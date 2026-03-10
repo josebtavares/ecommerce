@@ -1,0 +1,55 @@
+/* Base toast container */
+.Toastify__toast {
+    background-color: #323233 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: white !important;
+}
+
+/* Toast body (text + icon area) */
+.Toastify__toast-body {
+    background-color: transparent !important;
+    padding: 1rem !important;
+    margin: 0 !important;
+    color: white !important;
+}
+
+/* Default icon color (success) */
+.Toastify__toast-icon svg {
+    fill: white !important;
+    color: white !important;
+}
+
+/* Warning icon (yellow) */
+.Toastify__toast--warning .Toastify__toast-icon svg {
+    fill: yellow !important;
+    color: yellow !important;
+}
+
+/* Error icon (red) */
+.Toastify__toast--error .Toastify__toast-icon svg {
+    fill: red !important;
+    color: red !important;
+}
+
+/* Info icon (blue) */
+.Toastify__toast--info .Toastify__toast-icon svg {
+    fill: #4da6ff !important;  /* a soft blue */
+    color: #4da6ff !important;
+}
+
+/* Progress bar styling (keep white for all) */
+.Toastify__progress-bar {
+    background-color: white !important;
+    height: 2px !important;
+}
+
+/* Themed background (always #323233) */
+.Toastify__toast-theme--dark,
+.Toastify__toast-theme--light,
+.Toastify__toast-theme--colored {
+    background-color: #323233 !important;
+    color: white !important;
+}

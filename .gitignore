@@ -1,0 +1,72 @@
+# ══════════════════════════════════════════════════════════════
+# PYTHON / DJANGO
+# ══════════════════════════════════════════════════════════════
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+venv/
+env/
+.venv/
+
+# Django
+*.sqlite3
+media/
+staticfiles/
+static_root/
+local_settings.py
+
+# ══════════════════════════════════════════════════════════════
+# VARIÁVEIS DE AMBIENTE  (NUNCA para o Git)
+# ══════════════════════════════════════════════════════════════
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+*.env
+
+# ══════════════════════════════════════════════════════════════
+# NODE / VUE
+# ══════════════════════════════════════════════════════════════
+node_modules/
+/frontend/clube/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ══════════════════════════════════════════════════════════════
+# SISTEMA OPERATIVO
+# ══════════════════════════════════════════════════════════════
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ══════════════════════════════════════════════════════════════
+# EDITORES
+# ══════════════════════════════════════════════════════════════
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ══════════════════════════════════════════════════════════════
+# DOCKER
+# ══════════════════════════════════════════════════════════════
+*.log
+docker-compose.override.yml
+
+# ══════════════════════════════════════════════════════════════
+# MIGRATIONS  (opcional — muitos projetos fazem commit delas)
+# Descomenta se não quiseres versionar as migrations
+# ══════════════════════════════════════════════════════════════
+# backend/clube/app/migrations/
