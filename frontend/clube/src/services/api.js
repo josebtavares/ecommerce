@@ -4,11 +4,24 @@ const api = axios.create({
   baseURL: process.env.VUE_APP_URL_BASE
 });
 
-// Aplica token JWT no cabeçalho Authorization
+// URLs públicas — não enviam token nem fazem refresh
+const PUBLIC_URLS = [
+  '/app/utilizador/registar/',
+  '/app/utilizador/login/',
+  '/app/utilizador/recuperar_senha/',
+  '/app/utilizador/recuperar_senha/confirmar/',
+  '/api/token/refresh/',
+];
+
+const isPublic = (url) => PUBLIC_URLS.some(pub => url?.includes(pub));
+
+// Aplica token JWT no cabeçalho Authorization (só em URLs privadas)
 api.interceptors.request.use((config) => {
-  const access = localStorage.getItem('access_token');
-  if (access) {
-    config.headers.Authorization = `Bearer ${access}`;
+  if (!isPublic(config.url)) {
+    const access = localStorage.getItem('access_token');
+    if (access) {
+      config.headers.Authorization = `Bearer ${access}`;
+    }
   }
   return config;
 });
@@ -19,10 +32,12 @@ api.interceptors.response.use(
   async error => {
     const originalRequest = error.config;
 
+    // Não tenta refresh em URLs públicas ou se já tentou
     if (
       error.response &&
       error.response.status === 401 &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !isPublic(originalRequest.url)
     ) {
       originalRequest._retry = true;
 
@@ -30,16 +45,13 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refresh_token');
         if (!refreshToken) throw new Error('No refresh token');
 
-        // Requisição para obter novo access token
         const res = await axios.post(`${process.env.VUE_APP_URL_BASE}/api/token/refresh/`, {
           refresh: refreshToken
         });
 
-        const newAccess = res.data.access;
-
+        const newAccess = res.data.access_token || res.data.access;
         localStorage.setItem('access_token', newAccess);
 
-        // Atualiza o header da requisição original e repete
         originalRequest.headers.Authorization = `Bearer ${newAccess}`;
         return axios(originalRequest);
       } catch (refreshError) {
@@ -47,7 +59,6 @@ api.interceptors.response.use(
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
-        // Opcional: redirecionar para login
         window.location.href = '/Login';
         return Promise.reject(refreshError);
       }

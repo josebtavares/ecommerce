@@ -20,6 +20,10 @@ const routes = [
         component: App,
         meta: { requiresAuth: true },
     },
+    {   
+        path: '/',
+        redirect: '/Login'
+    },
     // Add other routes here
 ];
 

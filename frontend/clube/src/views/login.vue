@@ -96,7 +96,7 @@ export default {
   created () {
     // já autenticado → vai para Home
     if (localStorage.getItem('access_token')) {
-      this.$router.push({ name: 'Home' })
+      //this.$router.push({ name: 'Home' })
     }
   },
 

@@ -174,7 +174,7 @@ export default {
         if (this.file) form.append('foto', this.file)
 
         try {
-          const res = await api.post('app/utilizador/registar/', form, {
+          const res = await api.post('/app/utilizador/registar/', form, {
             headers: { 'Content-Type': 'multipart/form-data' }
           })
 
