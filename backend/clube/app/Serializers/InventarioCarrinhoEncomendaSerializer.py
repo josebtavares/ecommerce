@@ -4,6 +4,7 @@ from ..models import (
     Encomenda, ItemEncomenda, Produto
 )
 from .ProdutoSerializer import ProdutoMiniSerializer
+from .LojaSerializer import LojaMiniSerializer
 
 
 # ══════════════════════════════════════════════════════════════
@@ -56,7 +57,7 @@ class ItemCarrinhoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ItemCarrinho
-        fields = ['id', 'produto', 'produto_id', 'quantidade', 'subtotal']
+        fields = ['id', 'produto', 'produto_id', 'quantidade', 'atributos', 'subtotal']
 
     def get_subtotal(self, obj):
         return round(float(obj.produto.preco) * obj.quantidade, 2)
@@ -81,15 +82,15 @@ class ItemCarrinhoSerializer(serializers.ModelSerializer):
 
 
 class CarrinhoSerializer(serializers.ModelSerializer):
-    itens        = ItemCarrinhoSerializer(many=True, read_only=True)
-    total        = serializers.SerializerMethodField()
-    total_itens  = serializers.SerializerMethodField()
-    loja_nome    = serializers.CharField(source='loja.nome', read_only=True)
+    itens       = ItemCarrinhoSerializer(many=True, read_only=True)
+    total       = serializers.SerializerMethodField()
+    total_itens = serializers.SerializerMethodField()
+    loja        = LojaMiniSerializer(read_only=True)
 
     class Meta:
         model  = Carrinho
         fields = [
-            'id', 'loja', 'loja_nome',
+            'id', 'loja',
             'itens', 'total', 'total_itens',
             'data_criacao',
         ]
@@ -115,7 +116,7 @@ class ItemEncomendaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ItemEncomenda
-        fields = ['id', 'produto', 'quantidade', 'preco', 'subtotal']
+        fields = ['id', 'produto', 'quantidade', 'preco', 'atributos', 'subtotal']
 
     def get_subtotal(self, obj):
         return round(float(obj.preco) * obj.quantidade, 2)
@@ -143,7 +144,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'data_criacao', 'data_atualizacao',
         ]
         read_only_fields = [
-            'comprador', 'valor_total',
+            'comprador', 'loja', 'valor_total',
             'data_criacao', 'data_atualizacao',
         ]
 
@@ -181,26 +182,16 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
 
 
 class AtualizarStatusEncomendaSerializer(serializers.ModelSerializer):
-    """Usado pelo backoffice da loja para mudar o status."""
+    """Usado pelo backoffice da loja para mudar o status livremente."""
     class Meta:
         model  = Encomenda
         fields = ['status']
-
+ 
     def validate_status(self, value):
         instancia = self.instance
-        # mapa de transições permitidas
-        transicoes = {
-            'pendente'  : ['pago', 'cancelado'],
-            'pago'      : ['preparando', 'cancelado'],
-            'preparando': ['enviado', 'cancelado'],
-            'enviado'   : ['concluido'],
-            'concluido' : [],
-            'cancelado' : [],
-        }
-        permitidos = transicoes.get(instancia.status, [])
-        if value not in permitidos:
+        # só bloqueia estados terminais — o backoffice pode mudar livremente os outros
+        if instancia.status in ('concluido', 'cancelado'):
             raise serializers.ValidationError(
-                f'Transição inválida: {instancia.status} → {value}. '
-                f'Permitidos: {permitidos}'
+                f'Encomenda já está {instancia.status} — não pode ser alterada.'
             )
         return value

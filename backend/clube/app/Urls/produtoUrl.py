@@ -9,6 +9,11 @@ urlpatterns = [
     # ── Leitura pública ───────────────────────────────────────
     path('produto/',                                produtoView.produto_list_pagination,  name='produto-list'),
     path('produto/<int:id>/',                       produtoView.produto_get,              name='produto-get'),
+    
+    # Tipos por loja
+    path('loja/<int:loja_id>/tipos/',               produtoView.tipo_produto_list_loja, name='tipo-list-loja'),
+    path('loja/<int:loja_id>/tipos/criar/',          produtoView.tipo_produto_criar,     name='tipo-criar'),
+    path('loja/<int:loja_id>/tipos/<int:tipo_id>/',  produtoView.tipo_produto_gerir,     name='tipo-gerir'),
 
     # ── Backoffice da loja (requer autenticação + permissão) ──
     path('loja/<int:loja_id>/produtos/',            produtoView.produto_list_loja,        name='produto-list-loja'),

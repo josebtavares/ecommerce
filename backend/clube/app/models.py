@@ -245,31 +245,51 @@ class UtilizadorLoja(models.Model):
 class TipoProduto(models.Model):
     """
     Define um tipo de produto e os atributos esperados para esse tipo.
-
-    Exemplos de registos:
-      nome='calcado',  atributos_schema=['tamanho', 'cor', 'material']
-      nome='roupa',    atributos_schema=['tamanho', 'cor', 'genero']
-      nome='comida',   atributos_schema=['ingredientes', 'calorias', 'alergenos', 'peso']
-      nome='bebida',   atributos_schema=['volume', 'alcool', 'temperatura']
-      nome='eletronico', atributos_schema=['marca', 'modelo', 'garantia', 'cor']
+    loja=None → tipo global da plataforma (visível a todas as lojas)
+    loja=X    → tipo privado da loja X
+ 
+    Formato do atributos_schema (novo):
+    [
+        {"nome": "tamanho", "tipo": "choices", "opcoes": ["XS","S","M","L","XL"], "obrigatorio": true},
+        {"nome": "cor",     "tipo": "choices", "opcoes": ["preto","branco"],       "obrigatorio": false},
+        {"nome": "material","tipo": "texto",   "opcoes": [],                       "obrigatorio": false},
+    ]
     """
-    nome              = models.CharField(max_length=100, unique=True)
-    descricao         = models.CharField(max_length=255, blank=True, default='')
-    atributos_schema  = models.JSONField(default=list)
-    # ex: ["tamanho", "cor", "material"]
-    # usado para validar e mostrar os campos certos no frontend
-    ativo             = models.BooleanField(default=True)
-
+    loja             = models.ForeignKey(
+                         'Loja',
+                         on_delete=models.CASCADE,
+                         related_name='tipos_produto',
+                         null=True, blank=True,
+                       )
+    nome             = models.CharField(max_length=100)   # removido unique=True
+    descricao        = models.CharField(max_length=255, blank=True, default='')
+    atributos_schema = models.JSONField(default=list)
+    ativo            = models.BooleanField(default=True)
+ 
+    class Meta:
+        # nome único por loja (null loja = global)
+        unique_together = [('loja', 'nome')]
+ 
     def __str__(self):
-        return self.nome
-
+        if self.loja:
+            return f'{self.nome} ({self.loja.nome})'
+        return f'{self.nome} [global]'
+ 
     def validar_atributos(self, atributos: dict) -> list:
         """
-        Verifica se os atributos fornecidos contêm os campos esperados.
-        Devolve lista de campos em falta (vazia se tudo OK).
+        Verifica atributos obrigatórios em falta.
+        Compatível com schema antigo (lista de strings) e novo (lista de dicts).
         """
-        return [campo for campo in self.atributos_schema if campo not in atributos]
-
+        em_falta = []
+        for campo in self.atributos_schema:
+            if isinstance(campo, str):
+                # formato antigo
+                if campo not in atributos:
+                    em_falta.append(campo)
+            elif isinstance(campo, dict) and campo.get('obrigatorio'):
+                if campo.get('nome') not in atributos:
+                    em_falta.append(campo['nome'])
+        return em_falta
 
 # ══════════════════════════════════════════════════════════════
 # PRODUTO
@@ -359,6 +379,7 @@ class ItemCarrinho(models.Model):
     carrinho    = models.ForeignKey(Carrinho, on_delete=models.CASCADE, related_name='itens')
     produto     = models.ForeignKey(Produto, on_delete=models.CASCADE)
     quantidade  = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
+    atributos   = models.JSONField(default=dict, blank=True)
 
     class Meta:
         unique_together = ('carrinho', 'produto')
@@ -407,6 +428,8 @@ class ItemEncomenda(models.Model):
     produto     = models.ForeignKey(Produto, on_delete=models.SET_NULL, null=True)
     quantidade  = models.PositiveIntegerField(default=1)
     preco       = models.DecimalField(max_digits=10, decimal_places=2)  # snapshot do preço
+    atributos   = models.JSONField(default=dict, blank=True)  # ← novo
+
 
     def __str__(self):
         return f'{self.quantidade}x {self.produto} (enc. #{self.encomenda_id})'

@@ -23,12 +23,88 @@ from ..utils.pagination import paginar
 def tipo_produto_list(request):
     """
     GET /app/produto/tipos/
-    Devolve todos os tipos activos com o seu schema de atributos.
-    O frontend usa isto para saber quais campos mostrar ao criar um produto.
+    Devolve tipos globais (loja=null) activos.
+    Usado no home para os sliders dinâmicos por tipo.
     """
-    tipos = TipoProduto.objects.filter(ativo=True)
+    tipos = TipoProduto.objects.filter(ativo=True, loja__isnull=True)
     serializer = TipoProdutoSerializer(tipos, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def tipo_produto_list_loja(request, loja_id):
+    """
+    GET /app/loja/<loja_id>/tipos/
+    Lista tipos globais + tipos privados desta loja.
+    Usado no backoffice para popular o select ao criar produto.
+    """
+    _, _, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
+    if erro:
+        return erro
+ 
+    from django.db.models import Q
+    tipos = TipoProduto.objects.filter(ativo=True).filter(
+        Q(loja__isnull=True) | Q(loja_id=loja_id)
+    ).order_by('loja', 'nome')
+ 
+    serializer = TipoProdutoSerializer(tipos, many=True)
+    return Response(serializer.data)
+ 
+ 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def tipo_produto_criar(request, loja_id):
+    """
+    POST /app/loja/<loja_id>/tipos/criar/
+    Body: { nome, descricao?, atributos_schema }
+    Cria um tipo privado desta loja.
+    """
+    _, loja, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
+    if erro:
+        return erro
+ 
+    # valida nome único para esta loja
+    nome = (request.data.get('nome') or '').lower().strip()
+    if TipoProduto.objects.filter(loja=loja, nome=nome).exists():
+        return Response(
+            {'nome': 'Já tens um tipo com este nome.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+ 
+    serializer = TipoProdutoSerializer(data={**request.data, 'nome': nome})
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+ 
+    tipo = serializer.save(loja=loja)
+    return Response(TipoProdutoSerializer(tipo).data, status=status.HTTP_201_CREATED)
+ 
+ 
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def tipo_produto_gerir(request, loja_id, tipo_id):
+    """
+    PATCH  /app/loja/<loja_id>/tipos/<tipo_id>/  → editar
+    DELETE /app/loja/<loja_id>/tipos/<tipo_id>/  → desactivar
+    Só pode gerir tipos da sua loja — não pode tocar nos globais.
+    """
+    _, _, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
+    if erro:
+        return erro
+ 
+    # só tipos da loja (loja=X), nunca globais (loja=null)
+    tipo = get_object_or_404(TipoProduto, id=tipo_id, loja_id=loja_id)
+ 
+    if request.method == 'DELETE':
+        tipo.ativo = False
+        tipo.save(update_fields=['ativo'])
+        return Response({'detail': 'Tipo removido.'})
+ 
+    serializer = TipoProdutoSerializer(tipo, data=request.data, partial=True)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+ 
+    serializer.save()
+    return Response(serializer.data)
 
 
 # ══════════════════════════════════════════════════════════════

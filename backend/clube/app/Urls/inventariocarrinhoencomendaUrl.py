@@ -4,11 +4,10 @@ from ..Views import inventariocarrinhoencomendaView as v
 urlpatterns = [
 
     # ── Inventário (backoffice) ───────────────────────────────
+    # GET  → inventario_list
+    # POST → inventario_criar_ou_atualizar
     path('loja/<int:loja_id>/inventario/',
-         v.inventario_list,                     name='inventario-list'),
-
-    path('loja/<int:loja_id>/inventario/',
-         v.inventario_criar_ou_atualizar,        name='inventario-criar'),
+         v.inventario_list_ou_criar,             name='inventario-list-criar'),
 
     path('loja/<int:loja_id>/inventario/<int:produto_id>/ajustar/',
          v.inventario_ajustar_stock,             name='inventario-ajustar'),
@@ -25,6 +24,9 @@ urlpatterns = [
 
     path('loja/<int:loja_id>/carrinho/limpar/',
          v.carrinho_limpar,                      name='carrinho-limpar'),
+
+    path('carrinho/',
+         v.carrinho_list_utilizador,             name='carrinho-list-utilizador'),
 
     # ── Encomenda — comprador ─────────────────────────────────
     path('loja/<int:loja_id>/encomenda/criar/',

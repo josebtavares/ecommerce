@@ -1,0 +1,308 @@
+<template>
+  <div class="min-h-screen bg-zinc-950 text-zinc-100">
+
+    <!-- Product Popup -->
+    <ProductInfoCard
+      :produto="selectedProduct"
+      :loja="loja"
+      @close="selectedProduct = null"
+      @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)"
+    />
+
+    <!-- Cart -->
+    <MultiCart ref="cart" />
+    <Profile :data="user" class=" z-10" @log_out="log_out()"/>
+
+    <!-- Loading -->
+    <div v-if="loading" class="flex items-center justify-center h-screen">
+      <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+    </div>
+
+    <template v-else-if="loja">
+
+      <!-- HERO -->
+      <section class="relative h-[55vh] min-h-[360px] overflow-hidden">
+        <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+             :alt="loja.nome" class="w-full h-full object-cover" />
+        <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent"></div>
+        <div class="absolute inset-0 bg-gradient-to-r from-zinc-950/60 to-transparent"></div>
+
+        <button @click="$router.back()"
+          class="absolute top-5 left-5 w-9 h-9 rounded-full bg-black/50 hover:bg-black/70
+                 flex items-center justify-center transition backdrop-blur-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        <div class="absolute bottom-0 left-0 p-8 flex items-end gap-5">
+          <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
+               class="w-20 h-20 rounded-2xl object-cover border-2 border-zinc-700 shadow-xl flex-shrink-0" />
+          <div v-else class="w-20 h-20 rounded-2xl bg-zinc-800 flex items-center justify-center flex-shrink-0 border-2 border-zinc-700">
+            <span class="text-3xl font-bold text-zinc-400">{{ loja.nome.charAt(0) }}</span>
+          </div>
+          <div>
+            <span class="inline-block px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider mb-2">
+              {{ loja.categoria }}
+            </span>
+            <h1 class="text-3xl md:text-4xl font-extrabold text-white leading-tight">{{ loja.nome }}</h1>
+            <div class="flex items-center gap-4 mt-2 text-sm text-zinc-400 flex-wrap">
+              <span v-if="loja.localizacao" class="flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                </svg>
+                {{ loja.localizacao }}
+              </span>
+              <span v-if="loja.rating_medio" class="flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                {{ loja.rating_medio }}
+              </span>
+              <span v-if="loja.entrega_ativa" class="flex items-center gap-1 text-green-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Entrega disponível
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MAIN -->
+      <div class="max-w-6xl mx-auto px-6 py-8">
+
+        <!-- Info + Entrega -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div class="md:col-span-2 bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
+            <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Sobre a loja</h2>
+            <p class="text-zinc-300 text-sm leading-relaxed">{{ loja.descricao || 'Sem descrição disponível.' }}</p>
+          </div>
+          <div class="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
+            <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Entrega</h2>
+            <div v-if="opcoesEntrega.length === 0" class="text-zinc-500 text-sm">Sem opções configuradas.</div>
+            <div v-else class="space-y-2">
+              <div v-for="opcao in opcoesEntrega" :key="opcao.id"
+                   class="flex items-center justify-between py-2 border-b border-zinc-800 last:border-0">
+                <div>
+                  <p class="text-sm font-medium text-zinc-200">{{ opcao.nome }}</p>
+                  <p v-if="opcao.tempo_estimado" class="text-xs text-zinc-500">{{ opcao.tempo_estimado }}</p>
+                </div>
+                <span class="text-sm font-bold text-red-400">
+                  {{ opcao.preco == 0 ? 'Grátis' : formatPrice(opcao.preco) }}
+                </span>
+              </div>
+            </div>
+            <div v-if="loja.levantamento_ativo" class="mt-3 flex items-center gap-2 text-xs text-blue-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Levantamento em loja disponível
+            </div>
+          </div>
+        </div>
+
+      
+        <ProductSlider title="Em Destaque" icon=""
+            :params="{ loja_id: $route.params.id, destaque: true }"
+            @product-click="selectedProduct = $event" />
+
+        <ProductSlider
+          v-for="tipo in Object.keys(produtosPorTipo)"
+          :key="tipo"
+          :title="tipo" :icon="tipoIcon(tipo)"
+          :params="{ loja_id: $route.params.id, tipo: tipo }"
+          @product-click="selectedProduct = $event" />
+
+        <ProductCatalog
+          :loja-id="$route.params.id"
+          @product-click="selectedProduct = $event"
+        />
+
+        <!-- Sem produtos -->
+        <div v-if="!loadingProdutos && todosProdutos.length === 0" class="text-center py-12 text-zinc-500">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+          Nenhum produto disponível.
+        </div>
+
+        <!-- AVALIAÇÕES -->
+        <div class="mt-4">
+          <h2 class="text-xl font-bold text-zinc-100 mb-5">Avaliações</h2>
+          <div v-if="loadingAvaliacoes" class="space-y-3">
+            <div v-for="n in 3" :key="n" class="bg-zinc-900 rounded-2xl h-20 animate-pulse"></div>
+          </div>
+          <div v-else-if="avaliacoes.length === 0" class="text-center py-10 text-zinc-500 text-sm">
+            Ainda sem avaliações.
+          </div>
+          <div v-else class="space-y-3">
+            <div class="bg-zinc-900 rounded-2xl p-5 border border-zinc-800 flex items-center gap-5 mb-5">
+              <div class="text-center">
+                <p class="text-4xl font-extrabold text-white">{{ loja.rating_medio || '—' }}</p>
+                <div class="flex gap-0.5 mt-1 justify-center">
+                  <svg v-for="n in 5" :key="n" xmlns="http://www.w3.org/2000/svg"
+                       :class="['h-4 w-4', n <= Math.round(loja.rating_medio) ? 'text-yellow-400' : 'text-zinc-600']"
+                       fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                </div>
+                <p class="text-xs text-zinc-500 mt-1">{{ avaliacoes.length }} avaliações</p>
+              </div>
+            </div>
+            <div v-for="av in avaliacoes" :key="av.id" class="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300">
+                    {{ av.utilizador_username?.charAt(0)?.toUpperCase() || '?' }}
+                  </div>
+                  <span class="text-sm font-medium text-zinc-300">{{ av.utilizador_username }}</span>
+                </div>
+                <div class="flex gap-0.5">
+                  <svg v-for="n in 5" :key="n" xmlns="http://www.w3.org/2000/svg"
+                       :class="['h-3.5 w-3.5', n <= av.pontuacao ? 'text-yellow-400' : 'text-zinc-600']"
+                       fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                </div>
+              </div>
+              <p v-if="av.comentario" class="text-sm text-zinc-400 leading-relaxed">{{ av.comentario }}</p>
+              <p class="text-xs text-zinc-600 mt-2">{{ formatDate(av.data_criacao) }}</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </template>
+
+    <div v-else class="flex flex-col items-center justify-center h-screen text-center">
+      <p class="text-2xl font-bold text-zinc-400 mb-2">Loja não encontrada</p>
+      <button @click="$router.back()" class="text-red-400 hover:text-red-300 text-sm">← Voltar</button>
+    </div>
+
+  </div>
+</template>
+
+<script>
+import { Swiper, SwiperSlide } from 'swiper/vue'
+import { Autoplay } from 'swiper/modules'
+import 'swiper/css'
+import api from '@/services/api'
+import ProductInfoCard from '@/components/product/productInfoCard.vue'
+import MultiCart from '@/components/cart/multiCart.vue'
+
+import ProductSlider from '@/components/sliders/ProductSlider.vue'
+import Profile from '@/components/profile/UserProfile.vue'
+import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+
+
+export default {
+  name: 'LojaPublica',
+  components: { Swiper, SwiperSlide, ProductInfoCard, MultiCart,ProductSlider, Profile, ProductCatalog },
+
+  data () {
+    return {
+      swiperModules: [Autoplay],
+      backendUrl: process.env.VUE_APP_URL_BASE || 'http://localhost:8000',
+      loading: true,
+      loja: null,
+      todosProdutos: [],
+      loadingProdutos: false,
+      opcoesEntrega: [],
+      avaliacoes: [],
+      loadingAvaliacoes: false,
+      selectedProduct: null,
+      user: null,
+    }
+  },
+
+  computed: {
+    produtosDestaque () {
+      return this.todosProdutos.filter(p => p.destaque)
+    },
+    produtosPorTipo () {
+      const grupos = {}
+      this.todosProdutos.forEach(p => {
+        const tipo = p.tipo?.nome || 'Outros'
+        if (!grupos[tipo]) grupos[tipo] = []
+        grupos[tipo].push(p)
+      })
+      return grupos
+    },
+  },
+
+  async created () {
+    const user = localStorage.getItem('user')
+    this.user = user ? JSON.parse(user) : {}
+    const id = this.$route.params.id
+    await Promise.all([
+      this.fetchLoja(id),
+      this.fetchProdutos(id),
+      this.fetchOpcoesEntrega(id),
+      this.fetchAvaliacoes(id),
+    ])
+    this.loading = false
+  },
+
+  methods: {
+    formatPrice (val) {
+      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+    },
+    formatDate (d) {
+      return new Date(d).toLocaleDateString('pt-PT')
+    },
+    tipoIcon (tipo) {
+      const icons = {
+        prato: '🍽️', comida: '🍔', bebida: '🥤', sobremesa: '🍰',
+        roupa: '👗', calcado: '👟', acessorio: '👜',
+        eletronico: '📱', telemovel: '📱', tablet: '💻',
+        fruta: '🍎', legume: '🥦', carne: '🥩',
+      }
+      return icons[tipo?.toLowerCase()] || '📦'
+    },
+    async fetchLoja (id) {
+      try {
+        const { data } = await api.get(`/app/loja/${id}/`)
+        this.loja = data
+      } catch (e) { console.error(e) }
+    },
+    async fetchProdutos (id) {
+      this.loadingProdutos = true
+      try {
+        const { data } = await api.get(`/app/produto/?loja_id=${id}&limit=100`)
+        this.todosProdutos = data.results || data
+      } catch (e) { console.error(e) }
+      finally { this.loadingProdutos = false }
+    },
+    async fetchOpcoesEntrega (id) {
+      try {
+        const { data } = await api.get(`/app/loja/${id}/entrega/opcoes/`)
+        this.opcoesEntrega = data.results || data
+      } catch (e) { console.error(e) }
+    },
+    async fetchAvaliacoes (id) {
+      this.loadingAvaliacoes = true
+      try {
+        const { data } = await api.get(`/app/loja/${id}/avaliacoes/`)
+        this.avaliacoes = data.results || data
+      } catch (e) { console.error(e) }
+      finally { this.loadingAvaliacoes = false }
+    },
+
+      log_out () {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('user')
+        this.$router.push({ name: 'Login' })
+      },
+  }
+}
+</script>
+
+<style scoped>
+.swiper { overflow: hidden !important; }
+</style>

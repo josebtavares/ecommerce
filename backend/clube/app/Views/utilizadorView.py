@@ -364,3 +364,39 @@ def password_reset_confirm(request):
     django_user.save()
 
     return Response({'detail': 'Palavra-passe actualizada com sucesso.'}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def utilizador_search(request):
+    """
+    GET /app/utilizador/search/?q=joao
+    Pesquisa utilizadores por username ou email.
+    Qualquer utilizador autenticado pode usar — serve para adicionar staff.
+    Devolve apenas dados públicos (id, username, nome, email).
+    """
+    q = request.query_params.get('q', '').strip()
+    if len(q) < 2:
+        return Response(
+            {'detail': 'Pesquisa deve ter pelo menos 2 caracteres.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+ 
+    utilizadores = Utilizador.objects.select_related('user').filter(
+        Q(user__username__icontains=q) |
+        Q(user__email__icontains=q) |
+        Q(user__first_name__icontains=q) |
+        Q(user__last_name__icontains=q)
+    ).exclude(
+        user=request.user  # exclui o próprio utilizador
+    ).filter(status='ativo')[:10]
+ 
+    results = [
+        {
+            'id':       u.id,
+            'username': u.user.username,
+            'nome':     u.nome,
+            'email':    u.user.email,
+        }
+        for u in utilizadores
+    ]
+    return Response(results, status=status.HTTP_200_OK)

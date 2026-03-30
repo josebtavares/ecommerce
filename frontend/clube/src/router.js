@@ -2,6 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router';
 import App from './views/home.vue'; // Import your views as needed
 import AppLogin from './views/login.vue'; // Import your views as needed
 import AppRegister from './views/register.vue'; // Import your views as needed
+import LojaPublica from './views/lojaPublica.vue'
+import Checkout       from './views/Checkout.vue'
+import EncomendaSucesso from './views/EncomendaSucesso.vue'
+import Backoffice from './views/backoffice/Index.vue'
 
 const routes = [
     {
@@ -20,10 +24,31 @@ const routes = [
         component: App,
         meta: { requiresAuth: true },
     },
-    {   
+    {
+        path: '/loja/:id',
+        name: 'Loja',
+        component: LojaPublica,
+    },
+        {   
         path: '/',
         redirect: '/Login'
     },
+    {   path: '/checkout/:lojaId',  
+        name: 'Checkout',        
+        component: Checkout,        
+        meta: { requiresAuth: true } 
+    },
+    {   path: '/encomenda/:id/ok',  
+        name: 'EncomendaSucesso', 
+        component: EncomendaSucesso, 
+        meta: { requiresAuth: true } 
+    },
+    { path: '/loja/:id/backoffice', 
+        name: 'Backoffice', 
+        component: Backoffice, 
+        meta: { requiresAuth: true } 
+    },
+
     // Add other routes here
 ];
 

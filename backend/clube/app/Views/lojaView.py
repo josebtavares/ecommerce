@@ -95,6 +95,10 @@ def loja_list(request):
 
     if request.GET.get('levantamento') == 'true':
         qs = qs.filter(levantamento_ativo=True)
+        
+    ordering = request.GET.get('ordering')
+    if ordering in ['nome', '-nome', '-data_criacao']:
+        qs = qs.order_by(ordering)
 
     response, erro = paginar(request, qs, LojaPublicSerializer, limit_default=5)
     if erro:
@@ -245,7 +249,10 @@ def staff_list(request, loja_id):
     if erro:
         return erro
 
-    staff = UtilizadorLoja.objects.filter(loja=loja).select_related('utilizador__user')
+    # só mostra membros activos
+    staff = UtilizadorLoja.objects.filter(
+        loja=loja, ativo=True
+    ).select_related('utilizador__user')
     serializer = UtilizadorLojaSerializer(staff, many=True, context={'request': request})
     return Response(serializer.data)
 
@@ -256,27 +263,43 @@ def staff_add(request, loja_id):
     """
     POST /app/loja/<loja_id>/staff/adicionar/
     Body: { utilizador_id, role }
+    Se o utilizador já existiu no staff (ativo=False), reactiva-o.
     """
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
         return erro
 
-    # impede de adicionar um dono duplicado
     if request.data.get('role') == 'dono':
         return Response(
             {'detail': 'Não é possível atribuir o role de dono desta forma.'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # verifica se já existe
     utilizador_id = request.data.get('utilizador_id')
-    if UtilizadorLoja.objects.filter(loja=loja, utilizador_id=utilizador_id).exists():
-        return Response(
-            {'detail': 'Este utilizador já faz parte do staff.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    novo_role     = request.data.get('role', 'staff')
 
+    existente = UtilizadorLoja.objects.filter(
+        loja=loja, utilizador_id=utilizador_id
+    ).first()
+
+    if existente:
+        if existente.ativo:
+            return Response(
+                {'detail': 'Este utilizador já faz parte do staff.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        else:
+            # reactiva o registo existente com o novo role
+            existente.role  = novo_role
+            existente.ativo = True
+            existente.save(update_fields=['role', 'ativo'])
+            return Response(
+                UtilizadorLojaSerializer(existente, context={'request': request}).data,
+                status=status.HTTP_200_OK
+            )
+
+    # utilizador nunca esteve no staff — cria novo registo
     serializer = UtilizadorLojaSerializer(data=request.data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -293,16 +316,15 @@ def staff_add(request, loja_id):
 def staff_update_role(request, loja_id, membro_id):
     """
     PATCH /app/loja/<loja_id>/staff/<membro_id>/
-    Body: { role } ou { ativo }
+    Body: { role }
     """
     loja   = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
         return erro
 
-    membro = get_object_or_404(UtilizadorLoja, id=membro_id, loja=loja)
+    membro = get_object_or_404(UtilizadorLoja, id=membro_id, loja=loja, ativo=True)
 
-    # não deixa alterar o dono
     if membro.role == 'dono':
         return Response(
             {'detail': 'Não é possível alterar o role do dono.'},
@@ -326,7 +348,7 @@ def staff_remove(request, loja_id, membro_id):
     if erro:
         return erro
 
-    membro = get_object_or_404(UtilizadorLoja, id=membro_id, loja=loja)
+    membro = get_object_or_404(UtilizadorLoja, id=membro_id, loja=loja, ativo=True)
 
     if membro.role == 'dono':
         return Response(

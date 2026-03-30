@@ -1,534 +1,582 @@
-<!-- ProfileDrawer.vue -->
 <template>
   <div class="text-white fixed top-6 right-[2.5vw] z-20">
-    <!-- ícone para abrir -->
-    <font-awesome-icon :icon="['fas', 'user']" size="xl" class="cursor-pointer"
-                       @click="toggle" />
+    <font-awesome-icon :icon="['fas', 'user']" size="xl" class="cursor-pointer" @click="toggle" />
 
-    <!-- gaveta -->
-    <div
-      class="fixed top-0 right-0 w-[50vw] h-screen bg-[#171717]
-             text-white p-4 transition-transform duration-300
-             translate-x-full profile-panel overflow-hidden">
+    <!-- Backdrop -->
+    <transition enter-active-class="transition duration-200" enter-from-class="opacity-0"
+                leave-active-class="transition duration-150" leave-to-class="opacity-0">
+      <div v-if="isOpen" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" @click="toggle"></div>
+    </transition>
 
-      <!-- cabeçalho --------------------------------------------------->
-      <div class="flex justify-between items-center mb-4">
-        <font-awesome-icon :icon="['fas', 'xmark']" class="cursor-pointer" @click="toggle" />
-      </div>
+    <!-- Drawer -->
+    <transition enter-active-class="transition duration-300" enter-from-class="translate-x-full"
+                leave-active-class="transition duration-200" leave-to-class="translate-x-full">
+      <div v-if="isOpen"
+           class="fixed top-0 right-0 w-full max-w-sm h-screen bg-zinc-950 border-l border-zinc-800
+                  flex flex-col z-50 shadow-2xl overflow-hidden">
 
-      <!-- avatar + botão upload -------------------------------------->
-      <div class="flex items-center gap-4 mb-6">
-        <div class="relative">
-          <div class="">
-
-                <div class="mt-2 flex  justify-center gap-3">
-                    <!-- Avatar preview -->
-                    <img :src="previewUrl" alt="preview" class="h-25 w-25 rounded-full object-cover border" />
-
-                    <!-- INPUT FILE escondido -->
-                    <input ref="fileInput" id="foto" type="file" accept="image/*" @change="onFileChange"
-                        class="hidden" />
-
-                    <!-- Ícone plus: só ele é clicável -->
-                    <div class="cursor-pointer">
-                        <!-- Font Awesome ícone plus -->
-                        <i class="fa-solid fa-circle-plus " @click="triggerFileSelect" style="color: #ffffff;"></i>
-                    </div>
-                </div>
+        <!-- Header -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-zinc-800 flex-shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="relative group/avatar cursor-pointer" @click="triggerFileSelect">
+              <img :src="previewUrl" alt="avatar"
+                   class="w-16 h-16 rounded-full object-cover border-2 border-zinc-700 group-hover/avatar:border-red-500 transition" />
+              <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover/avatar:opacity-100
+                          transition flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <input ref="fileInput" type="file" accept="image/*" @change="onFileChange" class="hidden" />
             </div>
+            <div>
+              <p class="font-bold text-zinc-100">{{ data.username }}</p>
+              <p class="text-xs text-zinc-500">{{ data.email }}</p>
+            </div>
+          </div>
+          <button @click="toggle"
+            class="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-        <div>
-          <p class="text-lg font-bold">{{ data.username }}</p>
-          <button @click="$emit('log_out')" class="text-sm hover:underline">
+
+        <!-- Tabs -->
+        <div class="flex border-b border-zinc-800 flex-shrink-0">
+          <button v-for="tab in tabs" :key="tab.key" @click="activeTab = tab.key"
+            :class="[
+              'flex-1 py-3 text-xs font-semibold transition border-b-2',
+              activeTab === tab.key
+                ? 'border-red-500 text-red-400'
+                : 'border-transparent text-zinc-500 hover:text-zinc-300'
+            ]">
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <!-- Conteúdo scrollável -->
+        <div class="flex-1 overflow-y-auto p-5">
+
+          <!-- ═══ TAB: DADOS PESSOAIS ═══ -->
+          <div v-if="activeTab === 'dados'">
+            <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Informações pessoais</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Primeiro nome</label>
+                <input v-model="form.first_name" type="text"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Apelido</label>
+                <input v-model="form.last_name" type="text"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Username</label>
+                <input v-model="form.username" type="text"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Email</label>
+                <input v-model="form.email" type="email"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Telefone</label>
+                <input v-model="form.telefone" type="text"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Morada</label>
+                <input v-model="form.morada" type="text"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+            </div>
+            <button @click="saveProfile" :disabled="loadingProfile"
+              :class="[
+                'w-full mt-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2',
+                loadingProfile
+                  ? 'bg-red-700 cursor-not-allowed opacity-70'
+                  : 'bg-red-600 hover:bg-red-500 hover:-translate-y-0.5'
+              ]">
+              <span v-if="loadingProfile" class="flex items-center gap-2">
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+                  <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
+                </svg>
+                A guardar…
+              </span>
+              <span v-else>Guardar alterações</span>
+            </button>
+          </div>
+
+          <!-- ═══ TAB: PASSWORD ═══ -->
+          <div v-if="activeTab === 'password'">
+            <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Alterar password</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Nova password</label>
+                <input v-model="formPassword.password" type="password"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Confirmar password</label>
+                <input v-model="formPassword.confirm" type="password"
+                  class="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-100
+                         focus:outline-none focus:border-red-500 transition" />
+              </div>
+              <p v-if="passwordError" class="text-xs text-red-400">{{ passwordError }}</p>
+            </div>
+            <button @click="savePassword" :disabled="loadingPassword"
+              :class="[
+                'w-full mt-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2',
+                loadingPassword
+                  ? 'bg-red-700 cursor-not-allowed opacity-70'
+                  : 'bg-red-600 hover:bg-red-500 hover:-translate-y-0.5'
+              ]">
+              <span v-if="loadingPassword" class="flex items-center gap-2">
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+                  <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
+                </svg>
+                A guardar…
+              </span>
+              <span v-else>Alterar password</span>
+            </button>
+          </div>
+
+          <!-- ═══ TAB: ENCOMENDAS ═══ -->
+          <div v-if="activeTab === 'encomendas'">
+            <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Histórico de encomendas</h3>
+
+            <div v-if="loadingEncomendas" class="flex justify-center py-8">
+              <svg class="animate-spin h-6 w-6 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+            </div>
+
+            <div v-else-if="encomendas.length === 0" class="text-center py-8 text-zinc-500 text-sm">
+              Ainda não tens encomendas.
+            </div>
+
+            <div v-else class="space-y-3">
+              <div v-for="enc in encomendas" :key="enc.id"
+                   class="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden transition-all">
+
+                <!-- Cabeçalho — clicável para expandir -->
+                <button
+                  @click="toggleEncomenda(enc.id)"
+                  class="w-full flex items-center justify-between p-4 text-left hover:bg-zinc-800/50 transition"
+                >
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="text-xs font-bold text-zinc-300">#{{ enc.id }}</span>
+                      <span class="text-xs text-zinc-500">· {{ enc.loja_nome }}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="text-xs text-zinc-500">{{ formatDate(enc.data_criacao) }}</span>
+                      <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColor(enc.status)]">
+                        {{ enc.status }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3 flex-shrink-0 ml-2">
+                    <span class="text-sm font-bold text-red-400">{{ formatPrice(enc.valor_total) }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         :class="['h-4 w-4 text-zinc-500 transition-transform', expandedEncomenda === enc.id ? 'rotate-180' : '']"
+                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
+
+                <!-- Detalhe expandido -->
+                <div v-if="expandedEncomenda === enc.id"
+                     class="border-t border-zinc-800 px-4 pb-4 pt-3 space-y-4">
+
+                  <!-- Loading detalhe -->
+                  <div v-if="loadingDetalhe === enc.id" class="flex justify-center py-4">
+                    <svg class="animate-spin h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                  </div>
+
+                  <template v-else-if="detalhesEncomenda[enc.id]">
+                    <!-- Produtos -->
+                    <div>
+                      <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Produtos</p>
+                      <div class="space-y-2">
+                        <div v-for="item in detalhesEncomenda[enc.id].itens" :key="item.id"
+                             class="flex items-center gap-3">
+                          <img v-if="item.produto?.ficheiro_url"
+                               :src="item.produto.ficheiro_url" :alt="item.produto?.nome"
+                               class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                          <div v-else class="w-10 h-10 rounded-lg bg-zinc-800 flex-shrink-0"></div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm text-zinc-200 truncate">{{ item.produto?.nome }}</p>
+                            <p class="text-xs text-zinc-500">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.</p>
+                            <div v-if="item.atributos && Object.keys(item.atributos).length > 0"
+                                 class="flex flex-wrap gap-1 mt-1">
+                              <span v-for="(val, key) in item.atributos" :key="key"
+                                    class="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] rounded capitalize">
+                                {{ key }}: <span class="text-zinc-300 font-medium">{{ val }}</span>
+                              </span>
+                            </div>
+                          </div>
+                          <span class="text-sm font-bold text-zinc-300 flex-shrink-0">
+                            {{ formatPrice(item.subtotal) }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Entrega -->
+                    <div class="border-t border-zinc-800 pt-3 space-y-2">
+                      <div class="flex items-center justify-between text-xs">
+                        <span class="text-zinc-500">Tipo de entrega</span>
+                        <span class="text-zinc-300 font-medium">
+                          {{ detalhesEncomenda[enc.id].tipo_entrega === 'entrega' ? '🚚 Entrega ao domicílio' : '🏪 Takeaway' }}
+                        </span>
+                      </div>
+                      <div v-if="detalhesEncomenda[enc.id].morada_entrega"
+                           class="flex items-start justify-between text-xs gap-2">
+                        <span class="text-zinc-500 flex-shrink-0">Morada</span>
+                        <span class="text-zinc-300 text-right">{{ detalhesEncomenda[enc.id].morada_entrega }}</span>
+                      </div>
+                      <div v-if="detalhesEncomenda[enc.id].notas"
+                           class="flex items-start justify-between text-xs gap-2">
+                        <span class="text-zinc-500 flex-shrink-0">Notas</span>
+                        <span class="text-zinc-300 text-right italic">{{ detalhesEncomenda[enc.id].notas }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Total -->
+                    <div class="border-t border-zinc-800 pt-3 flex items-center justify-between">
+                      <span class="text-sm font-bold text-zinc-400">Total</span>
+                      <span class="text-base font-bold text-red-400">{{ formatPrice(detalhesEncomenda[enc.id].valor_total) }}</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <!-- Carregar mais -->
+              <div class="pt-2 text-center">
+                <button
+                  v-if="temMais"
+                  @click="carregarMais"
+                  :disabled="loadingMais"
+                  class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-400
+                         hover:text-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                  <span v-if="loadingMais" class="flex items-center gap-2 justify-center">
+                    <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+                      <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
+                    </svg>
+                    A carregar...
+                  </span>
+                  <span v-else>Ver mais ({{ encomendaTotal - encomendas.length }} restantes)</span>
+                </button>
+                <p v-else-if="encomendas.length > 0 && !temMais"
+                   class="text-xs text-zinc-600">
+                  Todas as encomendas carregadas
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ TAB: LOJAS ═══ -->
+          <div v-if="activeTab === 'lojas'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">As minhas lojas</h3>
+              <button @click="goToCreateStore"
+                class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-xs font-bold transition">
+                + Nova loja
+              </button>
+            </div>
+
+            <div v-if="loadingLojas" class="flex justify-center py-8">
+              <svg class="animate-spin h-6 w-6 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+            </div>
+
+            <div v-else-if="lojas.length === 0" class="text-center py-8 text-zinc-500 text-sm">
+              Ainda não tens lojas.<br/>
+              <button @click="goToCreateStore" class="text-red-400 hover:text-red-300 mt-2 text-sm">
+                Criar a primeira loja →
+              </button>
+            </div>
+
+            <div v-else class="space-y-3">
+              <div v-for="loja in lojas" :key="loja.id"
+                   class="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden
+                          hover:border-red-500/30 transition cursor-pointer group"
+                   @click="goToBackoffice(loja.id)">
+                <div class="flex items-center gap-3 p-3">
+                  <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
+                       class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                  <div v-else class="w-10 h-10 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                    <span class="text-sm font-bold text-zinc-400">{{ loja.nome.charAt(0) }}</span>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-sm text-zinc-100 truncate group-hover:text-red-400 transition">{{ loja.nome }}</p>
+                    <p class="text-xs text-zinc-500">{{ loja.categoria }} · {{ loja.minha_role }}</p>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-600 group-hover:text-red-500 transition flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer — logout -->
+        <div class="border-t border-zinc-800 p-4 flex-shrink-0">
+          <button @click="$emit('log_out')"
+            class="w-full py-2.5 rounded-xl border border-zinc-700 hover:border-red-500 hover:text-red-500
+                   text-sm font-semibold text-zinc-400 transition flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
             Terminar sessão
           </button>
         </div>
+
       </div>
-
-      <!-- grelha ------------------------------------------------------>
-      <div
-        ref="grid"
-        class="gallery-grid overscroll-contain overflow-y-auto pr-1"
-        @scroll="onScroll"
-        @wheel.stop         
-        @touchmove.stop>    
-
-        <!-- cartão “+”  -->
-        <figure @click="showModal=true" class="gallery-item upload">
-          <i class="fa-solid fa-circle-plus fa-xl text-gray-300" />
-        </figure>
-
-        <!-- itens da galeria -->
-        <figure v-for="item in galeria" :key="item.id" class="gallery-item" @click="openPreview(item)">
-          <img   v-if="!isVideo(item.ficheiro_url)" :src="item.ficheiro_url" />
-          <video v-else              
-           :src="item.ficheiro_url"
-           muted playsinline loop controls></video>
-
-            <!-- quick-tap like on thumbnail -->
-          <button class="thumb-like" @click.stop="toggleLike(item)">
-            <i :class="isLiked(item.id) ? 'fas fa-heart' : 'far fa-heart'"/>
-          </button>
-        </figure>
-
-        <div v-if="loading" class="py-4 text-center col-span-3">
-          <span class="animate-pulse text-sm text-gray-400">a carregar…</span>
-        </div>
-        <div ref="sentinel"></div>
-      </div>
-    </div>
+    </transition>
   </div>
-
-  <!-- MODAL upload ---------------------------------------------------->
-  <transition name="fade">
-    <div v-if="showModal"
-         class="fixed inset-0 z-70 bg-black/60 flex items-center
-                justify-center">
-      <div class="bg-[#1f1f1f] w-[90vw] max-w-md p-6 rounded-lg text-white">
-
-        <h3 class="text-lg font-semibold mb-4">Novo item da galeria</h3>
-
-        <form @submit.prevent="uploadItem" class="flex flex-col gap-4">
-          <input v-model="form.titulo" placeholder="Título"
-                 class="p-2 rounded bg-gray-700 outline-none" />
-
-          <textarea v-model="form.descricao" rows="3"
-                    placeholder="Descrição (opcional)"
-                    class="p-2 rounded bg-gray-700 outline-none"></textarea>
-
-          <div class="flex items-center gap-2">
-            <input
-              ref="modalFileInput"
-              type="file"
-              accept="image/*,video/*"
-              @change="e => form.ficheiro = e.target.files[0]"
-              class="hidden"
-            />
-            <button
-              type="button"
-              @click="$refs.modalFileInput.click()"
-              class="px-3 py-1 bg-blue-600 rounded hover:bg-blue-700 text-white"
-            >
-              Selecionar ficheiro
-            </button>
-            <span v-if="form.ficheiro" class="text-xs text-gray-300 truncate max-w-[120px]">
-              {{ form.ficheiro.name }}
-            </span>
-
-            <!-- opcao de postar na feed tamvbém botao toggle -->
-            <label class="flex items-center gap-2">
-              <span class="text-sm">Postar na feed</span>
-              <input type="checkbox" v-model="postarNaFeed" class="cursor-pointer" />
-            </label>
-
-            
-          </div>
-
-          <div class="flex justify-end gap-3 mt-2">
-            <button type="button" @click="resetModal"
-                    class="px-4 py-1 bg-gray-600 rounded">Cancelar</button>
-            <button type="submit" :disabled="!form.ficheiro"
-                    class="px-4 py-1 bg-blue-600 rounded
-                           disabled:bg-gray-500">
-              Enviar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </transition>
-
-  <!-- ─────────── FULL-VIEW OVERLAY ─────────── -->
-<transition name="fade">
-  <div v-if="preview" class="preview-overlay" @click.self="closePreview">
-    <button class="close-btn" @click="closePreview">
-      <i class="fas fa-times"></i>
-    </button>
-
-    <!-- media itself -->
-    <video v-if="isVideo(preview.ficheiro_url)"
-           :src="preview.ficheiro_url"
-           controls autoplay
-           class="preview-media" />
-    <img   v-else :src="preview.ficheiro_url" class="preview-media" />
-
-    <!-- NEW CAPTION STRIP -->
-    <div class="caption">
-      <h3 class="title">{{ preview.titulo }}</h3>
-      <p  class="desc" v-if="preview.descricao">{{ preview.descricao }}</p>
-    </div>
-
-    <!-- like / comment icons -->
-    <div class="preview-actions">
-      <button class="action relative"
-          :class="previewLiked ? 'text-red-500' : ''"
-          @click="toggleLike(preview)">
-          <span class="absolute top-1 right-1 text-xs bg-gray-600 text-white rounded-full px-1">
-            {{ preview.likes || 0 }}
-          </span>
-          <i :class="isLiked(preview.id) ? 'fas fa-heart text-blue-600' : 'far fa-heart'"/>
-        <span class="sr-only">Gostos</span>
-      </button>
-      <button class="action relative" @click.prevent="openComment(preview)">
-        <i class="far fa-comment"></i>
-        <span class="absolute top-1 right-1 text-xs bg-gray-600 text-white rounded-full px-1">
-          {{ preview.comentarios || 0 }}
-        </span>
-        <span class="sr-only">Comentários</span>
-      </button>
-    </div>
-  </div>
-</transition>
-<div class ="w-full" >
-  <GaleriaComment
-  :open="showGalComment"
-  :galeria-id="selectedItem && selectedItem.id"
-  :user-id="data.id"
-  @close="showGalComment = false"
-  @new-comment="selectedItem.comentarios++"
-/>
-
-</div>
-
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, defineProps, reactive } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
-import GaleriaComment from '@/components/comment/galeriaCommentDrawer.vue'
 
-
-
-/* props */
 const props = defineProps({
   data: { type: Object, default: () => ({}) },
-  backendUrl: { type: String, default: () => process.env.VUE_APP_URL_BASE },
 })
+defineEmits(['log_out'])
 
-/* estado */
-const previewUrl = ref('')
-const galeria    = ref([])
-const offset     = ref(0)
-const loading    = ref(false)
-const PAGE       = 6
-
-const postarNaFeed = ref(false) // novo estado para opção de postar na feed
-/* refs dom */
-const fileInput = ref(null)
-const grid      = ref(null)
-const sentinel  = ref(null)
-const showGalComment = ref(false) // estado para mostrar o comentário da galeria
-const selectedItem = ref(null) // item selecionado para comentários
-
-
-const preview = ref(null)
-
-function openPreview (item) { 
-  preview.value = item
-
-  /* ask once per item whether the user already liked it ----------- */
-  if (!likedCache.has(item.id)) {
-    api.get(`/app/galerialike/check/galeria/${item.id}/utilizador/${props.data.id}/`)
-       .then(r => likedCache.set(item.id, !!r.data.liked))
-       .catch(() => likedCache.set(item.id, false))
-       .finally(() => previewLiked.value = likedCache.get(item.id))
-  } else {
-    previewLiked.value = likedCache.get(item.id)
-  }
-
-}
-function closePreview ()    { preview.value = null }
-
-const likedCache = new Map()   //  id → true/false  (local cache)
-const previewLiked = ref(false)   /* controls heart icon state */
-
-const liked = reactive({})      // id → true / false  (reactive!)
-const isLiked = id => !!liked[id]
-const setLiked = (id,v)=> liked[id]=v   // keep in one place
-
-async function seedLikes () {
-  const { data } = await api.get(
-    `/app/galerialike/utilizador/${props.data.id}/`)
-  data.forEach(l => setLiked(l.galeria_id, true))
-}
-
-async function toggleLike (item) {
-  console.log('Toggling like for item:', item)
-  try {
-    if (isLiked(item.id)) {
-      await api.delete(
-        `/app/galerialike/unlike/galeria/${item.id}/utilizador/${props.data.id}/`)
-      item.likes--                          // ← SAME NAME
-      setLiked(item.id,false)
-    } else {
-      await api.post('/app/galerialike/registar/', {
-        galeria_id:item.id, utilizador_id:props.data.id })
-      item.likes++
-      setLiked(item.id,true)
-    }
-  } catch (e) { console.error(e) }
-}
-
-/* helpers */
+const router = useRouter()
 const backend = process.env.VUE_APP_URL_BASE
 
-/* novo estado para modal upload ------------------------------------*/
-const showModal = ref(false)
-const form = ref({ titulo:'', descricao:'', ficheiro:null })
-function resetModal () {
-  form.value = { titulo:'', descricao:'', ficheiro:null }
-  showModal.value = false
+const isOpen    = ref(false)
+const fileInput = ref(null)
+const previewUrl = ref('')
+const activeTab  = ref('dados')
+
+const tabs = [
+  { key: 'dados',      label: 'Perfil'     },
+  { key: 'password',   label: 'Password'   },
+  { key: 'encomendas', label: 'Encomendas' },
+  { key: 'lojas',      label: 'Lojas'      },
+]
+
+// ── Dados pessoais ────────────────────────────────────────
+const form = ref({ first_name: '', last_name: '', username: '', email: '', telefone: '', morada: '' })
+const { loading: loadingProfile, wrap: wrapProfile } = useAsyncAction()
+
+// ── Password ──────────────────────────────────────────────
+const formPassword = ref({ password: '', confirm: '' })
+const passwordError = ref('')
+const { loading: loadingPassword, wrap: wrapPassword } = useAsyncAction()
+
+// ── Encomendas ────────────────────────────────────────────
+const encomendas       = ref([])
+const loadingEncomendas = ref(false)
+const expandedEncomenda = ref(null)   // id da encomenda expandida
+const detalhesEncomenda = ref({})     // { [id]: encomenda_completa }
+const loadingDetalhe    = ref(null)   // id a carregar detalhe
+
+// ── Lojas ─────────────────────────────────────────────────
+const lojas       = ref([])
+const loadingLojas = ref(false)
+
+// ── Helpers ───────────────────────────────────────────────
+function formatPrice(val) {
+  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
 }
-
-function isVideo (url) { return /\.(mp4|webm|mov|mkv)$/i.test(url) }
-
-/* ───────── toggle gaveta ───────── */
-function toggle () {
-  document.querySelector('.profile-panel')
-    .classList.toggle('translate-x-full')
-
-  
+function formatDate(d) {
+  return new Date(d).toLocaleDateString('pt-PT')
 }
-
-function openComment (item) {
-  console.log('Abrindo comentário para:', item)
-  selectedItem.value = item
-  showGalComment.value = true
-}
-
-/* ───────── carregar galeria ────── */
-async function fetchGalery (reset = false) {
-  if (!props.data?.id || loading.value) return  
-  if (loading.value) return
-  loading.value = true
-  if (reset) {
-    galeria.value = []
-    offset.value  = 0
+function statusColor(s) {
+  const map = {
+    pendente:   'bg-yellow-500/15 text-yellow-400',
+    pago:       'bg-blue-500/15 text-blue-400',
+    preparando: 'bg-purple-500/15 text-purple-400',
+    enviado:    'bg-indigo-500/15 text-indigo-400',
+    concluido:  'bg-green-500/15 text-green-400',
+    cancelado:  'bg-red-500/15 text-red-400',
   }
-  const { data } = await api.get(
-    `/app/galeria/utilizador/${props.data.id}/`,
-    { params: { offset: offset.value, limit: PAGE } }
-  )
-  galeria.value.push(...data.results)
-  offset.value = data.next_offset ?? null
-  loading.value = false
+  return map[s] || 'bg-zinc-500/15 text-zinc-400'
 }
 
-/* IntersectionObserver para infinite-scroll */
-let io = null
-function createObserver () {
-  if (io) io.disconnect()
-  io = new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting && offset.value !== null) {
-      fetchGalery()
-    }
-  }, { root: grid.value, threshold: 0.1 })
-  io.observe(sentinel.value)
+// ── Accordion encomendas ───────────────────────────────────
+async function toggleEncomenda(id) {
+  // fecha se já está aberto
+  if (expandedEncomenda.value === id) {
+    expandedEncomenda.value = null
+    return
+  }
+  expandedEncomenda.value = id
+  // só carrega o detalhe se ainda não foi carregado
+  if (detalhesEncomenda.value[id]) return
+  loadingDetalhe.value = id
+  try {
+    const { data } = await api.get(`/app/encomenda/${id}/`)
+    detalhesEncomenda.value = { ...detalhesEncomenda.value, [id]: data }
+  } catch (e) { console.error(e) }
+  finally { loadingDetalhe.value = null }
 }
 
-/* upload de item da galeria ----------------------------------------*/
-function uploadItem () {
-  if (!form.value.ficheiro) return
-  wrap(async () => {
-    const fd = new FormData()
-    fd.append('titulo', form.value.titulo)
-    fd.append('descricao', form.value.descricao)
-    fd.append('utilizador_id', props.data.id)
-    fd.append('ficheiro', form.value.ficheiro)
-    fd.append('postar_na_feed', postarNaFeed.value) // inclui opção de postar na feed
-    
-    const { data:newItem } = await api.post(
-    '/app/galeria/registar/', fd,
-     { headers:{'Content-Type':'multipart/form-data'} })
-
-   /* mostra logo o upload na 1ª posição                              */
-   galeria.value.unshift(newItem)
-
-   /* como acrescentámos um registo localmente, ajustamos o offset    */
-   if (offset.value !== null) offset.value += 1
-
-   toast.success('Item adicionado!', { autoClose: 1200 })
-   postarNaFeed.value = false
-   resetModal()
-  })
+// ── Toggle drawer ─────────────────────────────────────────
+function toggle() {
+  isOpen.value = !isOpen.value
+  if (isOpen.value && activeTab.value === 'encomendas') fetchEncomendas()
+  if (isOpen.value && activeTab.value === 'lojas') fetchLojas()
 }
 
-/* ───────── upload avatar ───────── */
-const { wrap } = useAsyncAction()
-function triggerFileSelect () { fileInput.value.click() }
-function onFileChange (e) {
+watch(activeTab, (tab) => {
+  if (tab === 'encomendas' && encomendas.value.length === 0) fetchEncomendas()
+  if (tab === 'lojas' && lojas.value.length === 0) fetchLojas()
+})
+
+// ── Init form ─────────────────────────────────────────────
+function initForm() {
+  form.value = {
+    first_name: props.data.first_name || '',
+    last_name:  props.data.last_name  || '',
+    username:   props.data.username   || '',
+    email:      props.data.email      || '',
+    telefone:   props.data.telefone   || '',
+    morada:     props.data.morada     || '',
+  }
+}
+
+onMounted(() => {
+  previewUrl.value = props.data.foto || `${backend}/media/utilizadores/default.png`
+  initForm()
+})
+
+watch(() => props.data, () => {
+  previewUrl.value = props.data.foto || `${backend}/media/utilizadores/default.png`
+  initForm()
+}, { deep: true })
+
+// ── Upload foto ───────────────────────────────────────────
+function triggerFileSelect() { fileInput.value?.click() }
+
+function onFileChange(e) {
   const file = e.target.files[0]
   if (!file) return
   previewUrl.value = URL.createObjectURL(file)
-
-  wrap(async () => {
-    const form = new FormData()
-    form.append('foto', file)
-    const url = `${backend}/app/utilizador/editar/${props.data.id}/`
-    const res = await api.put(url, form,
-      { headers: { 'Content-Type': 'multipart/form-data' } })
-    previewUrl.value = backend + res.data.foto
-    toast.success('Foto actualizada!', { autoClose: 1000 })
+  wrapProfile(async () => {
+    const fd = new FormData()
+    fd.append('foto', file)
+    const res = await api.put('/app/utilizador/me/editar/', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    if (res.data.foto) previewUrl.value = res.data.foto
+    toast.success('Foto actualizada!', { autoClose: 1500 })
   })
 }
 
-/* ───────── eventos lifecycle ───── */
-onMounted(async () => {
-  previewUrl.value = props.data.foto
-    ? backend + props.data.foto
-    : backend + '/media/utilizadores/default.png'
-  fetchGalery(true).then(createObserver)
+// ── Guardar perfil ────────────────────────────────────────
+async function saveProfile() {
+  await wrapProfile(async () => {
+    const fd = new FormData()
+    Object.entries(form.value).forEach(([k, v]) => { if (v) fd.append(k, v) })
+    await api.put('/app/utilizador/me/editar/', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    Object.assign(user, form.value)
+    localStorage.setItem('user', JSON.stringify(user))
+    toast.success('Perfil actualizado!', { autoClose: 1500 })
+  })
+}
 
-  await Promise.all([ fetchGalery(true), seedLikes() ])   // <── HERE
-  createObserver(grid.value)
-})
-onUnmounted(() => io && io.disconnect())
-
-/* recarrega grelha quando mudar utilizador */
-watch(
-  () => props.data.id,
-  id => {
-    if (id) {
-      fetchGalery(true)          // utilizador válido → recarrega
-    } else {
-      galeria.value = []         // logout → limpa grelha
-      offset.value  = 0
-    }
+// ── Alterar password ──────────────────────────────────────
+async function savePassword() {
+  passwordError.value = ''
+  if (!formPassword.value.password) { passwordError.value = 'Introduz a nova password.'; return }
+  if (formPassword.value.password !== formPassword.value.confirm) {
+    passwordError.value = 'As passwords não coincidem.'; return
   }
+  await wrapPassword(async () => {
+    const fd = new FormData()
+    fd.append('password', formPassword.value.password)
+    await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    formPassword.value = { password: '', confirm: '' }
+    toast.success('Password alterada!', { autoClose: 1500 })
+  })
+}
+
+// ── Fetch encomendas (scroll infinito) ───────────────────
+const encomendaOffset  = ref(0)
+const encomendaLimit   = ref(6)
+const encomendaTotal   = ref(0)
+const loadingMais      = ref(false)
+
+const temMais = computed(() =>
+  encomendas.value.length < encomendaTotal.value
 )
+
+async function fetchEncomendas() {
+  loadingEncomendas.value = true
+  encomendaOffset.value = 0
+  try {
+    const { data } = await api.get('/app/encomenda/', {
+      params: { limit: encomendaLimit.value, offset: 0 }
+    })
+    encomendas.value  = data.results || data
+    encomendaTotal.value = data.count ?? encomendas.value.length
+    encomendaOffset.value = encomendas.value.length
+  } catch (e) { console.error(e) }
+  finally { loadingEncomendas.value = false }
+}
+
+async function carregarMais() {
+  if (loadingMais.value || !temMais.value) return
+  loadingMais.value = true
+  try {
+    const { data } = await api.get('/app/encomenda/', {
+      params: { limit: encomendaLimit.value, offset: encomendaOffset.value }
+    })
+    const novas = data.results || data
+    encomendas.value = [...encomendas.value, ...novas]
+    encomendaOffset.value += novas.length
+    encomendaTotal.value = data.count ?? encomendaTotal.value
+  } catch (e) { console.error(e) }
+  finally { loadingMais.value = false }
+}
+
+// ── Fetch lojas ───────────────────────────────────────────
+async function fetchLojas() {
+  loadingLojas.value = true
+  try {
+    const { data } = await api.get('/app/loja/minhas/')
+    lojas.value = data.results || data
+  } catch (e) { console.error(e) }
+  finally { loadingLojas.value = false }
+}
+
+// ── Navegação ─────────────────────────────────────────────
+function goToBackoffice(id) { router.push(`/loja/${id}/backoffice`); isOpen.value = false }
+function goToCreateStore()  { router.push('/loja/criar');            isOpen.value = false }
 </script>
-
-<style scoped>
-.gallery-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:8px;
-
-  /* mostra duas linhas; o resto surge ao fazer scroll        */
-  --cell: calc(50vw / 3);           /* largura de uma célula  */
-  /* height: calc(var(--cell) * 2 + 8px);    */
-  height:75vh;
-}
-
-/* ------------- cada célula quadrada                       */
-.gallery-item{
-  position:relative;
-  width:100%;
-  padding-bottom:100%;      /* ← altura = largura (quadrado) */
-  overflow:hidden;
-  border-radius:8px;
-}
-
-/* ------------- conteúdo ocupa 100 % da célula              */
-.gallery-item img,
-.gallery-item video{
-  position:absolute; inset:0;       /* top:0 right:0 bottom:0 left:0 */
-  width:100%; height:100%;
-  object-fit:cover;
-}
-
-/* ------------- cartão de upload                            */
-.gallery-item.upload {
-  position: relative;
-  display: flex;           /* you can even leave these or remove them */
-  align-items: center;
-  justify-content: center;
-  background: rgba(255,255,255,.08);
-  cursor: pointer;
-  transition: background .2s;
-}
-
-/* Then absolutely center the icon inside it */
-.gallery-item.upload i {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  /* optional: enlarge it a bit */
-  font-size: 2.5rem;
-  color: #cbd5e1;
-}
-.gallery-item.upload:hover{
-  background:rgba(255,255,255,.15);
-}
-.profile-panel { transition: transform .3s }
-.fade-enter-active, .fade-leave-active { transition: opacity .2s }
-.fade-enter-from,  .fade-leave-to      { opacity: 0 }
-
-.preview-overlay{
-  position:fixed;
-  top:0; right:0;                     /* stay inside the drawer */
-  width:50vw; height:100vh;           /* same size as the drawer */
-  background:#171717; z-index:80;
-  display:flex; align-items:center; justify-content:center;
-  overflow:hidden;
-  
-}
-
-/* close (x) button  */
-.close-btn{
-  position:absolute; top:12px; right:12px;
-  font-size:1.25rem; color:#fff;
-}
-
-/* actual media */
-.preview-media{
-  max-width:100%; max-height:100%;
-  object-fit:contain;
-}
-
-/* like / comment icons */
-.preview-actions{
-  position:absolute; bottom:20px; right:20px;
-  display:flex; flex-direction:column; gap:18px;
-}
-.action{
-  width:44px; height:44px;
-  border-radius:50%; background:rgba(255,255,255,.15);
-  display:flex; align-items:center; justify-content:center;
-  color:#fff; font-size:1.1rem;
-}
-.action:hover{ background:rgba(255,255,255,.3); }
-
-/* fade transition reused */
-.fade-enter-active,.fade-leave-active{transition:opacity .2s}
-.fade-enter-from,.fade-leave-to{opacity:0}
-
-.caption{
-  position:absolute;
-  bottom:0; left:0;            /* stick to bottom edge   */
-  width:100%;
-  padding:14px 18px 20px;
-  background:linear-gradient(0deg,rgba(0,0,0,.7) 0%, rgba(0,0,0,0) 90%);
-  box-sizing:border-box;
-  color:#fff;
-}
-.title{
-  font-size:1rem;
-  font-weight:600;
-  line-height:1.3;
-  margin:0 0 4px 0;
-  word-break:break-word;
-  text-shadow:0 1px 2px rgba(0,0,0,.5);
-}
-.desc{
-  font-size:.9rem;
-  line-height:1.35;
-  opacity:.9;
-  max-height:3.6em;            /* ≈ 2 lines; remove if not needed   */
-  overflow:hidden;
-  text-overflow:ellipsis;
-  text-shadow:0 1px 2px rgba(0,0,0,.5);
-
-}
-
-.thumb-like{
-  position:absolute; bottom:6px; right:6px;
-  font-size:.85rem; color:#e2e8f0;
-}
-.thumb-like .fas{ color:var(--color-blue-600); }
-
-
-</style>

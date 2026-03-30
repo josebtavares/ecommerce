@@ -48,103 +48,54 @@ def _exige_permissao(request, loja, permissao):
 # INVENTÁRIO
 # ══════════════════════════════════════════════════════════════
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def inventario_list(request, loja_id):
-    """
-    GET /app/loja/<loja_id>/inventario/?q=camisa&offset=0&limit=20
-    Lista o inventário da loja com pesquisa e paginação.
-    """
-    loja = get_object_or_404(Loja, id=loja_id)
-    _, erro = _exige_permissao(request, loja, 'gerir_inventario')
-    if erro:
-        return erro
-
-    qs = Inventario.objects.select_related('produto').filter(loja=loja)
-
-    q = request.GET.get('q')
-    if q:
-        qs = qs.filter(
-            Q(produto__nome__icontains=q) | Q(produto__sku__icontains=q)
-        )
-
-    # filtro por stock baixo
-    if request.GET.get('stock_baixo') == 'true':
-        qs = qs.filter(quantidade__lte=5)
-
-    response, erro = paginar(request, qs, InventarioSerializer)
-    if erro:
-        return erro
-    return response
 
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
-def inventario_criar_ou_atualizar(request, loja_id):
+def inventario_list_ou_criar(request, loja_id):
     """
-    POST /app/loja/<loja_id>/inventario/
-    Body: { produto_id, quantidade, preco_custo, preco_venda }
-    Cria ou actualiza o inventário de um produto.
+    GET  /app/loja/<loja_id>/inventario/  → lista inventário
+    POST /app/loja/<loja_id>/inventario/  → cria ou actualiza inventário
     """
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_inventario')
     if erro:
         return erro
-
+ 
+    if request.method == 'GET':
+        qs = Inventario.objects.select_related('produto').filter(loja=loja)
+ 
+        q = request.GET.get('q')
+        if q:
+            qs = qs.filter(
+                Q(produto__nome__icontains=q) | Q(produto__sku__icontains=q)
+            )
+        if request.GET.get('stock_baixo') == 'true':
+            qs = qs.filter(quantidade__lte=5)
+ 
+        response, erro = paginar(request, qs, InventarioSerializer)
+        if erro:
+            return erro
+        return response
+ 
+    # POST — cria ou actualiza
     produto = get_object_or_404(Produto, id=request.data.get('produto_id'), loja=loja)
-
+ 
     inventario, criado = Inventario.objects.get_or_create(
         loja=loja, produto=produto,
         defaults={'quantidade': 0, 'preco_custo': 0, 'preco_venda': produto.preco}
     )
-
+ 
     serializer = InventarioSerializer(inventario, data=request.data, partial=True)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+ 
     serializer.save()
     return Response(
         serializer.data,
         status=status.HTTP_201_CREATED if criado else status.HTTP_200_OK
     )
-
-
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-@transaction.atomic
-def inventario_ajustar_stock(request, loja_id, produto_id):
-    """
-    PATCH /app/loja/<loja_id>/inventario/<produto_id>/ajustar/
-    Body: { ajuste: 10 }  →  adiciona 10 ao stock
-          { ajuste: -3 }  →  remove 3 do stock
-    Útil para ajustes rápidos sem ter de enviar o total.
-    """
-    loja = get_object_or_404(Loja, id=loja_id)
-    _, erro = _exige_permissao(request, loja, 'gerir_inventario')
-    if erro:
-        return erro
-
-    inventario = get_object_or_404(Inventario, loja=loja, produto_id=produto_id)
-
-    try:
-        ajuste = int(request.data.get('ajuste', 0))
-    except ValueError:
-        return Response({'detail': 'ajuste deve ser um número inteiro.'}, status=400)
-
-    nova_qty = inventario.quantidade + ajuste
-    if nova_qty < 0:
-        return Response(
-            {'detail': f'Stock insuficiente. Actual: {inventario.quantidade}'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    inventario.quantidade = nova_qty
-    inventario.save(update_fields=['quantidade', 'data_atualizacao'])
-
-    return Response(InventarioSerializer(inventario).data)
-
-
 # ══════════════════════════════════════════════════════════════
 # CARRINHO
 # ══════════════════════════════════════════════════════════════
@@ -191,9 +142,14 @@ def carrinho_adicionar(request, loja_id):
     quantidade = int(request.data.get('quantidade', 1))
 
     item, criado = ItemCarrinho.objects.get_or_create(
-        carrinho=carrinho, produto=produto,
-        defaults={'quantidade': 0}
-    )
+    carrinho=carrinho, produto=produto,
+    defaults={'quantidade': 0, 'atributos': request.data.get('atributos', {})}
+)
+    # se já existia, actualiza os atributos
+    if not criado:
+        atributos = request.data.get('atributos', {})
+        if atributos:
+            item.atributos = atributos
 
     # valida stock
     try:
@@ -322,7 +278,8 @@ def encomenda_criar(request, loja_id):
             encomenda  = encomenda,
             produto    = item.produto,
             quantidade = item.quantidade,
-            preco      = item.produto.preco,  # snapshot do preço actual
+            preco      = item.produto.preco,
+            atributos  = item.atributos,   # ← copia os atributos
         )
         # desconta stock se existir inventário
         try:
@@ -332,8 +289,7 @@ def encomenda_criar(request, loja_id):
         except Inventario.DoesNotExist:
             pass
 
-    # limpa o carrinho após encomenda criada
-    itens.delete()
+
 
     return Response(
         EncomendaSerializer(encomenda, context={'request': request}).data,
@@ -431,3 +387,49 @@ def encomenda_atualizar_status(request, loja_id, id):
     return Response(
         EncomendaSerializer(encomenda, context={'request': request}).data
     )
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def carrinho_list_utilizador(request):
+    """
+    GET /app/carrinho/
+    Devolve todos os carrinhos activos do utilizador autenticado.
+    Só inclui carrinhos com itens.
+    """
+    utilizador = request.user.utilizador
+    carrinhos = Carrinho.objects.filter(
+        utilizador=utilizador
+    ).prefetch_related('itens__produto__inventario').all()
+
+    # só devolve carrinhos com itens
+    carrinhos = [c for c in carrinhos if c.itens.exists()]
+
+    serializer = CarrinhoSerializer(carrinhos, many=True, context={'request': request})
+    return Response(serializer.data)
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def inventario_ajustar_stock(request, loja_id, produto_id):
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_inventario')
+    if erro:
+        return erro
+
+    inventario = get_object_or_404(Inventario, loja=loja, produto_id=produto_id)
+
+    try:
+        ajuste = int(request.data.get('ajuste', 0))
+    except ValueError:
+        return Response({'detail': 'ajuste deve ser um número inteiro.'}, status=400)
+
+    nova_qty = inventario.quantidade + ajuste
+    if nova_qty < 0:
+        return Response(
+            {'detail': f'Stock insuficiente. Actual: {inventario.quantidade}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    inventario.quantidade = nova_qty
+    inventario.save(update_fields=['quantidade', 'data_atualizacao'])
+    return Response(InventarioSerializer(inventario).data)

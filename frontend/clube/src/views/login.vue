@@ -1,6 +1,6 @@
 <template>
   <div class="relative w-screen h-screen overflow-hidden
-           bg-[url('/src/assets/img/login/login_background2.jpg')]
+           bg-[url('/src/assets/img/login/login_back.jpg')]
            bg-cover bg-center bg-no-repeat">
     <div class="absolute inset-0 bg-black/40"></div>
 
@@ -96,7 +96,7 @@ export default {
   created () {
     // já autenticado → vai para Home
     if (localStorage.getItem('access_token')) {
-      //this.$router.push({ name: 'Home' })
+      this.$router.push({ name: 'Home' })
     }
   },
 
@@ -119,7 +119,7 @@ export default {
           localStorage.setItem('user',          JSON.stringify(user))
 
           toast.success('Login bem-sucedido!', { autoClose: 2000 })
-          //this.$router.push({ name: 'Home' })
+          this.$router.push({ name: 'Home' })
           console.log('Login bem-sucedido:', user)
 
         } catch (err) {

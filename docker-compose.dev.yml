@@ -42,7 +42,8 @@ services:
       - .env.dev
     volumes:
       - ./backend/clube:/app
-      - media_data:/app/media
+      #- media_data:/app/media
+      - ./backend/clube/media:/app/media 
     ports:
       - "8000:8000"
     depends_on:

@@ -30,6 +30,7 @@ local_settings.py
 .env.development
 .env.production
 *.env
+.env.dev
 
 # ══════════════════════════════════════════════════════════════
 # NODE / VUE

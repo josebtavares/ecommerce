@@ -186,7 +186,7 @@ export default {
           localStorage.setItem('user',          JSON.stringify(user))
 
           toast.success('Conta criada com sucesso!', { autoClose: 2000 })
-          //this.$router.push({ name: 'Home' })
+          this.$router.push({ name: 'Home' })
           console.log('Conta criada com sucesso:', user)
 
         } catch (err) {
