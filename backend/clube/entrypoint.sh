@@ -3,7 +3,7 @@
 
 set -e
 
-echo "⏳ A aguardar base de dados..."
+echo "â³ A aguardar base de dados..."
 
 while ! python -c "
 import os, psycopg2
@@ -22,9 +22,9 @@ except psycopg2.OperationalError:
   sleep 2
 done
 
-echo "✅ PostgreSQL pronto!"
+echo "âœ… PostgreSQL pronto!"
 
-echo "⏳ A aguardar Redis..."
+echo "â³ A aguardar Redis..."
 
 while ! python -c "
 import os, redis
@@ -38,13 +38,13 @@ except Exception:
   sleep 2
 done
 
-echo "✅ Redis pronto!"
+echo "âœ… Redis pronto!"
 
-echo "🔄 A correr migrations..."
+echo "ðŸ”„ A correr migrations..."
 python manage.py migrate --noinput
 
-echo "📁 A recolher ficheiros estaticos..."
+echo "ðŸ“ A recolher ficheiros estaticos..."
 python manage.py collectstatic --noinput
 
-echo "🚀 A iniciar servidor com 4 workers..."
+echo "ðŸš€ A iniciar servidor com 4 workers..."
 exec python -m daphne -b 0.0.0.0 -p 8000 clube.asgi:application
