@@ -93,12 +93,22 @@
       </div>
 
       <!-- Atributos dinâmicos do tipo seleccionado -->
-      <div v-if="activeTipo && activeTipo.atributos_schema?.length" class="flex flex-wrap gap-3 mt-3 pt-3 border-t border-zinc-800">
-        <div v-for="attr in activeTipo.atributos_schema" :key="attr" class="relative">
-          <input
-            v-model="filters.atributos[attr]"
+      <div v-if="activeTipo && atributosFiltravelis.length" class="flex flex-wrap gap-3 mt-3 pt-3 border-t border-zinc-800">
+        <div v-for="attr in atributosFiltravelis" :key="attr.nome" class="relative">
+          <!-- choices — select -->
+          <select v-if="attr.tipo === 'choices'"
+            v-model="filters.atributos[attr.nome]"
+            @change="debouncedFetch"
+            class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
+                   focus:outline-none focus:border-red-500 transition w-36">
+            <option value="">{{ capitalize(attr.nome) }}</option>
+            <option v-for="op in attr.opcoes" :key="op" :value="op">{{ op }}</option>
+          </select>
+          <!-- texto/numero — input -->
+          <input v-else
+            v-model="filters.atributos[attr.nome]"
             @input="debouncedFetch"
-            :placeholder="capitalize(attr)"
+            :placeholder="capitalize(attr.nome)"
             class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                    placeholder-zinc-500 focus:outline-none focus:border-red-500 transition w-36"
           />
@@ -237,6 +247,14 @@ export default {
   },
 
   computed: {
+    // schema normalizado — só atributos com nome definido
+    atributosFiltravelis () {
+      if (!this.activeTipo?.atributos_schema?.length) return []
+      return this.activeTipo.atributos_schema
+        .map(a => typeof a === 'string' ? { nome: a, tipo: 'texto', opcoes: [] } : a)
+        .filter(a => a.nome)
+    },
+
     hasActiveFilters () {
       return this.filters.q ||
         this.filters.preco_min ||
@@ -264,7 +282,10 @@ export default {
     },
 
     capitalize (str) {
-      return str.charAt(0).toUpperCase() + str.slice(1)
+      if (!str) return ''
+      const s = typeof str === 'object' ? (str.nome || '') : str
+      if (typeof s !== 'string' || !s) return ''
+      return s.charAt(0).toUpperCase() + s.slice(1)
     },
 
     slicedAtributos (atributos) {
@@ -274,28 +295,35 @@ export default {
 
     // ── Tipos ──────────────────────────────────────────────
     async fetchTipos () {
-        try {
-            // busca produtos da loja para extrair os tipos que existem
-            const params = { limit: 100 }
-            if (this.lojaId) params.loja_id = this.lojaId
-
-            const { data } = await api.get(this.endpoint, { params })
-            const produtos = data.results || data
-
-            // extrai tipos únicos dos produtos existentes
-            const tiposMap = {}
-            produtos.forEach(p => {
-            if (p.tipo && !tiposMap[p.tipo.id]) {
-                tiposMap[p.tipo.id] = p.tipo
-            }
-            })
-            this.tipos = Object.values(tiposMap)
-        } catch (e) { console.error(e) }
-        },
+      try {
+        // extrai tipos unicos dos produtos existentes na loja
+        const params = { limit: 100 }
+        if (this.lojaId) params.loja_id = this.lojaId
+        const { data } = await api.get(this.endpoint, { params })
+        const produtos = data.results || data
+        const tiposMap = {}
+        produtos.forEach(p => {
+          if (p.tipo && !tiposMap[p.tipo.id]) {
+            tiposMap[p.tipo.id] = p.tipo
+          }
+        })
+        this.tipos = Object.values(tiposMap)
+      } catch (e) { console.error(e) }
+    },
 
     selectTipo (tipo) {
       this.activeTipo = tipo
-      this.filters.atributos = {}
+      // inicializa cada atributo com string vazia para evitar partilha de modelo
+      if (tipo && tipo.atributos_schema) {
+        const atributos = {}
+        tipo.atributos_schema.forEach(a => {
+          const nome = typeof a === 'string' ? a : a.nome
+          if (nome) atributos[nome] = ''
+        })
+        this.filters.atributos = atributos
+      } else {
+        this.filters.atributos = {}
+      }
       this.resetAndFetch()
     },
 
@@ -306,7 +334,14 @@ export default {
     },
 
     clearFilters () {
-      this.filters = { q: '', preco_min: '', preco_max: '', ordem: '', stock_disponivel: false, atributos: {} }
+      const atributos = {}
+      if (this.activeTipo?.atributos_schema) {
+        this.activeTipo.atributos_schema.forEach(a => {
+          const nome = typeof a === 'string' ? a : a.nome
+          if (nome) atributos[nome] = ''
+        })
+      }
+      this.filters = { q: '', preco_min: '', preco_max: '', ordem: '', stock_disponivel: false, atributos }
       this.resetAndFetch()
     },
 
