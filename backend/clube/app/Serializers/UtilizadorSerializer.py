@@ -36,9 +36,10 @@ class UtilizadorSerializer(serializers.ModelSerializer):
             # do Utilizador
             'telefone', 'morada', 'foto', 'foto_url',
             'verificado', 'rating',
+            'role_admin', 
             'data_criacao', 'data_atualizacao', 'status',
         ]
-        read_only_fields = ['verificado', 'rating', 'data_criacao', 'data_atualizacao']
+        read_only_fields = ['verificado', 'rating', 'role_admin', 'data_criacao', 'data_atualizacao']
 
     def get_foto_url(self, obj):
         request = self.context.get('request')

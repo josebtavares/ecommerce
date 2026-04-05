@@ -6,6 +6,9 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from ..Views.notificacaoView import notificar_staff,notificar,notificar_admins
+from decimal import Decimal
+
 
 from ..models import (
     Inventario, Produto,
@@ -257,19 +260,33 @@ def encomenda_criar(request, loja_id):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # calcula o total
-    valor_total = sum(
+    # calcula o total — produtos + custo de entrega
+    valor_produtos = sum(
         item.produto.preco * item.quantidade for item in itens
     )
-
+ 
+    # adiciona custo da opcao de entrega se existir
+    custo_entrega = 0
+    opcao_entrega_id = serializer.validated_data.get('opcao_entrega_id')
+    if opcao_entrega_id:
+        from ..models import OpcaoEntrega
+        try:
+            opcao = OpcaoEntrega.objects.get(id=opcao_entrega_id, loja=loja, ativa=True)
+            custo_entrega = opcao.preco
+        except OpcaoEntrega.DoesNotExist:
+            pass
+ 
+    valor_total = valor_produtos + custo_entrega
+ 
     encomenda = Encomenda.objects.create(
-        comprador    = utilizador,
-        loja         = loja,
-        valor_total  = valor_total,
-        tipo_entrega = serializer.validated_data.get('tipo_entrega', 'levantamento'),
+        comprador      = utilizador,
+        loja           = loja,
+        valor_total    = valor_total,
+        tipo_entrega   = serializer.validated_data.get('tipo_entrega', 'levantamento'),
         morada_entrega = serializer.validated_data.get('morada_entrega', ''),
-        notas        = serializer.validated_data.get('notas', ''),
-        status       = 'pendente',
+        notas          = serializer.validated_data.get('notas', ''),
+        status         = 'pendente',
+        opcao_entrega  = opcao if opcao_entrega_id else None,  # ← guarda a FK
     )
 
     # cria os itens da encomenda e desconta o stock
@@ -288,6 +305,15 @@ def encomenda_criar(request, loja_id):
             inv.save(update_fields=['quantidade', 'data_atualizacao'])
         except Inventario.DoesNotExist:
             pass
+        
+    notificar_staff(
+        loja=loja,
+        roles=['dono', 'gestor', 'staff'],
+        tipo='nova_encomenda',
+        titulo=f'Nova encomenda #{encomenda.id}',
+        mensagem=f'Encomenda de {utilizador.nome} no valor de €{encomenda.valor_total}.',
+        link=f'/loja/{loja.id}/backoffice',
+    )
 
 
 
@@ -369,21 +395,103 @@ def encomenda_atualizar_status(request, loja_id, id):
     """
     PATCH /app/loja/<loja_id>/encomendas/<id>/status/
     Body: { status: 'preparando' }
-    Backoffice — actualiza o status da encomenda com validação de transições.
+    - cancelado  → repõe stock
+    - concluido + dinheiro → aprova pagamento + regista comissao
     """
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_encomendas')
     if erro:
         return erro
-
+ 
     encomenda  = get_object_or_404(Encomenda, id=id, loja=loja)
     serializer = AtualizarStatusEncomendaSerializer(
         encomenda, data=request.data, partial=True
     )
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+ 
+    novo_status = serializer.validated_data.get('status')
     serializer.save()
+ 
+    # cancelado → repõe stock de todos os itens
+    if novo_status == 'cancelado':
+        for item in encomenda.itens.select_related('produto__inventario').all():
+            try:
+                inv = item.produto.inventario
+                inv.quantidade += item.quantidade
+                inv.save(update_fields=['quantidade', 'data_atualizacao'])
+            except Exception:
+                pass
+ 
+    # concluido + dinheiro → aprova pagamento e regista comissao
+    if novo_status == 'concluido':
+        try:
+            pagamento = encomenda.pagamento
+            if pagamento.referencia_transacao == 'dinheiro' and pagamento.status == 'pendente':
+                from django.utils.timezone import now
+                pagamento.status = 'aprovado'
+                pagamento.save(update_fields=['status'])
+                from ..models import Comissao
+                Comissao.registar(encomenda)
+        except Exception:
+            pass
+    MSGS_COMPRADOR = {
+        'pago':       ('Encomenda confirmada',   'O pagamento foi confirmado. A loja está a preparar o teu pedido.', 'encomenda_paga'),
+        'preparando': ('Encomenda em preparação','A tua encomenda está a ser preparada.',                            'encomenda_atualizada'),
+        'enviado':    ('Encomenda enviada',       'A tua encomenda está a caminho!',                                 'encomenda_enviada'),
+        'concluido':  ('Encomenda concluída',     'A tua encomenda foi entregue. Obrigado pela compra!',             'encomenda_concluida'),
+        'cancelado':  ('Encomenda cancelada',     f'A tua encomenda #{encomenda.id} foi cancelada.',                 'encomenda_cancelada'),
+    }
+    if novo_status in MSGS_COMPRADOR:
+        titulo, msg, tipo_c = MSGS_COMPRADOR[novo_status]
+        notificar(
+            utilizador=encomenda.comprador,
+            tipo=tipo_c,
+            titulo=f'{titulo} #{encomenda.id}',
+            mensagem=msg,
+            loja=encomenda.loja,
+            link='/perfil',
+        )
+ 
+    # ── Notifica dono/gestor quando concluído ─────────────────
+    if novo_status == 'concluido':
+        _perc = encomenda.loja.percentagem_comissao
+        _com  = (encomenda.valor_total * _perc / 100).quantize(Decimal('0.01'))
+        _liq  = encomenda.valor_total - _com
+ 
+        notificar_staff(
+            loja=encomenda.loja,
+            roles=['dono', 'gestor'],
+            tipo='encomenda_concluida_loja',
+            titulo=f'Encomenda #{encomenda.id} concluída ✓',
+            mensagem=f'Receita: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com} · Líquido: €{_liq}.',
+            link=f'/loja/{encomenda.loja_id}/backoffice',
+        )
+ 
+        # notifica admins se pagamento era dinheiro (comissão registada agora)
+        try:
+            if encomenda.pagamento.referencia_transacao == 'dinheiro':
+                notificar_admins(
+                    tipo='comissao_recebida',
+                    titulo=f'Comissão registada (dinheiro) — {encomenda.loja.nome}',
+                    mensagem=f'Encomenda #{encomenda.id} concluída · Comissão: €{_com}.',
+                    loja=encomenda.loja,
+                    link='/admin',
+                )
+        except Exception:
+            pass
+ 
+    # ── Notifica loja quando cancelado ───────────────────────
+    if novo_status == 'cancelado':
+        notificar_staff(
+            loja=encomenda.loja,
+            roles=['dono', 'gestor', 'staff'],
+            tipo='encomenda_cancelada_loja',
+            titulo=f'Encomenda #{encomenda.id} cancelada',
+            mensagem='Stock reposto automaticamente.',
+            link=f'/loja/{encomenda.loja_id}/backoffice',
+        )
+ 
     return Response(
         EncomendaSerializer(encomenda, context={'request': request}).data
     )
@@ -432,4 +540,13 @@ def inventario_ajustar_stock(request, loja_id, produto_id):
 
     inventario.quantidade = nova_qty
     inventario.save(update_fields=['quantidade', 'data_atualizacao'])
+    if inventario.quantidade <= 5:
+        notificar_staff(
+            loja=loja,
+            roles=['dono', 'gestor'],
+            tipo='stock_baixo',
+            titulo=f'⚠️ Stock baixo: {inventario.produto.nome}',
+            mensagem=f'Apenas {inventario.quantidade} unidades restantes.',
+            link=f'/loja/{loja.id}/backoffice',
+        )
     return Response(InventarioSerializer(inventario).data)

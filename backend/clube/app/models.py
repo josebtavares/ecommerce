@@ -14,7 +14,7 @@ class Utilizador(models.Model):
     Um utilizador pode comprar, abrir loja, ser staff ou condutor.
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='utilizador')
-
+ 
     telefone        = models.CharField(max_length=30, blank=True, default='')
     morada          = models.CharField(max_length=300, blank=True, default='')
     foto            = models.ImageField(
@@ -27,24 +27,76 @@ class Utilizador(models.Model):
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
     status          = models.CharField(max_length=20, default='ativo')
-
+ 
+    # ── Role no painel de administração ──────────────────────
+    # Só activo se user.is_staff=True
+    ROLES_ADMIN = [
+        ('superadmin',   'Super Admin'),
+        ('moderador',    'Moderador'),
+        ('suporte',      'Suporte'),
+        ('contabilista', 'Contabilista'),
+    ]
+ 
+    PERMISSOES_ADMIN = {
+        'superadmin': [
+            'ver_stats',
+            'gerir_lojas',
+            'gerir_utilizadores',
+            'gerir_produtos',
+            'gerir_encomendas',
+            'gerir_pagamentos',
+            'gerir_tipos_globais',
+        ],
+        'moderador': [
+            'ver_stats',
+            'gerir_lojas',
+            'gerir_produtos',
+        ],
+        'suporte': [
+            'ver_stats',
+            'gerir_utilizadores',
+            'gerir_lojas',
+            'gerir_encomendas',
+        ],
+        'contabilista': [
+            'ver_stats',
+            'gerir_pagamentos',
+            'gerir_encomendas',
+        ],
+    }
+ 
+    role_admin = models.CharField(
+        max_length=20,
+        choices=ROLES_ADMIN,
+        null=True, blank=True,
+        default=None,
+    )
+ 
     # ── propriedades de conveniência ──────────────────────────
     @property
     def nome(self):
         return self.user.get_full_name() or self.user.username
-
+ 
     @property
     def email(self):
         return self.user.email
-
+ 
     @property
     def username(self):
         return self.user.username
-
+ 
     @property
     def is_active(self):
         return self.status == 'ativo'
-
+ 
+    def pode_admin(self, permissao: str) -> bool:
+        """Verifica se este utilizador tem permissão no painel de admin."""
+        if not self.user.is_staff:
+            return False
+        if not self.role_admin:
+            return False
+        return permissao in self.PERMISSOES_ADMIN.get(self.role_admin, [])
+ 
     def __str__(self):
         return self.user.username
 
@@ -111,6 +163,7 @@ class Loja(models.Model):
     categoria       = models.CharField(max_length=100)          # ex: 'comida', 'roupa', 'eletronicos'
     localizacao     = models.CharField(max_length=300, blank=True, default='')
     percentagem_iva = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    percentagem_comissao = models.DecimalField(max_digits=5, decimal_places=2, default=10.00, validators=[MinValueValidator(0), MaxValueValidator(100)],help_text='Percentagem de comissao cobrada pela plataforma')
 
     # Opções de entrega/levantamento
     entrega_ativa   = models.BooleanField(default=False)
@@ -415,6 +468,12 @@ class Encomenda(models.Model):
     notas           = models.TextField(blank=True, default='')
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
+    opcao_entrega   = models.ForeignKey(
+        'OpcaoEntrega',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='encomendas',
+    )
 
     class Meta:
         ordering = ['-data_criacao']
@@ -543,6 +602,7 @@ class AvaliacaoLoja(models.Model):
                   )
     comentario  = models.TextField(blank=True, default='')
     data_criacao= models.DateTimeField(auto_now_add=True)
+    oculta = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('utilizador', 'loja', 'encomenda')
@@ -648,6 +708,76 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['created_at']
+        
+class Comissao(models.Model):
+    STATUS = [
+        ('pendente',   'Pendente'),    # registada, aguarda liquidacao
+        ('liquidada',  'Liquidada'),   # paga ao administrador
+    ]
+ 
+    encomenda        = models.OneToOneField(
+                           Encomenda, on_delete=models.CASCADE,
+                           related_name='comissao'
+                       )
+    loja             = models.ForeignKey(
+                           Loja, on_delete=models.CASCADE,
+                           related_name='comissoes'
+                       )
+    valor_encomenda  = models.DecimalField(max_digits=10, decimal_places=2)
+    percentagem      = models.DecimalField(max_digits=5, decimal_places=2)
+    valor_comissao   = models.DecimalField(max_digits=10, decimal_places=2)
+    status           = models.CharField(max_length=15, choices=STATUS, default='pendente')
+    data_criacao     = models.DateTimeField(auto_now_add=True)
+    data_liquidacao  = models.DateTimeField(null=True, blank=True)
+    notas            = models.TextField(blank=True, default='')
+ 
+    class Meta:
+        ordering = ['-data_criacao']
+ 
+    def __str__(self):
+        return f'Comissao #{self.pk} — {self.loja.nome} — {self.valor_comissao}€ ({self.status})'
+ 
+    @classmethod
+    def registar(cls, encomenda):
+        """
+        Cria o registo de comissao para uma encomenda.
+        Chama isto apos pagamento confirmado (cartao/mbway)
+        ou quando encomenda.status = concluido (dinheiro).
+        Evita duplicados com get_or_create.
+        """
+        loja = encomenda.loja
+        percentagem   = loja.percentagem_comissao
+        valor_comissao = (encomenda.valor_total * percentagem / 100).quantize(
+            __import__('decimal').Decimal('0.01')
+        )
+        comissao, criada = cls.objects.get_or_create(
+            encomenda=encomenda,
+            defaults={
+                'loja':           loja,
+                'valor_encomenda': encomenda.valor_total,
+                'percentagem':    percentagem,
+                'valor_comissao': valor_comissao,
+                'status':         'pendente',
+            }
+        )
+        return comissao, criada
+    
+    
+class Categoria(models.Model):
+    """
+    Categorias de loja geridas pelo admin.
+    A Loja guarda só o nome (CharField) — sem FK.
+    """
+    nome  = models.CharField(max_length=100, unique=True)
+    icon  = models.CharField(max_length=10, default='🏪')
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveIntegerField(default=0)
+ 
+    class Meta:
+        ordering = ['ordem', 'nome']
+ 
+    def __str__(self):
+        return f'{self.icon} {self.nome}'
 
 
 # ══════════════════════════════════════════════════════════════
@@ -694,6 +824,98 @@ class PermissaoLoja(BasePermission):
         if not loja:
             return False
         return UtilizadorLoja.verificar_permissao(loja, utilizador, self.permissao_necessaria)
+    
+    
+# ══════════════════════════════════════════════════════════════
+# NOTIFICAÇÕES
+# ══════════════════════════════════════════════════════════════
+ 
+class Notificacao(models.Model):
+    TIPOS = [
+        # Admin do site
+        ('loja_pendente',            'Loja pendente de aprovação'),
+        ('comissao_recebida',        'Comissão recebida'),
+        # Dono/gestor da loja
+        ('loja_aprovada',            'Loja aprovada'),
+        ('loja_rejeitada',           'Loja rejeitada'),
+        ('nova_encomenda',           'Nova encomenda'),
+        ('pagamento_aprovado',       'Pagamento aprovado'),
+        ('encomenda_concluida_loja', 'Encomenda concluída na loja'),
+        ('encomenda_cancelada_loja', 'Encomenda cancelada na loja'),
+        ('stock_baixo',              'Stock baixo'),
+        ('novo_staff',               'Novo membro de staff'),
+        ('avaliacao_recebida',       'Nova avaliação recebida'),
+        # Condutor
+        ('entrega_atribuida',        'Entrega atribuída'),
+        ('entrega_cancelada',        'Entrega cancelada'),
+        # Comprador
+        ('encomenda_paga',           'Encomenda paga'),
+        ('encomenda_enviada',        'Encomenda enviada'),
+        ('encomenda_concluida',      'Encomenda concluída'),
+        ('encomenda_cancelada',      'Encomenda cancelada'),
+        # Staff
+        ('encomenda_atualizada',     'Encomenda actualizada'),
+    ]
+ 
+    utilizador   = models.ForeignKey(
+                       Utilizador, on_delete=models.CASCADE,
+                       related_name='notificacoes'
+                   )
+    tipo         = models.CharField(max_length=30, choices=TIPOS)
+    titulo       = models.CharField(max_length=200)
+    mensagem     = models.TextField(blank=True, default='')
+    loja         = models.ForeignKey(
+                       'Loja', on_delete=models.CASCADE,
+                       null=True, blank=True,
+                       related_name='notificacoes'
+                   )
+    link         = models.CharField(max_length=300, blank=True, default='')
+    lida         = models.BooleanField(default=False)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        ordering = ['-data_criacao']
+ 
+    def __str__(self):
+        return f'{self.tipo} → {self.utilizador} ({self.lida})'
+ 
+    @classmethod
+    def criar(cls, utilizador, tipo, titulo, mensagem='', loja=None, link=''):
+        return cls.objects.create(
+            utilizador=utilizador,
+            tipo=tipo,
+            titulo=titulo,
+            mensagem=mensagem,
+            loja=loja,
+            link=link,
+        )
+ 
+    @classmethod
+    def criar_para_staff(cls, loja, roles, tipo, titulo, mensagem='', link='', excluir=None):
+        """
+        Cria notificação para todos os membros activos da loja com os roles indicados.
+        roles: lista de strings, ex: ['dono', 'gestor', 'staff']
+        excluir: Utilizador a excluir (ex: o próprio que fez a acção)
+        """
+        from .models import UtilizadorLoja
+        membros = UtilizadorLoja.objects.filter(
+            loja=loja, role__in=roles, ativo=True
+        ).select_related('utilizador')
+ 
+        notificacoes = []
+        for membro in membros:
+            if excluir and membro.utilizador == excluir:
+                continue
+            notificacoes.append(cls(
+                utilizador=membro.utilizador,
+                tipo=tipo,
+                titulo=titulo,
+                mensagem=mensagem,
+                loja=loja,
+                link=link,
+            ))
+        if notificacoes:
+            cls.objects.bulk_create(notificacoes)
 
 
 # ── Permissões concretas ──────────────────────────────────────

@@ -202,7 +202,7 @@ def produto_get(request, id):
 
 def _verificar_permissao_loja(request, loja_id, permissao):
     """Helper: verifica se o utilizador tem permissão na loja."""
-    loja = get_object_or_404(Loja, id=loja_id, ativa=True)
+    loja = get_object_or_404(Loja, id=loja_id)
     utilizador = request.user.utilizador
     if not UtilizadorLoja.verificar_permissao(loja, utilizador, permissao):
         return None, loja, Response(
@@ -293,6 +293,19 @@ def produto_create(request, loja_id):
         atributos=atributos,
         ficheiro=request.FILES.get('ficheiro')
     )
+ 
+    # cria inventário automaticamente com quantidade=0
+    from ..models import Inventario
+    Inventario.objects.get_or_create(
+        loja=loja,
+        produto=produto,
+        defaults={
+            'quantidade':   0,
+            'preco_custo':  0,
+            'preco_venda':  produto.preco,
+        }
+    )
+ 
     return Response(
         ProdutoSerializer(produto, context={'request': request}).data,
         status=status.HTTP_201_CREATED

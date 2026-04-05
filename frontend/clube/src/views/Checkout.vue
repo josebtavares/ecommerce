@@ -205,7 +205,7 @@
 
           <!-- Itens -->
           <div class="space-y-3 mb-4">
-            <div v-for="item in itens" :key="item.id" class="flex  gap-3">
+            <div v-for="item in itens" :key="item.id" class="flex items-center gap-3">
               <img v-if="item.produto?.ficheiro_url" :src="item.produto.ficheiro_url"
                    :alt="item.produto?.nome"
                    class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
@@ -214,9 +214,9 @@
                 <p class="text-xs font-medium text-zinc-200 truncate">{{ item.produto?.nome }}</p>
                 <p class="text-xs text-zinc-500">x{{ item.quantidade }}</p>
                 <div v-if="item.atributos && Object.keys(item.atributos).length > 0"
-                     class="flex flex-row gap-1 mt-1">
+                     class="flex flex-wrap gap-1 mt-1">
                   <span v-for="(val, key) in item.atributos" :key="key"
-                        class="flex gap-1 px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] rounded capitalize">
+                        class="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] rounded capitalize">
                     {{ key }}: <span class="text-zinc-300 font-medium">{{ val }}</span>
                   </span>
                 </div>
@@ -417,27 +417,34 @@ export default {
       this.erro = ''
       await this.wrap(async () => {
         // 1 — cria encomenda
+        const payload = {
+          tipo_entrega:   this.tipoEntrega,
+          morada_entrega: this.tipoEntrega === 'entrega' ? this.moradaEntrega : '',
+          notas:          this.notas,
+        }
+        // envia opcao de entrega para o backend calcular o custo
+        if (this.tipoEntrega === 'entrega' && this.opcaoEntregaId) {
+          payload.opcao_entrega_id = this.opcaoEntregaId
+        }
         const { data: encomenda } = await api.post(
           `/app/loja/${this.lojaId}/encomenda/criar/`,
-          {
-            tipo_entrega:   this.tipoEntrega,
-            morada_entrega: this.tipoEntrega === 'entrega' ? this.moradaEntrega : '',
-            notas:          this.notas,
-          }
+          payload
         )
 
         // 2 — pagamento simulado
         const endpoint = ENDPOINT_PAGAMENTO[this.metodoPagamento] || '/app/pagamento/dinheiro/'
-        const payload  = { encomenda_id: encomenda.id }
+        const pagamentoPayload = { encomenda_id: encomenda.id }
 
         if (this.metodoPagamento === 'mbway') {
           const user = JSON.parse(localStorage.getItem('user') || '{}')
-          payload.telemovel = user.telefone || '910000000'
+          pagamentoPayload.telemovel = user.telefone || '910000000'
         }
 
-        await api.post(endpoint, payload)
+        await api.post(endpoint, pagamentoPayload)
 
-        // 3 — redireciona para sucesso
+        // 3 — limpa carrinho em memoria e redireciona para sucesso
+        // dispara evento global para o multiCart limpar o estado
+        window.dispatchEvent(new CustomEvent('carrinho-limpo', { detail: { lojaId: this.lojaId } }))
         this.$router.push({ name: 'EncomendaSucesso', params: { id: encomenda.id } })
       })
 

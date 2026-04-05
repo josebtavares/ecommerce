@@ -40,24 +40,64 @@ class MetodoPagamentoSerializer(serializers.ModelSerializer):
 # PAGAMENTO
 # ══════════════════════════════════════════════════════════════
 
+# Substitui PagamentoSerializer no ficheiro PagamentoSerializer.py
+
 class PagamentoSerializer(serializers.ModelSerializer):
-    metodo_tipo = serializers.CharField(source='metodo.tipo', read_only=True)
+    metodo_tipo          = serializers.CharField(source='metodo.tipo', read_only=True, default=None)
+    loja_nome            = serializers.SerializerMethodField()
+    comprador_username   = serializers.SerializerMethodField()
+    comissao_valor       = serializers.SerializerMethodField()
+    comissao_percentagem = serializers.SerializerMethodField()
+    receita_liquida      = serializers.SerializerMethodField()
+    data_criacao         = serializers.DateTimeField(format='%d-%m-%Y %H:%M', read_only=True)
 
     class Meta:
         model  = Pagamento
         fields = [
             'id',
             'encomenda',
-            'metodo', 'metodo_tipo',
+            'metodo',
+            'metodo_tipo',
+            'loja_nome',
+            'comprador_username',
             'valor',
             'status',
             'referencia_transacao',
+            'comissao_valor',
+            'comissao_percentagem',
+            'receita_liquida',
             'data_criacao',
         ]
-        read_only_fields = [
-            'valor', 'status',
-            'referencia_transacao', 'data_criacao',
-        ]
+
+    def get_loja_nome(self, obj):
+        try:
+            return obj.encomenda.loja.nome
+        except Exception:
+            return None
+
+    def get_comprador_username(self, obj):
+        try:
+            return obj.encomenda.comprador.user.username
+        except Exception:
+            return None
+
+    def get_comissao_valor(self, obj):
+        try:
+            return str(obj.encomenda.comissao.valor_comissao)
+        except Exception:
+            return None
+
+    def get_comissao_percentagem(self, obj):
+        try:
+            return str(obj.encomenda.comissao.percentagem)
+        except Exception:
+            return None
+
+    def get_receita_liquida(self, obj):
+        try:
+            return str(obj.encomenda.valor_total - obj.encomenda.comissao.valor_comissao)
+        except Exception:
+            return str(obj.valor)
 
 
 # ══════════════════════════════════════════════════════════════

@@ -55,6 +55,8 @@ def _build_user_payload(utilizador: Utilizador, request=None) -> dict:
         'verificado'     : utilizador.verificado,
         'rating'         : str(utilizador.rating),
         'status'         : utilizador.status,
+        'is_staff'       : utilizador.user.is_staff,        
+        'role_admin'     : utilizador.role_admin,           
         'data_criacao'   : utilizador.data_criacao.strftime('%d-%m-%Y %H:%M:%S'),
     }
 

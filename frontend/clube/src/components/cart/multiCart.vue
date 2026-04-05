@@ -1,6 +1,6 @@
 <template>
   <!-- Cart Toggle Button -->
-  <div class="fixed top-[0.7rem] right-22 z-50">
+  <div class="fixed top-[1rem] right-30 z-50">
     <button
       @click="toggleCart"
       class="relative p-3 rounded-full bg-zinc-900 border border-zinc-700

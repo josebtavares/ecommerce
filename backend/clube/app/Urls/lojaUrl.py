@@ -26,4 +26,7 @@ urlpatterns = [
     path('loja/<int:loja_id>/staff/adicionar/',         lojaView.staff_add,             name='staff-add'),
     path('loja/<int:loja_id>/staff/<int:membro_id>/',   lojaView.staff_update_role,     name='staff-update'),
     path('loja/<int:loja_id>/staff/<int:membro_id>/remover/', lojaView.staff_remove,    name='staff-remove'),
+    
+    # ── Categorias ─────────────────────────────────────────────────
+    path('categorias/', lojaView.categoria_list, name='categoria-list'),
 ]

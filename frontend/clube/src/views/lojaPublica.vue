@@ -132,48 +132,9 @@
         </div>
 
         <!-- AVALIAÇÕES -->
-        <div class="mt-4">
+        <div class="mt-10">
           <h2 class="text-xl font-bold text-zinc-100 mb-5">Avaliações</h2>
-          <div v-if="loadingAvaliacoes" class="space-y-3">
-            <div v-for="n in 3" :key="n" class="bg-zinc-900 rounded-2xl h-20 animate-pulse"></div>
-          </div>
-          <div v-else-if="avaliacoes.length === 0" class="text-center py-10 text-zinc-500 text-sm">
-            Ainda sem avaliações.
-          </div>
-          <div v-else class="space-y-3">
-            <div class="bg-zinc-900 rounded-2xl p-5 border border-zinc-800 flex items-center gap-5 mb-5">
-              <div class="text-center">
-                <p class="text-4xl font-extrabold text-white">{{ loja.rating_medio || '—' }}</p>
-                <div class="flex gap-0.5 mt-1 justify-center">
-                  <svg v-for="n in 5" :key="n" xmlns="http://www.w3.org/2000/svg"
-                       :class="['h-4 w-4', n <= Math.round(loja.rating_medio) ? 'text-yellow-400' : 'text-zinc-600']"
-                       fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                </div>
-                <p class="text-xs text-zinc-500 mt-1">{{ avaliacoes.length }} avaliações</p>
-              </div>
-            </div>
-            <div v-for="av in avaliacoes" :key="av.id" class="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300">
-                    {{ av.utilizador_username?.charAt(0)?.toUpperCase() || '?' }}
-                  </div>
-                  <span class="text-sm font-medium text-zinc-300">{{ av.utilizador_username }}</span>
-                </div>
-                <div class="flex gap-0.5">
-                  <svg v-for="n in 5" :key="n" xmlns="http://www.w3.org/2000/svg"
-                       :class="['h-3.5 w-3.5', n <= av.pontuacao ? 'text-yellow-400' : 'text-zinc-600']"
-                       fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                </div>
-              </div>
-              <p v-if="av.comentario" class="text-sm text-zinc-400 leading-relaxed">{{ av.comentario }}</p>
-              <p class="text-xs text-zinc-600 mt-2">{{ formatDate(av.data_criacao) }}</p>
-            </div>
-          </div>
+          <AvaliacaoLoja :loja-id="$route.params.id" @rating-updated="onRatingUpdated" />
         </div>
 
       </div>
@@ -198,11 +159,12 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import ProductSlider from '@/components/sliders/ProductSlider.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 
 export default {
   name: 'LojaPublica',
-  components: { Swiper, SwiperSlide, ProductInfoCard, MultiCart,ProductSlider, Profile, ProductCatalog },
+  components: { Swiper, SwiperSlide, ProductInfoCard, MultiCart,ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
 
   data () {
     return {
@@ -243,7 +205,7 @@ export default {
       this.fetchLoja(id),
       this.fetchProdutos(id),
       this.fetchOpcoesEntrega(id),
-      this.fetchAvaliacoes(id),
+      //this.fetchAvaliacoes(id),
     ])
     this.loading = false
   },
@@ -293,12 +255,18 @@ export default {
       finally { this.loadingAvaliacoes = false }
     },
 
-      log_out () {
+    onRatingUpdated ({ media }) {
+      if (this.loja && media !== undefined) {
+        this.loja.rating_medio = media
+      }
+    },
+
+    log_out () {
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         localStorage.removeItem('user')
         this.$router.push({ name: 'Login' })
-      },
+    },
   }
 }
 </script>

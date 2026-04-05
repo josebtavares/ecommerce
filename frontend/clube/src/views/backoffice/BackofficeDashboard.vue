@@ -2,7 +2,7 @@
   <div class="space-y-6">
 
     <!-- KPI Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
       <div v-for="kpi in kpis" :key="kpi.label"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
         <div class="flex items-center justify-between mb-3">
@@ -89,17 +89,19 @@ export default {
     return {
       loading: true,
       encomendas: [],
-      stats: { total: 0, receita: 0, produtos: 0, pendentes: 0 },
+      stats: { total: 0, receita: 0, comissoes: 0, liquida: 0, produtos: 0, pendentes: 0 },
     }
   },
 
   computed: {
     kpis () {
       return [
-        { label: 'Total encomendas', value: this.stats.total,              sub: 'Todas as encomendas',      bg: 'bg-blue-500/10',   color: 'text-blue-400',   iconComp: IconBag     },
-        { label: 'Receita total',    value: this.formatPrice(this.stats.receita), sub: 'Encomendas pagas', bg: 'bg-green-500/10',  color: 'text-green-400',  iconComp: IconMoney   },
-        { label: 'Produtos activos', value: this.stats.produtos,           sub: 'No catálogo',              bg: 'bg-purple-500/10', color: 'text-purple-400', iconComp: IconBox     },
-        { label: 'Pendentes',        value: this.stats.pendentes,          sub: 'A aguardar',               bg: 'bg-yellow-500/10', color: 'text-yellow-400', iconComp: IconPending },
+        { label: 'Total encomendas', value: this.stats.total,                        sub: 'Todas as encomendas',        bg: 'bg-blue-500/10',   color: 'text-blue-400',   iconComp: IconBag     },
+        { label: 'Receita bruta',    value: this.formatPrice(this.stats.receita),     sub: 'Valor total das encomendas', bg: 'bg-green-500/10',  color: 'text-green-400',  iconComp: IconMoney   },
+        { label: 'Comissoes pagas',  value: this.formatPrice(this.stats.comissoes),   sub: 'Descontado pela plataforma', bg: 'bg-red-500/10',    color: 'text-red-400',    iconComp: IconPending },
+        { label: 'Receita liquida',  value: this.formatPrice(this.stats.liquida),     sub: 'O que fica para ti',         bg: 'bg-emerald-500/10',color: 'text-emerald-400',iconComp: IconMoney   },
+        { label: 'Produtos activos', value: this.stats.produtos,                      sub: 'No catalogo',                bg: 'bg-purple-500/10', color: 'text-purple-400', iconComp: IconBox     },
+        { label: 'Pendentes',        value: this.stats.pendentes,                     sub: 'A aguardar',                 bg: 'bg-yellow-500/10', color: 'text-yellow-400', iconComp: IconPending },
       ]
     },
     statusStats () {
@@ -138,10 +140,15 @@ export default {
         ])
         const todasEncomendas = enc.data.results || enc.data
         this.encomendas = todasEncomendas.slice(0, 8)
-        const receita = todasEncomendas.filter(e => ['pago','preparando','enviado','concluido'].includes(e.status)).reduce((s, e) => s + parseFloat(e.valor_total || 0), 0)
+        const encPagas = todasEncomendas.filter(e => ['pago','preparando','enviado','concluido'].includes(e.status))
+        const receita   = encPagas.reduce((s, e) => s + parseFloat(e.valor_total || 0), 0)
+        const comissoes = encPagas.reduce((s, e) => s + parseFloat(e.comissao_valor || 0), 0)
+        const liquida   = encPagas.reduce((s, e) => s + parseFloat(e.receita_liquida || e.valor_total || 0), 0)
         this.stats = {
           total:     todasEncomendas.length,
           receita,
+          comissoes,
+          liquida,
           produtos:  prod.data.count ?? 0,
           pendentes: todasEncomendas.filter(e => e.status === 'pendente').length,
         }

@@ -1,8 +1,6 @@
 from rest_framework import serializers
-from ..models import (
-    Inventario, Carrinho, ItemCarrinho,
-    Encomenda, ItemEncomenda, Produto
-)
+from ..models import Inventario, Carrinho, ItemCarrinho, Encomenda, ItemEncomenda, Produto, Comissao
+
 from .ProdutoSerializer import ProdutoMiniSerializer
 from .LojaSerializer import LojaMiniSerializer
 
@@ -123,12 +121,18 @@ class ItemEncomendaSerializer(serializers.ModelSerializer):
 
 
 class EncomendaSerializer(serializers.ModelSerializer):
-    itens        = ItemEncomendaSerializer(many=True, read_only=True)
-    loja_nome    = serializers.CharField(source='loja.nome',      read_only=True)
-    comprador_username = serializers.CharField(
-        source='comprador.user.username', read_only=True
-    )
-
+    itens              = ItemEncomendaSerializer(many=True, read_only=True)
+    loja_nome          = serializers.CharField(source='loja.nome', read_only=True)
+    comprador_username = serializers.CharField(source='comprador.user.username', read_only=True)
+    metodo_pagamento   = serializers.SerializerMethodField()
+    pagamento_status   = serializers.SerializerMethodField()
+    comissao_valor     = serializers.SerializerMethodField()
+    comissao_percentagem = serializers.SerializerMethodField()
+    receita_liquida    = serializers.SerializerMethodField()
+    opcao_entrega_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    entrega_condutor = serializers.SerializerMethodField()
+    entrega_status   = serializers.SerializerMethodField()
+ 
     class Meta:
         model  = Encomenda
         fields = [
@@ -139,59 +143,177 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'valor_total',
             'tipo_entrega',
             'status',
+            'metodo_pagamento',
+            'pagamento_status',
+            'comissao_valor',
+            'comissao_percentagem',
+            'receita_liquida',
             'morada_entrega',
             'notas',
             'data_criacao', 'data_atualizacao',
+            'opcao_entrega_id',
+            'entrega_condutor', 
+            'entrega_status',
         ]
         read_only_fields = [
             'comprador', 'loja', 'valor_total',
             'data_criacao', 'data_atualizacao',
         ]
-
+ 
+    def get_metodo_pagamento(self, obj):
+        try:
+            return obj.pagamento.metodo.tipo if obj.pagamento and obj.pagamento.metodo else None
+        except Exception:
+            return None
+ 
+    def get_pagamento_status(self, obj):
+        try:
+            return obj.pagamento.status
+        except Exception:
+            return None
+ 
+    def get_comissao_valor(self, obj):
+        try:
+            return str(obj.comissao.valor_comissao)
+        except Exception:
+            return None
+ 
+    def get_comissao_percentagem(self, obj):
+        try:
+            return str(obj.comissao.percentagem)
+        except Exception:
+            return None
+ 
+    def get_receita_liquida(self, obj):
+        try:
+            return str(obj.valor_total - obj.comissao.valor_comissao)
+        except Exception:
+            return str(obj.valor_total)
+ 
     def validate_tipo_entrega(self, value):
-        """Valida se a loja suporta o tipo de entrega escolhido."""
         loja = self.context.get('loja')
         if not loja:
             return value
         if value == 'entrega' and not loja.entrega_ativa:
-            raise serializers.ValidationError('Esta loja não oferece entrega ao domicílio.')
+            raise serializers.ValidationError('Esta loja nao oferece entrega ao domicilio.')
         if value == 'levantamento' and not loja.levantamento_ativo:
-            raise serializers.ValidationError('Esta loja não oferece levantamento em loja.')
+            raise serializers.ValidationError('Esta loja nao oferece levantamento em loja.')
         return value
-
+ 
     def validate(self, attrs):
         if attrs.get('tipo_entrega') == 'entrega':
             if not attrs.get('morada_entrega', '').strip():
                 raise serializers.ValidationError(
-                    {'morada_entrega': 'Morada de entrega obrigatória para entregas ao domicílio.'}
+                    {'morada_entrega': 'Morada de entrega obrigatoria para entregas ao domicilio.'}
                 )
         return attrs
+    
+    def get_entrega_condutor(self, obj):
+        try:
+            condutor = obj.entrega.condutor
+            if not condutor:
+                return None
+            return condutor.utilizador.nome or condutor.utilizador.username
+        except Exception:
+            return None
+ 
+    def get_entrega_status(self, obj):
+        try:
+            return obj.entrega.status
+        except Exception:
+            return None
 
 
 class EncomendaMiniSerializer(serializers.ModelSerializer):
     """Usado em listagens — sem itens detalhados."""
-    loja_nome = serializers.CharField(source='loja.nome', read_only=True)
-
+    loja_nome          = serializers.CharField(source='loja.nome', read_only=True)
+    comprador_username = serializers.CharField(source='comprador.user.username', read_only=True)
+    metodo_pagamento   = serializers.SerializerMethodField()
+    comissao_valor     = serializers.SerializerMethodField()
+    comissao_percentagem = serializers.SerializerMethodField()
+    receita_liquida    = serializers.SerializerMethodField()
+ 
     class Meta:
         model  = Encomenda
         fields = [
             'id', 'loja', 'loja_nome',
-            'valor_total', 'tipo_entrega',
-            'status', 'data_criacao',
+            'comprador_username',
+            'valor_total',
+            'tipo_entrega',
+            'status',
+            'metodo_pagamento',
+            'comissao_valor',
+            'comissao_percentagem',
+            'receita_liquida',
+            'data_criacao',
         ]
+ 
+    def get_metodo_pagamento(self, obj):
+        try:
+            return obj.pagamento.metodo.tipo if obj.pagamento and obj.pagamento.metodo else None
+        except Exception:
+            return None
+ 
+    def get_comissao_valor(self, obj):
+        try:
+            return str(obj.comissao.valor_comissao)
+        except Exception:
+            return None
+ 
+    def get_comissao_percentagem(self, obj):
+        try:
+            return str(obj.comissao.percentagem)
+        except Exception:
+            return None
+ 
+    def get_receita_liquida(self, obj):
+        try:
+            return str(obj.valor_total - obj.comissao.valor_comissao)
+        except Exception:
+            return str(obj.valor_total)
 
 
 class AtualizarStatusEncomendaSerializer(serializers.ModelSerializer):
-    """Usado pelo backoffice da loja para mudar o status livremente."""
     class Meta:
         model  = Encomenda
         fields = ['status']
  
     def validate_status(self, value):
         instancia = self.instance
-        # só bloqueia estados terminais — o backoffice pode mudar livremente os outros
-        if instancia.status in ('concluido', 'cancelado'):
+        status_actual = instancia.status
+ 
+        # estados finais — não podem ser alterados
+        if status_actual in ('concluido', 'cancelado'):
             raise serializers.ValidationError(
-                f'Encomenda já está {instancia.status} — não pode ser alterada.'
+                f'Encomenda já está {status_actual} — não pode ser alterada.'
             )
+ 
+        # ordem válida de progressão (entrega ao domicílio)
+        ORDEM_ENTREGA     = ['pendente', 'pago', 'preparando', 'enviado', 'concluido']
+        # ordem válida para takeaway — sem "enviado"
+        ORDEM_LEVANTAMENTO = ['pendente', 'pago', 'preparando', 'concluido']
+ 
+        # cancelar é sempre permitido
+        if value == 'cancelado':
+            return value
+ 
+        # takeaway: bloqueia "enviado" e permite preparando → concluido
+        if instancia.tipo_entrega == 'levantamento':
+            if value == 'enviado':
+                raise serializers.ValidationError(
+                    'Encomendas de takeaway não podem ser marcadas como "enviado".'
+                )
+            ordem = ORDEM_LEVANTAMENTO
+        else:
+            ordem = ORDEM_ENTREGA
+ 
+        idx_actual = ordem.index(status_actual) if status_actual in ordem else -1
+        idx_novo   = ordem.index(value)         if value in ordem         else -1
+ 
+        # não permite retroceder após enviado (só para entrega)
+        if instancia.tipo_entrega == 'entrega' and status_actual == 'enviado' and idx_novo < idx_actual:
+            raise serializers.ValidationError(
+                'Não é possível retroceder uma encomenda já enviada.'
+            )
+ 
         return value

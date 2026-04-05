@@ -7,6 +7,9 @@ from rest_framework.decorators import api_view, parser_classes, permission_class
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from ..Views.notificacaoView import notificar_admins,notificar
+
+
 
 from ..models import Loja, LojaTemplate, UtilizadorLoja, Utilizador
 from ..Serializers.LojaSerializer import (
@@ -126,20 +129,37 @@ def loja_get(request, id):
 def loja_create(request):
     """
     POST /app/loja/criar/
-    Cria a loja e atribui automaticamente o criador como 'dono'.
+    Só utilizadores verificados podem criar lojas.
+    Loja criada com ativa=False — aguarda aprovação do admin.
     """
     utilizador = request.user.utilizador
-
+ 
+    # verifica se o utilizador está verificado
+    if not utilizador.verificado:
+        return Response(
+            {'detail': 'A tua conta precisa de estar verificada para criar uma loja.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+ 
     serializer = LojaSerializer(data=request.data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+ 
     loja = serializer.save(
-        dono=utilizador,
-        logo=request.FILES.get('logo'),
-        banner=request.FILES.get('banner'),
+        dono   = utilizador,
+        ativa  = False,          # pendente de aprovação pelo admin
+        logo   = request.FILES.get('logo'),
+        banner = request.FILES.get('banner'),
     )
-
+    
+    notificar_admins(
+        tipo='loja_pendente',
+        titulo=f'Nova loja pendente: {loja.nome}',
+        mensagem=f'{utilizador.nome} criou a loja "{loja.nome}" ({loja.categoria}). Aguarda aprovação.',
+        loja=loja,
+        link='/admin',
+    )
+ 
     # regista o criador como dono no staff
     UtilizadorLoja.objects.create(
         loja=loja,
@@ -147,7 +167,33 @@ def loja_create(request):
         role='dono',
         ativo=True,
     )
-
+ 
+    # cria métodos de pagamento seleccionados
+    metodos = request.data.getlist('metodos_pagamento')
+    if metodos:
+        from ..models import MetodoPagamento
+        for tipo in metodos:
+            MetodoPagamento.objects.get_or_create(loja=loja, tipo=tipo, defaults={'ativo': True})
+ 
+    # cria opções de entrega (enviadas como JSON string)
+    import json
+    opcoes_raw = request.data.get('opcoes_entrega')
+    if opcoes_raw:
+        try:
+            opcoes = json.loads(opcoes_raw)
+            from ..models import OpcaoEntrega
+            for op in opcoes:
+                if op.get('nome'):
+                    OpcaoEntrega.objects.create(
+                        loja           = loja,
+                        nome           = op['nome'],
+                        preco          = op.get('preco', 0),
+                        tempo_estimado = op.get('tempo_estimado', ''),
+                        ativa          = True,
+                    )
+        except (json.JSONDecodeError, TypeError):
+            pass
+ 
     return Response(
         LojaSerializer(loja, context={'request': request}).data,
         status=status.HTTP_201_CREATED
@@ -263,26 +309,27 @@ def staff_add(request, loja_id):
     """
     POST /app/loja/<loja_id>/staff/adicionar/
     Body: { utilizador_id, role }
+    Se role=condutor → cria também registo Condutor.
     Se o utilizador já existiu no staff (ativo=False), reactiva-o.
     """
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
         return erro
-
+ 
     if request.data.get('role') == 'dono':
         return Response(
             {'detail': 'Não é possível atribuir o role de dono desta forma.'},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+ 
     utilizador_id = request.data.get('utilizador_id')
     novo_role     = request.data.get('role', 'staff')
-
+ 
     existente = UtilizadorLoja.objects.filter(
         loja=loja, utilizador_id=utilizador_id
     ).first()
-
+ 
     if existente:
         if existente.ativo:
             return Response(
@@ -290,25 +337,65 @@ def staff_add(request, loja_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
         else:
-            # reactiva o registo existente com o novo role
             existente.role  = novo_role
             existente.ativo = True
             existente.save(update_fields=['role', 'ativo'])
+            # se mudou para condutor, garante registo Condutor activo
+            if novo_role == 'condutor':
+                _sincronizar_condutor(loja, existente.utilizador, request.data.get('tipo_veiculo', ''))
+                _notificar_novo_staff(existente.utilizador, loja, novo_role)
             return Response(
                 UtilizadorLojaSerializer(existente, context={'request': request}).data,
                 status=status.HTTP_200_OK
             )
-
-    # utilizador nunca esteve no staff — cria novo registo
+ 
     serializer = UtilizadorLojaSerializer(data=request.data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+ 
     membro = serializer.save(loja=loja)
+ 
+    # se role=condutor → cria registo Condutor
+    if novo_role == 'condutor':
+        _sincronizar_condutor(loja, membro.utilizador, request.data.get('tipo_veiculo', ''))
+ 
+    _notificar_novo_staff(membro.utilizador, loja, novo_role)
+ 
     return Response(
         UtilizadorLojaSerializer(membro, context={'request': request}).data,
         status=status.HTTP_201_CREATED
     )
+    
+def _sincronizar_condutor(loja, utilizador, tipo_veiculo=''):
+    """Cria ou reactiva o registo Condutor quando role=condutor."""
+    from ..models import Condutor
+    condutor, criado = Condutor.objects.get_or_create(
+        loja=loja,
+        utilizador=utilizador,
+        defaults={'tipo_veiculo': tipo_veiculo, 'ativo': True}
+    )
+    if not criado:
+        # reactiva se estava inactivo
+        condutor.ativo = True
+        if tipo_veiculo:
+            condutor.tipo_veiculo = tipo_veiculo
+        condutor.save(update_fields=['ativo', 'tipo_veiculo'])
+    return condutor
+ 
+ 
+def _notificar_novo_staff(utilizador, loja, role):
+    try:
+        from ..Views.notificacaoView import notificar
+        notificar(
+            utilizador=utilizador,
+            tipo='novo_staff',
+            titulo=f'Foste adicionado à loja "{loja.nome}"',
+            mensagem=f'Tens o papel de {role} na loja {loja.nome}.',
+            loja=loja,
+            link=f'/loja/{loja.id}/backoffice',
+        )
+    except Exception:
+        pass
 
 
 @api_view(['PATCH'])
@@ -317,25 +404,41 @@ def staff_update_role(request, loja_id, membro_id):
     """
     PATCH /app/loja/<loja_id>/staff/<membro_id>/
     Body: { role }
+    - role muda para 'condutor'      → cria/reactiva Condutor
+    - role muda de 'condutor' para X → desactiva Condutor
     """
-    loja   = get_object_or_404(Loja, id=loja_id)
+    loja    = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
         return erro
-
+ 
     membro = get_object_or_404(UtilizadorLoja, id=membro_id, loja=loja, ativo=True)
-
+ 
     if membro.role == 'dono':
         return Response(
             {'detail': 'Não é possível alterar o role do dono.'},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+ 
+    role_anterior = membro.role
+    novo_role     = request.data.get('role', role_anterior)
+ 
     serializer = UtilizadorLojaSerializer(membro, data=request.data, partial=True)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+ 
     serializer.save()
+ 
+    # sincroniza registo Condutor se o role mudou de/para 'condutor'
+    if role_anterior != novo_role:
+        from ..models import Condutor
+        if novo_role == 'condutor':
+            # cria ou reactiva
+            _sincronizar_condutor(loja, membro.utilizador, request.data.get('tipo_veiculo', ''))
+        elif role_anterior == 'condutor':
+            # desactiva
+            Condutor.objects.filter(loja=loja, utilizador=membro.utilizador).update(ativo=False)
+ 
     return Response(serializer.data)
 
 
@@ -347,15 +450,33 @@ def staff_remove(request, loja_id, membro_id):
     _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
         return erro
-
+ 
     membro = get_object_or_404(UtilizadorLoja, id=membro_id, loja=loja, ativo=True)
-
+ 
     if membro.role == 'dono':
         return Response(
             {'detail': 'Não é possível remover o dono da loja.'},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+ 
     membro.ativo = False
     membro.save(update_fields=['ativo'])
+ 
+    # se era condutor → desactiva também o registo Condutor
+    if membro.role == 'condutor':
+        from ..models import Condutor
+        Condutor.objects.filter(loja=loja, utilizador=membro.utilizador).update(ativo=False)
+ 
     return Response({'detail': 'Membro removido do staff.'})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def categoria_list(request):
+    """GET /app/categorias/ — lista pública de categorias activas"""
+    from ..models import Categoria
+    cats = Categoria.objects.filter(ativo=True)
+    return Response([
+        {'id': c.id, 'nome': c.nome, 'icon': c.icon, 'ordem': c.ordem}
+        for c in cats
+    ])

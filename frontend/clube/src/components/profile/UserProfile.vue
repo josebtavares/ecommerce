@@ -1,5 +1,6 @@
 <template>
-  <div class="text-white fixed top-6 right-[2.5vw] z-20">
+  <div class="text-white fixed top-6 right-[2.5vw] z-20 flex items-center gap-3">
+    <NotificacaoSino />
     <font-awesome-icon :icon="['fas', 'user']" size="xl" class="cursor-pointer" @click="toggle" />
 
     <!-- Backdrop -->
@@ -31,7 +32,10 @@
               <input ref="fileInput" type="file" accept="image/*" @change="onFileChange" class="hidden" />
             </div>
             <div>
-              <p class="font-bold text-zinc-100">{{ data.username }}</p>
+              <div class="flex items-center gap-2">
+                <p class="font-bold text-zinc-100">{{ data.username }}</p>
+                <span v-if="data.verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold">✓ Verificado</span>
+              </div>
               <p class="text-xs text-zinc-500">{{ data.email }}</p>
             </div>
           </div>
@@ -345,6 +349,10 @@
 
         <!-- Footer — logout -->
         <div class="border-t border-zinc-800 p-4 flex-shrink-0">
+          <button v-if="data.is_staff" @click="$router.push('/admin'); isOpen = false"
+            class="w-full py-2 text-xs text-purple-400 hover:text-purple-300 transition">
+            ⚙️ Painel de Admin
+          </button>
           <button @click="$emit('log_out')"
             class="w-full py-2.5 rounded-xl border border-zinc-700 hover:border-red-500 hover:text-red-500
                    text-sm font-semibold text-zinc-400 transition flex items-center justify-center gap-2">
@@ -366,6 +374,7 @@ import { useRouter } from 'vue-router'
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
+import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 
 const props = defineProps({
   data: { type: Object, default: () => ({}) },

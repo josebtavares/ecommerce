@@ -9,6 +9,8 @@
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)"
     />
+    <NotificacaoSino  />
+
     <MultiCart ref="cart" />
 
     <div class="flex overflow-x-hidden">
@@ -331,6 +333,7 @@ import StoreSlider     from '@/components/sliders/StoreSlider.vue'
 import ProductSlider   from '@/components/sliders/ProductSlider.vue'
 import StoreCatalog    from '@/components/catalog/StoreCatalog.vue'
 import api from '@/services/api'
+import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 
 const CATEGORIAS_MAP = {
   restaurante:  { label: 'Restaurantes',  icon: '🍔' },
@@ -355,7 +358,7 @@ const TIPO_ICONS = {
 
 export default {
   name: 'AppHome',
-  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog },
+  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, NotificacaoSino },
 
   data () {
     return {

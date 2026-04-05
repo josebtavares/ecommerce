@@ -6,6 +6,9 @@ import LojaPublica from './views/lojaPublica.vue'
 import Checkout       from './views/Checkout.vue'
 import EncomendaSucesso from './views/EncomendaSucesso.vue'
 import Backoffice from './views/backoffice/Index.vue'
+import AdminLayout from '@/views/admin/AdminLayout.vue'
+import criarLoja from './views/criarLoja.vue';
+
 
 const routes = [
     {
@@ -46,6 +49,18 @@ const routes = [
     { path: '/loja/:id/backoffice', 
         name: 'Backoffice', 
         component: Backoffice, 
+        meta: { requiresAuth: true } 
+    },
+    {
+        path: '/admin',
+        name: 'Admin',
+        component: AdminLayout,
+        meta: { requiresAuth: true }
+    },
+    { 
+        path: '/loja/criar', 
+        name: 'CriarLoja', 
+        component: criarLoja, 
         meta: { requiresAuth: true } 
     },
 

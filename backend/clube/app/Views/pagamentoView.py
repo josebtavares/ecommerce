@@ -8,9 +8,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from ..Views.notificacaoView import notificar_staff, notificar_admins
+from decimal import Decimal
 from ..models import (
     Encomenda, Pagamento, MetodoPagamento,
-    CartaoGuardado, UtilizadorLoja, Loja, Carrinho,
+    CartaoGuardado, UtilizadorLoja, Loja, Carrinho, Comissao,
 )
 from ..Serializers.PagamentoSerializer import (
     CartaoGuardadoSerializer,
@@ -35,7 +37,7 @@ def _get_ou_criar_stripe_customer(utilizador) -> str:
     customer = stripe.Customer.create(
         email=utilizador.email,
         name=utilizador.nome,
-        metadata={"utilizador_id": utilizador.id}
+        metadata={'utilizador_id': utilizador.id}
     )
     return customer.id
 
@@ -44,49 +46,81 @@ def _verificar_encomenda(request, encomenda_id):
     utilizador = request.user.utilizador
     encomenda  = get_object_or_404(Encomenda, id=encomenda_id)
     if encomenda.comprador != utilizador:
-        return None, Response({"detail": "Sem permissao."}, status=status.HTTP_403_FORBIDDEN)
-    if encomenda.status != "pendente":
-        return None, Response({"detail": f"Encomenda ja esta: {encomenda.status}"}, status=status.HTTP_400_BAD_REQUEST)
+        return None, Response({'detail': 'Sem permissao.'}, status=status.HTTP_403_FORBIDDEN)
+    if encomenda.status != 'pendente':
+        return None, Response({'detail': f'Encomenda ja esta: {encomenda.status}'}, status=status.HTTP_400_BAD_REQUEST)
     return encomenda, None
-
-
-def _registar_pagamento(encomenda, metodo, stripe_intent_id, valor):
-    pagamento = Pagamento.objects.create(
-        encomenda            = encomenda,
-        metodo               = metodo,
-        valor                = valor,
-        status               = "aprovado",
-        referencia_transacao = stripe_intent_id,
-    )
-    encomenda.status = "pago"
-    encomenda.save(update_fields=["status"])
-    return pagamento
 
 
 def _limpar_carrinho(encomenda):
     """Limpa o carrinho do comprador para a loja, apos pagamento confirmado."""
     try:
-        carrinho = Carrinho.objects.get(
-            utilizador=encomenda.comprador,
-            loja=encomenda.loja
-        )
+        carrinho = Carrinho.objects.get(utilizador=encomenda.comprador, loja=encomenda.loja)
         carrinho.itens.all().delete()
     except Carrinho.DoesNotExist:
         pass
+
+
+def _registar_pagamento_aprovado(encomenda, metodo, referencia, valor):
+    """
+    Cria pagamento com status=aprovado, muda encomenda para pago,
+    regista comissao e limpa carrinho.
+    Usado para cartao e mbway (pagamento digital confirmado).
+    """
+    pagamento = Pagamento.objects.create(
+        encomenda=encomenda,
+        metodo=metodo,
+        valor=valor,
+        status='aprovado',
+        referencia_transacao=referencia,
+    )
+    encomenda.status = 'pago'
+    encomenda.save(update_fields=['status'])
+
+    # regista comissao imediatamente
+    Comissao.registar(encomenda)
+    
+    # calcula valor da comissao para a mensagem
+    _perc = encomenda.loja.percentagem_comissao
+    _com  = (encomenda.valor_total * _perc / 100).quantize(Decimal('0.01'))
+    _liq  = encomenda.valor_total - _com
+ 
+    # notifica dono/gestor — pagamento confirmado
+    notificar_staff(
+        loja=encomenda.loja,
+        roles=['dono', 'gestor'],
+        tipo='pagamento_aprovado',
+        titulo=f'Pagamento confirmado — Encomenda #{encomenda.id}',
+        mensagem=f'€{encomenda.valor_total} recebido via {referencia}. Receita líquida: €{_liq}.',
+        link=f'/loja/{encomenda.loja_id}/backoffice',
+    )
+ 
+    # notifica admins — comissão registada
+    notificar_admins(
+        tipo='comissao_recebida',
+        titulo=f'Comissão registada — {encomenda.loja.nome}',
+        mensagem=f'Encomenda #{encomenda.id} · Total: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com}.',
+        loja=encomenda.loja,
+        link='/admin',
+    )
+
+    # limpa carrinho
+    _limpar_carrinho(encomenda)
+    return pagamento
 
 
 # ══════════════════════════════════════════════════════════════
 # CARTOES GUARDADOS
 # ══════════════════════════════════════════════════════════════
 
-@api_view(["GET"])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def cartao_list(request):
     cartoes = CartaoGuardado.objects.filter(utilizador=request.user.utilizador)
     return Response(CartaoGuardadoSerializer(cartoes, many=True).data)
 
 
-@api_view(["DELETE"])
+@api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def cartao_remover(request, id):
@@ -95,12 +129,12 @@ def cartao_remover(request, id):
     try:
         stripe.PaymentMethod.detach(cartao.stripe_payment_id)
     except stripe.error.StripeError as e:
-        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     cartao.delete()
-    return Response({"detail": "Cartao removido."})
+    return Response({'detail': 'Cartao removido.'})
 
 
-@api_view(["PATCH"])
+@api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def cartao_predefinir(request, id):
     utilizador = request.user.utilizador
@@ -114,7 +148,7 @@ def cartao_predefinir(request, id):
 # METODOS DE PAGAMENTO DA LOJA
 # ══════════════════════════════════════════════════════════════
 
-@api_view(["GET"])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def metodos_loja(request, loja_id):
     loja    = get_object_or_404(Loja, id=loja_id, ativa=True)
@@ -122,31 +156,31 @@ def metodos_loja(request, loja_id):
     return Response(MetodoPagamentoSerializer(metodos, many=True).data)
 
 
-@api_view(["POST", "DELETE"])
+@api_view(['POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def metodo_gerir(request, loja_id, tipo):
     loja = get_object_or_404(Loja, id=loja_id)
     try:
         membro = UtilizadorLoja.objects.get(loja=loja, utilizador=request.user.utilizador, ativo=True)
     except UtilizadorLoja.DoesNotExist:
-        return Response({"detail": "Sem permissao."}, status=status.HTTP_403_FORBIDDEN)
-    if not membro.pode("gerir_metodos_pagamento"):
-        return Response({"detail": "Sem permissao."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'detail': 'Sem permissao.'}, status=status.HTTP_403_FORBIDDEN)
+    if not membro.pode('gerir_metodos_pagamento'):
+        return Response({'detail': 'Sem permissao.'}, status=status.HTTP_403_FORBIDDEN)
     metodo, _ = MetodoPagamento.objects.get_or_create(loja=loja, tipo=tipo)
-    if request.method == "POST":
+    if request.method == 'POST':
         metodo.ativo = True
         metodo.save()
         return Response(MetodoPagamentoSerializer(metodo).data)
     metodo.ativo = False
     metodo.save()
-    return Response({"detail": f"Metodo {tipo} desactivado."})
+    return Response({'detail': f'Metodo {tipo} desactivado.'})
 
 
 # ══════════════════════════════════════════════════════════════
 # PAGAR COM CARTAO (Stripe)
 # ══════════════════════════════════════════════════════════════
 
-@api_view(["POST"])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def pagar_com_cartao(request):
@@ -155,30 +189,29 @@ def pagar_com_cartao(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     data       = serializer.validated_data
     utilizador = request.user.utilizador
-    encomenda, erro = _verificar_encomenda(request, data["encomenda_id"])
-    if erro:
-        return erro
-    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo="cartao", ativo=True).first()
+    encomenda, erro = _verificar_encomenda(request, data['encomenda_id'])
+    if erro: return erro
+    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo='cartao', ativo=True).first()
     if not metodo:
-        return Response({"detail": "Esta loja nao aceita pagamento por cartao."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Esta loja nao aceita pagamento por cartao.'}, status=status.HTTP_400_BAD_REQUEST)
     try:
         customer_id = _get_ou_criar_stripe_customer(utilizador)
-        if data.get("cartao_id"):
-            cartao = get_object_or_404(CartaoGuardado, id=data["cartao_id"], utilizador=utilizador)
+        if data.get('cartao_id'):
+            cartao = get_object_or_404(CartaoGuardado, id=data['cartao_id'], utilizador=utilizador)
             payment_method_id = cartao.stripe_payment_id
         else:
-            payment_method_id = data["payment_method_id"]
+            payment_method_id = data['payment_method_id']
             stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
         valor_centimos = int(encomenda.valor_total * 100)
         intent = stripe.PaymentIntent.create(
-            amount=valor_centimos, currency="eur", customer=customer_id,
+            amount=valor_centimos, currency='eur', customer=customer_id,
             payment_method=payment_method_id, confirm=True,
-            metadata={"encomenda_id": encomenda.id, "utilizador_id": utilizador.id},
-            return_url="http://localhost:8080/pagamento/sucesso",
+            metadata={'encomenda_id': encomenda.id, 'utilizador_id': utilizador.id},
+            return_url='http://localhost:8080/pagamento/sucesso',
         )
-        if intent.status not in ("succeeded", "processing"):
-            return Response({"detail": f"Pagamento nao confirmado: {intent.status}"}, status=status.HTTP_400_BAD_REQUEST)
-        if data.get("guardar_cartao") and not data.get("cartao_id"):
+        if intent.status not in ('succeeded', 'processing'):
+            return Response({'detail': f'Pagamento nao confirmado: {intent.status}'}, status=status.HTTP_400_BAD_REQUEST)
+        if data.get('guardar_cartao') and not data.get('cartao_id'):
             pm = stripe.PaymentMethod.retrieve(payment_method_id)
             CartaoGuardado.objects.create(
                 utilizador=utilizador, stripe_customer_id=customer_id,
@@ -187,20 +220,20 @@ def pagar_com_cartao(request):
                 ano_expiracao=pm.card.exp_year,
                 predefinido=not CartaoGuardado.objects.filter(utilizador=utilizador).exists(),
             )
-        pagamento = _registar_pagamento(encomenda, metodo, intent.id, encomenda.valor_total)
-        _limpar_carrinho(encomenda)  # ← limpa o carrinho apos pagamento confirmado
+        # cartao confirmado digitalmente → aprovado imediatamente + comissao
+        pagamento = _registar_pagamento_aprovado(encomenda, metodo, intent.id, encomenda.valor_total)
         return Response(PagamentoSerializer(pagamento).data, status=status.HTTP_200_OK)
     except stripe.error.CardError as e:
-        return Response({"detail": e.user_message}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': e.user_message}, status=status.HTTP_400_BAD_REQUEST)
     except stripe.error.StripeError as e:
-        return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'detail': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 # ══════════════════════════════════════════════════════════════
 # PAGAR COM MBWAY
 # ══════════════════════════════════════════════════════════════
 
-@api_view(["POST"])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def pagar_com_mbway(request):
@@ -208,20 +241,21 @@ def pagar_com_mbway(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     data      = serializer.validated_data
-    encomenda, erro = _verificar_encomenda(request, data["encomenda_id"])
-    if erro:
-        return erro
-    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo="mbway", ativo=True).first()
+    encomenda, erro = _verificar_encomenda(request, data['encomenda_id'])
+    if erro: return erro
+    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo='mbway', ativo=True).first()
     if not metodo:
-        return Response({"detail": "Esta loja nao aceita MBWay."}, status=status.HTTP_400_BAD_REQUEST)
-    pagamento = Pagamento.objects.create(
-        encomenda=encomenda, metodo=metodo, valor=encomenda.valor_total,
-        status="pendente", referencia_transacao=f"mbway_{data['telemovel']}",
+        return Response({'detail': 'Esta loja nao aceita MBWay.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # MBWay simulado — trata como aprovado imediatamente (em producao seria async via webhook)
+    pagamento = _registar_pagamento_aprovado(
+        encomenda, metodo,
+        f'mbway_{data["telemovel"]}',
+        encomenda.valor_total
     )
-    # carrinho limpo pelo webhook quando MBWay confirmar
     return Response(
-        {"detail": f"Pedido MBWay enviado para {data['telemovel']}. Aguarda confirmacao.",
-         "pagamento": PagamentoSerializer(pagamento).data},
+        {'detail': f'Pagamento MBWay confirmado para {data["telemovel"]}.',
+         'pagamento': PagamentoSerializer(pagamento).data},
         status=status.HTTP_200_OK
     )
 
@@ -230,26 +264,38 @@ def pagar_com_mbway(request):
 # PAGAR NA ENTREGA (dinheiro)
 # ══════════════════════════════════════════════════════════════
 
-@api_view(["POST"])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def pagar_dinheiro(request):
+    """
+    Dinheiro → pagamento PENDENTE (confirmado fisicamente na entrega).
+    A comissao so e registada quando a encomenda for marcada como concluida.
+    """
     serializer = PagarComDinheiroSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    encomenda, erro = _verificar_encomenda(request, serializer.validated_data["encomenda_id"])
-    if erro:
-        return erro
-    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo="dinheiro", ativo=True).first()
+    encomenda, erro = _verificar_encomenda(request, serializer.validated_data['encomenda_id'])
+    if erro: return erro
+    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo='dinheiro', ativo=True).first()
     if not metodo:
-        return Response({"detail": "Esta loja nao aceita pagamento em dinheiro."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Esta loja nao aceita pagamento em dinheiro.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # dinheiro → pagamento pendente, encomenda pendente ate entrega fisica
     pagamento = Pagamento.objects.create(
-        encomenda=encomenda, metodo=metodo, valor=encomenda.valor_total,
-        status="pendente", referencia_transacao="dinheiro",
+        encomenda=encomenda,
+        metodo=metodo,
+        valor=encomenda.valor_total,
+        status='pendente',          # ← pendente ate staff confirmar
+        referencia_transacao='dinheiro',
     )
-    encomenda.status = "pago"
-    encomenda.save(update_fields=["status"])
-    _limpar_carrinho(encomenda)  # ← limpa o carrinho apos confirmar
+    encomenda.status = 'pago'       # encomenda aceite, aguarda entrega
+    encomenda.save(update_fields=['status'])
+
+    # NAO regista comissao ainda — so quando concluido
+    # NAO limpa carrinho ainda — so quando concluido
+    _limpar_carrinho(encomenda)     # limpa o carrinho (encomenda ja foi criada)
+
     return Response(PagamentoSerializer(pagamento).data, status=status.HTTP_200_OK)
 
 
@@ -257,30 +303,31 @@ def pagar_dinheiro(request):
 # STRIPE WEBHOOK
 # ══════════════════════════════════════════════════════════════
 
-@api_view(["POST"])
+@api_view(['POST'])
 def stripe_webhook(request):
     payload    = request.body
-    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
     except (ValueError, stripe.error.SignatureVerificationError):
-        return Response({"detail": "Webhook invalido."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Webhook invalido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if event["type"] == "payment_intent.succeeded":
-        intent    = event["data"]["object"]
-        pagamento = Pagamento.objects.filter(referencia_transacao=intent["id"]).first()
-        if pagamento and pagamento.status != "aprovado":
-            pagamento.status = "aprovado"
-            pagamento.save(update_fields=["status"])
-            pagamento.encomenda.status = "pago"
-            pagamento.encomenda.save(update_fields=["status"])
-            _limpar_carrinho(pagamento.encomenda)  # ← cobre MBWay e outros async
+    if event['type'] == 'payment_intent.succeeded':
+        intent    = event['data']['object']
+        pagamento = Pagamento.objects.filter(referencia_transacao=intent['id']).first()
+        if pagamento and pagamento.status != 'aprovado':
+            pagamento.status = 'aprovado'
+            pagamento.save(update_fields=['status'])
+            pagamento.encomenda.status = 'pago'
+            pagamento.encomenda.save(update_fields=['status'])
+            Comissao.registar(pagamento.encomenda)
+            _limpar_carrinho(pagamento.encomenda)
 
-    elif event["type"] == "payment_intent.payment_failed":
-        intent    = event["data"]["object"]
-        pagamento = Pagamento.objects.filter(referencia_transacao=intent["id"]).first()
+    elif event['type'] == 'payment_intent.payment_failed':
+        intent    = event['data']['object']
+        pagamento = Pagamento.objects.filter(referencia_transacao=intent['id']).first()
         if pagamento:
-            pagamento.status = "falhado"
-            pagamento.save(update_fields=["status"])
+            pagamento.status = 'falhado'
+            pagamento.save(update_fields=['status'])
 
-    return Response({"detail": "ok"}, status=status.HTTP_200_OK)
+    return Response({'detail': 'ok'}, status=status.HTTP_200_OK)

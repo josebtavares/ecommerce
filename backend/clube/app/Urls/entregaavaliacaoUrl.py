@@ -39,7 +39,15 @@ urlpatterns = [
 
     path('loja/<int:loja_id>/avaliacoes/criar/',
          v.avaliacao_criar,                      name='avaliacao-criar'),
+    
+    path('loja/<int:loja_id>/avaliacoes/<int:avaliacao_id>/editar/', v.avaliacao_editar),
+    
+    path('loja/<int:loja_id>/avaliacoes/<int:avaliacao_id>/ocultar/', v.avaliacao_ocultar),
 
     path('loja/<int:loja_id>/avaliacoes/<int:avaliacao_id>/apagar/',
          v.avaliacao_apagar,                     name='avaliacao-apagar'),
+    
+    path('loja/<int:loja_id>/avaliacoes/pode-avaliar/', v.pode_avaliar_loja),
+    
+    path('loja/<int:loja_id>/entrega/lista/',  v.entrega_list_loja, name='entrega-list-loja'),
 ]

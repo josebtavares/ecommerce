@@ -76,6 +76,7 @@
           <p class="text-xs text-zinc-500">{{ loja?.nome }}</p>
         </div>
         <div class="flex items-center gap-3">
+          <NotificacaoSino />
           <span class="text-xs text-zinc-600">{{ user.username }}</span>
         </div>
       </header>
@@ -101,6 +102,8 @@
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja" @updated="fetchLoja" />
         <BackofficeStaff        v-else-if="activeSection === 'staff'"        :loja-id="lojaId" />
         <BackofficeTipos        v-else-if="activeSection === 'tipos'" :loja-id="lojaId" />
+        <BackofficeAvaliacoes   v-else-if="activeSection === 'avaliacoes'"   :loja-id="lojaId" />
+        <BackofficeEntregas v-else-if="activeSection === 'entregas'" :loja-id="lojaId" :minha-role="role" />
 
       </main>
     </div>
@@ -117,6 +120,10 @@ import BackofficeInventario     from './BackofficeInventario.vue'
 import BackofficeConfiguracoes  from './BackofficeConfiguracoes.vue'
 import BackofficeStaff          from './BackofficeStaff.vue'
 import BackofficeTipos from './BackofficeTipos.vue'
+import BackofficeAvaliacoes from './BackofficeAvaliacoes.vue'
+import BackofficeEntregas from './BackofficeEntregas.vue'
+import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
+
 
 // Permissões por role — espelho do backend (models.py UtilizadorLoja.PERMISSOES)
 const PERMISSOES = {
@@ -134,18 +141,21 @@ const PERMISSOES = {
   ],
   staff: ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas'],
   contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios'],
-  condutor: ['ver_loja','gerir_entregas'],
+  condutor: ['gerir_entregas'],
 }
 
 // Secções disponíveis e a permissão necessária para cada uma
 const SECCOES = [
   { key: 'dashboard',     label: 'Dashboard',     icon: 'chart',     permissao: 'ver_loja'         },
   { key: 'encomendas',    label: 'Encomendas',    icon: 'order',     permissao: 'gerir_encomendas' },
+  { key: 'entregas',      label: 'Entregas',      icon: 'delivery',  permissao: 'gerir_entregas'   },
+  { key: 'avaliacoes', label: 'Avaliações', icon: 'star', permissao: 'ver_loja' },
   { key: 'tipos', label: 'Tipos de Produto', icon: 'tag', permissao: 'gerir_produtos' },
   { key: 'produtos',      label: 'Produtos',      icon: 'box',       permissao: 'gerir_produtos'   },
   { key: 'inventario',    label: 'Inventário',    icon: 'inventory', permissao: 'gerir_inventario' },
   { key: 'staff',         label: 'Staff',         icon: 'staff',     permissao: 'gerir_staff'      },
   { key: 'configuracoes', label: 'Configurações', icon: 'settings',  permissao: 'editar_loja'      },
+  
 ]
 export default {
   name: 'BackofficeLayout',
@@ -158,6 +168,9 @@ export default {
     BackofficeConfiguracoes,
     BackofficeStaff,
     BackofficeTipos,
+    NotificacaoSino,
+    BackofficeEntregas,
+    BackofficeAvaliacoes,
   },
 
   data () {
