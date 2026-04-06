@@ -10,8 +10,10 @@ from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_admins,notificar
 
 from django.db.models import Sum, Count, Avg, Q
-from django.utils.timezone import now
-from datetime import timedelta
+from django.utils.timezone import now, make_aware
+from datetime import timedelta, datetime, date
+from django.utils.dateparse import parse_date
+
 
 
 from ..models import Loja, LojaTemplate, UtilizadorLoja, Utilizador
@@ -490,46 +492,72 @@ def categoria_list(request):
 def loja_dashboard(request, loja_id):
     """
     GET /app/loja/<loja_id>/dashboard/
-    Métricas do backoffice da loja.
-    Query params: periodo=7|30|90 (dias, default=30)
+    Query params:
+      - periodo=7|30|90        (atalhos rápidos, default=30)
+      - data_inicio=YYYY-MM-DD (período personalizado)
+      - data_fim=YYYY-MM-DD    (período personalizado)
+    Se data_inicio e data_fim forem passados, ignoram o periodo.
     """
+    from ..models import (
+        Loja, UtilizadorLoja, Encomenda, ItemEncomenda,
+        Comissao, AvaliacaoLoja, Inventario, Entrega
+    )
+    from ..Views.lojaView import _exige_permissao
+    from django.db.models.functions import TruncDate
+ 
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'ver_loja')
     if erro:
         return erro
  
-    periodo = int(request.GET.get('periodo', 30))
-    inicio  = now() - timedelta(days=periodo)
-    inicio_anterior = inicio - timedelta(days=periodo)
+    # ── período ──────────────────────────────────────────────
+    hoje = date.today()
+    data_inicio_str = request.GET.get('data_inicio')
+    data_fim_str    = request.GET.get('data_fim')
  
-    from ..models import Encomenda, ItemEncomenda, Comissao, AvaliacaoLoja, Inventario
+    if data_inicio_str and data_fim_str:
+        try:
+            inicio = make_aware(datetime.combine(parse_date(data_inicio_str), datetime.min.time()))
+            fim    = make_aware(datetime.combine(parse_date(data_fim_str),    datetime.max.time()))
+        except Exception:
+            return Response({'detail': 'Datas inválidas. Use YYYY-MM-DD.'}, status=400)
+        periodo = None  # período personalizado
+    else:
+        periodo = int(request.GET.get('periodo', 30))
+        inicio  = now() - timedelta(days=periodo)
+        fim     = now()
+        data_inicio_str = str((hoje - timedelta(days=periodo)))
+        data_fim_str    = str(hoje)
+ 
+    # período anterior para comparação
+    duracao = (fim - inicio)
+    inicio_anterior = inicio - duracao
+    fim_anterior    = inicio
  
     enc_qs      = Encomenda.objects.filter(loja=loja)
-    enc_periodo = enc_qs.filter(data_criacao__gte=inicio)
-    enc_ant     = enc_qs.filter(data_criacao__gte=inicio_anterior, data_criacao__lt=inicio)
- 
-    # ── KPIs principais ──────────────────────────────────────
-    total_vendas    = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
-    total_vendas_ant= enc_ant.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
-    total_enc       = enc_periodo.count()
-    total_enc_ant   = enc_ant.count()
-    enc_concluidas  = enc_periodo.filter(status='concluido').count()
-    enc_canceladas  = enc_periodo.filter(status='cancelado').count()
+    enc_periodo = enc_qs.filter(data_criacao__range=(inicio, fim))
+    enc_ant     = enc_qs.filter(data_criacao__range=(inicio_anterior, fim_anterior))
  
     def variacao(actual, anterior):
-        if not anterior:
-            return None
+        if not anterior: return None
         return round(((actual - anterior) / anterior) * 100, 1)
  
-    # ── Encomendas por estado ─────────────────────────────────
+    # ── KPIs principais ──────────────────────────────────────
+    total_vendas     = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    total_vendas_ant = enc_ant.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    total_enc        = enc_periodo.count()
+    total_enc_ant    = enc_ant.count()
+    enc_concluidas   = enc_periodo.filter(status='concluido').count()
+    enc_canceladas   = enc_periodo.filter(status='cancelado').count()
+ 
+    # ── Encomendas por estado (histórico total) ───────────────
     por_estado = {}
     for s in ['pendente','pago','preparando','enviado','concluido','cancelado']:
         por_estado[s] = enc_qs.filter(status=s).count()
  
-    # ── Vendas por dia (últimos N dias) ───────────────────────
-    from django.db.models.functions import TruncDate
+    # ── Vendas por dia ────────────────────────────────────────
     vendas_por_dia = (
-        enc_qs.filter(data_criacao__gte=inicio, status='concluido')
+        enc_qs.filter(data_criacao__range=(inicio, fim), status='concluido')
         .annotate(dia=TruncDate('data_criacao'))
         .values('dia')
         .annotate(total=Sum('valor_total'), count=Count('id'))
@@ -540,10 +568,10 @@ def loja_dashboard(request, loja_id):
         for v in vendas_por_dia
     ]
  
-    # ── Produtos mais vendidos ────────────────────────────────
+    # ── Top produtos ──────────────────────────────────────────
     top_produtos = (
         ItemEncomenda.objects
-        .filter(encomenda__loja=loja, encomenda__data_criacao__gte=inicio)
+        .filter(encomenda__loja=loja, encomenda__data_criacao__range=(inicio, fim))
         .values('produto__id', 'produto__nome')
         .annotate(total_qty=Sum('quantidade'), total_val=Sum('preco'))
         .order_by('-total_qty')[:5]
@@ -562,12 +590,15 @@ def loja_dashboard(request, loja_id):
     com_qs = Comissao.objects.filter(loja=loja)
     comissao_pendente  = com_qs.filter(status='pendente').aggregate(v=Sum('valor_comissao'))['v'] or 0
     comissao_liquidada = com_qs.filter(status='liquidada').aggregate(v=Sum('valor_comissao'))['v'] or 0
+    comissao_periodo   = com_qs.filter(
+        data_criacao__range=(inicio, fim)
+    ).aggregate(v=Sum('valor_comissao'))['v'] or 0
  
     # ── Avaliações ────────────────────────────────────────────
-    av_qs       = AvaliacaoLoja.objects.filter(loja=loja)
-    rating_med  = av_qs.aggregate(m=Avg('pontuacao'))['m']
-    total_aval  = av_qs.count()
-    aval_rec    = av_qs.filter(data_criacao__gte=inicio).count()
+    av_qs      = AvaliacaoLoja.objects.filter(loja=loja)
+    rating_med = av_qs.aggregate(m=Avg('pontuacao'))['m']
+    total_aval = av_qs.count()
+    aval_rec   = av_qs.filter(data_criacao__range=(inicio, fim)).count()
  
     # ── Stock em alerta ───────────────────────────────────────
     stock_alerta = (
@@ -580,9 +611,24 @@ def loja_dashboard(request, loja_id):
         for s in stock_alerta
     ]
  
+    # ── Entregas ──────────────────────────────────────────────
+    ent_qs = Entrega.objects.filter(encomenda__loja=loja)
+    ent_periodo = ent_qs.filter(data_criacao__range=(inicio, fim))
+ 
+    entregas_por_status = {}
+    for s in ['atribuido', 'a_caminho', 'entregue', 'falhou']:
+        entregas_por_status[s] = ent_qs.filter(status=s).count()
+ 
+    entregas_periodo     = ent_periodo.count()
+    entregas_concluidas  = ent_periodo.filter(status='entregue').count()
+    entregas_falhadas    = ent_periodo.filter(status='falhou').count()
+    taxa_entrega         = round(entregas_concluidas / entregas_periodo * 100, 1) if entregas_periodo else 0
+ 
     return Response({
         'periodo':            periodo,
-        # KPIs
+        'data_inicio':        data_inicio_str,
+        'data_fim':           data_fim_str,
+        # KPIs vendas
         'total_vendas':       float(total_vendas),
         'variacao_vendas':    variacao(total_vendas, total_vendas_ant),
         'total_encomendas':   total_enc,
@@ -597,6 +643,7 @@ def loja_dashboard(request, loja_id):
         # Financeiro
         'comissao_pendente':  float(comissao_pendente),
         'comissao_liquidada': float(comissao_liquidada),
+        'comissao_periodo':   float(comissao_periodo),
         # Avaliações
         'rating_medio':       round(float(rating_med), 2) if rating_med else None,
         'total_avaliacoes':   total_aval,
@@ -604,5 +651,10 @@ def loja_dashboard(request, loja_id):
         # Stock
         'stock_baixo':        stock_baixo,
         'stock_alerta_count': len(stock_baixo),
+        # Entregas
+        'entregas_por_status':  entregas_por_status,
+        'entregas_periodo':     entregas_periodo,
+        'entregas_concluidas':  entregas_concluidas,
+        'entregas_falhadas':    entregas_falhadas,
+        'taxa_entrega':         taxa_entrega,
     })
-    
