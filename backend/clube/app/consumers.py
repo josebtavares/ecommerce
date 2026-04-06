@@ -11,7 +11,7 @@ from .Serializers.ChatSerializer import ChatMessageSerializer
 # ═══════════════════════════════════════════════════════════════
 class InboxConsumer(AsyncWebsocketConsumer):
     """
-    Socket “global” de cada utilizador: recebe avisos de novas
+    Socket "global" de cada utilizador: recebe avisos de novas
     mensagens/threads para actualizar badge + toast no front-end.
     """
 
@@ -25,14 +25,12 @@ class InboxConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.inbox_group, self.channel_name)
         await self.accept()
 
-    # ### ALTERADO – usa o mesmo nome gravado em connect
     async def disconnect(self, code):
         if hasattr(self, "inbox_group"):
             await self.channel_layer.group_discard(
                 self.inbox_group, self.channel_name
             )
 
-    # Django → Browser
     async def inbox_message(self, event):
         await self.send(text_data=json.dumps(event))
 
@@ -61,7 +59,6 @@ class ThreadConsumer(AsyncWebsocketConsumer):
             self.room_group_name, self.channel_name
         )
 
-    # ───────────────────── mensagem DO browser ─────────────────────
     async def receive(self, text_data=None, bytes_data=None):
         user = self.scope["user"]
         data = json.loads(text_data or "{}")
@@ -70,18 +67,12 @@ class ThreadConsumer(AsyncWebsocketConsumer):
         if not text and "attachment" not in data:
             return
 
-        # cria a mensagem
         msg = await self._create_message(user, text)
-
-        # serializa fora da thread async
         ser = await database_sync_to_async(ChatMessageSerializer)(msg)
         payload = {"type": "chat.message", "message": ser.data}
-
-        # envia para todos os sockets desta thread
         await self.channel_layer.group_send(self.room_group_name, payload)
 
-        # ▲▲▲ agora avisamos as inbox DOS OUTROS participantes ▲▲▲
-        other_ids = await self._other_auth_user_ids(msg)          # lista Django-auth ids
+        other_ids = await self._other_auth_user_ids(msg)
         inbox_payload = {
             "type":    "inbox.message",
             "thread":  msg.thread_id,
@@ -90,25 +81,20 @@ class ThreadConsumer(AsyncWebsocketConsumer):
         for uid in other_ids:
             await self.channel_layer.group_send(f"inbox_{uid}", inbox_payload)
 
-    # ───────────────────── mensagem DA room → browser ──────────────
     async def chat_message(self, event):
         await self.send(text_data=json.dumps(event))
 
-    # ───────────── helpers DB (executados em thread pool) ───────────
     @database_sync_to_async
     def _create_message(self, user, text):
         util   = user.utilizador
         thread = ChatThread.objects.get(pk=self.thread_id)
-
         msg = ChatMessage.objects.create(thread=thread, sender=util, text=text)
-
         thread.last_msg_at = msg.created_at
         thread.save(update_fields=["last_msg_at"])
         ChatParticipant.objects.filter(thread=thread, user=util)\
                                .update(last_read=msg.created_at)
         return msg
 
-    # ### NOVO – devolve ids do utilizador Django (auth_user.id) excepto do remetente
     @database_sync_to_async
     def _other_auth_user_ids(self, msg):
         return list(
@@ -117,3 +103,65 @@ class ThreadConsumer(AsyncWebsocketConsumer):
                .exclude(user=msg.sender)
                .values_list("user__user__id", flat=True)
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+# NOVO — Notificações em tempo real
+# ═══════════════════════════════════════════════════════════════
+class NotificacaoConsumer(AsyncWebsocketConsumer):
+    """
+    Canal pessoal de notificações de cada utilizador.
+    URL: ws/notificacoes/
+
+    Ao conectar envia logo o contador de não lidas.
+    Quando o backend chama notificar(), a notificação chega
+    aqui em tempo real sem polling.
+    """
+
+    async def connect(self):
+        user = self.scope["user"]
+        if user.is_anonymous:
+            await self.close(code=4001)
+            return
+
+        self.group_name = f"notif_{user.id}"
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+        # envia contador de não lidas ao conectar
+        count = await self._nao_lidas(user)
+        await self.send(text_data=json.dumps({
+            "type":      "contador",
+            "nao_lidas": count,
+        }))
+
+    async def disconnect(self, code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(
+                self.group_name, self.channel_name
+            )
+
+    # backend → browser: nova notificação
+    async def notificacao_nova(self, event):
+        await self.send(text_data=json.dumps({
+            "type":        "nova",
+            "notificacao": event["notificacao"],
+            "nao_lidas":   event.get("nao_lidas", 0),
+        }))
+
+    # backend → browser: só actualiza o badge
+    async def notificacao_contador(self, event):
+        await self.send(text_data=json.dumps({
+            "type":      "contador",
+            "nao_lidas": event["nao_lidas"],
+        }))
+
+    @database_sync_to_async
+    def _nao_lidas(self, user):
+        from .models import Notificacao
+        try:
+            return Notificacao.objects.filter(
+                utilizador=user.utilizador, lida=False
+            ).count()
+        except Exception:
+            return 0
