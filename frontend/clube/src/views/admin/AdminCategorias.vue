@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 max-w-2xl">
+  <div class="space-y-5 ">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-lg font-bold text-zinc-100">Categorias de loja</h2>

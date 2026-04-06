@@ -9,8 +9,7 @@
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)"
     />
-    <NotificacaoSino  />
-
+    
     <MultiCart ref="cart" />
 
     <div class="flex overflow-x-hidden">

@@ -4,7 +4,7 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <p class="text-xs text-zinc-500">{{ total }} avaliação{{ total !== 1 ? 'ões' : '' }}</p>
+        <p class="text-xs text-zinc-500">{{ total }} avaliaç{{ total !== 1 ? 'ões' : 'ão' }}</p>
       </div>
       <!-- Filtro estrelas -->
       <div class="flex gap-1">

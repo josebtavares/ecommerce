@@ -56,7 +56,7 @@
           <p class="text-xs text-zinc-500">{{ u.email }} · {{ u.total_lojas }} lojas · desde {{ u.data_criacao }}</p>
         </div>
 
-        <div class="flex gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+        <div class="flex gap-2 flex-shrink-0 opacity-100 group-hover:opacity-100 transition">
           <button @click="toggleVerificado(u)" :title="u.verificado ? 'Remover verificacao' : 'Verificar'"
             :class="['w-8 h-8 rounded-lg flex items-center justify-center transition text-xs',
                      u.verificado ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-green-400']">✓</button>

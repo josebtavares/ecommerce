@@ -8,7 +8,6 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
       </svg>
-      <!-- Badge contador -->
       <span v-if="naoLidas > 0"
         class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-bold
                rounded-full flex items-center justify-center">
@@ -16,12 +15,22 @@
       </span>
     </button>
 
-    <!-- Dropdown -->
-    <div v-if="aberto"
-         class="absolute right-0 top-12 w-96 max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-2xl
-                shadow-2xl z-50 flex flex-col overflow-hidden">
+    <!-- Teleport para body — evita problemas de z-index com layouts fixed -->
+    <teleport to="body">
+      <!-- Overlay invisível fecha ao clicar fora -->
+      <div v-if="aberto"
+           class="fixed inset-0 z-[9997]"
+           @click="aberto = false" />
 
-      <!-- Header dropdown -->
+      <!-- Dropdown -->
+      <div v-if="aberto"
+           data-sino-dropdown
+           class="fixed z-[9999] bg-zinc-900 border border-zinc-800 flex flex-col overflow-hidden rounded-2xl shadow-2xl max-h-[80vh]"
+           :style="dropdownStyle">
+
+
+
+      <!-- Header -->
       <div class="flex items-center justify-between px-4 py-3 border-b border-zinc-800 flex-shrink-0">
         <h3 class="text-sm font-bold text-zinc-100">Notificações</h3>
         <div class="flex items-center gap-2">
@@ -31,13 +40,21 @@
           </button>
           <span v-if="naoLidas > 0"
             class="px-2 py-0.5 bg-red-600/20 text-red-400 text-xs font-bold rounded-full">
-            {{ naoLidas }} novas
+            {{ naoLidas }}
           </span>
+          <!-- Fechar -->
+          <button @click="aberto = false"
+            class="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      <!-- Abas por loja (se tiver mais de uma) -->
-      <div v-if="lojas.length > 1" class="flex gap-1 px-3 py-2 border-b border-zinc-800 overflow-x-auto scrollbar-hide flex-shrink-0">
+      <!-- Abas por loja -->
+      <div v-if="lojas.length > 1"
+           class="flex gap-1 px-3 py-2 border-b border-zinc-800 overflow-x-auto scrollbar-hide flex-shrink-0">
         <button @click="lojaFiltro = null"
           :class="['px-2.5 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
                    lojaFiltro === null ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
@@ -56,16 +73,17 @@
         </button>
       </div>
 
-      <!-- Lista notificações -->
+      <!-- Lista -->
       <div class="overflow-y-auto flex-1">
         <div v-if="loading" class="p-4 space-y-3">
           <div v-for="n in 4" :key="n" class="h-14 bg-zinc-800 rounded-xl animate-pulse"></div>
         </div>
 
         <div v-else-if="notificacoesFiltradas.length === 0"
-             class="flex flex-col items-center justify-center py-12 text-zinc-500 text-sm">
+             class="flex flex-col items-center justify-center py-6 text-zinc-500 text-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
           </svg>
           Sem notificações
         </div>
@@ -74,15 +92,13 @@
           <div v-for="notif in notificacoesFiltradas" :key="notif.id"
                @click="clicarNotificacao(notif)"
                :class="[
-                 'flex items-start gap-3 px-4 py-3 border-b border-zinc-800/50 cursor-pointer transition',
+                 'group flex items-start gap-3 px-4 py-3 border-b border-zinc-800/50 cursor-pointer transition',
                  notif.lida ? 'hover:bg-zinc-800/30' : 'bg-red-500/5 hover:bg-red-500/10'
                ]">
-            <!-- Ícone tipo -->
-            <div :class="['w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-0.5',
+            <div :class="['w-9 h-9 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-0.5',
                            iconeBg(notif.tipo)]">
               {{ icone(notif.tipo) }}
             </div>
-
             <div class="flex-1 min-w-0">
               <div class="flex items-start justify-between gap-2">
                 <p :class="['text-xs font-semibold leading-snug', notif.lida ? 'text-zinc-400' : 'text-zinc-100']">
@@ -91,7 +107,8 @@
                 <div class="flex items-center gap-1.5 flex-shrink-0">
                   <span v-if="!notif.lida" class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
                   <button @click.stop="apagar(notif)"
-                    class="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-red-400 transition opacity-0 group-hover:opacity-100">
+                    class="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-red-400
+                           transition opacity-0 group-hover:opacity-100 text-lg leading-none">
                     ×
                   </button>
                 </div>
@@ -104,16 +121,16 @@
             </div>
           </div>
 
-          <!-- Carregar mais -->
           <div v-if="temMais" class="p-3 text-center">
             <button @click="carregarMais"
-              class="text-xs text-zinc-500 hover:text-zinc-300 transition">
+              class="text-xs text-zinc-500 hover:text-zinc-300 transition px-4 py-2 rounded-lg hover:bg-zinc-800">
               Ver mais
             </button>
           </div>
         </div>
       </div>
     </div>
+    </teleport>
   </div>
 </template>
 
@@ -121,10 +138,8 @@
 import api from '@/services/api'
 
 const ICONES = {
-  // Admin
   loja_pendente:            { icon: '🏪', bg: 'bg-yellow-500/20' },
   comissao_recebida:        { icon: '💰', bg: 'bg-green-500/20'  },
-  // Loja
   loja_aprovada:            { icon: '✅', bg: 'bg-green-500/20'  },
   loja_rejeitada:           { icon: '❌', bg: 'bg-red-500/20'    },
   nova_encomenda:           { icon: '🛍️', bg: 'bg-blue-500/20'  },
@@ -134,10 +149,8 @@ const ICONES = {
   stock_baixo:              { icon: '⚠️', bg: 'bg-yellow-500/20' },
   novo_staff:               { icon: '👥', bg: 'bg-purple-500/20' },
   avaliacao_recebida:       { icon: '⭐', bg: 'bg-yellow-500/20' },
-  // Condutor
   entrega_atribuida:        { icon: '🚗', bg: 'bg-blue-500/20'   },
   entrega_cancelada:        { icon: '🚨', bg: 'bg-red-500/20'    },
-  // Comprador
   encomenda_paga:           { icon: '💳', bg: 'bg-green-500/20'  },
   encomenda_atualizada:     { icon: '📦', bg: 'bg-blue-500/20'   },
   encomenda_enviada:        { icon: '🚚', bg: 'bg-indigo-500/20' },
@@ -154,18 +167,20 @@ export default {
       loading:       false,
       notificacoes:  [],
       naoLidas:      0,
-      lojas:         [], // carregadas internamente
+      lojas:         [],
       lojaFiltro:    null,
       offset:        0,
       temMais:       false,
       pollingTimer:  null,
+      isMobile:      window.innerWidth < 640,
+      dropdownStyle: {},
     }
   },
 
   computed: {
     notificacoesFiltradas () {
-      if (this.lojaFiltro === null) return this.notificacoes
-      if (this.lojaFiltro === 'pessoal') return this.notificacoes.filter(n => !n.loja_id)
+      if (this.lojaFiltro === null)       return this.notificacoes
+      if (this.lojaFiltro === 'pessoal')  return this.notificacoes.filter(n => !n.loja_id)
       return this.notificacoes.filter(n => n.loja_id === this.lojaFiltro)
     },
   },
@@ -173,9 +188,7 @@ export default {
   mounted () {
     this.fetchContador()
     this.fetchLojas()
-    // polling a cada 30 segundos para actualizar contador
     this.pollingTimer = setInterval(() => this.fetchContador(), 30000)
-    // fecha ao clicar fora
     document.addEventListener('click', this.clickFora)
   },
 
@@ -189,15 +202,47 @@ export default {
     iconeBg (tipo) { return ICONES[tipo]?.bg   || 'bg-zinc-700' },
 
     clickFora (e) {
-      if (this.$refs.sinoRef && !this.$refs.sinoRef.contains(e.target)) {
+      // o overlay transparente cobre tudo — fecha ao clicar nele
+      // este listener só é backup para o desktop
+      const dentroSino = this.$refs.sinoRef && this.$refs.sinoRef.contains(e.target)
+      const dentroDropdown = e.target.closest('[data-sino-dropdown]')
+      if (!dentroSino && !dentroDropdown) {
         this.aberto = false
       }
     },
 
     async toggle () {
-      this.aberto = !this.aberto
+      this.isMobile = window.innerWidth < 640
+      this.aberto   = !this.aberto
       if (this.aberto && this.notificacoes.length === 0) {
         await this.fetchNotificacoes()
+      }
+    },
+
+    calcularPosicao () {
+      if (!this.$refs.sinoRef) return
+      const rect   = this.$refs.sinoRef.getBoundingClientRect()
+      const top    = Math.max(8, rect.bottom + 8)
+      const mobile = window.innerWidth < 640
+
+      if (mobile) {
+        const width    = window.innerWidth - 16
+        const maxH     = window.innerHeight - top - 16
+        this.dropdownStyle = {
+          top:       `${top}px`,
+          right:     '8px',
+          left:      '8px',
+          width:     `${width}px`,
+          maxHeight: `${Math.max(200, maxH)}px`,
+        }
+      } else {
+        const right = Math.max(8, window.innerWidth - rect.right)
+        this.dropdownStyle = {
+          top:      `${top}px`,
+          right:    `${right}px`,
+          width:    '384px',
+          maxHeight: `${window.innerHeight - top - 16}px`,
+        }
       }
     },
 
@@ -275,6 +320,14 @@ export default {
       this.offset = 0
       this.notificacoes = []
       this.fetchNotificacoes()
+    },
+
+    async aberto (val) {
+      if (val) {
+        // recalcula posição DEPOIS do dropdown existir no DOM
+        await this.$nextTick()
+        this.calcularPosicao()
+      }
     },
   },
 }
