@@ -20,6 +20,7 @@ urlpatterns = [
     path('loja/<int:id>/backoffice/',                   lojaView.loja_backoffice,       name='loja-backoffice'),
     path('loja/<int:id>/editar/',                       lojaView.loja_update,           name='loja-update'),
     path('loja/<int:id>/eliminar/',                     lojaView.loja_delete,           name='loja-delete'),
+    path('loja/<int:loja_id>/dashboard/',               lojaView.loja_dashboard,        name='loja-dashboard'),
 
     # ── Staff ─────────────────────────────────────────────────
     path('loja/<int:loja_id>/staff/',                   lojaView.staff_list,            name='staff-list'),

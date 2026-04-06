@@ -9,6 +9,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar
 
+from django.db.models import Sum, Count, Avg, Q
+from django.utils.timezone import now
+from datetime import timedelta
+
 from ..models import (
     Utilizador, Loja, Produto, Encomenda,
     Pagamento, TipoProduto, UtilizadorLoja,
@@ -545,7 +549,7 @@ def admin_comissao_liquidar(request, comissao_id):
     Marca a comissao como liquidada.
     """
     from ..models import Comissao
-    from django.utils.timezone import now
+    
 
     erro = _exige_admin(request, 'gerir_pagamentos')
     if erro: return erro
@@ -676,3 +680,242 @@ def admin_categoria_gerir(request, cat_id):
     cat.save()
  
     return Response({'id': cat.id, 'nome': cat.nome, 'icon': cat.icon, 'ativo': cat.ativo, 'ordem': cat.ordem})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_dashboard(request):
+    """
+    GET /app/admin/dashboard/?periodo=30
+    Métricas globais para o painel de administração.
+    """
+    if not request.user.is_staff:
+        return Response({'detail': 'Sem permissão.'}, status=403)
+ 
+    periodo = int(request.GET.get('periodo', 30))
+    inicio  = now() - timedelta(days=periodo)
+    inicio_anterior = inicio - timedelta(days=periodo)
+ 
+    from ..models import (
+        Encomenda, Loja, Utilizador, Comissao, AvaliacaoLoja
+    )
+    from django.contrib.auth.models import User
+ 
+    enc_qs      = Encomenda.objects.all()
+    enc_periodo = enc_qs.filter(data_criacao__gte=inicio)
+    enc_ant     = enc_qs.filter(data_criacao__gte=inicio_anterior, data_criacao__lt=inicio)
+ 
+    def variacao(actual, anterior):
+        if not anterior: return None
+        return round(((actual - anterior) / anterior) * 100, 1)
+ 
+    # ── KPIs globais ──────────────────────────────────────────
+    gmv         = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    gmv_ant     = enc_ant.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+ 
+    com_qs      = Comissao.objects.all()
+    comissao_p  = com_qs.filter(status='pendente').aggregate(v=Sum('valor_comissao'))['v'] or 0
+    comissao_l  = com_qs.filter(status='liquidada').aggregate(v=Sum('valor_comissao'))['v'] or 0
+    comissao_periodo = com_qs.filter(data_criacao__gte=inicio).aggregate(v=Sum('valor_comissao'))['v'] or 0
+ 
+    total_lojas     = Loja.objects.filter(ativa=True).count()
+    lojas_periodo   = Loja.objects.filter(data_criacao__gte=inicio).count()
+    total_users     = Utilizador.objects.filter(status='ativo').count()
+    users_periodo   = Utilizador.objects.filter(data_criacao__gte=inicio).count()
+    total_enc       = enc_periodo.count()
+    total_enc_ant   = enc_ant.count()
+ 
+    # ── Encomendas por estado ─────────────────────────────────
+    por_estado = {}
+    for s in ['pendente','pago','preparando','enviado','concluido','cancelado']:
+        por_estado[s] = enc_qs.filter(status=s).count()
+ 
+    # ── GMV por dia ───────────────────────────────────────────
+    from django.db.models.functions import TruncDate
+    gmv_por_dia = (
+        enc_qs.filter(data_criacao__gte=inicio, status='concluido')
+        .annotate(dia=TruncDate('data_criacao'))
+        .values('dia')
+        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .order_by('dia')
+    )
+    grafico_gmv = [
+        {'dia': str(v['dia']), 'total': float(v['total']), 'count': v['count']}
+        for v in gmv_por_dia
+    ]
+ 
+    # ── Top lojas por vendas ──────────────────────────────────
+    top_lojas = (
+        enc_qs.filter(data_criacao__gte=inicio, status='concluido')
+        .values('loja__id', 'loja__nome')
+        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .order_by('-total')[:5]
+    )
+    lojas_top = [
+        {'id': l['loja__id'], 'nome': l['loja__nome'],
+         'total': float(l['total']), 'count': l['count']}
+        for l in top_lojas
+    ]
+ 
+    # ── Lojas pendentes de aprovação ─────────────────────────
+    lojas_pendentes = Loja.objects.filter(ativa=False).count()
+ 
+    return Response({
+        'periodo':              periodo,
+        # KPIs
+        'gmv':                  float(gmv),
+        'variacao_gmv':         variacao(gmv, gmv_ant),
+        'comissao_periodo':     float(comissao_periodo),
+        'comissao_pendente':    float(comissao_p),
+        'comissao_liquidada':   float(comissao_l),
+        'total_lojas':          total_lojas,
+        'lojas_novas':          lojas_periodo,
+        'lojas_pendentes':      lojas_pendentes,
+        'total_utilizadores':   total_users,
+        'utilizadores_novos':   users_periodo,
+        'total_encomendas':     total_enc,
+        'variacao_enc':         variacao(total_enc, total_enc_ant),
+        # Distribuição
+        'por_estado':           por_estado,
+        'grafico_gmv':          grafico_gmv,
+        'lojas_top':            lojas_top,
+    })
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_relatorios(request):
+    """
+    GET /app/admin/relatorios/
+    Query params:
+      - data_inicio  (YYYY-MM-DD)
+      - data_fim     (YYYY-MM-DD)
+      - loja_id      (opcional — filtra por loja específica)
+    """
+    from django.utils.dateparse import parse_date
+    from django.utils.timezone import make_aware
+    from datetime import datetime, date, timedelta
+ 
+    erro = _exige_admin(request, 'ver_stats')
+    if erro: return erro
+ 
+    # ── período ──────────────────────────────────────────────
+    hoje    = date.today()
+    data_fim_str   = request.GET.get('data_fim',   str(hoje))
+    data_inicio_str= request.GET.get('data_inicio',str(hoje - timedelta(days=30)))
+ 
+    try:
+        data_inicio = make_aware(datetime.combine(parse_date(data_inicio_str), datetime.min.time()))
+        data_fim    = make_aware(datetime.combine(parse_date(data_fim_str),    datetime.max.time()))
+    except Exception:
+        return Response({'detail': 'Datas inválidas. Use YYYY-MM-DD.'}, status=400)
+ 
+    loja_id = request.GET.get('loja_id')
+ 
+    from ..models import Encomenda, Comissao, AvaliacaoLoja, Loja
+    from django.db.models.functions import TruncDate
+ 
+    enc_qs = Encomenda.objects.filter(data_criacao__range=(data_inicio, data_fim))
+    com_qs = Comissao.objects.filter(data_criacao__range=(data_inicio, data_fim))
+    av_qs  = AvaliacaoLoja.objects.filter(data_criacao__range=(data_inicio, data_fim))
+ 
+    if loja_id:
+        enc_qs = enc_qs.filter(loja_id=loja_id)
+        com_qs = com_qs.filter(loja_id=loja_id)
+        av_qs  = av_qs.filter(loja_id=loja_id)
+ 
+    # ── KPIs do período ───────────────────────────────────────
+    gmv            = enc_qs.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    total_enc      = enc_qs.count()
+    enc_concluidas = enc_qs.filter(status='concluido').count()
+    enc_canceladas = enc_qs.filter(status='cancelado').count()
+    taxa_conclusao = round(enc_concluidas / total_enc * 100, 1) if total_enc else 0
+ 
+    com_geradas    = com_qs.aggregate(v=Sum('valor_comissao'))['v'] or 0
+    com_liquidadas = com_qs.filter(status='liquidada').aggregate(v=Sum('valor_comissao'))['v'] or 0
+    com_pendentes  = com_qs.filter(status='pendente').aggregate(v=Sum('valor_comissao'))['v'] or 0
+ 
+    rating_medio   = av_qs.aggregate(m=Avg('pontuacao'))['m']
+    total_aval     = av_qs.count()
+ 
+    # ── Por estado ────────────────────────────────────────────
+    por_estado = {}
+    for s in ['pendente','pago','preparando','enviado','concluido','cancelado']:
+        por_estado[s] = enc_qs.filter(status=s).count()
+ 
+    # ── Vendas por dia ────────────────────────────────────────
+    vendas_dia = (
+        enc_qs.filter(status='concluido')
+        .annotate(dia=TruncDate('data_criacao'))
+        .values('dia')
+        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .order_by('dia')
+    )
+    grafico = [
+        {'dia': str(v['dia']), 'total': float(v['total']), 'count': v['count']}
+        for v in vendas_dia
+    ]
+ 
+    # ── Top lojas (só se não filtrado por loja) ───────────────
+    lojas_top = []
+    if not loja_id:
+        top = (
+            enc_qs.filter(status='concluido')
+            .values('loja__id', 'loja__nome')
+            .annotate(total=Sum('valor_total'), count=Count('id'))
+            .order_by('-total')[:10]
+        )
+        lojas_top = [
+            {'id': l['loja__id'], 'nome': l['loja__nome'],
+             'total': float(l['total']), 'count': l['count']}
+            for l in top
+        ]
+ 
+    # ── Top produtos ──────────────────────────────────────────
+    from ..models import ItemEncomenda
+    top_prod_qs = ItemEncomenda.objects.filter(
+        encomenda__data_criacao__range=(data_inicio, data_fim)
+    )
+    if loja_id:
+        top_prod_qs = top_prod_qs.filter(encomenda__loja_id=loja_id)
+ 
+    top_produtos = (
+        top_prod_qs
+        .values('produto__id', 'produto__nome')
+        .annotate(qty=Sum('quantidade'), total=Sum('preco'))
+        .order_by('-qty')[:10]
+    )
+    produtos_top = [
+        {'id': p['produto__id'], 'nome': p['produto__nome'],
+         'qty': p['qty'], 'total': float(p['total'] or 0)}
+        for p in top_produtos
+    ]
+ 
+    # ── Lista de lojas para o filtro ──────────────────────────
+    lojas_lista = list(
+        Loja.objects.filter(ativa=True).values('id', 'nome').order_by('nome')
+    )
+ 
+    return Response({
+        'periodo': {'inicio': data_inicio_str, 'fim': data_fim_str},
+        'loja_id': loja_id,
+        # KPIs
+        'gmv':             float(gmv),
+        'total_encomendas':total_enc,
+        'enc_concluidas':  enc_concluidas,
+        'enc_canceladas':  enc_canceladas,
+        'taxa_conclusao':  taxa_conclusao,
+        # Comissões
+        'comissoes_geradas':   float(com_geradas),
+        'comissoes_liquidadas':float(com_liquidadas),
+        'comissoes_pendentes': float(com_pendentes),
+        # Avaliações
+        'rating_medio':    round(float(rating_medio), 2) if rating_medio else None,
+        'total_avaliacoes':total_aval,
+        # Gráficos
+        'por_estado':      por_estado,
+        'grafico':         grafico,
+        'lojas_top':       lojas_top,
+        'produtos_top':    produtos_top,
+        # Meta
+        'lojas_lista':     lojas_lista,
+    })

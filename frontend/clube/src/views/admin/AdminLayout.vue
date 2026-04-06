@@ -117,6 +117,7 @@
         <AdminTipos        v-else-if="activeSection === 'tipos'"        />
         <AdminComissoes    v-else-if="activeSection === 'comissoes'"    />
         <AdminCategorias   v-else-if="activeSection === 'categorias'"   />
+        <AdminRelatorios   v-else-if="activeSection === 'relatorios'"   />
       </div>
     </div>
 
@@ -146,10 +147,12 @@ import AdminPagamentos   from './AdminPagamentos.vue'
 import AdminTipos        from './AdminTipos.vue'
 import AdminComissoes    from './AdminComissoes.vue'
 import AdminCategorias   from './AdminCategorias.vue'
+import AdminRelatorios   from './AdminRelatorios.vue'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 
 const SECCOES = [
   { key: 'dashboard',    label: 'Dashboard',     icon: '📊', permissao: 'ver_stats'           },
+  { key: 'relatorios',   label: 'Relatórios',    icon: '📈', permissao: 'ver_relatorios'    },
   { key: 'categorias',   label: 'Categorias',    icon: '🏷️', permissao: 'gerir_lojas'         },
   { key: 'lojas',        label: 'Lojas',         icon: '🏪', permissao: 'gerir_lojas'         },
   { key: 'utilizadores', label: 'Utilizadores',  icon: '👥', permissao: 'gerir_utilizadores'  },
@@ -161,10 +164,10 @@ const SECCOES = [
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes'],
-  moderador:    ['ver_stats','gerir_lojas','gerir_produtos'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios'],
+  moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','ver_relatorios'],
   suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas'],
-  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas'],
+  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios'],
 }
 
 export default {
@@ -172,7 +175,7 @@ export default {
   components: {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
-    AdminCategorias, NotificacaoSino,
+    AdminCategorias, NotificacaoSino,AdminRelatorios,
   },
 
   data () {

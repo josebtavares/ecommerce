@@ -5,7 +5,7 @@ urlpatterns = [
 
     # ── Estatísticas ──────────────────────────────────────────
     path('admin/stats/',                        adminView.admin_stats,               name='admin-stats'),
-
+    path('admin/dashboard/',                    adminView.admin_dashboard,           name='admin-dashboard'),
     # ── Lojas ─────────────────────────────────────────────────
     path('admin/lojas/',                        adminView.admin_loja_list,           name='admin-loja-list'),
     path('admin/lojas/<int:loja_id>/',          adminView.admin_loja_gerir,          name='admin-loja-gerir'),
@@ -38,6 +38,9 @@ urlpatterns = [
 
     path('admin/categorias/', adminView.admin_categoria_list_criar, name='admin-cat-list'),
     path('admin/categorias/<int:cat_id>/', adminView.admin_categoria_gerir, name='admin-cat-gerir'),
+    
+    #-─ Relatórios ──────────────────────────────────────────────
+    path('admin/relatorios/', adminView.admin_relatorios, name='admin-relatorios'),
 ]
 
    

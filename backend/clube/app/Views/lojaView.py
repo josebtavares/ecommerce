@@ -9,6 +9,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_admins,notificar
 
+from django.db.models import Sum, Count, Avg, Q
+from django.utils.timezone import now
+from datetime import timedelta
 
 
 from ..models import Loja, LojaTemplate, UtilizadorLoja, Utilizador
@@ -480,3 +483,126 @@ def categoria_list(request):
         {'id': c.id, 'nome': c.nome, 'icon': c.icon, 'ordem': c.ordem}
         for c in cats
     ])
+    
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_dashboard(request, loja_id):
+    """
+    GET /app/loja/<loja_id>/dashboard/
+    Métricas do backoffice da loja.
+    Query params: periodo=7|30|90 (dias, default=30)
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'ver_loja')
+    if erro:
+        return erro
+ 
+    periodo = int(request.GET.get('periodo', 30))
+    inicio  = now() - timedelta(days=periodo)
+    inicio_anterior = inicio - timedelta(days=periodo)
+ 
+    from ..models import Encomenda, ItemEncomenda, Comissao, AvaliacaoLoja, Inventario
+ 
+    enc_qs      = Encomenda.objects.filter(loja=loja)
+    enc_periodo = enc_qs.filter(data_criacao__gte=inicio)
+    enc_ant     = enc_qs.filter(data_criacao__gte=inicio_anterior, data_criacao__lt=inicio)
+ 
+    # ── KPIs principais ──────────────────────────────────────
+    total_vendas    = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    total_vendas_ant= enc_ant.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    total_enc       = enc_periodo.count()
+    total_enc_ant   = enc_ant.count()
+    enc_concluidas  = enc_periodo.filter(status='concluido').count()
+    enc_canceladas  = enc_periodo.filter(status='cancelado').count()
+ 
+    def variacao(actual, anterior):
+        if not anterior:
+            return None
+        return round(((actual - anterior) / anterior) * 100, 1)
+ 
+    # ── Encomendas por estado ─────────────────────────────────
+    por_estado = {}
+    for s in ['pendente','pago','preparando','enviado','concluido','cancelado']:
+        por_estado[s] = enc_qs.filter(status=s).count()
+ 
+    # ── Vendas por dia (últimos N dias) ───────────────────────
+    from django.db.models.functions import TruncDate
+    vendas_por_dia = (
+        enc_qs.filter(data_criacao__gte=inicio, status='concluido')
+        .annotate(dia=TruncDate('data_criacao'))
+        .values('dia')
+        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .order_by('dia')
+    )
+    grafico_vendas = [
+        {'dia': str(v['dia']), 'total': float(v['total']), 'count': v['count']}
+        for v in vendas_por_dia
+    ]
+ 
+    # ── Produtos mais vendidos ────────────────────────────────
+    top_produtos = (
+        ItemEncomenda.objects
+        .filter(encomenda__loja=loja, encomenda__data_criacao__gte=inicio)
+        .values('produto__id', 'produto__nome')
+        .annotate(total_qty=Sum('quantidade'), total_val=Sum('preco'))
+        .order_by('-total_qty')[:5]
+    )
+    produtos_top = [
+        {
+            'id':    p['produto__id'],
+            'nome':  p['produto__nome'],
+            'qty':   p['total_qty'],
+            'valor': float(p['total_val'] or 0),
+        }
+        for p in top_produtos
+    ]
+ 
+    # ── Comissões ─────────────────────────────────────────────
+    com_qs = Comissao.objects.filter(loja=loja)
+    comissao_pendente  = com_qs.filter(status='pendente').aggregate(v=Sum('valor_comissao'))['v'] or 0
+    comissao_liquidada = com_qs.filter(status='liquidada').aggregate(v=Sum('valor_comissao'))['v'] or 0
+ 
+    # ── Avaliações ────────────────────────────────────────────
+    av_qs       = AvaliacaoLoja.objects.filter(loja=loja)
+    rating_med  = av_qs.aggregate(m=Avg('pontuacao'))['m']
+    total_aval  = av_qs.count()
+    aval_rec    = av_qs.filter(data_criacao__gte=inicio).count()
+ 
+    # ── Stock em alerta ───────────────────────────────────────
+    stock_alerta = (
+        Inventario.objects.filter(loja=loja, quantidade__lte=5)
+        .select_related('produto')
+        .values('produto__id', 'produto__nome', 'quantidade')[:10]
+    )
+    stock_baixo = [
+        {'id': s['produto__id'], 'nome': s['produto__nome'], 'qty': s['quantidade']}
+        for s in stock_alerta
+    ]
+ 
+    return Response({
+        'periodo':            periodo,
+        # KPIs
+        'total_vendas':       float(total_vendas),
+        'variacao_vendas':    variacao(total_vendas, total_vendas_ant),
+        'total_encomendas':   total_enc,
+        'variacao_enc':       variacao(total_enc, total_enc_ant),
+        'enc_concluidas':     enc_concluidas,
+        'enc_canceladas':     enc_canceladas,
+        'taxa_conclusao':     round(enc_concluidas / total_enc * 100, 1) if total_enc else 0,
+        # Distribuição
+        'por_estado':         por_estado,
+        'grafico_vendas':     grafico_vendas,
+        'produtos_top':       produtos_top,
+        # Financeiro
+        'comissao_pendente':  float(comissao_pendente),
+        'comissao_liquidada': float(comissao_liquidada),
+        # Avaliações
+        'rating_medio':       round(float(rating_med), 2) if rating_med else None,
+        'total_avaliacoes':   total_aval,
+        'avaliacoes_recentes':aval_rec,
+        # Stock
+        'stock_baixo':        stock_baixo,
+        'stock_alerta_count': len(stock_baixo),
+    })
+    
