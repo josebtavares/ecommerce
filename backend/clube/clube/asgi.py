@@ -1,6 +1,5 @@
 """
 ASGI config for clube project.
-Inclui middleware JWT para autenticação via WebSocket.
 """
 
 import os
@@ -20,14 +19,17 @@ django_app = get_asgi_application()
 
 class JwtAuthMiddleware:
     """
-    Lê o token JWT do query string (?token=...) e autentica o utilizador.
-    O AuthMiddlewareStack padrão lê cookies — não funciona para WebSockets
-    com JWT enviado pelo frontend Vue.
+    Só actua em WebSockets — lê o token JWT do query string (?token=...).
+    Requests HTTP passam directamente sem interferência.
     """
     def __init__(self, inner):
         self.inner = inner
 
     async def __call__(self, scope, receive, send):
+        # ── só processa WebSockets ────────────────────────────
+        if scope["type"] != "websocket":
+            return await self.inner(scope, receive, send)
+
         from channels.db import database_sync_to_async
         from django.contrib.auth import get_user_model
 
@@ -51,8 +53,8 @@ class JwtAuthMiddleware:
 
 
 application = ProtocolTypeRouter({
-    "http": django_app,
-    "websocket": JwtAuthMiddleware(
+    "http": django_app,                          # HTTP — sem alterações
+    "websocket": JwtAuthMiddleware(              # WebSocket — com JWT
         URLRouter(app.routing.websocket_urlpatterns)
     ),
 })
