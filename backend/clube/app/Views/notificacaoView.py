@@ -5,25 +5,62 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import Notificacao
-
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 # ══════════════════════════════════════════════════════════════
 # HELPERS — importa e usa em qualquer view
 # ══════════════════════════════════════════════════════════════
 
 def notificar(utilizador, tipo, titulo, mensagem='', loja=None, link=''):
-    """Cria notificação para um utilizador específico."""
+    """
+    1. Grava a notificação na BD (como antes)
+    2. Envia em tempo real via WebSocket ao utilizador
+       Se ele não estiver ligado, a notificação fica na BD
+       e é carregada quando abrir o sino.
+    """
+    
+    
+ 
+    # ── 1. gravar na BD ──────────────────────────────────────
+    notif = Notificacao.objects.create(
+        utilizador = utilizador,
+        tipo       = tipo,
+        titulo     = titulo,
+        mensagem   = mensagem,
+        loja       = loja,
+        link       = link,
+    )
+ 
+    # ── 2. contar não lidas ───────────────────────────────────
+    nao_lidas = Notificacao.objects.filter(
+        utilizador=utilizador, lida=False
+    ).count()
+ 
+    # ── 3. enviar via WebSocket ───────────────────────────────
     try:
-        Notificacao.objects.create(
-            utilizador=utilizador,
-            tipo=tipo,
-            titulo=titulo,
-            mensagem=mensagem,
-            loja=loja,
-            link=link,
-        )
+        channel_layer = get_channel_layer()
+        group_name    = f"notif_{utilizador.user.id}"
+ 
+        async_to_sync(channel_layer.group_send)(group_name, {
+            "type": "notificacao.nova",      # → chama notificacao_nova() no consumer
+            "notificacao": {
+                "id":          notif.id,
+                "tipo":        notif.tipo,
+                "titulo":      notif.titulo,
+                "mensagem":    notif.mensagem,
+                "loja_id":     loja.id   if loja else None,
+                "loja_nome":   loja.nome if loja else None,
+                "link":        notif.link,
+                "lida":        False,
+                "data_criacao": notif.data_criacao.strftime('%d-%m-%Y %H:%M'),
+            },
+            "nao_lidas": nao_lidas,
+        })
     except Exception:
-        pass  # nunca falha silenciosamente para não quebrar a view principal
+        pass  # falha silenciosa — notificação já está na BD
+ 
+    return notif
 
 
 def notificar_staff(loja, roles, tipo, titulo, mensagem='', link='', excluir=None):
