@@ -41,6 +41,21 @@
             </svg>
             Aplicar
           </button>
+
+          <!-- Exportar PDF -->
+          <button v-if="dados" @click="exportarPdf" :disabled="loadingPdf"
+            class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold
+                   rounded-xl transition self-end flex items-center gap-2 disabled:opacity-50">
+            <svg v-if="loadingPdf" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+              <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" class="opacity-75"/>
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {{ loadingPdf ? 'A gerar...' : 'PDF' }}
+          </button>
         </div>
       </div>
 
@@ -293,6 +308,7 @@
 
 <script>
 import api from '@/services/api'
+import { usePdfRelatorio } from '@/composables/usePdfRelatorio'
 
 export default {
   name: 'BackofficeDashboard',
@@ -310,6 +326,7 @@ export default {
       atalhoActivo: 'Este mês',
       svgW: 400,
       svgH: 140,
+      loadingPdf:   false,
       atalhos: [
         { label: 'Hoje',        dias: 0           },
         { label: 'Últimos 7d',  dias: 7           },
@@ -475,6 +492,20 @@ export default {
         console.error(e)
       } finally {
         this.loading = false
+      }
+    },
+
+    async exportarPdf () {
+      this.loadingPdf = true
+      const { gerarPdfLoja } = usePdfRelatorio()
+      const nomeLoja = this.$route?.params?.nomeLoja || `Loja ${this.lojaId}`
+      const periodo  = `${this.dataInicio} a ${this.dataFim}`
+      try {
+        await gerarPdfLoja(this.dados, nomeLoja, periodo)
+      } catch (e) {
+        console.error('Erro ao gerar PDF:', e)
+      } finally {
+        this.loadingPdf = false
       }
     },
 
