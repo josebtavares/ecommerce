@@ -66,6 +66,21 @@
           </svg>
           CSV
         </button>
+
+        <!-- Exportar PDF -->
+        <button v-if="dados" @click="exportarPdf" :disabled="loadingPdf"
+          class="px-4 py-2 bg-red-600/15 hover:bg-red-600/25 text-red-400 text-sm font-semibold
+                 rounded-xl transition flex items-center gap-2 disabled:opacity-50">
+          <svg v-if="loadingPdf" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+            <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" class="opacity-75"/>
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l5 5v11a2 2 0 01-2 2z" />
+          </svg>
+          {{ loadingPdf ? 'A gerar...' : 'PDF' }}
+        </button>
       </div>
 
       <!-- Período activo -->
@@ -268,6 +283,7 @@
 
 <script>
 import api from '@/services/api'
+import { usePdfRelatorio } from '@/composables/usePdfRelatorio'
 
 export default {
   name: 'AdminRelatorios',
@@ -283,6 +299,7 @@ export default {
       lojaId:       '',
       lojas:        [],
       atalhoActivo: 'Este mês',
+      loadingPdf:   false,
       svgW:         400,
       svgH:         160,
       atalhos: [
@@ -426,6 +443,21 @@ export default {
         if (data.lojas_lista?.length) this.lojas = data.lojas_lista
       } catch (e) { console.error(e) }
       finally { this.loading = false }
+    },
+
+    async exportarPdf () {
+      this.loadingPdf = true
+      const { gerarPdfAdmin } = usePdfRelatorio()
+      const user     = JSON.parse(localStorage.getItem('user') || '{}')
+      const periodo  = `${this.dataInicio} a ${this.dataFim}`
+      const lojaNome = this.lojaId ? this.lojaNomeActivo : ''
+      try {
+        await gerarPdfAdmin(this.dados, periodo + (lojaNome ? ` · ${lojaNome}` : ''), user.username || '')
+      } catch (e) {
+        console.error('Erro ao gerar PDF:', e)
+      } finally {
+        this.loadingPdf = false
+      }
     },
 
     exportarCSV () {
