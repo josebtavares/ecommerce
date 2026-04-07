@@ -217,8 +217,12 @@ export default {
     async toggle () {
       this.isMobile = window.innerWidth < 640
       this.aberto   = !this.aberto
-      if (this.aberto && this.notificacoes.length === 0) {
-        await this.fetchNotificacoes()
+      if (this.aberto) {
+        // se a lista está vazia, busca via HTTP (fallback para quando WS não entregou ainda)
+        // se já tem itens do WS, não rebusca
+        if (this.notificacoes.length === 0) {
+          await this.fetchNotificacoes()
+        }
       }
     },
 
@@ -278,9 +282,13 @@ export default {
           const msg = JSON.parse(e.data)
           if (msg.type === 'nova') {
             this.naoLidas = msg.nao_lidas
-            // adiciona no topo da lista se o dropdown estiver aberto
-            if (this.aberto && msg.notificacao) {
-              this.notificacoes.unshift(msg.notificacao)
+            // adiciona sempre ao topo da lista — aberto ou fechado
+            if (msg.notificacao) {
+              // evita duplicados (pode chegar duas vezes em edge cases)
+              const existe = this.notificacoes.some(n => n.id === msg.notificacao.id)
+              if (!existe) {
+                this.notificacoes.unshift(msg.notificacao)
+              }
             }
           }
           if (msg.type === 'contador') {
