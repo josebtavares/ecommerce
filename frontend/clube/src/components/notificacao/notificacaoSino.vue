@@ -171,7 +171,9 @@ export default {
       lojaFiltro:    null,
       offset:        0,
       temMais:       false,
-      pollingTimer:  null,
+      _ws:           null,
+      _wsTimer:      null,
+      _wsTentativas: 0,
       isMobile:      window.innerWidth < 640,
       dropdownStyle: {},
     }
@@ -186,15 +188,16 @@ export default {
   },
 
   mounted () {
-    this.fetchContador()
     this.fetchLojas()
-    this.pollingTimer = setInterval(() => this.fetchContador(), 30000)
     document.addEventListener('click', this.clickFora)
+
+    // WebSocket — recebe notificações em tempo real
+    this._wsLigar()
   },
 
   beforeUnmount () {
-    clearInterval(this.pollingTimer)
     document.removeEventListener('click', this.clickFora)
+    this._wsDesligar()
   },
 
   methods: {
@@ -214,8 +217,12 @@ export default {
     async toggle () {
       this.isMobile = window.innerWidth < 640
       this.aberto   = !this.aberto
-      if (this.aberto && this.notificacoes.length === 0) {
-        await this.fetchNotificacoes()
+      if (this.aberto) {
+        // se a lista está vazia, busca via HTTP (fallback para quando WS não entregou ainda)
+        // se já tem itens do WS, não rebusca
+        if (this.notificacoes.length === 0) {
+          await this.fetchNotificacoes()
+        }
       }
     },
 
@@ -251,6 +258,65 @@ export default {
         const { data } = await api.get('/app/loja/minhas/')
         this.lojas = data || []
       } catch (e) { /* sem lojas */ }
+    },
+
+    // ── WebSocket ────────────────────────────────────────
+    _wsUrl () {
+      const base  = process.env.VUE_APP_WS_URL || 'ws://localhost:8000/ws'
+      const token = localStorage.getItem('access_token') || ''
+      return `${base}/notificacoes/?token=${token}`
+    },
+
+    _wsLigar () {
+      if (!localStorage.getItem('access_token')) return
+      if (this._ws?.readyState === WebSocket.OPEN) return
+
+      this._ws = new WebSocket(this._wsUrl())
+
+      this._ws.onopen = () => {
+        this._wsTentativas = 0
+      }
+
+      this._ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.type === 'nova') {
+            this.naoLidas = msg.nao_lidas
+            // adiciona sempre ao topo da lista — aberto ou fechado
+            if (msg.notificacao) {
+              // evita duplicados (pode chegar duas vezes em edge cases)
+              const existe = this.notificacoes.some(n => n.id === msg.notificacao.id)
+              if (!existe) {
+                this.notificacoes.unshift(msg.notificacao)
+              }
+            }
+          }
+          if (msg.type === 'contador') {
+            this.naoLidas = msg.nao_lidas
+          }
+        } catch (err) { /* silencioso */ }
+      }
+
+      this._ws.onclose = (e) => {
+        if (e.code !== 4001) {
+          const delay = Math.min(1000 * 2 ** this._wsTentativas, 30000)
+          this._wsTentativas++
+          this._wsTimer = setTimeout(() => this._wsLigar(), delay)
+        } else {
+          // não autenticado — fallback para polling
+          this._wsTimer = setInterval(() => this.fetchContador(), 30000)
+          this.fetchContador()
+        }
+      }
+
+      this._ws.onerror = () => { this._ws?.close() }
+    },
+
+    _wsDesligar () {
+      clearTimeout(this._wsTimer)
+      clearInterval(this._wsTimer)
+      this._ws?.close(1000)
+      this._ws = null
     },
 
     async fetchContador () {
