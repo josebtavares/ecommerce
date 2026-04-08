@@ -303,11 +303,39 @@ export default {
       finally { this.loading = false }
     },
 
-    async mudarRole (membro, novoRole) {
+   async mudarRole (membro, novoRole) {
+      const roleAnterior = membro.role
       try {
         await api.patch(`/app/loja/${this.lojaId}/staff/${membro.id}/`, { role: novoRole })
         membro.role = novoRole
-      } catch (e) { console.error(e) }
+
+      } catch (e) {
+        if (e.response?.status === 409 && e.response.data.requer_confirmacao) {
+          const n = e.response.data.entregas_activas
+          const confirmar = confirm(
+            `Este condutor tem ${n} entrega(s) activa(s).\n\n` +
+            `Ao confirmar:\n` +
+            `• As entregas serão canceladas\n` +
+            `• As encomendas voltam a "preparando" para reatribuição\n\n` +
+            `Confirmar?`
+          )
+          if (confirmar) {
+            try {
+              await api.patch(`/app/loja/${this.lojaId}/staff/${membro.id}/`, { role: novoRole, forcar: true })
+              membro.role = novoRole
+            } catch (e2) { console.error(e2) }
+          }
+          // se não confirmar, repõe o select para o role anterior
+          // (Vue não repõe automaticamente porque o value já mudou no DOM)
+          else {
+            await this.$nextTick()
+            membro.role = roleAnterior
+          }
+        } else {
+          console.error(e)
+          membro.role = roleAnterior
+        }
+      }
     },
 
     async removerMembro (membro) {
