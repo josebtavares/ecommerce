@@ -322,7 +322,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
             encomenda.status = 'enviado'
             encomenda.save(update_fields=['status'])
             
-        entrega.save(update_fields=['condutor'])
+        entrega.save(update_fields=['condutor', 'status'])
  
         # notifica novo condutor
         notificar(
