@@ -9,102 +9,128 @@
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)"
     />
-    
     <MultiCart ref="cart" />
 
     <div class="flex overflow-x-hidden">
 
-      <!-- ═══ SIDEBAR ═══ -->
-      <aside class="fixed left-0 top-0 h-[100vh] w-64 bg-zinc-900 border-r border-zinc-800 overflow-y-auto hidden lg:block z-10">
-        <div class="p-6">
-          <h2 class="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            Categorias
-          </h2>
+      <!-- ═══ SIDEBAR TOGGLE BUTTON ═══ -->
+      <button @click="sidebarAberta = !sidebarAberta"
+        class="fixed top-4 left-4 z-30 w-10 h-10 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800
+               rounded-xl flex items-center justify-center transition shadow-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-zinc-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
 
-          <!-- Skeleton -->
-          <div v-if="loadingCategorias" class="space-y-2">
-            <div v-for="n in 5" :key="n" class="h-10 bg-zinc-800 rounded-lg animate-pulse"></div>
+      <!-- ═══ OVERLAY ═══ -->
+      <transition enter-active-class="transition duration-200" enter-from-class="opacity-0"
+                  leave-active-class="transition duration-150" leave-to-class="opacity-0">
+        <div v-if="sidebarAberta"
+             class="fixed inset-0 z-20 bg-black/50 backdrop-blur-sm"
+             @click="sidebarAberta = false" />
+      </transition>
+
+      <!-- ═══ SIDEBAR ═══ -->
+      <transition enter-active-class="transition duration-300" enter-from-class="-translate-x-full"
+                  leave-active-class="transition duration-200" leave-to-class="-translate-x-full">
+        <aside v-if="sidebarAberta"
+               class="fixed left-0 top-0 h-[100vh] w-64 bg-zinc-900 border-r border-zinc-800 overflow-y-auto z-30">
+          <div class="p-6">
+            <!-- Fechar -->
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                Categorias
+              </h2>
+              <button @click="sidebarAberta = false"
+                class="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Skeleton -->
+            <div v-if="loadingCategorias" class="space-y-2">
+              <div v-for="n in 5" :key="n" class="h-10 bg-zinc-800 rounded-lg animate-pulse"></div>
+            </div>
+
+            <ul v-else class="space-y-1">
+              <li
+                v-for="cat in categoriasExistentes" :key="cat.value"
+                @click="selectCategoria(cat)"
+                :class="[
+                  'px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3',
+                  selectedCategoria === cat.value
+                    ? 'bg-red-600 text-white'
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+                ]"
+              >
+                <span class="w-2 h-2 rounded-full flex-shrink-0"
+                      :class="selectedCategoria === cat.value ? 'bg-white' : 'bg-zinc-600'"></span>
+                {{ cat.label }}
+              </li>
+
+              <li
+                @click="clearCategoria"
+                :class="[
+                  'px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3 mt-4 border border-dashed',
+                  !selectedCategoria
+                    ? 'border-red-500 text-red-500'
+                    : 'border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
+                ]"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                Ver Todas
+              </li>
+
+              <li @click="scrollToSection('produtos')"
+                class="px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3 mt-4 border-t border-zinc-800 pt-5
+                       text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100">
+                <span class="w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0"></span>
+                Produtos
+              </li>
+              <li @click="scrollToSection('catalogo')"
+                class="px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3
+                       text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100">
+                <span class="w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0"></span>
+                Explorar Lojas
+              </li>
+            </ul>
           </div>
 
-          <ul v-else class="space-y-1">
-            <!-- Categorias dinâmicas -->
-            <li
-              v-for="cat in categoriasExistentes" :key="cat.value"
-              @click="selectCategoria(cat)"
-              :class="[
-                'px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3',
-                selectedCategoria === cat.value
-                  ? 'bg-red-600 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
-              ]"
-            >
-              <span class="w-2 h-2 rounded-full flex-shrink-0"
-                    :class="selectedCategoria === cat.value ? 'bg-white' : 'bg-zinc-600'"></span>
-              {{ cat.label }}
-            </li>
-
-            <!-- Ver Todas -->
-            <li
-              @click="clearCategoria"
-              :class="[
-                'px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3 mt-4 border border-dashed',
-                !selectedCategoria
-                  ? 'border-red-500 text-red-500'
-                  : 'border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
-              ]"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </svg>
-              Ver Todas
-            </li>
-
-            <!-- Produtos + Explorar -->
-            <li @click="scrollToSection('produtos')"
-              class="px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3 mt-4 border-t border-zinc-800 pt-5
-                     text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100">
-              <span class="w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0"></span>
-              Produtos
-            </li>
-            <li @click="scrollToSection('catalogo')"
-              class="px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3
-                     text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100">
-              <span class="w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0"></span>
-              Explorar Lojas
-            </li>
-          </ul>
-        </div>
-
-        <!-- Lojas da categoria seleccionada -->
-        <div v-if="selectedCategoria && storesByCategory.length > 0" class="p-6 border-t border-zinc-800">
-          <h3 class="text-sm font-medium text-zinc-400 mb-3 uppercase tracking-wider">
-            Lojas em {{ selectedCategoriaLabel }}
-          </h3>
-          <ul class="space-y-2">
-            <li
-              v-for="store in storesByCategory" :key="store.id"
-              @click="goToStore(store.id)"
-              class="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer transition-colors"
-            >
-              <img v-if="store.logo_url" :src="store.logo_url" :alt="store.nome"
-                   class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-              <div v-else class="w-10 h-10 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
-                <span class="text-sm font-bold text-zinc-400">{{ store.nome.charAt(0) }}</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-zinc-200 truncate">{{ store.nome }}</p>
-                <p class="text-xs text-zinc-500 truncate">{{ store.localizacao }}</p>
-              </div>
-            </li>
-          </ul>
-        </div>
-      </aside>
+          <!-- Lojas da categoria seleccionada -->
+          <div v-if="selectedCategoria && storesByCategory.length > 0" class="p-6 border-t border-zinc-800">
+            <h3 class="text-sm font-medium text-zinc-400 mb-3 uppercase tracking-wider">
+              Lojas em {{ selectedCategoriaLabel }}
+            </h3>
+            <ul class="space-y-2">
+              <li
+                v-for="store in storesByCategory" :key="store.id"
+                @click="goToStore(store.id)"
+                class="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer transition-colors"
+              >
+                <img v-if="store.logo_url" :src="store.logo_url" :alt="store.nome"
+                     class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                <div v-else class="w-10 h-10 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                  <span class="text-sm font-bold text-zinc-400">{{ store.nome.charAt(0) }}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-zinc-200 truncate">{{ store.nome }}</p>
+                  <p class="text-xs text-zinc-500 truncate">{{ store.localizacao }}</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </aside>
+      </transition>
 
       <!-- ═══ MAIN ═══ -->
-      <main class="flex-1 lg:ml-64 overflow-x-hidden">
+      <main class="flex-1 overflow-x-hidden">
 
         <!-- ── HERO ── -->
         <section class="relative overflow-hidden">
@@ -256,65 +282,6 @@
       </main>
     </div>
 
-    <!-- Mobile FAB -->
-    <button @click="showMobileCategories = true"
-      class="fixed bottom-6 right-6 z-40 lg:hidden p-4 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg transition">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-    </button>
-
-    <!-- Mobile Drawer -->
-    <div v-if="showMobileCategories" class="fixed inset-0 z-50 lg:hidden" @click="showMobileCategories = false">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-      <div class="absolute left-0 top-0 h-full w-72 bg-zinc-900 p-6 overflow-y-auto" @click.stop>
-        <div class="flex items-center justify-between mb-6">
-          <h2 class="text-lg font-semibold text-white">Categorias</h2>
-          <button @click="showMobileCategories = false" class="p-2 hover:bg-zinc-800 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <ul class="space-y-1">
-          <li v-for="cat in categoriasExistentes" :key="cat.value"
-            @click="selectCategoria(cat); showMobileCategories = false"
-            :class="[
-              'px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3',
-              selectedCategoria === cat.value
-                ? 'bg-red-600 text-white'
-                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
-            ]">
-            <span class="w-2 h-2 rounded-full flex-shrink-0"
-                  :class="selectedCategoria === cat.value ? 'bg-white' : 'bg-zinc-600'"></span>
-            {{ cat.label }}
-          </li>
-          <li @click="clearCategoria; showMobileCategories = false"
-            :class="[
-              'px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 mt-4 border border-dashed',
-              !selectedCategoria ? 'border-red-500 text-red-500' : 'border-zinc-700 text-zinc-500'
-            ]">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-            Ver Todas
-          </li>
-          <li @click="scrollToSection('produtos'); showMobileCategories = false"
-            class="px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 mt-4 border-t border-zinc-800 pt-5
-                   text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100">
-            <span class="w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0"></span>
-            Produtos
-          </li>
-          <li @click="scrollToSection('catalogo'); showMobileCategories = false"
-            class="px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3
-                   text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100">
-            <span class="w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0"></span>
-            Explorar Lojas
-          </li>
-        </ul>
-      </div>
-    </div>
-
   </div>
 </template>
 
@@ -367,9 +334,10 @@ export default {
       loadingCategorias: true,
       selectedProduct: null,
       selectedLoja: null,
-      selectedCategoria: null,       // value da categoria seleccionada na sidebar
+      selectedCategoria: null,
       storesByCategory: [],
       showMobileCategories: false,
+      sidebarAberta: false,            // escondida por defeito
       user: {},
       sectionRefs: {},
     }
@@ -392,7 +360,10 @@ export default {
   },
 
   methods: {
-    goToStore (id) { this.$router.push(`/loja/${id}`) },
+    goToStore (id) {
+      this.sidebarAberta = false
+      this.$router.push(`/loja/${id}`)
+    },
 
     openProduct (produto) {
       this.selectedProduct = produto
@@ -405,7 +376,10 @@ export default {
 
     scrollToSection (key) {
       const el = this.sectionRefs[key]
-      if (el) el.scrollIntoView({ behavior: 'smooth' })
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' })
+        this.sidebarAberta = false
+      }
     },
 
     async selectCategoria (cat) {
