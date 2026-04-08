@@ -7,7 +7,7 @@ from rest_framework.decorators import api_view, parser_classes, permission_class
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from ..Views.notificacaoView import notificar_admins,notificar
+from ..Views.notificacaoView import notificar_admins,notificar, notificar_staff
 
 from django.db.models import Sum, Count, Avg, Q
 from django.utils.timezone import now, make_aware
@@ -503,7 +503,13 @@ def staff_update_role(request, loja_id, membro_id):
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def staff_remove(request, loja_id, membro_id):
-    """DELETE /app/loja/<loja_id>/staff/<membro_id>/remover/"""
+    """
+    DELETE /app/loja/<loja_id>/staff/<membro_id>/remover/
+ 
+    Se o membro for condutor com entregas activas:
+    - sem forcar: devolve 409 com requer_confirmacao=true
+    - com forcar=true: cancela entregas + encomendas voltam a preparando
+    """
     loja   = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
@@ -517,13 +523,59 @@ def staff_remove(request, loja_id, membro_id):
             status=status.HTTP_400_BAD_REQUEST
         )
  
+    # ── se é condutor, verifica entregas activas ──────────────
+    if membro.role == 'condutor':
+        from ..models import Condutor, Entrega
+ 
+        condutor = Condutor.objects.filter(
+            loja=loja, utilizador=membro.utilizador
+        ).first()
+ 
+        if condutor:
+            entregas_activas = Entrega.objects.filter(
+                condutor=condutor,
+                status__in=['atribuido', 'a_caminho']
+            ).select_related('encomenda')
+ 
+            if entregas_activas.exists() and not request.data.get('forcar', False):
+                return Response({
+                    'detail': (
+                        f'Este condutor tem {entregas_activas.count()} entrega(s) activa(s). '
+                        f'Serão canceladas e as encomendas voltam a "preparando". '
+                        f'Envia "forcar": true para confirmar.'
+                    ),
+                    'entregas_activas':   entregas_activas.count(),
+                    'requer_confirmacao': True,
+                }, status=status.HTTP_409_CONFLICT)
+ 
+            # cancela entregas activas
+            if entregas_activas.exists():
+                count = entregas_activas.count()
+                for entrega in entregas_activas:
+                    entrega.status = 'falhou'
+                    entrega.save(update_fields=['status'])
+                    entrega.encomenda.status = 'preparando'
+                    entrega.encomenda.save(update_fields=['status'])
+ 
+                notificar_staff(
+                    loja=loja,
+                    roles=['dono', 'gestor'],
+                    tipo='entrega_cancelada',
+                    titulo=f'{count} entrega(s) cancelada(s)',
+                    mensagem=(
+                        f'O condutor {membro.utilizador.nome} foi removido da loja. '
+                        f'{count} encomenda(s) voltaram a "preparando" para reatribuição.'
+                    ),
+                    link=f'/loja/{loja.id}/backoffice',
+                )
+ 
+            # desactiva registo Condutor
+            condutor.ativo = False
+            condutor.save(update_fields=['ativo'])
+ 
+    # ── remove o membro ───────────────────────────────────────
     membro.ativo = False
     membro.save(update_fields=['ativo'])
- 
-    # se era condutor → desactiva também o registo Condutor
-    if membro.role == 'condutor':
-        from ..models import Condutor
-        Condutor.objects.filter(loja=loja, utilizador=membro.utilizador).update(ativo=False)
  
     return Response({'detail': 'Membro removido do staff.'})
 

@@ -317,6 +317,11 @@ def entrega_atualizar(request, loja_id, encomenda_id):
     if 'condutor_id' in request.data:
         condutor = get_object_or_404(Condutor, id=request.data['condutor_id'], loja=loja, ativo=True)
         entrega.condutor = condutor
+        if entrega.status == 'falhou':
+            entrega.status = 'atribuido'
+            encomenda.status = 'enviado'
+            encomenda.save(update_fields=['status'])
+            
         entrega.save(update_fields=['condutor'])
  
         # notifica novo condutor

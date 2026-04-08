@@ -343,7 +343,22 @@ export default {
       try {
         await api.delete(`/app/loja/${this.lojaId}/staff/${membro.id}/remover/`)
         this.staff = this.staff.filter(m => m.id !== membro.id)
-      } catch (e) { console.error(e) }
+      } catch (e) {
+        if (e.response?.status === 409 && e.response.data.requer_confirmacao) {
+          const n = e.response.data.entregas_activas
+          if (confirm(
+            `Este condutor tem ${n} entrega(s) activa(s).\n\n` +
+            `Ao confirmar:\n• As entregas serão canceladas\n` +
+            `• As encomendas voltam a "preparando"\n\nConfirmar?`
+          )) {
+            await api.delete(
+              `/app/loja/${this.lojaId}/staff/${membro.id}/remover/`,
+              { data: { forcar: true } }   // ← axios DELETE com body
+            )
+            this.staff = this.staff.filter(m => m.id !== membro.id)
+          }
+        }
+      }
     },
 
     async adicionarMembro () {
