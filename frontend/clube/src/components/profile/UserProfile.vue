@@ -1,5 +1,5 @@
 <template>
-  <div class="text-white fixed top-6 right-[2.5vw] z-20 flex items-center gap-3">
+  <div class="text-white fixed top-6 right-[2.5vw] z-20 flex items-center gap-6">
     <NotificacaoSino />
     <font-awesome-icon :icon="['fas', 'user']" size="xl" class="cursor-pointer" @click="toggle" />
 
