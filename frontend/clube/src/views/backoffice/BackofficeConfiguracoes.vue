@@ -148,6 +148,39 @@
       </div>
     </div>
 
+    <!-- Políticas da loja -->
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+      <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">
+        Políticas da loja
+      </h2>
+      <p class="text-xs text-zinc-600 mb-5">
+        Visíveis na página pública da loja. Deixa em branco se não aplicável.
+      </p>
+      <div class="space-y-4">
+        <div>
+          <label class="text-xs text-zinc-500 mb-1 block">Política de devoluções</label>
+          <textarea v-model="form.politica_devolucao" rows="4"
+            placeholder="Ex: Aceitamos devoluções até 30 dias após a compra..."
+            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
+                  focus:outline-none focus:border-red-500 transition resize-none"></textarea>
+        </div>
+        <div>
+          <label class="text-xs text-zinc-500 mb-1 block">Termos de serviço</label>
+          <textarea v-model="form.termos_servico" rows="4"
+            placeholder="Ex: Ao fazer uma encomenda, o cliente aceita..."
+            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
+                  focus:outline-none focus:border-red-500 transition resize-none"></textarea>
+        </div>
+        <div>
+          <label class="text-xs text-zinc-500 mb-1 block">Política de privacidade</label>
+          <textarea v-model="form.politica_privacidade" rows="4"
+            placeholder="Ex: Os dados recolhidos são usados apenas para processamento de encomendas..."
+            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
+                  focus:outline-none focus:border-red-500 transition resize-none"></textarea>
+        </div>
+      </div>
+    </div>
+
     <!-- Guardar info loja -->
     <button @click="guardarLoja" :disabled="loadingSave"
       :class="[
@@ -185,7 +218,11 @@ export default {
 
   data () {
     return {
-      form: { nome: '', descricao: '', categoria: '', localizacao: '', entrega_ativa: false, levantamento_ativo: false },
+      form: { nome: '', descricao: '', categoria: '', localizacao: '', entrega_ativa: false, levantamento_ativo: false,
+        politica_devolucao: '',    
+        termos_servico: '',        
+        politica_privacidade: '', 
+       },
       logoFicheiro: null,
       bannerFicheiro: null,
       logoPreview: '',
@@ -213,6 +250,9 @@ export default {
         localizacao:        l.localizacao       || '',
         entrega_ativa:      l.entrega_ativa      || false,
         levantamento_ativo: l.levantamento_ativo || false,
+        politica_devolucao:   l.politica_devolucao   || '',
+        termos_servico:       l.termos_servico       || '',
+        politica_privacidade: l.politica_privacidade || '',
       }
       this.logoPreview   = l.logo_url   || ''
       this.bannerPreview = l.banner_url || ''
