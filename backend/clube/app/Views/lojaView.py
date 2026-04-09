@@ -771,4 +771,4 @@ def metodos_pagamento_publico(request, loja_id):
     from ..models import MetodoPagamento
     loja = get_object_or_404(Loja, id=loja_id, ativa=True)
     metodos = MetodoPagamento.objects.filter(loja=loja, ativo=True)
-    return Response([{'id': m.id, 'tipo': m.tipo} for m in metodos])
+    return Response([{'id': m.id, 'tipo': m.tipo, 'ativo': m.ativo} for m in metodos])
