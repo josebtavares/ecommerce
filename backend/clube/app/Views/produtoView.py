@@ -30,6 +30,8 @@ def tipo_produto_list(request):
     serializer = TipoProdutoSerializer(tipos, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def tipo_produto_list_loja(request, loja_id):
@@ -38,17 +40,17 @@ def tipo_produto_list_loja(request, loja_id):
     Lista tipos globais + tipos privados desta loja.
     Usado no backoffice para popular o select ao criar produto.
     """
+    
     _, _, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
     if erro:
         return erro
- 
-    from django.db.models import Q
-    tipos = TipoProduto.objects.filter(ativo=True).filter(
-        Q(loja__isnull=True) | Q(loja_id=loja_id)
+
+    tipos = TipoProduto.objects.filter(
+        Q(loja__isnull=True, ativo=True) |  # globais: só activos
+        Q(loja_id=loja_id)                  # da loja: activos E inactivos
     ).order_by('loja', 'nome')
- 
-    serializer = TipoProdutoSerializer(tipos, many=True)
-    return Response(serializer.data)
+
+    return Response(TipoProdutoSerializer(tipos, many=True).data)
  
  
 @api_view(['POST'])
