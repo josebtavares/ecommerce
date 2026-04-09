@@ -82,14 +82,28 @@
             </div>
           </div>
           <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
+            <!-- Editar -->
             <button @click="abrirEditar(tipo)"
-              class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition">
+              class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"
+              title="Editar">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
+          
+            <!-- Desactivar (soft delete) -->
             <button @click="eliminarTipo(tipo)"
-              class="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition">
+              class="w-8 h-8 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 flex items-center justify-center transition"
+              title="Desactivar (pode ser reactivado)">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </button>
+          
+            <!-- Eliminar definitivamente -->
+            <button @click="eliminarTipoDefinitivamente(tipo)"
+              class="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition"
+              title="Eliminar definitivamente">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
@@ -222,6 +236,11 @@
             </div>
           </div>
 
+          <div v-if="erroModal"
+            class="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">
+            {{ erroModal }}
+          </div>
+
           <!-- Actions -->
           <div class="flex gap-3 pt-2 border-t border-zinc-800">
             <button @click="fecharModal" type="button"
@@ -342,25 +361,70 @@ export default {
 
     async guardar () {
       if (!this.form.nome.trim()) return
-      this.loading = true
+      this.loading  = true
+      this.erroModal = ''
       try {
         if (this.tipoEditando) {
           await api.patch(`/app/loja/${this.lojaId}/tipos/${this.tipoEditando.id}/`, this.form)
         } else {
-          await api.post(`/app/loja/${this.lojaId}/tipos/criar/`, this.form)
+          const res = await api.post(`/app/loja/${this.lojaId}/tipos/criar/`, this.form)
+          // 200 = reactivado, 201 = criado novo
+          if (res.status === 200) {
+            // avisa o utilizador que foi reactivado (não é erro)
+            console.info('Tipo reactivado:', res.data.nome)
+          }
         }
         this.fecharModal()
         await this.fetchTipos()
-      } catch (e) { console.error(e) }
-      finally { this.loading = false }
+      } catch (e) {
+        // mostra o erro inline no modal em vez de silencioso
+        this.erroModal = e.response?.data?.nome
+          || e.response?.data?.detail
+          || 'Erro ao guardar o tipo.'
+      } finally {
+        this.loading = false
+      }
     },
 
     async eliminarTipo (tipo) {
-      if (!confirm(`Eliminar o tipo "${tipo.nome}"? Os produtos que o usam não serão afectados.`)) return
+      // Modal de confirmação com as duas opções
+      const opcao = confirm(
+        `O que queres fazer com o tipo "${tipo.nome}"?\n\n` +
+        `• OK → Desactivar (pode ser reactivado depois)\n` +
+        `• Cancelar → Não fazer nada\n\n` +
+        `Para eliminar definitivamente, usa o botão de lixo com Alt pressionado.`
+      )
+      if (!opcao) return
+    
+      // Se o utilizador manteve Alt pressionado → eliminar definitivamente
+      // Alternativa: adicionar um segundo botão na UI (ver comentário abaixo)
       try {
         await api.delete(`/app/loja/${this.lojaId}/tipos/${tipo.id}/`)
         await this.fetchTipos()
-      } catch (e) { console.error(e) }
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Erro ao desactivar o tipo.')
+      }
+    },
+
+    async eliminarTipoDefinitivamente (tipo) {
+      if (!confirm(
+        `⚠️ Eliminar DEFINITIVAMENTE o tipo "${tipo.nome}"?\n\n` +
+        `Esta acção não pode ser desfeita.\n` +
+        `Os produtos que usam este tipo perderão a sua classificação.`
+      )) return
+    
+      try {
+        await api.delete(`/app/loja/${this.lojaId}/tipos/${tipo.id}/?hard=1`)
+        await this.fetchTipos()
+      } catch (e) {
+        const detail = e.response?.data?.detail || 'Erro ao eliminar.'
+        const produtos = e.response?.data?.produtos_ativos
+        if (produtos) {
+          alert(`Não foi possível eliminar: ${detail}`)
+        } else {
+          alert(detail)
+        }
+      }
     },
   }
 }
