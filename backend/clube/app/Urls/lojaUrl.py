@@ -30,4 +30,7 @@ urlpatterns = [
     
     # ── Categorias ─────────────────────────────────────────────────
     path('categorias/', lojaView.categoria_list, name='categoria-list'),
+    
+    path('loja/<int:loja_id>/pagamento/metodos/', lojaView.metodos_pagamento_publico),
+
 ]
