@@ -138,6 +138,15 @@ def produto_list_pagination(request):
     tipo = request.GET.get('tipo')
     if tipo:
         qs = qs.filter(tipo__nome__iexact=tipo)
+        
+    tipo = request.GET.get('tipo')
+    if tipo:
+        qs = qs.filter(tipo__nome__iexact=tipo)
+ 
+    # ── filtro por categoria do produto ───────────────────────
+    categoria = request.GET.get('categoria')
+    if categoria:
+        qs = qs.filter(categoria__iexact=categoria)
 
     # ── 3) pesquisa de texto livre (nome + descrição) ─────────
     q = request.GET.get('q')
@@ -368,3 +377,23 @@ def produto_delete(request, loja_id, id):
     produto.ativo = False
     produto.save(update_fields=['ativo'])
     return Response({'detail': 'Produto desactivado.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def produto_categorias_loja(request, loja_id):
+    """
+    GET /app/loja/<loja_id>/produtos/categorias/
+    Devolve as categorias distintas dos produtos activos desta loja.
+    Usado na página pública da loja para construir os sliders e abas.
+    """
+    categorias = (
+        Produto.objects
+        .filter(loja_id=loja_id, ativo=True)
+        .exclude(categoria='')
+        .exclude(categoria__isnull=True)
+        .values_list('categoria', flat=True)
+        .distinct()
+        .order_by('categoria')
+    )
+    return Response(list(categorias))

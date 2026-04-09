@@ -1,17 +1,14 @@
 <template>
   <div class="min-h-screen bg-zinc-950 text-zinc-100">
 
-    <!-- Product Popup -->
     <ProductInfoCard
       :produto="selectedProduct"
       :loja="loja"
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)"
     />
-
-    <!-- Cart -->
     <MultiCart ref="cart" />
-    <Profile :data="user" class=" z-10" @log_out="log_out()"/>
+    <Profile :data="user" class="z-10" @log_out="log_out()"/>
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center h-screen">
@@ -23,7 +20,7 @@
 
     <template v-else-if="loja">
 
-      <!-- HERO -->
+      <!-- ── HERO ── -->
       <section class="relative h-[55vh] min-h-[360px] overflow-hidden">
         <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
              :alt="loja.nome" class="w-full h-full object-cover" />
@@ -73,7 +70,7 @@
         </div>
       </section>
 
-      <!-- MAIN -->
+      <!-- ── MAIN ── -->
       <div class="max-w-6xl mx-auto px-6 py-8">
 
         <!-- Info + Entrega -->
@@ -106,32 +103,51 @@
           </div>
         </div>
 
-      
-        <ProductSlider title="Em Destaque" icon=""
-            :params="{ loja_id: $route.params.id, destaque: true }"
-            @product-click="selectedProduct = $event" />
-
+        <!-- ── Em Destaque ── -->
         <ProductSlider
-          v-for="tipo in Object.keys(produtosPorTipo)"
-          :key="tipo"
-          :title="tipo" :icon="tipoIcon(tipo)"
-          :params="{ loja_id: $route.params.id, tipo: tipo }"
+          title="Em Destaque" icon="⭐"
+          :params="{ loja_id: $route.params.id, destaque: true }"
           @product-click="selectedProduct = $event" />
 
+        <!-- ── Sliders por TIPO ── -->
+        <template v-if="tiposExistentes.length > 0">
+          <div class="flex items-center gap-3 my-6">
+            <div class="h-px flex-1 bg-zinc-800"></div>
+            <span class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Por tipo</span>
+            <div class="h-px flex-1 bg-zinc-800"></div>
+          </div>
+          <ProductSlider
+            v-for="tipo in tiposExistentes" :key="'tipo-' + tipo.id"
+            :title="tipo.nome" :icon="tipoIcon(tipo.nome)"
+            :params="{ loja_id: $route.params.id, tipo: tipo.nome }"
+            @product-click="selectedProduct = $event" />
+        </template>
+
+        <!-- ── Sliders por CATEGORIA ── -->
+        <template v-if="categoriasExistentes.length > 0">
+          <div class="flex items-center gap-3 my-6">
+            <div class="h-px flex-1 bg-zinc-800"></div>
+            <span class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Por categoria</span>
+            <div class="h-px flex-1 bg-zinc-800"></div>
+          </div>
+          <ProductSlider
+            v-for="cat in categoriasExistentes" :key="'cat-' + cat"
+            :title="cat" icon="📂"
+            :params="{ loja_id: $route.params.id, categoria: cat }"
+            @product-click="selectedProduct = $event" />
+        </template>
+
+        <!-- ── Catálogo completo ── -->
+        <div class="mt-10 mb-4">
+          <h2 class="text-xl font-bold text-zinc-100">Catálogo completo</h2>
+          <p class="text-sm text-zinc-500 mt-1">Filtra por tipo, categoria ou pesquisa directamente</p>
+        </div>
         <ProductCatalog
           :loja-id="$route.params.id"
           @product-click="selectedProduct = $event"
         />
 
-        <!-- Sem produtos -->
-        <div v-if="!loadingProdutos && todosProdutos.length === 0" class="text-center py-12 text-zinc-500">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
-          Nenhum produto disponível.
-        </div>
-
-        <!-- AVALIAÇÕES -->
+        <!-- ── Avaliações ── -->
         <div class="mt-10">
           <h2 class="text-xl font-bold text-zinc-100 mb-5">Avaliações</h2>
           <AvaliacaoLoja :loja-id="$route.params.id" @rating-updated="onRatingUpdated" />
@@ -155,16 +171,14 @@ import 'swiper/css'
 import api from '@/services/api'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
-
 import ProductSlider from '@/components/sliders/ProductSlider.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
-
 export default {
   name: 'LojaPublica',
-  components: { Swiper, SwiperSlide, ProductInfoCard, MultiCart,ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
+  components: { Swiper, SwiperSlide, ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
 
   data () {
     return {
@@ -172,29 +186,12 @@ export default {
       backendUrl: process.env.VUE_APP_URL_BASE || 'http://localhost:8000',
       loading: true,
       loja: null,
-      todosProdutos: [],
-      loadingProdutos: false,
       opcoesEntrega: [],
-      avaliacoes: [],
-      loadingAvaliacoes: false,
+      tiposExistentes: [],
+      categoriasExistentes: [],
       selectedProduct: null,
       user: null,
     }
-  },
-
-  computed: {
-    produtosDestaque () {
-      return this.todosProdutos.filter(p => p.destaque)
-    },
-    produtosPorTipo () {
-      const grupos = {}
-      this.todosProdutos.forEach(p => {
-        const tipo = p.tipo?.nome || 'Outros'
-        if (!grupos[tipo]) grupos[tipo] = []
-        grupos[tipo].push(p)
-      })
-      return grupos
-    },
   },
 
   async created () {
@@ -203,9 +200,9 @@ export default {
     const id = this.$route.params.id
     await Promise.all([
       this.fetchLoja(id),
-      this.fetchProdutos(id),
       this.fetchOpcoesEntrega(id),
-      //this.fetchAvaliacoes(id),
+      this.fetchTiposExistentes(id),
+      this.fetchCategoriasExistentes(id),
     ])
     this.loading = false
   },
@@ -214,58 +211,59 @@ export default {
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
-    formatDate (d) {
-      return new Date(d).toLocaleDateString('pt-PT')
-    },
+
     tipoIcon (tipo) {
       const icons = {
         prato: '🍽️', comida: '🍔', bebida: '🥤', sobremesa: '🍰',
         roupa: '👗', calcado: '👟', acessorio: '👜',
         eletronico: '📱', telemovel: '📱', tablet: '💻',
         fruta: '🍎', legume: '🥦', carne: '🥩',
+        livro: '📚', manga: '📖', revista: '📰',
       }
       return icons[tipo?.toLowerCase()] || '📦'
     },
+
     async fetchLoja (id) {
       try {
         const { data } = await api.get(`/app/loja/${id}/`)
         this.loja = data
       } catch (e) { console.error(e) }
     },
-    async fetchProdutos (id) {
-      this.loadingProdutos = true
-      try {
-        const { data } = await api.get(`/app/produto/?loja_id=${id}&limit=100`)
-        this.todosProdutos = data.results || data
-      } catch (e) { console.error(e) }
-      finally { this.loadingProdutos = false }
-    },
+
     async fetchOpcoesEntrega (id) {
       try {
         const { data } = await api.get(`/app/loja/${id}/entrega/opcoes/`)
         this.opcoesEntrega = data.results || data
       } catch (e) { console.error(e) }
     },
-    async fetchAvaliacoes (id) {
-      this.loadingAvaliacoes = true
+
+    async fetchTiposExistentes (id) {
       try {
-        const { data } = await api.get(`/app/loja/${id}/avaliacoes/`)
-        this.avaliacoes = data.results || data
+        // busca tipos únicos dos produtos desta loja
+        const { data } = await api.get('/app/produto/', { params: { loja_id: id, limit: 200 } })
+        const produtos = data.results || data
+        const map = {}
+        produtos.forEach(p => { if (p.tipo && !map[p.tipo.id]) map[p.tipo.id] = p.tipo })
+        this.tiposExistentes = Object.values(map)
       } catch (e) { console.error(e) }
-      finally { this.loadingAvaliacoes = false }
+    },
+
+    async fetchCategoriasExistentes (id) {
+      try {
+        const { data } = await api.get(`/app/loja/${id}/produtos/categorias/`)
+        this.categoriasExistentes = data
+      } catch (e) { console.error(e) }
     },
 
     onRatingUpdated ({ media }) {
-      if (this.loja && media !== undefined) {
-        this.loja.rating_medio = media
-      }
+      if (this.loja && media !== undefined) this.loja.rating_medio = media
     },
 
     log_out () {
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        localStorage.removeItem('user')
-        this.$router.push({ name: 'Login' })
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user')
+      this.$router.push({ name: 'Login' })
     },
   }
 }
