@@ -30,6 +30,8 @@ def tipo_produto_list(request):
     serializer = TipoProdutoSerializer(tipos, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def tipo_produto_list_loja(request, loja_id):
@@ -38,17 +40,17 @@ def tipo_produto_list_loja(request, loja_id):
     Lista tipos globais + tipos privados desta loja.
     Usado no backoffice para popular o select ao criar produto.
     """
+    
     _, _, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
     if erro:
         return erro
- 
-    from django.db.models import Q
-    tipos = TipoProduto.objects.filter(ativo=True).filter(
-        Q(loja__isnull=True) | Q(loja_id=loja_id)
+
+    tipos = TipoProduto.objects.filter(
+        Q(loja__isnull=True, ativo=True) |  # globais: só activos
+        Q(loja_id=loja_id)                  # da loja: activos E inactivos
     ).order_by('loja', 'nome')
- 
-    serializer = TipoProdutoSerializer(tipos, many=True)
-    return Response(serializer.data)
+
+    return Response(TipoProdutoSerializer(tipos, many=True).data)
  
  
 @api_view(['POST'])
@@ -57,20 +59,40 @@ def tipo_produto_criar(request, loja_id):
     """
     POST /app/loja/<loja_id>/tipos/criar/
     Body: { nome, descricao?, atributos_schema }
-    Cria um tipo privado desta loja.
+ 
+    Se já existir um tipo com o mesmo nome (mesmo inactivo),
+    reactiva-o em vez de devolver erro.
     """
     _, loja, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
     if erro:
         return erro
  
-    # valida nome único para esta loja
     nome = (request.data.get('nome') or '').lower().strip()
-    if TipoProduto.objects.filter(loja=loja, nome=nome).exists():
-        return Response(
-            {'nome': 'Já tens um tipo com este nome.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    if not nome:
+        return Response({'nome': 'O nome é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
  
+    # verifica se já existe (activo ou inactivo)
+    existente = TipoProduto.objects.filter(loja=loja, nome=nome).first()
+ 
+    if existente:
+        if existente.ativo:
+            # activo — não pode duplicar
+            return Response(
+                {'nome': f'Já tens um tipo activo com o nome "{nome}".'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        else:
+            # inactivo — reactiva e actualiza com os novos dados
+            existente.ativo       = True
+            existente.descricao   = request.data.get('descricao', existente.descricao)
+            existente.atributos_schema = request.data.get('atributos_schema', existente.atributos_schema)
+            existente.save(update_fields=['ativo', 'descricao', 'atributos_schema'])
+            return Response(
+                TipoProdutoSerializer(existente).data,
+                status=status.HTTP_200_OK   # 200 porque reactivou, não criou
+            )
+ 
+    # não existe — cria normalmente
     serializer = TipoProdutoSerializer(data={**request.data, 'nome': nome})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -83,22 +105,39 @@ def tipo_produto_criar(request, loja_id):
 @permission_classes([IsAuthenticated])
 def tipo_produto_gerir(request, loja_id, tipo_id):
     """
-    PATCH  /app/loja/<loja_id>/tipos/<tipo_id>/  → editar
-    DELETE /app/loja/<loja_id>/tipos/<tipo_id>/  → desactivar
-    Só pode gerir tipos da sua loja — não pode tocar nos globais.
+    PATCH  /app/loja/<loja_id>/tipos/<tipo_id>/         → editar
+    DELETE /app/loja/<loja_id>/tipos/<tipo_id>/         → desactivar (soft delete)
+    DELETE /app/loja/<loja_id>/tipos/<tipo_id>/?hard=1  → eliminar definitivamente
     """
     _, _, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
     if erro:
         return erro
  
-    # só tipos da loja (loja=X), nunca globais (loja=null)
     tipo = get_object_or_404(TipoProduto, id=tipo_id, loja_id=loja_id)
  
     if request.method == 'DELETE':
-        tipo.ativo = False
-        tipo.save(update_fields=['ativo'])
-        return Response({'detail': 'Tipo removido.'})
+        hard = request.GET.get('hard') == '1'
+        if hard:
+            # verifica se há produtos activos a usar este tipo
+            produtos_ativos = tipo.produtos.filter(ativo=True).count()
+            if produtos_ativos > 0:
+                return Response(
+                    {
+                        'detail': f'Este tipo tem {produtos_ativos} produto(s) activo(s). '
+                                  f'Desactiva ou remove os produtos primeiro.',
+                        'produtos_ativos': produtos_ativos,
+                    },
+                    status=status.HTTP_409_CONFLICT
+                )
+            tipo.delete()
+            return Response({'detail': 'Tipo eliminado definitivamente.'})
+        else:
+            # soft delete — mantém histórico
+            tipo.ativo = False
+            tipo.save(update_fields=['ativo'])
+            return Response({'detail': 'Tipo desactivado.'})
  
+    # PATCH — editar
     serializer = TipoProdutoSerializer(tipo, data=request.data, partial=True)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
