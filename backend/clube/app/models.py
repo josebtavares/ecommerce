@@ -180,6 +180,10 @@ class Loja(models.Model):
     ativa           = models.BooleanField(default=True)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
+    
+    politica_devolucao   = models.TextField(blank=True, default='')
+    termos_servico       = models.TextField(blank=True, default='')
+    politica_privacidade = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['-data_criacao']

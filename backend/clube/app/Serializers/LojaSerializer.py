@@ -94,6 +94,7 @@ class LojaSerializer(serializers.ModelSerializer):
             # estado
             'ativa',
             'data_criacao', 'data_atualizacao',
+            'politica_devolucao', 'termos_servico', 'politica_privacidade',
         ]
         read_only_fields = ['dono', 'data_criacao', 'data_atualizacao']
         extra_kwargs = {
@@ -163,6 +164,7 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             'cor_primaria', 'cor_secundaria', 'layout_produtos',
             'entrega_ativa', 'levantamento_ativo',
             'rating_medio',
+            'politica_devolucao', 'termos_servico', 'politica_privacidade',
         ]
 
     def get_logo_url(self, obj):
