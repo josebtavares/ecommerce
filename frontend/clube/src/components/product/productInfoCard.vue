@@ -84,8 +84,13 @@
           <!-- Loja info -->
           <div class="flex items-center gap-2 mb-3">
             <img v-if="loja?.logo_url" :src="loja.logo_url" :alt="loja.nome"
-                 class="w-6 h-6 rounded object-cover" />
-            <span class="text-xs text-zinc-500 font-medium">{{ loja?.nome }}</span>
+                class="w-6 h-6 rounded object-cover" />
+            <button v-if="mostrarBotaoLoja"
+              @click="visitarLoja"
+              class="text-xs font-medium text-zinc-400 hover:text-red-400 transition underline-offset-2 hover:underline">
+              {{ loja?.nome }}
+            </button>
+            <span v-else class="text-xs text-zinc-500 font-medium">{{ loja?.nome }}</span>
             <span class="text-zinc-700">·</span>
             <span class="text-xs text-zinc-500">{{ produto.categoria }}</span>
           </div>
@@ -173,18 +178,7 @@
             </span>
           </div>
 
-          <button
-            v-if="mostrarBotaoLoja"
-            @click="visitarLoja"
-            class="w-full py-2.5 rounded-xl font-semibold text-sm transition flex items-center justify-center gap-2
-                  border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 mb-3">
-            <img v-if="loja?.logo_url" :src="loja.logo_url" class="w-5 h-5 rounded object-cover" />
-            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            Visitar {{ loja?.nome }}
-          </button>
+        
 
           <!-- Botão adicionar -->
           <button
