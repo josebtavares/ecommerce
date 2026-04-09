@@ -92,7 +92,7 @@
             </button>
           
             <!-- Desactivar (soft delete) -->
-            <button @click="eliminarTipo(tipo)"
+            <button v-if="tipo.ativo" @click="eliminarTipo(tipo)"
               class="w-8 h-8 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 flex items-center justify-center transition"
               title="Desactivar (pode ser reactivado)">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
