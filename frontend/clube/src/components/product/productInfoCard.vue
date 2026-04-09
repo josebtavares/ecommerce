@@ -84,8 +84,13 @@
           <!-- Loja info -->
           <div class="flex items-center gap-2 mb-3">
             <img v-if="loja?.logo_url" :src="loja.logo_url" :alt="loja.nome"
-                 class="w-6 h-6 rounded object-cover" />
-            <span class="text-xs text-zinc-500 font-medium">{{ loja?.nome }}</span>
+                class="w-6 h-6 rounded object-cover" />
+            <button v-if="mostrarBotaoLoja"
+              @click="visitarLoja"
+              class="text-xs font-medium text-zinc-400 hover:text-red-400 transition underline-offset-2 hover:underline">
+              {{ loja?.nome }}
+            </button>
+            <span v-else class="text-xs text-zinc-500 font-medium">{{ loja?.nome }}</span>
             <span class="text-zinc-700">·</span>
             <span class="text-xs text-zinc-500">{{ produto.categoria }}</span>
           </div>
@@ -173,6 +178,8 @@
             </span>
           </div>
 
+        
+
           <!-- Botão adicionar -->
           <button
             @click="addToCart"
@@ -247,6 +254,14 @@ export default {
           : a
       )
     },
+    mostrarBotaoLoja () {
+      const rotaActual   = this.$route?.name
+      const lojaIdActual = this.$route?.params?.id
+      if (rotaActual === 'LojaPublica' && String(lojaIdActual) === String(this.loja?.id)) {
+        return false
+      }
+      return !!this.loja?.id
+    },
 
     atributosChoices () {
       return this.schema.filter(a => a.tipo === 'choices' && a.opcoes?.length > 0)
@@ -307,6 +322,10 @@ export default {
         this.$emit('added-to-cart', { loja: this.loja })
         this.$emit('close')
       })
+    },
+    visitarLoja () {
+      this.$emit('close')
+      this.$router.push(`/loja/${this.loja.id}`)
     },
   }
 }
