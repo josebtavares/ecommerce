@@ -20,4 +20,6 @@ urlpatterns = [
     path('loja/<int:loja_id>/produtos/criar/',      produtoView.produto_create,           name='produto-create'),
     path('loja/<int:loja_id>/produtos/<int:id>/editar/',  produtoView.produto_update,     name='produto-update'),
     path('loja/<int:loja_id>/produtos/<int:id>/eliminar/', produtoView.produto_delete,    name='produto-delete'),
+    
+    path('loja/<int:loja_id>/produtos/categorias/', produtoView.produto_categorias_loja, name='produto-categorias-loja'),
 ]
