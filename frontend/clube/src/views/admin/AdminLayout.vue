@@ -118,6 +118,7 @@
         <AdminComissoes    v-else-if="activeSection === 'comissoes'"    />
         <AdminCategorias   v-else-if="activeSection === 'categorias'"   />
         <AdminRelatorios   v-else-if="activeSection === 'relatorios'"   />
+        <AdminCategoriasDestaque v-else-if="activeSection === 'categorias_destaque'" />
       </div>
     </div>
 
@@ -148,6 +149,7 @@ import AdminTipos        from './AdminTipos.vue'
 import AdminComissoes    from './AdminComissoes.vue'
 import AdminCategorias   from './AdminCategorias.vue'
 import AdminRelatorios   from './AdminRelatorios.vue'
+import AdminCategoriasDestaque from './AdminCategoriasDestaque.vue'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 
 const SECCOES = [
@@ -157,16 +159,19 @@ const SECCOES = [
   { key: 'lojas',        label: 'Lojas',         icon: '🏪', permissao: 'gerir_lojas'         },
   { key: 'utilizadores', label: 'Utilizadores',  icon: '👥', permissao: 'gerir_utilizadores'  },
   { key: 'produtos',     label: 'Produtos',      icon: '📦', permissao: 'gerir_produtos'      },
+  { key: 'categorias_destaque', label: 'Categorias em Destaque', icon: '🔥', permissao: 'gerir_categorias_destaque' },
+
   { key: 'encomendas',   label: 'Encomendas',    icon: '🛍️', permissao: 'gerir_encomendas'   },
   { key: 'pagamentos',   label: 'Pagamentos',    icon: '💳', permissao: 'gerir_pagamentos'    },
   { key: 'tipos',        label: 'Tipos Globais', icon: '🏷️', permissao: 'gerir_tipos_globais' },
   { key: 'comissoes',    label: 'Comissões',     icon: '💰', permissao: 'gerir_comissoes'     },
+
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque'],
   moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','ver_relatorios'],
-  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas'],
+  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios'],
   contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios'],
 }
 
@@ -175,7 +180,7 @@ export default {
   components: {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
-    AdminCategorias, NotificacaoSino,AdminRelatorios,
+    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminCategoriasDestaque,
   },
 
   data () {

@@ -920,6 +920,27 @@ class Notificacao(models.Model):
             ))
         if notificacoes:
             cls.objects.bulk_create(notificacoes)
+            
+class CategoriaDestaque(models.Model):
+    """
+    Categorias curadas pelo admin que aparecem no home.
+    Correspondem ao campo `categoria` dos produtos (lowercase).
+    """
+    nome   = models.CharField(max_length=100, unique=True)
+    icone  = models.CharField(max_length=10, default='📂')
+    ordem  = models.IntegerField(default=0)
+    ativo  = models.BooleanField(default=True)
+ 
+    class Meta:
+        ordering = ['ordem', 'nome']
+ 
+    def __str__(self):
+        return self.nome
+ 
+    def save(self, *args, **kwargs):
+        self.nome = self.nome.lower().strip()
+        super().save(*args, **kwargs)
+
 
 
 # ── Permissões concretas ──────────────────────────────────────
