@@ -149,7 +149,38 @@ def tipo_produto_gerir(request, loja_id, tipo_id):
 # ══════════════════════════════════════════════════════════════
 # PRODUTO — LEITURA PÚBLICA
 # ══════════════════════════════════════════════════════════════
-
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def produto_categorias_plataforma(request):
+    """
+    GET /app/produto/categorias/
+    Devolve categorias distintas de todos os produtos activos.
+    Usado no home para sliders dinâmicos por categoria.
+    Suporta ?min_produtos=3 para filtrar categorias com poucos produtos.
+    """
+    min_produtos = int(request.GET.get('min_produtos', 1))
+ 
+    from django.db.models import Count
+ 
+    categorias = (
+        Produto.objects
+        .filter(ativo=True)
+        .exclude(categoria='')
+        .exclude(categoria__isnull=True)
+        .values('categoria')
+        .annotate(total=Count('id'))
+        .filter(total__gte=min_produtos)
+        .order_by('-total')  # mais populares primeiro
+    )
+    # limita o número de categorias devolvidas (default 20, max 50)
+    limit = min(int(request.GET.get('limit', 20)), 50)
+    categorias = categorias[:limit]
+ 
+    return Response([
+        {'categoria': c['categoria'], 'total': c['total']}
+        for c in categorias
+    ])
+    
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def produto_list_pagination(request):

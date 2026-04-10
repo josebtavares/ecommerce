@@ -208,6 +208,11 @@ class ProdutoSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+    
+    def validate_categoria(self, value):
+        if value:
+            return value.lower().strip()
+        return value
 
 
 # ══════════════════════════════════════════════════════════════
