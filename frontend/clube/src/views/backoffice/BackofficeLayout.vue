@@ -127,6 +127,7 @@
         <BackofficeAvaliacoes    v-else-if="activeSection === 'avaliacoes'"    :loja-id="lojaId" />
         <BackofficeEntregas      v-else-if="activeSection === 'entregas'"      :loja-id="lojaId" :minha-role="role" />
         <BackofficeCategorias    v-else-if="activeSection === 'categorias'"    :loja-id="lojaId" />
+        <BackofficeTemplates     v-else-if="activeSection === 'templates'"     :loja-id="lojaId" />
       </main>
     </div>
 
@@ -167,6 +168,7 @@ import BackofficeTipos          from './BackofficeTipos.vue'
 import BackofficeAvaliacoes     from './BackofficeAvaliacoes.vue'
 import BackofficeEntregas       from './BackofficeEntregas.vue'
 import BackofficeCategorias     from './BackofficeCategorias.vue'
+import BackofficeTemplates       from './BackofficeTemplates.vue'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 
 const PERMISSOES = {
@@ -197,6 +199,7 @@ const SECCOES = [
   { key: 'produtos',      label: 'Produtos',          icon: 'box',       permissao: 'gerir_produtos'   },
   { key: 'inventario',    label: 'Inventário',        icon: 'inventory', permissao: 'gerir_inventario' },
   { key: 'staff',         label: 'Staff',             icon: 'staff',     permissao: 'gerir_staff'      },
+  { key: 'templates',     label: 'Templates',         icon: 'template',  permissao: 'gerir_template'   },
   { key: 'configuracoes', label: 'Configurações',     icon: 'settings',  permissao: 'editar_loja'      },
 ]
 
@@ -207,6 +210,7 @@ export default {
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
+    BackofficeTemplates,
   },
 
   data () {
