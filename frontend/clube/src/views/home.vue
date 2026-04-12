@@ -245,13 +245,12 @@
             </div>
           </section>
           <section
-            v-for="cat in categoriasPlataforma" :key="'cat-' + cat.nome"
-            :ref="el => { if (el) sectionRefs['cat-' + cat.nome] = el }"
+            v-for="cat in categoriasPlataforma" :key="'cat-' + cat.categoria_id"
             class="py-4 px-6 md:px-12"
           >
             <ProductSlider
               :title="cat.nome" :icon="cat.icone || '📂'"
-              :params="{ categoria: cat.nome }"
+              :params="{ categoria_id: cat.categoria_id }"
               @product-click="openProduct($event)"
             />
           </section>
@@ -450,9 +449,8 @@ export default {
 
     async fetchCategoriasPlataforma () {
       try {
-        // usa o endpoint curado pelo admin — só mostra o que o admin aprovou
         const { data } = await api.get('/app/categorias-destaque/')
-        this.categoriasPlataforma = data
+        this.categoriasPlataforma = data  // já devolve { id, nome, icone, categoria_id, loja_id, ... }
       } catch (e) { console.error(e) }
     },
 

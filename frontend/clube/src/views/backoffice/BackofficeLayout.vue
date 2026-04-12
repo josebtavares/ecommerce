@@ -126,6 +126,7 @@
         <BackofficeTipos         v-else-if="activeSection === 'tipos'"         :loja-id="lojaId" />
         <BackofficeAvaliacoes    v-else-if="activeSection === 'avaliacoes'"    :loja-id="lojaId" />
         <BackofficeEntregas      v-else-if="activeSection === 'entregas'"      :loja-id="lojaId" :minha-role="role" />
+        <BackofficeCategorias    v-else-if="activeSection === 'categorias'"    :loja-id="lojaId" />
       </main>
     </div>
 
@@ -165,6 +166,7 @@ import BackofficeStaff          from './BackofficeStaff.vue'
 import BackofficeTipos          from './BackofficeTipos.vue'
 import BackofficeAvaliacoes     from './BackofficeAvaliacoes.vue'
 import BackofficeEntregas       from './BackofficeEntregas.vue'
+import BackofficeCategorias     from './BackofficeCategorias.vue'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 
 const PERMISSOES = {
@@ -191,6 +193,7 @@ const SECCOES = [
   { key: 'entregas',      label: 'Entregas',          icon: 'delivery',  permissao: 'gerir_entregas'   },
   { key: 'avaliacoes',    label: 'Avaliações',        icon: 'star',      permissao: 'ver_loja'         },
   { key: 'tipos',         label: 'Tipos de Produto',  icon: 'tag',       permissao: 'gerir_produtos'   },
+  { key: 'categorias',    label: 'Categorias',        icon: 'category',  permissao: 'gerir_produtos'   },
   { key: 'produtos',      label: 'Produtos',          icon: 'box',       permissao: 'gerir_produtos'   },
   { key: 'inventario',    label: 'Inventário',        icon: 'inventory', permissao: 'gerir_inventario' },
   { key: 'staff',         label: 'Staff',             icon: 'staff',     permissao: 'gerir_staff'      },
@@ -203,7 +206,7 @@ export default {
     BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas,
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
-    BackofficeEntregas, BackofficeAvaliacoes,
+    BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
   },
 
   data () {

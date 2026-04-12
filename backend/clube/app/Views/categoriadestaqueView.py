@@ -33,29 +33,24 @@ def categoria_destaque_list_publica(request):
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def categoria_destaque_list_admin(request):
-    """
-    GET /app/admin/categorias-destaque/
-    Lista todas (activas e inactivas) para o painel admin.
-    Inclui contagem de produtos por categoria.
-    """
-    categorias = CategoriaDestaque.objects.all()
-
-    # enriquece com total de produtos reais
-    nomes = list(categorias.values_list('nome', flat=True))
-    contagens = {
-        item['categoria']: item['total']
-        for item in Produto.objects
-            .filter(ativo=True, categoria__in=nomes)
-            .values('categoria')
-            .annotate(total=Count('id'))
-    }
+    categorias = CategoriaDestaque.objects.select_related('categoria').all()
+    loja_id = request.GET.get('loja_id')
+    if loja_id:
+        categorias = categorias.filter(categoria__loja_id=loja_id)
 
     data = []
     for cat in categorias:
-        row = CategoriaDestaqueSerializer(cat).data
-        row['total_produtos'] = contagens.get(cat.nome, 0)
-        data.append(row)
-
+        data.append({
+            'id':             cat.id,
+            'nome':           cat.categoria.nome,
+            'icone':          cat.icone or cat.categoria.icone or '📂',
+            'ordem':          cat.ordem,
+            'ativo':          cat.ativo,
+            'loja_nome':      cat.categoria.loja.nome,
+            'loja_id':        cat.categoria.loja.id,
+            'categoria_id':   cat.categoria.id,
+            'total_produtos': cat.categoria.produtos.filter(ativo=True).count(),
+        })
     return Response(data)
 
 
