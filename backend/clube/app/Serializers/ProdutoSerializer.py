@@ -1,7 +1,9 @@
 import json
 from rest_framework import serializers
-from ..models import Produto, TipoProduto, Inventario
+from ..models import Produto, TipoProduto, Inventario, CategoriaLoja
 from .LojaSerializer import LojaMiniSerializer
+from ..Serializers.CategoriaLojaSerializer import CategoriaLojaMiniSerializer
+
 
 
 # ══════════════════════════════════════════════════════════════
@@ -109,6 +111,14 @@ class ProdutoSerializer(serializers.ModelSerializer):
                     allow_null=True,
                 )
     atributos = FlexJSONField(required=False, default=dict)
+    categorias = CategoriaLojaMiniSerializer(many=True, read_only=True)
+    categoria_ids = serializers.PrimaryKeyRelatedField(
+        queryset=CategoriaLoja.objects.all(),
+        many=True,
+        write_only=True,
+        required=False,
+        source='categorias',
+    )
 
     class Meta:
         model  = Produto
@@ -116,13 +126,14 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'id',
             'loja',
             'tipo', 'tipo_id',
-            'nome', 'descricao', 'categoria', 'sku',
+            'nome', 'descricao', 'sku',
             'preco',
             'ficheiro', 'ficheiro_url',
             'atributos', 'atributos_em_falta',
             'stock',
             'destaque', 'ativo',
             'data_criacao',
+            'categorias', 'categoria_ids',
         ]
         read_only_fields = ['loja', 'data_criacao']
         extra_kwargs = {
@@ -198,21 +209,24 @@ class ProdutoSerializer(serializers.ModelSerializer):
         return ret
 
     def create(self, validated_data):
-        return Produto.objects.create(**validated_data)
+        categorias = validated_data.pop('categorias', [])
+        produto = Produto.objects.create(**validated_data)
+        if categorias:
+            produto.categorias.set(categorias)
+        return produto
 
     def update(self, instance, validated_data):
+        categorias = validated_data.pop('categorias', None)
         if 'atributos' in validated_data:
             merged = {**instance.atributos, **validated_data.pop('atributos')}
             instance.atributos = merged
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        if categorias is not None:
+            instance.categorias.set(categorias)
         return instance
-    
-    def validate_categoria(self, value):
-        if value:
-            return value.lower().strip()
-        return value
+  
 
 
 # ══════════════════════════════════════════════════════════════

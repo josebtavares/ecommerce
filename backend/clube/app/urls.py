@@ -13,7 +13,9 @@ urlpatterns = [
     path('', include('app.Urls.entregaavaliacaoUrl')),
     path('', include('app.Urls.adminUrl')),
     path('', include('app.Urls.notificacaoUrl')),
-    path('', include('app.Urls.categoriadestaqueUrl'))
+    
+    path('', include('app.Urls.categorialojaUrl')),
+    
 
     
     
