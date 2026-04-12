@@ -8,6 +8,7 @@ urlpatterns = [
 
     # ── Leitura pública ───────────────────────────────────────
     path('produto/',                                produtoView.produto_list_pagination,  name='produto-list'),
+    path('produto/categorias/',                     produtoView.produto_categorias_plataforma, name='produto-categorias-plataforma'),
     path('produto/<int:id>/',                       produtoView.produto_get,              name='produto-get'),
     
     # Tipos por loja
