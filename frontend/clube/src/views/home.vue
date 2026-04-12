@@ -235,6 +235,27 @@
           />
         </section>
 
+        <!-- ── SLIDERS DE PRODUTOS POR CATEGORIA ── -->
+        <template v-if="categoriasPlataforma.length > 0">
+          <section class="py-4 px-6 md:px-12">
+            <div class="flex items-center gap-3 mb-2">
+              <div class="h-px flex-1 bg-zinc-800"></div>
+              <span class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Por categoria</span>
+              <div class="h-px flex-1 bg-zinc-800"></div>
+            </div>
+          </section>
+          <section
+            v-for="cat in categoriasPlataforma" :key="'cat-' + cat.categoria_id"
+            class="py-4 px-6 md:px-12"
+          >
+            <ProductSlider
+              :title="cat.nome" :icon="cat.icone || '📂'"
+              :params="{ categoria_id: cat.categoria_id }"
+              @product-click="openProduct($event)"
+            />
+          </section>
+        </template>
+
         <!-- ── CATÁLOGO COMPLETO ── -->
         <section :ref="el => { if (el) sectionRefs['catalogo'] = el }"
                  class="py-12 px-6 md:px-12 border-t border-zinc-800 bg-zinc-900/20">
@@ -338,6 +359,7 @@ export default {
       storesByCategory: [],
       showMobileCategories: false,
       sidebarAberta: false,            // escondida por defeito
+      categoriasPlataforma: [],
       user: {},
       sectionRefs: {},
     }
@@ -356,6 +378,7 @@ export default {
       this.fetchNewStores(),
       this.fetchCategoriasExistentes(),
       this.fetchTiposExistentes(),
+      this.fetchCategoriasPlataforma(),
     ])
   },
 
@@ -422,6 +445,13 @@ export default {
         }))
       } catch (e) { console.error(e) }
       finally { this.loadingCategorias = false }
+    },
+
+    async fetchCategoriasPlataforma () {
+      try {
+        const { data } = await api.get('/app/categorias-destaque/')
+        this.categoriasPlataforma = data  // já devolve { id, nome, icone, categoria_id, loja_id, ... }
+      } catch (e) { console.error(e) }
     },
 
     async fetchTiposExistentes () {

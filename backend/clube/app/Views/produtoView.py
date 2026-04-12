@@ -149,7 +149,38 @@ def tipo_produto_gerir(request, loja_id, tipo_id):
 # ══════════════════════════════════════════════════════════════
 # PRODUTO — LEITURA PÚBLICA
 # ══════════════════════════════════════════════════════════════
-
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def produto_categorias_plataforma(request):
+    """
+    GET /app/produto/categorias/
+    Devolve categorias distintas de todos os produtos activos.
+    Usado no home para sliders dinâmicos por categoria.
+    Suporta ?min_produtos=3 para filtrar categorias com poucos produtos.
+    """
+    min_produtos = int(request.GET.get('min_produtos', 1))
+ 
+    from django.db.models import Count
+ 
+    categorias = (
+        Produto.objects
+        .filter(ativo=True)
+        .exclude(categoria='')
+        .exclude(categoria__isnull=True)
+        .values('categoria')
+        .annotate(total=Count('id'))
+        .filter(total__gte=min_produtos)
+        .order_by('-total')  # mais populares primeiro
+    )
+    # limita o número de categorias devolvidas (default 20, max 50)
+    limit = min(int(request.GET.get('limit', 20)), 50)
+    categorias = categorias[:limit]
+ 
+    return Response([
+        {'categoria': c['categoria'], 'total': c['total']}
+        for c in categorias
+    ])
+    
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def produto_list_pagination(request):
@@ -183,9 +214,13 @@ def produto_list_pagination(request):
         qs = qs.filter(tipo__nome__iexact=tipo)
  
     # ── filtro por categoria do produto ───────────────────────
-    categoria = request.GET.get('categoria')
-    if categoria:
-        qs = qs.filter(categoria__iexact=categoria)
+    categoria_id = request.GET.get('categoria_id')
+    if categoria_id:
+        qs = qs.filter(categorias__id=categoria_id)
+ 
+    categoria_nome = request.GET.get('categoria')
+    if categoria_nome:
+        qs = qs.filter(categorias__nome__iexact=categoria_nome)
 
     # ── 3) pesquisa de texto livre (nome + descrição) ─────────
     q = request.GET.get('q')
@@ -341,6 +376,27 @@ def produto_create(request, loja_id):
         atributos=atributos,
         ficheiro=request.FILES.get('ficheiro')
     )
+    
+    categoria_ids_raw = request.data.getlist('categoria_ids')
+    if categoria_ids_raw:
+        from ..models import CategoriaLoja
+        cats = CategoriaLoja.objects.filter(
+            id__in=[int(x) for x in categoria_ids_raw if x.isdigit()],
+            loja=loja
+        )
+        produto.categorias.set(cats)
+    
+    # criar novas categorias inline se vieram nomes novos
+    novas_categorias_raw = request.data.getlist('novas_categorias')
+    for nome in novas_categorias_raw:
+        nome = nome.lower().strip()
+        if nome:
+            from ..models import CategoriaLoja
+            cat, _ = CategoriaLoja.objects.get_or_create(
+                loja=loja, nome=nome,
+                defaults={'ativo': True}
+            )
+            produto.categorias.add(cat)
  
     # cria inventário automaticamente com quantidade=0
     from ..models import Inventario
@@ -389,6 +445,28 @@ def produto_update(request, loja_id, id):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     produto = serializer.save()
+    loja = produto.loja 
+    
+    categoria_ids_raw = request.data.getlist('categoria_ids')
+    if categoria_ids_raw:
+        from ..models import CategoriaLoja
+        cats = CategoriaLoja.objects.filter(
+            id__in=[int(x) for x in categoria_ids_raw if x.isdigit()],
+            loja=loja
+        )
+        produto.categorias.set(cats)
+    
+    # criar novas categorias inline se vieram nomes novos
+    novas_categorias_raw = request.data.getlist('novas_categorias')
+    for nome in novas_categorias_raw:
+        nome = nome.lower().strip()
+        if nome:
+            from ..models import CategoriaLoja
+            cat, _ = CategoriaLoja.objects.get_or_create(
+                loja=loja, nome=nome,
+                defaults={'ativo': True}
+            )
+            produto.categorias.add(cat)
 
     # ficheiro novo (opcional)
     if 'ficheiro' in request.FILES:

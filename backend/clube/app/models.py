@@ -358,7 +358,13 @@ class Produto(models.Model):
                                     null=True, blank=True, related_name='produtos')
     nome        = models.CharField(max_length=200)
     descricao   = models.TextField(blank=True, default='')
-    categoria   = models.CharField(max_length=100, blank=True, default='')
+    categorias = models.ManyToManyField(
+       'CategoriaLoja',
+       blank=True,
+       related_name='produtos',
+         help_text='Categorias associadas a este produto (ex: "calçado", "roupa", "comida").'
+       
+    )
     preco       = models.DecimalField(max_digits=10, decimal_places=2,
                                       validators=[MinValueValidator(0)])
     sku         = models.CharField(max_length=100, blank=True, default='')
@@ -920,6 +926,59 @@ class Notificacao(models.Model):
             ))
         if notificacoes:
             cls.objects.bulk_create(notificacoes)
+
+class CategoriaLoja(models.Model):
+    """
+    Categoria de produtos criada pelo dono da loja.
+    Um produto pode pertencer a várias categorias (M2M).
+    """
+    loja   = models.ForeignKey('Loja', on_delete=models.CASCADE, related_name='categorias')
+    nome   = models.CharField(max_length=100)
+    icone  = models.CharField(max_length=10, default='📂', blank=True)
+    ativo  = models.BooleanField(default=True)   # aparece na página da loja
+    ordem  = models.IntegerField(default=0)
+    
+    class Meta:
+        ordering = ['ordem', 'nome']
+        unique_together = [('loja', 'nome')]      # nome único por loja
+    
+    def __str__(self):
+        return f'{self.loja.nome} / {self.nome}'
+    
+    def save(self, *args, **kwargs):
+        self.nome = self.nome.lower().strip()
+        super().save(*args, **kwargs)
+        
+class CategoriaDestaque(models.Model):
+    """
+    Categorias de lojas promovidas pelo admin para aparecer no home.
+    Referencia directamente uma CategoriaLoja.
+    """
+    categoria = models.ForeignKey(
+    'CategoriaLoja',
+    on_delete=models.CASCADE,
+    related_name='destaques',
+    null=True,      # ← temporário para a migração passar
+    blank=True,
+)
+    icone  = models.CharField(max_length=10, default='', blank=True)
+    ordem  = models.IntegerField(default=0)
+    ativo  = models.BooleanField(default=True)
+ 
+    class Meta:
+        ordering = ['ordem']
+ 
+    def __str__(self):
+        return f'Destaque: {self.categoria.nome} ({self.categoria.loja.nome})'
+ 
+    @property
+    def nome(self):
+        return self.categoria.nome
+ 
+    @property  
+    def icone_display(self):
+        return self.icone or self.categoria.icone or '📂'
+
 
 
 # ── Permissões concretas ──────────────────────────────────────
