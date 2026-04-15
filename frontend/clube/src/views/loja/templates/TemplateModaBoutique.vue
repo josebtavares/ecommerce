@@ -8,45 +8,7 @@
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
     <MultiCart ref="cart" />
-    <Profile :data="user" class="z-10" @log_out="logOut()" />
-
-    <!-- Nav elegante sticky -->
-    <nav class="fixed top-0 left-0 right-0 z-30 transition-all duration-500"
-         :class="scrolled 
-           ? (isDark ? 'bg-neutral-950/95 backdrop-blur-lg border-b border-neutral-800' : 'bg-stone-50/95 backdrop-blur-lg border-b border-stone-200') 
-           : 'bg-transparent'">
-      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <button @click="$router.back()"
-          class="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
-          :class="scrolled 
-            ? (isDark ? 'bg-neutral-800 hover:bg-neutral-700' : 'bg-stone-200 hover:bg-stone-300')
-            : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" :class="scrolled ? (isDark ? 'text-neutral-300' : 'text-neutral-700') : 'text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <!-- Logo central quando scrolled -->
-        <div v-if="scrolled && loja" class="flex items-center gap-3">
-          <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="w-8 h-8 rounded-full object-cover" />
-          <span class="font-serif text-lg tracking-wide" :class="isDark ? 'text-neutral-100' : 'text-neutral-900'">{{ loja.nome }}</span>
-        </div>
-        <div v-else class="w-10"></div>
-
-        <button @click="toggleDark"
-          class="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
-          :class="scrolled 
-            ? (isDark ? 'bg-neutral-800 hover:bg-neutral-700' : 'bg-stone-200 hover:bg-stone-300')
-            : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'">
-          <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" :class="scrolled ? 'text-neutral-700' : 'text-white'" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z" />
-          </svg>
-        </button>
-      </div>
-    </nav>
+    <Profile :data="user" class="z-50" @log_out="logOut()" />
 
     <div v-if="loading" class="flex items-center justify-center h-screen">
       <div class="w-12 h-12 border-2 rounded-full animate-spin"
@@ -54,12 +16,31 @@
     </div>
 
     <template v-else-if="loja">
-      <!-- HERO Boutique - Split asymmetric -->
-      <section class="relative min-h-screen overflow-hidden">
+      <!-- HERO Boutique - Split asymmetric com padding-top para nao sobrepor header fixo -->
+      <section class="relative min-h-screen overflow-hidden pt-20">
         <div class="absolute inset-0">
           <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
                :alt="loja.nome" class="w-full h-full object-cover" />
           <div class="absolute inset-0" :class="isDark ? 'bg-neutral-950/60' : 'bg-stone-900/40'"></div>
+        </div>
+
+        <!-- Botoes de navegacao -->
+        <div class="absolute top-24 left-6 z-20 flex items-center gap-3">
+          <button @click="$router.back()"
+            class="w-10 h-10 rounded-full flex items-center justify-center bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button @click="toggleDark"
+            class="w-10 h-10 rounded-full flex items-center justify-center bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-300">
+            <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z" />
+            </svg>
+          </button>
         </div>
 
         <!-- Content overlay -->
@@ -157,11 +138,24 @@
           </div>
         </section>
 
-        <!-- Featured slider -->
+        <!-- Featured slider - Boutique style cards -->
         <section class="py-16">
-          <ProductSlider title="Destaques" icon=""
+          <ProductSlider 
+            title="Destaques"
             :params="{ loja_id: lojaId, destaque: true }"
             :isDark="isDark"
+            card-width="220px"
+            image-height="280px"
+            card-height="380px"
+            card-border-radius="rounded-none"
+            hover-effect="hover:shadow-2xl"
+            hover-border-class="hover:border-amber-500/50"
+            title-size="text-xl"
+            title-class="font-serif tracking-wide"
+            product-name-class="font-serif"
+            price-class="text-amber-600"
+            badge-class="bg-amber-600"
+            :show-stock="false"
             @product-click="selectedProduct = $event" />
         </section>
 
@@ -180,9 +174,20 @@
                 {{ String(idx + 1).padStart(2, '0') }}
               </span>
             </div>
-            <ProductSlider :title="tipo.nome" :icon="tipoIcon(tipo.nome)"
+            <ProductSlider 
+              :title="tipo.nome"
               :params="{ loja_id: lojaId, tipo: tipo.nome }"
-              :isDark="isDark" :show-title="false"
+              :isDark="isDark"
+              card-width="200px"
+              image-height="260px"
+              card-height="360px"
+              card-border-radius="rounded-none"
+              hover-effect="hover:shadow-2xl"
+              hover-border-class="hover:border-amber-500/50"
+              title-class="font-serif"
+              product-name-class="font-serif"
+              price-class="text-amber-600"
+              :show-stock="false"
               @product-click="selectedProduct = $event" />
           </section>
         </template>
@@ -199,15 +204,24 @@
                 <h3 class="font-serif text-2xl capitalize" :class="isDark ? 'text-neutral-200' : 'text-neutral-800'">{{ cat.nome }}</h3>
                 <div class="flex-1 h-px" :class="isDark ? 'bg-neutral-800' : 'bg-stone-200'"></div>
               </div>
-              <ProductSlider :title="cat.nome" :icon="cat.icone"
+              <ProductSlider 
+                :title="cat.nome"
                 :params="{ loja_id: lojaId, categoria_id: cat.id }"
-                :isDark="isDark" :show-title="false"
+                :isDark="isDark"
+                card-width="180px"
+                image-height="240px"
+                card-height="340px"
+                card-border-radius="rounded-none"
+                hover-border-class="hover:border-amber-500/50"
+                product-name-class="font-serif"
+                price-class="text-amber-600"
+                :show-stock="false"
                 @product-click="selectedProduct = $event" />
             </div>
           </section>
         </template>
 
-        <!-- Full Catalog -->
+        <!-- Full Catalog - Boutique style -->
         <section id="catalogo" class="py-16 border-t" :class="isDark ? 'border-neutral-800' : 'border-stone-200'">
           <div class="flex items-end justify-between mb-10">
             <div>
@@ -215,14 +229,46 @@
               <h2 class="font-serif text-4xl" :class="isDark ? 'text-neutral-100' : 'text-neutral-900'">Todas as Pecas</h2>
             </div>
           </div>
-          <ProductCatalog :loja-id="lojaId" :isDark="isDark" @product-click="selectedProduct = $event" />
+          <ProductCatalog 
+            :loja-id="lojaId" 
+            :isDark="isDark"
+            grid-class="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+            image-height="220px"
+            card-border-radius="rounded-none"
+            hover-effect="hover:shadow-2xl"
+            hover-border-class="hover:border-amber-500/50"
+            tab-border-radius="rounded-none"
+            active-tab-class="bg-amber-600 text-white"
+            input-border-radius="rounded-none"
+            input-focus-class="focus:border-amber-500"
+            filter-container-radius="rounded-none"
+            product-name-hover-class="group-hover:text-amber-600"
+            price-class="text-amber-600"
+            spinner-class="text-amber-600"
+            clear-all-class="text-amber-600 hover:text-amber-500"
+            :show-stock="false"
+            @product-click="selectedProduct = $event" />
         </section>
 
-        <!-- Reviews -->
+        <!-- Reviews - Elegant style -->
         <section id="avaliacoes" class="py-16 border-t" :class="isDark ? 'border-neutral-800' : 'border-stone-200'">
           <p class="text-xs uppercase tracking-[0.3em] mb-2" :style="{ color: 'var(--cor-primaria)' }">Feedback</p>
           <h2 class="font-serif text-4xl mb-10" :class="isDark ? 'text-neutral-100' : 'text-neutral-900'">O Que Dizem</h2>
-          <AvaliacaoLoja :loja-id="lojaId" :isDark="isDark" @rating-updated="onRatingUpdated" />
+          <AvaliacaoLoja 
+            :loja-id="lojaId" 
+            :isDark="isDark"
+            summary-border-radius="rounded-none"
+            form-border-radius="rounded-none"
+            review-card-border-radius="rounded-none"
+            button-border-radius="rounded-none"
+            textarea-border-radius="rounded-none"
+            star-active-class="text-amber-500"
+            progress-bar-class="bg-amber-500"
+            submit-button-class="bg-amber-600 hover:bg-amber-500 text-white"
+            own-review-border-class="bg-neutral-900 border border-amber-500/40"
+            own-badge-class="bg-amber-500/20 text-amber-400"
+            link-class="text-amber-500 hover:text-amber-400"
+            @rating-updated="onRatingUpdated" />
         </section>
 
         <!-- Footer elegante -->
@@ -248,9 +294,9 @@
       </main>
 
       <!-- Modal politicas -->
-      <div v-if="modalPolitica" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      <div v-if="modalPolitica" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
            @click.self="modalPolitica = null">
-        <div class="rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl"
+        <div class="w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl"
              :class="isDark ? 'bg-neutral-900 border border-neutral-800' : 'bg-white'">
           <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0"
                :class="isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-stone-100'">
@@ -258,7 +304,7 @@
               {{ modalPolitica === 'devolucao' ? 'Politica de Devolucoes' : modalPolitica === 'termos' ? 'Termos de Servico' : 'Politica de Privacidade' }}
             </h3>
             <button @click="modalPolitica = null"
-              class="w-8 h-8 rounded-full flex items-center justify-center transition"
+              class="w-8 h-8 flex items-center justify-center transition"
               :class="isDark ? 'bg-neutral-800 hover:bg-neutral-700' : 'bg-stone-100 hover:bg-stone-200'">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="isDark ? 'text-neutral-400' : 'text-neutral-600'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -273,7 +319,7 @@
       </div>
     </template>
 
-    <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center">
+    <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center pt-20">
       <p class="font-serif text-2xl mb-4" :class="isDark ? 'text-neutral-400' : 'text-neutral-600'">Boutique nao encontrada</p>
       <button @click="$router.back()" class="text-sm hover:underline" :style="{ color: 'var(--cor-primaria)' }">Voltar</button>
     </div>

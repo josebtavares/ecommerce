@@ -1,434 +1,541 @@
-<!-- TemplateTechStore — Futurista, clean, tons de azul/ciano, estilo Apple/tech -->
+<!-- TemplateTechStore — Dashboard tech, layout de 3 colunas, neon cyan, cards tipo spec sheet -->
 <template>
-  <div class="min-h-screen transition-colors duration-300"
+  <div class="min-h-screen transition-colors duration-500"
        :class="isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'"
        :style="cssVars">
 
-    <ProductInfoCard :produto="selectedProduct" :loja="loja"
+    <ProductInfoCard :produto="selectedProduct" :loja="loja" :isDark="isDark"
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
-    <MultiCart ref="cart" />
-    <Profile :data="user" class="z-10" @log_out="logOut()" />
+    <MultiCart ref="cart" :isDark="isDark" />
+    <Profile :data="user" :isDark="isDark" class="z-40" @log_out="logOut()" />
 
-    <!-- Sticky nav tech style -->
-    <nav class="fixed top-0 left-0 right-0 z-30 transition-all duration-300"
-         :class="scrolled 
-           ? (isDark ? 'bg-slate-950/80 backdrop-blur-xl border-b border-slate-800' : 'bg-white/80 backdrop-blur-xl border-b border-slate-200 shadow-sm') 
-           : ''">
-      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <button @click="$router.back()"
-          class="w-10 h-10 rounded-xl flex items-center justify-center transition-all"
-          :class="isDark ? 'bg-slate-800/80 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" :class="isDark ? 'text-slate-300' : 'text-slate-700'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <!-- Logo when scrolled -->
-        <div v-if="scrolled && loja" class="flex items-center gap-3">
-          <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="w-8 h-8 rounded-lg object-cover" />
-          <span class="font-semibold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">{{ loja.nome }}</span>
+    <!-- Loading — estilo terminal -->
+    <div v-if="loading" class="fixed inset-0 z-50 flex items-center justify-center font-mono"
+         :class="isDark ? 'bg-slate-950' : 'bg-slate-50'">
+      <div class="space-y-2 text-center">
+        <div class="text-cyan-400 text-xs tracking-widest animate-pulse">[ INITIALIZING ]</div>
+        <div class="w-48 h-0.5 relative overflow-hidden rounded"
+             :class="isDark ? 'bg-slate-800' : 'bg-slate-200'">
+          <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-500 to-blue-500 animate-loading-bar rounded"></div>
         </div>
-
-        <div class="flex items-center gap-3">
-          <button @click="scrollToId('catalogo')"
-            class="hidden md:flex px-4 py-2 rounded-xl text-sm font-medium transition-all"
-            :class="isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'">
-            Produtos
-          </button>
-          <button @click="toggleDark"
-            class="w-10 h-10 rounded-xl flex items-center justify-center transition-all"
-            :class="isDark ? 'bg-slate-800/80 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'">
-            <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </nav>
-
-    <div v-if="loading" class="flex items-center justify-center h-screen">
-      <div class="relative">
-        <div class="w-16 h-16 border-4 border-cyan-500/30 rounded-full"></div>
-        <div class="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-cyan-500 rounded-full animate-spin"></div>
+        <div class="text-[10px] text-cyan-500/50 tracking-[0.3em]">LOADING STORE DATA...</div>
       </div>
     </div>
 
     <template v-else-if="loja">
-      <!-- HERO Tech - Gradient mesh background -->
-      <section class="relative min-h-[80vh] overflow-hidden">
-        <!-- Gradient background -->
-        <div class="absolute inset-0" :class="isDark ? 'bg-slate-950' : 'bg-slate-100'">
-          <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-transparent to-blue-600/20"></div>
-          <div class="absolute top-1/4 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
-          <div class="absolute bottom-1/4 left-1/4 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
+
+      <!-- ── HERO TECH — fullscreen com grid overlay e estatísticas em HUD ── -->
+      <section class="relative min-h-screen overflow-hidden flex flex-col">
+        <!-- Background -->
+        <div class="absolute inset-0">
+          <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+               :alt="loja.nome"
+               class="w-full h-full object-cover"
+               :class="isDark ? 'opacity-25' : 'opacity-20'" />
+          <!-- Gradient overlay -->
+          <div class="absolute inset-0"
+               :class="isDark
+                 ? 'bg-gradient-to-br from-slate-950 via-cyan-950/60 to-slate-950'
+                 : 'bg-gradient-to-br from-slate-50 via-cyan-50/60 to-slate-100'"/>
           <!-- Grid pattern -->
-          <div class="absolute inset-0 opacity-[0.03]" 
-               style="background-image: linear-gradient(rgba(0,0,0,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.1) 1px, transparent 1px); background-size: 50px 50px;"></div>
+          <div class="absolute inset-0"
+               :class="isDark ? 'opacity-[0.07]' : 'opacity-[0.05]'"
+               style="background-image: linear-gradient(to right, cyan 1px, transparent 1px), linear-gradient(to bottom, cyan 1px, transparent 1px); background-size: 40px 40px;"></div>
+          <!-- Corner glow -->
+          <div class="absolute top-0 right-0 w-96 h-96 rounded-full blur-[120px] pointer-events-none opacity-30"
+               style="background: radial-gradient(circle, rgba(6,182,212,0.4), transparent)"></div>
         </div>
 
-        <!-- Content -->
-        <div class="relative max-w-7xl mx-auto px-6 pt-32 pb-20">
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <!-- Left: Text content -->
-            <div>
-              <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6"
-                   :class="isDark ? 'bg-cyan-500/10 border border-cyan-500/20' : 'bg-cyan-50 border border-cyan-200'">
-                <span class="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
-                <span class="text-sm font-medium" :style="{ color: 'var(--cor-primaria)' }">{{ loja.categoria }}</span>
-              </div>
+        <!-- Nav overlay -->
+        <div class="relative flex items-center justify-between px-6 py-5 z-10">
+          <div class="flex items-center gap-3">
+            <button @click="$router.back()"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-mono tracking-wider transition"
+              :class="isDark ? 'border-slate-700 text-slate-400 hover:border-cyan-500/50 hover:text-cyan-400 bg-slate-950/50' : 'border-slate-300 text-slate-500 hover:border-cyan-400 hover:text-cyan-600 bg-white/50'">
+              ← BACK
+            </button>
+            <button @click="toggleDark"
+              class="w-9 h-9 rounded-lg border flex items-center justify-center transition"
+              :class="isDark ? 'border-slate-700 text-cyan-400 hover:border-cyan-500 bg-slate-950/50' : 'border-slate-300 text-cyan-600 hover:border-cyan-400 bg-white/50'">
+              <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
-              <h1 class="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight mb-6"
-                  :class="isDark ? 'text-white' : 'text-slate-900'">
-                {{ loja.nome }}
-              </h1>
+        <!-- Hero content — centro -->
+        <div class="relative flex-1 flex flex-col items-center justify-center px-6 py-16 z-10 text-center">
+          <div v-if="loja.logo_url"
+               class="w-24 h-24 mb-8 rounded-2xl overflow-hidden border-2 shadow-xl"
+               :style="{ borderColor: 'var(--cor-primaria)', boxShadow: `0 0 40px var(--cor-primaria)40` }">
+            <img :src="loja.logo_url" :alt="loja.nome" class="w-full h-full object-cover" />
+          </div>
 
-              <p v-if="loja.descricao" class="text-lg leading-relaxed mb-8 max-w-lg"
-                 :class="isDark ? 'text-slate-400' : 'text-slate-600'">
-                {{ loja.descricao.substring(0, 180) }}{{ loja.descricao.length > 180 ? '...' : '' }}
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-mono tracking-[0.3em] uppercase mb-6"
+               :style="{ borderColor: 'var(--cor-primaria)40', color: 'var(--cor-primaria)', backgroundColor: 'var(--cor-primaria)10' }">
+            <span class="w-1.5 h-1.5 rounded-full animate-pulse"
+                  :style="{ backgroundColor: 'var(--cor-primaria)' }"></span>
+            {{ loja.categoria }}
+          </div>
+
+          <h1 class="font-black leading-none mb-4 tracking-tight"
+              style="font-size: clamp(3.5rem, 10vw, 9rem)"
+              :class="isDark ? '' : ''">
+            <span class="bg-clip-text text-transparent"
+                  :style="isDark
+                    ? 'background-image: linear-gradient(135deg, #e2e8f0, #94a3b8, #67e8f9)'
+                    : 'background-image: linear-gradient(135deg, #0f172a, #334155, #0e7490)'">
+              {{ loja.nome }}
+            </span>
+          </h1>
+
+          <p v-if="loja.descricao" class="text-base max-w-2xl leading-relaxed mb-10"
+             :class="isDark ? 'text-slate-400' : 'text-slate-600'">
+            {{ loja.descricao.substring(0, 140) }}{{ loja.descricao.length > 140 ? '…' : '' }}
+          </p>
+
+          <!-- HUD Stats -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl w-full">
+            <div v-if="loja.rating_medio"
+                 class="hud-card rounded-xl p-4 border text-center"
+                 :class="isDark ? 'bg-slate-900/70 border-slate-700/50' : 'bg-white/70 border-slate-200'">
+              <p class="text-2xl font-black"
+                 :style="{ color: 'var(--cor-primaria)' }">{{ loja.rating_medio }}</p>
+              <p class="text-[10px] tracking-[0.3em] uppercase mt-1"
+                 :class="isDark ? 'text-slate-500' : 'text-slate-400'">Rating</p>
+            </div>
+            <div v-if="loja.total_avaliacoes"
+                 class="hud-card rounded-xl p-4 border text-center"
+                 :class="isDark ? 'bg-slate-900/70 border-slate-700/50' : 'bg-white/70 border-slate-200'">
+              <p class="text-2xl font-black"
+                 :class="isDark ? 'text-slate-100' : 'text-slate-800'">{{ loja.total_avaliacoes }}</p>
+              <p class="text-[10px] tracking-[0.3em] uppercase mt-1"
+                 :class="isDark ? 'text-slate-500' : 'text-slate-400'">Reviews</p>
+            </div>
+            <div v-if="loja.entrega_ativa"
+                 class="hud-card rounded-xl p-4 border text-center col-span-2 md:col-span-1"
+                 :class="isDark ? 'bg-slate-900/70 border-emerald-500/20' : 'bg-white/70 border-emerald-300/50'">
+              <p class="text-2xl font-black text-emerald-400">ON</p>
+              <p class="text-[10px] tracking-[0.3em] uppercase mt-1"
+                 :class="isDark ? 'text-slate-500' : 'text-slate-400'">Entrega</p>
+            </div>
+            <div class="hud-card rounded-xl p-4 border text-center"
+                 :class="isDark ? 'bg-slate-900/70 border-slate-700/50' : 'bg-white/70 border-slate-200'">
+              <p class="text-2xl font-black"
+                 :class="isDark ? 'text-slate-100' : 'text-slate-800'">
+                {{ (tiposExistentes.length + categoriasExistentes.length) || '—' }}
               </p>
-
-              <!-- Stats row -->
-              <div class="flex items-center gap-8 mb-8">
-                <div v-if="loja.rating_medio" class="flex items-center gap-2">
-                  <div class="flex items-center gap-1 px-3 py-1.5 rounded-lg" :style="{ backgroundColor: 'var(--cor-primaria)' }">
-                    <svg class="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    <span class="font-bold text-white">{{ loja.rating_medio }}</span>
-                  </div>
-                  <span class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">{{ loja.total_avaliacoes }} reviews</span>
-                </div>
-                <div v-if="loja.entrega_ativa" class="flex items-center gap-2">
-                  <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
-                  <span class="text-sm font-medium text-emerald-500">Entrega Express</span>
-                </div>
-              </div>
-
-              <!-- CTA buttons -->
-              <div class="flex items-center gap-4">
-                <button @click="scrollToId('catalogo')"
-                  class="px-8 py-4 rounded-xl font-semibold text-white transition-all hover:scale-105 hover:shadow-xl hover:shadow-cyan-500/20"
-                  :style="{ backgroundColor: 'var(--cor-primaria)' }">
-                  Explorar Produtos
-                </button>
-                <button @click="scrollToId('especificacoes')"
-                  class="px-8 py-4 rounded-xl font-semibold transition-all border"
-                  :class="isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'">
-                  Saber Mais
-                </button>
-              </div>
-            </div>
-
-            <!-- Right: Logo/Image showcase -->
-            <div class="relative flex justify-center">
-              <div class="relative">
-                <!-- Glow effect -->
-                <div class="absolute inset-0 blur-3xl opacity-50" :style="{ backgroundColor: 'var(--cor-primaria)' }"></div>
-                <!-- Logo container -->
-                <div class="relative w-64 h-64 md:w-80 md:h-80 rounded-3xl overflow-hidden border shadow-2xl"
-                     :class="isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'">
-                  <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center"
-                       :style="{ backgroundColor: 'var(--cor-primaria)' }">
-                    <span class="text-7xl font-bold text-white">{{ loja.nome.charAt(0) }}</span>
-                  </div>
-                </div>
-                <!-- Floating badges -->
-                <div class="absolute -top-4 -right-4 px-4 py-2 rounded-xl shadow-lg"
-                     :class="isDark ? 'bg-slate-800' : 'bg-white'" v-if="loja.entrega_ativa">
-                  <span class="text-sm font-medium" :class="isDark ? 'text-slate-300' : 'text-slate-700'">Envio Gratis*</span>
-                </div>
-              </div>
+              <p class="text-[10px] tracking-[0.3em] uppercase mt-1"
+                 :class="isDark ? 'text-slate-500' : 'text-slate-400'">Categorias</p>
             </div>
           </div>
+
+          <!-- CTA -->
+          <button @click="scrollToId('produtos')"
+            class="mt-10 px-8 py-3.5 rounded-xl font-bold text-white tracking-wider transition-all hover:scale-105"
+            :style="{ background: `linear-gradient(135deg, var(--cor-primaria), ${isDark ? '#1d4ed8' : '#0284c7'})`, boxShadow: `0 8px 30px var(--cor-primaria)40` }">
+            Explorar Produtos ↓
+          </button>
         </div>
       </section>
 
-      <!-- Features bar -->
-      <section class="border-y" :class="isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-white'">
-        <div class="max-w-7xl mx-auto px-6 py-8">
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-xl flex items-center justify-center"
-                   :class="isDark ? 'bg-cyan-500/10' : 'bg-cyan-50'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" :style="{ color: 'var(--cor-primaria)' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div>
-                <p class="font-semibold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Garantia</p>
-                <p class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">Produtos originais</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-xl flex items-center justify-center"
-                   :class="isDark ? 'bg-cyan-500/10' : 'bg-cyan-50'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" :style="{ color: 'var(--cor-primaria)' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <div>
-                <p class="font-semibold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Entrega Rapida</p>
-                <p class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">24-48h uteis</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-xl flex items-center justify-center"
-                   :class="isDark ? 'bg-cyan-500/10' : 'bg-cyan-50'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" :style="{ color: 'var(--cor-primaria)' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <div>
-                <p class="font-semibold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Pagamento Seguro</p>
-                <p class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">SSL encriptado</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-xl flex items-center justify-center"
-                   :class="isDark ? 'bg-cyan-500/10' : 'bg-cyan-50'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" :style="{ color: 'var(--cor-primaria)' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <div>
-                <p class="font-semibold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Suporte Tech</p>
-                <p class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">Ajuda especializada</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <!-- ── LAYOUT PRINCIPAL — 3 colunas: sidebar filtros + conteúdo + sidebar info ── -->
+      <div id="produtos" class="flex gap-0">
 
-      <!-- Main content -->
-      <main class="max-w-7xl mx-auto px-6">
-        
-        <!-- Featured products -->
-        <section class="py-16">
-          <div class="flex items-center justify-between mb-8">
-            <div>
-              <p class="text-sm font-medium mb-1" :style="{ color: 'var(--cor-primaria)' }">NOVIDADES</p>
-              <h2 class="text-3xl font-bold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Produtos em Destaque</h2>
-            </div>
-          </div>
-          <ProductSlider title="Destaques" icon=""
-            :params="{ loja_id: lojaId, destaque: true }"
-            :isDark="isDark"
-            @product-click="selectedProduct = $event" />
-        </section>
-
-        <!-- Products by Type -->
-        <template v-if="tiposExistentes.length > 0">
-          <section v-for="tipo in tiposExistentes" :key="tipo.id" :id="'tipo-' + tipo.id" class="py-12 border-t"
-                   :class="isDark ? 'border-slate-800' : 'border-slate-200'">
-            <div class="flex items-center justify-between mb-8">
-              <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl flex items-center justify-center"
-                     :class="isDark ? 'bg-slate-800' : 'bg-slate-100'">
-                  <span class="text-xl">{{ tipoIcon(tipo.nome) }}</span>
-                </div>
-                <h2 class="text-2xl font-bold capitalize" :class="isDark ? 'text-slate-100' : 'text-slate-900'">{{ tipo.nome }}</h2>
+        <!-- LEFT SIDEBAR — categorias e filtros rápidos -->
+        <aside class="hidden lg:flex flex-col sticky top-0 h-screen w-60 xl:w-64 flex-shrink-0 border-r overflow-y-auto"
+               :class="isDark ? 'bg-slate-950 border-slate-800/50' : 'bg-slate-50 border-slate-200'">
+          <div class="p-5">
+            <!-- Store badge -->
+            <div class="flex items-center gap-3 mb-6 p-3 rounded-xl border"
+                 :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'">
+              <img v-if="loja.logo_url" :src="loja.logo_url" class="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
+              <div v-else class="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center text-white text-sm font-black"
+                   :style="{ background: 'var(--cor-primaria)' }">
+                {{ loja.nome.charAt(0) }}
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-bold truncate" :class="isDark ? 'text-slate-200' : 'text-slate-800'">{{ loja.nome }}</p>
+                <p class="text-[10px]" :style="{ color: 'var(--cor-primaria)' }">● Online</p>
               </div>
             </div>
-            <ProductSlider :title="tipo.nome" :icon="tipoIcon(tipo.nome)"
-              :params="{ loja_id: lojaId, tipo: tipo.nome }"
-              :isDark="isDark" :show-title="false"
-              @product-click="selectedProduct = $event" />
-          </section>
-        </template>
 
-        <!-- Categories grid -->
-        <template v-if="categoriasExistentes.length > 0">
-          <section class="py-12 border-t" :class="isDark ? 'border-slate-800' : 'border-slate-200'">
-            <div class="mb-8">
-              <p class="text-sm font-medium mb-1" :style="{ color: 'var(--cor-primaria)' }">CATEGORIAS</p>
-              <h2 class="text-3xl font-bold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Explorar por Categoria</h2>
-            </div>
-            
-            <!-- Category buttons -->
-            <div class="flex flex-wrap gap-3 mb-10">
-              <button v-for="cat in categoriasExistentes" :key="cat.id"
-                @click="scrollToId('cat-' + cat.id)"
-                class="px-5 py-3 rounded-xl font-medium transition-all flex items-center gap-2 border"
-                :class="isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-cyan-500 hover:bg-slate-800' : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-500 hover:bg-slate-50'">
-                {{ cat.icone }} {{ cat.nome }}
+            <p class="text-[10px] font-mono tracking-[0.3em] uppercase mb-3"
+               :class="isDark ? 'text-slate-600' : 'text-slate-400'">// Navegação</p>
+
+            <nav class="space-y-1">
+              <button @click="scrollToId('destaques')"
+                class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-mono transition group"
+                :class="isDark ? 'text-cyan-400 hover:bg-slate-800' : 'text-cyan-600 hover:bg-slate-100'">
+                <span class="w-5 h-5 rounded-lg flex items-center justify-center text-[10px]"
+                      :style="{ background: 'var(--cor-primaria)20', color: 'var(--cor-primaria)' }">⚡</span>
+                FEATURED
               </button>
-            </div>
 
-            <div v-for="cat in categoriasExistentes" :key="cat.id" :id="'cat-' + cat.id" class="mb-12">
-              <div class="flex items-center gap-3 mb-6">
-                <span class="text-2xl">{{ cat.icone }}</span>
-                <h3 class="text-xl font-bold capitalize" :class="isDark ? 'text-slate-100' : 'text-slate-900'">{{ cat.nome }}</h3>
-                <div class="flex-1 h-px" :class="isDark ? 'bg-slate-800' : 'bg-slate-200'"></div>
-              </div>
-              <ProductSlider :title="cat.nome" :icon="cat.icone"
-                :params="{ loja_id: lojaId, categoria_id: cat.id }"
-                :isDark="isDark" :show-title="false"
-                @product-click="selectedProduct = $event" />
-            </div>
-          </section>
-        </template>
+              <template v-if="tiposExistentes.length">
+                <p class="text-[10px] font-mono tracking-[0.3em] uppercase pt-4 pb-2 px-3"
+                   :class="isDark ? 'text-slate-600' : 'text-slate-400'">// Tipos</p>
+                <button v-for="tipo in tiposExistentes" :key="tipo.id"
+                  @click="scrollToId('tipo-' + tipo.id)"
+                  class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-mono transition capitalize"
+                  :class="isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'">
+                  <span>{{ tipoIcon(tipo.nome) }}</span>
+                  {{ tipo.nome }}
+                </button>
+              </template>
 
-        <!-- Full Catalog -->
-        <section id="catalogo" class="py-16 border-t" :class="isDark ? 'border-slate-800' : 'border-slate-200'">
-          <div class="mb-8">
-            <p class="text-sm font-medium mb-1" :style="{ color: 'var(--cor-primaria)' }">CATALOGO</p>
-            <h2 class="text-3xl font-bold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Todos os Produtos</h2>
-          </div>
-          <ProductCatalog :loja-id="lojaId" :isDark="isDark" @product-click="selectedProduct = $event" />
-        </section>
+              <template v-if="categoriasExistentes.length">
+                <p class="text-[10px] font-mono tracking-[0.3em] uppercase pt-4 pb-2 px-3"
+                   :class="isDark ? 'text-slate-600' : 'text-slate-400'">// Categorias</p>
+                <button v-for="cat in categoriasExistentes" :key="cat.id"
+                  @click="scrollToId('cat-' + cat.id)"
+                  class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-mono transition capitalize"
+                  :class="isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'">
+                  <span>{{ cat.icone }}</span>
+                  {{ cat.nome }}
+                </button>
+              </template>
 
-        <!-- Specifications / Info -->
-        <section id="especificacoes" class="py-16 border-t" :class="isDark ? 'border-slate-800' : 'border-slate-200'">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Delivery -->
-            <div class="rounded-2xl p-6 border" :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center gap-2" :class="isDark ? 'text-slate-100' : 'text-slate-900'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" :style="{ color: 'var(--cor-primaria)' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
-                </svg>
-                Opcoes de Envio
-              </h3>
-              <div v-if="opcoesEntrega.length === 0" class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">
-                Sem opcoes configuradas.
-              </div>
-              <div v-else class="space-y-3">
-                <div v-for="opcao in opcoesEntrega" :key="opcao.id"
-                     class="flex items-center justify-between py-3 border-b last:border-0"
-                     :class="isDark ? 'border-slate-800' : 'border-slate-100'">
-                  <div>
-                    <p class="font-medium" :class="isDark ? 'text-slate-200' : 'text-slate-700'">{{ opcao.nome }}</p>
-                    <p v-if="opcao.tempo_estimado" class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">{{ opcao.tempo_estimado }}</p>
-                  </div>
-                  <span class="font-bold" :style="{ color: 'var(--cor-primaria)' }">
-                    {{ opcao.preco == 0 ? 'Gratis' : formatPrice(opcao.preco) }}
-                  </span>
-                </div>
-              </div>
-            </div>
+              <p class="text-[10px] font-mono tracking-[0.3em] uppercase pt-4 pb-2 px-3"
+                 :class="isDark ? 'text-slate-600' : 'text-slate-400'">// Mais</p>
+              <button @click="scrollToId('catalogo')"
+                class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-mono transition"
+                :class="isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'">
+                <span class="w-5 h-5 rounded-lg flex items-center justify-center text-[10px]"
+                      :class="isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-500'">⊞</span>
+                ALL PRODUCTS
+              </button>
+              <button @click="scrollToId('avaliacoes')"
+                class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-mono transition"
+                :class="isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'">
+                <span class="w-5 h-5 rounded-lg flex items-center justify-center text-[10px]"
+                      :class="isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-500'">★</span>
+                REVIEWS
+              </button>
+            </nav>
 
-            <!-- Payment -->
-            <div class="rounded-2xl p-6 border" :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'">
-              <h3 class="text-lg font-bold mb-4 flex items-center gap-2" :class="isDark ? 'text-slate-100' : 'text-slate-900'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" :style="{ color: 'var(--cor-primaria)' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-                Metodos de Pagamento
-              </h3>
-              <div class="flex flex-wrap gap-2">
-                <span v-for="m in metodosPagamento" :key="m.id"
-                      class="px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2"
-                      :class="isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'">
-                  {{ metodoPagamentoIcon(m.tipo) }} {{ m.tipo }}
+            <!-- Specs da loja -->
+            <div class="mt-6 border-t pt-5 space-y-2"
+                 :class="isDark ? 'border-slate-800' : 'border-slate-200'">
+              <p class="text-[10px] font-mono tracking-[0.3em] uppercase mb-3"
+                 :class="isDark ? 'text-slate-600' : 'text-slate-400'">// Especificações</p>
+              <div v-for="opcao in opcoesEntrega" :key="opcao.id"
+                   class="flex items-center justify-between py-1.5 border-b text-xs"
+                   :class="isDark ? 'border-slate-800/50 text-slate-500' : 'border-slate-100 text-slate-400'">
+                <span class="font-mono">{{ opcao.nome }}</span>
+                <span class="font-bold" :style="{ color: 'var(--cor-primaria)' }">
+                  {{ opcao.preco == 0 ? 'FREE' : formatPrice(opcao.preco) }}
                 </span>
               </div>
             </div>
           </div>
-        </section>
+        </aside>
 
-        <!-- Reviews -->
-        <section id="avaliacoes" class="py-16 border-t" :class="isDark ? 'border-slate-800' : 'border-slate-200'">
-          <div class="mb-8">
-            <p class="text-sm font-medium mb-1" :style="{ color: 'var(--cor-primaria)' }">FEEDBACK</p>
-            <h2 class="text-3xl font-bold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">Avaliacoes de Clientes</h2>
+        <!-- MAIN CONTENT -->
+        <main class="flex-1 min-w-0 pb-20">
+
+          <!-- Mobile nav -->
+          <div class="lg:hidden sticky top-0 z-20 border-b overflow-x-auto scrollbar-hide"
+               :class="isDark ? 'bg-slate-950/95 border-slate-800 backdrop-blur-xl' : 'bg-slate-50/95 border-slate-200 backdrop-blur-xl'">
+            <div class="flex gap-2 px-4 py-3 min-w-max">
+              <button @click="scrollToId('destaques')"
+                class="px-3 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap text-white transition"
+                :style="{ background: 'var(--cor-primaria)' }">
+                ⚡ FEATURED
+              </button>
+              <button v-for="cat in categoriasExistentes" :key="cat.id"
+                @click="scrollToId('cat-' + cat.id)"
+                class="px-3 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap border transition"
+                :class="isDark ? 'border-slate-700 text-slate-400 hover:border-cyan-500/50 hover:text-cyan-400' : 'border-slate-300 text-slate-500 hover:border-cyan-400 hover:text-cyan-600'">
+                {{ cat.icone }} {{ cat.nome }}
+              </button>
+            </div>
           </div>
-          <AvaliacaoLoja :loja-id="lojaId" :isDark="isDark" @rating-updated="onRatingUpdated" />
-        </section>
 
-        <!-- Footer -->
-        <footer class="py-12 border-t" :class="isDark ? 'border-slate-800' : 'border-slate-200'">
-          <div class="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div class="flex items-center gap-4">
-              <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="w-12 h-12 rounded-xl object-cover" />
-              <div>
-                <p class="font-bold text-lg" :class="isDark ? 'text-slate-100' : 'text-slate-900'">{{ loja.nome }}</p>
-                <p class="text-sm" :class="isDark ? 'text-slate-500' : 'text-slate-500'">{{ loja.categoria }}</p>
+          <div class="px-6 md:px-10 pt-10">
+
+            <!-- Destaques -->
+            <section id="destaques" class="mb-16">
+              <div class="flex items-center gap-4 mb-8">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center"
+                     :style="{ background: `linear-gradient(135deg, var(--cor-primaria), #1d4ed8)` }">
+                  <span class="text-white text-xs font-black">⚡</span>
+                </div>
+                <h2 class="text-2xl font-black tracking-tight"
+                    :class="isDark ? 'text-slate-100' : 'text-slate-900'">Em Destaque</h2>
+                <div class="flex-1 h-px bg-gradient-to-r from-current to-transparent opacity-20"
+                     :class="isDark ? 'text-slate-400' : 'text-slate-500'"></div>
+                <span class="text-[10px] font-mono tracking-[0.3em] uppercase"
+                      :style="{ color: 'var(--cor-primaria)' }">// FEATURED</span>
               </div>
-            </div>
-            <div class="flex gap-6 text-sm" :class="isDark ? 'text-slate-400' : 'text-slate-500'">
-              <button v-if="loja.politica_devolucao" @click="modalPolitica = 'devolucao'" class="hover:underline">Devolucoes</button>
-              <button v-if="loja.termos_servico" @click="modalPolitica = 'termos'" class="hover:underline">Termos</button>
-              <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'" class="hover:underline">Privacidade</button>
-            </div>
-          </div>
-          <p class="text-center text-xs mt-8" :class="isDark ? 'text-slate-600' : 'text-slate-400'">
-            {{ new Date().getFullYear() }} {{ loja.nome }}. Tecnologia ao seu alcance.
-          </p>
-        </footer>
-      </main>
+              <ProductSlider
+                title="Destaques"
+                :params="{ loja_id: lojaId, destaque: true }"
+                :isDark="isDark"
+                card-width="230px"
+                image-height="200px"
+                card-height="320px"
+                card-border-radius="rounded-2xl"
+                hover-effect="hover:-translate-y-2 hover:shadow-2xl transition-all duration-300"
+                :hover-border-class="'hover:border-cyan-500/50'"
+                price-class="text-cyan-400 font-black"
+                badge-class="bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg text-white font-bold"
+                badge-text="HOT"
+                :show-store-name="false"
+                @product-click="selectedProduct = $event" />
+            </section>
 
-      <!-- Modal politicas -->
-      <div v-if="modalPolitica" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            <!-- Por tipo -->
+            <template v-if="tiposExistentes.length > 0">
+              <section v-for="tipo in tiposExistentes" :key="tipo.id" :id="'tipo-' + tipo.id"
+                       class="mb-16">
+                <div class="flex items-center gap-4 mb-8">
+                  <div class="w-8 h-8 rounded-xl border flex items-center justify-center text-lg"
+                       :class="isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'">
+                    {{ tipoIcon(tipo.nome) }}
+                  </div>
+                  <h2 class="text-2xl font-black capitalize tracking-tight"
+                      :class="isDark ? 'text-slate-100' : 'text-slate-900'">{{ tipo.nome }}</h2>
+                  <div class="flex-1 h-px bg-gradient-to-r from-current to-transparent opacity-20"
+                       :class="isDark ? 'text-slate-400' : 'text-slate-500'"></div>
+                </div>
+                <ProductSlider
+                  :title="tipo.nome"
+                  :params="{ loja_id: lojaId, tipo: tipo.nome }"
+                  :isDark="isDark"
+                  card-width="200px"
+                  image-height="170px"
+                  card-height="290px"
+                  card-border-radius="rounded-2xl"
+                  hover-effect="hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+                  hover-border-class="hover:border-cyan-500/50"
+                  price-class="text-cyan-400 font-bold"
+                  :show-store-name="false"
+                  @product-click="selectedProduct = $event" />
+              </section>
+            </template>
+
+            <!-- Por categoria -->
+            <template v-if="categoriasExistentes.length > 0">
+              <section v-for="cat in categoriasExistentes" :key="cat.id" :id="'cat-' + cat.id"
+                       class="mb-16">
+                <div class="flex items-center gap-4 mb-8">
+                  <div class="w-8 h-8 rounded-xl border flex items-center justify-center text-lg"
+                       :class="isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'">
+                    {{ cat.icone }}
+                  </div>
+                  <h2 class="text-2xl font-black capitalize tracking-tight"
+                      :class="isDark ? 'text-slate-100' : 'text-slate-900'">{{ cat.nome }}</h2>
+                  <div class="flex-1 h-px bg-gradient-to-r from-current to-transparent opacity-20"
+                       :class="isDark ? 'text-slate-400' : 'text-slate-500'"></div>
+                </div>
+                <ProductSlider
+                  :title="cat.nome"
+                  :params="{ loja_id: lojaId, categoria_id: cat.id }"
+                  :isDark="isDark"
+                  card-width="200px"
+                  image-height="170px"
+                  card-height="290px"
+                  card-border-radius="rounded-2xl"
+                  hover-effect="hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+                  hover-border-class="hover:border-cyan-500/50"
+                  price-class="text-cyan-400 font-bold"
+                  :show-store-name="false"
+                  @product-click="selectedProduct = $event" />
+              </section>
+            </template>
+
+            <!-- Catálogo completo -->
+            <section id="catalogo" class="mb-16">
+              <div class="flex items-center gap-4 mb-8">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-xs"
+                     :style="{ background: `linear-gradient(135deg, var(--cor-primaria), #1d4ed8)` }">⊞</div>
+                <h2 class="text-2xl font-black tracking-tight"
+                    :class="isDark ? 'text-slate-100' : 'text-slate-900'">Todos os Produtos</h2>
+                <div class="flex-1 h-px bg-gradient-to-r from-current to-transparent opacity-20"
+                     :class="isDark ? 'text-slate-400' : 'text-slate-500'"></div>
+              </div>
+              <ProductCatalog
+                :loja-id="lojaId"
+                :isDark="isDark"
+                grid-class="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
+                image-height="175px"
+                card-border-radius="rounded-2xl"
+                hover-effect="hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+                hover-border-class="hover:border-cyan-500/50"
+                tab-border-radius="rounded-xl"
+                :active-tab-class="'text-white font-bold shadow-lg shadow-cyan-500/20'"
+                :inactive-tab-dark-class="'bg-slate-800 text-cyan-300/70 hover:text-cyan-200 border border-slate-700'"
+                :inactive-tab-light-class="'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'"
+                active-sub-tab-class="bg-cyan-500/20 text-cyan-400"
+                input-border-radius="rounded-xl"
+                input-focus-class="focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                filter-container-radius="rounded-2xl"
+                product-name-hover-class="group-hover:text-cyan-400"
+                price-class="text-cyan-400 font-bold"
+                spinner-class="text-cyan-400"
+                indicator-active-class="bg-cyan-500/20 text-cyan-400"
+                clear-all-class="text-cyan-400 hover:text-cyan-300"
+                @product-click="selectedProduct = $event" />
+            </section>
+
+            <!-- Avaliações -->
+            <section id="avaliacoes" class="mb-16">
+              <div class="flex items-center gap-4 mb-8">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black"
+                     :style="{ background: `linear-gradient(135deg, var(--cor-primaria), #1d4ed8)` }">★</div>
+                <h2 class="text-2xl font-black tracking-tight"
+                    :class="isDark ? 'text-slate-100' : 'text-slate-900'">Avaliações</h2>
+                <div class="flex-1 h-px bg-gradient-to-r from-current to-transparent opacity-20"
+                     :class="isDark ? 'text-slate-400' : 'text-slate-500'"></div>
+              </div>
+              <AvaliacaoLoja
+                :loja-id="lojaId"
+                :isDark="isDark"
+                summary-border-radius="rounded-2xl"
+                form-border-radius="rounded-2xl"
+                review-card-border-radius="rounded-2xl"
+                button-border-radius="rounded-xl"
+                textarea-border-radius="rounded-xl"
+                star-active-class="text-cyan-400"
+                :star-inactive-class="isDark ? 'text-slate-700' : 'text-slate-300'"
+                :progress-bar-class="'bg-gradient-to-r from-cyan-500 to-blue-600'"
+                :submit-button-class="'text-white font-bold'"
+                :own-review-border-class="isDark ? 'bg-slate-900 border border-cyan-500/30' : 'bg-white border border-cyan-200'"
+                own-badge-class="bg-cyan-500/20 text-cyan-400"
+                link-class="text-cyan-400 hover:text-cyan-300"
+                @rating-updated="onRatingUpdated" />
+            </section>
+
+            <!-- Footer -->
+            <footer class="border-t pb-8 pt-6"
+                    :class="isDark ? 'border-slate-800' : 'border-slate-200'">
+              <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p class="font-black text-sm bg-clip-text text-transparent"
+                     :style="isDark
+                       ? 'background-image: linear-gradient(to right, #94a3b8, #67e8f9)'
+                       : 'background-image: linear-gradient(to right, #334155, #0e7490)'">
+                    {{ loja.nome }}
+                  </p>
+                  <p class="text-xs font-mono mt-0.5"
+                     :class="isDark ? 'text-slate-600' : 'text-slate-400'">
+                    © {{ new Date().getFullYear() }} · All rights reserved
+                  </p>
+                </div>
+                <div class="flex gap-4 text-xs font-mono">
+                  <button v-if="loja.politica_devolucao" @click="modalPolitica = 'devolucao'"
+                    class="transition hover:underline underline-offset-4"
+                    :class="isDark ? 'text-slate-500 hover:text-cyan-400' : 'text-slate-400 hover:text-cyan-600'">
+                    RETURNS
+                  </button>
+                  <button v-if="loja.termos_servico" @click="modalPolitica = 'termos'"
+                    class="transition hover:underline underline-offset-4"
+                    :class="isDark ? 'text-slate-500 hover:text-cyan-400' : 'text-slate-400 hover:text-cyan-600'">
+                    TERMS
+                  </button>
+                  <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'"
+                    class="transition hover:underline underline-offset-4"
+                    :class="isDark ? 'text-slate-500 hover:text-cyan-400' : 'text-slate-400 hover:text-cyan-600'">
+                    PRIVACY
+                  </button>
+                </div>
+              </div>
+            </footer>
+          </div>
+        </main>
+      </div>
+
+      <!-- Modal políticas -->
+      <div v-if="modalPolitica"
+           class="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/80 backdrop-blur-md"
            @click.self="modalPolitica = null">
-        <div class="rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl"
-             :class="isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'">
+        <div class="w-full md:max-w-lg max-h-[80vh] overflow-y-auto md:rounded-2xl border"
+             :class="isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'">
           <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0"
                :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'">
-            <h3 class="font-bold" :class="isDark ? 'text-slate-100' : 'text-slate-900'">
-              {{ modalPolitica === 'devolucao' ? 'Politica de Devolucoes' : modalPolitica === 'termos' ? 'Termos de Servico' : 'Politica de Privacidade' }}
+            <h3 class="font-bold font-mono text-xs tracking-[0.3em] uppercase"
+                :class="isDark ? 'text-slate-200' : 'text-slate-800'">
+              // {{ modalPolitica === 'devolucao' ? 'RETURNS' : modalPolitica === 'termos' ? 'TERMS' : 'PRIVACY' }}
             </h3>
             <button @click="modalPolitica = null"
-              class="w-8 h-8 rounded-lg flex items-center justify-center transition"
-              :class="isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="isDark ? 'text-slate-400' : 'text-slate-600'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              class="w-8 h-8 rounded-lg border flex items-center justify-center transition"
+              :class="isDark ? 'border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-400' : 'border-slate-200 text-slate-500 hover:border-cyan-400 hover:text-cyan-600'">
+              ×
             </button>
           </div>
           <div class="p-6 text-sm leading-relaxed whitespace-pre-wrap"
                :class="isDark ? 'text-slate-300' : 'text-slate-600'">
-            {{ modalPolitica === 'devolucao' ? loja.politica_devolucao : modalPolitica === 'termos' ? loja.termos_servico : loja.politica_privacidade }}
+            {{ modalPolitica === 'devolucao' ? loja.politica_devolucao
+             : modalPolitica === 'termos'    ? loja.termos_servico
+             :                                 loja.politica_privacidade }}
           </div>
         </div>
       </div>
+
     </template>
 
-    <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center">
-      <p class="text-2xl font-bold mb-4" :class="isDark ? 'text-slate-400' : 'text-slate-600'">Loja nao encontrada</p>
-      <button @click="$router.back()" class="text-sm hover:underline" :style="{ color: 'var(--cor-primaria)' }">Voltar</button>
+    <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center font-mono"
+         :class="isDark ? 'bg-slate-950' : 'bg-slate-50'">
+      <p class="text-sm text-cyan-400 mb-4">[ ERROR 404 ] Store not found</p>
+      <button @click="$router.back()" class="text-xs hover:underline" :style="{ color: 'var(--cor-primaria)' }">← BACK</button>
     </div>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useLojaData } from '@/composables/useLojaData'
-import ProductInfoCard from '@/components/product/productInfoCard.vue'
-import MultiCart from '@/components/cart/multiCart.vue'
-import ProductSlider from '@/components/sliders/ProductSlider.vue'
-import Profile from '@/components/profile/UserProfile.vue'
-import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
-import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
+import { useLojaData }   from '@/composables/useLojaData'
+import ProductInfoCard   from '@/components/product/productInfoCard.vue'
+import MultiCart         from '@/components/cart/multiCart.vue'
+import ProductSlider     from '@/components/sliders/ProductSlider.vue'
+import Profile           from '@/components/profile/UserProfile.vue'
+import ProductCatalog    from '@/components/catalog/ProductCatalog.vue'
+import AvaliacaoLoja     from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
   name: 'TemplateTechStore',
   components: { ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
+  emits: ['toggle-dark'],
   props: { tema: { type: Object, default: () => ({}) } },
 
-  setup(props) {
-    const isDark = ref(props.tema?.darkMode !== false)
-    const scrolled = ref(false)
+  setup (props, { emit }) {
+    const isDark   = ref(props.tema?.darkMode !== false)
     const lojaData = useLojaData()
-    
+
     const cssVars = computed(() => ({
-      '--cor-primaria': props.tema?.corPrimaria || '#06b6d4',
+      '--cor-primaria':   props.tema?.corPrimaria   || '#06b6d4',
       '--cor-secundaria': props.tema?.corSecundaria || '#0f172a',
     }))
-    
+
     const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 
-    function toggleDark() { isDark.value = !isDark.value }
-    function onScroll() { scrolled.value = window.scrollY > 80 }
-    
-    onMounted(() => window.addEventListener('scroll', onScroll))
-    onUnmounted(() => window.removeEventListener('scroll', onScroll))
+    function toggleDark () { isDark.value = !isDark.value; emit('toggle-dark', isDark.value) }
 
-    return { isDark, scrolled, cssVars, user, toggleDark, ...lojaData }
+    return { isDark, cssVars, user, toggleDark, ...lojaData }
   }
 }
 </script>
+
+<style scoped>
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+@keyframes loading-bar {
+  0%   { left: -30%; width: 30%; }
+  50%  { left: 20%; width: 60%; }
+  100% { left: 100%; width: 30%; }
+}
+.animate-loading-bar { animation: loading-bar 1.4s ease-in-out infinite; }
+
+.nav-btn { transition: all 0.15s ease; }
+.nav-btn:hover { transform: translateX(3px); }
+
+.hud-card { transition: all 0.2s ease; }
+.hud-card:hover { transform: translateY(-2px); }
+</style>

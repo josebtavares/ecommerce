@@ -3,11 +3,11 @@
        :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-gray-50 text-zinc-900'"
        :style="cssVars">
 
-    <ProductInfoCard :produto="selectedProduct" :loja="loja"
+    <ProductInfoCard :produto="selectedProduct" :loja="loja" :isDark="isDark"
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
-    <MultiCart ref="cart" />
-    <Profile :data="user" class="z-10" @log_out="logOut()" />
+    <MultiCart ref="cart" :isDark="isDark" />
+    <Profile :data="user" :isDark="isDark" class="z-10" @log_out="logOut()" />
 
     <div v-if="loading" class="flex items-center justify-center h-screen">
       <svg class="animate-spin h-10 w-10" style="color: var(--cor-primaria)"

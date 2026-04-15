@@ -3,8 +3,10 @@
 
     <!-- Botão sino -->
     <button @click="toggle"
-      class="relative w-9 h-9 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      class="relative w-9 h-9 rounded-full flex items-center justify-center transition"
+      :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+           :class="isDark ? 'text-white' : 'text-zinc-700'">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
       </svg>
@@ -15,121 +17,134 @@
       </span>
     </button>
 
-    <!-- Teleport para body — evita problemas de z-index com layouts fixed -->
     <teleport to="body">
-      <!-- Overlay invisível fecha ao clicar fora -->
-      <div v-if="aberto"
-           class="fixed inset-0 z-[9997]"
-           @click="aberto = false" />
+      <div v-if="aberto" class="fixed inset-0 z-[9997]" @click="aberto = false" />
 
-      <!-- Dropdown -->
       <div v-if="aberto"
            data-sino-dropdown
-           class="fixed z-[9999] bg-zinc-900 border border-zinc-800 flex flex-col overflow-hidden rounded-2xl shadow-2xl max-h-[80vh]"
+           class="fixed z-[9999] border flex flex-col overflow-hidden shadow-2xl max-h-[80vh]"
+           :class="isDark
+             ? 'bg-zinc-900 border-zinc-800 rounded-2xl'
+             : 'bg-white border-gray-200 rounded-2xl'"
            :style="dropdownStyle">
 
-
-
-      <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-3 border-b border-zinc-800 flex-shrink-0">
-        <h3 class="text-sm font-bold text-zinc-100">Notificações</h3>
-        <div class="flex items-center gap-2">
-          <button v-if="naoLidas > 0" @click="marcarTodasLidas"
-            class="text-xs text-zinc-500 hover:text-zinc-300 transition">
-            Marcar todas como lidas
-          </button>
-          <span v-if="naoLidas > 0"
-            class="px-2 py-0.5 bg-red-600/20 text-red-400 text-xs font-bold rounded-full">
-            {{ naoLidas }}
-          </span>
-          <!-- Fechar -->
-          <button @click="aberto = false"
-            class="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Abas por loja -->
-      <div v-if="lojas.length > 1"
-           class="flex gap-1 px-3 py-2 border-b border-zinc-800 overflow-x-auto scrollbar-hide flex-shrink-0">
-        <button @click="lojaFiltro = null"
-          :class="['px-2.5 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
-                   lojaFiltro === null ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-          Todas
-        </button>
-        <button v-for="loja in lojas" :key="loja.id"
-          @click="lojaFiltro = loja.id"
-          :class="['px-2.5 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
-                   lojaFiltro === loja.id ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-          {{ loja.nome }}
-        </button>
-        <button @click="lojaFiltro = 'pessoal'"
-          :class="['px-2.5 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
-                   lojaFiltro === 'pessoal' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-          Pessoal
-        </button>
-      </div>
-
-      <!-- Lista -->
-      <div class="overflow-y-auto flex-1">
-        <div v-if="loading" class="p-4 space-y-3">
-          <div v-for="n in 4" :key="n" class="h-14 bg-zinc-800 rounded-xl animate-pulse"></div>
-        </div>
-
-        <div v-else-if="notificacoesFiltradas.length === 0"
-             class="flex flex-col items-center justify-center py-6 text-zinc-500 text-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-          Sem notificações
-        </div>
-
-        <div v-else>
-          <div v-for="notif in notificacoesFiltradas" :key="notif.id"
-               @click="clicarNotificacao(notif)"
-               :class="[
-                 'group flex items-start gap-3 px-4 py-3 border-b border-zinc-800/50 cursor-pointer transition',
-                 notif.lida ? 'hover:bg-zinc-800/30' : 'bg-red-500/5 hover:bg-red-500/10'
-               ]">
-            <div :class="['w-9 h-9 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-0.5',
-                           iconeBg(notif.tipo)]">
-              {{ icone(notif.tipo) }}
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-start justify-between gap-2">
-                <p :class="['text-xs font-semibold leading-snug', notif.lida ? 'text-zinc-400' : 'text-zinc-100']">
-                  {{ notif.titulo }}
-                </p>
-                <div class="flex items-center gap-1.5 flex-shrink-0">
-                  <span v-if="!notif.lida" class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
-                  <button @click.stop="apagar(notif)"
-                    class="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-red-400
-                           transition opacity-0 group-hover:opacity-100 text-lg leading-none">
-                    ×
-                  </button>
-                </div>
-              </div>
-              <p v-if="notif.mensagem" class="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{{ notif.mensagem }}</p>
-              <div class="flex items-center gap-2 mt-1">
-                <p class="text-[10px] text-zinc-600">{{ notif.data_criacao }}</p>
-                <span v-if="notif.loja_nome" class="text-[10px] text-zinc-600">· {{ notif.loja_nome }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="temMais" class="p-3 text-center">
-            <button @click="carregarMais"
-              class="text-xs text-zinc-500 hover:text-zinc-300 transition px-4 py-2 rounded-lg hover:bg-zinc-800">
-              Ver mais
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
+             :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
+          <h3 class="text-sm font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Notificações</h3>
+          <div class="flex items-center gap-2">
+            <button v-if="naoLidas > 0" @click="marcarTodasLidas"
+              class="text-xs transition"
+              :class="isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-700'">
+              Marcar todas como lidas
+            </button>
+            <span v-if="naoLidas > 0" class="px-2 py-0.5 bg-red-600/20 text-red-400 text-xs font-bold rounded-full">
+              {{ naoLidas }}
+            </span>
+            <button @click="aberto = false"
+              class="w-7 h-7 rounded-lg flex items-center justify-center transition"
+              :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                   :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
+
+        <!-- Abas por loja -->
+        <div v-if="lojas.length > 1"
+             class="flex gap-1 px-3 py-2 border-b overflow-x-auto scrollbar-hide flex-shrink-0"
+             :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
+          <button @click="lojaFiltro = null"
+            :class="['px-2.5 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
+                     lojaFiltro === null
+                       ? 'bg-red-600 text-white'
+                       : isDark ? 'bg-zinc-800 text-zinc-400 hover:text-zinc-200' : 'bg-gray-100 text-zinc-500 hover:text-zinc-700']">
+            Todas
+          </button>
+          <button v-for="loja in lojas" :key="loja.id" @click="lojaFiltro = loja.id"
+            :class="['px-2.5 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
+                     lojaFiltro === loja.id
+                       ? 'bg-red-600 text-white'
+                       : isDark ? 'bg-zinc-800 text-zinc-400 hover:text-zinc-200' : 'bg-gray-100 text-zinc-500 hover:text-zinc-700']">
+            {{ loja.nome }}
+          </button>
+          <button @click="lojaFiltro = 'pessoal'"
+            :class="['px-2.5 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
+                     lojaFiltro === 'pessoal'
+                       ? 'bg-red-600 text-white'
+                       : isDark ? 'bg-zinc-800 text-zinc-400 hover:text-zinc-200' : 'bg-gray-100 text-zinc-500 hover:text-zinc-700']">
+            Pessoal
+          </button>
+        </div>
+
+        <!-- Lista -->
+        <div class="overflow-y-auto flex-1">
+          <div v-if="loading" class="p-4 space-y-3">
+            <div v-for="n in 4" :key="n" class="h-14 rounded-xl animate-pulse"
+                 :class="isDark ? 'bg-zinc-800' : 'bg-gray-100'"></div>
+          </div>
+
+          <div v-else-if="notificacoesFiltradas.length === 0"
+               class="flex flex-col items-center justify-center py-6 text-sm"
+               :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2"
+                 :class="isDark ? 'text-zinc-700' : 'text-gray-300'"
+                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            Sem notificações
+          </div>
+
+          <div v-else>
+            <div v-for="notif in notificacoesFiltradas" :key="notif.id"
+                 @click="clicarNotificacao(notif)"
+                 class="group flex items-start gap-3 px-4 py-3 border-b cursor-pointer transition"
+                 :class="[
+                   isDark ? 'border-zinc-800/50' : 'border-gray-100',
+                   notif.lida
+                     ? isDark ? 'hover:bg-zinc-800/30' : 'hover:bg-gray-50'
+                     : isDark ? 'bg-red-500/5 hover:bg-red-500/10' : 'bg-red-50/50 hover:bg-red-50'
+                 ]">
+              <div :class="['w-9 h-9 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-0.5', iconeBg(notif.tipo)]">
+                {{ icone(notif.tipo) }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <p class="text-xs font-semibold leading-snug"
+                     :class="notif.lida ? (isDark ? 'text-zinc-400' : 'text-zinc-500') : (isDark ? 'text-zinc-100' : 'text-zinc-900')">
+                    {{ notif.titulo }}
+                  </p>
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <span v-if="!notif.lida" class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
+                    <button @click.stop="apagar(notif)"
+                      class="w-5 h-5 rounded flex items-center justify-center text-lg leading-none transition opacity-0 group-hover:opacity-100"
+                      :class="isDark ? 'text-zinc-600 hover:text-red-400' : 'text-gray-300 hover:text-red-400'">
+                      ×
+                    </button>
+                  </div>
+                </div>
+                <p v-if="notif.mensagem" class="text-[11px] mt-0.5 line-clamp-2"
+                   :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ notif.mensagem }}</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <p class="text-[10px]" :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">{{ notif.data_criacao }}</p>
+                  <span v-if="notif.loja_nome" class="text-[10px]" :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">· {{ notif.loja_nome }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="temMais" class="p-3 text-center">
+              <button @click="carregarMais"
+                class="text-xs transition px-4 py-2 rounded-lg"
+                :class="isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-700 hover:bg-gray-100'">
+                Ver mais
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
     </teleport>
   </div>
 </template>
@@ -160,29 +175,26 @@ const ICONES = {
 
 export default {
   name: 'NotificacaoSino',
+  props: {
+    isDark: { type: Boolean, default: true },   // ← prop nova, default true = comportamento original
+  },
 
   data () {
     return {
-      aberto:        false,
-      loading:       false,
-      notificacoes:  [],
-      naoLidas:      0,
-      lojas:         [],
-      lojaFiltro:    null,
-      offset:        0,
-      temMais:       false,
-      _ws:           null,
-      _wsTimer:      null,
-      _wsTentativas: 0,
-      isMobile:      window.innerWidth < 640,
+      aberto: false, loading: false,
+      notificacoes: [], naoLidas: 0,
+      lojas: [], lojaFiltro: null,
+      offset: 0, temMais: false,
+      _ws: null, _wsTimer: null, _wsTentativas: 0,
+      isMobile: window.innerWidth < 640,
       dropdownStyle: {},
     }
   },
 
   computed: {
     notificacoesFiltradas () {
-      if (this.lojaFiltro === null)       return this.notificacoes
-      if (this.lojaFiltro === 'pessoal')  return this.notificacoes.filter(n => !n.loja_id)
+      if (this.lojaFiltro === null)      return this.notificacoes
+      if (this.lojaFiltro === 'pessoal') return this.notificacoes.filter(n => !n.loja_id)
       return this.notificacoes.filter(n => n.loja_id === this.lojaFiltro)
     },
   },
@@ -190,8 +202,6 @@ export default {
   mounted () {
     this.fetchLojas()
     document.addEventListener('click', this.clickFora)
-
-    // WebSocket — recebe notificações em tempo real
     this._wsLigar()
   },
 
@@ -205,25 +215,15 @@ export default {
     iconeBg (tipo) { return ICONES[tipo]?.bg   || 'bg-zinc-700' },
 
     clickFora (e) {
-      // o overlay transparente cobre tudo — fecha ao clicar nele
-      // este listener só é backup para o desktop
-      const dentroSino = this.$refs.sinoRef && this.$refs.sinoRef.contains(e.target)
+      const dentroSino     = this.$refs.sinoRef?.contains(e.target)
       const dentroDropdown = e.target.closest('[data-sino-dropdown]')
-      if (!dentroSino && !dentroDropdown) {
-        this.aberto = false
-      }
+      if (!dentroSino && !dentroDropdown) this.aberto = false
     },
 
     async toggle () {
       this.isMobile = window.innerWidth < 640
       this.aberto   = !this.aberto
-      if (this.aberto) {
-        // se a lista está vazia, busca via HTTP (fallback para quando WS não entregou ainda)
-        // se já tem itens do WS, não rebusca
-        if (this.notificacoes.length === 0) {
-          await this.fetchNotificacoes()
-        }
-      }
+      if (this.aberto && this.notificacoes.length === 0) await this.fetchNotificacoes()
     },
 
     calcularPosicao () {
@@ -231,25 +231,12 @@ export default {
       const rect   = this.$refs.sinoRef.getBoundingClientRect()
       const top    = Math.max(8, rect.bottom + 8)
       const mobile = window.innerWidth < 640
-
       if (mobile) {
-        const width    = window.innerWidth - 16
-        const maxH     = window.innerHeight - top - 16
-        this.dropdownStyle = {
-          top:       `${top}px`,
-          right:     '8px',
-          left:      '8px',
-          width:     `${width}px`,
-          maxHeight: `${Math.max(200, maxH)}px`,
-        }
+        const width = window.innerWidth - 16
+        this.dropdownStyle = { top: `${top}px`, right: '8px', left: '8px', width: `${width}px`, maxHeight: `${window.innerHeight - top - 16}px` }
       } else {
         const right = Math.max(8, window.innerWidth - rect.right)
-        this.dropdownStyle = {
-          top:      `${top}px`,
-          right:    `${right}px`,
-          width:    '384px',
-          maxHeight: `${window.innerHeight - top - 16}px`,
-        }
+        this.dropdownStyle = { top: `${top}px`, right: `${right}px`, width: '384px', maxHeight: `${window.innerHeight - top - 16}px` }
       }
     },
 
@@ -260,7 +247,6 @@ export default {
       } catch (e) { /* sem lojas */ }
     },
 
-    // ── WebSocket ────────────────────────────────────────
     _wsUrl () {
       const base  = process.env.VUE_APP_WS_URL || 'ws://localhost:8000/ws'
       const token = localStorage.getItem('access_token') || ''
@@ -270,53 +256,36 @@ export default {
     _wsLigar () {
       if (!localStorage.getItem('access_token')) return
       if (this._ws?.readyState === WebSocket.OPEN) return
-
       this._ws = new WebSocket(this._wsUrl())
-
-      this._ws.onopen = () => {
-        this._wsTentativas = 0
-      }
-
+      this._ws.onopen  = () => { this._wsTentativas = 0 }
       this._ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
           if (msg.type === 'nova') {
             this.naoLidas = msg.nao_lidas
-            // adiciona sempre ao topo da lista — aberto ou fechado
-            if (msg.notificacao) {
-              // evita duplicados (pode chegar duas vezes em edge cases)
-              const existe = this.notificacoes.some(n => n.id === msg.notificacao.id)
-              if (!existe) {
-                this.notificacoes.unshift(msg.notificacao)
-              }
+            if (msg.notificacao && !this.notificacoes.some(n => n.id === msg.notificacao.id)) {
+              this.notificacoes.unshift(msg.notificacao)
             }
           }
-          if (msg.type === 'contador') {
-            this.naoLidas = msg.nao_lidas
-          }
+          if (msg.type === 'contador') this.naoLidas = msg.nao_lidas
         } catch (err) { /* silencioso */ }
       }
-
       this._ws.onclose = (e) => {
         if (e.code !== 4001) {
           const delay = Math.min(1000 * 2 ** this._wsTentativas, 30000)
           this._wsTentativas++
           this._wsTimer = setTimeout(() => this._wsLigar(), delay)
         } else {
-          // não autenticado — fallback para polling
           this._wsTimer = setInterval(() => this.fetchContador(), 30000)
           this.fetchContador()
         }
       }
-
       this._ws.onerror = () => { this._ws?.close() }
     },
 
     _wsDesligar () {
-      clearTimeout(this._wsTimer)
-      clearInterval(this._wsTimer)
-      this._ws?.close(1000)
-      this._ws = null
+      clearTimeout(this._wsTimer); clearInterval(this._wsTimer)
+      this._ws?.close(1000); this._ws = null
     },
 
     async fetchContador () {
@@ -334,7 +303,7 @@ export default {
         const { data } = await api.get('/app/notificacoes/', { params })
         const results = data.results || data
         if (append) this.notificacoes.push(...results)
-        else this.notificacoes = results
+        else        this.notificacoes = results
         this.naoLidas = data.nao_lidas ?? this.naoLidas
         this.temMais  = !!data.next_offset
         this.offset   = data.next_offset ?? 0
@@ -342,16 +311,11 @@ export default {
       finally { this.loading = false }
     },
 
-    async carregarMais () {
-      await this.fetchNotificacoes(true)
-    },
+    async carregarMais () { await this.fetchNotificacoes(true) },
 
     async clicarNotificacao (notif) {
       if (!notif.lida) await this.marcarLida(notif)
-      if (notif.link) {
-        this.aberto = false
-        this.$router.push(notif.link)
-      }
+      if (notif.link) { this.aberto = false; this.$router.push(notif.link) }
     },
 
     async marcarLida (notif) {
@@ -382,18 +346,9 @@ export default {
   },
 
   watch: {
-    lojaFiltro () {
-      this.offset = 0
-      this.notificacoes = []
-      this.fetchNotificacoes()
-    },
-
+    lojaFiltro () { this.offset = 0; this.notificacoes = []; this.fetchNotificacoes() },
     async aberto (val) {
-      if (val) {
-        // recalcula posição DEPOIS do dropdown existir no DOM
-        await this.$nextTick()
-        this.calcularPosicao()
-      }
+      if (val) { await this.$nextTick(); this.calcularPosicao() }
     },
   },
 }

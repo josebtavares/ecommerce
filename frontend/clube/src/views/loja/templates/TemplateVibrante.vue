@@ -1,4 +1,3 @@
-<!-- TemplateVibrante — Bold, colorido, energetico, formas geometricas, ideal para lojas jovens/streetwear -->
 <template>
   <div class="min-h-screen transition-colors duration-300 overflow-x-hidden"
        :class="isDark ? 'bg-zinc-950 text-white' : 'bg-white text-zinc-900'"
@@ -10,31 +9,25 @@
     <MultiCart ref="cart" />
     <Profile :data="user" class="z-10" @log_out="logOut()" />
 
-    <!-- Bold floating nav -->
-    <nav class="fixed top-4 left-4 right-4 z-30">
-      <div class="max-w-7xl mx-auto px-4 py-3 rounded-2xl flex items-center justify-between transition-all"
-           :class="scrolled 
-             ? (isDark ? 'bg-zinc-900/90 backdrop-blur-xl border border-zinc-800' : 'bg-white/90 backdrop-blur-xl border border-zinc-200 shadow-xl')
-             : 'bg-transparent'">
-        <button @click="$router.back()"
-          class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg transition-all"
-          :style="{ backgroundColor: 'var(--cor-primaria)', color: 'white' }">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+    <!-- Back button only - left side to avoid right-side fixed components -->
+    <div class="fixed top-6 left-6 z-30">
+      <button @click="$router.back()"
+        class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg transition-all shadow-lg"
+        :style="{ backgroundColor: 'var(--cor-primaria)', color: 'white' }">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+    </div>
 
-        <div v-if="scrolled && loja" class="flex items-center gap-3">
-          <span class="font-black text-lg uppercase tracking-wider" :class="isDark ? 'text-white' : 'text-zinc-900'">{{ loja.nome }}</span>
-        </div>
-
-        <button @click="toggleDark"
-          class="w-12 h-12 rounded-xl flex items-center justify-center font-bold transition-all border-2"
-          :class="isDark ? 'border-white text-white hover:bg-white hover:text-zinc-900' : 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'">
-          {{ isDark ? 'LT' : 'DK' }}
-        </button>
-      </div>
-    </nav>
+    <!-- Dark mode toggle - bottom left to avoid conflicts -->
+    <div class="fixed bottom-6 left-6 z-30">
+      <button @click="toggleDark"
+        class="w-12 h-12 rounded-xl flex items-center justify-center font-bold transition-all border-2 shadow-lg"
+        :class="isDark ? 'border-white text-white bg-zinc-900 hover:bg-white hover:text-zinc-900' : 'border-zinc-900 text-zinc-900 bg-white hover:bg-zinc-900 hover:text-white'">
+        {{ isDark ? 'LT' : 'DK' }}
+      </button>
+    </div>
 
     <div v-if="loading" class="flex items-center justify-center h-screen">
       <div class="relative">
@@ -45,45 +38,36 @@
 
     <template v-else-if="loja">
       <!-- HERO Vibrante - Geometric shapes and bold typography -->
-      <section class="relative min-h-screen overflow-hidden">
+      <section class="relative min-h-screen overflow-hidden pt-20">
         <!-- Background with geometric shapes -->
         <div class="absolute inset-0" :class="isDark ? 'bg-zinc-950' : 'bg-zinc-100'">
-          <!-- Main background image -->
           <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
                :alt="loja.nome" class="w-full h-full object-cover opacity-40" />
           
-          <!-- Geometric overlays -->
           <div class="absolute top-0 right-0 w-1/2 h-full" :style="{ backgroundColor: 'var(--cor-primaria)', opacity: 0.9 }"></div>
           <div class="absolute bottom-0 left-0 w-2/3 h-1/2 -skew-y-6 origin-left" 
                :class="isDark ? 'bg-zinc-900' : 'bg-white'"></div>
           
-          <!-- Decorative shapes -->
           <div class="absolute top-20 left-10 w-32 h-32 rounded-full border-4 opacity-20"
                :style="{ borderColor: 'var(--cor-primaria)' }"></div>
           <div class="absolute bottom-40 right-20 w-48 h-48 rounded-full opacity-10"
                :style="{ backgroundColor: 'var(--cor-primaria)' }"></div>
-          <div class="absolute top-1/3 left-1/4 w-8 h-8 rotate-45"
-               :style="{ backgroundColor: 'var(--cor-primaria)' }"></div>
         </div>
 
-        <!-- Content -->
-        <div class="relative max-w-7xl mx-auto px-6 pt-32 pb-20 min-h-screen flex items-center">
+        <div class="relative max-w-7xl mx-auto px-6 pt-12 pb-20 min-h-screen flex items-center">
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center w-full">
-            <!-- Left: Main content -->
             <div class="relative z-10">
-              <!-- Tag -->
               <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 font-bold uppercase tracking-wider text-sm"
                    :style="{ backgroundColor: 'var(--cor-primaria)', color: 'white' }">
                 <span class="w-3 h-3 bg-white rounded-full animate-pulse"></span>
                 {{ loja.categoria }}
               </div>
 
-              <!-- Title with outline effect -->
               <h1 class="text-6xl md:text-8xl font-black uppercase leading-none mb-6">
                 <span class="block" :class="isDark ? 'text-white' : 'text-zinc-900'">{{ loja.nome.split(' ')[0] }}</span>
                 <span v-if="loja.nome.split(' ').length > 1" 
-                      class="block stroke-text"
-                      :style="{ color: 'transparent', '-webkit-text-stroke': isDark ? '2px white' : '2px black' }">
+                      class="block"
+                      :style="{ color: 'transparent', WebkitTextStroke: isDark ? '2px white' : '2px black' }">
                   {{ loja.nome.split(' ').slice(1).join(' ') }}
                 </span>
               </h1>
@@ -93,7 +77,6 @@
                 {{ loja.descricao.substring(0, 150) }}{{ loja.descricao.length > 150 ? '...' : '' }}
               </p>
 
-              <!-- Stats -->
               <div class="flex items-center gap-6 mb-8">
                 <div v-if="loja.rating_medio" class="flex items-center gap-2">
                   <span class="text-4xl font-black" :style="{ color: 'var(--cor-primaria)' }">{{ loja.rating_medio }}</span>
@@ -111,7 +94,6 @@
                 </div>
               </div>
 
-              <!-- CTA -->
               <div class="flex items-center gap-4">
                 <button @click="scrollToId('produtos')"
                   class="px-10 py-5 rounded-xl font-black uppercase tracking-wider transition-all hover:scale-105 hover:-rotate-1"
@@ -119,23 +101,20 @@
                   Ver Colecao
                 </button>
                 <button @click="scrollToId('catalogo')"
-                  class="px-10 py-5 rounded-xl font-black uppercase tracking-wider transition-all border-3 hover:scale-105 hover:rotate-1"
+                  class="px-10 py-5 rounded-xl font-black uppercase tracking-wider transition-all hover:scale-105 hover:rotate-1"
                   :class="isDark ? 'border-white text-white hover:bg-white hover:text-zinc-900' : 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'"
-                  style="border-width: 3px;">
+                  style="border-width: 3px; border-style: solid;">
                   Catalogo
                 </button>
               </div>
             </div>
 
-            <!-- Right: Logo showcase -->
             <div class="relative flex justify-center lg:justify-end">
               <div class="relative">
-                <!-- Rotating border -->
                 <div class="absolute -inset-4 rounded-3xl animate-spin-slow" 
-                     style="border: 4px dashed; animation-duration: 20s;"
+                     style="border: 4px dashed; animation: spin 20s linear infinite;"
                      :style="{ borderColor: 'var(--cor-primaria)' }"></div>
                 
-                <!-- Logo container -->
                 <div class="relative w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden rotate-3 hover:rotate-0 transition-transform duration-500"
                      :class="isDark ? 'bg-zinc-800' : 'bg-white shadow-2xl'">
                   <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="w-full h-full object-cover" />
@@ -149,7 +128,6 @@
           </div>
         </div>
 
-        <!-- Scroll down indicator -->
         <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center">
           <p class="text-xs font-bold uppercase tracking-widest mb-2" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Scroll</p>
           <div class="w-6 h-10 rounded-full border-2 flex items-start justify-center p-1"
@@ -173,34 +151,34 @@
         </div>
       </div>
 
-      <!-- Main content -->
       <main class="max-w-7xl mx-auto px-6">
-        
-        <!-- Featured - Bold section -->
+        <!-- Featured Products -->
         <section id="produtos" class="py-20">
           <div class="flex items-end justify-between mb-10">
             <div>
               <p class="font-bold uppercase tracking-widest text-sm mb-2" :style="{ color: 'var(--cor-primaria)' }">Hot Items</p>
               <h2 class="text-5xl font-black uppercase" :class="isDark ? 'text-white' : 'text-zinc-900'">Destaques</h2>
             </div>
-            <div class="hidden md:block">
-              <span class="text-8xl font-black" :style="{ color: 'var(--cor-primaria)', opacity: 0.2 }">01</span>
-            </div>
+            <span class="hidden md:block text-8xl font-black" :style="{ color: 'var(--cor-primaria)', opacity: 0.2 }">01</span>
           </div>
-          <ProductSlider title="Destaques" icon=""
+          <ProductSlider 
             :params="{ loja_id: lojaId, destaque: true }"
             :isDark="isDark"
+            :show-title="false"
+            card-style="bold"
+            card-height="380px"
+            card-border-radius="1.5rem"
             @product-click="selectedProduct = $event" />
         </section>
 
-        <!-- By Type with bold headers -->
+        <!-- By Type -->
         <template v-if="tiposExistentes.length > 0">
           <section v-for="(tipo, idx) in tiposExistentes" :key="tipo.id" :id="'tipo-' + tipo.id" 
                    class="py-16 border-t-4"
                    :style="{ borderColor: 'var(--cor-primaria)' }">
             <div class="flex items-end justify-between mb-10">
               <div class="flex items-center gap-6">
-                <div class="w-16 h-16 rounded-xl flex items-center justify-center text-2xl"
+                <div class="w-16 h-16 rounded-xl flex items-center justify-center text-2xl text-white"
                      :style="{ backgroundColor: 'var(--cor-primaria)' }">
                   {{ tipoIcon(tipo.nome) }}
                 </div>
@@ -210,26 +188,27 @@
                 {{ String(idx + 2).padStart(2, '0') }}
               </span>
             </div>
-            <ProductSlider :title="tipo.nome" :icon="tipoIcon(tipo.nome)"
+            <ProductSlider 
               :params="{ loja_id: lojaId, tipo: tipo.nome }"
-              :isDark="isDark" :show-title="false"
+              :isDark="isDark" 
+              :show-title="false"
+              card-style="bold"
+              card-height="350px"
               @product-click="selectedProduct = $event" />
           </section>
         </template>
 
-        <!-- Categories - Card grid -->
+        <!-- Categories -->
         <template v-if="categoriasExistentes.length > 0">
           <section class="py-16">
             <p class="font-bold uppercase tracking-widest text-sm mb-2" :style="{ color: 'var(--cor-primaria)' }">Browse</p>
             <h2 class="text-5xl font-black uppercase mb-10" :class="isDark ? 'text-white' : 'text-zinc-900'">Categorias</h2>
             
-            <!-- Category cards -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
               <button v-for="cat in categoriasExistentes" :key="cat.id"
                 @click="scrollToId('cat-' + cat.id)"
                 class="p-6 rounded-2xl font-bold uppercase text-center transition-all hover:scale-105 hover:-rotate-1 border-2"
-                :class="isDark ? 'bg-zinc-900 border-zinc-800 text-white hover:border-current' : 'bg-white border-zinc-200 text-zinc-900 hover:border-current'"
-                :style="{ '--tw-border-opacity': 1 }">
+                :class="isDark ? 'bg-zinc-900 border-zinc-800 text-white hover:border-current' : 'bg-white border-zinc-200 text-zinc-900 hover:border-current'">
                 <span class="text-3xl block mb-2">{{ cat.icone }}</span>
                 <span class="text-sm">{{ cat.nome }}</span>
               </button>
@@ -241,9 +220,12 @@
                 <h3 class="text-2xl font-black uppercase" :class="isDark ? 'text-white' : 'text-zinc-900'">{{ cat.nome }}</h3>
                 <div class="flex-1 h-1" :style="{ backgroundColor: 'var(--cor-primaria)', opacity: 0.3 }"></div>
               </div>
-              <ProductSlider :title="cat.nome" :icon="cat.icone"
+              <ProductSlider 
                 :params="{ loja_id: lojaId, categoria_id: cat.id }"
-                :isDark="isDark" :show-title="false"
+                :isDark="isDark" 
+                :show-title="false"
+                card-style="bold"
+                card-height="350px"
                 @product-click="selectedProduct = $event" />
             </div>
           </section>
@@ -255,10 +237,16 @@
             <p class="font-bold uppercase tracking-widest text-sm mb-2" :style="{ color: 'var(--cor-primaria)' }">Full Collection</p>
             <h2 class="text-5xl font-black uppercase" :class="isDark ? 'text-white' : 'text-zinc-900'">Catalogo</h2>
           </div>
-          <ProductCatalog :loja-id="lojaId" :isDark="isDark" @product-click="selectedProduct = $event" />
+          <ProductCatalog 
+            :loja-id="lojaId" 
+            :isDark="isDark"
+            card-style="bold"
+            card-height="380px"
+            grid-cols="4"
+            @product-click="selectedProduct = $event" />
         </section>
 
-        <!-- Info cards - Delivery & Payment -->
+        <!-- Info cards -->
         <section class="py-16 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="rounded-3xl p-8 border-2"
                :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'">
@@ -306,7 +294,11 @@
         <section id="avaliacoes" class="py-16 border-t-4" :style="{ borderColor: 'var(--cor-primaria)' }">
           <p class="font-bold uppercase tracking-widest text-sm mb-2" :style="{ color: 'var(--cor-primaria)' }">Community</p>
           <h2 class="text-5xl font-black uppercase mb-10" :class="isDark ? 'text-white' : 'text-zinc-900'">Reviews</h2>
-          <AvaliacaoLoja :loja-id="lojaId" :isDark="isDark" @rating-updated="onRatingUpdated" />
+          <AvaliacaoLoja 
+            :loja-id="lojaId" 
+            :isDark="isDark"
+            card-style="bold"
+            @rating-updated="onRatingUpdated" />
         </section>
 
         <!-- Footer -->
@@ -344,17 +336,21 @@
             </button>
           </div>
           <div class="p-6 text-sm leading-relaxed whitespace-pre-wrap"
-               :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">
+               :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
             {{ modalPolitica === 'devolucao' ? loja.politica_devolucao : modalPolitica === 'termos' ? loja.termos_servico : loja.politica_privacidade }}
           </div>
         </div>
       </div>
     </template>
 
-    <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center">
-      <p class="text-4xl font-black uppercase mb-4" :class="isDark ? 'text-white' : 'text-zinc-900'">404</p>
-      <p class="mb-4" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Loja nao encontrada</p>
-      <button @click="$router.back()" class="font-bold uppercase hover:underline" :style="{ color: 'var(--cor-primaria)' }">Voltar</button>
+    <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center pt-20">
+      <p class="text-6xl font-black mb-4" :style="{ color: 'var(--cor-primaria)' }">404</p>
+      <p class="text-xl font-bold uppercase mb-8" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Loja nao encontrada</p>
+      <button @click="$router.back()" 
+        class="px-8 py-4 rounded-xl font-black uppercase"
+        :style="{ backgroundColor: 'var(--cor-primaria)', color: 'white' }">
+        Voltar
+      </button>
     </div>
   </div>
 </template>
@@ -380,14 +376,14 @@ export default {
     const lojaData = useLojaData()
     
     const cssVars = computed(() => ({
-      '--cor-primaria': props.tema?.corPrimaria || '#ec4899',
+      '--cor-primaria': props.tema?.corPrimaria || '#f43f5e',
       '--cor-secundaria': props.tema?.corSecundaria || '#18181b',
     }))
     
     const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 
     function toggleDark() { isDark.value = !isDark.value }
-    function onScroll() { scrolled.value = window.scrollY > 100 }
+    function onScroll() { scrolled.value = window.scrollY > 50 }
     
     onMounted(() => window.addEventListener('scroll', onScroll))
     onUnmounted(() => window.removeEventListener('scroll', onScroll))
@@ -398,21 +394,15 @@ export default {
 </script>
 
 <style scoped>
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
 .animate-marquee {
   animation: marquee 30s linear infinite;
-}
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-.animate-spin-slow {
-  animation: spin-slow 20s linear infinite;
-}
-.stroke-text {
-  -webkit-text-stroke: 2px currentColor;
 }
 </style>
