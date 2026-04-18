@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+import json
 
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
@@ -9,7 +10,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
-from ..models import Produto, TipoProduto, Loja, UtilizadorLoja
+from ..models import Produto, TipoProduto, Loja, UtilizadorLoja,ProdutoImagem
 from ..Serializers.ProdutoSerializer import ProdutoSerializer, TipoProdutoSerializer
 from ..utils.pagination import paginar
 
@@ -284,15 +285,47 @@ def produto_get(request, id):
 # ══════════════════════════════════════════════════════════════
 
 def _verificar_permissao_loja(request, loja_id, permissao):
-    """Helper: verifica se o utilizador tem permissão na loja."""
     loja = get_object_or_404(Loja, id=loja_id)
     utilizador = request.user.utilizador
     if not UtilizadorLoja.verificar_permissao(loja, utilizador, permissao):
-        return None, loja, Response(
-            {'detail': f'Sem permissão: {permissao}'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        return None, loja, Response({'detail': f'Sem permissão: {permissao}'}, status=status.HTTP_403_FORBIDDEN)
     return utilizador, loja, None
+ 
+ 
+def _gerir_imagens(produto, request):
+    """
+    Processa imagens adicionais enviadas no multipart request:
+      imagens_novas[0], imagens_novas[1], ...  → ficheiros a adicionar
+      imagens_eliminar                         → JSON array de IDs a remover
+      imagens_reordenar                        → JSON array [{id, ordem}]
+    """
+    # 1. Eliminar imagens marcadas
+    ids_eliminar_raw = request.data.get('imagens_eliminar')
+    if ids_eliminar_raw:
+        try:
+            ids = json.loads(ids_eliminar_raw) if isinstance(ids_eliminar_raw, str) else ids_eliminar_raw
+            ProdutoImagem.objects.filter(produto=produto, id__in=ids).delete()
+        except Exception:
+            pass
+ 
+    # 2. Adicionar novas imagens
+    i = 0
+    while f'imagens_novas[{i}]' in request.FILES:
+        ficheiro = request.FILES[f'imagens_novas[{i}]']
+        ordem    = int(request.data.get(f'imagens_ordem_nova[{i}]', i))
+        legenda  = request.data.get(f'imagens_legenda[{i}]', '')
+        ProdutoImagem.objects.create(produto=produto, ficheiro=ficheiro, ordem=ordem, legenda=legenda)
+        i += 1
+ 
+    # 3. Reordenar imagens existentes
+    ordem_raw = request.data.get('imagens_reordenar')
+    if ordem_raw:
+        try:
+            ordens = json.loads(ordem_raw) if isinstance(ordem_raw, str) else ordem_raw
+            for item in ordens:
+                ProdutoImagem.objects.filter(produto=produto, id=item['id']).update(ordem=item['ordem'])
+        except Exception:
+            pass
 
 
 @api_view(['GET'])
@@ -333,87 +366,57 @@ def produto_list_loja(request, loja_id):
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def produto_create(request, loja_id):
-    """
-    POST /app/loja/<loja_id>/produtos/criar/
-    Body (multipart):
-      nome, preco, descricao, sku, categoria,
-      tipo_id, atributos (JSON string),
-      destaque, ficheiro (opcional)
-    """
     _, loja, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
     if erro:
         return erro
-
-    import json
-    # atributos vem como JSON string no FormData
+ 
     atributos_raw = request.data.get('atributos', '{}')
     try:
         atributos = json.loads(atributos_raw) if isinstance(atributos_raw, str) else atributos_raw
     except json.JSONDecodeError:
         return Response({'atributos': 'JSON inválido.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    # valida atributos contra o schema do tipo
+ 
     tipo_id = request.data.get('tipo_id')
     if tipo_id:
         tipo = get_object_or_404(TipoProduto, id=tipo_id, ativo=True)
         em_falta = tipo.validar_atributos(atributos)
         if em_falta:
-            return Response(
-                {'atributos': f'Campos obrigatórios em falta: {em_falta}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+            return Response({'atributos': f'Campos obrigatórios em falta: {em_falta}'}, status=status.HTTP_400_BAD_REQUEST)
+ 
     data = request.data.copy()
     data['loja']      = loja.id
     data['atributos'] = atributos
-
+ 
     serializer = ProdutoSerializer(data=data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    produto = serializer.save(
-        loja=loja,
-        atributos=atributos,
-        ficheiro=request.FILES.get('ficheiro')
-    )
-    
+ 
+    produto = serializer.save(loja=loja, atributos=atributos, ficheiro=request.FILES.get('ficheiro'))
+ 
     categoria_ids_raw = request.data.getlist('categoria_ids')
     if categoria_ids_raw:
         from ..models import CategoriaLoja
-        cats = CategoriaLoja.objects.filter(
-            id__in=[int(x) for x in categoria_ids_raw if x.isdigit()],
-            loja=loja
-        )
+        cats = CategoriaLoja.objects.filter(id__in=[int(x) for x in categoria_ids_raw if x.isdigit()], loja=loja)
         produto.categorias.set(cats)
-    
-    # criar novas categorias inline se vieram nomes novos
+ 
     novas_categorias_raw = request.data.getlist('novas_categorias')
     for nome in novas_categorias_raw:
         nome = nome.lower().strip()
         if nome:
             from ..models import CategoriaLoja
-            cat, _ = CategoriaLoja.objects.get_or_create(
-                loja=loja, nome=nome,
-                defaults={'ativo': True}
-            )
+            cat, _ = CategoriaLoja.objects.get_or_create(loja=loja, nome=nome, defaults={'ativo': True})
             produto.categorias.add(cat)
  
-    # cria inventário automaticamente com quantidade=0
     from ..models import Inventario
     Inventario.objects.get_or_create(
-        loja=loja,
-        produto=produto,
-        defaults={
-            'quantidade':   0,
-            'preco_custo':  0,
-            'preco_venda':  produto.preco,
-        }
+        loja=loja, produto=produto,
+        defaults={'quantidade': 0, 'preco_custo': 0, 'preco_venda': produto.preco}
     )
  
-    return Response(
-        ProdutoSerializer(produto, context={'request': request}).data,
-        status=status.HTTP_201_CREATED
-    )
+    # ── NOVO: processar imagens adicionais ─────────────────────
+    _gerir_imagens(produto, request)
+ 
+    return Response(ProdutoSerializer(produto, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['PUT', 'PATCH'])
@@ -421,62 +424,48 @@ def produto_create(request, loja_id):
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def produto_update(request, loja_id, id):
-    """
-    PUT/PATCH /app/loja/<loja_id>/produtos/<id>/editar/
-    """
     _, _, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
     if erro:
         return erro
-
+ 
     produto = get_object_or_404(Produto, id=id, loja_id=loja_id)
-
-    import json
+ 
     data = request.data.copy()
-
-    # atributos vem como JSON string no FormData
     if 'atributos' in data:
         try:
             data['atributos'] = json.loads(data['atributos']) if isinstance(data['atributos'], str) else data['atributos']
         except json.JSONDecodeError:
             return Response({'atributos': 'JSON inválido.'}, status=status.HTTP_400_BAD_REQUEST)
-
+ 
     serializer = ProdutoSerializer(produto, data=data, partial=True, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+ 
     produto = serializer.save()
-    loja = produto.loja 
-    
+    loja = produto.loja
+ 
     categoria_ids_raw = request.data.getlist('categoria_ids')
     if categoria_ids_raw:
         from ..models import CategoriaLoja
-        cats = CategoriaLoja.objects.filter(
-            id__in=[int(x) for x in categoria_ids_raw if x.isdigit()],
-            loja=loja
-        )
+        cats = CategoriaLoja.objects.filter(id__in=[int(x) for x in categoria_ids_raw if x.isdigit()], loja=loja)
         produto.categorias.set(cats)
-    
-    # criar novas categorias inline se vieram nomes novos
+ 
     novas_categorias_raw = request.data.getlist('novas_categorias')
     for nome in novas_categorias_raw:
         nome = nome.lower().strip()
         if nome:
             from ..models import CategoriaLoja
-            cat, _ = CategoriaLoja.objects.get_or_create(
-                loja=loja, nome=nome,
-                defaults={'ativo': True}
-            )
+            cat, _ = CategoriaLoja.objects.get_or_create(loja=loja, nome=nome, defaults={'ativo': True})
             produto.categorias.add(cat)
-
-    # ficheiro novo (opcional)
+ 
     if 'ficheiro' in request.FILES:
         produto.ficheiro = request.FILES['ficheiro']
         produto.save(update_fields=['ficheiro'])
-
-    return Response(
-        ProdutoSerializer(produto, context={'request': request}).data,
-        status=status.HTTP_200_OK
-    )
+ 
+    # ── NOVO: processar imagens adicionais ─────────────────────
+    _gerir_imagens(produto, request)
+ 
+    return Response(ProdutoSerializer(produto, context={'request': request}).data)
 
 
 @api_view(['DELETE'])
@@ -494,6 +483,18 @@ def produto_delete(request, loja_id, id):
     produto.ativo = False
     produto.save(update_fields=['ativo'])
     return Response({'detail': 'Produto desactivado.'}, status=status.HTTP_200_OK)
+
+# ── NOVO: eliminar imagem individual ───────────────────────────
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def produto_imagem_delete(request, loja_id, id, img_id):
+    _, _, erro = _verificar_permissao_loja(request, loja_id, 'gerir_produtos')
+    if erro:
+        return erro
+    produto = get_object_or_404(Produto, id=id, loja_id=loja_id)
+    imagem  = get_object_or_404(ProdutoImagem, id=img_id, produto=produto)
+    imagem.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['GET'])
