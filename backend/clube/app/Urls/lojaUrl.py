@@ -3,8 +3,7 @@ from ..Views import lojaView
 
 urlpatterns = [
 
-    # ── Templates (público) ───────────────────────────────────
-    path('loja/templates/',                             lojaView.template_list,         name='loja-template-list'),
+ 
 
     # ── Leitura pública ───────────────────────────────────────
     path('loja/',                                       lojaView.loja_list,             name='loja-list'),
@@ -32,5 +31,10 @@ urlpatterns = [
     path('categorias/', lojaView.categoria_list, name='categoria-list'),
     
     path('loja/<int:loja_id>/pagamento/metodos/', lojaView.metodos_pagamento_publico),
+    
+    
+    # ── Aparencias ─────────────────────────────────────────────────
+    path('loja/<int:loja_id>/aparencia/', lojaView.loja_aparencia, name='loja-aparencia'),
+
 
 ]

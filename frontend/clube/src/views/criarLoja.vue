@@ -78,7 +78,7 @@
             </div>
             <div v-else class="flex flex-wrap gap-2">
               <button v-for="cat in categorias" :key="cat.id"
-                @click="form.categoria = cat.nome"
+                @click="form.categoria = cat.nome; autoSelecionarTemplate(cat.nome)"
                 :class="[
                   'px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5',
                   form.categoria === cat.nome
@@ -155,6 +155,7 @@
                   class="w-10 h-10 rounded-lg cursor-pointer border border-zinc-700 bg-zinc-800 p-0.5" />
                 <span class="text-xs text-zinc-400 font-mono">{{ form.cor_primaria }}</span>
               </div>
+              <p class="text-[10px] text-zinc-600 mt-1">Botões, destaques, badges</p>
             </div>
             <div>
               <label class="text-xs text-zinc-500 mb-1.5 block">Cor secundária</label>
@@ -162,6 +163,75 @@
                 <input type="color" v-model="form.cor_secundaria"
                   class="w-10 h-10 rounded-lg cursor-pointer border border-zinc-700 bg-zinc-800 p-0.5" />
                 <span class="text-xs text-zinc-400 font-mono">{{ form.cor_secundaria }}</span>
+              </div>
+              <p class="text-[10px] text-zinc-600 mt-1">Fundos, backgrounds</p>
+            </div>
+          </div>
+
+          <!-- Preview das cores -->
+          <div class="flex items-center gap-3">
+            <div class="flex-1 h-6 rounded-lg" :style="{ backgroundColor: form.cor_primaria }"></div>
+            <div class="flex-1 h-6 rounded-lg border border-zinc-700" :style="{ backgroundColor: form.cor_secundaria }"></div>
+            <p class="text-xs text-zinc-600">Preview cores</p>
+          </div>
+
+          <!-- ── TEMPLATE ── -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs text-zinc-500">Template da loja</label>
+              <span v-if="form.categoria" class="text-[10px] text-zinc-600">
+                Sugeridos para <span class="text-zinc-400 capitalize">{{ form.categoria }}</span>
+              </span>
+            </div>
+            <p class="text-[10px] text-zinc-600 mb-3">
+              Podes mudar a qualquer altura no backoffice → Aparência.
+            </p>
+
+            <!-- Filtro rápido — só aparece se há mais de 3 templates -->
+            <div v-if="todosTemplates.length > 3" class="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
+              <button @click="filtroTemplate = null"
+                :class="['px-3 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap',
+                         filtroTemplate === null ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+                Todos
+              </button>
+              <button v-for="cat in categoriasFiltroTemplate" :key="cat.value"
+                @click="filtroTemplate = cat.value"
+                :class="['px-3 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap capitalize',
+                         filtroTemplate === cat.value ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+                {{ cat.label }}
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div v-for="t in templatesFiltrados" :key="t.id"
+                   @click="form.template_id = t.id"
+                   :class="['relative rounded-xl border-2 p-3 cursor-pointer transition-all',
+                            form.template_id === t.id
+                              ? 'border-red-500 bg-red-500/10'
+                              : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600']">
+                <!-- Check -->
+                <div v-if="form.template_id === t.id"
+                     class="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div class="text-3xl text-center mb-2">{{ t.preview }}</div>
+                <p class="text-xs font-bold text-center"
+                   :class="form.template_id === t.id ? 'text-zinc-100' : 'text-zinc-300'">
+                  {{ t.nome }}
+                </p>
+                <p class="text-[10px] text-center mt-0.5 line-clamp-2 leading-relaxed"
+                   :class="form.template_id === t.id ? 'text-zinc-300' : 'text-zinc-500'">
+                  {{ t.descricao }}
+                </p>
+                <!-- Tags de categoria -->
+                <div class="flex flex-wrap justify-center gap-1 mt-2">
+                  <span v-for="cat in t.categorias" :key="cat"
+                        class="px-1.5 py-0.5 bg-zinc-900/80 text-zinc-600 text-[9px] rounded capitalize">
+                    {{ cat === 'todos' ? 'genérico' : cat }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -251,7 +321,7 @@
             <div v-if="form.opcoes_entrega.length === 0"
                  class="text-center py-4 text-xs rounded-xl border border-dashed"
                  :class="form.entrega_ativa ? 'border-red-500/50 text-red-400/70 bg-red-500/5' : 'border-zinc-700 text-zinc-600'">
-              {{ form.entrega_ativa ? '⚠️ Obrigatório — adiciona pelo menos uma opção de entrega' : 'Sem opções de entrega. Clica em + Adicionar.' }}
+              {{ form.entrega_ativa ? '⚠️ Obrigatório — adiciona pelo menos uma opção de entrega' : 'Sem opções de entrega.' }}
             </div>
           </div>
         </div>
@@ -262,6 +332,19 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p class="text-sm text-red-400">{{ avisoEntrega }}</p>
+        </div>
+
+        <!-- Resumo do template escolhido -->
+        <div v-if="templateEscolhido" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 flex items-center gap-3">
+          <span class="text-2xl flex-shrink-0">{{ templateEscolhido.preview }}</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs text-zinc-500">Template seleccionado</p>
+            <p class="text-sm font-bold text-zinc-200">{{ templateEscolhido.nome }}</p>
+          </div>
+          <button @click="step = 2"
+            class="text-xs text-red-400 hover:text-red-300 transition flex-shrink-0">
+            Alterar →
+          </button>
         </div>
 
         <!-- Aviso de aprovação -->
@@ -294,7 +377,9 @@
         <button v-if="step === 3" @click="submeter"
           :disabled="loading || !podeCriar"
           :class="['flex-1 py-3 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2',
-                   !podeCriar ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : loading ? 'bg-red-700 opacity-70 cursor-not-allowed text-white' : 'bg-red-600 hover:bg-red-500 text-white']">
+                   !podeCriar ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' :
+                   loading ? 'bg-red-700 opacity-70 cursor-not-allowed text-white' :
+                   'bg-red-600 hover:bg-red-500 text-white']">
           <svg v-if="loading" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
             <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
@@ -313,8 +398,13 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
           </svg>
         </div>
+        <div class="text-4xl">{{ templateEscolhido?.preview || '🏪' }}</div>
         <h2 class="text-xl font-extrabold text-zinc-100">Loja criada!</h2>
-        <p class="text-zinc-400 text-sm">A tua loja está pendente de aprovação. O administrador irá activá-la em breve.</p>
+        <p class="text-zinc-400 text-sm">
+          A tua loja está pendente de aprovação com o template
+          <span class="text-zinc-200 font-semibold">{{ templateEscolhido?.nome }}</span>.
+          O administrador irá activá-la em breve.
+        </p>
         <button @click="$router.push('/')"
           class="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition">
           Voltar ao início
@@ -326,6 +416,7 @@
 
 <script>
 import api from '@/services/api'
+import { TEMPLATES, getTemplatesSugeridos } from '@/config/lojaTemplates'
 
 export default {
   name: 'CriarLoja',
@@ -338,53 +429,81 @@ export default {
       erro: '',
       sucesso: false,
       user,
+      filtroTemplate: null,
 
       form: {
-        nome:              '',
-        descricao:         '',
-        categoria:         '',
-        categoriaCustom:   '',
-        localizacao:       '',
-        logo:              null,
-        banner:            null,
-        cor_primaria:      '#ef4444',
-        cor_secundaria:    '#ffffff',
-        entrega_ativa:     false,
+        nome:               '',
+        descricao:          '',
+        categoria:          '',
+        localizacao:        '',
+        logo:               null,
+        banner:             null,
+        cor_primaria:       '#ef4444',
+        cor_secundaria:     '#ffffff',
+        template_id:        'classico',
+        entrega_ativa:      false,
         levantamento_ativo: true,
-        metodos_pagamento: ['dinheiro'],
-        opcoes_entrega:    [],
+        metodos_pagamento:  ['dinheiro'],
+        opcoes_entrega:     [],
       },
 
       logoPreview:   null,
-      loadingCats:   false,
       bannerPreview: null,
-
-      categorias: [],  // carregadas da API
+      loadingCats:   false,
+      categorias:    [],
 
       metodosPagamento: [
         { tipo: 'dinheiro', icon: '💵', label: 'Dinheiro' },
         { tipo: 'mbway',    icon: '📱', label: 'MBWay'    },
         { tipo: 'cartao',   icon: '💳', label: 'Cartão'   },
       ],
+
+      categoriasFiltroTemplate: [
+        { value: 'todos',       label: 'Genéricos'   },
+        { value: 'restaurante', label: 'Restaurante' },
+        { value: 'moda',        label: 'Moda'        },
+        { value: 'tecnologia',  label: 'Tecnologia'  },
+      ],
     }
   },
 
   computed: {
+    todosTemplates () { return TEMPLATES },
+
+    templatesFiltrados () {
+      if (this.filtroTemplate) {
+        return TEMPLATES.filter(t =>
+          t.categorias.includes('todos') || t.categorias.includes(this.filtroTemplate)
+        )
+      }
+      // sem filtro manual: mostra sugeridos para a categoria, senão todos
+      return this.form.categoria
+        ? getTemplatesSugeridos(this.form.categoria)
+        : TEMPLATES
+    },
+
+    templateEscolhido () {
+      return TEMPLATES.find(t => t.id === this.form.template_id) || null
+    },
+
     categoriaLabel () {
       const cat = this.categorias.find(c => c.nome === this.form.categoria)
       return cat ? `${cat.icon} ${cat.nome}` : ''
     },
+
     podeAvancar () {
       if (this.step === 1) return this.form.nome.trim() && this.form.categoria
       if (this.step === 2) return true
       return false
     },
+
     podeCriar () {
       if (this.form.metodos_pagamento.length === 0) return false
       if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0) return false
       if (!this.form.entrega_ativa && !this.form.levantamento_ativo) return false
       return true
     },
+
     avisoEntrega () {
       if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0)
         return 'Com entrega ao domicílio activa tens de adicionar pelo menos uma opção de entrega.'
@@ -406,6 +525,18 @@ export default {
         this.categorias = data
       } catch (e) { console.error(e) }
       finally { this.loadingCats = false }
+    },
+
+    // Quando muda categoria no passo 1, pré-selecciona o primeiro template sugerido
+    autoSelecionarTemplate (categoriaNome) {
+      const sugeridos = getTemplatesSugeridos(categoriaNome)
+      // só muda se ainda estiver no default ou se for genérico
+      const actualTemplate = TEMPLATES.find(t => t.id === this.form.template_id)
+      if (!actualTemplate || actualTemplate.categorias.includes('todos')) {
+        // selecciona o primeiro sugerido que não seja genérico, senão o primeiro
+        const especifico = sugeridos.find(t => !t.categorias.includes('todos'))
+        if (especifico) this.form.template_id = especifico.id
+      }
     },
 
     avancar () {
@@ -444,15 +575,15 @@ export default {
       this.erro = ''
       try {
         const fd = new FormData()
-        const cat = this.form.categoria
-        fd.append('nome',              this.form.nome.trim())
-        fd.append('descricao',         this.form.descricao)
-        fd.append('categoria',         cat)
-        fd.append('localizacao',       this.form.localizacao)
-        fd.append('cor_primaria',      this.form.cor_primaria)
-        fd.append('cor_secundaria',    this.form.cor_secundaria)
-        fd.append('entrega_ativa',     this.form.entrega_ativa)
-        fd.append('levantamento_ativo',this.form.levantamento_ativo)
+        fd.append('nome',               this.form.nome.trim())
+        fd.append('descricao',          this.form.descricao)
+        fd.append('categoria',          this.form.categoria)
+        fd.append('localizacao',        this.form.localizacao)
+        fd.append('cor_primaria',       this.form.cor_primaria)
+        fd.append('cor_secundaria',     this.form.cor_secundaria)
+        fd.append('template_id',        this.form.template_id)
+        fd.append('entrega_ativa',      this.form.entrega_ativa)
+        fd.append('levantamento_ativo', this.form.levantamento_ativo)
 
         if (this.form.logo)   fd.append('logo',   this.form.logo)
         if (this.form.banner) fd.append('banner', this.form.banner)
@@ -470,8 +601,7 @@ export default {
         })
         this.sucesso = true
       } catch (e) {
-        const detail = e.response?.data?.detail || 'Erro ao criar a loja. Tenta novamente.'
-        this.erro = detail
+        this.erro = e.response?.data?.detail || 'Erro ao criar a loja. Tenta novamente.'
       } finally {
         this.loading = false
       }
@@ -479,3 +609,14 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>
