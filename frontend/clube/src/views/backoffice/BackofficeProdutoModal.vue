@@ -228,8 +228,8 @@
                 </button>
 
                 <!-- Indicador do que está selecionado -->
-                <div v-if="form.atributos[attr.nome]?.length > 0"
-                     class="w-full mt-1 text-[10px] text-zinc-500">
+                <div v-if="Array.isArray(form.atributos[attr.nome]) && form.atributos[attr.nome].length > 0"
+                    class="w-full mt-1 text-[10px] text-zinc-500">
                   Seleccionados: <span class="text-zinc-300">{{ form.atributos[attr.nome].join(', ') }}</span>
                 </div>
                 <div v-else-if="attr.obrigatorio" class="w-full mt-1 text-[10px] text-yellow-600">
@@ -335,6 +335,8 @@ export default {
   async created () {
     await Promise.all([this.fetchTipos(), this.fetchCategorias()])
     if (this.produto) {
+      const schemaDoProduto = this.produto?.tipo?.atributos_schema || []
+
       this.form = {
         nome:          this.produto.nome      || '',
         preco:         this.produto.preco     || '',
@@ -343,14 +345,13 @@ export default {
         tipo_id:       this.produto.tipo?.id  || '',
         destaque:      this.produto.destaque  || false,
         ativo:         this.produto.ativo     !== false,
-        // atributos: normalizar para lista nos choices
-        atributos:     this._normalizarAtributosParaForm(this.produto.atributos || {}),
+        atributos:     this._normalizarAtributosParaForm(this.produto.atributos || {}, schemaDoProduto),
         categoria_ids: (this.produto.categorias || []).map(c => c.id),
       }
+
       this.previewUrl = this.produto.ficheiro_url || ''
-      // Imagens adicionais existentes
       this.imagensExistentes = (this.produto.imagens || []).map(img => ({
-        id:  img.id,
+        id: img.id,
         url: img.ficheiro_url,
       }))
     }
@@ -360,16 +361,17 @@ export default {
 
     // ── Normaliza atributos do servidor para o form ────────────────
     // Garante que choices ficam como array, texto/numero como string
-    _normalizarAtributosParaForm (atributos) {
+    _normalizarAtributosParaForm (atributos, schemaInput = null) {
       const result = {}
-      const schema = this.tipoSelecionado?.atributos_schema || []
+      const schema = schemaInput || this.tipoSelecionado?.atributos_schema || []
+
       for (const [key, val] of Object.entries(atributos)) {
         const def = schema.find(a => (typeof a === 'string' ? a : a.nome) === key)
         const tipo = def?.tipo || 'texto'
         if (tipo === 'choices') {
           result[key] = Array.isArray(val) ? val : (val ? [String(val)] : [])
         } else {
-          result[key] = Array.isArray(val) ? val[0] || '' : (val || '')
+          result[key] = Array.isArray(val) ? (val[0] || '') : (val || '')
         }
       }
       return result
