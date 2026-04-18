@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import App from './views/home.vue'; // Import your views as needed
 import AppLogin from './views/login.vue'; // Import your views as needed
 import AppRegister from './views/register.vue'; // Import your views as needed
-import LojaPublica from './views/lojaPublica.vue'
+import LojaPublica from './views/loja/lojaPublica.vue'
 import Checkout       from './views/Checkout.vue'
 import EncomendaSucesso from './views/EncomendaSucesso.vue'
 import Backoffice from './views/backoffice/Index.vue'

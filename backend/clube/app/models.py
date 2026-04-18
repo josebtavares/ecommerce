@@ -155,8 +155,7 @@ class LojaTemplate(models.Model):
 
 class Loja(models.Model):
     dono            = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='lojas')
-    template        = models.ForeignKey(LojaTemplate, on_delete=models.SET_NULL,
-                                        null=True, blank=True, related_name='lojas')
+    
 
     nome            = models.CharField(max_length=200)
     descricao       = models.TextField(blank=True, default='')
@@ -172,8 +171,7 @@ class Loja(models.Model):
     # Branding
     logo            = models.ImageField(upload_to='lojas/logos/%Y/%m/', null=True, blank=True)
     banner          = models.ImageField(upload_to='lojas/banners/%Y/%m/', null=True, blank=True)
-    cor_primaria    = models.CharField(max_length=7, default='#000000')   # hex
-    cor_secundaria  = models.CharField(max_length=7, default='#ffffff')
+   
     layout_produtos = models.CharField(max_length=10, default='grid',
                                        choices=[('grid', 'Grelha'), ('list', 'Lista')])
 
@@ -184,6 +182,12 @@ class Loja(models.Model):
     politica_devolucao   = models.TextField(blank=True, default='')
     termos_servico       = models.TextField(blank=True, default='')
     politica_privacidade = models.TextField(blank=True, default='')
+    
+    template_id    = models.CharField(max_length=50, default='classico', blank=True)
+    cor_primaria   = models.CharField(max_length=7,  default='#dc2626',  blank=True)
+    cor_secundaria = models.CharField(max_length=7,  default='#1c1c1e',  blank=True)
+    dark_mode      = models.BooleanField(default=True)
+ 
 
     class Meta:
         ordering = ['-data_criacao']
