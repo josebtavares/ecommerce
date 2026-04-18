@@ -95,7 +95,7 @@ export default {
   data () {
     return {
       loading: true, comissoes: [], totalCount: 0,
-      page: 1, limit: 20, filtroStatus: '',
+      page: 1, limit: 6, filtroStatus: '',
       totalPendente: '0.00', totalLiquidado: '0.00',
     }
   },
