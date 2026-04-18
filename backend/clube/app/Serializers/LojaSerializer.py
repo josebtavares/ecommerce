@@ -1,20 +1,6 @@
 from rest_framework import serializers
-from ..models import Loja, LojaTemplate, UtilizadorLoja
+from ..models import Loja, UtilizadorLoja
 from .UtilizadorSerializer import UtilizadorMiniSerializer
-
-
-# ══════════════════════════════════════════════════════════════
-# TEMPLATE DE LOJA
-# ══════════════════════════════════════════════════════════════
-
-class LojaTemplateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = LojaTemplate
-        fields = [
-            'id', 'nome', 'tipo_layout', 'imagem_preview',
-            'suporta_banner', 'suporta_produtos_destaque',
-            'suporta_sidebar', 'ativo',
-        ]
 
 
 # ══════════════════════════════════════════════════════════════
@@ -22,7 +8,7 @@ class LojaTemplateSerializer(serializers.ModelSerializer):
 # ══════════════════════════════════════════════════════════════
 
 class UtilizadorLojaSerializer(serializers.ModelSerializer):
-    utilizador = UtilizadorMiniSerializer(read_only=True)
+    utilizador    = UtilizadorMiniSerializer(read_only=True)
     utilizador_id = serializers.IntegerField(write_only=True)
 
     class Meta:
@@ -53,45 +39,27 @@ class UtilizadorLojaSerializer(serializers.ModelSerializer):
 class LojaSerializer(serializers.ModelSerializer):
 
     # ── Leitura ───────────────────────────────────────────────
-    dono            = UtilizadorMiniSerializer(read_only=True)
-    template        = LojaTemplateSerializer(read_only=True)
-    logo_url        = serializers.SerializerMethodField()
-    banner_url      = serializers.SerializerMethodField()
-    total_produtos  = serializers.SerializerMethodField()
-    minha_role      = serializers.SerializerMethodField()
-
-    # ── Escrita ───────────────────────────────────────────────
-    template_id     = serializers.PrimaryKeyRelatedField(
-                        queryset=LojaTemplate.objects.filter(ativo=True),
-                        source='template',
-                        write_only=True,
-                        required=False,
-                        allow_null=True,
-                      )
+    dono           = UtilizadorMiniSerializer(read_only=True)
+    logo_url       = serializers.SerializerMethodField()
+    banner_url     = serializers.SerializerMethodField()
+    total_produtos = serializers.SerializerMethodField()
+    minha_role     = serializers.SerializerMethodField()
 
     class Meta:
         model  = Loja
         fields = [
             'id',
-            # dono
             'dono',
-            # template
-            'template', 'template_id',
-            # info base
             'nome', 'descricao', 'categoria', 'localizacao',
             'percentagem_iva',
-            # entrega
             'entrega_ativa', 'levantamento_ativo',
-            # branding
             'logo', 'logo_url',
             'banner', 'banner_url',
             'cor_primaria', 'cor_secundaria',
+            'template_id', 'dark_mode',
             'layout_produtos',
-            # stats
             'total_produtos',
-            # role do utilizador autenticado nesta loja
             'minha_role',
-            # estado
             'ativa',
             'data_criacao', 'data_atualizacao',
             'politica_devolucao', 'termos_servico', 'politica_privacidade',
@@ -118,10 +86,6 @@ class LojaSerializer(serializers.ModelSerializer):
         return obj.produtos.filter(ativo=True).count()
 
     def get_minha_role(self, obj):
-        """
-        Devolve a role do utilizador autenticado nesta loja.
-        Útil para o frontend saber o que mostrar no backoffice.
-        """
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return None
@@ -136,7 +100,6 @@ class LojaSerializer(serializers.ModelSerializer):
             return None
 
     def create(self, validated_data):
-        # dono é injectado pela view via serializer.save(dono=utilizador)
         return Loja.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
@@ -151,19 +114,21 @@ class LojaSerializer(serializers.ModelSerializer):
 # ══════════════════════════════════════════════════════════════
 
 class LojaPublicSerializer(serializers.ModelSerializer):
-    logo_url   = serializers.SerializerMethodField()
-    banner_url = serializers.SerializerMethodField()
-    template   = LojaTemplateSerializer(read_only=True)
-    rating_medio = serializers.SerializerMethodField()
+    logo_url       = serializers.SerializerMethodField()
+    banner_url     = serializers.SerializerMethodField()
+    rating_medio   = serializers.SerializerMethodField()
+    total_avaliacoes = serializers.SerializerMethodField()
 
     class Meta:
         model  = Loja
         fields = [
             'id', 'nome', 'descricao', 'categoria', 'localizacao',
-            'logo_url', 'banner_url', 'template',
-            'cor_primaria', 'cor_secundaria', 'layout_produtos',
+            'logo_url', 'banner_url',
+            'cor_primaria', 'cor_secundaria',
+            'template_id', 'dark_mode',
+            'layout_produtos',
             'entrega_ativa', 'levantamento_ativo',
-            'rating_medio',
+            'rating_medio', 'total_avaliacoes',
             'politica_devolucao', 'termos_servico', 'politica_privacidade',
         ]
 
@@ -185,6 +150,9 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             return None
         total = sum(a.pontuacao for a in avaliacoes)
         return round(total / avaliacoes.count(), 2)
+
+    def get_total_avaliacoes(self, obj):
+        return obj.avaliacoes.count()
 
 
 # ══════════════════════════════════════════════════════════════
