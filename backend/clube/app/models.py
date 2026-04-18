@@ -476,8 +476,7 @@ class ItemCarrinho(models.Model):
     quantidade  = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
     atributos   = models.JSONField(default=dict, blank=True)
 
-    class Meta:
-        unique_together = ('carrinho', 'produto')
+    
 
     def __str__(self):
         return f'{self.quantidade}x {self.produto.nome}'
