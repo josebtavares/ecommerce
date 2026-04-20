@@ -528,20 +528,20 @@ def admin_comissao_list(request):
     data_fim_str    = request.GET.get('data_fim')
 
     if data_inicio_str or data_fim_str:
-        # Se a filtragem é por liquidadas → usar data_liquidacao
-        # Senão → usar data_criacao (cobre "pendente" e "todas")
         campo = 'data_liquidacao' if stat == 'liquidada' else 'data_criacao'
 
         if data_inicio_str:
             try:
-                dt = make_aware(datetime.combine(parse_date(data_inicio_str), datetime.min.time()))
+                d = parse_date(data_inicio_str)
+                dt = make_aware(datetime(d.year, d.month, d.day, 0, 0, 0))
                 qs = qs.filter(**{f'{campo}__gte': dt})
             except Exception:
                 pass
 
         if data_fim_str:
             try:
-                dt = make_aware(datetime.combine(parse_date(data_fim_str), datetime.max.time()))
+                d = parse_date(data_fim_str)
+                dt = make_aware(datetime(d.year, d.month, d.day, 23, 59, 59))
                 qs = qs.filter(**{f'{campo}__lte': dt})
             except Exception:
                 pass

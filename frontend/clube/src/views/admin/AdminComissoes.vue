@@ -98,8 +98,10 @@
         <select v-model="filtroOrdem" @change="fetchComissoes(1)"
           class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-300
                  focus:outline-none focus:border-red-500 transition cursor-pointer">
-          <option value="-data_criacao">Mais recente</option>
-          <option value="data_criacao">Mais antiga</option>
+          <option value="-data_criacao">Criação mais recente</option>
+          <option value="data_criacao">Criação mais antiga</option>
+          <option value="-data_liquidacao">Liquidação mais recente</option>
+          <option value="data_liquidacao">Liquidação mais antiga</option>
           <option value="-valor_comissao">Maior comissão</option>
           <option value="valor_comissao">Menor comissão</option>
         </select>
@@ -390,10 +392,7 @@ export default {
 
     formatarData (str) {
       if (!str) return ''
-      // Backend envia "19-04-2026 21:44" → converter para ISO
-      const m = str.match(/(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})/)
-      if (!m) return str
-      return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}`).toLocaleDateString('pt-PT', {
+      return new Date(str).toLocaleDateString('pt-PT', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
       })
