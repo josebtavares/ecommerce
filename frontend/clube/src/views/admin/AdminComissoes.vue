@@ -63,7 +63,7 @@
         <!-- Data início -->
         <div class="flex items-center gap-2">
           <label class="text-xs text-zinc-500 whitespace-nowrap">De</label>
-          <input v-model="filtroDataInicio" @change="fetchComissoes(1)" type="date"
+          <input v-model="filtroDataInicio" @change="atalhoActivo = null; fetchComissoes(1)" type="date"
             class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-200
                    focus:outline-none focus:border-red-500 transition" />
         </div>
@@ -71,7 +71,7 @@
         <!-- Data fim -->
         <div class="flex items-center gap-2">
           <label class="text-xs text-zinc-500 whitespace-nowrap">Até</label>
-          <input v-model="filtroDataFim" @change="fetchComissoes(1)" type="date"
+          <input v-model="filtroDataFim" @change="atalhoActivo = null; fetchComissoes(1)" type="date"
             class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-200
                    focus:outline-none focus:border-red-500 transition" />
         </div>
@@ -80,8 +80,10 @@
         <div class="flex gap-1 flex-wrap">
           <button v-for="atalho in atalhosData" :key="atalho.label"
             @click="aplicarAtalho(atalho)"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition border border-zinc-700
-                   text-zinc-500 hover:text-zinc-200 hover:border-zinc-500">
+            :class="['px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition border',
+                     atalhoActivo === atalho.label
+                       ? 'bg-red-600/20 border-red-500/50 text-red-400'
+                       : 'border-zinc-700 text-zinc-500 hover:text-zinc-200 hover:border-zinc-500']">
             {{ atalho.label }}
           </button>
         </div>
@@ -291,6 +293,7 @@ export default {
       // estado
       liquidandoId: null,
       debounceTimer: null,
+      atalhoActivo: null,
 
       statusOpcoes: [
         { value: '',         label: 'Todas',     activeClass: 'bg-zinc-700 border-zinc-600 text-zinc-200' },
@@ -372,10 +375,10 @@ export default {
     },
 
     aplicarAtalho (atalho) {
+      this.atalhoActivo = atalho.label
       const hoje = new Date()
       const inicio = new Date()
       if (atalho.dias === 0) {
-        // hoje
         this.filtroDataInicio = this.formatarDateInput(hoje)
         this.filtroDataFim    = this.formatarDateInput(hoje)
       } else {
@@ -391,8 +394,13 @@ export default {
     },
 
     formatarData (str) {
-      if (!str) return ''
-      return new Date(str).toLocaleDateString('pt-PT', {
+      if (!str || str === 'null' || str === 'undefined') return ''
+      // Backend envia "20-04-2026 11:10" (DD-MM-YYYY HH:MM) → converter para ISO
+      const m = str.match(/(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})/)
+      if (!m) return str
+      const d = new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}`)
+      if (isNaN(d.getTime())) return str
+      return d.toLocaleDateString('pt-PT', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
       })
@@ -410,6 +418,7 @@ export default {
       this.filtroDataFim    = ''
       this.filtroMin        = ''
       this.filtroOrdem      = '-data_criacao'
+      this.atalhoActivo     = null
       this.fetchComissoes(1)
     },
 
