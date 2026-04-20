@@ -525,20 +525,26 @@ def admin_comissao_list(request):
         qs = qs.filter(loja_id=loja_id)
  
     data_inicio_str = request.GET.get('data_inicio')
-    if data_inicio_str:
-        try:
-            dt = make_aware(datetime.combine(parse_date(data_inicio_str), datetime.min.time()))
-            qs = qs.filter(data_criacao__gte=dt)
-        except Exception:
-            pass
- 
-    data_fim_str = request.GET.get('data_fim')
-    if data_fim_str:
-        try:
-            dt = make_aware(datetime.combine(parse_date(data_fim_str), datetime.max.time()))
-            qs = qs.filter(data_criacao__lte=dt)
-        except Exception:
-            pass
+    data_fim_str    = request.GET.get('data_fim')
+
+    if data_inicio_str or data_fim_str:
+        # Se a filtragem é por liquidadas → usar data_liquidacao
+        # Senão → usar data_criacao (cobre "pendente" e "todas")
+        campo = 'data_liquidacao' if stat == 'liquidada' else 'data_criacao'
+
+        if data_inicio_str:
+            try:
+                dt = make_aware(datetime.combine(parse_date(data_inicio_str), datetime.min.time()))
+                qs = qs.filter(**{f'{campo}__gte': dt})
+            except Exception:
+                pass
+
+        if data_fim_str:
+            try:
+                dt = make_aware(datetime.combine(parse_date(data_fim_str), datetime.max.time()))
+                qs = qs.filter(**{f'{campo}__lte': dt})
+            except Exception:
+                pass
  
     valor_min = request.GET.get('valor_min')
     if valor_min:

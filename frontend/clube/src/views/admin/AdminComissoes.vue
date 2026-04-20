@@ -390,7 +390,10 @@ export default {
 
     formatarData (str) {
       if (!str) return ''
-      return new Date(str).toLocaleDateString('pt-PT', {
+      // Backend envia "19-04-2026 21:44" → converter para ISO
+      const m = str.match(/(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})/)
+      if (!m) return str
+      return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}`).toLocaleDateString('pt-PT', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
       })
