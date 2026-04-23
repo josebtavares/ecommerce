@@ -430,14 +430,23 @@ def produto_update(request, loja_id, id):
  
     produto = get_object_or_404(Produto, id=id, loja_id=loja_id)
  
-    data = request.data.copy()
-    if 'atributos' in data:
+    # DEPOIS — sem copy(), sem erro:
+    atributos_raw = request.data.get('atributos')
+    atributos_parsed = None
+    if atributos_raw:
         try:
-            data['atributos'] = json.loads(data['atributos']) if isinstance(data['atributos'], str) else data['atributos']
+            atributos_parsed = json.loads(atributos_raw) if isinstance(atributos_raw, str) else atributos_raw
         except json.JSONDecodeError:
             return Response({'atributos': 'JSON inválido.'}, status=status.HTTP_400_BAD_REQUEST)
- 
-    serializer = ProdutoSerializer(produto, data=data, partial=True, context={'request': request})
+
+    campos = {}
+    for field in ['nome', 'preco', 'sku', 'descricao', 'destaque', 'ativo', 'tipo_id']:
+        if field in request.data:
+            campos[field] = request.data[field]
+    if atributos_parsed is not None:
+        campos['atributos'] = atributos_parsed
+
+    serializer = ProdutoSerializer(produto, data=campos, partial=True, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
  
