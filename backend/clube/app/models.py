@@ -111,6 +111,9 @@ def galeria_upload(instance, filename):
 def produto_upload(instance, filename):
     return f'produtos/{now():%Y/%m}/{filename}'
 
+def produto_imagem_upload(instance, filename):
+    return f'produtos/{instance.produto.loja_id}/{instance.produto_id}/{filename}'
+
 
 class Galeria(models.Model):
     titulo      = models.CharField(max_length=200, blank=True, null=True)
@@ -405,6 +408,31 @@ class Produto(models.Model):
         if not self.tipo:
             return []
         return self.tipo.validar_atributos(self.atributos)
+    
+
+class ProdutoImagem(models.Model):
+    """
+    Imagens adicionais de um produto.
+    A imagem principal continua em Produto.ficheiro (retrocompatibilidade).
+    """
+    produto  = models.ForeignKey(
+        'Produto', on_delete=models.CASCADE, related_name='imagens'
+    )
+    ficheiro = models.ImageField(upload_to=produto_imagem_upload)
+    ordem    = models.PositiveSmallIntegerField(default=0)  # para ordenar no slider
+    legenda  = models.CharField(max_length=120, blank=True)
+ 
+    class Meta:
+        ordering = ['ordem', 'id']
+ 
+    def __str__(self):
+        return f'Imagem {self.id} do produto {self.produto_id}'
+ 
+    @property
+    def ficheiro_url(self):
+        if self.ficheiro:
+            return self.ficheiro.url
+        return None
 
 
 # ══════════════════════════════════════════════════════════════
@@ -448,8 +476,7 @@ class ItemCarrinho(models.Model):
     quantidade  = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
     atributos   = models.JSONField(default=dict, blank=True)
 
-    class Meta:
-        unique_together = ('carrinho', 'produto')
+    
 
     def __str__(self):
         return f'{self.quantidade}x {self.produto.nome}'

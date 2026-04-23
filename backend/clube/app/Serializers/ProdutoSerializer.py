@@ -1,9 +1,8 @@
 import json
 from rest_framework import serializers
-from ..models import Produto, TipoProduto, Inventario, CategoriaLoja
+from ..models import Produto, TipoProduto, Inventario, CategoriaLoja, ProdutoImagem
 from .LojaSerializer import LojaMiniSerializer
 from ..Serializers.CategoriaLojaSerializer import CategoriaLojaMiniSerializer
-
 
 
 # ══════════════════════════════════════════════════════════════
@@ -11,10 +10,6 @@ from ..Serializers.CategoriaLojaSerializer import CategoriaLojaMiniSerializer
 # ══════════════════════════════════════════════════════════════
 
 class FlexJSONField(serializers.Field):
-    """
-    Aceita tanto string JSON (vem do FormData/multipart)
-    como dict directamente (vem de JSON body).
-    """
     def to_internal_value(self, data):
         if isinstance(data, dict):
             return data
@@ -60,7 +55,6 @@ class TipoProdutoSerializer(serializers.ModelSerializer):
     def validate_atributos_schema(self, value):
         if not isinstance(value, list):
             raise serializers.ValidationError('atributos_schema deve ser uma lista.')
-
         normalizado = []
         for item in value:
             if isinstance(item, str):
@@ -90,6 +84,26 @@ class TipoProdutoSerializer(serializers.ModelSerializer):
 
 
 # ══════════════════════════════════════════════════════════════
+# IMAGEM DE PRODUTO  ← NOVO
+# ══════════════════════════════════════════════════════════════
+
+class ProdutoImagemSerializer(serializers.ModelSerializer):
+    ficheiro_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ProdutoImagem
+        fields = ['id', 'ficheiro_url', 'ordem', 'legenda']
+
+    def get_ficheiro_url(self, obj):
+        request = self.context.get('request')
+        if obj.ficheiro and request:
+            return request.build_absolute_uri(obj.ficheiro.url)
+        if obj.ficheiro:
+            return obj.ficheiro.url
+        return None
+
+
+# ══════════════════════════════════════════════════════════════
 # PRODUTO
 # ══════════════════════════════════════════════════════════════
 
@@ -102,14 +116,18 @@ class ProdutoSerializer(serializers.ModelSerializer):
     atributos_em_falta = serializers.SerializerMethodField()
     stock              = serializers.SerializerMethodField()
 
+    # ── NOVO: imagens adicionais + atributos normalizados ──────
+    imagens                = ProdutoImagemSerializer(many=True, read_only=True)
+    atributos_normalizados = serializers.SerializerMethodField()
+
     # ── Escrita ───────────────────────────────────────────────
-    tipo_id   = serializers.PrimaryKeyRelatedField(
-                    queryset=TipoProduto.objects.filter(ativo=True),
-                    source='tipo',
-                    write_only=True,
-                    required=False,
-                    allow_null=True,
-                )
+    tipo_id = serializers.PrimaryKeyRelatedField(
+        queryset=TipoProduto.objects.filter(ativo=True),
+        source='tipo',
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
     atributos = FlexJSONField(required=False, default=dict)
     categorias = CategoriaLojaMiniSerializer(many=True, read_only=True)
     categoria_ids = serializers.PrimaryKeyRelatedField(
@@ -129,7 +147,8 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'nome', 'descricao', 'sku',
             'preco',
             'ficheiro', 'ficheiro_url',
-            'atributos', 'atributos_em_falta',
+            'imagens',                    # ← NOVO
+            'atributos', 'atributos_normalizados', 'atributos_em_falta',  # ← atributos_normalizados novo
             'stock',
             'destaque', 'ativo',
             'data_criacao',
@@ -160,8 +179,27 @@ class ProdutoSerializer(serializers.ModelSerializer):
         except Inventario.DoesNotExist:
             return None
 
+    def get_atributos_normalizados(self, obj):
+        """
+        Garante que cada valor é sempre uma lista, independentemente
+        do formato guardado na BD:
+          formato antigo → {"cor": "vermelho"}       → {"cor": ["vermelho"]}
+          formato novo   → {"cor": ["vermelho","azul"]} → inalterado
+        O frontend (productInfoCard) usa este campo para filtrar
+        quais as opções disponíveis num produto específico.
+        """
+        raw = obj.atributos or {}
+        normalized = {}
+        for key, val in raw.items():
+            if isinstance(val, list):
+                normalized[key] = [str(v) for v in val if v is not None and str(v).strip()]
+            elif val is not None and str(val).strip():
+                normalized[key] = [str(val)]
+            else:
+                normalized[key] = []
+        return normalized
+
     def validate_atributos(self, value):
-        # aceita string JSON (vem do FormData) ou dict directamente
         if isinstance(value, str):
             if not value or value.strip() in ('', '{}'):
                 return {}
@@ -176,8 +214,6 @@ class ProdutoSerializer(serializers.ModelSerializer):
         raise serializers.ValidationError('atributos deve ser um objecto JSON.')
 
     def to_internal_value(self, data):
-        # converte atributos de string para dict ANTES da validacao
-        # necessario porque FormData envia tudo como string
         if 'atributos' in data and isinstance(data.get('atributos'), str):
             try:
                 val = data['atributos'].strip()
@@ -199,7 +235,6 @@ class ProdutoSerializer(serializers.ModelSerializer):
         return attrs
 
     def to_representation(self, instance):
-        # garante que atributos é sempre devolvido como dict na leitura
         ret = super().to_representation(instance)
         if isinstance(ret.get('atributos'), str):
             try:
@@ -226,7 +261,6 @@ class ProdutoSerializer(serializers.ModelSerializer):
         if categorias is not None:
             instance.categorias.set(categorias)
         return instance
-  
 
 
 # ══════════════════════════════════════════════════════════════
