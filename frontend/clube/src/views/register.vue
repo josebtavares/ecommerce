@@ -2,8 +2,8 @@
   <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden">
 
     <!-- Background image -->
-    <div class="absolute inset-0 bg-cover bg-center bg-no-repeat"
-         style="background-image: url('/src/assets/img/login/login_background2.jpg');"></div>
+    <div class="bg-[url('/src/assets/img/login/login_back.jpg')] bg-cover bg-center bg-no-repeat">
+    </div>
     <div class="absolute inset-0 bg-black/60"></div>
 
     <div class="relative z-10 w-full max-w-3xl flex rounded-2xl overflow-hidden shadow-2xl">
