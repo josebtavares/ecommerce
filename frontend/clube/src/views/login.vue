@@ -1,70 +1,82 @@
 <template>
-  <div class="relative w-screen h-screen overflow-hidden
-           bg-[url('/src/assets/img/login/login_back.jpg')]
-           bg-cover bg-center bg-no-repeat">
-    <div class="absolute inset-0 bg-black/40"></div>
+  <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden"
+       style="background: #0a0a0a;">
 
-    <div class="relative z-10 flex items-center justify-center h-full gap-0">
+    <!-- Fundo animado -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="absolute -top-40 -left-40 w-96 h-96 rounded-full opacity-20"
+           style="background: radial-gradient(circle, #dc2626, transparent); filter: blur(80px);"></div>
+      <div class="absolute -bottom-40 -right-40 w-96 h-96 rounded-full opacity-10"
+           style="background: radial-gradient(circle, #7f1d1d, transparent); filter: blur(80px);"></div>
+      <!-- Grid subtil -->
+      <div class="absolute inset-0 opacity-[0.03]"
+           style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 60px 60px;"></div>
+    </div>
 
-      <!-- Painel ESQUERDO -->
-      <div class="w-96 h-[50%] p-8 shadow-md flex flex-col items-center justify-center
-               bg-gradient-to-b from-black via-gray-800 to-gray-600
-               rounded-tl-lg rounded-bl-lg">
-        <img src="@/assets/img/login/ai_logo.png" alt="Logo" class="w-32 mb-4" />
-        <h1 class="text-3xl font-bold text-white mb-4">AI Signal</h1>
-        <p class="text-lg text-white text-center">Bem-vindo.</p>
+    <div class="relative z-10 w-full max-w-sm">
+
+      <!-- Logo / marca -->
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 border border-red-500/30"
+             style="background: linear-gradient(135deg, #1a0000, #2d0000);">
+          <img src="@/assets/img/login/store_logo.png" alt="Logo" class="w-8 h-8 object-contain" />
+        </div>
+        <h1 class="text-2xl font-bold text-white tracking-tight">AI Signal</h1>
+        <p class="text-zinc-500 text-sm mt-1">Bem-vindo de volta</p>
       </div>
 
-      <!-- Painel DIREITO -->
-      <div class="w-96 h-[50%] bg-white p-8 shadow-md rounded-tr-lg rounded-br-lg">
+      <!-- Card -->
+      <div class="rounded-2xl border border-zinc-800 p-6 sm:p-8"
+           style="background: rgba(18,18,18,0.95); backdrop-filter: blur(20px);">
 
-        <h2 class="text-2xl font-bold mb-6 text-center">Login</h2>
+        <h2 class="text-lg font-bold text-white mb-6">Entrar na conta</h2>
 
-        <form @submit.prevent="handleLogin">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700" for="username">
-              Username ou Email
-            </label>
-            <input
-              id="username" v-model="username" required
-              class="mt-1 block w-full p-2 border border-gray-300 rounded-md" />
+        <form @submit.prevent="handleLogin" class="space-y-4">
+
+          <div>
+            <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Username ou Email</label>
+            <input v-model="username" required autocomplete="username"
+              class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
+                     focus:outline-none focus:border-red-500 transition"
+              style="background: #1a1a1a;"
+              placeholder="o_teu_username" />
           </div>
 
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700" for="password">
-              Password
-            </label>
-            <input
-              id="password" v-model="password" type="password" required
-              class="mt-1 block w-full p-2 border border-gray-300 rounded-md" />
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs font-medium text-zinc-400">Password</label>
+              <a href="#" class="text-xs text-red-400 hover:text-red-300 transition">Esqueceste?</a>
+            </div>
+            <input v-model="password" type="password" required autocomplete="current-password"
+              class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
+                     focus:outline-none focus:border-red-500 transition"
+              style="background: #1a1a1a;"
+              placeholder="••••••••" />
           </div>
 
-          <button
-            type="submit"
-            :disabled="loading"
-            :class="[
-              'w-full py-2 rounded text-white transition',
-              loading ? 'bg-blue-400 cursor-not-allowed opacity-70'
-                      : 'bg-blue-500 hover:bg-blue-600'
-            ]">
-            <span v-if="!loading">Login</span>
-            <span v-else class="flex items-center justify-center gap-2">
-              <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
-                <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
-              </svg>
-              A entrar…
-            </span>
+          <div v-if="warning"
+               class="px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
+            {{ warningMsg }}
+          </div>
+
+          <button type="submit" :disabled="loading"
+            class="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all mt-2
+                   flex items-center justify-center gap-2"
+            :class="loading ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90 active:scale-[0.98]'"
+            style="background: linear-gradient(135deg, #dc2626, #b91c1c);">
+            <svg v-if="loading" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+              <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
+            </svg>
+            {{ loading ? 'A entrar…' : 'Entrar' }}
           </button>
         </form>
 
-        <p v-if="warning" class="text-red-500 text-center mt-2 text-sm">
-          {{ warningMsg }}
-        </p>
-
-        <p class="mt-4 text-center text-sm">
+        <p class="mt-5 text-center text-xs text-zinc-500">
           Ainda não tens conta?
-          <router-link to="/Register" class="text-blue-500">Regista-te</router-link>
+          <router-link to="/Register" class="text-red-400 hover:text-red-300 transition font-medium">
+            Cria uma agora
+          </router-link>
         </p>
       </div>
     </div>
@@ -94,7 +106,6 @@ export default {
   },
 
   created () {
-    // já autenticado → vai para Home
     if (localStorage.getItem('access_token')) {
       this.$router.push({ name: 'Home' })
     }
@@ -104,24 +115,17 @@ export default {
     async handleLogin () {
       await this.wrap(async () => {
         this.warning = false
-
         try {
           const res = await api.post('app/utilizador/login/', {
             username: this.username,
             password: this.password,
           })
-
-          // backend devolve: { access_token, refresh_token, user }
           const { access_token, refresh_token, user } = res.data
-
           localStorage.setItem('access_token',  access_token)
           localStorage.setItem('refresh_token', refresh_token)
           localStorage.setItem('user',          JSON.stringify(user))
-
           toast.success('Login bem-sucedido!', { autoClose: 2000 })
           this.$router.push({ name: 'Home' })
-          console.log('Login bem-sucedido:', user)
-
         } catch (err) {
           const msg = err.response?.data?.detail || 'Credenciais inválidas.'
           this.warningMsg = msg
