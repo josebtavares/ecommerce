@@ -12,10 +12,14 @@ from ..Views.notificacaoView import notificar
 from django.db.models import Sum, Count, Avg, Q
 from django.utils.timezone import now
 from datetime import timedelta
+from django.utils.dateparse import parse_date
+from django.utils.timezone import make_aware
+from datetime import datetime
+
 
 from ..models import (
     Utilizador, Loja, Produto, Encomenda,
-    Pagamento, TipoProduto, UtilizadorLoja,
+    Pagamento, TipoProduto, UtilizadorLoja,Comissao
 )
 from ..Serializers.ProdutoSerializer import TipoProdutoSerializer
 from ..utils.pagination import paginar
@@ -490,48 +494,101 @@ def admin_tipos_gerir(request, tipo_id):
 @permission_classes([IsAuthenticated])
 def admin_comissao_list(request):
     """
-    GET /app/admin/comissoes/?status=&loja_id=&offset=0&limit=20
+    GET /app/admin/comissoes/
+    Parâmetros suportados:
+      status       pendente | liquidada
+      loja_id      ID da loja
+      data_inicio  YYYY-MM-DD
+      data_fim     YYYY-MM-DD
+      valor_min    float — comissões com valor >= X
+      ordering     -data_criacao | data_criacao | -valor_comissao | valor_comissao
+      offset       int
+      limit        int
     """
-    from ..models import Comissao
-    from django.db.models import Sum
 
+    
+  
+ 
     erro = _exige_admin(request, 'gerir_pagamentos')
-    if erro: return erro
-
-    qs = Comissao.objects.select_related('loja', 'encomenda').order_by('-data_criacao')
-
+    if erro:
+        return erro
+ 
+    qs = Comissao.objects.select_related('loja', 'encomenda').all()
+ 
+    # ── filtros ───────────────────────────────────────────────
     stat = request.GET.get('status')
     if stat:
         qs = qs.filter(status=stat)
-
+ 
     loja_id = request.GET.get('loja_id')
     if loja_id:
         qs = qs.filter(loja_id=loja_id)
+ 
+    data_inicio_str = request.GET.get('data_inicio')
+    data_fim_str    = request.GET.get('data_fim')
 
-    # totais
+    if data_inicio_str or data_fim_str:
+        campo = 'data_liquidacao' if stat == 'liquidada' else 'data_criacao'
+
+        if data_inicio_str:
+            try:
+                d = parse_date(data_inicio_str)
+                dt = make_aware(datetime(d.year, d.month, d.day, 0, 0, 0))
+                qs = qs.filter(**{f'{campo}__gte': dt})
+            except Exception:
+                pass
+
+        if data_fim_str:
+            try:
+                d = parse_date(data_fim_str)
+                dt = make_aware(datetime(d.year, d.month, d.day, 23, 59, 59))
+                qs = qs.filter(**{f'{campo}__lte': dt})
+            except Exception:
+                pass
+ 
+    valor_min = request.GET.get('valor_min')
+    if valor_min:
+        try:
+            qs = qs.filter(valor_comissao__gte=float(valor_min))
+        except ValueError:
+            pass
+ 
+    # ── ordenação ─────────────────────────────────────────────
+    ordering_map = {
+        '-data_criacao':    '-data_criacao',
+        'data_criacao':     'data_criacao',
+        '-valor_comissao':  '-valor_comissao',
+        'valor_comissao':   'valor_comissao',
+    }
+    ordering = ordering_map.get(request.GET.get('ordering', '-data_criacao'), '-data_criacao')
+    qs = qs.order_by(ordering)
+ 
+    # ── totais globais (ignoram paginação e filtros de data/valor) ─
     total_pendente  = Comissao.objects.filter(status='pendente').aggregate(t=Sum('valor_comissao'))['t'] or 0
     total_liquidado = Comissao.objects.filter(status='liquidada').aggregate(t=Sum('valor_comissao'))['t'] or 0
-
+ 
+    # ── paginação ─────────────────────────────────────────────
     offset = int(request.GET.get('offset', 0))
-    limit  = int(request.GET.get('limit', 20))
+    limit  = min(int(request.GET.get('limit', 20)), 100)
     total  = qs.count()
     items  = qs[offset:offset + limit]
-
+ 
     results = []
     for c in items:
         results.append({
-            'id':             c.id,
-            'loja_id':        c.loja.id,
-            'loja_nome':      c.loja.nome,
-            'encomenda_id':   c.encomenda_id,
+            'id':              c.id,
+            'loja_id':         c.loja.id,
+            'loja_nome':       c.loja.nome,
+            'encomenda_id':    c.encomenda_id,
             'valor_encomenda': str(c.valor_encomenda),
-            'percentagem':    str(c.percentagem),
-            'valor_comissao': str(c.valor_comissao),
-            'status':         c.status,
-            'data_criacao':   c.data_criacao.strftime('%d-%m-%Y %H:%M'),
+            'percentagem':     str(c.percentagem),
+            'valor_comissao':  str(c.valor_comissao),
+            'status':          c.status,
+            'data_criacao':    c.data_criacao.strftime('%d-%m-%Y %H:%M'),
             'data_liquidacao': c.data_liquidacao.strftime('%d-%m-%Y %H:%M') if c.data_liquidacao else None,
+            'notas':           c.notas,
         })
-
+ 
     return Response({
         'count':           total,
         'next_offset':     offset + limit if offset + limit < total else None,
@@ -586,6 +643,42 @@ def admin_loja_comissao(request, loja_id):
             'percentagem_comissao': str(loja.percentagem_comissao),
         })
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_comissoes_por_loja(request):
+    """
+    GET /app/admin/comissoes/por-loja/
+    Devolve todas as lojas que têm comissões, com totais pendente e liquidado.
+    Usado para as abas na página AdminComissoes.vue.
+    """
+    
+
+ 
+    erro = _exige_admin(request, 'gerir_pagamentos')
+    if erro:
+        return erro
+ 
+    
+ 
+    # agrupa por loja e calcula pendente + liquidado em uma query
+    from ..models import Loja
+ 
+    lojas_ids = Comissao.objects.values_list('loja_id', flat=True).distinct()
+ 
+    resultado = []
+    for loja in Loja.objects.filter(id__in=lojas_ids).order_by('nome'):
+        agg = Comissao.objects.filter(loja=loja).aggregate(
+            pendente=Sum('valor_comissao', filter=Q(status='pendente')),
+            liquidado=Sum('valor_comissao', filter=Q(status='liquidada')),
+        )
+        resultado.append({
+            'id':        loja.id,
+            'nome':      loja.nome,
+            'pendente':  f"{agg['pendente'] or 0:.2f}",
+            'liquidado': f"{agg['liquidado'] or 0:.2f}",
+        })
+ 
+    return Response(resultado)
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
