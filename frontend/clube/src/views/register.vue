@@ -1,76 +1,98 @@
 <template>
-  <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden"
-       style="background: #0a0a0a;">
+  <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden">
 
-    <!-- Fundo animado -->
-    <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-15"
-           style="background: radial-gradient(circle, #dc2626, transparent); filter: blur(80px);"></div>
-      <div class="absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-10"
-           style="background: radial-gradient(circle, #7f1d1d, transparent); filter: blur(80px);"></div>
-      <div class="absolute inset-0 opacity-[0.03]"
-           style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 60px 60px;"></div>
-    </div>
+    <!-- Background image -->
+    <div class="absolute inset-0 bg-cover bg-center bg-no-repeat"
+         style="background-image: url('/src/assets/img/login/login_background2.jpg');"></div>
+    <div class="absolute inset-0 bg-black/60"></div>
 
-    <div class="relative z-10 w-full max-w-md">
+    <div class="relative z-10 w-full max-w-3xl flex rounded-2xl overflow-hidden shadow-2xl">
 
-      <!-- Logo / marca -->
-      <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 border border-red-500/30"
-             style="background: linear-gradient(135deg, #1a0000, #2d0000);">
-          <img src="@/assets/img/register/store_logo.png" alt="Logo" class="w-8 h-8 object-contain" />
+      <!-- Painel ESQUERDO — branding -->
+      <div class="hidden sm:flex w-2/5 flex-col items-center justify-center p-10 flex-shrink-0"
+           style="background: linear-gradient(160deg, rgba(0,0,0,0.92) 0%, rgba(30,0,0,0.88) 100%); border-right: 1px solid rgba(220,38,38,0.2);">
+        <img src="@/assets/img/login/ai_logo.png" alt="Logo"
+             class="w-20 h-20 object-contain mb-5 drop-shadow-lg" />
+        <h1 class="text-2xl font-extrabold text-white tracking-tight text-center">NõsLoja</h1>
+        <p class="text-zinc-400 text-sm mt-2 text-center leading-relaxed">
+          Junta-te à comunidade<br/>de compradores e vendedores
+        </p>
+        <div class="mt-8 w-10 h-0.5 rounded-full bg-red-600 opacity-60"></div>
+        <div class="mt-6 space-y-2 w-full">
+          <div class="flex items-center gap-2 text-zinc-500 text-xs">
+            <div class="w-4 h-4 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
+              <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+            </div>
+            Cria a tua loja em minutos
+          </div>
+          <div class="flex items-center gap-2 text-zinc-500 text-xs">
+            <div class="w-4 h-4 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
+              <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+            </div>
+            Compra de lojas locais
+          </div>
+          <div class="flex items-center gap-2 text-zinc-500 text-xs">
+            <div class="w-4 h-4 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
+              <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+            </div>
+            Gestão completa no backoffice
+          </div>
         </div>
-        <h1 class="text-2xl font-bold text-white tracking-tight">AI Signal</h1>
-        <p class="text-zinc-500 text-sm mt-1">Cria a tua conta gratuitamente</p>
       </div>
 
-      <!-- Card -->
-      <div class="rounded-2xl border border-zinc-800 p-6 sm:p-8"
-           style="background: rgba(18,18,18,0.95); backdrop-filter: blur(20px);">
+      <!-- Painel DIREITO — formulário -->
+      <div class="flex-1 flex flex-col justify-center p-7 sm:p-10 overflow-y-auto max-h-screen"
+           style="background: rgba(12,12,12,0.96); backdrop-filter: blur(20px);">
 
-        <h2 class="text-lg font-bold text-white mb-6">Criar conta</h2>
+        <!-- Logo visível só em mobile -->
+        <div class="flex sm:hidden items-center gap-3 mb-6">
+          <img src="@/assets/img/login/ai_logo.png" alt="Logo" class="w-9 h-9 object-contain" />
+          <span class="text-lg font-extrabold text-white">NõsLoja</span>
+        </div>
 
-        <form @submit.prevent="handleRegister" class="space-y-5">
+        <h2 class="text-xl font-bold text-white mb-1">Criar conta</h2>
+        <p class="text-zinc-500 text-xs mb-7">Preenche os dados para começar</p>
+
+        <form @submit.prevent="handleRegister" class="space-y-4">
 
           <!-- Foto de perfil -->
           <div class="flex items-center gap-4">
             <div class="relative flex-shrink-0 cursor-pointer group" @click="$refs.fileInput.click()">
               <img :src="previewUrl" alt="Foto"
-                   class="w-16 h-16 rounded-full object-cover border-2 border-zinc-700 group-hover:border-red-500 transition" />
-              <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100
+                   class="w-14 h-14 rounded-full object-cover border-2 border-zinc-700 group-hover:border-red-500 transition" />
+              <div class="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100
                           flex items-center justify-center transition">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 </svg>
               </div>
             </div>
             <div>
-              <p class="text-sm font-medium text-zinc-300">Foto de perfil</p>
-              <p class="text-xs text-zinc-500 mt-0.5">Opcional · JPG, PNG</p>
+              <p class="text-xs font-medium text-zinc-300">Foto de perfil <span class="text-zinc-600">(opcional)</span></p>
               <button type="button" @click="$refs.fileInput.click()"
-                class="text-xs text-red-400 hover:text-red-300 transition mt-1">
-                Escolher foto
+                class="text-xs text-red-400 hover:text-red-300 transition mt-0.5">
+                Escolher ficheiro
               </button>
             </div>
             <input ref="fileInput" type="file" accept="image/*" @change="onFileChange" class="hidden" />
           </div>
 
-          <!-- Nome — grid 2 colunas em sm -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Nome -->
+          <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Primeiro nome *</label>
               <input v-model="first_name" required autocomplete="given-name"
-                class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
-                       focus:outline-none focus:border-red-500 transition"
-                style="background: #1a1a1a;" placeholder="Ana" />
+                class="w-full px-3 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-800
+                       focus:outline-none focus:border-red-500 transition placeholder-zinc-600"
+                style="background: #181818;" placeholder="Ana" />
             </div>
             <div>
               <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Apelido</label>
               <input v-model="last_name" autocomplete="family-name"
-                class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
-                       focus:outline-none focus:border-red-500 transition"
-                style="background: #1a1a1a;" placeholder="Silva" />
+                class="w-full px-3 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-800
+                       focus:outline-none focus:border-red-500 transition placeholder-zinc-600"
+                style="background: #181818;" placeholder="Silva" />
             </div>
           </div>
 
@@ -78,35 +100,35 @@
           <div>
             <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Username *</label>
             <input v-model="username" required autocomplete="username"
-              class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
-                     focus:outline-none focus:border-red-500 transition"
-              style="background: #1a1a1a;" placeholder="ana_silva" />
+              class="w-full px-3 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-800
+                     focus:outline-none focus:border-red-500 transition placeholder-zinc-600"
+              style="background: #181818;" placeholder="ana_silva" />
           </div>
 
           <!-- Email -->
           <div>
             <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Email *</label>
             <input v-model="email" type="email" required autocomplete="email"
-              class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
-                     focus:outline-none focus:border-red-500 transition"
-              style="background: #1a1a1a;" placeholder="ana@exemplo.pt" />
+              class="w-full px-3 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-800
+                     focus:outline-none focus:border-red-500 transition placeholder-zinc-600"
+              style="background: #181818;" placeholder="ana@exemplo.pt" />
           </div>
 
-          <!-- Telemóvel + Morada — grid 2 colunas em sm -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Telemóvel + Morada -->
+          <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Telemóvel</label>
               <input v-model="telefone" type="tel" autocomplete="tel"
-                class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
-                       focus:outline-none focus:border-red-500 transition"
-                style="background: #1a1a1a;" placeholder="+351 9xx xxx xxx" />
+                class="w-full px-3 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-800
+                       focus:outline-none focus:border-red-500 transition placeholder-zinc-600"
+                style="background: #181818;" placeholder="+351 9xx..." />
             </div>
             <div>
-              <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Morada</label>
-              <input v-model="morada" autocomplete="street-address"
-                class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
-                       focus:outline-none focus:border-red-500 transition"
-                style="background: #1a1a1a;" placeholder="Lisboa" />
+              <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Cidade</label>
+              <input v-model="morada" autocomplete="address-level2"
+                class="w-full px-3 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-800
+                       focus:outline-none focus:border-red-500 transition placeholder-zinc-600"
+                style="background: #181818;" placeholder="Lisboa" />
             </div>
           </div>
 
@@ -114,20 +136,20 @@
           <div>
             <label class="text-xs font-medium text-zinc-400 mb-1.5 block">Password *</label>
             <input v-model="password" type="password" required autocomplete="new-password"
-              class="w-full px-4 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-700
-                     focus:outline-none focus:border-red-500 transition"
-              style="background: #1a1a1a;" placeholder="Mínimo 8 caracteres" />
+              class="w-full px-3 py-2.5 rounded-xl text-sm text-zinc-100 border border-zinc-800
+                     focus:outline-none focus:border-red-500 transition placeholder-zinc-600"
+              style="background: #181818;" placeholder="Mínimo 8 caracteres" />
           </div>
 
           <!-- Erros -->
           <div v-if="errors.length"
-               class="px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 space-y-1">
+               class="px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 space-y-0.5">
             <p v-for="(e, i) in errors" :key="i" class="text-red-400 text-xs">{{ e }}</p>
           </div>
 
           <button type="submit" :disabled="loading"
             class="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all
-                   flex items-center justify-center gap-2"
+                   flex items-center justify-center gap-2 mt-1"
             :class="loading ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90 active:scale-[0.98]'"
             style="background: linear-gradient(135deg, #dc2626, #b91c1c);">
             <svg v-if="loading" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -140,7 +162,7 @@
 
         <p class="mt-5 text-center text-xs text-zinc-500">
           Já tens conta?
-          <router-link to="/Login" class="text-red-400 hover:text-red-300 transition font-medium">
+          <router-link to="/Login" class="text-red-400 hover:text-red-300 transition font-semibold">
             Entrar
           </router-link>
         </p>
