@@ -290,7 +290,7 @@
                 <div class="flex items-end gap-6 mb-8">
                   <h2 class="text-4xl font-black tracking-tighter capitalize leading-none"
                       :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ cat.nome }}</h2>
-                  <span class="text-lg">{{ cat.icone }}</span>
+                  <!-- <span class="text-lg">{{ cat.icone }}</span> -->
                   <span class="text-6xl font-black opacity-10 leading-none"
                         :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">
                     {{ String(tiposExistentes.length + idx + 1).padStart(2, '0') }}

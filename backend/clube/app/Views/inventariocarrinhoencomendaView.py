@@ -121,53 +121,97 @@ def carrinho_get(request, loja_id):
     serializer = CarrinhoSerializer(carrinho, context={'request': request})
     return Response(serializer.data)
 
-
+def _atributos_iguais(a: dict, b: dict) -> bool:
+    """
+    Compara dois dicts de atributos de forma normalizada.
+    Ordena listas antes de comparar:
+      {"cor": ["azul","vermelho"]} == {"cor": ["vermelho","azul"]} → True
+    """
+    if set(a.keys()) != set(b.keys()):
+        return False
+    for key in a:
+        va = sorted(a[key]) if isinstance(a[key], list) else a[key]
+        vb = sorted(b[key]) if isinstance(b[key], list) else b[key]
+        if va != vb:
+            return False
+    return True
+ 
+ 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def carrinho_adicionar(request, loja_id):
     """
     POST /app/loja/<loja_id>/carrinho/adicionar/
-    Body: { produto_id, quantidade }
-    Adiciona ou actualiza a quantidade de um item no carrinho.
+    Body: { produto_id, quantidade, atributos }
+ 
+    Regras:
+    - Mesmo produto + mesmos atributos   → incrementa quantidade
+    - Mesmo produto + atributos diferentes → cria novo item separado
     """
     loja       = get_object_or_404(Loja, id=loja_id, ativa=True)
     utilizador = request.user.utilizador
-
-    # garante que o produto pertence à loja
+ 
     produto_id = request.data.get('produto_id')
     produto    = get_object_or_404(Produto, id=produto_id, loja=loja, ativo=True)
-
+    quantidade = int(request.data.get('quantidade', 1))
+    atributos  = request.data.get('atributos', {})
+ 
+    # normalizar atributos (pode vir como string JSON do multipart)
+    if isinstance(atributos, str):
+        import json
+        try:
+            atributos = json.loads(atributos)
+        except (json.JSONDecodeError, TypeError):
+            atributos = {}
+    if not isinstance(atributos, dict):
+        atributos = {}
+ 
     carrinho, _ = Carrinho.objects.get_or_create(
         utilizador=utilizador, loja=loja
     )
-
-    quantidade = int(request.data.get('quantidade', 1))
-
-    item, criado = ItemCarrinho.objects.get_or_create(
-    carrinho=carrinho, produto=produto,
-    defaults={'quantidade': 0, 'atributos': request.data.get('atributos', {})}
-)
-    # se já existia, actualiza os atributos
-    if not criado:
-        atributos = request.data.get('atributos', {})
-        if atributos:
-            item.atributos = atributos
-
-    # valida stock
+ 
+    # validar stock
     try:
         stock = produto.inventario.quantidade
-        if item.quantidade + quantidade > stock:
+        if quantidade > stock:
             return Response(
                 {'detail': f'Stock insuficiente. Disponível: {stock}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
     except Inventario.DoesNotExist:
         pass
-
-    item.quantidade += quantidade
-    item.save()
-
+ 
+    # procurar item com o mesmo produto E os mesmos atributos
+    item_existente = None
+    for item in ItemCarrinho.objects.filter(carrinho=carrinho, produto=produto):
+        if _atributos_iguais(item.atributos or {}, atributos):
+            item_existente = item
+            break
+ 
+    if item_existente:
+        # mesmos atributos → incrementar quantidade
+        nova_qty = item_existente.quantidade + quantidade
+        # re-validar stock com nova quantidade total
+        try:
+            if nova_qty > produto.inventario.quantidade:
+                return Response(
+                    {'detail': f'Stock insuficiente. Disponível: {produto.inventario.quantidade}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Inventario.DoesNotExist:
+            pass
+        item_existente.quantidade = nova_qty
+        item_existente.save(update_fields=['quantidade'])
+    else:
+        # atributos diferentes → criar item separado
+        ItemCarrinho.objects.create(
+            carrinho=carrinho,
+            produto=produto,
+            quantidade=quantidade,
+            atributos=atributos,
+        )
+ 
     return Response(
         CarrinhoSerializer(carrinho, context={'request': request}).data,
         status=status.HTTP_200_OK
