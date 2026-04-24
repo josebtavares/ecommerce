@@ -9,30 +9,30 @@
 
       <!-- Painel ESQUERDO — branding -->
       <div class="hidden sm:flex w-2/5 flex-col items-center justify-center p-10 flex-shrink-0"
-           style="background: linear-gradient(160deg, rgba(0,0,0,0.92) 0%, rgba(30,0,0,0.88) 100%); border-right: 1px solid rgba(220,38,38,0.2);">
+           style="background: linear-gradient(160deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.96) 100%); border-right: 1px solid rgba(249,115,22,0.18);">
         <img src="@/assets/img/login/logo_final.png" alt="Logo"
-             class="w-40 h-40 object-contain mb-5 drop-shadow-lg" />
-        <h1 class="text-2xl font-extrabold text-white tracking-tight text-center">NõsLoja</h1>
-        <p class="text-zinc-400 text-sm mt-2 text-center leading-relaxed">
+             class="w-60 h-60 object-contain mb-5 drop-shadow-lg" />
+        <!-- <h1 class="text-2xl font-extrabold text-white tracking-tight text-center">NõsLoja</h1> -->
+        <p class="text-zinc-800 text-sm mt-2 text-center leading-relaxed">
           Junta-te à comunidade<br/>de compradores e vendedores
         </p>
-        <div class="mt-8 w-10 h-0.5 rounded-full bg-red-600 opacity-60"></div>
+        <div class="mt-8 w-10 h-0.5 rounded-full bg-orange-500 opacity-70"></div>
         <div class="mt-6 space-y-2 w-full">
-          <div class="flex items-center gap-2 text-zinc-500 text-xs">
-            <div class="w-4 h-4 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
-              <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+          <div class="flex items-center gap-2 text-zinc-700 text-xs">
+            <div class="w-4 h-4 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0">
+              <div class="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
             </div>
             Cria a tua loja em minutos
           </div>
-          <div class="flex items-center gap-2 text-zinc-500 text-xs">
-            <div class="w-4 h-4 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
-              <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+          <div class="flex items-center gap-2 text-zinc-700 text-xs">
+            <div class="w-4 h-4 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0">
+              <div class="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
             </div>
             Compra de lojas locais
           </div>
-          <div class="flex items-center gap-2 text-zinc-500 text-xs">
-            <div class="w-4 h-4 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
-              <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+          <div class="flex items-center gap-2 text-zinc-700 text-xs">
+            <div class="w-4 h-4 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0">
+              <div class="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
             </div>
             Gestão completa no backoffice
           </div>
@@ -45,8 +45,8 @@
 
         <!-- Logo visível só em mobile -->
         <div class="flex sm:hidden items-center gap-3 mb-6">
-          <img src="@/assets/img/login/ai_logo.png" alt="Logo" class="w-9 h-9 object-contain" />
-          <span class="text-lg font-extrabold text-white">NõsLoja</span>
+          <img src="@/assets/img/login/logo_final.png" alt="Logo" class="w-9 h-9 object-contain" />
+          <!-- <span class="text-lg font-extrabold text-white">NõsLoja</span> -->
         </div>
 
         <h2 class="text-xl font-bold text-white mb-1">Criar conta</h2>
