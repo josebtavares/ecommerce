@@ -47,7 +47,8 @@ _idx = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
 MIDDLEWARE.insert(_idx + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
 
 # ══════════════════════════════════════════════════════════════
 # MEDIA — não persiste entre deploys (ok para testes)

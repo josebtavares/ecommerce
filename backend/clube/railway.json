@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pip install -r requirements.txt && DJANGO_SETTINGS_MODULE=clube.settings_prod python manage.py collectstatic --noinput"
+    "buildCommand": "pip install -r requirements.txt && DJANGO_SETTINGS_MODULE=clube.settings_prod DATABASE_URL=sqlite:///tmp/build.db python manage.py collectstatic --noinput"
   },
   "deploy": {
     "startCommand": "sh -c 'python -m daphne -b 0.0.0.0 -p $PORT clube.asgi:application'",
