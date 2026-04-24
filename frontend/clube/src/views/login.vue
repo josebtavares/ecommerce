@@ -2,7 +2,7 @@
   <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden">
 
     <!-- Background image -->
-    <div class="absolute inset-0 bg-[url('/src/assets/img/login/login_fundo2.png')] bg-cover bg-center bg-no-repeat"></div>
+    <div class="absolute inset-0 bg-[url('/src/assets/img/login/login_fundo3.png')] bg-cover bg-center bg-no-repeat"></div>
     <div class="absolute inset-0" :class="isDark ? 'bg-black/55' : 'bg-black/30'"></div>
 
     <!-- Toggle tema — canto superior direito -->
