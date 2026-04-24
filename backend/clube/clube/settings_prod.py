@@ -47,8 +47,7 @@ _idx = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
 MIDDLEWARE.insert(_idx + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ══════════════════════════════════════════════════════════════
 # MEDIA — não persiste entre deploys (ok para testes)
@@ -103,3 +102,36 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@nosloja.pt')
 # ══════════════════════════════════════════════════════════════
 
 FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', '')
+
+
+# ══════════════════════════════════════════════════════════════
+# CLOUDFLARE R2 — Storage para ficheiros media (imagens)
+# Substitui a pasta media/ local por storage permanente na cloud
+# ══════════════════════════════════════════════════════════════
+
+import os
+
+AWS_ACCESS_KEY_ID     = os.environ.get('R2_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY', '')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME', 'nosloja-media')
+AWS_S3_ENDPOINT_URL   = os.environ.get('R2_ENDPOINT_URL', '')
+AWS_S3_REGION_NAME    = 'auto'
+AWS_DEFAULT_ACL       = 'public-read'
+AWS_S3_FILE_OVERWRITE = False
+AWS_QUERYSTRING_AUTH  = False  # URLs públicos sem assinatura
+
+# URL público das imagens (usar o domínio público do bucket)
+AWS_S3_CUSTOM_DOMAIN  = os.environ.get('R2_PUBLIC_DOMAIN', '')
+
+# Usar R2 para ficheiros media
+DEFAULT_FILE_STORAGE  = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# Media URL aponta para o R2
+if AWS_S3_CUSTOM_DOMAIN:
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+else:
+    MEDIA_URL = f'{AWS_S3_ENDPOINT_URL}/{AWS_STORAGE_BUCKET_NAME}/'
+
+# Proxy headers para URLs correctos atrás do Railway
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
