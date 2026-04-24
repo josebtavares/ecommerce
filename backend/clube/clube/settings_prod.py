@@ -8,6 +8,12 @@ from .settings import *
 import os
 import dj_database_url
 
+# Adicionar storages ao INSTALLED_APPS
+INSTALLED_APPS = INSTALLED_APPS + ['storages']
+
+# Corrigir staticfiles storage
+
+
 # ══════════════════════════════════════════════════════════════
 # SEGURANÇA
 # ══════════════════════════════════════════════════════════════
@@ -47,7 +53,7 @@ _idx = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
 MIDDLEWARE.insert(_idx + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # ══════════════════════════════════════════════════════════════
 # MEDIA — não persiste entre deploys (ok para testes)
@@ -109,7 +115,7 @@ FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL', '')
 # Substitui a pasta media/ local por storage permanente na cloud
 # ══════════════════════════════════════════════════════════════
 
-import os
+
 
 AWS_ACCESS_KEY_ID     = os.environ.get('R2_ACCESS_KEY_ID', '')
 AWS_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY', '')
