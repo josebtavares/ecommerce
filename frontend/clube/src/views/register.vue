@@ -3,15 +3,15 @@
 
     <!-- Background image -->
     <div class="absolute inset-0 bg-[url('/src/assets/img/login/login_background2.jpg')] bg-cover bg-center bg-no-repeat"></div>
-    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="absolute inset-0 bg-black/40"></div>
 
     <div class="relative z-10 w-full max-w-3xl flex rounded-2xl overflow-hidden shadow-2xl">
 
       <!-- Painel ESQUERDO — branding -->
       <div class="hidden sm:flex w-2/5 flex-col items-center justify-center p-10 flex-shrink-0"
            style="background: linear-gradient(160deg, rgba(0,0,0,0.92) 0%, rgba(30,0,0,0.88) 100%); border-right: 1px solid rgba(220,38,38,0.2);">
-        <img src="@/assets/img/login/ai_logo.png" alt="Logo"
-             class="w-20 h-20 object-contain mb-5 drop-shadow-lg" />
+        <img src="@/assets/img/login/store_logo-1.png" alt="Logo"
+             class="w-40 h-40 object-contain mb-5 drop-shadow-lg" />
         <h1 class="text-2xl font-extrabold text-white tracking-tight text-center">NõsLoja</h1>
         <p class="text-zinc-400 text-sm mt-2 text-center leading-relaxed">
           Junta-te à comunidade<br/>de compradores e vendedores
