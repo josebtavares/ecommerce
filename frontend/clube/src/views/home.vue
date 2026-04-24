@@ -150,7 +150,7 @@
         <section class="relative overflow-hidden">
           <swiper ref="heroSwiper" :pagination="heroPagination" :modules="modules"
                   :autoplay="{ delay: 3500, disableOnInteraction: false }"
-                  :speed="800" :effect="'fade'" class="h-[70vh]"
+                  :speed="800" effect="slide" class="h-[70vh]"
                   @mouseenter="stopHeroAutoplay" @mouseleave="startHeroAutoplay">
             <swiper-slide v-for="store in newStores" :key="store.id"
               @click="goToStore(store.id)" class="cursor-pointer">
@@ -303,7 +303,7 @@
 </template>
 
 <script>
-import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules'
+import { Navigation, Pagination, Autoplay } from 'swiper/modules'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
 import 'swiper/css/pagination'
@@ -462,7 +462,7 @@ export default {
   setup () {
     return {
       heroPagination: { clickable: true },
-      modules: [Navigation, Pagination, Autoplay, EffectFade],
+      modules: [Navigation, Pagination, Autoplay],
     }
   },
 }
