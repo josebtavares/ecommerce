@@ -135,8 +135,8 @@
 import { toast } from 'vue3-toastify'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api.js'
-import logoDefault from '@/assets/img/login/logo_final.png'
-import logoLight from '@/assets/img/login/logo_final_light.png'
+import logoDefault from '@/assets/img/login/logo_final_4k.png'
+import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 
 export default {
   name: 'AppLogin',

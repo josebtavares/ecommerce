@@ -263,7 +263,9 @@
                 :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-200'">
           <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h3 class="text-lg font-bold mb-3" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Marketplace</h3>
+              <!-- logo here -->
+              <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="w-32 h-32 object-contain mb-3" />
+              <!-- <h3 class="text-lg font-bold mb-3" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Bendi</h3> -->
               <p class="text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">A melhor plataforma para descobrir lojas e produtos incríveis.</p>
             </div>
             <div>
@@ -315,6 +317,8 @@ import MultiCart       from '@/components/cart/multiCart.vue'
 import StoreSlider     from '@/components/sliders/StoreSlider.vue'
 import ProductSlider   from '@/components/sliders/ProductSlider.vue'
 import StoreCatalog    from '@/components/catalog/StoreCatalog.vue'
+import logoDefault from '@/assets/img/login/logo_final_4k.png'
+import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 import api from '@/services/api'
 
 const CATEGORIAS_MAP = {
@@ -357,6 +361,8 @@ export default {
       categoriasPlataforma: [],
       user: {},
       sectionRefs: {},
+      logoDefault,
+      logoLight,
     }
   },
 
