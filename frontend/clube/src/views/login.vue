@@ -32,7 +32,7 @@
            :style="isDark
              ? 'background: linear-gradient(160deg, rgba(0,0,0,0.95) 0%, rgba(20,0,0,0.92) 100%); border-right: 1px solid rgba(220,38,38,0.2);'
              : 'background: linear-gradient(160deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.96) 100%); border-right: 1px solid rgba(249,115,22,0.18);'">
-        <img src="@/assets/img/login/logo_final.png" alt="Logo"
+        <img :src="isDark ? '@/assets/img/login/logo_final_light.png' : '@/assets/img/login/logo_final.png'" alt="Logo"
              class="w-60 h-60 object-contain mb-5 drop-shadow-lg" />
         <p class="text-sm mt-2 text-center leading-relaxed transition-colors"
            :class="isDark ? 'text-zinc-400' : 'text-zinc-700'">
@@ -48,9 +48,8 @@
              ? 'background: rgba(12,12,12,0.97); backdrop-filter: blur(20px);'
              : 'background: rgba(255,255,255,0.97); backdrop-filter: blur(20px);'">
 
-        <!-- Logo mobile -->
         <div class="flex sm:hidden items-center gap-3 mb-8">
-          <img src="@/assets/img/login/logo_final.png" alt="Logo" class="w-9 h-9 object-contain" />
+          <img :src="isDark ? '@/assets/img/login/logo_final_light.png' : '@/assets/img/login/logo_final.png'" alt="Logo" class="w-9 h-9 object-contain" />
         </div>
 
         <h2 class="text-xl font-bold mb-1 transition-colors"
