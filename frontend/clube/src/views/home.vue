@@ -150,7 +150,7 @@
         <section class="relative overflow-hidden">
           <swiper ref="heroSwiper" :pagination="heroPagination" :modules="modules"
                   :autoplay="{ delay: 3500, disableOnInteraction: false }"
-                  :speed="800" effect="slide" class="h-[70vh]"
+                  :speed="800" effect="slide" class="md:h-[90vh] h-[70vh]"
                   @mouseenter="stopHeroAutoplay" @mouseleave="startHeroAutoplay">
             <swiper-slide v-for="store in newStores" :key="store.id"
               @click="goToStore(store.id)" class="cursor-pointer">
