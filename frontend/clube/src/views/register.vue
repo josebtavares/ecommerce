@@ -10,7 +10,7 @@
       <!-- Painel ESQUERDO — branding -->
       <div class="hidden sm:flex w-2/5 flex-col items-center justify-center p-10 flex-shrink-0"
            style="background: linear-gradient(160deg, rgba(0,0,0,0.92) 0%, rgba(30,0,0,0.88) 100%); border-right: 1px solid rgba(220,38,38,0.2);">
-        <img src="@/assets/img/login/store_logo-1.png" alt="Logo"
+        <img src="@/assets/img/login/logo_final.png" alt="Logo"
              class="w-40 h-40 object-contain mb-5 drop-shadow-lg" />
         <h1 class="text-2xl font-extrabold text-white tracking-tight text-center">NõsLoja</h1>
         <p class="text-zinc-400 text-sm mt-2 text-center leading-relaxed">
