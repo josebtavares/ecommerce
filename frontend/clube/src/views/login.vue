@@ -2,7 +2,7 @@
   <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden">
 
     <!-- Background image -->
-    <div class="absolute inset-0 bg-[url('/src/assets/img/login/login_back.jpg')] bg-cover bg-center bg-no-repeat"></div>
+    <div class="absolute inset-0 bg-[url('/src/assets/img/login/login_fundo.png')] bg-cover bg-center bg-no-repeat"></div>
     <div class="absolute inset-0" :class="isDark ? 'bg-black/55' : 'bg-black/30'"></div>
 
     <!-- Toggle tema — canto superior direito -->
@@ -48,8 +48,8 @@
              ? 'background: rgba(12,12,12,0.97); backdrop-filter: blur(20px);'
              : 'background: rgba(255,255,255,0.97); backdrop-filter: blur(20px);'">
 
-        <div class="flex sm:hidden items-center gap-3 mb-8">
-          <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="w-9 h-9 object-contain" />
+        <div class="flex sm:hidden items-center gap-3 mb-8 justify-center">
+          <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="w-40 h-40 object-contain" />
         </div>
 
         <h2 class="text-xl font-bold mb-1 transition-colors"
