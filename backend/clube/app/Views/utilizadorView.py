@@ -510,7 +510,6 @@ def google_callback(request):
     except Utilizador.DoesNotExist:
         utilizador = Utilizador.objects.create(
             user=user,
-            nome=nome,
             verificado=True,
         )
         # Download da foto do Google
