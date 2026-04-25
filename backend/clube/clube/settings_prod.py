@@ -141,3 +141,14 @@ else:
 # Proxy headers para URLs correctos atrás do Railway
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# ══════════════════════════════════════════════════════════════
+# SENTRY — monitorização de erros em produção
+# ══════════════════════════════════════════════════════════════
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn=os.environ.get('SENTRY_DSN', ''),
+    traces_sample_rate=0.1,
+    send_default_pii=False,
+)
