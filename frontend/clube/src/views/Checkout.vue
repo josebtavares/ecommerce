@@ -409,7 +409,7 @@ export default {
       this.loadingMetodos = true
       try {
         // carrega os métodos reais da loja da API
-        const { data } = await api.get(`/app/pagamento/loja/${this.lojaId}/metodos/`)
+        const { data } = await api.get(`/app/loja/${this.lojaId}/metodos/`)
         const lista = Array.isArray(data) ? data : data.results || []
         // enriquece com ícone e descrição
         this.metodosPagamento = lista
