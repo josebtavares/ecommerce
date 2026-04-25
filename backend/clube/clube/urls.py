@@ -20,15 +20,11 @@ from django.contrib import admin
 from django.urls import path, include
 from app.Views.login_token import MyTokenView
 
-
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,   # /token/  → devolve access+refresh
     TokenRefreshView,      # /token/refresh/
     TokenVerifyView,       # opcional
 )
-
-def trigger_error(request):
-    division_by_zero = 1 / 0
 
 urlpatterns = [
     path("api/token/", MyTokenView.as_view(), name="token_obtain_pair"),
@@ -37,10 +33,6 @@ urlpatterns = [
     path("api/chat/",  include('app.Urls.chatUrl')),  # chat/urls.py
     path('admin/', admin.site.urls),
     path('app/', include('app.urls')),
-   
-    # ... as tuas urls existentes ...
-    path('sentry-debug/', trigger_error),
-
     
 ]
 
