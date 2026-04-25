@@ -21,4 +21,9 @@ urlpatterns = [
     path('utilizador/<int:id>/',             utilizadorView.utilizador_get,            name='utilizador-get'),
     path('utilizador/<int:id>/eliminar/',    utilizadorView.utilizador_delete,         name='utilizador-delete'),
     path('utilizador/search/', utilizadorView.utilizador_search, name='utilizador-search'),
+    
+    
+    #---─ Google OAuth2 ─────────────────────────────────────────────
+    path('utilizador/google/',          utilizadorView.google_login_url, name='google-login-url'),
+    path('utilizador/google/callback/', utilizadorView.google_callback,  name='google-callback'),
 ]

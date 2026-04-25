@@ -8,6 +8,7 @@ import EncomendaSucesso from './views/EncomendaSucesso.vue'
 import Backoffice from './views/backoffice/Index.vue'
 import AdminLayout from '@/views/admin/AdminLayout.vue'
 import criarLoja from './views/criarLoja.vue';
+import GoogleCallback from './views/google/GoogleCallback.vue';
 
 
 const routes = [
@@ -62,6 +63,11 @@ const routes = [
         name: 'CriarLoja', 
         component: criarLoja, 
         meta: { requiresAuth: true } 
+    },
+    {
+        path: '/auth/google/callback',
+        name: 'GoogleCallback',
+        component: GoogleCallback,
     },
 
     // Add other routes here
