@@ -27,6 +27,7 @@ class Utilizador(models.Model):
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
     status          = models.CharField(max_length=20, default='ativo')
+    google_id       = models.CharField(max_length=100, blank=True, null=True, unique=True)
  
     # ── Role no painel de administração ──────────────────────
     # Só activo se user.is_staff=True
