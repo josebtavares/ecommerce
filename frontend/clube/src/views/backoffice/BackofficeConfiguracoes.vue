@@ -200,6 +200,10 @@
           <p class="text-[10px] text-zinc-600 mt-1">
             Encontras em Flutterwave Dashboard → Subaccounts → o teu Subaccount ID
           </p>
+          <p class="text-xs text-zinc-500 mt-2">
+            ⚠️ Taxa de processamento Flutterwave (~1.4% a 3%) é descontada automaticamente 
+            de cada pagamento recebido.
+          </p>
         </div>
         <button @click="guardarFlutterwave" :disabled="loadingFlw || !flwSubaccountId.trim()"
           :class="['w-full py-2 rounded-lg text-xs font-bold transition',
