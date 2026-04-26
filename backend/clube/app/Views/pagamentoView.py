@@ -360,9 +360,6 @@ def iniciar_pagamento_flutterwave(request):
     """
     POST /app/pagamento/flutterwave/iniciar/
     Body: { encomenda_id }
- 
-    Cria um link de pagamento Flutterwave e devolve o URL
-    para o frontend redirecionar o utilizador.
     """
     encomenda_id = request.data.get('encomenda_id')
     encomenda, erro = _verificar_encomenda(request, encomenda_id)
@@ -371,13 +368,7 @@ def iniciar_pagamento_flutterwave(request):
  
     loja = encomenda.loja
  
-    # verificar se a loja tem Flutterwave configurado
-    if not loja.aceita_flutterwave or not loja.flutterwave_subaccount_id:
-        return Response(
-            {'detail': 'Esta loja não tem Flutterwave configurado.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
- 
+    # só verifica se flutterwave está activo — subaccount é opcional para testes
     metodo = MetodoPagamento.objects.filter(
         loja=loja, tipo='flutterwave', ativo=True
     ).first()
@@ -390,39 +381,41 @@ def iniciar_pagamento_flutterwave(request):
     utilizador  = request.user.utilizador
     valor_total = float(encomenda.valor_total)
  
-    # calcular split — comissão da plataforma
+    # calcular comissão
     percentagem_comissao = float(loja.percentagem_comissao)
     valor_comissao = round(valor_total * percentagem_comissao / 100, 2)
  
-    # payload para o Flutterwave
+    # payload base
     payload = {
-        'tx_ref':        f'enc_{encomenda.id}_{encomenda.data_criacao.strftime("%Y%m%d%H%M%S")}',
-        'amount':        valor_total,
-        'currency':      'CVE',  # Escudo cabo-verdiano — mudar para EUR se necessário
-        'redirect_url':  f'{os.environ.get("FRONTEND_BASE_URL", "")}/pagamento/callback',
+        'tx_ref':       f'enc_{encomenda.id}_{encomenda.data_criacao.strftime("%Y%m%d%H%M%S")}',
+        'amount':       valor_total,
+        'currency':     'EUR',  # mudar para CVE quando tiveres conta em escudos
+        'redirect_url': f'{os.environ.get("FRONTEND_BASE_URL", "")}/pagamento/callback',
         'customer': {
-            'email':      utilizador.email,
-            'name':       utilizador.nome,
+            'email':       utilizador.email,
+            'name':        utilizador.nome,
             'phonenumber': utilizador.telefone or '',
         },
         'meta': {
             'encomenda_id': encomenda.id,
             'loja_id':      loja.id,
         },
-        'subaccounts': [
-            {
-                # comissão vai para a plataforma
-                'id':                  PLATAFORMA_SUBACCOUNT,
-                'transaction_charge_type': 'flat',
-                'transaction_charge': valor_comissao,
-            }
-        ],
         'customizations': {
             'title':       loja.nome,
             'description': f'Encomenda #{encomenda.id}',
             'logo':        loja.logo.url if loja.logo else '',
         },
     }
+ 
+    # split só se ambos os subaccounts estiverem configurados
+    if loja.flutterwave_subaccount_id and PLATAFORMA_SUBACCOUNT:
+        payload['subaccounts'] = [
+            {
+                'id':                      PLATAFORMA_SUBACCOUNT,
+                'transaction_charge_type': 'flat',
+                'transaction_charge':      valor_comissao,
+            }
+        ]
  
     # chamar API Flutterwave
     resp = flw_requests.post(
