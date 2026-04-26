@@ -453,9 +453,12 @@ export default {
       categorias:    [],
 
       metodosPagamento: [
-        { tipo: 'dinheiro', icon: '💵', label: 'Dinheiro' },
-        { tipo: 'mbway',    icon: '📱', label: 'MBWay'    },
-        { tipo: 'cartao',   icon: '💳', label: 'Cartão'   },
+        { tipo: 'dinheiro',      icon: '💵', label: 'Dinheiro'      },
+        { tipo: 'mbway',         icon: '📱', label: 'MBWay'         },
+        { tipo: 'cartao',        icon: '💳', label: 'Cartão'        },
+        { tipo: 'flutterwave',   icon: '🌍', label: 'Flutterwave'   },
+        { tipo: 'transferencia', icon: '🏦', label: 'Transferência' },
+        { tipo: 'mobile_money',  icon: '📲', label: 'Mobile Money'  },
       ],
 
       categoriasFiltroTemplate: [

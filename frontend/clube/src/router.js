@@ -9,6 +9,7 @@ import Backoffice from './views/backoffice/Index.vue'
 import AdminLayout from '@/views/admin/AdminLayout.vue'
 import criarLoja from './views/criarLoja.vue';
 import GoogleCallback from './views/google/GoogleCallback.vue';
+import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 
 
 const routes = [
@@ -68,6 +69,11 @@ const routes = [
         path: '/auth/google/callback',
         name: 'GoogleCallback',
         component: GoogleCallback,
+    },
+    {
+        path: '/pagamento/callback',
+        name: 'FlutterwaveCallback',
+        component: FlutterwaveCallback,
     },
 
     // Add other routes here

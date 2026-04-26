@@ -1,3 +1,5 @@
+import os
+
 import stripe
 from django.conf import settings
 from django.db import transaction
@@ -14,6 +16,11 @@ from ..models import (
     Encomenda, Pagamento, MetodoPagamento,
     CartaoGuardado, UtilizadorLoja, Loja, Carrinho, Comissao,
 )
+
+import requests as flw_requests
+import hashlib
+import hmac
+
 from ..Serializers.PagamentoSerializer import (
     CartaoGuardadoSerializer,
     MetodoPagamentoSerializer,
@@ -24,6 +31,19 @@ from ..Serializers.PagamentoSerializer import (
 )
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+FLW_SECRET_KEY    = os.environ.get('FLW_SECRET_KEY', '')
+FLW_PUBLIC_KEY    = os.environ.get('FLW_PUBLIC_KEY', '')
+FLW_SECRET_HASH   = os.environ.get('FLW_SECRET_HASH', '')
+FLW_BASE_URL      = 'https://api.flutterwave.com/v3'
+PLATAFORMA_SUBACCOUNT = os.environ.get('FLW_PLATAFORMA_SUBACCOUNT', '')
+ 
+def _flw_headers():
+    return {
+        'Authorization': f'Bearer {FLW_SECRET_KEY}',
+        'Content-Type':  'application/json',
+    }
+ 
 
 
 # ══════════════════════════════════════════════════════════════
@@ -331,3 +351,199 @@ def stripe_webhook(request):
             pagamento.save(update_fields=['status'])
 
     return Response({'detail': 'ok'}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def iniciar_pagamento_flutterwave(request):
+    """
+    POST /app/pagamento/flutterwave/iniciar/
+    Body: { encomenda_id }
+    """
+    encomenda_id = request.data.get('encomenda_id')
+    encomenda, erro = _verificar_encomenda(request, encomenda_id)
+    if erro:
+        return erro
+ 
+    loja = encomenda.loja
+ 
+    # só verifica se flutterwave está activo — subaccount é opcional para testes
+    metodo = MetodoPagamento.objects.filter(
+        loja=loja, tipo='flutterwave', ativo=True
+    ).first()
+    if not metodo:
+        return Response(
+            {'detail': 'Flutterwave não está activo nesta loja.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+ 
+    utilizador  = request.user.utilizador
+    valor_total = float(encomenda.valor_total)
+ 
+    # calcular comissão
+    percentagem_comissao = float(loja.percentagem_comissao)
+    valor_comissao = round(valor_total * percentagem_comissao / 100, 2)
+ 
+    # payload base
+    payload = {
+        'tx_ref':       f'enc_{encomenda.id}_{encomenda.data_criacao.strftime("%Y%m%d%H%M%S")}',
+        'amount':       valor_total,
+        'currency':     'EUR',  # mudar para CVE quando tiveres conta em escudos
+        'redirect_url': f'{os.environ.get("FRONTEND_BASE_URL", "")}/pagamento/callback',
+        'customer': {
+            'email':       utilizador.email,
+            'name':        utilizador.nome,
+            'phonenumber': utilizador.telefone or '',
+        },
+        'meta': {
+            'encomenda_id': encomenda.id,
+            'loja_id':      loja.id,
+        },
+        'customizations': {
+            'title':       loja.nome,
+            'description': f'Encomenda #{encomenda.id}',
+            'logo':        loja.logo.url if loja.logo else '',
+        },
+    }
+ 
+    # split só se ambos os subaccounts estiverem configurados
+    if loja.flutterwave_subaccount_id and PLATAFORMA_SUBACCOUNT:
+        payload['subaccounts'] = [
+            {
+                'id':                      PLATAFORMA_SUBACCOUNT,
+                'transaction_charge_type': 'flat',
+                'transaction_charge':      valor_comissao,
+            }
+        ]
+ 
+    # chamar API Flutterwave
+    resp = flw_requests.post(
+        f'{FLW_BASE_URL}/payments',
+        json=payload,
+        headers=_flw_headers(),
+        timeout=15,
+    )
+ 
+    if resp.status_code != 200 or resp.json().get('status') != 'success':
+        return Response(
+            {'detail': 'Erro ao criar pagamento no Flutterwave.', 'flw_error': resp.json()},
+            status=status.HTTP_502_BAD_GATEWAY
+        )
+ 
+    link = resp.json()['data']['link']
+    return Response({'payment_url': link, 'tx_ref': payload['tx_ref']})
+ 
+ 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def verificar_pagamento_flutterwave(request):
+    """
+    POST /app/pagamento/flutterwave/verificar/
+    Body: { transaction_id, tx_ref }
+ 
+    Chamado pelo frontend após o utilizador regressar do Flutterwave.
+    Verifica o pagamento na API e confirma a encomenda.
+    """
+    transaction_id = request.data.get('transaction_id')
+    tx_ref         = request.data.get('tx_ref')
+ 
+    if not transaction_id:
+        return Response({'detail': 'transaction_id em falta.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+    # extrair encomenda_id do tx_ref (formato: enc_<id>_<timestamp>)
+    try:
+        encomenda_id = int(tx_ref.split('_')[1])
+    except (IndexError, ValueError):
+        return Response({'detail': 'tx_ref inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+    encomenda, erro = _verificar_encomenda(request, encomenda_id)
+    if erro:
+        return erro
+ 
+    # verificar na API do Flutterwave
+    resp = flw_requests.get(
+        f'{FLW_BASE_URL}/transactions/{transaction_id}/verify',
+        headers=_flw_headers(),
+        timeout=15,
+    )
+ 
+    if resp.status_code != 200:
+        return Response({'detail': 'Erro ao verificar pagamento.'}, status=status.HTTP_502_BAD_GATEWAY)
+ 
+    flw_data = resp.json().get('data', {})
+ 
+    # validar valor e moeda
+    valor_esperado = float(encomenda.valor_total)
+    valor_pago     = float(flw_data.get('amount', 0))
+    moeda_paga     = flw_data.get('currency', '')
+    flw_status     = flw_data.get('status', '')
+ 
+    if flw_status != 'successful':
+        return Response(
+            {'detail': f'Pagamento não confirmado: {flw_status}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+ 
+    if abs(valor_pago - valor_esperado) > 0.01:
+        return Response(
+            {'detail': f'Valor incorreto. Esperado: {valor_esperado}, Pago: {valor_pago}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+ 
+    # pagamento confirmado — registar
+    metodo = MetodoPagamento.objects.filter(
+        loja=encomenda.loja, tipo='flutterwave', ativo=True
+    ).first()
+ 
+    pagamento = _registar_pagamento_aprovado(
+        encomenda, metodo,
+        f'flw_{transaction_id}',
+        encomenda.valor_total,
+    )
+ 
+    return Response(PagamentoSerializer(pagamento).data, status=status.HTTP_200_OK)
+ 
+ 
+@api_view(['POST'])
+def flutterwave_webhook(request):
+    """
+    POST /app/pagamento/flutterwave/webhook/
+    Webhook do Flutterwave — confirmação assíncrona de pagamento.
+    """
+    # verificar assinatura
+    signature = request.META.get('HTTP_VERIF_HASH', '')
+    if signature != FLW_SECRET_HASH:
+        return Response({'detail': 'Assinatura inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+    data       = request.data
+    flw_status = data.get('data', {}).get('status', '')
+    tx_ref     = data.get('data', {}).get('tx_ref', '')
+ 
+    if data.get('event') != 'charge.completed' or flw_status != 'successful':
+        return Response({'detail': 'ok'})
+ 
+    # extrair encomenda_id
+    try:
+        encomenda_id = int(tx_ref.split('_')[1])
+        encomenda = Encomenda.objects.get(id=encomenda_id)
+    except (IndexError, ValueError, Encomenda.DoesNotExist):
+        return Response({'detail': 'Encomenda não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+ 
+    # evitar duplicados
+    if encomenda.status != 'pendente':
+        return Response({'detail': 'ok'})
+ 
+    metodo = MetodoPagamento.objects.filter(
+        loja=encomenda.loja, tipo='flutterwave', ativo=True
+    ).first()
+ 
+    transaction_id = data.get('data', {}).get('id', '')
+    _registar_pagamento_aprovado(
+        encomenda, metodo,
+        f'flw_{transaction_id}',
+        encomenda.valor_total,
+    )
+ 
+    return Response({'detail': 'ok'})
