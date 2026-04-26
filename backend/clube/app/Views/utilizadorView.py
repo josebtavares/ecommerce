@@ -9,6 +9,10 @@ from django.shortcuts import get_object_or_404
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 
+import os
+import requests as http_requests
+import requests as google_requests
+
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -25,6 +29,11 @@ from ..Serializers.UtilizadorSerializer import (
 )
 
 token_generator = PasswordResetTokenGenerator()
+
+GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'http://localhost:8000/app/utilizador/google/callback/')
+ 
 
 
 # ══════════════════════════════════════════════════════════════
@@ -402,3 +411,119 @@ def utilizador_search(request):
         for u in utilizadores
     ]
     return Response(results, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def google_login_url(request):
+    """
+    GET /app/utilizador/google/
+    Devolve o URL de autenticação do Google para o frontend redirecionar.
+    """
+    from urllib.parse import urlencode
+    params = {
+        'client_id':     GOOGLE_CLIENT_ID,
+        'redirect_uri':  GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope':         'openid email profile',
+        'access_type':   'offline',
+        'prompt':        'select_account',
+    }
+    url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urlencode(params)
+    return Response({'url': url})
+ 
+ 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_callback(request):
+    """
+    POST /app/utilizador/google/callback/
+    Body: { code: "..." }
+    Recebe o código do Google, troca por token, cria conta se não existir e devolve JWT.
+    """
+    code = request.data.get('code')
+    if not code:
+        return Response({'detail': 'Código Google em falta.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+    # 1. Trocar código por access token
+    token_resp = google_requests.post('https://oauth2.googleapis.com/token', data={
+        'code':          code,
+        'client_id':     GOOGLE_CLIENT_ID,
+        'client_secret': GOOGLE_CLIENT_SECRET,
+        'redirect_uri':  GOOGLE_REDIRECT_URI,
+        'grant_type':    'authorization_code',
+    })
+ 
+    if token_resp.status_code != 200:
+        return Response({'detail': 'Erro ao obter token do Google.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+    access_token = token_resp.json().get('access_token')
+ 
+    # 2. Obter dados do utilizador Google
+    user_resp = google_requests.get(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        headers={'Authorization': f'Bearer {access_token}'}
+    )
+ 
+    if user_resp.status_code != 200:
+        return Response({'detail': 'Erro ao obter dados do Google.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+    google_data = user_resp.json()
+    email       = google_data.get('email')
+    first_name  = google_data.get('given_name', '')
+    last_name   = google_data.get('family_name', '')
+    nome        = google_data.get('name', f'{first_name} {last_name}'.strip())
+    foto_url    = google_data.get('picture', '')
+    google_id   = google_data.get('id', '')
+ 
+    if not email:
+        return Response({'detail': 'Email não disponível no Google.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+    # 3. Criar ou obter utilizador Django
+    user, criado = User.objects.get_or_create(
+        email=email,
+        defaults={
+            'username':   email.split('@')[0],
+            'first_name': first_name,
+            'last_name':  last_name,
+        }
+    )
+ 
+    # Garantir username único
+    if criado:
+        base = email.split('@')[0]
+        username = base
+        i = 1
+        while User.objects.filter(username=username).exclude(pk=user.pk).exists():
+            username = f'{base}{i}'
+            i += 1
+        user.username = username
+        user.save(update_fields=['username'])
+ 
+    # 4. Criar ou actualizar perfil Utilizador
+    try:
+        utilizador = user.utilizador
+        # marcar como verificado se ainda não estava
+        if not utilizador.verificado:
+            utilizador.verificado = True
+            utilizador.save(update_fields=['verificado'])
+    except Utilizador.DoesNotExist:
+        utilizador = Utilizador.objects.create(
+            user=user,
+            verificado=True,
+        )
+        # Download da foto do Google
+        if foto_url:
+            try:
+                import urllib.request
+                from django.core.files.base import ContentFile
+                img_data = urllib.request.urlopen(foto_url).read()
+                utilizador.foto.save(f'google_{google_id}.jpg', ContentFile(img_data), save=True)
+            except Exception:
+                pass
+ 
+    # 5. Devolver JWT + dados do utilizador (mesmo formato do login normal)
+    return Response({
+        **_build_auth_response(utilizador, request),
+        'criado': criado,
+    })
