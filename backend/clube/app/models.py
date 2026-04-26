@@ -192,6 +192,14 @@ class Loja(models.Model):
     cor_secundaria = models.CharField(max_length=7,  default='#1c1c1e',  blank=True)
     dark_mode      = models.BooleanField(default=True)
  
+    flutterwave_subaccount_id = models.CharField(
+            max_length=200, blank=True, default='',
+            help_text='Subaccount ID do Flutterwave desta loja (ex: RS_XXXX)'
+        )
+    aceita_flutterwave = models.BooleanField(
+        default=False,
+        help_text='A loja tem Flutterwave configurado e activo'
+    )
 
     class Meta:
         ordering = ['-data_criacao']
@@ -597,6 +605,8 @@ class MetodoPagamento(models.Model):
         ('mbway',   'MBWay'),
         ('paypal',  'PayPal'),
         ('stripe',  'Stripe'),
+        ('flutterwave',   'Flutterwave'),
+        ('transferencia', 'Transferência Bancária'),
     ]
 
     loja    = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='metodos_pagamento')

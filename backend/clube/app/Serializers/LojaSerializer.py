@@ -63,6 +63,7 @@ class LojaSerializer(serializers.ModelSerializer):
             'ativa',
             'data_criacao', 'data_atualizacao',
             'politica_devolucao', 'termos_servico', 'politica_privacidade',
+            'flutterwave_subaccount_id', 'aceita_flutterwave',
         ]
         read_only_fields = ['dono', 'data_criacao', 'data_atualizacao']
         extra_kwargs = {
