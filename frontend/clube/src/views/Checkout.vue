@@ -337,6 +337,7 @@ export default {
       notas:          '',
       metodoPagamento: '',
       erro: '',
+      redirectindoFlutterwave: false,
     }
   },
 
@@ -459,6 +460,7 @@ export default {
           localStorage.setItem('flw_tx_ref',     flw.tx_ref)
           localStorage.setItem('flw_encomenda_id', encomenda.id)
           // redirecionar para o Flutterwave
+          this.redirectindoFlutterwave = true 
           window.location.href = flw.payment_url
           return
         }
@@ -477,7 +479,7 @@ export default {
         this.$router.push({ name: 'EncomendaSucesso', params: { id: encomenda.id } })
       })
 
-      if (!this.loadingConfirmar && this.$route.name !== 'EncomendaSucesso') {
+      if (!this.loadingConfirmar && !this.redirectindoFlutterwave && this.$route.name !== 'EncomendaSucesso') {
         this.erro = 'Erro ao processar a encomenda. Verifica os dados e tenta novamente.'
       }
     },
