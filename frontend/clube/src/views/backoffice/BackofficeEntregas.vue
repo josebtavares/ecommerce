@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5">
 
-    <!-- Tabs — só mostra se não for condutor -->
+    <!-- Tabs -->
     <div v-if="!isCondutor" class="flex gap-1 bg-zinc-900 rounded-xl p-1 w-fit">
       <button v-for="tab in tabs" :key="tab.key"
         @click="activeTab = tab.key"
@@ -64,6 +64,27 @@
             </div>
           </div>
 
+          <!-- Contacto do cliente -->
+          <div v-if="entrega.comprador_nome || entrega.comprador_email || entrega.comprador_telefone"
+               class="border-t border-zinc-800 px-4 py-3 bg-zinc-800/30">
+            <p class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Cliente</p>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <span v-if="entrega.comprador_nome" class="text-zinc-300 font-semibold">
+                👤 {{ entrega.comprador_nome }}
+              </span>
+              <a v-if="entrega.comprador_email"
+                 :href="`mailto:${entrega.comprador_email}`"
+                 class="text-red-400 hover:text-red-300 transition flex items-center gap-1">
+                ✉️ {{ entrega.comprador_email }}
+              </a>
+              <a v-if="entrega.comprador_telefone"
+                 :href="`tel:${entrega.comprador_telefone}`"
+                 class="text-red-400 hover:text-red-300 transition flex items-center gap-1">
+                📞 {{ entrega.comprador_telefone }}
+              </a>
+            </div>
+          </div>
+
           <!-- Detalhe encomenda -->
           <div class="border-t border-zinc-800 px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
             <div v-if="entrega.morada_entrega" class="col-span-2 flex gap-2">
@@ -76,7 +97,6 @@
                 {{ entrega.tipo_entrega === 'entrega' ? '🚚 Domicílio' : '🏪 Levantamento' }}
               </span>
             </div>
-            <!-- Opção de entrega com nome, tempo e preço -->
             <div v-if="entrega.opcao_entrega_nome" class="flex gap-2 col-span-2">
               <span class="text-zinc-500 flex-shrink-0">Opção:</span>
               <span class="text-zinc-300 font-semibold">{{ entrega.opcao_entrega_nome }}</span>
@@ -95,7 +115,7 @@
               </span>
             </div>
             <div v-if="entrega.notas" class="col-span-2 flex gap-2">
-              <span class="text-zinc-500 flex-shrink-0">Notas:</span>
+              <span class="text-zinc-500 flex-shrink-0">📝 Notas:</span>
               <span class="text-zinc-300 italic">{{ entrega.notas }}</span>
             </div>
             <div v-if="entrega.data_entrega" class="col-span-2 text-green-400">
@@ -107,7 +127,6 @@
           <div v-if="!['entregue'].includes(entrega.status)"
                class="border-t border-zinc-800 px-4 py-3 flex flex-wrap gap-2 items-center">
 
-            <!-- Condutor: a caminho + entregue + falhou -->
             <template v-if="isCondutor">
               <button v-if="entrega.status === 'atribuido'"
                 @click="atualizarEntrega(entrega, 'a_caminho')"
@@ -129,7 +148,6 @@
               </button>
             </template>
 
-            <!-- Dono/gestor/staff: reatribuir + concluir + cancelar entrega -->
             <template v-else>
               <button @click="abrirReatribuir(entrega)"
                 class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition">
@@ -178,6 +196,19 @@
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold text-zinc-200">{{ c.utilizador_nome || c.utilizador_username }}</p>
             <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo não especificado' }}</p>
+            <!-- Contacto do condutor -->
+            <div class="flex gap-3 mt-1">
+              <a v-if="c.utilizador_email"
+                 :href="`mailto:${c.utilizador_email}`"
+                 class="text-xs text-red-400 hover:text-red-300 transition">
+                ✉️ {{ c.utilizador_email }}
+              </a>
+              <a v-if="c.utilizador_telefone"
+                 :href="`tel:${c.utilizador_telefone}`"
+                 class="text-xs text-red-400 hover:text-red-300 transition">
+                📞 {{ c.utilizador_telefone }}
+              </a>
+            </div>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs text-zinc-500">
@@ -209,6 +240,28 @@
           </button>
         </div>
 
+        <!-- Contacto cliente no modal reatribuir -->
+        <div v-if="modalReatribuir.comprador_nome || modalReatribuir.comprador_email || modalReatribuir.comprador_telefone"
+             class="bg-zinc-800/50 rounded-xl p-3 space-y-1 text-xs">
+          <p class="text-zinc-500 font-semibold mb-1">Cliente</p>
+          <p v-if="modalReatribuir.comprador_nome" class="text-zinc-300 font-semibold">
+            👤 {{ modalReatribuir.comprador_nome }}
+          </p>
+          <a v-if="modalReatribuir.comprador_email"
+             :href="`mailto:${modalReatribuir.comprador_email}`"
+             class="text-red-400 hover:text-red-300 flex items-center gap-1">
+            ✉️ {{ modalReatribuir.comprador_email }}
+          </a>
+          <a v-if="modalReatribuir.comprador_telefone"
+             :href="`tel:${modalReatribuir.comprador_telefone}`"
+             class="text-red-400 hover:text-red-300 flex items-center gap-1">
+            📞 {{ modalReatribuir.comprador_telefone }}
+          </a>
+          <p v-if="modalReatribuir.morada_entrega" class="text-zinc-400 mt-1">
+            📍 {{ modalReatribuir.morada_entrega }}
+          </p>
+        </div>
+
         <div v-if="modalReatribuir.condutor_nome"
              class="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3 text-xs">
           <span class="text-zinc-500">Actual:</span>
@@ -232,6 +285,7 @@
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-zinc-200">{{ c.utilizador_nome || c.utilizador_username }}</p>
               <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo n/d' }}</p>
+              <p v-if="c.utilizador_telefone" class="text-xs text-zinc-600">📞 {{ c.utilizador_telefone }}</p>
             </div>
             <span v-if="c.id === modalReatribuir.condutor_id" class="text-[10px] text-zinc-500">actual</span>
             <div v-else-if="novoCondutorId === c.id" class="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
@@ -276,8 +330,7 @@
         <div>
           <h3 class="text-base font-bold text-zinc-100">Cancelar entrega?</h3>
           <p class="text-sm text-zinc-400 mt-1">
-            A encomenda <strong>#{{ modalFalha?.encomenda }}</strong> voltará ao estado <strong>"preparando"</strong>
-            para que possas atribuir outro condutor.
+            A encomenda <strong>#{{ modalFalha?.encomenda }}</strong> voltará ao estado <strong>"preparando"</strong>.
           </p>
         </div>
         <div class="flex gap-3">
@@ -304,7 +357,7 @@ export default {
   name: 'BackofficeEntregas',
   props: {
     lojaId:    [String, Number],
-    minhaRole: { type: String, default: '' }, // role do utilizador logado nesta loja
+    minhaRole: { type: String, default: '' },
   },
 
   data () {
@@ -326,7 +379,6 @@ export default {
       ],
       condutores:        [],
       loadingCondutores: false,
-      // modais
       modalReatribuir:   null,
       novoCondutorId:    null,
       loadingReatribuir: false,
@@ -385,7 +437,6 @@ export default {
       finally { this.loadingCondutores = false }
     },
 
-    // ── Actualizar status entrega ────────────────────────────
     async atualizarEntrega (entrega, novoStatus) {
       this.loadingAcao = entrega.id
       try {
@@ -401,7 +452,6 @@ export default {
       finally { this.loadingAcao = null }
     },
 
-    // ── Falha / cancelar entrega ─────────────────────────────
     confirmarFalha (entrega) {
       this.modalFalha = entrega
     },
@@ -415,7 +465,6 @@ export default {
           `/app/loja/${this.lojaId}/encomendas/${this.modalFalha.encomenda}/entrega/atualizar/`,
           { status: 'falhou' }
         )
-        // actualiza localmente
         const entrega = this.entregas.find(e => e.id === entregaId)
         if (entrega) entrega.status = 'falhou'
         this.modalFalha = null
@@ -423,7 +472,6 @@ export default {
       finally { this.loadingAcao = null }
     },
 
-    // ── Reatribuir condutor ──────────────────────────────────
     abrirReatribuir (entrega) {
       this.modalReatribuir = entrega
       this.novoCondutorId  = null
@@ -444,7 +492,6 @@ export default {
           entrega.condutor_id      = condutor.id
           entrega.condutor_nome    = condutor.utilizador_nome || condutor.utilizador_username
           entrega.condutor_veiculo = condutor.tipo_veiculo
-          // se estava falhou, volta a atribuido
           if (entregaFalhou) entrega.status = 'atribuido'
         }
         this.modalReatribuir = null
