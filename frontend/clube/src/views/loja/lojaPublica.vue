@@ -26,7 +26,11 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/services/api'
-import { getTemplate } from '@/config/lojaTemplates'
+import { TEMPLATE_COMPONENTS, TEMPLATES } from '@/config/lojaTemplates'
+
+// Fallback: template clássico
+const FALLBACK_ID      = 'classico'
+const FALLBACK_TEMA    = { id: FALLBACK_ID, corPrimaria: '#dc2626', corSecundaria: '#1c1c1e', darkMode: true }
 
 export default {
   name: 'LojaPublica',
@@ -37,68 +41,89 @@ export default {
     const templateComponent = ref(null)
     const temaActivo        = ref(null)
 
+    // Devolve o loader lazy para um templateId, com fallback para 'classico'
+    function getLoader (templateId) {
+      return TEMPLATE_COMPONENTS[templateId] ?? TEMPLATE_COMPONENTS[FALLBACK_ID]
+    }
+
+    // Defaults de cor/modo a partir da config estática (sem precisar de API)
+    function defaultsForTemplate (templateId) {
+      const config = TEMPLATES.find(t => t.id === templateId)
+      return {
+        corPrimaria:   config?.primaryDefault   ?? '#dc2626',
+        corSecundaria: config?.secundariaDefault ?? '#1c1c1e',
+        darkMode:      config?.darkDefault       ?? true,
+      }
+    }
+
     async function resolveTemplate (lojaId) {
       loadingTemplate.value = true
+
       try {
-        // 1. Cache do template/cores da loja
+        // ── 1. Lê cache local (resposta imediata enquanto espera API) ──────────
         const cacheKey = `loja_template_${lojaId}`
         const cached   = localStorage.getItem(cacheKey)
+        let cached_    = cached ? JSON.parse(cached) : null
 
-        let templateId    = cached ? JSON.parse(cached).templateId    : 'classico'
-        let corPrimaria   = cached ? JSON.parse(cached).corPrimaria   : '#dc2626'
-        let corSecundaria = cached ? JSON.parse(cached).corSecundaria : '#1c1c1e'
-        let darkModeDefault = cached ? JSON.parse(cached).darkMode    : true
+        let templateId    = cached_?.templateId    ?? FALLBACK_ID
+        let corPrimaria   = cached_?.corPrimaria   ?? FALLBACK_TEMA.corPrimaria
+        let corSecundaria = cached_?.corSecundaria ?? FALLBACK_TEMA.corSecundaria
+        let darkModeDB    = cached_?.darkMode      ?? true
 
-        // 2. Fonte de verdade: BD
+        // ── 2. Fonte de verdade: API ──────────────────────────────────────────
         const { data } = await api.get(`/app/loja/${lojaId}/`)
-        templateId      = data.template_id    || templateId
-        corPrimaria     = data.cor_primaria   || corPrimaria
-        corSecundaria   = data.cor_secundaria || corSecundaria
-        darkModeDefault = data.dark_mode      !== undefined ? data.dark_mode : darkModeDefault
 
-        // 3. Actualiza cache do template
+        templateId    = data.template_id    || templateId
+        corPrimaria   = data.cor_primaria   || corPrimaria
+        corSecundaria = data.cor_secundaria || corSecundaria
+        darkModeDB    = data.dark_mode      !== undefined ? data.dark_mode : darkModeDB
+
+        // ── 3. Actualiza cache ────────────────────────────────────────────────
         localStorage.setItem(cacheKey, JSON.stringify({
-          templateId, corPrimaria, corSecundaria, darkMode: darkModeDefault
+          templateId, corPrimaria, corSecundaria, darkMode: darkModeDB,
         }))
 
-        // 4. Preferência de dark/light do UTILIZADOR para esta loja (tem prioridade)
+        // ── 4. Preferência dark/light do UTILIZADOR (tem prioridade sobre BD) ─
         const userDarkKey = `user_dark_${lojaId}`
         const userDark    = localStorage.getItem(userDarkKey)
-        const darkMode    = userDark !== null ? userDark === 'true' : darkModeDefault
+        const darkMode    = userDark !== null ? userDark === 'true' : darkModeDB
 
         temaActivo.value = { id: templateId, corPrimaria, corSecundaria, darkMode }
 
-        // 5. Carrega componente lazy
-        const config = getTemplate(templateId)
-        const mod    = await config.component()
+        // ── 5. Carrega componente via TEMPLATE_COMPONENTS (lazy import) ───────
+        const loader = getLoader(templateId)
+        const mod    = await loader()
         templateComponent.value = mod.default
 
       } catch (e) {
-        console.error('Erro ao carregar template:', e)
+        console.error('Erro ao carregar template da loja:', e)
+
+        // Fallback: tenta carregar o clássico
         try {
-          const mod = await import('@/views/loja/templates/TemplateClassico.vue')
+          const mod = await TEMPLATE_COMPONENTS[FALLBACK_ID]()
           templateComponent.value = mod.default
-          temaActivo.value = { id: 'classico', corPrimaria: '#dc2626', corSecundaria: '#1c1c1e', darkMode: true }
-        } catch (e2) { console.error(e2) }
+          temaActivo.value = { ...FALLBACK_TEMA }
+        } catch (e2) {
+          console.error('Erro ao carregar template fallback:', e2)
+        }
       } finally {
         loadingTemplate.value = false
       }
     }
 
-    // Utilizador clicou no toggle — guarda preferência no localStorage
+    // Utilizador togglou dark/light — guarda preferência local
     function onToggleDark (novoValor) {
-      const lojaId     = route.params.id
-      const userDarkKey = `user_dark_${lojaId}`
-      localStorage.setItem(userDarkKey, String(novoValor))
+      const lojaId = route.params.id
+      localStorage.setItem(`user_dark_${lojaId}`, String(novoValor))
       if (temaActivo.value) {
         temaActivo.value = { ...temaActivo.value, darkMode: novoValor }
       }
     }
 
     onMounted(() => resolveTemplate(route.params.id))
-    watch(() => route.params.id, id => resolveTemplate(id))
+    watch(() => route.params.id, id => { if (id) resolveTemplate(id) })
 
     return { loadingTemplate, templateComponent, temaActivo, onToggleDark }
-  }
+  },
 }
 </script>
