@@ -80,9 +80,9 @@
                 Nome: {{ entrega.comprador_nome }}
               </span>
               <a v-if="entrega.comprador_email" :href="`mailto:${entrega.comprador_email}`"
-                 class="text-white-400 hover:text-red-300 transition">Email: {{ entrega.comprador_email }}</a>
+                 class="text-zinc-300 hover:text-red-300 transition">Email: {{ entrega.comprador_email }}</a>
               <a v-if="entrega.comprador_telefone" :href="`tel:${entrega.comprador_telefone}`"
-                 class="text-white-400 hover:text-red-300 transition">Contato: {{ entrega.comprador_telefone }}</a>
+                 class="text-zinc-300 hover:text-red-300 transition">Contato: {{ entrega.comprador_telefone }}</a>
             </div>
           </div>
 
