@@ -1,89 +1,142 @@
-// config/lojaTemplates.js
-// Registo central de todos os templates disponíveis
+// src/config/lojaTemplates.js
+// Fonte única de verdade para todos os templates disponíveis.
+// Usado em BackofficeTemplates.vue e em LojaPublica.vue para carregar o componente certo.
 
 export const TEMPLATES = [
-  // ── GENÉRICOS ─────────────────────────────────────────────
   {
     id: 'classico',
     nome: 'Clássico',
-    descricao: 'Layout limpo e equilibrado. Funciona para qualquer tipo de loja.',
-    preview: '🏪',
+    descricao: 'Layout versátil com sidebar flutuante. Funciona para qualquer tipo de negócio.',
     categorias: ['todos'],
-    component: () => import('@/views/loja/templates/TemplateClassico.vue'),
+    tag: 'Versátil',
+    primaryDefault: '#dc2626',
+    secundariaDefault: '#1c1c1e',
+    darkDefault: true,
   },
   {
     id: 'minimalista',
     nome: 'Minimalista',
-    descricao: 'Espaçado, tipografia grande, ideal para marcas premium.',
-    preview: '◻️',
-    categorias: ['todos'],
-    component: () => import('@/views/loja/templates/TemplateMinimalista.vue'),
+    descricao: 'Tipografia extrema, espaço máximo, zero ornamentação. A marca fala sozinha.',
+    categorias: ['moda', 'luxo'],
+    tag: 'Luxury',
+    primaryDefault: '#a8a29e',
+    secundariaDefault: '#1c1917',
+    darkDefault: true,
+  },
+  {
+    id: 'moda-boutique',
+    nome: 'Moda Boutique',
+    descricao: 'Serif elegante com tons dourados. Para boutiques e marcas premium.',
+    categorias: ['moda'],
+    tag: 'Fashion',
+    primaryDefault: '#b8860b',
+    secundariaDefault: '#0a0805',
+    darkDefault: true,
+  },
+  {
+    id: 'moda-editorial',
+    nome: 'Moda Editorial',
+    descricao: 'Layout assimétrico 60/40 com números editoriais. Estética de revista.',
+    categorias: ['moda'],
+    tag: 'Editorial',
+    primaryDefault: '#e4e4e7',
+    secundariaDefault: '#09090b',
+    darkDefault: true,
+  },
+  {
+    id: 'restaurante-bistro',
+    nome: 'Restaurante Bistro',
+    descricao: 'Tipografia serif, tons quentes, ornamentos decorativos. Estilo Parisiense.',
+    categorias: ['restaurante'],
+    tag: 'Food',
+    primaryDefault: '#d97706',
+    secundariaDefault: '#1a1410',
+    darkDefault: false,
+  },
+  {
+    id: 'restaurante-moderno',
+    nome: 'Restaurante Moderno',
+    descricao: 'Hero cinematográfico com parallax, sidebar de categorias e cards de menu.',
+    categorias: ['restaurante'],
+    tag: 'Food',
+    primaryDefault: '#e11d48',
+    secundariaDefault: '#0f0f0f',
+    darkDefault: true,
+  },
+  {
+    id: 'tech-store',
+    nome: 'Tech Store',
+    descricao: 'Dashboard tech com grid overlay, HUD de estatísticas e acento neon.',
+    categorias: ['tecnologia'],
+    tag: 'Tech',
+    primaryDefault: '#06b6d4',
+    secundariaDefault: '#020617',
+    darkDefault: true,
   },
   {
     id: 'vibrante',
     nome: 'Vibrante',
-    descricao: 'Cores fortes, cards grandes, muito visual. Ideal para produtos de impulso.',
-    preview: '🎨',
-    categorias: ['todos'],
-    component: () => import('@/views/loja/templates/TemplateVibrante.vue'),
+    descricao: 'Formas geométricas, texto outline, marquee animado. Energia e atitude.',
+    categorias: ['moda', 'todos'],
+    tag: 'Bold',
+    primaryDefault: '#f43f5e',
+    secundariaDefault: '#09090b',
+    darkDefault: true,
   },
-
-  // ── RESTAURANTE ───────────────────────────────────────────
+  // ── Novos templates ────────────────────────────────────────────────────────
   {
-    id: 'restaurante_moderno',
-    nome: 'Restaurante Moderno',
-    descricao: 'Hero escuro com foto de fundo, menu por categorias em tabs.',
-    preview: '🍽️',
-    categorias: ['restaurante'],
-    component: () => import('@/views/loja/templates/TemplateRestauranteModerno.vue'),
-  },
-  {
-    id: 'restaurante_bistro',
-    nome: 'Bistrô',
-    descricao: 'Tom quente, grid de pratos com fotos grandes, atmosfera acolhedora.',
-    preview: '🥂',
-    categorias: ['restaurante'],
-    component: () => import('@/views/loja/templates/TemplateRestauranteBistro.vue'),
-  },
-
-  // ── MODA ──────────────────────────────────────────────────
-  {
-    id: 'moda_editorial',
-    nome: 'Editorial',
-    descricao: 'Full-bleed hero, grid assimétrico, focado na imagem do produto.',
-    preview: '👗',
-    categorias: ['moda'],
-    component: () => import('@/views/loja/templates/TemplateModaEditorial.vue'),
+    id: 'natureza',
+    nome: 'Natureza',
+    descricao: 'Visual orgânico, tons verdes e terrosos. Para produtos naturais e bio.',
+    categorias: ['todos', 'natureza'],
+    tag: 'Nature',
+    primaryDefault: '#16a34a',
+    secundariaDefault: '#051a0a',
+    darkDefault: true,
   },
   {
-    id: 'moda_boutique',
-    nome: 'Boutique',
-    descricao: 'Elegante, fundo claro opcional, produtos em destaque individual.',
-    preview: '🛍️',
-    categorias: ['moda'],
-    component: () => import('@/views/loja/templates/TemplateModaBoutique.vue'),
+    id: 'luxo-premium',
+    nome: 'Luxo Premium',
+    descricao: 'Ultra-minimalista, ouro e preto absoluto. Para jóias e marcas de prestígio.',
+    categorias: ['moda', 'luxo'],
+    tag: 'Premium',
+    primaryDefault: '#c9a84c',
+    secundariaDefault: '#030303',
+    darkDefault: true,
   },
-
-  // ── ELECTRÓNICA ───────────────────────────────────────────
   {
-    id: 'tech_store',
-    nome: 'Tech Store',
-    descricao: 'Dark mode, specs em destaque, grid denso estilo loja de electrónica.',
-    preview: '💻',
-    categorias: ['tecnologia', 'eletronicos'],
-    component: () => import('@/views/loja/templates/TemplateTechStore.vue'),
+    id: 'desporto',
+    nome: 'Desporto',
+    descricao: 'Dinâmico, diagonal, alta energia. Para equipamento desportivo e fitness.',
+    categorias: ['desporto', 'todos'],
+    tag: 'Sport',
+    primaryDefault: '#f97316',
+    secundariaDefault: '#0a0a0a',
+    darkDefault: true,
   },
 ]
 
-// Devolve template por id, com fallback para 'classico'
-export function getTemplate (templateId) {
-  return TEMPLATES.find(t => t.id === templateId) || TEMPLATES.find(t => t.id === 'classico')
-}
+export const CATEGORIAS_FILTRO = [
+  { value: 'todos',       label: 'Genérico'    },
+  { value: 'moda',        label: 'Moda'        },
+  { value: 'luxo',        label: 'Luxo'        },
+  { value: 'restaurante', label: 'Restauração' },
+  { value: 'tecnologia',  label: 'Tecnologia'  },
+  { value: 'desporto',    label: 'Desporto'    },
+  { value: 'natureza',    label: 'Natureza'    },
+]
 
-// Templates recomendados para uma categoria de loja
-export function getTemplatesSugeridos (categoriaLoja) {
-  const cat = categoriaLoja?.toLowerCase() || ''
-  return TEMPLATES.filter(t =>
-    t.categorias.includes('todos') || t.categorias.some(c => cat.includes(c))
-  )
+// Mapa de componente para LojaPublica.vue usar dynamic import
+export const TEMPLATE_COMPONENTS = {
+  'classico':            () => import('@/components/templates/TemplateClassico.vue'),
+  'minimalista':         () => import('@/components/templates/TemplateMinimalista.vue'),
+  'moda-boutique':       () => import('@/components/templates/TemplateModaBoutique.vue'),
+  'moda-editorial':      () => import('@/components/templates/TemplateModaEditorial.vue'),
+  'restaurante-bistro':  () => import('@/components/templates/TemplateRestauranteBistro.vue'),
+  'restaurante-moderno': () => import('@/components/templates/TemplateRestauranteModerno.vue'),
+  'tech-store':          () => import('@/components/templates/TemplateTechStore.vue'),
+  'vibrante':            () => import('@/components/templates/TemplateVibrante.vue'),
+  'natureza':            () => import('@/components/templates/TemplateNatureza.vue'),
+  'luxo-premium':        () => import('@/components/templates/TemplateLuxoPremium.vue'),
+  'desporto':            () => import('@/components/templates/TemplateDesporto.vue'),
 }
