@@ -34,12 +34,15 @@ class CondutorSerializer(serializers.ModelSerializer):
     utilizador_nome     = serializers.CharField(source='utilizador.nome',         read_only=True)
     utilizador_username = serializers.CharField(source='utilizador.user.username', read_only=True)
 
+    utilizador_email    = serializers.CharField(source='utilizador.user.email',    read_only=True)
+    utilizador_telefone = serializers.CharField(source='utilizador.telefone',      read_only=True)
     class Meta:
         model  = Condutor
         fields = [
             'id', 'utilizador', 'utilizador_id',
             'tipo_veiculo', 'ativo',
             'utilizador_nome', 'utilizador_username',
+            'utilizador_email', 'utilizador_telefone',
         ]
 
     def validate_utilizador_id(self, value):
@@ -66,6 +69,25 @@ class EntregaSerializer(serializers.ModelSerializer):
     # escrita
     condutor_id      = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     opcao_entrega_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    
+    # campos do comprador da encomenda
+    comprador_nome     = serializers.SerializerMethodField()
+    comprador_email    = serializers.SerializerMethodField()
+    comprador_telefone = serializers.SerializerMethodField()
+    morada_entrega     = serializers.CharField(source='encomenda.morada_entrega', read_only=True)
+    notas              = serializers.CharField(source='encomenda.notas', read_only=True)
+    tipo_entrega       = serializers.CharField(source='encomenda.tipo_entrega', read_only=True)
+    metodo_pagamento   = serializers.SerializerMethodField()
+    # campos da opção de entrega (flat — mais fácil de usar no frontend)
+    opcao_entrega_nome  = serializers.CharField(source='opcao_entrega.nome',           read_only=True)
+    opcao_entrega_tempo = serializers.CharField(source='opcao_entrega.tempo_estimado',  read_only=True)
+    opcao_entrega_preco = serializers.DecimalField(source='opcao_entrega.preco', max_digits=8, decimal_places=2, read_only=True)
+    # campos do condutor (flat)
+    condutor_nome     = serializers.SerializerMethodField()
+    condutor_veiculo  = serializers.SerializerMethodField()
+    condutor_id_field = serializers.SerializerMethodField()
+    data_criacao      = serializers.DateTimeField(format='%d-%m-%Y %H:%M', read_only=True)
+    data_entrega      = serializers.DateTimeField(format='%d-%m-%Y %H:%M', read_only=True)
 
     class Meta:
         model  = Entrega
@@ -75,6 +97,10 @@ class EntregaSerializer(serializers.ModelSerializer):
             'opcao_entrega', 'opcao_entrega_id',
             'status',
             'data_criacao', 'data_entrega',
+            'comprador_nome', 'comprador_email', 'comprador_telefone',
+            'morada_entrega', 'notas', 'tipo_entrega', 'metodo_pagamento',
+            'opcao_entrega_nome', 'opcao_entrega_tempo', 'opcao_entrega_preco',
+            'condutor_nome', 'condutor_veiculo', 'condutor_id_field',
         ]
         read_only_fields = ['data_criacao']
 
@@ -96,6 +122,52 @@ class EntregaSerializer(serializers.ModelSerializer):
                 f'Permitidos: {permitidos}'
             )
         return value
+    
+    def get_comprador_nome(self, obj):
+        try:
+            return obj.encomenda.comprador.user.get_full_name() or obj.encomenda.comprador.user.username
+        except Exception:
+            return None
+
+    def get_comprador_email(self, obj):
+        try:
+            return obj.encomenda.comprador.user.email
+        except Exception:
+            return None
+
+    def get_comprador_telefone(self, obj):
+        try:
+            return obj.encomenda.comprador.telefone
+        except Exception:
+            return None
+
+    def get_metodo_pagamento(self, obj):
+        try:
+            return obj.encomenda.pagamento.metodo.tipo
+        except Exception:
+            return None
+
+    def get_condutor_nome(self, obj):
+        try:
+            return obj.condutor.utilizador.user.get_full_name() or obj.condutor.utilizador.user.username
+        except Exception:
+            return None
+
+    def get_condutor_veiculo(self, obj):
+        try:
+            return obj.condutor.tipo_veiculo
+        except Exception:
+            return None
+
+    def get_condutor_id_field(self, obj):
+        try:
+            return obj.condutor.id
+        except Exception:
+            return None
+    
+    
+    
+    
 
 
 # ══════════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5">
 
-    <!-- Tabs — só mostra se não for condutor -->
+    <!-- Tabs -->
     <div v-if="!isCondutor" class="flex gap-1 bg-zinc-900 rounded-xl p-1 w-fit">
       <button v-for="tab in tabs" :key="tab.key"
         @click="activeTab = tab.key"
@@ -14,17 +14,28 @@
     <!-- ═══ TAB: ENTREGAS ═══ -->
     <div v-if="activeTab === 'entregas'">
 
-      <div class="flex flex-wrap gap-2 mb-4">
+      <!-- Filtros + limit -->
+      <div class="flex flex-wrap items-center gap-2 mb-4">
         <button v-for="f in filtrosEntrega" :key="f.value"
-          @click="filtroEntrega = f.value; fetchEntregas()"
+          @click="filtroEntrega = f.value; page = 1; fetchEntregas()"
           :class="['px-3 py-1.5 rounded-full text-xs font-semibold transition',
                    filtroEntrega === f.value ? f.active : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
           {{ f.label }}
         </button>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="text-xs text-zinc-500">Por página:</span>
+          <select v-model="limit" @change="page = 1; fetchEntregas()"
+            class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-red-500">
+            <option :value="10">10</option>
+            <option :value="20">20</option>
+            <option :value="50">50</option>
+          </select>
+          <span class="text-xs text-zinc-500">{{ totalCount }} entregas</span>
+        </div>
       </div>
 
       <div v-if="loadingEntregas" class="space-y-3">
-        <div v-for="n in 5" :key="n" class="h-24 bg-zinc-900 rounded-2xl animate-pulse"></div>
+        <div v-for="n in limit" :key="n" class="h-24 bg-zinc-900 rounded-2xl animate-pulse"></div>
       </div>
 
       <div v-else-if="entregas.length === 0"
@@ -51,38 +62,44 @@
               </div>
               <p class="text-xs text-zinc-500">{{ entrega.data_criacao }}</p>
             </div>
-
-            <!-- Condutor -->
             <div class="text-right flex-shrink-0">
               <p v-if="entrega.condutor_nome" class="text-xs font-semibold text-zinc-200">
                 🚗 {{ entrega.condutor_nome }}
               </p>
-              <p v-if="entrega.condutor_veiculo" class="text-[10px] text-zinc-500">
-                {{ entrega.condutor_veiculo }}
-              </p>
+              <p v-if="entrega.condutor_veiculo" class="text-[10px] text-zinc-500">{{ entrega.condutor_veiculo }}</p>
               <p v-if="!entrega.condutor_nome" class="text-xs text-zinc-600 italic">Sem condutor</p>
             </div>
           </div>
 
-          <!-- Detalhe encomenda -->
+          <!-- Contacto do cliente -->
+          <div v-if="entrega.comprador_nome || entrega.comprador_email || entrega.comprador_telefone"
+               class="border-t border-zinc-800 px-4 py-3 bg-zinc-800/30">
+            <p class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Cliente</p>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <span v-if="entrega.comprador_nome" class="text-zinc-300 font-semibold">
+                Nome: {{ entrega.comprador_nome }}
+              </span>
+              <a v-if="entrega.comprador_email" :href="`mailto:${entrega.comprador_email}`"
+                 class="text-zinc-300 hover:text-red-300 transition">Email: {{ entrega.comprador_email }}</a>
+              <a v-if="entrega.comprador_telefone" :href="`tel:${entrega.comprador_telefone}`"
+                 class="text-zinc-300 hover:text-red-300 transition">Contato: {{ entrega.comprador_telefone }}</a>
+            </div>
+          </div>
+
+          <!-- Detalhe -->
           <div class="border-t border-zinc-800 px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
             <div v-if="entrega.morada_entrega" class="col-span-2 flex gap-2">
-              <span class="text-zinc-500 flex-shrink-0">📍 Morada:</span>
+              <span class="text-zinc-500 flex-shrink-0">Morada:</span>
               <span class="text-zinc-300">{{ entrega.morada_entrega }}</span>
             </div>
             <div v-if="entrega.tipo_entrega" class="flex gap-2">
               <span class="text-zinc-500 flex-shrink-0">Tipo:</span>
-              <span class="text-zinc-300">
-                {{ entrega.tipo_entrega === 'entrega' ? '🚚 Domicílio' : '🏪 Levantamento' }}
-              </span>
+              <span class="text-zinc-300">{{ entrega.tipo_entrega === 'entrega' ? '🚚 Domicílio' : '🏪 Levantamento' }}</span>
             </div>
-            <!-- Opção de entrega com nome, tempo e preço -->
             <div v-if="entrega.opcao_entrega_nome" class="flex gap-2 col-span-2">
               <span class="text-zinc-500 flex-shrink-0">Opção:</span>
               <span class="text-zinc-300 font-semibold">{{ entrega.opcao_entrega_nome }}</span>
-              <span v-if="entrega.opcao_entrega_tempo" class="text-zinc-500">
-                · {{ entrega.opcao_entrega_tempo }}
-              </span>
+              <span v-if="entrega.opcao_entrega_tempo" class="text-zinc-500">· {{ entrega.opcao_entrega_tempo }}</span>
               <span v-if="entrega.opcao_entrega_preco" class="text-zinc-500">
                 · {{ parseFloat(entrega.opcao_entrega_preco) === 0 ? 'Gratuito' : '€' + entrega.opcao_entrega_preco }}
               </span>
@@ -95,7 +112,7 @@
               </span>
             </div>
             <div v-if="entrega.notas" class="col-span-2 flex gap-2">
-              <span class="text-zinc-500 flex-shrink-0">Notas:</span>
+              <span class="text-zinc-500 flex-shrink-0">📝 Notas:</span>
               <span class="text-zinc-300 italic">{{ entrega.notas }}</span>
             </div>
             <div v-if="entrega.data_entrega" class="col-span-2 text-green-400">
@@ -106,56 +123,70 @@
           <!-- Acções -->
           <div v-if="!['entregue'].includes(entrega.status)"
                class="border-t border-zinc-800 px-4 py-3 flex flex-wrap gap-2 items-center">
-
-            <!-- Condutor: a caminho + entregue + falhou -->
             <template v-if="isCondutor">
               <button v-if="entrega.status === 'atribuido'"
-                @click="atualizarEntrega(entrega, 'a_caminho')"
-                :disabled="loadingAcao === entrega.id"
+                @click="atualizarEntrega(entrega, 'a_caminho')" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 text-xs font-semibold transition">
                 🚗 A caminho
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
-                @click="atualizarEntrega(entrega, 'entregue')"
-                :disabled="loadingAcao === entrega.id"
+                @click="atualizarEntrega(entrega, 'entregue')" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-semibold transition">
                 ✓ Marcar entregue
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
-                @click="confirmarFalha(entrega)"
-                :disabled="loadingAcao === entrega.id"
+                @click="confirmarFalha(entrega)" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold transition">
                 ✗ Não consegui entregar
               </button>
             </template>
-
-            <!-- Dono/gestor/staff: reatribuir + concluir + cancelar entrega -->
             <template v-else>
               <button @click="abrirReatribuir(entrega)"
                 class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition">
                 {{ entrega.condutor_nome ? '↺ Reatribuir' : '+ Atribuir condutor' }}
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
-                @click="atualizarEntrega(entrega, 'entregue')"
-                :disabled="loadingAcao === entrega.id"
+                @click="atualizarEntrega(entrega, 'entregue')" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-semibold transition">
                 ✓ Concluir entrega
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
-                @click="confirmarFalha(entrega)"
-                :disabled="loadingAcao === entrega.id"
+                @click="confirmarFalha(entrega)" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold transition">
                 ✗ Cancelar entrega
               </button>
             </template>
-
-            <svg v-if="loadingAcao === entrega.id"
-                 class="animate-spin h-4 w-4 text-zinc-500 ml-auto"
-                 viewBox="0 0 24 24" fill="none">
+            <svg v-if="loadingAcao === entrega.id" class="animate-spin h-4 w-4 text-zinc-500 ml-auto" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
               <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
             </svg>
           </div>
+        </div>
+      </div>
+
+      <!-- Paginação -->
+      <div v-if="totalPages > 1" class="flex items-center justify-between pt-2">
+        <p class="text-xs text-zinc-500">
+          {{ (page - 1) * limit + 1 }}–{{ Math.min(page * limit, totalCount) }} de {{ totalCount }}
+        </p>
+        <div class="flex items-center gap-2">
+          <button @click="irParaPagina(page - 1)" :disabled="page <= 1"
+            class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition disabled:opacity-30">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button v-for="p in paginasVisiveis" :key="p" @click="irParaPagina(p)"
+            :class="['w-8 h-8 rounded-lg text-xs font-bold transition',
+                     p === page ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700']">
+            {{ p }}
+          </button>
+          <button @click="irParaPagina(page + 1)" :disabled="page >= totalPages"
+            class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition disabled:opacity-30">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -178,6 +209,12 @@
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold text-zinc-200">{{ c.utilizador_nome || c.utilizador_username }}</p>
             <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo não especificado' }}</p>
+            <div class="flex gap-3 mt-1">
+              <a v-if="c.utilizador_email" :href="`mailto:${c.utilizador_email}`"
+                 class="text-xs text-red-400 hover:text-red-300 transition">✉️ {{ c.utilizador_email }}</a>
+              <a v-if="c.utilizador_telefone" :href="`tel:${c.utilizador_telefone}`"
+                 class="text-xs text-red-400 hover:text-red-300 transition">📞 {{ c.utilizador_telefone }}</a>
+            </div>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs text-zinc-500">
@@ -209,6 +246,17 @@
           </button>
         </div>
 
+        <div v-if="modalReatribuir.comprador_nome || modalReatribuir.comprador_email || modalReatribuir.comprador_telefone"
+             class="bg-zinc-800/50 rounded-xl p-3 space-y-1 text-xs">
+          <p class="text-zinc-500 font-semibold mb-1">Cliente</p>
+          <p v-if="modalReatribuir.comprador_nome" class="text-zinc-300 font-semibold">👤 {{ modalReatribuir.comprador_nome }}</p>
+          <a v-if="modalReatribuir.comprador_email" :href="`mailto:${modalReatribuir.comprador_email}`"
+             class="text-red-400 hover:text-red-300 flex items-center gap-1">✉️ {{ modalReatribuir.comprador_email }}</a>
+          <a v-if="modalReatribuir.comprador_telefone" :href="`tel:${modalReatribuir.comprador_telefone}`"
+             class="text-red-400 hover:text-red-300 flex items-center gap-1">📞 {{ modalReatribuir.comprador_telefone }}</a>
+          <p v-if="modalReatribuir.morada_entrega" class="text-zinc-400 mt-1">📍 {{ modalReatribuir.morada_entrega }}</p>
+        </div>
+
         <div v-if="modalReatribuir.condutor_nome"
              class="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3 text-xs">
           <span class="text-zinc-500">Actual:</span>
@@ -219,9 +267,9 @@
         <div class="space-y-2 max-h-64 overflow-y-auto">
           <button v-for="c in condutores" :key="c.id"
             @click="novoCondutorId = c.id"
-            :disabled="c.id === modalReatribuir.condutor_id"
+            :disabled="c.id === modalReatribuir.condutor_id_field"
             :class="['w-full flex items-center gap-3 p-3 rounded-xl border-2 transition text-left',
-                     c.id === modalReatribuir.condutor_id
+                     c.id === modalReatribuir.condutor_id_field
                        ? 'border-zinc-700 opacity-40 cursor-not-allowed'
                        : novoCondutorId === c.id
                          ? 'border-red-500 bg-red-500/10'
@@ -232,14 +280,13 @@
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-zinc-200">{{ c.utilizador_nome || c.utilizador_username }}</p>
               <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo n/d' }}</p>
+              <p v-if="c.utilizador_telefone" class="text-xs text-zinc-600">📞 {{ c.utilizador_telefone }}</p>
             </div>
-            <span v-if="c.id === modalReatribuir.condutor_id" class="text-[10px] text-zinc-500">actual</span>
+            <span v-if="c.id === modalReatribuir.condutor_id_field" class="text-[10px] text-zinc-500">actual</span>
             <div v-else-if="novoCondutorId === c.id" class="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
           </button>
-          <p v-if="condutores.filter(c => c.id !== modalReatribuir.condutor_id).length === 0"
-             class="text-center py-4 text-zinc-500 text-sm">
-            Sem outros condutores disponíveis.
-          </p>
+          <p v-if="condutores.filter(c => c.id !== modalReatribuir.condutor_id_field).length === 0"
+             class="text-center py-4 text-zinc-500 text-sm">Sem outros condutores disponíveis.</p>
         </div>
 
         <div class="flex gap-3">
@@ -250,9 +297,7 @@
           <button @click="confirmarReatribuicao"
             :disabled="!novoCondutorId || loadingReatribuir"
             :class="['flex-1 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2',
-                     !novoCondutorId || loadingReatribuir
-                       ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                       : 'bg-red-600 hover:bg-red-500 text-white']">
+                     !novoCondutorId || loadingReatribuir ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500 text-white']">
             <svg v-if="loadingReatribuir" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
               <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
@@ -276,8 +321,7 @@
         <div>
           <h3 class="text-base font-bold text-zinc-100">Cancelar entrega?</h3>
           <p class="text-sm text-zinc-400 mt-1">
-            A encomenda <strong>#{{ modalFalha?.encomenda }}</strong> voltará ao estado <strong>"preparando"</strong>
-            para que possas atribuir outro condutor.
+            A encomenda <strong>#{{ modalFalha?.encomenda }}</strong> voltará ao estado <strong>"preparando"</strong>.
           </p>
         </div>
         <div class="flex gap-3">
@@ -285,8 +329,7 @@
             class="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
             Voltar
           </button>
-          <button @click="confirmarFalhaEntrega"
-            :disabled="loadingAcao === modalFalha?.id"
+          <button @click="confirmarFalhaEntrega" :disabled="loadingAcao === modalFalha?.id"
             class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition">
             Confirmar
           </button>
@@ -304,7 +347,7 @@ export default {
   name: 'BackofficeEntregas',
   props: {
     lojaId:    [String, Number],
-    minhaRole: { type: String, default: '' }, // role do utilizador logado nesta loja
+    minhaRole: { type: String, default: '' },
   },
 
   data () {
@@ -314,7 +357,10 @@ export default {
         { key: 'entregas',   label: '📦 Entregas'  },
         { key: 'condutores', label: '🚗 Condutores' },
       ],
-      entregas:         [],
+      entregas:      [],
+      totalCount:    0,
+      page:          1,
+      limit:         10,
       loadingEntregas:  false,
       filtroEntrega:    'todos',
       filtrosEntrega: [
@@ -326,7 +372,6 @@ export default {
       ],
       condutores:        [],
       loadingCondutores: false,
-      // modais
       modalReatribuir:   null,
       novoCondutorId:    null,
       loadingReatribuir: false,
@@ -336,7 +381,13 @@ export default {
   },
 
   computed: {
-    isCondutor () { return this.minhaRole === 'condutor' },
+    isCondutor ()  { return this.minhaRole === 'condutor' },
+    totalPages ()  { return Math.ceil(this.totalCount / this.limit) },
+    paginasVisiveis () {
+      const start = Math.max(1, this.page - 2)
+      const end   = Math.min(this.totalPages, this.page + 2)
+      return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+    },
   },
 
   async created () {
@@ -361,17 +412,27 @@ export default {
 
     entregasActivasDoCondutor (condutorId) {
       return this.entregas.filter(e =>
-        e.condutor_id === condutorId && !['entregue', 'falhou'].includes(e.status)
+        e.condutor_id_field === condutorId && !['entregue', 'falhou'].includes(e.status)
       ).length
+    },
+
+    irParaPagina (p) {
+      if (p < 1 || p > this.totalPages) return
+      this.page = p
+      this.fetchEntregas()
     },
 
     async fetchEntregas () {
       this.loadingEntregas = true
       try {
-        const params = {}
+        const params = {
+          limit:  this.limit,
+          offset: (this.page - 1) * this.limit,
+        }
         if (this.filtroEntrega !== 'todos') params.status = this.filtroEntrega
         const { data } = await api.get(`/app/loja/${this.lojaId}/entrega/lista/`, { params })
-        this.entregas = data.results || data
+        this.entregas   = data.results || data
+        this.totalCount = data.count ?? this.entregas.length
       } catch (e) { console.error(e) }
       finally { this.loadingEntregas = false }
     },
@@ -385,7 +446,6 @@ export default {
       finally { this.loadingCondutores = false }
     },
 
-    // ── Actualizar status entrega ────────────────────────────
     async atualizarEntrega (entrega, novoStatus) {
       this.loadingAcao = entrega.id
       try {
@@ -401,10 +461,7 @@ export default {
       finally { this.loadingAcao = null }
     },
 
-    // ── Falha / cancelar entrega ─────────────────────────────
-    confirmarFalha (entrega) {
-      this.modalFalha = entrega
-    },
+    confirmarFalha (entrega) { this.modalFalha = entrega },
 
     async confirmarFalhaEntrega () {
       if (!this.modalFalha) return
@@ -415,7 +472,6 @@ export default {
           `/app/loja/${this.lojaId}/encomendas/${this.modalFalha.encomenda}/entrega/atualizar/`,
           { status: 'falhou' }
         )
-        // actualiza localmente
         const entrega = this.entregas.find(e => e.id === entregaId)
         if (entrega) entrega.status = 'falhou'
         this.modalFalha = null
@@ -423,7 +479,6 @@ export default {
       finally { this.loadingAcao = null }
     },
 
-    // ── Reatribuir condutor ──────────────────────────────────
     abrirReatribuir (entrega) {
       this.modalReatribuir = entrega
       this.novoCondutorId  = null
@@ -441,10 +496,9 @@ export default {
         const condutor = this.condutores.find(c => c.id === this.novoCondutorId)
         const entrega  = this.entregas.find(e => e.id === this.modalReatribuir.id)
         if (entrega && condutor) {
-          entrega.condutor_id      = condutor.id
-          entrega.condutor_nome    = condutor.utilizador_nome || condutor.utilizador_username
-          entrega.condutor_veiculo = condutor.tipo_veiculo
-          // se estava falhou, volta a atribuido
+          entrega.condutor_id_field = condutor.id
+          entrega.condutor_nome     = condutor.utilizador_nome || condutor.utilizador_username
+          entrega.condutor_veiculo  = condutor.tipo_veiculo
           if (entregaFalhou) entrega.status = 'atribuido'
         }
         this.modalReatribuir = null

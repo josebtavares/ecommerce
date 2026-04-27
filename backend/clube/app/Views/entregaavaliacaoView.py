@@ -545,28 +545,26 @@ def avaliacao_apagar(request, loja_id, avaliacao_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def entrega_list_loja(request, loja_id):
-    """
-    GET /app/loja/<loja_id>/entrega/lista/?status=atribuido
-    - Dono/gestor/staff: vê todas as entregas
-    - Condutor: vê só as suas
-    """
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_entregas')
     if erro:
         return erro
- 
+
     qs = Entrega.objects.filter(
         encomenda__loja=loja
     ).select_related(
         'condutor__utilizador__user',
         'opcao_entrega',
+        'encomenda__comprador__user',
+        'encomenda__comprador',
         'encomenda__pagamento__metodo',
+        'encomenda__opcao_entrega',
     ).order_by('-data_criacao')
- 
+
     status_filtro = request.GET.get('status')
     if status_filtro:
         qs = qs.filter(status=status_filtro)
- 
+
     # condutor só vê as suas
     try:
         membro = UtilizadorLoja.objects.get(loja=loja, utilizador=request.user.utilizador, ativo=True)
@@ -576,43 +574,11 @@ def entrega_list_loja(request, loja_id):
                 qs = qs.filter(condutor=condutor)
     except UtilizadorLoja.DoesNotExist:
         pass
- 
-    def _metodo(e):
-        try:
-            return e.encomenda.pagamento.metodo.tipo
-        except Exception:
-            return None
- 
-    results = [
-        {
-            'id':                 e.id,
-            'encomenda':          e.encomenda_id,
-            'status':             e.status,
-            # condutor
-            'condutor_id':        e.condutor_id,
-            'condutor_nome':      e.condutor.utilizador.nome if e.condutor else None,
-            'condutor_username':  e.condutor.utilizador.user.username if e.condutor else None,
-            'condutor_veiculo':   e.condutor.tipo_veiculo if e.condutor else None,
-            # opção entrega
-            'opcao_entrega_nome':  (e.opcao_entrega or e.encomenda.opcao_entrega).nome
-                           if (e.opcao_entrega or e.encomenda.opcao_entrega) else None,
-            'opcao_entrega_tempo': (e.opcao_entrega or e.encomenda.opcao_entrega).tempo_estimado
-                           if (e.opcao_entrega or e.encomenda.opcao_entrega) else None,
-            'opcao_entrega_preco': str((e.opcao_entrega or e.encomenda.opcao_entrega).preco)
-                           if (e.opcao_entrega or e.encomenda.opcao_entrega) else None,
-            # detalhe encomenda — para o condutor ver
-            'morada_entrega':     e.encomenda.morada_entrega,
-            'tipo_entrega':       e.encomenda.tipo_entrega,
-            'notas':              e.encomenda.notas,
-            'metodo_pagamento':   _metodo(e),
-            # datas
-            'data_criacao':       e.data_criacao.strftime('%d-%m-%Y %H:%M'),
-            'data_entrega':       e.data_entrega.strftime('%d-%m-%Y %H:%M') if e.data_entrega else None,
-        }
-        for e in qs
-    ]
- 
-    return Response({'count': len(results), 'results': results})
+
+    response, erro = paginar(request, qs, EntregaSerializer, limit_default=10)
+    if erro:
+        return erro
+    return response
 
 
 @api_view(['GET'])
