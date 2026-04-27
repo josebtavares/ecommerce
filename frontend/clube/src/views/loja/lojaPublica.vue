@@ -26,11 +26,10 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/services/api'
-import { TEMPLATE_COMPONENTS, TEMPLATES } from '@/config/lojaTemplates'
+import { getTemplate, TEMPLATE_COMPONENTS } from '@/config/lojaTemplates'
 
-// Fallback: template clássico
-const FALLBACK_ID      = 'classico'
-const FALLBACK_TEMA    = { id: FALLBACK_ID, corPrimaria: '#dc2626', corSecundaria: '#1c1c1e', darkMode: true }
+const FALLBACK_ID   = 'classico'
+const FALLBACK_TEMA = { id: FALLBACK_ID, corPrimaria: '#dc2626', corSecundaria: '#1c1c1e', darkMode: true }
 
 export default {
   name: 'LojaPublica',
@@ -41,38 +40,23 @@ export default {
     const templateComponent = ref(null)
     const temaActivo        = ref(null)
 
-    // Devolve o loader lazy para um templateId, com fallback para 'classico'
-    function getLoader (templateId) {
-      return TEMPLATE_COMPONENTS[templateId] ?? TEMPLATE_COMPONENTS[FALLBACK_ID]
-    }
-
-    // Defaults de cor/modo a partir da config estática (sem precisar de API)
-    function defaultsForTemplate (templateId) {
-      const config = TEMPLATES.find(t => t.id === templateId)
-      return {
-        corPrimaria:   config?.primaryDefault   ?? '#dc2626',
-        corSecundaria: config?.secundariaDefault ?? '#1c1c1e',
-        darkMode:      config?.darkDefault       ?? true,
-      }
-    }
-
     async function resolveTemplate (lojaId) {
-      loadingTemplate.value = true
+      loadingTemplate.value   = true
+      templateComponent.value = null
 
       try {
-        // ── 1. Lê cache local (resposta imediata enquanto espera API) ──────────
+        // ── 1. Cache local (resposta imediata enquanto a API carrega) ──────────
         const cacheKey = `loja_template_${lojaId}`
-        const cached   = localStorage.getItem(cacheKey)
-        let cached_    = cached ? JSON.parse(cached) : null
+        const cached_  = localStorage.getItem(cacheKey)
+        const cached   = cached_ ? JSON.parse(cached_) : null
 
-        let templateId    = cached_?.templateId    ?? FALLBACK_ID
-        let corPrimaria   = cached_?.corPrimaria   ?? FALLBACK_TEMA.corPrimaria
-        let corSecundaria = cached_?.corSecundaria ?? FALLBACK_TEMA.corSecundaria
-        let darkModeDB    = cached_?.darkMode      ?? true
+        let templateId    = cached?.templateId    ?? FALLBACK_ID
+        let corPrimaria   = cached?.corPrimaria   ?? FALLBACK_TEMA.corPrimaria
+        let corSecundaria = cached?.corSecundaria ?? FALLBACK_TEMA.corSecundaria
+        let darkModeDB    = cached?.darkMode      ?? true
 
         // ── 2. Fonte de verdade: API ──────────────────────────────────────────
         const { data } = await api.get(`/app/loja/${lojaId}/`)
-
         templateId    = data.template_id    || templateId
         corPrimaria   = data.cor_primaria   || corPrimaria
         corSecundaria = data.cor_secundaria || corSecundaria
@@ -84,27 +68,36 @@ export default {
         }))
 
         // ── 4. Preferência dark/light do UTILIZADOR (tem prioridade sobre BD) ─
-        const userDarkKey = `user_dark_${lojaId}`
-        const userDark    = localStorage.getItem(userDarkKey)
-        const darkMode    = userDark !== null ? userDark === 'true' : darkModeDB
+        const userDark = localStorage.getItem(`user_dark_${lojaId}`)
+        const darkMode = userDark !== null ? userDark === 'true' : darkModeDB
 
         temaActivo.value = { id: templateId, corPrimaria, corSecundaria, darkMode }
 
-        // ── 5. Carrega componente via TEMPLATE_COMPONENTS (lazy import) ───────
-        const loader = getLoader(templateId)
-        const mod    = await loader()
+        // ── 5. Carrega componente ─────────────────────────────────────────────
+        // Tenta TEMPLATE_COMPONENTS primeiro (novo mapa directo),
+        // depois cai em getTemplate() para compatibilidade com código legado.
+        const loader = TEMPLATE_COMPONENTS?.[templateId]
+          ?? getTemplate(templateId)?.component
+          ?? TEMPLATE_COMPONENTS?.[FALLBACK_ID]
+
+        if (!loader) throw new Error(`Loader não encontrado para template: ${templateId}`)
+
+        const mod = await loader()
         templateComponent.value = mod.default
 
       } catch (e) {
         console.error('Erro ao carregar template da loja:', e)
 
-        // Fallback: tenta carregar o clássico
+        // Fallback: carrega o clássico directamente
         try {
-          const mod = await TEMPLATE_COMPONENTS[FALLBACK_ID]()
+          const fallbackLoader = TEMPLATE_COMPONENTS?.[FALLBACK_ID]
+            ?? getTemplate(FALLBACK_ID)?.component
+          const mod = await fallbackLoader()
           templateComponent.value = mod.default
           temaActivo.value = { ...FALLBACK_TEMA }
         } catch (e2) {
           console.error('Erro ao carregar template fallback:', e2)
+          // templateComponent fica null → mostra "Loja não encontrada"
         }
       } finally {
         loadingTemplate.value = false
