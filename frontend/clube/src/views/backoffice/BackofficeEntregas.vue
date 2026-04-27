@@ -77,19 +77,19 @@
             <p class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Cliente</p>
             <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
               <span v-if="entrega.comprador_nome" class="text-zinc-300 font-semibold">
-                👤 {{ entrega.comprador_nome }}
+                Nome:{{ entrega.comprador_nome }}
               </span>
               <a v-if="entrega.comprador_email" :href="`mailto:${entrega.comprador_email}`"
-                 class="text-red-400 hover:text-red-300 transition">✉️ {{ entrega.comprador_email }}</a>
+                 class="text-red-400 hover:text-red-300 transition">Email:{{ entrega.comprador_email }}</a>
               <a v-if="entrega.comprador_telefone" :href="`tel:${entrega.comprador_telefone}`"
-                 class="text-red-400 hover:text-red-300 transition">📞 {{ entrega.comprador_telefone }}</a>
+                 class="text-red-400 hover:text-red-300 transition">Contato:{{ entrega.comprador_telefone }}</a>
             </div>
           </div>
 
           <!-- Detalhe -->
           <div class="border-t border-zinc-800 px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
             <div v-if="entrega.morada_entrega" class="col-span-2 flex gap-2">
-              <span class="text-zinc-500 flex-shrink-0">📍 Morada:</span>
+              <span class="text-zinc-500 flex-shrink-0">Morada:</span>
               <span class="text-zinc-300">{{ entrega.morada_entrega }}</span>
             </div>
             <div v-if="entrega.tipo_entrega" class="flex gap-2">
