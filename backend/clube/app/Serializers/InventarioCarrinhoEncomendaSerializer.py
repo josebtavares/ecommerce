@@ -132,6 +132,9 @@ class EncomendaSerializer(serializers.ModelSerializer):
     opcao_entrega_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     entrega_condutor = serializers.SerializerMethodField()
     entrega_status   = serializers.SerializerMethodField()
+    comprador_nome     = serializers.CharField(source='comprador.user.get_full_name', read_only=True)
+    comprador_email    = serializers.CharField(source='comprador.user.email', read_only=True)
+    comprador_telefone = serializers.CharField(source='comprador.telefone', read_only=True)
  
     class Meta:
         model  = Encomenda
@@ -154,6 +157,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'opcao_entrega_id',
             'entrega_condutor', 
             'entrega_status',
+            'comprador_nome', 'comprador_email', 'comprador_telefone',
         ]
         read_only_fields = [
             'comprador', 'loja', 'valor_total',
@@ -222,6 +226,12 @@ class EncomendaSerializer(serializers.ModelSerializer):
             return obj.entrega.status
         except Exception:
             return None
+        
+    def get_comprador_nome(self, obj):
+        try:
+            return obj.comprador.user.get_full_name() or obj.comprador.user.username
+        except Exception:
+            return None
 
 
 class EncomendaMiniSerializer(serializers.ModelSerializer):
@@ -232,6 +242,9 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
     comissao_valor     = serializers.SerializerMethodField()
     comissao_percentagem = serializers.SerializerMethodField()
     receita_liquida    = serializers.SerializerMethodField()
+    comprador_nome     = serializers.CharField(source='comprador.user.get_full_name', read_only=True)
+    comprador_email    = serializers.CharField(source='comprador.user.email', read_only=True)
+    comprador_telefone = serializers.CharField(source='comprador.telefone', read_only=True)
  
     class Meta:
         model  = Encomenda
@@ -246,6 +259,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             'comissao_percentagem',
             'receita_liquida',
             'data_criacao',
+            'comprador_nome', 'comprador_email', 'comprador_telefone',
         ]
  
     def get_metodo_pagamento(self, obj):
@@ -271,6 +285,12 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             return str(obj.valor_total - obj.comissao.valor_comissao)
         except Exception:
             return str(obj.valor_total)
+        
+    def get_comprador_nome(self, obj):
+        try:
+            return obj.comprador.user.get_full_name() or obj.comprador.user.username
+        except Exception:
+            return None
 
 
 class AtualizarStatusEncomendaSerializer(serializers.ModelSerializer):
