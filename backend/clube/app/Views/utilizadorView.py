@@ -506,13 +506,13 @@ def google_callback(request):
     try:
         utilizador = user.utilizador
         # marcar como verificado se ainda não estava
-        if not utilizador.verificado:
-            utilizador.verificado = True
-            utilizador.save(update_fields=['verificado'])
+        # if not utilizador.verificado:
+        #     utilizador.verificado = True
+        #     utilizador.save(update_fields=['verificado'])
     except Utilizador.DoesNotExist:
         utilizador = Utilizador.objects.create(
             user=user,
-            verificado=True,
+            verificado=False,
         )
         # Download da foto do Google
         if foto_url:
