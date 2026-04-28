@@ -66,7 +66,7 @@
     </template>
 
     <!-- ── MODA BOUTIQUE ── -->
-    <template v-else-if="id === 'moda-boutique'">
+    <template v-else-if="id === 'moda_boutique'">
       <div style="position:absolute;inset:0;display:flex">
         <div style="width:52%;position:relative;overflow:hidden">
           <div class="abs stripe" style="background:rgba(10,8,5,0.45)"></div>
@@ -89,7 +89,7 @@
     </template>
 
     <!-- ── MODA EDITORIAL ── -->
-    <template v-else-if="id === 'moda-editorial'">
+    <template v-else-if="id === 'moda_editorial'">
       <div style="position:absolute;inset:0;display:grid;grid-template-columns:3fr 2fr">
         <div style="position:relative;overflow:hidden">
           <div class="abs stripe" style="background:rgba(9,9,11,0.25)"></div>
@@ -111,7 +111,7 @@
     </template>
 
     <!-- ── RESTAURANTE BISTRO ── -->
-    <template v-else-if="id === 'restaurante-bistro'">
+    <template v-else-if="id === 'restaurante_bistro'">
       <div style="position:absolute;top:0;left:0;right:0;height:44%">
         <div class="abs stripe light" style="background:rgba(26,20,16,0.3)"></div>
         <div class="abs" style="background:linear-gradient(to bottom,transparent 40%,#fdf6ec)"></div>
@@ -138,7 +138,7 @@
     </template>
 
     <!-- ── RESTAURANTE MODERNO ── -->
-    <template v-else-if="id === 'restaurante-moderno'">
+    <template v-else-if="id === 'restaurante_moderno'">
       <div class="abs stripe" style="background:rgba(9,9,11,0.65)"></div>
       <div class="abs" style="background:radial-gradient(ellipse at center,transparent 30%,rgba(9,9,11,0.7) 100%)"></div>
       <div class="abs" style="bottom:0;left:0;right:0;height:65%;background:linear-gradient(to top,#09090b,transparent)"></div>
@@ -165,7 +165,7 @@
     </template>
 
     <!-- ── TECH STORE ── -->
-    <template v-else-if="id === 'tech-store'">
+    <template v-else-if="id === 'tech_store'">
       <div class="abs" style="opacity:0.07;background-image:linear-gradient(to right,#06b6d4 1px,transparent 1px),linear-gradient(to bottom,#06b6d4 1px,transparent 1px);background-size:18px 18px"></div>
       <div class="abs" style="top:-20px;right:-20px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,rgba(6,182,212,0.3),transparent);pointer-events:none"></div>
       <div class="abs stripe" style="opacity:0.1;background:rgba(0,0,0,0)"></div>
@@ -242,7 +242,7 @@
     </template>
 
     <!-- ── LUXO PREMIUM ── -->
-    <template v-else-if="id === 'luxo-premium'">
+    <template v-else-if="id === 'luxo_premium'">
       <div class="abs" style="inset:0;background:#030303"></div>
       <div class="abs stripe" style="opacity:0.04;background:rgba(0,0,0,0)"></div>
       <div :style="{ position:'absolute',top:'-30px',left:'50%',transform:'translateX(-50%)',width:'160px',height:'160px',borderRadius:'50%',background:'radial-gradient(circle,rgba(201,168,76,0.12),transparent)',pointerEvents:'none' }"></div>
@@ -312,14 +312,14 @@ export default {
       const map = {
         'classico':            '#09090b',
         'minimalista':         '#1c1917',
-        'moda-boutique':       '#0a0805',
-        'moda-editorial':      '#09090b',
-        'restaurante-bistro':  '#fdf6ec',
-        'restaurante-moderno': '#09090b',
-        'tech-store':          '#020617',
+        'moda_boutique':       '#0a0805',
+        'moda_editorial':      '#09090b',
+        'restaurante_bistro':  '#fdf6ec',
+        'restaurante_moderno': '#09090b',
+        'tech_store':          '#020617',
         'vibrante':            '#09090b',
         'natureza':            '#051a0a',
-        'luxo-premium':        '#030303',
+        'luxo_premium':        '#030303',
         'desporto':            '#0a0a0a',
       }
       return map[this.id] || '#111113'
