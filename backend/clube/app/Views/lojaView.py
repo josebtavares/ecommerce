@@ -90,8 +90,18 @@ def loja_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def loja_get(request, id):
-    """GET /app/loja/<id>/"""
-    loja = get_object_or_404(Loja, id=id, ativa=True)
+    loja = get_object_or_404(Loja, id=id)
+    
+    # loja inactiva — só o dono/staff pode ver
+    if not loja.ativa:
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Loja não encontrada.'}, status=404)
+        membro = UtilizadorLoja.objects.filter(
+            loja=loja, utilizador=request.user.utilizador, ativo=True
+        ).first()
+        if not membro and not request.user.is_staff:
+            return Response({'detail': 'Loja não encontrada.'}, status=404)
+    
     return Response(LojaPublicSerializer(loja, context={'request': request}).data)
 
 
@@ -465,7 +475,7 @@ def categoria_list(request):
 def metodos_pagamento_publico(request, loja_id):
     """GET /app/loja/<loja_id>/pagamento/metodos/"""
     from ..models import MetodoPagamento
-    loja = get_object_or_404(Loja, id=loja_id, ativa=True)
+    loja = get_object_or_404(Loja, id=loja_id)
     metodos = MetodoPagamento.objects.filter(loja=loja, ativo=True)
     return Response([{'id': m.id, 'tipo': m.tipo, 'ativo': m.ativo} for m in metodos])
 
