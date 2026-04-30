@@ -115,11 +115,13 @@
           <button @click="submeter"
             :disabled="!form.pontuacao || loadingSubmeter"
             :class="[
-              'flex-1 py-2.5 text-sm font-bold transition flex items-center justify-center gap-2',
+              'px-4 py-2.5 text-sm font-bold transition flex items-center justify-center gap-2',
               buttonBorderRadius,
               !form.pontuacao || loadingSubmeter
                 ? disabledButtonClass
-                : submitButtonClass
+                : submitButtonClass.includes('editorial') 
+                  ? 'avaliacao-btn-primary w-full justify-center'
+                  : submitButtonClass
             ]">
             <svg v-if="loadingSubmeter" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
@@ -248,7 +250,7 @@ export default {
     remainingBadgeClass: { type: String, default: 'bg-zinc-700 text-zinc-400' },
     
     // Buttons
-    submitButtonClass:   { type: String, default: 'bg-red-600 hover:bg-red-500 text-white' },
+    submitButtonClass:   { type: String, default: 'bg-red-600 hover:bg-red-500 text-white disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed' },
     disabledButtonClass: { type: String, default: 'bg-zinc-700 text-zinc-500 cursor-not-allowed' },
     deleteButtonClass:   { type: String, default: 'bg-red-500/10 hover:bg-red-500/20 text-red-400' },
     loadMoreButtonClass: { type: String, default: 'rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200' },
@@ -307,7 +309,7 @@ export default {
     },
 
     mediaFormatada () {
-      return this.media ? this.media.toFixed(1) : '—'
+      return this.media ? parseFloat(this.media.toFixed(1)) : '—'
     },
 
     contagem () {
@@ -458,3 +460,25 @@ export default {
   },
 }
 </script>
+
+<style>
+/* Button styling that uses accent color from parent editorial context */
+.avaliacao-btn-primary {
+  background: var(--accent, #c8ff00);
+  color: var(--bg, #0a0a0a);
+  font-weight: 800;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.avaliacao-btn-primary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.avaliacao-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>

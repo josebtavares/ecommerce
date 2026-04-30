@@ -128,7 +128,7 @@
             <div class="editorial-hero__stats">
               <div v-if="loja.rating_medio">
                 <div class="editorial-hero__stat-val editorial-hero__stat-val--ac">
-                  {{ loja.rating_medio }}
+                  {{ ratingFormatted }}
                 </div>
                 <div class="editorial-hero__stat-label">Rating</div>
               </div>
@@ -624,6 +624,11 @@ export default {
       return parts.slice(1).join(' ')
     })
 
+    const ratingFormatted = computed(() => {
+      if (!lojaData.loja?.value?.rating_medio) return '—'
+      return parseFloat(lojaData.loja.value.rating_medio.toFixed(1))
+    })
+
     function toggleDark() {
       isDark.value = !isDark.value
       emit('toggle-dark', isDark.value)
@@ -666,6 +671,7 @@ export default {
       currentYear,
       firstWord,
       restWords,
+      ratingFormatted,
       toggleDark,
       ...lojaData,
     }
