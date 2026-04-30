@@ -937,7 +937,7 @@ export default {
 .editorial-btn-primary {
   padding: 12px 28px;
   background: var(--accent);
-  color: #0a0a0a;
+  color: var(--bg);
   font-family: var(--font-head);
   font-size: 12px;
   font-weight: 800;
