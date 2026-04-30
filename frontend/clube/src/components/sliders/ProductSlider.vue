@@ -1,5 +1,5 @@
 <template>
-  <div v-if="produtos.length > 0 || loading" :class="['mb-10', containerClass]">
+  <div v-if="produtos.length > 0 || loading" :class="['mb-10 relative', containerClass]">
     <!-- Header -->
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
@@ -30,73 +30,105 @@
            :style="{ width: cardWidth, height: cardHeight }"></div>
     </div>
 
-    <!-- Swiper -->
-    <swiper v-else ref="swiperRef" :slides-per-view="'auto'" :space-between="cardGap"
-            :modules="swiperModules" class="pb-3" @reach-end="loadMore">
-      <swiper-slide v-for="produto in produtos" :key="produto.id" :style="{ width: cardWidth }">
-        <div @click="$emit('product-click', produto)"
-             :class="[
-               'group overflow-hidden border transition-all cursor-pointer',
-               cardBorderRadius,
-               hoverEffect,
-               isDark
-                 ? `bg-zinc-900 border-zinc-800 ${hoverBorderClass || 'hover:border-red-500/40'}`
-                 : `bg-white border-gray-200 ${hoverBorderClass || 'hover:border-red-400/50'} shadow-sm`,
-               cardClass
-             ]">
-          <!-- Image -->
-          <div :class="['relative overflow-hidden', imageContainerClass]" :style="{ height: imageHeight }">
-            <img :src="produto.ficheiro_url || defaultImg" :alt="produto.nome"
-                 :class="[
-                   'w-full h-full object-cover transition-transform duration-300',
-                   imageHoverEffect
-                 ]" />
-            <span v-if="produto.destaque && showBadges"
-                  :class="['absolute top-2 right-2 px-1.5 py-0.5 text-white text-[10px] font-bold', badgeClass]">
-              {{ badgeText }}
-            </span>
-            <div v-if="produto.stock && produto.stock.quantidade === 0"
-                 class="absolute inset-0 bg-black/60 flex items-center justify-center text-xs font-bold text-zinc-300">
-              Sem stock
-            </div>
-          </div>
-          <!-- Info -->
-          <div :class="['p-3', contentClass]">
-            <p :class="[
-              'font-semibold truncate',
-              productNameSize,
-              isDark ? 'text-zinc-100' : 'text-zinc-900',
-              productNameClass
-            ]">{{ produto.nome }}</p>
-            <p v-if="showStoreName" :class="[
-              'text-xs mt-0.5 truncate',
-              isDark ? 'text-zinc-500' : 'text-zinc-400',
-              storeNameClass
-            ]">
-              {{ produto.loja?.nome }}
-            </p>
-            <div class="flex items-center justify-between mt-2">
-              <span :class="['font-bold', priceSize, priceClass]">{{ formatPrice(produto.preco) }}</span>
-              <span v-if="produto.stock && showStock" :class="[
-                'text-[10px]',
-                isDark ? 'text-zinc-600' : 'text-zinc-400'
-              ]">
-                {{ produto.stock.quantidade }} un.
+    <!-- Slider Container -->
+    <div class="relative group" v-else>
+      <!-- Swiper -->
+      <swiper ref="swiperRef" :slides-per-view="'auto'" :space-between="cardGap"
+              :modules="swiperModules" class="pb-3" @reach-end="loadMore">
+        <swiper-slide v-for="produto in produtos" :key="produto.id" :style="{ width: cardWidth }">
+          <div @click="$emit('product-click', produto)"
+               :class="[
+                 'group overflow-hidden border transition-all cursor-pointer',
+                 cardBorderRadius,
+                 hoverEffect,
+                 isDark
+                   ? `bg-zinc-900 border-zinc-800 ${hoverBorderClass || 'hover:border-red-500/40'}`
+                   : `bg-white border-gray-200 ${hoverBorderClass || 'hover:border-red-400/50'} shadow-sm`,
+                 cardClass
+               ]">
+            <!-- Image -->
+            <div :class="['relative overflow-hidden', imageContainerClass]" :style="{ height: imageHeight }">
+              <img :src="produto.ficheiro_url || defaultImg" :alt="produto.nome"
+                   :class="[
+                     'w-full h-full object-cover transition-transform duration-300',
+                     imageHoverEffect
+                   ]" />
+              <span v-if="produto.destaque && showBadges"
+                    :class="['absolute top-2 right-2 px-1.5 py-0.5 text-white text-[10px] font-bold', badgeClass]">
+                {{ badgeText }}
               </span>
+              <div v-if="produto.stock && produto.stock.quantidade === 0"
+                   class="absolute inset-0 bg-black/60 flex items-center justify-center text-xs font-bold text-zinc-300">
+                Sem stock
+              </div>
+            </div>
+            <!-- Info -->
+            <div :class="['p-3', contentClass]">
+              <p :class="[
+                'font-semibold truncate',
+                productNameSize,
+                isDark ? 'text-zinc-100' : 'text-zinc-900',
+                productNameClass
+              ]">{{ produto.nome }}</p>
+              <p v-if="showStoreName" :class="[
+                'text-xs mt-0.5 truncate',
+                isDark ? 'text-zinc-500' : 'text-zinc-400',
+                storeNameClass
+              ]">
+                {{ produto.loja?.nome }}
+              </p>
+              <div class="flex items-center justify-between mt-2">
+                <span :class="['font-bold', priceSize, priceClass]">{{ formatPrice(produto.preco) }}</span>
+                <span v-if="produto.stock && showStock" :class="[
+                  'text-[10px]',
+                  isDark ? 'text-zinc-600' : 'text-zinc-400'
+                ]">
+                  {{ produto.stock.quantidade }} un.
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </swiper-slide>
+        </swiper-slide>
 
-      <swiper-slide v-if="loadingMore" :style="{ width: cardWidth }">
-        <div :class="[
-          'animate-pulse flex-shrink-0',
-          skeletonClass,
-          isDark ? 'bg-zinc-800' : 'bg-gray-200'
-        ]" :style="{ width: cardWidth, height: cardHeight }"></div>
-      </swiper-slide>
-    </swiper>
-  </div>
+        <swiper-slide v-if="loadingMore" :style="{ width: cardWidth }">
+          <div :class="[
+            'animate-pulse flex-shrink-0',
+            skeletonClass,
+            isDark ? 'bg-zinc-800' : 'bg-gray-200'
+          ]" :style="{ width: cardWidth, height: cardHeight }"></div>
+        </swiper-slide>
+      </swiper>
+
+      <!-- Left Arrow Button -->
+      <button @click="slidePrev"
+              :class="[
+                'absolute left-0 top-1/2 -translate-y-1/2 -translate-x-12 z-10',
+                'w-9 h-9 rounded-full flex items-center justify-center transition',
+                'opacity-0 group-hover:opacity-100',
+                isDark
+                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                  : 'bg-gray-200 hover:bg-gray-300 text-zinc-700'
+              ]">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      <!-- Right Arrow Button -->
+      <button @click="slideNext"
+              :class="[
+                'absolute right-0 top-1/2 -translate-y-1/2 translate-x-12 z-10',
+                'w-9 h-9 rounded-full flex items-center justify-center transition',
+                'opacity-0 group-hover:opacity-100',
+                isDark
+                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                  : 'bg-gray-200 hover:bg-gray-300 text-zinc-700'
+              ]">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
 </template>
 
 <script>
@@ -192,6 +224,8 @@ export default {
       finally { this.loading = false; this.loadingMore = false }
     },
     loadMore () { if (!this.reachedEnd && !this.loadingMore) this.fetch(false) },
+    slidePrev () { this.$refs.swiperRef?.swiper.slidePrev() },
+    slideNext () { this.$refs.swiperRef?.swiper.slideNext() },
   }
 }
 </script>
