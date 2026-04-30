@@ -764,9 +764,9 @@ export default {
   inset: 0;
   background:
     linear-gradient(to bottom, rgba(10,10,10,0.2) 0%, rgba(10,10,10,0.88) 100%),
-    var(--bg) center/contain no-repeat;
+    var(--bg) center top / 100% auto no-repeat;
   transform: scale(1);
-  transition: transform 14s ease-out;
+  transition: none;
 }
 
 .editorial-hero__bg--loaded {
