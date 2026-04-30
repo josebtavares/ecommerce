@@ -43,11 +43,12 @@
            HERO
       ══════════════════════════════════════════ -->
       <section class="editorial-hero" ref="heroRef">
-        <div
-          class="editorial-hero__bg"
-          :style="{ backgroundImage: `url(${loja.banner_url || backendUrl + '/media/lojas/default_banner.jpg'})` }"
-          :class="{ 'editorial-hero__bg--loaded': bgLoaded }"
-        ></div>
+        <img
+          :src="loja.banner_url || backendUrl + '/media/lojas/default_banner.jpg'"
+          :alt="loja.nome"
+          class="editorial-hero__img"
+        />
+        <div class="editorial-hero__overlay"></div>
 
         <!-- Nav -->
         <nav class="editorial-hero__nav">
@@ -600,7 +601,6 @@ export default {
 
   setup(props, { emit }) {
     const isDark = ref(props.tema?.darkMode !== false)
-    const bgLoaded = ref(false)
     const activeSection = ref('edit-sobre')
     const lojaData = useLojaData()
 
@@ -651,10 +651,6 @@ export default {
     }
 
     onMounted(() => {
-      setTimeout(() => {
-        bgLoaded.value = true
-      }, 120)
-
       setupSectionObserver()
     })
 
@@ -664,7 +660,6 @@ export default {
 
     return {
       isDark,
-      bgLoaded,
       activeSection,
       cssVars,
       user,
@@ -759,18 +754,19 @@ export default {
   flex-direction: column;
 }
 
-.editorial-hero__bg {
+.editorial-hero__img {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(to bottom, rgba(10,10,10,0.2) 0%, rgba(10,10,10,0.88) 100%),
-    var(--bg) center top / 100% auto no-repeat;
-  transform: scale(1);
-  transition: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.editorial-hero__bg--loaded {
-  transform: scale(1);
+.editorial-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(10,10,10,0.2) 0%, rgba(10,10,10,0.88) 100%);
+  pointer-events: none;
 }
 
 .editorial-hero__nav {
