@@ -4,45 +4,91 @@
      Acento configurável via --cor-primaria (default: #c8ff00 limão)
 -->
 <template>
-  <div class="editorial-root transition-colors duration-500"
-       :class="isDark ? 'dark' : 'light'"
-       :style="cssVars">
-
-    <ProductInfoCard :produto="selectedProduct" :loja="loja" :isDark="isDark"
+  <div
+    class="editorial-root transition-colors duration-500"
+    :class="isDark ? 'dark' : 'light'"
+    :style="cssVars"
+  >
+    <ProductInfoCard
+      :produto="selectedProduct"
+      :loja="loja"
+      :isDark="isDark"
       @close="selectedProduct = null"
-      @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
+      @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)"
+    />
+
     <MultiCart ref="cart" :isDark="isDark" />
-    <Profile :data="user" :isDark="isDark" class="z-40" @log_out="logOut()" />
+
+    <Profile
+      :data="user"
+      :isDark="isDark"
+      class="z-40"
+      @log_out="logOut()"
+    />
 
     <!-- Loading -->
     <div v-if="loading" class="editorial-loading">
       <div class="editorial-loading__bars">
-        <div v-for="i in 5" :key="i" class="editorial-loading__bar"
-             :style="{ animationDelay: (i * 0.12) + 's' }"></div>
+        <div
+          v-for="i in 5"
+          :key="i"
+          class="editorial-loading__bar"
+          :style="{ animationDelay: (i * 0.12) + 's' }"
+        ></div>
       </div>
     </div>
 
     <template v-else-if="loja">
-
       <!-- ══════════════════════════════════════════
            HERO
       ══════════════════════════════════════════ -->
       <section class="editorial-hero" ref="heroRef">
-        <div class="editorial-hero__bg"
-             :style="{ backgroundImage: `url(${loja.banner_url || backendUrl + '/media/lojas/default_banner.jpg'})` }"
-             :class="{ 'editorial-hero__bg--loaded': bgLoaded }">
-        </div>
+        <div
+          class="editorial-hero__bg"
+          :style="{ backgroundImage: `url(${loja.banner_url || backendUrl + '/media/lojas/default_banner.jpg'})` }"
+          :class="{ 'editorial-hero__bg--loaded': bgLoaded }"
+        ></div>
 
         <!-- Nav -->
         <nav class="editorial-hero__nav">
-          <button @click="$router.back()" class="editorial-hero__back">← Voltar</button>
-          <div class="editorial-hero__controls">
+          <div class="editorial-hero__left-controls">
+            <button @click="$router.back()" class="editorial-hero__back">
+              ← Voltar
+            </button>
+
             <button @click="toggleDark" class="editorial-btn-icon">
-              <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              <svg
+                v-if="isDark"
+                xmlns="http://www.w3.org/2000/svg"
+                width="13"
+                height="13"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                />
               </svg>
-              <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z" />
+
+              <svg
+                v-else
+                xmlns="http://www.w3.org/2000/svg"
+                width="13"
+                height="13"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z"
+                />
               </svg>
             </button>
           </div>
@@ -52,7 +98,9 @@
         <div class="editorial-hero__content">
           <div class="editorial-hero__issue">
             <div class="editorial-hero__issue-line"></div>
-            <span class="editorial-hero__issue-label">{{ loja.categoria }} · {{ loja.localizacao || 'PT' }} · AW25</span>
+            <span class="editorial-hero__issue-label">
+              {{ loja.categoria }} · {{ loja.localizacao || 'PT' }} · AW25
+            </span>
           </div>
 
           <h1 class="editorial-hero__title">
@@ -65,22 +113,37 @@
               <p v-if="loja.descricao" class="editorial-hero__desc">
                 {{ loja.descricao.substring(0, 150) }}{{ loja.descricao.length > 150 ? '…' : '' }}
               </p>
+
               <div class="editorial-hero__ctas">
-                <button @click="scrollToId('edit-colecao')" class="editorial-btn-primary">Ver Coleção →</button>
-                <button @click="scrollToId('edit-catalogo')" class="editorial-btn-ghost">Catálogo</button>
+                <button @click="scrollToId('edit-colecao')" class="editorial-btn-primary">
+                  Ver Coleção →
+                </button>
+
+                <button @click="scrollToId('edit-catalogo')" class="editorial-btn-ghost">
+                  Catálogo
+                </button>
               </div>
             </div>
+
             <div class="editorial-hero__stats">
               <div v-if="loja.rating_medio">
-                <div class="editorial-hero__stat-val editorial-hero__stat-val--ac">{{ loja.rating_medio }}</div>
+                <div class="editorial-hero__stat-val editorial-hero__stat-val--ac">
+                  {{ loja.rating_medio }}
+                </div>
                 <div class="editorial-hero__stat-label">Rating</div>
               </div>
+
               <div v-if="loja.total_avaliacoes">
-                <div class="editorial-hero__stat-val">{{ loja.total_avaliacoes }}</div>
+                <div class="editorial-hero__stat-val">
+                  {{ loja.total_avaliacoes }}
+                </div>
                 <div class="editorial-hero__stat-label">Reviews</div>
               </div>
+
               <div v-if="loja.entrega_ativa">
-                <div class="editorial-hero__stat-val editorial-hero__stat-val--ac">✓</div>
+                <div class="editorial-hero__stat-val editorial-hero__stat-val--ac">
+                  ✓
+                </div>
                 <div class="editorial-hero__stat-label">Entrega</div>
               </div>
             </div>
@@ -88,7 +151,9 @@
         </div>
 
         <!-- Ghost year -->
-        <div class="editorial-hero__year" aria-hidden="true">{{ currentYear }}</div>
+        <div class="editorial-hero__year" aria-hidden="true">
+          {{ currentYear }}
+        </div>
       </section>
 
       <!-- ══════════════════════════════════════════
@@ -96,26 +161,57 @@
       ══════════════════════════════════════════ -->
       <nav class="editorial-nav" ref="stickyNav">
         <div class="editorial-nav__inner hide-scroll">
-          <button class="editorial-nav__item"
-                  :class="{ 'editorial-nav__item--active': activeSection === 'edit-sobre' }"
-                  @click="scrollToId('edit-sobre')">Sobre</button>
-          <button class="editorial-nav__item"
-                  :class="{ 'editorial-nav__item--active': activeSection === 'edit-colecao' }"
-                  @click="scrollToId('edit-colecao')">Destaques</button>
-          <button v-for="tipo in tiposExistentes" :key="tipo.id"
-                  class="editorial-nav__item capitalize"
-                  :class="{ 'editorial-nav__item--active': activeSection === 'edit-tipo-' + tipo.id }"
-                  @click="scrollToId('edit-tipo-' + tipo.id)">{{ tipo.nome }}</button>
-          <button v-for="cat in categoriasExistentes" :key="cat.id"
-                  class="editorial-nav__item capitalize"
-                  :class="{ 'editorial-nav__item--active': activeSection === 'edit-cat-' + cat.id }"
-                  @click="scrollToId('edit-cat-' + cat.id)">{{ cat.nome }}</button>
-          <button class="editorial-nav__item"
-                  :class="{ 'editorial-nav__item--active': activeSection === 'edit-catalogo' }"
-                  @click="scrollToId('edit-catalogo')">Catálogo</button>
-          <button class="editorial-nav__item"
-                  :class="{ 'editorial-nav__item--active': activeSection === 'edit-avaliacoes' }"
-                  @click="scrollToId('edit-avaliacoes')">Reviews</button>
+          <button
+            class="editorial-nav__item"
+            :class="{ 'editorial-nav__item--active': activeSection === 'edit-sobre' }"
+            @click="scrollToId('edit-sobre')"
+          >
+            Sobre
+          </button>
+
+          <button
+            class="editorial-nav__item"
+            :class="{ 'editorial-nav__item--active': activeSection === 'edit-colecao' }"
+            @click="scrollToId('edit-colecao')"
+          >
+            Destaques
+          </button>
+
+          <button
+            v-for="tipo in tiposExistentes"
+            :key="tipo.id"
+            class="editorial-nav__item capitalize"
+            :class="{ 'editorial-nav__item--active': activeSection === 'edit-tipo-' + tipo.id }"
+            @click="scrollToId('edit-tipo-' + tipo.id)"
+          >
+            {{ tipo.nome }}
+          </button>
+
+          <button
+            v-for="cat in categoriasExistentes"
+            :key="cat.id"
+            class="editorial-nav__item capitalize"
+            :class="{ 'editorial-nav__item--active': activeSection === 'edit-cat-' + cat.id }"
+            @click="scrollToId('edit-cat-' + cat.id)"
+          >
+            {{ cat.nome }}
+          </button>
+
+          <button
+            class="editorial-nav__item"
+            :class="{ 'editorial-nav__item--active': activeSection === 'edit-catalogo' }"
+            @click="scrollToId('edit-catalogo')"
+          >
+            Catálogo
+          </button>
+
+          <button
+            class="editorial-nav__item"
+            :class="{ 'editorial-nav__item--active': activeSection === 'edit-avaliacoes' }"
+            @click="scrollToId('edit-avaliacoes')"
+          >
+            Reviews
+          </button>
         </div>
       </nav>
 
@@ -123,33 +219,48 @@
            MAIN
       ══════════════════════════════════════════ -->
       <main>
-
         <!-- 00 — SOBRE -->
         <section class="editorial-section" id="edit-sobre">
           <div class="editorial-section__grid">
             <div class="editorial-section__num-col">
               <span class="editorial-section__num">00</span>
             </div>
+
             <div class="editorial-section__body">
               <div class="editorial-about">
                 <div>
                   <div class="editorial-section__sub">About</div>
+
                   <p class="editorial-about__text">
                     {{ loja.descricao || 'Uma loja construída em torno de um único princípio: qualidade sem compromisso, design sem ruído.' }}
                   </p>
                 </div>
+
                 <div class="editorial-about__meta">
                   <div v-if="opcoesEntrega.length" class="editorial-meta-block">
                     <div class="editorial-meta-label">Envio</div>
-                    <div v-for="opcao in opcoesEntrega" :key="opcao.id" class="editorial-meta-row">
+
+                    <div
+                      v-for="opcao in opcoesEntrega"
+                      :key="opcao.id"
+                      class="editorial-meta-row"
+                    >
                       <span>{{ opcao.nome }}</span>
                       <span>{{ opcao.preco == 0 ? 'Grátis' : formatPrice(opcao.preco) }}</span>
                     </div>
                   </div>
+
                   <div v-if="metodosPagamento.length" class="editorial-meta-block">
                     <div class="editorial-meta-label">Pagamento</div>
+
                     <div class="editorial-meta-chips">
-                      <span v-for="m in metodosPagamento" :key="m.id" class="editorial-chip">{{ m.tipo }}</span>
+                      <span
+                        v-for="m in metodosPagamento"
+                        :key="m.id"
+                        class="editorial-chip"
+                      >
+                        {{ m.tipo }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -164,14 +275,17 @@
             <div class="editorial-section__num-col">
               <span class="editorial-section__num">01</span>
             </div>
+
             <div class="editorial-section__body">
               <div class="editorial-section__header">
                 <div>
                   <div class="editorial-section__sub">New Season</div>
                   <h2 class="editorial-section__title">Destaques</h2>
                 </div>
+
                 <div class="editorial-section__line"></div>
               </div>
+
               <ProductSlider
                 title="Destaques"
                 :params="{ loja_id: lojaId, destaque: true }"
@@ -188,27 +302,38 @@
                 badge-class="editorial-badge"
                 :show-store-name="false"
                 :show-stock="false"
-                @product-click="selectedProduct = $event" />
+                @product-click="selectedProduct = $event"
+              />
             </div>
           </div>
         </section>
 
         <!-- POR TIPO -->
-        <section v-for="(tipo, idx) in tiposExistentes" :key="tipo.id"
-                 :id="'edit-tipo-' + tipo.id"
-                 class="editorial-section">
+        <section
+          v-for="(tipo, idx) in tiposExistentes"
+          :key="tipo.id"
+          :id="'edit-tipo-' + tipo.id"
+          class="editorial-section"
+        >
           <div class="editorial-section__grid">
             <div class="editorial-section__num-col">
-              <span class="editorial-section__num">{{ String(idx + 2).padStart(2,'0') }}</span>
+              <span class="editorial-section__num">
+                {{ String(idx + 2).padStart(2, '0') }}
+              </span>
             </div>
+
             <div class="editorial-section__body">
               <div class="editorial-section__header">
                 <div>
                   <div class="editorial-section__sub">Collection</div>
-                  <h2 class="editorial-section__title capitalize">{{ tipo.nome }}</h2>
+                  <h2 class="editorial-section__title capitalize">
+                    {{ tipo.nome }}
+                  </h2>
                 </div>
+
                 <div class="editorial-section__line"></div>
               </div>
+
               <ProductSlider
                 :title="tipo.nome"
                 :params="{ loja_id: lojaId, tipo: tipo.nome }"
@@ -223,27 +348,38 @@
                 price-class="editorial-product-price"
                 :show-store-name="false"
                 :show-stock="false"
-                @product-click="selectedProduct = $event" />
+                @product-click="selectedProduct = $event"
+              />
             </div>
           </div>
         </section>
 
         <!-- POR CATEGORIA -->
-        <section v-for="(cat, idx) in categoriasExistentes" :key="cat.id"
-                 :id="'edit-cat-' + cat.id"
-                 class="editorial-section">
+        <section
+          v-for="(cat, idx) in categoriasExistentes"
+          :key="cat.id"
+          :id="'edit-cat-' + cat.id"
+          class="editorial-section"
+        >
           <div class="editorial-section__grid">
             <div class="editorial-section__num-col">
-              <span class="editorial-section__num">{{ String(tiposExistentes.length + idx + 2).padStart(2,'0') }}</span>
+              <span class="editorial-section__num">
+                {{ String(tiposExistentes.length + idx + 2).padStart(2, '0') }}
+              </span>
             </div>
+
             <div class="editorial-section__body">
               <div class="editorial-section__header">
                 <div>
                   <div class="editorial-section__sub">Collection</div>
-                  <h2 class="editorial-section__title capitalize">{{ cat.nome }}</h2>
+                  <h2 class="editorial-section__title capitalize">
+                    {{ cat.nome }}
+                  </h2>
                 </div>
+
                 <div class="editorial-section__line"></div>
               </div>
+
               <ProductSlider
                 :title="cat.nome"
                 :params="{ loja_id: lojaId, categoria_id: cat.id }"
@@ -258,7 +394,8 @@
                 price-class="editorial-product-price"
                 :show-store-name="false"
                 :show-stock="false"
-                @product-click="selectedProduct = $event" />
+                @product-click="selectedProduct = $event"
+              />
             </div>
           </div>
         </section>
@@ -267,16 +404,21 @@
         <section class="editorial-section" id="edit-catalogo">
           <div class="editorial-section__grid">
             <div class="editorial-section__num-col">
-              <span class="editorial-section__num editorial-section__num--text">CATALOG</span>
+              <span class="editorial-section__num editorial-section__num--text">
+                CATALOG
+              </span>
             </div>
+
             <div class="editorial-section__body">
               <div class="editorial-section__header">
                 <div>
                   <div class="editorial-section__sub">Full Collection</div>
                   <h2 class="editorial-section__title">Coleção Completa</h2>
                 </div>
+
                 <div class="editorial-section__line"></div>
               </div>
+
               <ProductCatalog
                 :loja-id="lojaId"
                 :isDark="isDark"
@@ -297,7 +439,8 @@
                 :show-stock="false"
                 :show-badges="false"
                 :show-category-badges="false"
-                @product-click="selectedProduct = $event" />
+                @product-click="selectedProduct = $event"
+              />
             </div>
           </div>
         </section>
@@ -306,16 +449,21 @@
         <section class="editorial-section" id="edit-avaliacoes">
           <div class="editorial-section__grid">
             <div class="editorial-section__num-col">
-              <span class="editorial-section__num editorial-section__num--text">REVIEWS</span>
+              <span class="editorial-section__num editorial-section__num--text">
+                REVIEWS
+              </span>
             </div>
+
             <div class="editorial-section__body">
               <div class="editorial-section__header">
                 <div>
                   <div class="editorial-section__sub">Community</div>
                   <h2 class="editorial-section__title">Avaliações</h2>
                 </div>
+
                 <div class="editorial-section__line"></div>
               </div>
+
               <AvaliacaoLoja
                 :loja-id="lojaId"
                 :isDark="isDark"
@@ -331,7 +479,8 @@
                 :review-card-class="'editorial-review-card'"
                 :own-review-border-class="isDark ? 'border-b editorial-border editorial-own-review' : 'border-b editorial-border editorial-own-review-light'"
                 :load-more-button-class="'editorial-btn-ghost text-xs tracking-widest uppercase'"
-                @rating-updated="onRatingUpdated" />
+                @rating-updated="onRatingUpdated"
+              />
             </div>
           </div>
         </section>
@@ -340,43 +489,80 @@
         <footer class="editorial-footer">
           <div class="editorial-footer__top">
             <div>
-              <div class="editorial-footer__brand">{{ loja.nome }}</div>
-              <div class="editorial-footer__tagline">{{ loja.localizacao || 'Portugal' }} · {{ currentYear }}</div>
+              <div class="editorial-footer__brand">
+                {{ loja.nome }}
+              </div>
+
+              <div class="editorial-footer__tagline">
+                {{ loja.localizacao || 'Portugal' }} · {{ currentYear }}
+              </div>
             </div>
+
             <div class="editorial-footer__links">
-              <button v-if="loja.politica_devolucao" @click="modalPolitica = 'devolucao'" class="editorial-footer__link">Devoluções</button>
-              <button v-if="loja.termos_servico" @click="modalPolitica = 'termos'" class="editorial-footer__link">Termos</button>
-              <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'" class="editorial-footer__link">Privacidade</button>
+              <button
+                v-if="loja.politica_devolucao"
+                @click="modalPolitica = 'devolucao'"
+                class="editorial-footer__link"
+              >
+                Devoluções
+              </button>
+
+              <button
+                v-if="loja.termos_servico"
+                @click="modalPolitica = 'termos'"
+                class="editorial-footer__link"
+              >
+                Termos
+              </button>
+
+              <button
+                v-if="loja.politica_privacidade"
+                @click="modalPolitica = 'privacidade'"
+                class="editorial-footer__link"
+              >
+                Privacidade
+              </button>
             </div>
           </div>
+
           <div class="editorial-footer__bottom">
-            <span class="editorial-footer__copy">© {{ currentYear }} {{ loja.nome }}. All rights reserved.</span>
+            <span class="editorial-footer__copy">
+              © {{ currentYear }} {{ loja.nome }}. All rights reserved.
+            </span>
           </div>
         </footer>
       </main>
 
       <!-- Modal políticas -->
-      <div v-if="modalPolitica"
-           class="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-sm"
-           @click.self="modalPolitica = null">
+      <div
+        v-if="modalPolitica"
+        class="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-sm"
+        @click.self="modalPolitica = null"
+      >
         <div class="w-full md:max-w-lg max-h-[80vh] overflow-y-auto editorial-modal">
           <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0 editorial-modal__header">
             <h3 class="editorial-modal__title">
               {{ modalPolitica === 'devolucao' ? 'Devoluções' : modalPolitica === 'termos' ? 'Termos' : 'Privacidade' }}
             </h3>
-            <button @click="modalPolitica = null" class="editorial-modal__close">×</button>
+
+            <button @click="modalPolitica = null" class="editorial-modal__close">
+              ×
+            </button>
           </div>
+
           <div class="p-6 text-sm leading-relaxed whitespace-pre-wrap editorial-modal__body">
             {{ modalPolitica === 'devolucao' ? loja.politica_devolucao : modalPolitica === 'termos' ? loja.termos_servico : loja.politica_privacidade }}
           </div>
         </div>
       </div>
-
     </template>
 
     <div v-else-if="!loading" class="editorial-not-found">
       <p class="editorial-not-found__title">404</p>
-      <button @click="$router.back()" class="editorial-not-found__back">← Voltar</button>
+
+      <button @click="$router.back()" class="editorial-not-found__back">
+        ← Voltar
+      </button>
     </div>
   </div>
 </template>
@@ -393,6 +579,7 @@ import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
   name: 'TemplateModaEditorial',
+
   components: {
     ProductInfoCard,
     MultiCart,
@@ -401,7 +588,9 @@ export default {
     ProductCatalog,
     AvaliacaoLoja,
   },
+
   emits: ['toggle-dark'],
+
   props: {
     tema: {
       type: Object,
@@ -486,7 +675,7 @@ export default {
 
 <style scoped>
 /* ── Fonts ──
-   Adicionar ao index.html ou ao ficheiro CSS global:
+   Adicionar ao index.html ou ao CSS global:
    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Barlow:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap');
 */
 
@@ -502,14 +691,10 @@ export default {
   --font-head: 'Barlow Condensed', sans-serif;
   --font-body: 'Barlow', sans-serif;
   --font-mono: 'DM Mono', monospace;
+
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
-
-  /*
-    Mantemos o corte da página para evitar scroll horizontal global,
-    mas corrigimos as colunas internas com minmax(0, 1fr) e min-width: 0.
-  */
   overflow-x: hidden;
 }
 
@@ -587,8 +772,14 @@ export default {
   z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 24px 48px;
+}
+
+.editorial-hero__left-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .editorial-hero__back {
@@ -612,13 +803,14 @@ export default {
   height: 34px;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.2);
-  background: none;
+  background: rgba(0,0,0,0.12);
   color: rgba(255,255,255,0.5);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  backdrop-filter: blur(8px);
 }
 
 .editorial-btn-icon:hover {
@@ -839,15 +1031,7 @@ export default {
 
 .editorial-section__grid {
   display: grid;
-
-  /*
-    FIX IMPORTANTE:
-    Antes estava 120px 1fr.
-    Em grids, 1fr pode não encolher o suficiente quando o filho tem conteúdo largo.
-    minmax(0, 1fr) permite que a coluna encolha e o ProductSlider use o seu próprio scroll.
-  */
   grid-template-columns: 120px minmax(0, 1fr);
-
   width: 100%;
   min-width: 0;
 }
@@ -883,12 +1067,6 @@ export default {
 
 .editorial-section__body {
   padding: 40px 48px 56px;
-
-  /*
-    FIX IMPORTANTE:
-    Sem isto, o conteúdo interno do slider pode forçar a coluna a ficar maior
-    do que o viewport e o overflow-x: hidden do root corta o scroll.
-  */
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -1053,11 +1231,7 @@ export default {
   font-weight: 600;
 }
 
-/*
-  FIX EXTRA PARA O PRODUCTSLIDER:
-  Estes seletores cobrem nomes comuns de wrappers.
-  Se o teu ProductSlider tiver classes diferentes, podes adicionar aqui a classe real.
-*/
+/* Fix para ProductSlider horizontal dentro de grid */
 :deep(.product-slider),
 :deep(.product-slider-wrapper),
 :deep(.slider-container),
@@ -1069,9 +1243,6 @@ export default {
   max-width: 100%;
 }
 
-/*
-  Garante que elementos com scroll horizontal dentro do template continuam scrolláveis.
-*/
 :deep(.overflow-x-auto),
 :deep(.overflow-x-scroll) {
   overflow-x: auto !important;
@@ -1258,34 +1429,51 @@ export default {
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 900px) {
+  .editorial-hero {
+    min-height: 560px;
+  }
+
   .editorial-hero__nav,
   .editorial-hero__content {
-    padding-left: 24px;
-    padding-right: 24px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .editorial-hero__nav {
+    justify-content: flex-start;
+    padding-top: 20px;
+    padding-bottom: 16px;
+  }
+
+  .editorial-hero__left-controls {
+    gap: 12px;
+  }
+
+  .editorial-hero__back {
+    font-size: 8px;
+    letter-spacing: 0.28em;
+  }
+
+  .editorial-btn-icon {
+    width: 32px;
+    height: 32px;
   }
 
   .editorial-hero__content {
     padding-bottom: 40px;
   }
 
-  .editorial-section__grid {
-    grid-template-columns: 60px minmax(0, 1fr);
+  .editorial-hero__issue-label {
+    font-size: 8px;
+    letter-spacing: 0.32em;
   }
 
-  .editorial-section__body {
-    padding: 28px 24px 40px;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
+  .editorial-hero__title {
+    font-size: clamp(4rem, 20vw, 7rem);
   }
 
-  .editorial-about {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 32px;
-  }
-
-  .editorial-footer {
-    padding: 32px 24px 24px;
+  .editorial-hero__bottom {
+    align-items: flex-start;
   }
 
   .editorial-hero__stats {
@@ -1298,7 +1486,125 @@ export default {
 
   .editorial-hero__year {
     font-size: 6rem;
-    right: 24px;
+    right: 20px;
+    bottom: 28px;
+  }
+
+  /*
+    Mobile:
+    remove a coluna lateral dos números 00, 01, 02, 03...
+  */
+  .editorial-section__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editorial-section__num-col {
+    display: none;
+  }
+
+  .editorial-section__body {
+    padding: 32px 20px 44px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .editorial-section__header {
+    margin-bottom: 28px;
+  }
+
+  .editorial-section__title {
+    font-size: 36px;
+  }
+
+  .editorial-about {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .editorial-about__text {
+    font-size: 18px;
+  }
+
+  .editorial-footer {
+    padding: 32px 20px 24px;
+  }
+
+  .editorial-footer__top {
+    gap: 28px;
+  }
+
+  .editorial-footer__links {
+    gap: 18px;
+  }
+}
+
+@media (max-width: 520px) {
+  .editorial-hero {
+    min-height: 520px;
+  }
+
+  .editorial-hero__nav {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .editorial-hero__content {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: 34px;
+  }
+
+  .editorial-hero__issue {
+    gap: 9px;
+  }
+
+  .editorial-hero__issue-line {
+    width: 28px;
+  }
+
+  .editorial-hero__issue-label {
+    letter-spacing: 0.22em;
+  }
+
+  .editorial-hero__title {
+    font-size: clamp(3.4rem, 21vw, 5.6rem);
+    margin-bottom: 20px;
+  }
+
+  .editorial-hero__desc {
+    font-size: 12px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+  }
+
+  .editorial-hero__ctas {
+    flex-wrap: wrap;
+  }
+
+  .editorial-btn-primary,
+  .editorial-btn-ghost {
+    padding: 11px 20px;
+    font-size: 11px;
+  }
+
+  .editorial-section__body {
+    padding: 30px 16px 42px;
+  }
+
+  .editorial-section__title {
+    font-size: 32px;
+  }
+
+  .editorial-nav__item {
+    padding: 13px 18px;
+    font-size: 8px;
+    letter-spacing: 0.28em;
+  }
+
+  .editorial-footer {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 
