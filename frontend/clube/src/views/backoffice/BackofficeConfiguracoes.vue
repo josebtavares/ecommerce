@@ -7,7 +7,7 @@
 
       <!-- Banner + Logo upload -->
       <div class="relative mb-6">
-        <div class="h-28 rounded-xl overflow-hidden bg-zinc-800 cursor-pointer group relative"
+        <div class="h-56 rounded-xl overflow-hidden bg-zinc-800 cursor-pointer group relative"
             @click="$refs.bannerInput.click()">
           <video v-if="bannerPreview && isBannerVideo"
             :src="bannerPreview" class="w-full h-full object-cover"

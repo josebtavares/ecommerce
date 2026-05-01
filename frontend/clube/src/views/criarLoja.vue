@@ -90,7 +90,7 @@
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Identidade visual</h2>
 
           <!-- Preview banner+logo -->
-          <div class="relative rounded-xl overflow-hidden bg-zinc-800 h-28">
+          <div class="relative rounded-xl overflow-hidden bg-zinc-800 h-56">
             <video v-if="bannerPreview && form.banner?.type?.startsWith('video')" :src="bannerPreview" class="w-full h-full object-cover" controls></video>
             <img v-else-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
             <div v-else class="w-full h-full flex items-center justify-center text-zinc-600 text-sm">Banner</div>
