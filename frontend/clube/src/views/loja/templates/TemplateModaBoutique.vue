@@ -19,8 +19,13 @@
       <!-- HERO Boutique - Split asymmetric com padding-top para nao sobrepor header fixo -->
       <section class="relative min-h-screen overflow-hidden pt-20">
         <div class="absolute inset-0">
-          <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-               :alt="loja.nome" class="w-full h-full object-cover" />
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover"
+            autoplay muted loop playsinline></video>
+          <img v-else
+            :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+            :alt="loja.nome" class="w-full h-full object-cover" />
           <div class="absolute inset-0" :class="isDark ? 'bg-neutral-950/60' : 'bg-stone-900/40'"></div>
         </div>
 
@@ -356,10 +361,14 @@ export default {
     function toggleDark() { isDark.value = !isDark.value }
     function onScroll() { scrolled.value = window.scrollY > 100 }
     
+    function isVideo(url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+    
     onMounted(() => window.addEventListener('scroll', onScroll))
     onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-    return { isDark, scrolled, cssVars, user, toggleDark, ...lojaData }
+    return { isDark, scrolled, cssVars, user, toggleDark, isVideo, ...lojaData }
   }
 }
 </script>
