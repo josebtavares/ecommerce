@@ -91,7 +91,8 @@
 
           <!-- Preview banner+logo -->
           <div class="relative rounded-xl overflow-hidden bg-zinc-800 h-28">
-            <img v-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
+            <video v-if="bannerPreview && form.banner?.type?.startsWith('video')" :src="bannerPreview" class="w-full h-full object-cover" controls></video>
+            <img v-else-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
             <div v-else class="w-full h-full flex items-center justify-center text-zinc-600 text-sm">Banner</div>
             <div class="absolute bottom-3 left-3 flex items-center gap-3">
               <div class="w-12 h-12 rounded-xl bg-zinc-900 border-2 border-zinc-700 overflow-hidden flex items-center justify-center">
@@ -121,8 +122,8 @@
 
           <!-- Banner upload -->
           <label class="flex items-center justify-center px-4 py-3 bg-zinc-800 border border-dashed border-zinc-600 rounded-xl text-sm text-zinc-400 cursor-pointer hover:border-zinc-500 transition">
-            {{ form.banner ? form.banner.name : 'Banner — clica para fazer upload (recomendado: 1200×300)' }}
-            <input type="file" accept="image/*" class="hidden" @change="onBanner" />
+            {{ form.banner ? form.banner.name : 'Banner — clica para fazer upload (imagem ou vídeo, recomendado: 1200×300)' }}
+            <input type="file" accept="image/*,video/*" class="hidden" @change="onBanner" />
           </label>
 
           <!-- Cores -->
