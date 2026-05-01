@@ -1,7 +1,10 @@
 <template>
   <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden">
 
-    <div class="absolute inset-0 bg-[url('/src/assets/img/login/login_fundo3.png')] bg-cover bg-center bg-no-repeat"></div>
+    <video autoplay muted loop playsinline
+      class="absolute inset-0 w-full h-full object-cover">
+      <source src="https://pub-803c78caa4b242b8b54656a45db9fb42.r2.dev/videos/background.mp4" type="video/mp4">
+    </video>
     <div class="absolute inset-0" :class="isDark ? 'bg-black/55' : 'bg-black/30'"></div>
 
     <button @click="isDark = !isDark"
