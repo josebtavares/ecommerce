@@ -27,8 +27,13 @@
       <section class="relative h-screen overflow-hidden" ref="heroRef">
         <div class="absolute inset-0 scale-110 hero-parallax"
              :style="{ transform: `translateY(${scrollY * 0.3}px) scale(1.1)` }">
-          <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-               :alt="loja.nome" class="w-full h-full object-cover" />
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover"
+            autoplay muted loop playsinline></video>
+          <img v-else
+            :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+            :alt="loja.nome" class="w-full h-full object-cover" />
         </div>
         <!-- Overlay gradiente duplo — vignette + bottom fade -->
         <div class="absolute inset-0"
@@ -463,10 +468,14 @@ export default {
     function toggleDark () { isDark.value = !isDark.value; emit('toggle-dark', isDark.value) }
     function onScroll ()   { scrollY.value = window.scrollY }
 
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
     onMounted (() => window.addEventListener('scroll', onScroll, { passive: true }))
     onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-    return { isDark, scrollY, cssVars, user, toggleDark, ...lojaData }
+    return { isDark, scrollY, cssVars, user, toggleDark, isVideo, ...lojaData }
   }
 }
 </script>

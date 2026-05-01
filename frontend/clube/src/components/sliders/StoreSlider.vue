@@ -38,11 +38,15 @@
             ? 'bg-zinc-800 border-zinc-700 hover:ring-2 hover:ring-red-500/50 hover:border-transparent'
             : 'bg-stone-100 border-stone-200 hover:ring-2 hover:ring-red-400/40 hover:border-transparent shadow-sm'"
         >
-          <img
+          <!-- DEPOIS -->
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover"
+            autoplay muted loop playsinline></video>
+          <img v-else
             :src="loja.banner_url || loja.logo_url || defaultImg"
             :alt="loja.nome"
-            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
           <!-- Gradiente overlay — ligeiramente diferente no light para não escurecer tanto -->
           <div class="absolute inset-0 transition-opacity"
                :class="isDark
@@ -186,6 +190,10 @@ export default {
         this.fetch(false)
       }
     },
+    isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    },
+
   }
 }
 </script>

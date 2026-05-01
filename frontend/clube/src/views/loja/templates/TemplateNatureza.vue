@@ -57,8 +57,13 @@
       <section class="min-h-screen grid grid-cols-1 lg:grid-cols-2 pt-14">
         <!-- Imagem -->
         <div class="relative h-[55vh] lg:h-screen overflow-hidden">
-          <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-               :alt="loja.nome" class="w-full h-full object-cover transition-transform duration-[8s] scale-105" />
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover transition-transform duration-[8s] scale-105"
+            autoplay muted loop playsinline></video>
+          <img v-else
+            :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+            :alt="loja.nome" class="w-full h-full object-cover transition-transform duration-[8s] scale-105" />
           <div class="absolute inset-0"
                :class="isDark
                  ? 'bg-gradient-to-r from-transparent via-transparent to-[#051a0a]/80'
@@ -370,10 +375,14 @@ export default {
     function toggleDark () { isDark.value = !isDark.value; emit('toggle-dark', isDark.value) }
     function onScroll ()   { scrolled.value = window.scrollY > 60 }
 
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
     onMounted (() => window.addEventListener('scroll', onScroll, { passive: true }))
     onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-    return { isDark, scrolled, cssVars, user, toggleDark, ...lojaData }
+    return { isDark, scrolled, cssVars, user, toggleDark, isVideo, ...lojaData }
   },
 }
 </script>

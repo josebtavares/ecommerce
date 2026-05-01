@@ -30,8 +30,13 @@
 
         <!-- Painel 1: imagem banner (fundo) -->
         <div class="absolute inset-0">
-          <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-               :alt="loja.nome" class="w-full h-full object-cover opacity-30" />
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover opacity-30"
+            autoplay muted loop playsinline></video>
+          <img v-else
+            :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+            :alt="loja.nome" class="w-full h-full object-cover opacity-30" />
         </div>
 
         <!-- Painel 2: bloco cor primária direita (diagonal) -->
@@ -434,7 +439,11 @@ export default {
 
     function toggleDark () { isDark.value = !isDark.value; emit('toggle-dark', isDark.value) }
 
-    return { isDark, cssVars, user, toggleDark, ...lojaData }
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
+    return { isDark, cssVars, user, toggleDark, isVideo, ...lojaData }
   },
 }
 </script>

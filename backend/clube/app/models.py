@@ -174,8 +174,13 @@ class Loja(models.Model):
 
     # Branding
     logo            = models.ImageField(upload_to='lojas/logos/%Y/%m/', null=True, blank=True)
-    banner          = models.ImageField(upload_to='lojas/banners/%Y/%m/', null=True, blank=True)
-   
+    banner = models.FileField(
+        upload_to='lojas/banners/%Y/%m/',
+        null=True, blank=True,
+        validators=[FileExtensionValidator(
+            ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov']
+        )]
+    )   
     layout_produtos = models.CharField(max_length=10, default='grid',
                                        choices=[('grid', 'Grelha'), ('list', 'Lista')])
 

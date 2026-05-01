@@ -517,7 +517,11 @@ export default {
 
     function toggleDark () { isDark.value = !isDark.value; emit('toggle-dark', isDark.value) }
 
-    return { isDark, cssVars, user, toggleDark, ...lojaData }
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
+    return { isDark, cssVars, user, toggleDark, isVideo, ...lojaData }
   }
 }
 </script>
