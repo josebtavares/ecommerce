@@ -27,10 +27,16 @@
 
         <!-- Background imagem -->
         <div class="absolute inset-0">
-          <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-               :alt="loja.nome"
-               class="w-full h-full object-cover"
-               :class="isDark ? 'opacity-30' : 'opacity-25'" />
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover"
+            :class="isDark ? 'opacity-30' : 'opacity-25'"
+            autoplay muted loop playsinline></video>
+          <img v-else
+            :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+            :alt="loja.nome"
+            class="w-full h-full object-cover"
+            :class="isDark ? 'opacity-30' : 'opacity-25'" />
           <div class="absolute inset-0"
                :class="isDark ? 'bg-[#0a0a0a]' : 'bg-[#f5f5f5]'"
                style="opacity:0.5"></div>
@@ -407,7 +413,11 @@ export default {
 
     function toggleDark () { isDark.value = !isDark.value; emit('toggle-dark', isDark.value) }
 
-    return { isDark, cssVars, user, toggleDark, ...lojaData }
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
+    return { isDark, cssVars, user, toggleDark, isVideo, ...lojaData }
   },
 }
 </script>

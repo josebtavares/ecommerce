@@ -155,8 +155,14 @@
             <swiper-slide v-for="store in newStores" :key="store.id"
               @click="goToStore(store.id)" class="cursor-pointer">
               <div class="relative h-full w-full">
-                <img :src="store.banner_url || '/placeholder-banner.jpg'" :alt="store.nome"
-                     class="w-full h-full object-cover" />
+                <video v-if="isVideo(store.banner_url)"
+                  :src="store.banner_url"
+                  class="w-full h-full object-cover"
+                  autoplay muted loop playsinline></video>
+                <img v-else
+                  :src="store.banner_url || '/placeholder-banner.jpg'"
+                  :alt="store.nome"
+                  class="w-full h-full object-cover" />
                 <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent"></div>
                 <div class="absolute inset-0 bg-gradient-to-r from-zinc-950/80 to-transparent"></div>
                 <div class="absolute bottom-0 left-0 p-8 md:p-12 max-w-2xl">
@@ -462,6 +468,9 @@ export default {
       localStorage.removeItem('user')
       this.user = {}
       this.$router.push('/login')
+    },
+    isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
     },
   },
 

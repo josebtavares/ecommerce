@@ -60,7 +60,12 @@
       <section class="relative min-h-screen flex flex-col justify-end overflow-hidden">
         <!-- Imagem de fundo com opacidade baixa -->
         <div class="absolute inset-0 overflow-hidden">
-          <img v-if="loja.banner_url"
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover transition-transform duration-[8s] scale-105"
+            :class="isDark ? 'opacity-15' : 'opacity-8'"
+            autoplay muted loop playsinline></video>
+          <img v-else-if="loja.banner_url"
                :src="loja.banner_url"
                :alt="loja.nome"
                class="w-full h-full object-cover transition-transform duration-[8s] scale-105"
@@ -503,11 +508,15 @@ export default {
       emit('toggle-dark', isDark.value)
     }
 
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
     function onScroll () { scrolled.value = window.scrollY > 60 }
     onMounted (() => window.addEventListener('scroll', onScroll, { passive: true }))
     onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-    return { isDark, scrolled, cssVars, user, toggleDark, ...lojaData }
+    return { isDark, scrolled, cssVars, user, toggleDark, isVideo, ...lojaData }
   }
 }
 </script>

@@ -101,8 +101,15 @@
            class="group relative rounded-2xl overflow-hidden cursor-pointer border transition-all hover:-translate-y-1 hover:shadow-xl"
            :class="isDark ? 'bg-zinc-900 border-zinc-800 hover:border-red-500/40' : 'bg-white border-stone-200 hover:border-red-400/40 shadow-sm'"
            style="height:240px">
-        <img :src="loja.banner_url || loja.logo_url || defaultImg" :alt="loja.nome"
-             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <!-- DEPOIS -->
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            autoplay muted loop playsinline></video>
+          <img v-else
+            :src="loja.banner_url || loja.logo_url || defaultImg"
+            :alt="loja.nome"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
         <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent"></div>
 
         <div class="absolute top-3 left-3">
@@ -247,6 +254,10 @@ export default {
     setupObserver () {
       this.observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) this.fetchMore() }, { rootMargin: '300px' })
       if (this.$refs.sentinel) this.observer.observe(this.$refs.sentinel)
+    },
+
+    isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
     },
   }
 }

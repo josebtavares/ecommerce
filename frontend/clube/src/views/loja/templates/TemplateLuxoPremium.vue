@@ -54,10 +54,16 @@
       <section class="relative min-h-screen flex flex-col justify-end overflow-hidden">
         <!-- Imagem de fundo com opacidade muito baixa -->
         <div class="absolute inset-0">
-          <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-               :alt="loja.nome"
-               class="w-full h-full object-cover"
-               :class="isDark ? 'opacity-20' : 'opacity-15'" />
+          <video v-if="isVideo(loja.banner_url)"
+            :src="loja.banner_url"
+            class="w-full h-full object-cover"
+            :class="isDark ? 'opacity-20' : 'opacity-15'"
+            autoplay muted loop playsinline></video>
+          <img v-else
+            :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+            :alt="loja.nome"
+            class="w-full h-full object-cover"
+            :class="isDark ? 'opacity-20' : 'opacity-15'" />
           <div class="absolute inset-0"
                :class="isDark
                  ? 'bg-gradient-to-t from-[#030303] via-[#030303]/70 to-[#030303]/30'
@@ -371,10 +377,14 @@ export default {
     function toggleDark () { isDark.value = !isDark.value; emit('toggle-dark', isDark.value) }
     function onScroll ()   { scrolled.value = window.scrollY > 80 }
 
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
     onMounted (() => window.addEventListener('scroll', onScroll, { passive: true }))
     onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-    return { isDark, scrolled, cssVars, user, toggleDark, ...lojaData }
+    return { isDark, scrolled, cssVars, user, toggleDark, isVideo, ...lojaData }
   },
 }
 </script>

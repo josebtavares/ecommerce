@@ -43,7 +43,17 @@
            HERO
       ══════════════════════════════════════════ -->
       <section class="editorial-hero" ref="heroRef">
+        <video
+          v-if="isVideo(loja.banner_url)"
+          :src="loja.banner_url"
+          class="editorial-hero__img"
+          autoplay
+          muted
+          loop
+          playsinline
+        ></video>
         <img
+          v-else
           :src="loja.banner_url || backendUrl + '/media/lojas/default_banner.jpg'"
           :alt="loja.nome"
           class="editorial-hero__img"
@@ -634,6 +644,10 @@ export default {
       emit('toggle-dark', isDark.value)
     }
 
+    function isVideo(url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
     let sectionObserver = null
 
     function setupSectionObserver() {
@@ -668,6 +682,7 @@ export default {
       restWords,
       ratingFormatted,
       toggleDark,
+      isVideo,
       ...lojaData,
     }
   },

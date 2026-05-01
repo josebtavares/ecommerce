@@ -7,14 +7,20 @@
 
       <!-- Banner + Logo upload -->
       <div class="relative mb-6">
-        <div class="h-28 rounded-xl overflow-hidden bg-zinc-800 cursor-pointer group relative"
-             @click="$refs.bannerInput.click()">
-          <img v-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
+        <div class="h-56 rounded-xl overflow-hidden bg-zinc-800 cursor-pointer group relative"
+            @click="$refs.bannerInput.click()">
+          <video v-if="bannerPreview && isBannerVideo"
+            :src="bannerPreview" class="w-full h-full object-cover"
+            autoplay muted loop playsinline></video>
+          <img v-else-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
+          <div v-else class="w-full h-full flex items-center justify-center text-zinc-600 text-xs">
+            Clica para adicionar banner
+          </div>
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
             <span class="text-white text-xs font-medium">Alterar banner</span>
           </div>
         </div>
-        <input ref="bannerInput" type="file" accept="image/*" class="hidden" @change="onBanner" />
+        <input ref="bannerInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" class="hidden" @change="onBanner" />
 
         <div class="absolute -bottom-4 left-4 cursor-pointer group" @click="$refs.logoInput.click()">
           <img v-if="logoPreview" :src="logoPreview"
@@ -271,6 +277,9 @@ const TODOS_METODOS = [
   { tipo: 'cartao',        icon: '💳', label: 'Cartão (Stripe)',     descricao: 'Cartão via Stripe (Europa)' },
   { tipo: 'paypal',        icon: '🅿️',  label: 'PayPal',            descricao: 'Pagamento via PayPal' },
 ]
+function isVideo (url) {
+  return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+}
 
 export default {
   name: 'BackofficeConfiguracoes',
@@ -309,6 +318,7 @@ export default {
       flwSubaccountId: '',
       loadingFlw:      false,
       flwGuardado:     false,
+      isBannerVideo: false,
     }
   },
 
@@ -350,11 +360,17 @@ export default {
       }
       this.logoPreview   = l.logo_url   || ''
       this.bannerPreview = l.banner_url || ''
+      this.isBannerVideo  = isVideo(l.banner_url || '') 
     },
 
     onLogo (e)   { const f = e.target.files[0]; if (f) { this.logoFicheiro   = f; this.logoPreview   = URL.createObjectURL(f) } },
-    onBanner (e) { const f = e.target.files[0]; if (f) { this.bannerFicheiro = f; this.bannerPreview = URL.createObjectURL(f) } },
-
+    onBanner (e) {
+      const f = e.target.files[0]
+      if (!f) return
+      this.bannerFicheiro = f
+      this.bannerPreview  = URL.createObjectURL(f)
+      this.isBannerVideo  = isVideo(f.name)
+    },
     // ── Métodos de pagamento ──────────────────────────────────
 
     metodoActivo (tipo) {
@@ -446,6 +462,7 @@ export default {
         await this.fetchOpcoes()
       } catch (e) { console.error(e) }
     },
+    
   }
 }
 </script>
