@@ -22,6 +22,33 @@ from ..Serializers.LojaSerializer import (
 )
 from ..utils.pagination import paginar
 
+import os, subprocess, threading
+
+def _ffmpeg_converter(caminho_original, caminho_saida, loja_pk):
+    try:
+        subprocess.run([
+            'ffmpeg', '-i', caminho_original,
+            '-vcodec', 'libx264', '-crf', '28',
+            '-preset', 'fast', '-movflags', '+faststart',
+            '-vf', 'scale=1280:-2', '-an',
+            caminho_saida, '-y'
+        ], check=True, timeout=180)
+        os.remove(caminho_original)
+        novo_nome = os.path.splitext(Loja.objects.get(pk=loja_pk).banner.name)[0] + '.mp4'
+        Loja.objects.filter(pk=loja_pk).update(banner=novo_nome)
+    except Exception as e:
+        print(f'[FFmpeg] Erro: {e}')
+
+def _converter_banner_se_video(loja):
+    if not loja.banner:
+        return
+    nome = loja.banner.name.lower()
+    if not any(nome.endswith(ext) for ext in ['.webm', '.mov', '.mkv']):
+        return
+    caminho = loja.banner.path
+    saida = os.path.splitext(caminho)[0] + '.mp4'
+    threading.Thread(target=_ffmpeg_converter, args=(caminho, saida, loja.pk), daemon=True).start()
+
 
 # ══════════════════════════════════════════════════════════════
 # HELPERS
@@ -133,6 +160,8 @@ def loja_create(request):
         logo   = request.FILES.get('logo'),
         banner = request.FILES.get('banner'),
     )
+    if request.FILES.get('banner'):          
+        _converter_banner_se_video(loja)
 
     notificar_admins(
         tipo='loja_pendente',
@@ -207,6 +236,9 @@ def loja_update(request, id):
         logo  =request.FILES.get('logo',   loja.logo),
         banner=request.FILES.get('banner', loja.banner),
     )
+    if request.FILES.get('banner'):         
+        _converter_banner_se_video(loja)
+        
     return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
