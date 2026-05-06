@@ -22,6 +22,63 @@ from ..Serializers.LojaSerializer import (
 )
 from ..utils.pagination import paginar
 
+import os, subprocess, threading, tempfile, requests as http_req
+from django.core.files.base import ContentFile
+
+def _ffmpeg_converter_remoto(url_original, loja_pk, nome_original):
+    try:
+        # 1. Descarregar ficheiro para temp
+        r = http_req.get(url_original, timeout=60)
+        ext = os.path.splitext(nome_original)[1].lower()
+        
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_in:
+            tmp_in.write(r.content)
+            caminho_in = tmp_in.name
+
+        caminho_out = caminho_in.replace(ext, '.mp4')
+
+        # 2. Converter com FFmpeg
+        subprocess.run([
+            'ffmpeg', '-i', caminho_in,
+            '-vcodec', 'libx264', '-crf', '28',
+            '-preset', 'fast', '-movflags', '+faststart',
+            '-vf', 'scale=1280:-2', '-an',
+            caminho_out, '-y'
+        ], check=True, timeout=180)
+
+        # 3. Re-upload para o storage
+        loja = Loja.objects.get(pk=loja_pk)
+        novo_nome = os.path.splitext(loja.banner.name)[0] + '.mp4'
+        with open(caminho_out, 'rb') as f:
+            loja.banner.save(os.path.basename(novo_nome), ContentFile(f.read()), save=True)
+
+        print(f'[FFmpeg] Banner da loja {loja_pk} convertido com sucesso')
+
+    except Exception as e:
+        print(f'[FFmpeg] Erro: {e}')
+    finally:
+        # 4. Limpar ficheiros temporários
+        for p in [caminho_in, caminho_out]:
+            try: os.remove(p)
+            except: pass
+
+
+def _converter_banner_se_video(loja):
+    if not loja.banner:
+        return
+    nome = loja.banner.name.lower()
+    if not any(nome.endswith(ext) for ext in ['.webm', '.mov', '.mkv']):
+        return
+    try:
+        url = loja.banner.url
+        threading.Thread(
+            target=_ffmpeg_converter_remoto,
+            args=(url, loja.pk, nome),
+            daemon=True
+        ).start()
+    except Exception as e:
+        print(f'[FFmpeg] Erro ao iniciar: {e}')
+
 
 # ══════════════════════════════════════════════════════════════
 # HELPERS
@@ -133,6 +190,8 @@ def loja_create(request):
         logo   = request.FILES.get('logo'),
         banner = request.FILES.get('banner'),
     )
+    if request.FILES.get('banner'):          
+        _converter_banner_se_video(loja)
 
     notificar_admins(
         tipo='loja_pendente',
@@ -207,6 +266,9 @@ def loja_update(request, id):
         logo  =request.FILES.get('logo',   loja.logo),
         banner=request.FILES.get('banner', loja.banner),
     )
+    if request.FILES.get('banner'):         
+        _converter_banner_se_video(loja)
+        
     return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
