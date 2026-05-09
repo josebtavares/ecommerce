@@ -35,6 +35,8 @@ urlpatterns = [
     
     # ── Aparencias ─────────────────────────────────────────────────
     path('loja/<int:loja_id>/aparencia/', lojaView.loja_aparencia, name='loja-aparencia'),
+    
+    # ── Criar Utilizador da loja ─────────────────────────────────────────────────
 
-
+    path('loja/<int:loja_id>/staff/criar-utilizador/', lojaView.staff_criar_utilizador),
 ]
