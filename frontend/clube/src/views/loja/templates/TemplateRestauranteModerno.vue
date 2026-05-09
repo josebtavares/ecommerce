@@ -31,140 +31,107 @@
 
     <template v-else-if="loja">
 
-      <!-- ───── TOP BAR (esquerda apenas) ───── -->
-      <header class="relative z-30 flex items-center justify-between px-6 md:px-10 pt-5 md:pt-7"
-              style="padding-right: clamp(8.5rem, calc(2.5vw + 11rem), 19rem)">
-        <div class="flex items-center gap-3">
-          <button @click="$router.back()" class="trm-iconbtn" aria-label="Voltar">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"
-                 stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          </button>
-          <button @click="toggleDark" class="trm-iconbtn" :aria-label="isDark ? 'Modo claro' : 'Modo escuro'">
-            <span class="text-[12px] leading-none">{{ isDark ? '☀' : '☾' }}</span>
-          </button>
+      <!-- ═══════════════════════════════════════════════════════
+           HERO IMERSIVO — fullscreen 100vh
+           ═══════════════════════════════════════════════════════ -->
+      <section class="trm-hero">
+        <!-- Media de fundo full-bleed -->
+        <div class="trm-hero__media">
+          <video v-if="isVideo(loja.banner_url)"
+                 :src="loja.banner_url" autoplay muted loop playsinline
+                 class="w-full h-full object-cover"></video>
+          <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome"
+               class="w-full h-full object-cover" />
+          <div v-else class="w-full h-full flex items-center justify-center"
+               :style="{ background: 'linear-gradient(135deg, var(--cor-primaria), var(--cor-secundaria))' }">
+            <span class="text-[280px] font-serif italic text-white/15 leading-none select-none">{{ monograma }}</span>
+          </div>
+          <div class="trm-hero__scrim"></div>
         </div>
 
-        <!-- Brand wordmark central (esquerda+centro) -->
-        <div class="hidden md:flex items-center gap-3 select-none">
-          <span class="trm-rule"></span>
-          <span class="trm-monogram" :style="{ borderColor: 'var(--cor-primaria)', color: 'var(--cor-primaria)' }">
-            {{ monograma }}
-          </span>
-          <span class="font-serif italic text-sm opacity-60">est. {{ anoFundacao }}</span>
+        <!-- Top bar overlay -->
+        <header class="trm-hero__topbar"
+                style="padding-right: clamp(8.5rem, calc(2.5vw + 11rem), 19rem)">
+          <div class="flex items-center gap-3">
+            <button @click="$router.back()" class="trm-iconbtn trm-iconbtn--on-media" aria-label="Voltar">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"
+                   stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <button @click="toggleDark" class="trm-iconbtn trm-iconbtn--on-media" :aria-label="isDark ? 'Modo claro' : 'Modo escuro'">
+              <span class="text-[12px] leading-none">{{ isDark ? '☀' : '☾' }}</span>
+            </button>
+          </div>
+          <div class="hidden md:flex items-center gap-3 text-white/85 select-none">
+            <span class="trm-rule trm-rule--white"></span>
+            <span class="trm-monogram trm-monogram--on-media">{{ monograma }}</span>
+            <span class="font-serif italic text-sm text-white/70">est. {{ anoFundacao }}</span>
+          </div>
+        </header>
+
+        <!-- Aberto-agora vertical (canto sup. dir.) -->
+        <div class="trm-hero__live">
+          <span class="trm-dot-pulse"></span>
+          <span class="text-[10px] tracking-[0.45em] uppercase text-white/85">Aberto · 19:00 — 23:30</span>
         </div>
-      </header>
 
-      <!-- ───── HERO ───── -->
-      <section class="relative px-6 md:px-10 pt-10 md:pt-14 pb-16 md:pb-24">
-        <div class="grid grid-cols-12 gap-6 md:gap-12 items-center max-w-[1400px] mx-auto"
-             style="min-height: clamp(560px, 80vh, 100vh)">
-
-          <!-- Coluna texto editorial -->
-          <div class="col-span-12 lg:col-span-6 order-2 lg:order-1">
-            <div class="flex items-center gap-4 mb-7">
-              <span class="trm-rule" style="width: 48px"></span>
-              <span class="text-[10px] font-medium uppercase tracking-[0.45em] opacity-70">
-                {{ loja.categoria || 'Restaurante' }} · {{ loja.localizacao ? loja.localizacao.split(',')[0] : 'Lisboa' }}
-              </span>
-            </div>
-
-            <h1 class="trm-hero-title font-serif">
-              <span v-for="(linha, i) in tituloLinhas" :key="i" class="block"
-                    :class="i % 2 === 1 ? 'italic font-light' : 'font-normal'"
-                    :style="i === 1 ? { color: 'var(--cor-primaria)' } : {}">
-                {{ linha }}
-              </span>
-            </h1>
-
-            <p v-if="loja.descricao" class="mt-8 max-w-lg text-base md:text-[17px] leading-[1.7] opacity-75">
-              {{ loja.descricao.substring(0, 200) }}{{ loja.descricao.length > 200 ? '…' : '' }}
-            </p>
-
-            <!-- Assinatura "do chef" -->
-            <div class="mt-8 flex items-center gap-3">
-              <span class="trm-rule" style="width: 28px"></span>
-              <span class="font-serif italic text-sm opacity-60">— uma palavra da casa</span>
-            </div>
-
-            <!-- CTAs -->
-            <div class="mt-10 flex flex-wrap items-center gap-4">
-              <button @click="scrollToId('menu')" class="trm-btn trm-btn--solid">
-                <span>Ver Menu</span>
-                <span class="trm-btn__arr">→</span>
-              </button>
-              <button @click="scrollToId('reservar')" class="trm-btn trm-btn--ghost">
-                <span>Reservar Mesa</span>
-              </button>
-            </div>
-
-            <!-- KPIs serenos -->
-            <div class="mt-12 grid grid-cols-3 gap-6 max-w-md">
-              <div class="trm-kpi">
-                <p class="trm-kpi__num font-serif">{{ loja.rating_medio ? Number(loja.rating_medio).toFixed(1) : '—' }}</p>
-                <p class="trm-kpi__lbl">Rating</p>
-              </div>
-              <div class="trm-kpi">
-                <p class="trm-kpi__num font-serif">{{ loja.total_avaliacoes || 0 }}</p>
-                <p class="trm-kpi__lbl">Reviews</p>
-              </div>
-              <div class="trm-kpi">
-                <p class="trm-kpi__num font-serif">{{ anoFundacao }}</p>
-                <p class="trm-kpi__lbl">Desde</p>
-              </div>
-            </div>
+        <!-- Conteúdo central editorial -->
+        <div class="trm-hero__content">
+          <div class="flex items-center gap-4 mb-8">
+            <span class="trm-rule trm-rule--white" style="width: 56px"></span>
+            <span class="text-[10px] font-medium uppercase tracking-[0.45em] text-white/75">
+              {{ loja.categoria || 'Restaurante' }} · {{ loja.localizacao ? loja.localizacao.split(',')[0] : 'Lisboa' }}
+            </span>
+            <span class="trm-rule trm-rule--white hidden sm:inline-block" style="width: 56px"></span>
           </div>
 
-          <!-- Coluna imagem ambiente -->
-          <div class="col-span-12 lg:col-span-6 order-1 lg:order-2 relative">
-            <div class="relative mx-auto w-full max-w-[560px]">
-              <!-- frame principal -->
-              <div class="trm-hero-frame">
-                <video v-if="isVideo(loja.banner_url)"
-                       :src="loja.banner_url" autoplay muted loop playsinline
-                       class="w-full h-full object-cover"></video>
-                <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome"
-                     class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full flex items-center justify-center"
-                     :style="{ background: 'var(--cor-primaria)' }">
-                  <span class="text-[140px] font-serif italic text-white/90 leading-none">{{ monograma }}</span>
-                </div>
+          <h1 class="trm-hero__title font-serif">
+            <span v-for="(linha, i) in tituloLinhas" :key="i" class="block"
+                  :class="i % 2 === 1 ? 'italic font-light' : 'font-normal'"
+                  :style="i === 1 ? { color: 'var(--cor-primaria)' } : {}">
+              {{ linha }}
+            </span>
+          </h1>
 
-                <!-- vinheta sobreposta -->
-                <div class="absolute inset-0 trm-vignette"></div>
+          <p v-if="loja.descricao" class="trm-hero__desc font-serif italic">
+            {{ loja.descricao.substring(0, 160) }}{{ loja.descricao.length > 160 ? '…' : '' }}
+          </p>
 
-                <!-- overlay info: hours -->
-                <div class="absolute left-5 bottom-5 right-5 flex items-end justify-between gap-3">
-                  <div>
-                    <p class="text-[10px] tracking-[0.35em] uppercase text-white/60">Aberto agora</p>
-                    <p class="font-serif text-white text-2xl mt-1">19:00 — 23:30</p>
-                  </div>
-                  <span class="trm-dot-pulse"></span>
-                </div>
-              </div>
-
-              <!-- card flutuante: rating com talheres -->
-              <div class="trm-floatcard">
-                <div class="flex items-center gap-3">
-                  <span class="font-serif text-3xl leading-none" style="color:var(--cor-primaria)">★</span>
-                  <div>
-                    <p class="font-serif text-2xl leading-none">
-                      {{ loja.rating_medio ? Number(loja.rating_medio).toFixed(1) : '4.7' }}
-                    </p>
-                    <p class="text-[9px] tracking-[0.3em] uppercase opacity-60 mt-1">Excelente</p>
-                  </div>
-                </div>
-                <div class="trm-rule mt-3 mb-3" style="width: 100%"></div>
-                <p class="text-[10px] tracking-[0.25em] uppercase opacity-70">
-                  Top 1% · {{ new Date().getFullYear() }}
-                </p>
-              </div>
-            </div>
+          <div class="mt-12 flex flex-wrap items-center justify-center gap-4">
+            <button @click="scrollToId('menu')" class="trm-btn trm-btn--solid">
+              <span>Ver Menu</span>
+              <span class="trm-btn__arr">→</span>
+            </button>
+            <button @click="scrollToId('assinatura')" class="trm-btn trm-btn--ghost-light">
+              <span>Pratos de Assinatura</span>
+            </button>
           </div>
         </div>
+
+        <!-- KPIs em rodapé do hero -->
+        <div class="trm-hero__footer">
+          <div class="trm-hero__kpi">
+            <p class="trm-hero__kpi-num font-serif">{{ loja.rating_medio ? Number(loja.rating_medio).toFixed(1) : '—' }}<span class="text-[var(--cor-primaria)]">★</span></p>
+            <p class="trm-hero__kpi-lbl">Rating · {{ loja.total_avaliacoes || 0 }} reviews</p>
+          </div>
+          <div class="trm-hero__kpi">
+            <p class="trm-hero__kpi-num font-serif italic">{{ anoFundacao }}</p>
+            <p class="trm-hero__kpi-lbl">Desde</p>
+          </div>
+          <div class="trm-hero__kpi">
+            <p class="trm-hero__kpi-num font-serif">{{ loja.localizacao ? loja.localizacao.split(',')[0] : 'Lisboa' }}</p>
+            <p class="trm-hero__kpi-lbl">Onde</p>
+          </div>
+        </div>
+
+        <!-- Scroll cue -->
+        <button class="trm-scrollcue" @click="scrollToId('infobar')" aria-label="Descer">
+          <span class="text-[9px] tracking-[0.5em] uppercase">scroll</span>
+          <span class="trm-scrollcue__line"></span>
+        </button>
       </section>
 
       <!-- ───── INFO BAR (horário · morada · telefone) ───── -->
-      <section class="trm-infobar">
+      <section id="infobar" class="trm-infobar">
         <div class="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-4 divide-x"
              :class="isDark ? 'divide-white/10' : 'divide-black/10'">
           <div class="trm-infobar__item">
@@ -347,7 +314,40 @@
               @product-click="selectedProduct = $event" />
           </section>
 
-
+          <!-- ENTREGA & PAGAMENTO (sem reservas) -->
+          <section id="entrega" class="pt-20 md:pt-28 grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-8 trm-divider">
+            <div>
+              <span class="trm-eyebrow opacity-60">Take-away & Delivery</span>
+              <h3 class="font-serif text-3xl md:text-4xl mt-2">Em sua casa, à mesma mesa.</h3>
+              <p class="font-serif italic opacity-60 mt-4 max-w-sm">
+                Embalagem que respeita o tempo do prato. Entrega ao detalhe.
+              </p>
+            </div>
+            <div class="trm-card-block">
+              <div v-if="!opcoesEntrega.length" class="text-sm opacity-60">Sem opções configuradas.</div>
+              <div v-else class="divide-y" :class="isDark ? 'divide-white/10' : 'divide-black/10'">
+                <div v-for="opcao in opcoesEntrega" :key="opcao.id"
+                     class="flex items-baseline justify-between py-3 gap-3">
+                  <div class="min-w-0">
+                    <p class="font-serif text-[17px] truncate">{{ opcao.nome }}</p>
+                    <p v-if="opcao.tempo_estimado" class="text-xs opacity-50 mt-0.5">{{ opcao.tempo_estimado }}</p>
+                  </div>
+                  <span class="trm-dotleader"></span>
+                  <span class="font-serif text-[17px]" style="color:var(--cor-primaria)">
+                    {{ opcao.preco == 0 ? 'Grátis' : formatPrice(opcao.preco) }}
+                  </span>
+                </div>
+              </div>
+              <div class="mt-6 pt-6 border-t" :class="isDark ? 'border-white/10' : 'border-black/10'">
+                <p class="trm-eyebrow opacity-60 mb-3">Pagamento</p>
+                <div class="flex flex-wrap gap-2">
+                  <span v-for="m in metodosPagamento" :key="m.id" class="trm-paychip">
+                    {{ metodoPagamentoIcon(m.tipo) }} {{ m.tipo }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
 
           <!-- AVALIAÇÕES -->
           <section id="avaliacoes" class="pt-20 md:pt-28 trm-divider">
@@ -469,16 +469,12 @@ export default {
     const isDark   = ref(props.tema?.darkMode !== false)
     const lojaData = useLojaData()
 
-    const cssVars = computed(() => {
-      const primaryColor = props.tema?.corPrimaria || '#b07b3f'
-      const secondaryColor = props.tema?.corSecundaria || '#0f0d0a'
-      return {
-        '--cor-primaria':   primaryColor,
-        '--cor-secundaria': secondaryColor,
-        '--trm-bg-d':       isDark.value ? '#0f0d0a' : '#f7f3ec',
-        '--trm-bg-l':       isDark.value ? '#0f0d0a' : '#f7f3ec',
-      }
-    })
+    const cssVars = computed(() => ({
+      '--cor-primaria':   props.tema?.corPrimaria   || '#b07b3f',
+      '--cor-secundaria': props.tema?.corSecundaria || '#0f0d0a',
+      '--trm-bg-d':       props.tema?.corSecundaria || '#0f0d0a',
+      '--trm-bg-l':       '#f7f3ec',
+    }))
 
     const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 
@@ -497,8 +493,8 @@ export default {
       { id: 'assinatura', label: 'Assinatura', num: 'i.' },
       { id: 'categorias', label: 'Categorias', num: 'ii.' },
       { id: 'menu',       label: 'A Carta',    num: 'iii.' },
-      { id: 'reservar',   label: 'Reservar',   num: 'iv.' },
-      { id: 'avaliacoes', label: 'Reviews',    num: 'v.' },
+      { id: 'avaliacoes', label: 'Reviews',    num: 'iv.' },
+      { id: 'entrega',    label: 'Entrega',    num: 'v.' },
     ]
 
     return { isDark, cssVars, user, toggleDark, isVideo, romano, romanoMin, secoes, ...lojaData }
@@ -586,73 +582,197 @@ export default {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   HERO
+   HERO IMERSIVO — fullscreen
    ════════════════════════════════════════════════════════════════ */
-.trm-hero-title {
-  font-size: clamp(3.4rem, 8.5vw, 7.4rem);
-  line-height: .95;
-  letter-spacing: -0.025em;
-  font-weight: 400;
-}
-
-.trm-hero-frame {
+.trm-hero {
   position: relative;
-  aspect-ratio: 4 / 5;
+  width: 100%;
+  height: 100vh;
+  min-height: 640px;
   overflow: hidden;
-  background: rgba(255,255,255,.04);
-  box-shadow: 0 40px 80px -30px rgba(0,0,0,.55);
+  background: #0a0907;
+  color: #fff;
+  isolation: isolate;
 }
-.trm--light .trm-hero-frame { background: rgba(0,0,0,.04); box-shadow: 0 40px 80px -30px rgba(60,40,20,.25); }
-
-.trm-vignette {
+.trm-hero__media {
+  position: absolute; inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+.trm-hero__media > img,
+.trm-hero__media > video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scale(1.05);
+  animation: trm-kenburns 24s ease-in-out infinite alternate;
+}
+@keyframes trm-kenburns {
+  from { transform: scale(1.05) translate3d(0, 0, 0); }
+  to   { transform: scale(1.12) translate3d(-1.5%, -1%, 0); }
+}
+.trm-hero__scrim {
+  position: absolute; inset: 0;
   background:
-    linear-gradient(180deg, transparent 55%, rgba(0,0,0,.7) 100%),
-    radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.35) 100%);
+    radial-gradient(ellipse at 50% 30%, transparent 0%, rgba(0,0,0,.35) 60%, rgba(0,0,0,.78) 100%),
+    linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.15) 30%, rgba(0,0,0,.25) 65%, rgba(0,0,0,.85) 100%);
 }
 
+.trm-hero__topbar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 3;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 32px 0;
+}
+@media (max-width: 768px) { .trm-hero__topbar { padding: 18px 20px 0; } }
+
+.trm-hero__live {
+  position: absolute;
+  top: 30px; right: clamp(8.5rem, calc(2.5vw + 11rem), 19rem);
+  z-index: 3;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(0,0,0,.25);
+  backdrop-filter: blur(8px);
+}
+@media (max-width: 768px) {
+  .trm-hero__live {
+    top: auto; bottom: 220px;
+    right: 20px;
+    padding: 8px 12px;
+  }
+  .trm-hero__live span:last-child { font-size: 8.5px !important; }
+}
+
+.trm-hero__content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: 60px 32px;
+}
+.trm-hero__title {
+  font-size: clamp(3.6rem, 12vw, 11rem);
+  line-height: .92;
+  letter-spacing: -0.035em;
+  font-weight: 400;
+  text-shadow: 0 4px 30px rgba(0,0,0,.4);
+  max-width: 1200px;
+}
+.trm-hero__desc {
+  margin-top: 28px;
+  font-size: clamp(1.15rem, 1.6vw, 1.4rem);
+  max-width: 560px;
+  color: rgba(255,255,255,.82);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.trm-hero__footer {
+  position: absolute;
+  left: 0; right: 0; bottom: 56px;
+  z-index: 2;
+  display: flex; justify-content: center;
+  gap: clamp(32px, 6vw, 80px);
+  padding: 0 24px;
+}
+@media (max-width: 640px) {
+  .trm-hero__footer { bottom: 90px; gap: 24px; }
+}
+.trm-hero__kpi {
+  text-align: center;
+  color: rgba(255,255,255,.95);
+}
+.trm-hero__kpi-num {
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.trm-hero__kpi-num span { font-size: .7em; margin-left: 4px; }
+.trm-hero__kpi-lbl {
+  font-size: 9px; letter-spacing: .4em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.55);
+  margin-top: 8px;
+}
+
+/* Scroll cue */
+.trm-scrollcue {
+  position: absolute;
+  left: 50%; bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: transparent; border: 0;
+  color: rgba(255,255,255,.6);
+  cursor: pointer;
+  transition: color .3s ease;
+}
+.trm-scrollcue:hover { color: var(--cor-primaria); }
+.trm-scrollcue__line {
+  width: 1px; height: 38px;
+  background: linear-gradient(180deg, currentColor, transparent);
+  position: relative;
+  overflow: hidden;
+}
+.trm-scrollcue__line::after {
+  content: ''; position: absolute;
+  top: -38px; left: 0; width: 100%; height: 38px;
+  background: linear-gradient(180deg, transparent, var(--cor-primaria));
+  animation: trm-scrolltrail 2s ease-in-out infinite;
+}
+@keyframes trm-scrolltrail {
+  0%   { top: -38px; opacity: 0; }
+  20%  { opacity: 1; }
+  100% { top: 38px; opacity: 0; }
+}
+
+/* live dot */
 .trm-dot-pulse {
-  width: 10px; height: 10px; border-radius: 50%;
+  width: 8px; height: 8px; border-radius: 50%;
   background: #4ade80;
   box-shadow: 0 0 0 4px rgba(74,222,128,.2);
   animation: trm-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
 }
 @keyframes trm-pulse {
   0%, 100% { box-shadow: 0 0 0 4px rgba(74,222,128,.18); }
   50%      { box-shadow: 0 0 0 8px rgba(74,222,128,.05); }
 }
 
-.trm-floatcard {
-  position: absolute;
-  bottom: -32px; left: -32px;
-  background: var(--trm-bg-d);
-  color: #ece6db;
-  padding: 18px 22px;
-  min-width: 200px;
-  border: 1px solid color-mix(in oklab, var(--cor-primaria), transparent 60%);
-  box-shadow: 0 30px 50px -20px rgba(0,0,0,.5);
+/* Variantes em fundo de media */
+.trm-iconbtn--on-media {
+  border-color: rgba(255,255,255,.4);
+  color: rgba(255,255,255,.92);
+  background: rgba(0,0,0,.18);
+  backdrop-filter: blur(8px);
+  opacity: 1;
 }
-.trm--light .trm-floatcard {
-  background: #fff;
-  color: #1a1714;
-  border-color: color-mix(in oklab, var(--cor-primaria), transparent 70%);
-  box-shadow: 0 30px 50px -20px rgba(60,40,20,.25);
+.trm-iconbtn--on-media:hover {
+  border-color: var(--cor-primaria);
+  color: #fff;
+  background: var(--cor-primaria);
 }
+.trm-monogram--on-media {
+  border-color: rgba(255,255,255,.55);
+  color: #fff;
+}
+.trm-rule--white { background: rgba(255,255,255,.6); opacity: 1; }
 
-/* KPIs */
-.trm-kpi { padding-top: 14px; border-top: 1px solid; border-color: currentColor; opacity: 1; }
-.trm-kpi__num {
-  font-size: clamp(2.2rem, 4vw, 2.8rem);
-  font-weight: 400;
-  line-height: 1;
-  color: var(--cor-primaria);
+.trm-btn--ghost-light {
+  border-color: rgba(255,255,255,.55);
+  color: #fff;
+  background: rgba(0,0,0,.18);
+  backdrop-filter: blur(6px);
 }
-.trm-kpi__lbl {
-  font-size: 9px; letter-spacing: .35em;
-  text-transform: uppercase;
-  opacity: .55;
-  margin-top: 6px;
+.trm-btn--ghost-light:hover {
+  background: #fff;
+  color: var(--cor-secundaria);
+  border-color: #fff;
 }
-.trm-kpi { border-color: color-mix(in oklab, currentColor, transparent 80%); }
 
 /* ════════════════════════════════════════════════════════════════
    BUTTONS
@@ -882,33 +1002,6 @@ export default {
   position: relative;
   overflow: hidden;
 }
-.trm-card-block__bg {
-  position: absolute;
-  inset: auto -120px -120px auto;
-  width: 360px; height: 360px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.06);
-  pointer-events: none;
-}
-
-.trm-input-on-accent {
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.2);
-  padding: 12px 14px;
-  font-size: 13px;
-  color: #fff;
-  outline: none;
-  font-family: inherit;
-  transition: all .25s;
-  border-radius: 0;
-}
-.trm-input-on-accent::placeholder { color: rgba(255,255,255,.5); }
-.trm-input-on-accent:focus {
-  background: rgba(255,255,255,.15);
-  border-color: rgba(255,255,255,.5);
-}
-.trm-input-on-accent option { color: #1a1714; }
-
 /* dot leader (preço estilo carta) */
 .trm-dotleader {
   flex: 1; min-width: 30px; align-self: flex-end;
