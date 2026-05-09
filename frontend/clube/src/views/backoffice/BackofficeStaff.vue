@@ -80,43 +80,44 @@
     </div>
 
     <!-- Modal adicionar membro -->
-    <div v-if="showModal"
-         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-         @click.self="fecharModal">
-      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-sm p-6 shadow-2xl">
-        <h3 class="text-base font-bold text-zinc-100 mb-1">Adicionar membro</h3>
-        <p class="text-xs text-zinc-500 mb-5">O utilizador já tem de ter conta na plataforma.</p>
+    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" @click.self="fecharModal">
+      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+        
+        <!-- Header -->
+        <div class="p-6 border-b border-zinc-800">
+          <h3 class="text-base font-bold text-zinc-100">Adicionar membro</h3>
+          
+          <!-- Tabs -->
+          <div class="flex gap-2 mt-4">
+            <button @click="activeTab = 'pesquisar'" :class="['flex-1 py-2 rounded-lg text-sm font-semibold transition', activeTab === 'pesquisar' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+              Pesquisar existente
+            </button>
+            <button @click="activeTab = 'criar'" :class="['flex-1 py-2 rounded-lg text-sm font-semibold transition', activeTab === 'criar' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+              Criar novo
+            </button>
+          </div>
+        </div>
 
-        <div class="space-y-4">
-
-          <!-- Pesquisa de utilizador -->
-          <div>
-            <label class="text-xs text-zinc-500 mb-1 block">Pesquisar utilizador</label>
+        <!-- Body scrollável -->
+        <div class="flex-1 overflow-y-auto p-6">
+          
+          <!-- TAB: Pesquisar -->
+          <div v-if="activeTab === 'pesquisar'" class="space-y-4">
+            
+            <!-- Barra de pesquisa -->
             <div class="relative">
-              <input
-                v-model="pesquisaUtilizador"
-                @input="debouncedPesquisa"
-                type="text"
-                placeholder="Username ou email..."
-                class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
-                       placeholder-zinc-500 focus:outline-none focus:border-red-500 transition pr-8" />
-              <svg v-if="loadingPesquisa"
-                   class="animate-spin h-4 w-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2"
-                   viewBox="0 0 24 24" fill="none">
+              <input v-model="pesquisaUtilizador" @input="debouncedPesquisa" type="text" placeholder="Username, email ou nome..." class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 pr-8" />
+              <svg v-if="loadingPesquisa" class="animate-spin h-4 w-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
                 <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
               </svg>
             </div>
 
-            <!-- Resultados da pesquisa -->
-            <div v-if="resultadosPesquisa.length > 0 && !utilizadorSelecionado"
-                 class="mt-1 bg-zinc-800 rounded-xl border border-zinc-700 overflow-hidden">
-              <button
-                v-for="u in resultadosPesquisa" :key="u.id"
-                @click="selecionarUtilizador(u)"
-                class="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-700 transition text-left">
-                <div class="w-7 h-7 rounded-lg bg-zinc-600 flex items-center justify-center flex-shrink-0">
-                  <span class="text-xs font-bold text-zinc-300">{{ u.nome?.charAt(0) || u.username?.charAt(0) }}</span>
+            <!-- Lista de resultados -->
+            <div v-if="resultadosPesquisa.length > 0" class="space-y-2 max-h-80 overflow-y-auto">
+              <button v-for="u in resultadosPesquisa" :key="u.id" @click="selecionarUtilizador(u)" :class="['w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition text-left', utilizadorSelecionado?.id === u.id ? 'bg-red-500/20 border-2 border-red-500' : 'bg-zinc-800 hover:bg-zinc-700 border-2 border-transparent']">
+                <div class="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                  <span class="text-sm font-bold text-zinc-300">{{ u.nome?.charAt(0) || u.username?.charAt(0) }}</span>
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-zinc-200 truncate">{{ u.nome }}</p>
@@ -125,64 +126,91 @@
               </button>
             </div>
 
-            <!-- Sem resultados -->
-            <p v-if="pesquisaUtilizador.length >= 2 && resultadosPesquisa.length === 0 && !loadingPesquisa && !utilizadorSelecionado"
-               class="text-xs text-zinc-500 mt-2 px-1">
-              Nenhum utilizador encontrado.
-            </p>
-          </div>
-
-          <!-- Utilizador seleccionado -->
-          <div v-if="utilizadorSelecionado"
-               class="flex items-center gap-3 p-3 bg-zinc-800 rounded-xl border border-red-500/40">
-            <div class="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
-              <span class="text-sm font-bold text-zinc-300">
-                {{ utilizadorSelecionado.nome?.charAt(0) || '?' }}
-              </span>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-zinc-200">{{ utilizadorSelecionado.nome }}</p>
-              <p class="text-xs text-zinc-500">@{{ utilizadorSelecionado.username }}</p>
-            </div>
-            <button @click="limparSeleccao" class="text-zinc-500 hover:text-zinc-300 transition">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- Role -->
-          <div>
-            <label class="text-xs text-zinc-500 mb-1 block">Role</label>
-            <select v-model="novoRole"
-              class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
-                     focus:outline-none focus:border-red-500 transition">
-              <option v-for="r in roles" :key="r.value" :value="r.value">{{ r.label }}</option>
-            </select>
-            <p class="text-xs text-zinc-600 mt-1">{{ rolesInfo.find(r => r.role === novoRole)?.descricao }}</p>
-          </div>
-
-          <p v-if="erroAdicionar" class="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{{ erroAdicionar }}</p>
-        </div>
-
-        <div class="flex gap-3 mt-5">
-          <button @click="fecharModal"
-            class="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
-            Cancelar
-          </button>
-          <button @click="adicionarMembro" :disabled="loadingAdicionar || !utilizadorSelecionado"
-            :class="['flex-1 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2',
-                     loadingAdicionar || !utilizadorSelecionado
-                       ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                       : 'bg-red-600 hover:bg-red-500 text-white']">
-            <span v-if="loadingAdicionar" class="flex items-center gap-1">
-              <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <!-- Load more -->
+            <button v-if="hasMoreResults" @click="carregarMais" :disabled="loadingMore" class="w-full py-2 rounded-lg bg-zinc-800 text-zinc-400 text-sm hover:bg-zinc-700 transition flex items-center justify-center gap-2 disabled:opacity-50">
+              <svg v-if="loadingMore" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
                 <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
               </svg>
-              A adicionar…
-            </span>
-            <span v-else>Adicionar à equipa</span>
+              {{ loadingMore ? 'A carregar...' : 'Carregar mais' }}
+            </button>
+
+            <p v-if="pesquisaUtilizador && resultadosPesquisa.length === 0 && !loadingPesquisa" class="text-xs text-zinc-500 text-center py-4">
+              Nenhum utilizador encontrado.
+            </p>
+
+            <!-- Role -->
+            <div v-if="utilizadorSelecionado">
+              <label class="text-xs text-zinc-500 mb-1 block">Role</label>
+              <select v-model="novoRole" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+                <option v-for="r in roles" :key="r.value" :value="r.value">{{ r.label }}</option>
+              </select>
+              <p class="text-xs text-zinc-600 mt-1">{{ rolesInfo.find(r => r.role === novoRole)?.descricao }}</p>
+            </div>
+          </div>
+
+          <!-- TAB: Criar novo -->
+          <div v-else class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Primeiro nome</label>
+                <input v-model="novoUtilizador.first_name" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Ana" />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Apelido</label>
+                <input v-model="novoUtilizador.last_name" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Silva" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Username *</label>
+              <input v-model="novoUtilizador.username" required class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="ana_silva" />
+            </div>
+
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Email *</label>
+              <input v-model="novoUtilizador.email" type="email" required class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="ana@exemplo.pt" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Telemóvel</label>
+                <input v-model="novoUtilizador.telefone" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="+351 9xx..." />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 mb-1 block">Cidade</label>
+                <input v-model="novoUtilizador.morada" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Lisboa" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Password *</label>
+              <input v-model="novoUtilizador.password" type="password" required class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Mínimo 8 caracteres" />
+            </div>
+
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Role *</label>
+              <select v-model="novoRole" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+                <option v-for="r in roles" :key="r.value" :value="r.value">{{ r.label }}</option>
+              </select>
+              <p class="text-xs text-zinc-600 mt-1">{{ rolesInfo.find(r => r.role === novoRole)?.descricao }}</p>
+            </div>
+
+            <p v-if="erroAdicionar" class="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{{ erroAdicionar }}</p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-6 border-t border-zinc-800 flex gap-3">
+          <button @click="fecharModal" class="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
+            Cancelar
+          </button>
+          <button @click="submeterModal" :disabled="loadingAdicionar || !podeSubmeter" :class="['flex-1 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2', loadingAdicionar || !podeSubmeter ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500 text-white']">
+            <svg v-if="loadingAdicionar" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+              <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
+            </svg>
+            {{ loadingAdicionar ? 'A adicionar…' : 'Adicionar à equipa' }}
           </button>
         </div>
       </div>
@@ -205,13 +233,31 @@ export default {
       loadingAdicionar: false,
       erroAdicionar: '',
 
+      activeTab: 'pesquisar', // 'pesquisar' | 'criar'
+
       // pesquisa
       pesquisaUtilizador: '',
       resultadosPesquisa: [],
       loadingPesquisa: false,
       utilizadorSelecionado: null,
-      novoRole: 'staff',
       debounceTimer: null,
+      offset: 0,
+      totalCount: 0,
+      hasMoreResults: false,
+      loadingMore: false,
+
+      // criar
+      novoUtilizador: {
+        username: '',
+        email: '',
+        password: '',
+        first_name: '',
+        last_name: '',
+        telefone: '',
+        morada: ''
+      },
+
+      novoRole: 'staff',
 
       roles: [
         { value: 'gestor',       label: 'Gestor'       },
@@ -226,6 +272,16 @@ export default {
         { role: 'contabilista', descricao: 'Acesso financeiro — pagamentos e relatórios apenas.' },
         { role: 'condutor',     descricao: 'Gestão de entregas — só vê e actualiza o estado das entregas.' },
       ],
+    }
+  },
+
+  computed: {
+    podeSubmeter () {
+      if (this.activeTab === 'pesquisar') {
+        return !!this.utilizadorSelecionado
+      } else {
+        return this.novoUtilizador.username && this.novoUtilizador.email && this.novoUtilizador.password
+      }
     }
   },
 
@@ -245,41 +301,57 @@ export default {
 
     abrirModal () {
       this.showModal = true
+      this.activeTab = 'pesquisar'
       this.erroAdicionar = ''
-      this.pesquisaUtilizador = ''
-      this.resultadosPesquisa = []
-      this.utilizadorSelecionado = null
-      this.novoRole = 'staff'
+      this.limparFormularios()
     },
 
     fecharModal () {
       this.showModal = false
       this.erroAdicionar = ''
-      this.pesquisaUtilizador = ''
-      this.resultadosPesquisa = []
-      this.utilizadorSelecionado = null
+      this.limparFormularios()
     },
 
-    limparSeleccao () {
-      this.utilizadorSelecionado = null
+    limparFormularios () {
       this.pesquisaUtilizador = ''
       this.resultadosPesquisa = []
+      this.utilizadorSelecionado = null
+      this.offset = 0
+      this.hasMoreResults = false
+      this.novoUtilizador = {
+        username: '',
+        email: '',
+        password: '',
+        first_name: '',
+        last_name: '',
+        telefone: '',
+        morada: ''
+      }
+      this.novoRole = 'staff'
+    },
+
+    selecionarUtilizador (u) {
+      this.utilizadorSelecionado = u
     },
 
     debouncedPesquisa () {
       clearTimeout(this.debounceTimer)
       this.resultadosPesquisa = []
+      this.utilizadorSelecionado = null
       if (this.pesquisaUtilizador.length < 2) return
       this.debounceTimer = setTimeout(() => this.pesquisarUtilizadores(), 400)
     },
 
     async pesquisarUtilizadores () {
       this.loadingPesquisa = true
+      this.offset = 0
       try {
-        const { data } = await api.get(`/app/utilizador/search/?q=${encodeURIComponent(this.pesquisaUtilizador)}`)
-        // filtra quem já está no staff
+        const { data } = await api.get(`/app/utilizador/search/?q=${encodeURIComponent(this.pesquisaUtilizador)}&offset=0&limit=20`)
         const idsStaff = this.staff.map(m => m.utilizador?.id)
-        this.resultadosPesquisa = data.filter(u => !idsStaff.includes(u.id))
+        this.resultadosPesquisa = data.results.filter(u => !idsStaff.includes(u.id))
+        this.totalCount = data.count
+        this.offset = 20
+        this.hasMoreResults = data.next_offset !== null
       } catch (e) {
         console.error(e)
         this.resultadosPesquisa = []
@@ -288,10 +360,19 @@ export default {
       }
     },
 
-    selecionarUtilizador (u) {
-      this.utilizadorSelecionado = u
-      this.resultadosPesquisa = []
-      this.pesquisaUtilizador = ''
+    async carregarMais () {
+      this.loadingMore = true
+      try {
+        const { data } = await api.get(`/app/utilizador/search/?q=${encodeURIComponent(this.pesquisaUtilizador)}&offset=${this.offset}&limit=20`)
+        const idsStaff = this.staff.map(m => m.utilizador?.id)
+        this.resultadosPesquisa.push(...data.results.filter(u => !idsStaff.includes(u.id)))
+        this.offset += 20
+        this.hasMoreResults = data.next_offset !== null
+      } catch (e) {
+        console.error(e)
+      } finally {
+        this.loadingMore = false
+      }
     },
 
     async fetchStaff () {
@@ -303,7 +384,7 @@ export default {
       finally { this.loading = false }
     },
 
-   async mudarRole (membro, novoRole) {
+    async mudarRole (membro, novoRole) {
       const roleAnterior = membro.role
       try {
         await api.patch(`/app/loja/${this.lojaId}/staff/${membro.id}/`, { role: novoRole })
@@ -324,10 +405,7 @@ export default {
               await api.patch(`/app/loja/${this.lojaId}/staff/${membro.id}/`, { role: novoRole, forcar: true })
               membro.role = novoRole
             } catch (e2) { console.error(e2) }
-          }
-          // se não confirmar, repõe o select para o role anterior
-          // (Vue não repõe automaticamente porque o value já mudou no DOM)
-          else {
+          } else {
             await this.$nextTick()
             membro.role = roleAnterior
           }
@@ -353,7 +431,7 @@ export default {
           )) {
             await api.delete(
               `/app/loja/${this.lojaId}/staff/${membro.id}/remover/`,
-              { data: { forcar: true } }   // ← axios DELETE com body
+              { data: { forcar: true } }
             )
             this.staff = this.staff.filter(m => m.id !== membro.id)
           }
@@ -361,16 +439,23 @@ export default {
       }
     },
 
-    async adicionarMembro () {
-      if (!this.utilizadorSelecionado) return
+    async submeterModal () {
       this.erroAdicionar = ''
       this.loadingAdicionar = true
       try {
-        // Associa o utilizador existente à loja via UtilizadorLoja
-        await api.post(`/app/loja/${this.lojaId}/staff/adicionar/`, {
-          utilizador_id: this.utilizadorSelecionado.id,
-          role: this.novoRole,
-        })
+        if (this.activeTab === 'pesquisar') {
+          // Adicionar utilizador existente
+          await api.post(`/app/loja/${this.lojaId}/staff/adicionar/`, {
+            utilizador_id: this.utilizadorSelecionado.id,
+            role: this.novoRole,
+          })
+        } else {
+          // Criar novo utilizador + adicionar
+          await api.post(`/app/loja/${this.lojaId}/staff/criar-utilizador/`, {
+            ...this.novoUtilizador,
+            role: this.novoRole,
+          })
+        }
         this.fecharModal()
         await this.fetchStaff()
       } catch (e) {

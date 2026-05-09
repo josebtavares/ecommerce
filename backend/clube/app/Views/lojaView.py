@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from ..Views.notificacaoView import notificar_admins, notificar, notificar_staff
-from ..models import Loja, UtilizadorLoja, Utilizador
+from ..models import Loja, UtilizadorLoja, Utilizador, User
 from ..Serializers.LojaSerializer import (
     LojaSerializer,
     LojaPublicSerializer,
@@ -684,3 +684,67 @@ def loja_dashboard(request, loja_id):
         'entregas_falhadas':    entregas_falhadas,
         'taxa_entrega':         taxa_entrega,
     })
+    
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def staff_criar_utilizador(request, loja_id):
+    """
+    POST /app/loja/<loja_id>/staff/criar-utilizador/
+    Cria utilizador novo + adiciona à loja com role especificado
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_staff')
+    if erro:
+        return erro
+
+    # Validar dados do utilizador
+    username = request.data.get('username', '').strip()
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '')
+    role = request.data.get('role', 'staff')
+
+    if not username or not email or not password:
+        return Response({'detail': 'Username, email e password são obrigatórios.'}, status=400)
+
+    if User.objects.filter(username=username).exists():
+        return Response({'detail': 'Username já existe.'}, status=400)
+    
+    if User.objects.filter(email=email).exists():
+        return Response({'detail': 'Email já está registado.'}, status=400)
+
+    # Criar User Django
+    user = User.objects.create_user(
+        username=username,
+        email=email,
+        password=password,
+        first_name=request.data.get('first_name', ''),
+        last_name=request.data.get('last_name', '')
+    )
+
+    # Criar Utilizador
+    utilizador = Utilizador.objects.create(
+        user=user,
+        telefone=request.data.get('telefone', ''),
+        morada=request.data.get('morada', ''),
+        verificado=False  # criado por gestor → não verificado
+    )
+
+    # Adicionar à loja com role
+    membro = UtilizadorLoja.objects.create(
+        loja=loja,
+        utilizador=utilizador,
+        role=role,
+        ativo=True
+    )
+
+    if role == 'condutor':
+        _sincronizar_condutor(loja, utilizador, request.data.get('tipo_veiculo', ''))
+
+    _notificar_novo_staff(utilizador, loja, role)
+
+    return Response(
+        UtilizadorLojaSerializer(membro, context={'request': request}).data,
+        status=201
+    )
