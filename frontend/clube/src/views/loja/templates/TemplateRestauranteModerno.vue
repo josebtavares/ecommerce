@@ -57,7 +57,7 @@
       <!-- ───── HERO ───── -->
       <section class="relative px-6 md:px-10 pt-10 md:pt-14 pb-16 md:pb-24">
         <div class="grid grid-cols-12 gap-6 md:gap-12 items-center max-w-[1400px] mx-auto"
-             style="min-height: clamp(560px, 80vh, 820px)">
+             style="min-height: clamp(560px, 80vh, 100vh)">
 
           <!-- Coluna texto editorial -->
           <div class="col-span-12 lg:col-span-6 order-2 lg:order-1">
@@ -347,57 +347,7 @@
               @product-click="selectedProduct = $event" />
           </section>
 
-          <!-- RESERVAR + LOCAL/ENTREGA -->
-          <section id="reservar" class="pt-20 md:pt-28 grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6 trm-divider">
 
-            <div class="trm-card-block lg:col-span-2 relative overflow-hidden"
-                 :style="{ background: 'var(--cor-primaria)', color: '#fff' }">
-              <div class="trm-card-block__bg"></div>
-              <span class="trm-eyebrow opacity-90">Para esta noite</span>
-              <h3 class="font-serif text-4xl md:text-5xl mt-2 leading-tight">Reserve a sua mesa</h3>
-              <p class="text-white/80 mt-4 max-w-sm">Atendimento personalizado, harmonização de vinhos e pequenas atenções da casa.</p>
-
-              <form class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3" @submit.prevent>
-                <input type="text" placeholder="Nome" class="trm-input-on-accent col-span-2" />
-                <input type="date" class="trm-input-on-accent" />
-                <input type="time" class="trm-input-on-accent" />
-                <select class="trm-input-on-accent">
-                  <option>2 pessoas</option><option>3</option><option>4</option><option>5+</option>
-                </select>
-                <input type="tel" placeholder="Contacto" class="trm-input-on-accent col-span-2" />
-                <button class="trm-btn trm-btn--reverse col-span-2 md:col-span-1">
-                  Reservar <span class="trm-btn__arr">→</span>
-                </button>
-              </form>
-            </div>
-
-            <div class="trm-card-block">
-              <span class="trm-eyebrow opacity-60">Take-away</span>
-              <h3 class="font-serif text-3xl mt-2">Entrega</h3>
-              <div v-if="!opcoesEntrega.length" class="text-sm opacity-60 mt-4">Sem opções configuradas.</div>
-              <div v-else class="mt-5 divide-y" :class="isDark ? 'divide-white/10' : 'divide-black/10'">
-                <div v-for="opcao in opcoesEntrega" :key="opcao.id"
-                     class="flex items-baseline justify-between py-3 gap-3">
-                  <div class="min-w-0">
-                    <p class="font-serif text-[17px] truncate">{{ opcao.nome }}</p>
-                    <p v-if="opcao.tempo_estimado" class="text-xs opacity-50 mt-0.5">{{ opcao.tempo_estimado }}</p>
-                  </div>
-                  <span class="trm-dotleader"></span>
-                  <span class="font-serif text-[17px]" style="color:var(--cor-primaria)">
-                    {{ opcao.preco == 0 ? 'Grátis' : formatPrice(opcao.preco) }}
-                  </span>
-                </div>
-              </div>
-              <div class="mt-6">
-                <p class="trm-eyebrow opacity-60 mb-3">Pagamento</p>
-                <div class="flex flex-wrap gap-2">
-                  <span v-for="m in metodosPagamento" :key="m.id" class="trm-paychip">
-                    {{ metodoPagamentoIcon(m.tipo) }} {{ m.tipo }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </section>
 
           <!-- AVALIAÇÕES -->
           <section id="avaliacoes" class="pt-20 md:pt-28 trm-divider">
@@ -519,12 +469,16 @@ export default {
     const isDark   = ref(props.tema?.darkMode !== false)
     const lojaData = useLojaData()
 
-    const cssVars = computed(() => ({
-      '--cor-primaria':   props.tema?.corPrimaria   || '#b07b3f',
-      '--cor-secundaria': props.tema?.corSecundaria || '#0f0d0a',
-      '--trm-bg-d':       props.tema?.corSecundaria || '#0f0d0a',
-      '--trm-bg-l':       '#f7f3ec',
-    }))
+    const cssVars = computed(() => {
+      const primaryColor = props.tema?.corPrimaria || '#b07b3f'
+      const secondaryColor = props.tema?.corSecundaria || '#0f0d0a'
+      return {
+        '--cor-primaria':   primaryColor,
+        '--cor-secundaria': secondaryColor,
+        '--trm-bg-d':       isDark.value ? '#0f0d0a' : '#f7f3ec',
+        '--trm-bg-l':       isDark.value ? '#0f0d0a' : '#f7f3ec',
+      }
+    })
 
     const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 
