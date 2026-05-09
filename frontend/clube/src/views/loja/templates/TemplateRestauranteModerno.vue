@@ -39,11 +39,7 @@
           :alt="loja.nome" 
           class="absolute inset-0 w-full h-full object-cover" />
 
-        <!-- Cinematic Overlays -->
-        <div class="absolute inset-0" 
-             :class="isDark 
-               ? 'bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/30' 
-               : 'bg-gradient-to-t from-white via-white/50 to-white/20'"></div>
+        
         
 
         <!-- Navigation Bar - positioned to avoid UserProfile/NotificacaoSino/MultiCart -->
