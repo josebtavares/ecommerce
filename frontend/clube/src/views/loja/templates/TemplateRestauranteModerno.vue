@@ -58,7 +58,7 @@
                 class="flex items-center gap-2 px-3 py-2 rounded-lg backdrop-blur-sm transition-all group"
                 :class="isDark 
                   ? 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white' 
-                  : 'bg-black/5 hover:bg-black/10 text-black/60 hover:text-black'">
+                  : 'bg-black/10 hover:bg-black/20 text-black/80 hover:text-black'">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
@@ -69,7 +69,7 @@
                 class="w-9 h-9 rounded-lg backdrop-blur-sm flex items-center justify-center transition-all"
                 :class="isDark 
                   ? 'bg-white/5 hover:bg-white/10' 
-                  : 'bg-black/5 hover:bg-black/10'">
+                  : 'bg-black/10 hover:bg-black/20'">
                 <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -106,7 +106,7 @@
                 <div class="flex items-center gap-3 mb-4">
                   <div class="h-px w-10" :style="{ backgroundColor: 'var(--cor-primaria)' }"></div>
                   <span class="text-xs font-bold tracking-[0.25em] uppercase"
-                        :class="isDark ? 'text-white/40' : 'text-black/50'">
+                        :class="isDark ? 'text-white/40' : 'text-black/70'">
                     {{ loja.categoria }}
                   </span>
                 </div>
@@ -119,7 +119,7 @@
 
                 <!-- Description -->
                 <p class="text-base md:text-lg leading-relaxed mb-6 max-w-lg"
-                   :class="isDark ? 'text-white/50' : 'text-zinc-600'">
+                   :class="isDark ? 'text-white/50' : 'text-zinc-700'">
                   {{ loja.descricao || 'Descubra uma experiência gastronómica única.' }}
                 </p>
 
@@ -138,7 +138,7 @@
                     class="px-6 py-3 font-bold text-sm uppercase tracking-wider border transition-all hover:-translate-y-0.5"
                     :class="isDark 
                       ? 'border-white/25 text-white/70 hover:border-white/50 hover:text-white' 
-                      : 'border-black/25 text-black/70 hover:border-black/50 hover:text-black'">
+                      : 'border-black/40 text-black/80 hover:border-black/60 hover:text-black'">
                     ★ Reviews
                   </button>
                 </div>
@@ -151,7 +151,7 @@
                     {{ loja.rating_medio }}
                   </p>
                   <p class="text-xs font-medium tracking-widest uppercase"
-                     :class="isDark ? 'text-white/25' : 'text-zinc-400'">
+                     :class="isDark ? 'text-white/25' : 'text-zinc-500'">
                     / 5 stars
                   </p>
                 </div>
@@ -160,7 +160,7 @@
                     {{ loja.total_avaliacoes }}
                   </p>
                   <p class="text-xs font-medium tracking-widest uppercase"
-                     :class="isDark ? 'text-white/25' : 'text-zinc-400'">
+                     :class="isDark ? 'text-white/25' : 'text-zinc-500'">
                     Reviews
                   </p>
                 </div>
@@ -172,8 +172,8 @@
         <!-- Scroll Indicator -->
         <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
           <span class="text-[10px] font-bold tracking-widest uppercase"
-                :class="isDark ? 'text-white/30' : 'text-black/30'">Scroll</span>
-          <svg class="w-4 h-4" :class="isDark ? 'text-white/30' : 'text-black/30'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                :class="isDark ? 'text-white/30' : 'text-black/50'">Scroll</span>
+          <svg class="w-4 h-4" :class="isDark ? 'text-white/30' : 'text-black/50'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
         </div>
@@ -371,7 +371,7 @@
               :submitButtonStyle="{ backgroundColor: 'var(--cor-primaria)' }"
               :ownReviewBorderClass="isDark 
                 ? 'bg-zinc-900 border-l-4' 
-                : 'bg-white border-l-4'"
+                : 'bg-gray-50 border-l-4 shadow-sm'"
               :ownReviewBorderStyle="{ borderLeftColor: 'var(--cor-primaria)' }"
               @rating-updated="onRatingUpdated" 
             />
