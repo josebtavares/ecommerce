@@ -43,7 +43,7 @@
         <div class="absolute inset-0" 
              :class="isDark 
                ? 'bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/30' 
-               : 'bg-gradient-to-t from-white via-white/50 to-white/20'"></div>
+               : 'bg-gradient-to-t from-white via-white/90 to-white/20'"></div>
         <div class="absolute inset-0"
              :class="isDark
                ? 'bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(9,9,11,0.8)_100%)]'
