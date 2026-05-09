@@ -1,512 +1,603 @@
+<!-- TemplateRestauranteModerno.vue — Professional Restaurant Template
+     Hero full-bleed · Horizontal sticky nav · Editorial grid with numbered sections
+     Typography: Playfair Display (títulos) + Inter (corpo) + JetBrains Mono (labels)
+     Acento configurável via --cor-primaria (default: #f97316 laranja)
+-->
 <template>
-  <div class="min-h-screen transition-colors duration-300"
-       :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-gray-50 text-zinc-900'"
-       :style="cssVars">
-
-    <!-- Product Info Card Modal -->
-    <ProductInfoCard :produto="selectedProduct" :loja="loja" :isDark="isDark"
+  <div
+    class="resto-root transition-colors duration-500"
+    :class="isDark ? 'dark' : 'light'"
+    :style="cssVars"
+  >
+    <ProductInfoCard
+      :produto="selectedProduct"
+      :loja="loja"
+      :isDark="isDark"
       @close="selectedProduct = null"
-      @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
-    
-    <!-- Multi Cart (fixed top-right, respects UserProfile position) -->
-    <MultiCart ref="cart" :isDark="isDark" />
-    
-    <!-- User Profile with Notification Bell (fixed top-right) -->
-    <Profile :data="user" :isDark="isDark" class="z-10" @log_out="logOut()" />
+      @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)"
+    />
 
-    <!-- Loading State -->
-    <div v-if="loading" class="flex items-center justify-center h-screen">
-      <svg class="animate-spin h-10 w-10" style="color: var(--cor-primaria)"
-           xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-      </svg>
+    <MultiCart ref="cart" :isDark="isDark" />
+
+    <Profile
+      :data="user"
+      :isDark="isDark"
+      class="z-40"
+      @log_out="logOut()"
+    />
+
+    <!-- Loading -->
+    <div v-if="loading" class="resto-loading">
+      <div class="resto-loading__flame">
+        <div class="resto-loading__flame-inner"></div>
+      </div>
+      <span class="resto-loading__text">A preparar...</span>
     </div>
 
     <template v-else-if="loja">
-      
-      <!-- ═══════════════════════════════════════════════════════════════════ -->
-      <!-- HERO SECTION - Full viewport cinematic style                        -->
-      <!-- ═══════════════════════════════════════════════════════════════════ -->
-      <section class="relative h-screen min-h-[600px] overflow-hidden">
-        <!-- Background Media -->
-        <video v-if="isVideo(loja.banner_url)"
+      <!-- ══════════════════════════════════════════
+           HERO
+      ══════════════════════════════════════════ -->
+      <section class="resto-hero" ref="heroRef">
+        <video
+          v-if="isVideo(loja.banner_url)"
           :src="loja.banner_url"
-          class="absolute inset-0 w-full h-full object-cover"
-          autoplay muted loop playsinline></video>
-        <img v-else
-          :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-          :alt="loja.nome" 
-          class="absolute inset-0 w-full h-full object-cover" />
+          class="resto-hero__media"
+          autoplay
+          muted
+          loop
+          playsinline
+        ></video>
+        <img
+          v-else
+          :src="loja.banner_url || backendUrl + '/media/lojas/default_banner.jpg'"
+          :alt="loja.nome"
+          class="resto-hero__media"
+        />
+        
+        <!-- Grain overlay for texture -->
+        <div class="resto-hero__grain"></div>
+        
+        <!-- Gradient overlays -->
+        <div class="resto-hero__overlay"></div>
+        <div class="resto-hero__vignette"></div>
 
-        <!-- Cinematic Overlays -->
-        <div class="absolute inset-0" 
-             :class="isDark 
-               ? 'bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/30' 
-               : 'bg-gradient-to-t from-black/20 via-transparent to-transparent'"></div>
-        <div class="absolute inset-0"
-             :class="isDark
-               ? 'bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(9,9,11,0.8)_100%)]'
-               : 'bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.3)_100%)]'"></div>
+        <!-- Top Nav -->
+        <nav class="resto-hero__nav">
+          <div class="resto-hero__nav-left">
+            <button @click="$router.back()" class="resto-nav-back">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+              <span>Voltar</span>
+            </button>
 
-        <!-- Navigation Bar - positioned to avoid UserProfile/NotificacaoSino/MultiCart -->
-        <nav class="absolute top-0 left-0 right-0 z-10">
-          <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-            <!-- Left side: Back button + Dark mode toggle -->
-            <div class="flex items-center gap-3">
-              <button @click="$router.back()"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg backdrop-blur-sm transition-all group"
-                :class="isDark 
-                  ? 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white' 
-                  : 'bg-black/5 hover:bg-black/10 text-black/60 hover:text-black'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-                <span class="text-sm font-medium hidden sm:inline">Voltar</span>
-              </button>
-              
-              <button @click="toggleDark"
-                class="w-9 h-9 rounded-lg backdrop-blur-sm flex items-center justify-center transition-all"
-                :class="isDark 
-                  ? 'bg-white/5 hover:bg-white/10' 
-                  : 'bg-black/5 hover:bg-black/10'">
-                <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-700" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z" />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Center: Logo/Name (hidden on small screens to not interfere with right icons) -->
-            <div class="hidden md:flex items-center gap-3 absolute left-1/2 -translate-x-1/2">
-              <div class="h-px w-8" :style="{ backgroundColor: 'var(--cor-primaria)' }"></div>
-              <span class="text-xs font-bold tracking-[0.3em] uppercase"
-                    :class="isDark ? 'text-white/40' : 'text-black/40'">
-                {{ loja.categoria }}
-              </span>
-              <div class="h-px w-8" :style="{ backgroundColor: 'var(--cor-primaria)' }"></div>
-            </div>
-
-            <!-- Right side: Empty space for UserProfile/NotificacaoSino/MultiCart (they're fixed positioned) -->
-            <div class="w-32"></div>
+            <button @click="toggleDark" class="resto-nav-icon">
+              <svg v-if="isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="5"/>
+                <line x1="12" y1="1" x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            </button>
           </div>
+
+          <!-- Center brand indicator (hidden on mobile) -->
+          <div class="resto-hero__nav-center">
+            <span class="resto-hero__nav-tag">{{ loja.categoria || 'Restaurante' }}</span>
+          </div>
+
+          <!-- Right spacer for UserProfile/NotificacaoSino/MultiCart -->
+          <div class="resto-hero__nav-right"></div>
         </nav>
 
         <!-- Hero Content -->
-        <div class="absolute bottom-0 left-0 right-0 pb-16 px-6 md:px-12">
-          <div class="max-w-7xl mx-auto">
-            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-8">
-              
-              <!-- Left: Restaurant Info -->
-              <div class="max-w-2xl">
-                <!-- Category Tag -->
-                <div class="flex items-center gap-3 mb-4">
-                  <div class="h-px w-10" :style="{ backgroundColor: 'var(--cor-primaria)' }"></div>
-                  <span class="text-xs font-bold tracking-[0.25em] uppercase"
-                        :class="isDark ? 'text-white/40' : 'text-black/50'">
-                    {{ loja.categoria }}
-                  </span>
-                </div>
+        <div class="resto-hero__content">
+          <!-- Decorative line + label -->
+          <div class="resto-hero__label-row">
+            <div class="resto-hero__label-line"></div>
+            <span class="resto-hero__label">
+              {{ loja.localizacao || 'Portugal' }} · Est. {{ currentYear }}
+            </span>
+          </div>
 
-                <!-- Restaurant Name -->
-                <h1 class="text-5xl md:text-7xl font-black tracking-tight leading-[0.9] mb-4"
-                    :class="isDark ? 'text-white' : 'text-zinc-900'">
-                  {{ loja.nome }}
-                </h1>
+          <!-- Title with split styling -->
+          <h1 class="resto-hero__title">
+            <span class="resto-hero__title-main">{{ firstWord }}</span>
+            <span class="resto-hero__title-outline">{{ restWords }}</span>
+          </h1>
 
-                <!-- Description -->
-                <p class="text-base md:text-lg leading-relaxed mb-6 max-w-lg"
-                   :class="isDark ? 'text-white/50' : 'text-zinc-600'">
-                  {{ loja.descricao || 'Descubra uma experiência gastronómica única.' }}
-                </p>
+          <!-- Description + CTAs + Stats row -->
+          <div class="resto-hero__bottom">
+            <div class="resto-hero__info">
+              <p v-if="loja.descricao" class="resto-hero__desc">
+                {{ truncateText(loja.descricao, 140) }}
+              </p>
 
-                <!-- CTA Buttons -->
-                <div class="flex flex-wrap gap-3">
-                  <button @click="scrollToId('catalogo')"
-                    class="px-6 py-3 font-bold text-sm uppercase tracking-wider transition-all hover:-translate-y-0.5 shadow-lg"
-                    :style="{ 
-                      backgroundColor: 'var(--cor-primaria)', 
-                      color: '#fff',
-                      boxShadow: `0 10px 30px -10px var(--cor-primaria)`
-                    }">
-                    Ver Menu
-                  </button>
-                  <button @click="scrollToId('avaliacoes')"
-                    class="px-6 py-3 font-bold text-sm uppercase tracking-wider border transition-all hover:-translate-y-0.5"
-                    :class="isDark 
-                      ? 'border-white/25 text-white/70 hover:border-white/50 hover:text-white' 
-                      : 'border-black/25 text-black/70 hover:border-black/50 hover:text-black'">
-                    ★ Reviews
-                  </button>
-                </div>
+              <div class="resto-hero__ctas">
+                <button @click="scrollToId('resto-menu')" class="resto-btn-primary">
+                  <span>Ver Menu</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </button>
+
+                <button @click="scrollToId('resto-avaliacoes')" class="resto-btn-ghost">
+                  Avaliações
+                </button>
+              </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="resto-hero__stats">
+              <div v-if="loja.rating_medio" class="resto-hero__stat">
+                <span class="resto-hero__stat-value resto-hero__stat-value--accent">
+                  {{ ratingFormatted }}
+                </span>
+                <span class="resto-hero__stat-label">Avaliação</span>
               </div>
 
-              <!-- Right: Stats -->
-              <div class="flex gap-8 md:gap-12">
-                <div class="text-right" v-if="loja.rating_medio">
-                  <p class="text-4xl md:text-5xl font-black" :class="isDark ? 'text-white' : 'text-zinc-900'">
-                    {{ loja.rating_medio }}
-                  </p>
-                  <p class="text-xs font-medium tracking-widest uppercase"
-                     :class="isDark ? 'text-white/25' : 'text-zinc-400'">
-                    / 5 stars
-                  </p>
-                </div>
-                <div class="text-right" v-if="loja.total_avaliacoes">
-                  <p class="text-4xl md:text-5xl font-black" :class="isDark ? 'text-white' : 'text-zinc-900'">
-                    {{ loja.total_avaliacoes }}
-                  </p>
-                  <p class="text-xs font-medium tracking-widest uppercase"
-                     :class="isDark ? 'text-white/25' : 'text-zinc-400'">
-                    Reviews
-                  </p>
-                </div>
+              <div v-if="loja.total_avaliacoes" class="resto-hero__stat">
+                <span class="resto-hero__stat-value">{{ loja.total_avaliacoes }}</span>
+                <span class="resto-hero__stat-label">Reviews</span>
+              </div>
+
+              <div v-if="loja.entrega_ativa" class="resto-hero__stat">
+                <span class="resto-hero__stat-value resto-hero__stat-value--accent">✓</span>
+                <span class="resto-hero__stat-label">Delivery</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Scroll Indicator -->
-        <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
-          <span class="text-[10px] font-bold tracking-widest uppercase"
-                :class="isDark ? 'text-white/30' : 'text-black/30'">Scroll</span>
-          <svg class="w-4 h-4" :class="isDark ? 'text-white/30' : 'text-black/30'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
+        <!-- Large decorative year -->
+        <div class="resto-hero__year" aria-hidden="true">{{ currentYear }}</div>
+
+        <!-- Scroll indicator -->
+        <div class="resto-hero__scroll">
+          <span>Scroll</span>
+          <div class="resto-hero__scroll-line"></div>
         </div>
       </section>
 
-      <!-- ═══════════════════════════════════════════════════════════════════ -->
-      <!-- MAIN CONTENT                                                        -->
-      <!-- ═══════════════════════════════════════════════════════════════════ -->
-      <main class="relative z-10">
-        <div class="max-w-7xl mx-auto px-6 py-16">
-          
-          <!-- Info Section -->
-          <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-20">
-            <!-- About -->
-            <div class="lg:col-span-2 p-8 rounded-none border-l-2 transition-colors"
-                 :class="isDark ? 'bg-zinc-900/50 border-l-red-500' : 'bg-white border-l-red-500 shadow-sm'"
-                 :style="{ borderLeftColor: 'var(--cor-primaria)' }">
-              <h2 class="text-xs font-bold uppercase tracking-[0.25em] mb-4"
-                  :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Sobre Nós</h2>
-              <p class="text-base leading-relaxed"
-                 :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">
-                {{ loja.descricao || 'Sem descrição disponível.' }}
-              </p>
-              
-              <!-- Payment Methods -->
-              <div v-if="metodosPagamento.length > 0" class="mt-6 pt-6 border-t"
-                   :class="isDark ? 'border-zinc-800' : 'border-gray-100'">
-                <p class="text-xs font-bold uppercase tracking-widest mb-3"
-                   :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">Métodos de Pagamento</p>
-                <div class="flex flex-wrap gap-2">
-                  <span v-for="m in metodosPagamento" :key="m.id"
-                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
-                        :class="isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-gray-100 text-zinc-600'">
-                    {{ metodoPagamentoIcon(m.tipo) }} {{ m.tipo }}
-                  </span>
-                </div>
-              </div>
-            </div>
+      <!-- ══════════════════════════════════════════
+           STICKY HORIZONTAL NAV
+      ══════════════════════════════════════════ -->
+      <nav class="resto-nav" ref="stickyNav">
+        <div class="resto-nav__inner hide-scroll">
+          <button
+            class="resto-nav__item"
+            :class="{ 'resto-nav__item--active': activeSection === 'resto-sobre' }"
+            @click="scrollToId('resto-sobre')"
+          >
+            Sobre
+          </button>
 
-            <!-- Delivery Info -->
-            <div class="p-8 rounded-none border-t-2 transition-colors"
-                 :class="isDark ? 'bg-zinc-900/50' : 'bg-white shadow-sm'"
-                 :style="{ borderTopColor: 'var(--cor-primaria)' }">
-              <h2 class="text-xs font-bold uppercase tracking-[0.25em] mb-4"
-                  :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Entrega</h2>
-              
-              <div v-if="opcoesEntrega.length === 0" class="text-sm"
-                   :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-                Sem opções configuradas.
-              </div>
-              
-              <div v-else class="space-y-4">
-                <div v-for="opcao in opcoesEntrega" :key="opcao.id"
-                     class="flex items-center justify-between py-3 border-b last:border-0"
-                     :class="isDark ? 'border-zinc-800' : 'border-gray-100'">
-                  <div>
-                    <p class="text-sm font-semibold" :class="isDark ? 'text-zinc-200' : 'text-zinc-700'">
-                      {{ opcao.nome }}
-                    </p>
-                    <p v-if="opcao.tempo_estimado" class="text-xs"
-                       :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-                      {{ opcao.tempo_estimado }}
-                    </p>
-                  </div>
-                  <span class="text-sm font-bold" :style="{ color: 'var(--cor-primaria)' }">
-                    {{ opcao.preco == 0 ? 'Grátis' : formatPrice(opcao.preco) }}
-                  </span>
-                </div>
-              </div>
+          <button
+            class="resto-nav__item"
+            :class="{ 'resto-nav__item--active': activeSection === 'resto-destaques' }"
+            @click="scrollToId('resto-destaques')"
+          >
+            Destaques
+          </button>
 
-              <!-- Location -->
-              <div v-if="loja.localizacao" class="mt-6 pt-4 border-t"
-                   :class="isDark ? 'border-zinc-800' : 'border-gray-100'">
-                <p class="text-xs font-bold uppercase tracking-widest mb-2"
-                   :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">Localização</p>
-                <p class="text-sm" :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">
-                  📍 {{ loja.localizacao }}
-                </p>
-              </div>
-            </div>
-          </section>
+          <button
+            v-for="tipo in tiposExistentes"
+            :key="tipo.id"
+            class="resto-nav__item capitalize"
+            :class="{ 'resto-nav__item--active': activeSection === 'resto-tipo-' + tipo.id }"
+            @click="scrollToId('resto-tipo-' + tipo.id)"
+          >
+            {{ tipo.nome }}
+          </button>
 
-          <!-- Product Sliders -->
-          <section class="mb-20">
-            <!-- Featured Products -->
-            <ProductSlider 
-              title="Em Destaque" 
-              icon="⭐"
-              :params="{ loja_id: lojaId, destaque: true }" 
-              :isDark="isDark"
-              cardBorderRadius="rounded-none"
-              hoverEffect="hover:-translate-y-1 hover:shadow-2xl"
-              :hoverBorderClass="isDark ? 'hover:border-zinc-600' : 'hover:border-zinc-300'"
-              productNameHoverClass="group-hover:text-current"
-              :priceClass="'font-bold'"
-              :priceStyle="{ color: 'var(--cor-primaria)' }"
-              @product-click="selectedProduct = $event" 
-            />
+          <button
+            v-for="cat in categoriasExistentes"
+            :key="cat.id"
+            class="resto-nav__item capitalize"
+            :class="{ 'resto-nav__item--active': activeSection === 'resto-cat-' + cat.id }"
+            @click="scrollToId('resto-cat-' + cat.id)"
+          >
+            {{ cat.nome }}
+          </button>
 
-            <!-- By Type -->
-            <template v-if="tiposExistentes.length > 0">
-              <div class="flex items-center gap-4 my-10">
-                <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
-                <span class="text-xs font-bold uppercase tracking-[0.3em]"
-                      :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">Por Tipo</span>
-                <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
-              </div>
-              <div v-for="tipo in tiposExistentes" :key="'tipo-' + tipo.id" :id="'tipo-' + tipo.id">
-                <ProductSlider 
-                  :title="tipo.nome" 
-                  :icon="tipoIcon(tipo.nome)"
-                  :params="{ loja_id: lojaId, tipo: tipo.nome }" 
-                  :isDark="isDark"
-                  cardBorderRadius="rounded-none"
-                  @product-click="selectedProduct = $event" 
-                />
-              </div>
-            </template>
+          <button
+            class="resto-nav__item"
+            :class="{ 'resto-nav__item--active': activeSection === 'resto-menu' }"
+            @click="scrollToId('resto-menu')"
+          >
+            Menu
+          </button>
 
-            <!-- By Category -->
-            <template v-if="categoriasExistentes.length > 0">
-              <div class="flex items-center gap-4 my-10">
-                <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
-                <span class="text-xs font-bold uppercase tracking-[0.3em]"
-                      :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">Por Categoria</span>
-                <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
-              </div>
-              <div v-for="cat in categoriasExistentes" :key="'cat-' + cat.id" :id="'cat-' + cat.id">
-                <ProductSlider 
-                  :title="cat.nome" 
-                  :icon="cat.icone || '📂'"
-                  :params="{ loja_id: lojaId, categoria_id: cat.id }" 
-                  :isDark="isDark"
-                  cardBorderRadius="rounded-none"
-                  @product-click="selectedProduct = $event" 
-                />
-              </div>
-            </template>
-          </section>
-
-          <!-- Full Catalog -->
-          <section id="catalogo" class="mb-20">
-            <div class="mb-8">
-              <h2 class="text-3xl font-black tracking-tight"
-                  :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">
-                Menu Completo
-              </h2>
-              <p class="text-sm mt-2" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">
-                Explore todos os nossos pratos e bebidas
-              </p>
-            </div>
-            
-            <ProductCatalog 
-              :loja-id="lojaId" 
-              :isDark="isDark"
-              cardBorderRadius="rounded-none"
-              filterContainerRadius="rounded-none"
-              tabBorderRadius="rounded-none"
-              inputBorderRadius="rounded-none"
-              skeletonClass="rounded-none"
-              :activeTabClass="'text-white'"
-              :activeTabStyle="{ backgroundColor: 'var(--cor-primaria)' }"
-              hoverEffect="hover:-translate-y-1 hover:shadow-2xl"
-              :hoverBorderClass="isDark ? 'hover:border-zinc-600' : 'hover:border-zinc-300'"
-              :priceClass="'font-bold'"
-              productNameHoverClass="group-hover:text-current"
-              @product-click="selectedProduct = $event" 
-            />
-          </section>
-
-          <!-- Reviews Section -->
-          <section id="avaliacoes" class="mb-20">
-            <div class="mb-8">
-              <h2 class="text-3xl font-black tracking-tight"
-                  :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">
-                Avaliações
-              </h2>
-              <p class="text-sm mt-2" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">
-                O que os nossos clientes dizem
-              </p>
-            </div>
-            
-            <AvaliacaoLoja 
-              :loja-id="lojaId" 
-              :isDark="isDark"
-              summaryBorderRadius="rounded-none"
-              formBorderRadius="rounded-none"
-              textareaBorderRadius="rounded-none"
-              buttonBorderRadius="rounded-none"
-              reviewCardBorderRadius="rounded-none"
-              skeletonClass="rounded-none"
-              :starActiveClass="'text-amber-400'"
-              progressBarClass="bg-amber-400"
-              :submitButtonClass="'text-white hover:opacity-90'"
-              :submitButtonStyle="{ backgroundColor: 'var(--cor-primaria)' }"
-              :ownReviewBorderClass="isDark 
-                ? 'bg-zinc-900 border-l-4' 
-                : 'bg-white border-l-4'"
-              :ownReviewBorderStyle="{ borderLeftColor: 'var(--cor-primaria)' }"
-              @rating-updated="onRatingUpdated" 
-            />
-          </section>
-
+          <button
+            class="resto-nav__item"
+            :class="{ 'resto-nav__item--active': activeSection === 'resto-avaliacoes' }"
+            @click="scrollToId('resto-avaliacoes')"
+          >
+            Avaliações
+          </button>
         </div>
+      </nav>
 
-        <!-- Footer -->
-        <footer v-if="temFooter" class="border-t"
-                :class="isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-gray-200 bg-white'">
-          <div class="max-w-7xl mx-auto px-6 py-16">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
-              <!-- Brand -->
-              <div>
-                <div class="flex items-center gap-4 mb-4">
-                  <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" 
-                       class="w-12 h-12 object-cover" />
-                  <div v-else class="w-12 h-12 flex items-center justify-center text-lg font-black text-white"
-                       :style="{ backgroundColor: 'var(--cor-primaria)' }">
-                    {{ loja.nome.charAt(0) }}
+      <!-- ══════════════════════════════════════════
+           MAIN CONTENT
+      ══════════════════════════════════════════ -->
+      <main class="resto-main">
+        <!-- 00 — SOBRE -->
+        <section class="resto-section" id="resto-sobre">
+          <div class="resto-section__grid">
+            <div class="resto-section__num-col">
+              <span class="resto-section__num">00</span>
+            </div>
+
+            <div class="resto-section__body">
+              <div class="resto-about">
+                <div class="resto-about__text-col">
+                  <div class="resto-section__sub">Sobre Nós</div>
+                  <p class="resto-about__text">
+                    {{ loja.descricao || 'Um restaurante construído com paixão pela gastronomia, onde cada prato conta uma história e cada refeição é uma experiência memorável.' }}
+                  </p>
+                </div>
+
+                <div class="resto-about__meta">
+                  <!-- Delivery options -->
+                  <div v-if="opcoesEntrega.length" class="resto-meta-block">
+                    <div class="resto-meta-label">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                      </svg>
+                      <span>Entrega</span>
+                    </div>
+                    <div class="resto-meta-rows">
+                      <div
+                        v-for="opcao in opcoesEntrega"
+                        :key="opcao.id"
+                        class="resto-meta-row"
+                      >
+                        <span>{{ opcao.nome }}</span>
+                        <span class="resto-meta-row__price">
+                          {{ opcao.preco == 0 ? 'Grátis' : formatPrice(opcao.preco) }}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p class="font-bold text-lg" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">
-                      {{ loja.nome }}
-                    </p>
-                    <p class="text-xs uppercase tracking-widest"
-                       :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">
-                      {{ loja.categoria }}
-                    </p>
+
+                  <!-- Payment methods -->
+                  <div v-if="metodosPagamento.length" class="resto-meta-block">
+                    <div class="resto-meta-label">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="1" y="4" width="22" height="16" rx="2"/>
+                        <line x1="1" y1="10" x2="23" y2="10"/>
+                      </svg>
+                      <span>Pagamento</span>
+                    </div>
+                    <div class="resto-meta-chips">
+                      <span
+                        v-for="m in metodosPagamento"
+                        :key="m.id"
+                        class="resto-chip"
+                      >
+                        {{ m.tipo }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Location -->
+                  <div v-if="loja.localizacao" class="resto-meta-block">
+                    <div class="resto-meta-label">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                      <span>Localização</span>
+                    </div>
+                    <p class="resto-meta-location">{{ loja.localizacao }}</p>
                   </div>
                 </div>
-                <p class="text-sm leading-relaxed"
-                   :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">
-                  {{ loja.descricao }}
-                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 01 — DESTAQUES -->
+        <section class="resto-section" id="resto-destaques">
+          <div class="resto-section__grid">
+            <div class="resto-section__num-col">
+              <span class="resto-section__num">01</span>
+            </div>
+
+            <div class="resto-section__body">
+              <div class="resto-section__header">
+                <div>
+                  <div class="resto-section__sub">Chef&apos;s Selection</div>
+                  <h2 class="resto-section__title">Destaques</h2>
+                </div>
+                <div class="resto-section__line"></div>
               </div>
 
-              <!-- Policies -->
-              <div v-if="loja.politica_devolucao || loja.termos_servico || loja.politica_privacidade" 
-                   class="space-y-3">
-                <p class="text-xs font-bold uppercase tracking-widest mb-4"
-                   :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">Informações</p>
-                <button v-if="loja.politica_devolucao" @click="modalPolitica = 'devolucao'"
-                  class="block text-sm font-medium transition"
-                  :class="isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-800'">
-                  Política de Devoluções
-                </button>
-                <button v-if="loja.termos_servico" @click="modalPolitica = 'termos'"
-                  class="block text-sm font-medium transition"
-                  :class="isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-800'">
-                  Termos de Serviço
-                </button>
-                <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'"
-                  class="block text-sm font-medium transition"
-                  :class="isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-800'">
-                  Política de Privacidade
-                </button>
+              <ProductSlider
+                title="Destaques"
+                :params="{ loja_id: lojaId, destaque: true }"
+                :isDark="isDark"
+                card-width="240px"
+                image-height="300px"
+                card-height="420px"
+                card-border-radius="rounded-sm"
+                hover-effect="hover:-translate-y-2 hover:shadow-2xl transition-all duration-500"
+                hover-border-class=""
+                product-name-class="resto-product-name"
+                price-class="resto-product-price"
+                badge-text="CHEF"
+                badge-class="resto-badge"
+                :show-store-name="false"
+                :show-stock="false"
+                @product-click="selectedProduct = $event"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- POR TIPO -->
+        <section
+          v-for="(tipo, idx) in tiposExistentes"
+          :key="tipo.id"
+          :id="'resto-tipo-' + tipo.id"
+          class="resto-section"
+        >
+          <div class="resto-section__grid">
+            <div class="resto-section__num-col">
+              <span class="resto-section__num">
+                {{ String(idx + 2).padStart(2, '0') }}
+              </span>
+            </div>
+
+            <div class="resto-section__body">
+              <div class="resto-section__header">
+                <div>
+                  <div class="resto-section__sub">Categoria</div>
+                  <h2 class="resto-section__title capitalize">{{ tipo.nome }}</h2>
+                </div>
+                <div class="resto-section__line"></div>
               </div>
 
-              <!-- Contact -->
-              <div v-if="loja.localizacao">
-                <p class="text-xs font-bold uppercase tracking-widest mb-4"
-                   :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">Localização</p>
-                <p class="text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">
-                  {{ loja.localizacao }}
-                </p>
+              <ProductSlider
+                :title="tipo.nome"
+                :params="{ loja_id: lojaId, tipo: tipo.nome }"
+                :isDark="isDark"
+                card-width="220px"
+                image-height="280px"
+                card-height="400px"
+                card-border-radius="rounded-sm"
+                hover-effect="hover:-translate-y-2 hover:shadow-xl transition-all duration-500"
+                hover-border-class=""
+                product-name-class="resto-product-name"
+                price-class="resto-product-price"
+                :show-store-name="false"
+                :show-stock="false"
+                @product-click="selectedProduct = $event"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- POR CATEGORIA -->
+        <section
+          v-for="(cat, idx) in categoriasExistentes"
+          :key="cat.id"
+          :id="'resto-cat-' + cat.id"
+          class="resto-section"
+        >
+          <div class="resto-section__grid">
+            <div class="resto-section__num-col">
+              <span class="resto-section__num">
+                {{ String(tiposExistentes.length + idx + 2).padStart(2, '0') }}
+              </span>
+            </div>
+
+            <div class="resto-section__body">
+              <div class="resto-section__header">
+                <div>
+                  <div class="resto-section__sub">Especialidade</div>
+                  <h2 class="resto-section__title capitalize">{{ cat.nome }}</h2>
+                </div>
+                <div class="resto-section__line"></div>
+              </div>
+
+              <ProductSlider
+                :title="cat.nome"
+                :params="{ loja_id: lojaId, categoria_id: cat.id }"
+                :isDark="isDark"
+                card-width="220px"
+                image-height="280px"
+                card-height="400px"
+                card-border-radius="rounded-sm"
+                hover-effect="hover:-translate-y-2 hover:shadow-xl transition-all duration-500"
+                hover-border-class=""
+                product-name-class="resto-product-name"
+                price-class="resto-product-price"
+                :show-store-name="false"
+                :show-stock="false"
+                @product-click="selectedProduct = $event"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- MENU COMPLETO -->
+        <section class="resto-section" id="resto-menu">
+          <div class="resto-section__grid">
+            <div class="resto-section__num-col">
+              <span class="resto-section__num resto-section__num--text">MENU</span>
+            </div>
+
+            <div class="resto-section__body">
+              <div class="resto-section__header">
+                <div>
+                  <div class="resto-section__sub">A Carta</div>
+                  <h2 class="resto-section__title">Menu Completo</h2>
+                </div>
+                <div class="resto-section__line"></div>
+              </div>
+
+              <ProductCatalog
+                :loja-id="lojaId"
+                :isDark="isDark"
+                grid-class="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                image-height="280px"
+                card-border-radius="rounded-sm"
+                hover-effect="hover:-translate-y-2 hover:shadow-xl transition-all duration-500"
+                hover-border-class=""
+                tab-border-radius="rounded-none"
+                :active-tab-class="'resto-tab--active'"
+                :inactive-tab-dark-class="'resto-tab resto-tab--dark'"
+                :inactive-tab-light-class="'resto-tab resto-tab--light'"
+                input-border-radius="rounded-sm"
+                filter-container-radius="rounded-sm"
+                product-name-class="resto-product-name"
+                product-name-hover-class="group-hover:opacity-70"
+                price-class="resto-product-price"
+                :show-stock="false"
+                :show-badges="true"
+                :show-category-badges="false"
+                @product-click="selectedProduct = $event"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- AVALIAÇÕES -->
+        <section class="resto-section" id="resto-avaliacoes">
+          <div class="resto-section__grid">
+            <div class="resto-section__num-col">
+              <span class="resto-section__num resto-section__num--text">REVIEWS</span>
+            </div>
+
+            <div class="resto-section__body">
+              <div class="resto-section__header">
+                <div>
+                  <div class="resto-section__sub">Comunidade</div>
+                  <h2 class="resto-section__title">Avaliações</h2>
+                </div>
+                <div class="resto-section__line"></div>
+              </div>
+
+              <AvaliacaoLoja
+                :loja-id="lojaId"
+                :isDark="isDark"
+                summary-border-radius="rounded-sm"
+                form-border-radius="rounded-sm"
+                review-card-border-radius="rounded-sm"
+                button-border-radius="rounded-sm"
+                textarea-border-radius="rounded-sm"
+                :star-active-class="'resto-star-active'"
+                :star-inactive-class="'resto-star-inactive'"
+                progress-bar-class="resto-progress-bar"
+                :submit-button-class="'resto-btn-primary w-full justify-center'"
+                :review-card-class="'resto-review-card'"
+                :own-review-border-class="isDark ? 'border-b resto-border resto-own-review' : 'border-b resto-border resto-own-review-light'"
+                :load-more-button-class="'resto-btn-ghost text-xs tracking-widest uppercase'"
+                @rating-updated="onRatingUpdated"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="resto-footer">
+          <div class="resto-footer__top">
+            <div class="resto-footer__brand-col">
+              <div class="resto-footer__brand">{{ loja.nome }}</div>
+              <div class="resto-footer__tagline">
+                {{ loja.categoria || 'Restaurante' }} · {{ loja.localizacao || 'Portugal' }}
               </div>
             </div>
 
-            <!-- Copyright -->
-            <div class="text-center text-xs pt-8 border-t"
-                 :class="isDark ? 'text-zinc-700 border-zinc-800' : 'text-zinc-400 border-gray-200'">
-              © {{ new Date().getFullYear() }} {{ loja.nome }}. Todos os direitos reservados.
+            <div class="resto-footer__links">
+              <button
+                v-if="loja.politica_devolucao"
+                @click="modalPolitica = 'devolucao'"
+                class="resto-footer__link"
+              >
+                Devoluções
+              </button>
+
+              <button
+                v-if="loja.termos_servico"
+                @click="modalPolitica = 'termos'"
+                class="resto-footer__link"
+              >
+                Termos
+              </button>
+
+              <button
+                v-if="loja.politica_privacidade"
+                @click="modalPolitica = 'privacidade'"
+                class="resto-footer__link"
+              >
+                Privacidade
+              </button>
             </div>
+          </div>
+
+          <div class="resto-footer__bottom">
+            <span class="resto-footer__copy">
+              &copy; {{ currentYear }} {{ loja.nome }}. Todos os direitos reservados.
+            </span>
           </div>
         </footer>
       </main>
 
-      <!-- Policy Modal -->
-      <div v-if="modalPolitica" 
-           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-           @click.self="modalPolitica = null">
-        <div class="w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl"
-             :class="isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-gray-200'">
-          <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0"
-               :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'">
-            <h3 class="text-base font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">
-              {{ modalPolitica === 'devolucao' ? 'Política de Devoluções'
-               : modalPolitica === 'termos'    ? 'Termos de Serviço'
-               :                                 'Política de Privacidade' }}
+      <!-- Modal políticas -->
+      <div
+        v-if="modalPolitica"
+        class="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-sm"
+        @click.self="modalPolitica = null"
+      >
+        <div class="w-full md:max-w-lg max-h-[80vh] overflow-y-auto resto-modal">
+          <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0 resto-modal__header">
+            <h3 class="resto-modal__title">
+              {{ modalPolitica === 'devolucao' ? 'Devoluções' : modalPolitica === 'termos' ? 'Termos' : 'Privacidade' }}
             </h3>
-            <button @click="modalPolitica = null"
-              class="w-8 h-8 flex items-center justify-center transition"
-              :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4"
-                   :class="isDark ? 'text-zinc-400' : 'text-zinc-600'"
-                   fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <button @click="modalPolitica = null" class="resto-modal__close">&times;</button>
           </div>
-          <div class="p-6 text-sm leading-relaxed whitespace-pre-wrap"
-               :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">
-            {{ modalPolitica === 'devolucao' ? loja.politica_devolucao
-             : modalPolitica === 'termos'    ? loja.termos_servico
-             :                                 loja.politica_privacidade }}
+          <div class="p-6 text-sm leading-relaxed whitespace-pre-wrap resto-modal__body">
+            {{ modalPolitica === 'devolucao' ? loja.politica_devolucao : modalPolitica === 'termos' ? loja.termos_servico : loja.politica_privacidade }}
           </div>
         </div>
       </div>
-
     </template>
 
-    <!-- Not Found State -->
-    <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center text-center"
-         :class="isDark ? 'bg-zinc-950' : 'bg-gray-50'">
-      <p class="text-2xl font-bold" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">
-        Restaurante não encontrado
-      </p>
-      <button @click="$router.back()" class="mt-3 text-sm font-medium"
-              :style="{ color: 'var(--cor-primaria)' }">
-        ← Voltar
+    <!-- 404 -->
+    <div v-else-if="!loading" class="resto-not-found">
+      <p class="resto-not-found__code">404</p>
+      <p class="resto-not-found__text">Restaurante não encontrado</p>
+      <button @click="$router.back()" class="resto-btn-ghost mt-6">
+        &larr; Voltar
       </button>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed } from 'vue'
-import { useLojaData }   from '@/composables/useLojaData'
-import ProductInfoCard   from '@/components/product/productInfoCard.vue'
-import MultiCart         from '@/components/cart/multiCart.vue'
-import ProductSlider     from '@/components/sliders/ProductSlider.vue'
-import Profile           from '@/components/profile/UserProfile.vue'
-import ProductCatalog    from '@/components/catalog/ProductCatalog.vue'
-import AvaliacaoLoja     from '@/components/avaliacao/avaliacaoLoja.vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useLojaData } from '@/composables/useLojaData'
+import ProductInfoCard from '@/components/product/productInfoCard.vue'
+import MultiCart from '@/components/cart/multiCart.vue'
+import ProductSlider from '@/components/sliders/ProductSlider.vue'
+import Profile from '@/components/profile/UserProfile.vue'
+import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
   name: 'TemplateRestauranteModerno',
@@ -520,143 +611,1325 @@ export default {
     AvaliacaoLoja,
   },
 
+  emits: ['toggle-dark'],
+
   props: {
     tema: {
       type: Object,
-      default: () => ({
-        id: 'restaurante_moderno',
-        corPrimaria: '#dc2626',
-        corSecundaria: '#1c1c1e',
-        darkMode: true,
-      }),
+      default: () => ({}),
     },
   },
 
-  emits: ['toggle-dark'],
-
-  setup (props, { emit }) {
-    const selectedProduct = ref(null)
-    const modalPolitica   = ref(null)
-
-    const {
-      loja, loading, lojaId, user,
-      tiposExistentes, categoriasExistentes,
-      metodosPagamento, opcoesEntrega,
-      backendUrl,
-      logOut,
-    } = useLojaData()
-
-    const isDark = computed(() => props.tema?.darkMode ?? true)
+  setup(props, { emit }) {
+    const isDark = ref(props.tema?.darkMode !== false)
+    const activeSection = ref('resto-sobre')
+    const modalPolitica = ref(null)
+    const lojaData = useLojaData()
 
     const cssVars = computed(() => ({
-      '--cor-primaria':   props.tema?.corPrimaria   || '#dc2626',
-      '--cor-secundaria': props.tema?.corSecundaria || '#1c1c1e',
+      '--cor-primaria': props.tema?.corPrimaria || '#f97316',
+      '--cor-secundaria': props.tema?.corSecundaria || '#0c0a09',
     }))
 
-    const temFooter = computed(() => {
-      return loja.value?.descricao || 
-             loja.value?.politica_devolucao || 
-             loja.value?.termos_servico ||
-             loja.value?.politica_privacidade
+    const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
+    const currentYear = new Date().getFullYear()
+
+    const firstWord = computed(() => {
+      if (!lojaData.loja?.value?.nome) return ''
+      const parts = lojaData.loja.value.nome.split(' ')
+      return parts[0]
     })
 
-    function toggleDark () {
-      emit('toggle-dark', !isDark.value)
+    const restWords = computed(() => {
+      if (!lojaData.loja?.value?.nome) return ''
+      const parts = lojaData.loja.value.nome.split(' ')
+      return parts.slice(1).join(' ')
+    })
+
+    const ratingFormatted = computed(() => {
+      if (!lojaData.loja?.value?.rating_medio) return '—'
+      return parseFloat(lojaData.loja.value.rating_medio).toFixed(1)
+    })
+
+    function toggleDark() {
+      isDark.value = !isDark.value
+      emit('toggle-dark', isDark.value)
     }
 
-    function scrollToId (id) {
+    function isVideo(url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
+    function truncateText(text, maxLength) {
+      if (!text) return ''
+      if (text.length <= maxLength) return text
+      return text.substring(0, maxLength) + '...'
+    }
+
+    function scrollToId(id) {
       const el = document.getElementById(id)
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-
-    function formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
-    }
-
-    function isVideo (url) {
-      if (!url) return false
-      return /\.(mp4|webm|ogg)$/i.test(url)
-    }
-
-    function tipoIcon (nome) {
-      const map = {
-        'bebidas': '🍹', 'drinks': '🍹',
-        'entradas': '🥗', 'starters': '🥗',
-        'pratos': '🍽️', 'mains': '🍽️', 'principais': '🍽️',
-        'sobremesas': '🍰', 'desserts': '🍰',
-        'snacks': '🍿',
-        'pizzas': '🍕', 'pizza': '🍕',
-        'burgers': '🍔', 'hambúrgueres': '🍔',
-        'sushi': '🍣',
-        'vegetariano': '🥬', 'vegan': '🌱',
-        'café': '☕', 'coffee': '☕',
-      }
-      const key = nome?.toLowerCase() || ''
-      return map[key] || '📂'
-    }
-
-    function metodoPagamentoIcon (tipo) {
-      const map = {
-        'multibanco': '💳', 'mbway': '📱', 'paypal': '🅿️',
-        'dinheiro': '💵', 'cash': '💵', 'cartão': '💳', 'card': '💳',
-        'transferência': '🏦', 'transfer': '🏦',
-      }
-      const key = tipo?.toLowerCase() || ''
-      return map[key] || '💰'
-    }
-
-    function onRatingUpdated (data) {
-      if (loja.value && data.media) {
-        loja.value.rating_medio = parseFloat(data.media.toFixed(1))
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
     }
+
+    function onRatingUpdated(data) {
+      if (lojaData.loja?.value) {
+        lojaData.loja.value.rating_medio = data.rating_medio
+        lojaData.loja.value.total_avaliacoes = data.total_avaliacoes
+      }
+    }
+
+    function logOut() {
+      localStorage.removeItem('user')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.reload()
+    }
+
+    let sectionObserver = null
+
+    function setupSectionObserver() {
+      const sections = document.querySelectorAll('[id^="resto-"]')
+
+      sectionObserver = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) activeSection.value = e.target.id
+        })
+      }, {
+        rootMargin: '-40% 0px -55% 0px',
+      })
+
+      sections.forEach(s => sectionObserver.observe(s))
+    }
+
+    onMounted(() => {
+      setupSectionObserver()
+    })
+
+    onUnmounted(() => {
+      sectionObserver?.disconnect()
+    })
 
     return {
-      // Data
-      selectedProduct,
-      modalPolitica,
-      loja,
-      loading,
-      lojaId,
-      user,
-      tiposExistentes,
-      categoriasExistentes,
-      metodosPagamento,
-      opcoesEntrega,
-      backendUrl,
-      
-      // Computed
       isDark,
+      activeSection,
+      modalPolitica,
       cssVars,
-      temFooter,
-      
-      // Methods
+      user,
+      currentYear,
+      firstWord,
+      restWords,
+      ratingFormatted,
       toggleDark,
-      scrollToId,
-      formatPrice,
       isVideo,
-      tipoIcon,
-      metodoPagamentoIcon,
-      logOut,
+      truncateText,
+      scrollToId,
       onRatingUpdated,
+      logOut,
+      ...lojaData,
     }
   },
 }
 </script>
 
 <style scoped>
-/* Custom scrollbar for dark mode */
-::-webkit-scrollbar {
-  width: 8px;
+/* ── Fonts ──
+   Add to index.html or global CSS:
+   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+*/
+
+/* ══════════════════════════════════════════════════════════
+   ROOT & THEME TOKENS
+══════════════════════════════════════════════════════════ */
+.resto-root {
+  --accent: var(--cor-primaria, #f97316);
+  --bg: #0c0a09;
+  --bg2: #1c1917;
+  --bg3: #292524;
+  --fg: #fafaf9;
+  --fg2: #a8a29e;
+  --fg3: #57534e;
+  --border: rgba(255,255,255,0.08);
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  min-height: 100vh;
 }
-::-webkit-scrollbar-track {
+
+.resto-root.light {
+  --bg: #fafaf9;
+  --bg2: #f5f5f4;
+  --bg3: #e7e5e4;
+  --fg: #1c1917;
+  --fg2: #78716c;
+  --fg3: #a8a29e;
+  --border: rgba(0,0,0,0.08);
+}
+
+/* ══════════════════════════════════════════════════════════
+   LOADING
+══════════════════════════════════════════════════════════ */
+.resto-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.resto-loading__flame {
+  width: 32px;
+  height: 48px;
+  position: relative;
+}
+
+.resto-loading__flame-inner {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 24px;
+  height: 36px;
+  background: linear-gradient(to top, var(--accent), #fbbf24, #fef3c7);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  transform: translateX(-50%);
+  animation: flameFlicker 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes flameFlicker {
+  0% {
+    transform: translateX(-50%) scaleY(1) scaleX(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateX(-50%) scaleY(1.1) scaleX(0.95);
+    filter: brightness(1.1);
+  }
+  100% {
+    transform: translateX(-50%) scaleY(0.95) scaleX(1.05);
+    filter: brightness(0.95);
+  }
+}
+
+.resto-loading__text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--fg2);
+}
+
+/* ══════════════════════════════════════════════════════════
+   HERO
+══════════════════════════════════════════════════════════ */
+.resto-hero {
+  position: relative;
+  height: 100svh;
+  min-height: 640px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.resto-hero__media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.resto-hero__grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+}
+
+.resto-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(12,10,9,0.95) 0%,
+    rgba(12,10,9,0.7) 40%,
+    rgba(12,10,9,0.3) 70%,
+    rgba(12,10,9,0.15) 100%
+  );
+  pointer-events: none;
+}
+
+.resto-root.light .resto-hero__overlay {
+  background: linear-gradient(
+    to top,
+    rgba(250,250,249,0.98) 0%,
+    rgba(250,250,249,0.75) 40%,
+    rgba(250,250,249,0.4) 70%,
+    rgba(250,250,249,0.2) 100%
+  );
+}
+
+.resto-hero__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(12,10,9,0.4) 100%);
+  pointer-events: none;
+}
+
+.resto-root.light .resto-hero__vignette {
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(250,250,249,0.3) 100%);
+}
+
+/* Hero Nav */
+.resto-hero__nav {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 48px;
+}
+
+.resto-hero__nav-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resto-hero__nav-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .resto-hero__nav-center {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+}
+
+.resto-hero__nav-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  padding: 6px 16px;
+  border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(8px);
+}
+
+.resto-root.light .resto-hero__nav-tag {
+  color: rgba(0,0,0,0.4);
+  border-color: rgba(0,0,0,0.15);
+}
+
+.resto-hero__nav-right {
+  width: 140px;
+}
+
+.resto-nav-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(0,0,0,0.2);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resto-root.light .resto-nav-back {
+  background: rgba(255,255,255,0.3);
+  border-color: rgba(0,0,0,0.1);
+  color: rgba(0,0,0,0.6);
+}
+
+.resto-nav-back:hover {
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+
+.resto-root.light .resto-nav-back:hover {
+  border-color: rgba(0,0,0,0.3);
+  color: #000;
+}
+
+.resto-nav-back span {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .resto-nav-back span {
+    display: inline;
+  }
+}
+
+.resto-nav-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.2);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resto-root.light .resto-nav-icon {
+  background: rgba(255,255,255,0.3);
+  border-color: rgba(0,0,0,0.1);
+  color: rgba(0,0,0,0.6);
+}
+
+.resto-nav-icon:hover {
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+
+.resto-root.light .resto-nav-icon:hover {
+  border-color: rgba(0,0,0,0.3);
+  color: #000;
+}
+
+/* Hero Content */
+.resto-hero__content {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 48px 64px;
+}
+
+.resto-hero__label-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.resto-hero__label-line {
+  width: 48px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.resto-hero__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+
+.resto-root.light .resto-hero__label {
+  color: rgba(0,0,0,0.4);
+}
+
+.resto-hero__title {
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 10vw, 9rem);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin-bottom: 28px;
+}
+
+.resto-root.light .resto-hero__title {
+  color: var(--fg);
+}
+
+.resto-hero__title-main,
+.resto-hero__title-outline {
+  display: block;
+}
+
+.resto-hero__title-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255,255,255,0.25);
+}
+
+.resto-root.light .resto-hero__title-outline {
+  -webkit-text-stroke: 1.5px rgba(0,0,0,0.2);
+}
+
+.resto-hero__bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.resto-hero__info {
+  max-width: 500px;
+}
+
+.resto-hero__desc {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 24px;
+}
+
+.resto-root.light .resto-hero__desc {
+  color: var(--fg2);
+}
+
+.resto-hero__ctas {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.resto-hero__stats {
+  display: flex;
+  gap: 48px;
+}
+
+.resto-hero__stat {
+  text-align: center;
+}
+
+.resto-hero__stat-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.resto-root.light .resto-hero__stat-value {
+  color: var(--fg);
+}
+
+.resto-hero__stat-value--accent {
+  color: var(--accent);
+}
+
+.resto-hero__stat-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+  margin-top: 6px;
+}
+
+.resto-root.light .resto-hero__stat-label {
+  color: var(--fg3);
+}
+
+/* Ghost year */
+.resto-hero__year {
+  position: absolute;
+  bottom: 32px;
+  right: 48px;
+  font-family: var(--font-display);
+  font-size: clamp(6rem, 14vw, 14rem);
+  font-weight: 700;
+  font-style: italic;
+  color: rgba(255,255,255,0.03);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.resto-root.light .resto-hero__year {
+  color: rgba(0,0,0,0.03);
+}
+
+/* Scroll indicator */
+.resto-hero__scroll {
+  position: absolute;
+  bottom: 32px;
+  left: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: scrollBounce 2s ease-in-out infinite;
+}
+
+@keyframes scrollBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+.resto-hero__scroll span {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+  writing-mode: vertical-rl;
+}
+
+.resto-root.light .resto-hero__scroll span {
+  color: var(--fg3);
+}
+
+.resto-hero__scroll-line {
+  width: 1px;
+  height: 48px;
+  background: linear-gradient(to bottom, var(--accent), transparent);
+}
+
+/* ══════════════════════════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════════════════════════ */
+.resto-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s;
+  box-shadow: 0 4px 24px -8px var(--accent);
+}
+
+.resto-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px -8px var(--accent);
+}
+
+.resto-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.7);
   background: transparent;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.25s;
 }
-::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 4px;
+
+.resto-root.light .resto-btn-ghost {
+  border-color: var(--border);
+  color: var(--fg2);
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+
+.resto-btn-ghost:hover {
+  border-color: rgba(255,255,255,0.5);
+  color: #fff;
+}
+
+.resto-root.light .resto-btn-ghost:hover {
+  border-color: var(--fg3);
+  color: var(--fg);
+}
+
+/* ══════════════════════════════════════════════════════════
+   STICKY HORIZONTAL NAV
+══════════════════════════════════════════════════════════ */
+.resto-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.resto-nav__inner {
+  display: flex;
+  white-space: nowrap;
+  min-width: max-content;
+}
+
+.resto-nav__item {
+  padding: 16px 24px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--fg2);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-right: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resto-nav__item:hover {
+  color: var(--fg);
+  background: var(--bg2);
+}
+
+.resto-nav__item--active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+/* ══════════════════════════════════════════════════════════
+   SECTIONS (Editorial Grid)
+══════════════════════════════════════════════════════════ */
+.resto-section {
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  min-width: 0;
+}
+
+.resto-section__grid {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+}
+
+.resto-section__num-col {
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 48px;
+  min-width: 0;
+}
+
+.resto-section__num {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--accent);
+  opacity: 0.2;
+  line-height: 1;
+  writing-mode: vertical-rl;
+  user-select: none;
+}
+
+.resto-section__num--text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: 0.2em;
+  color: var(--fg3);
+  opacity: 1;
+}
+
+.resto-section__body {
+  padding: 48px 48px 64px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.resto-section__header {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 40px;
+  min-width: 0;
+}
+
+.resto-section__sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.resto-section__title {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--fg);
+}
+
+.resto-section__line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   ABOUT
+══════════════════════════════════════════════════════════ */
+.resto-about {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: start;
+  min-width: 0;
+}
+
+.resto-about__text-col .resto-section__sub {
+  margin-bottom: 16px;
+}
+
+.resto-about__text {
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--fg2);
+}
+
+.resto-about__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+
+.resto-meta-block {
+  background: var(--bg2);
+  padding: 20px;
+  border-left: 2px solid var(--accent);
+}
+
+.resto-meta-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--fg3);
+  margin-bottom: 14px;
+}
+
+.resto-meta-label svg {
+  color: var(--accent);
+}
+
+.resto-meta-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.resto-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.resto-meta-row:last-child {
+  border-bottom: none;
+}
+
+.resto-meta-row span:first-child {
+  color: var(--fg2);
+}
+
+.resto-meta-row__price {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent) !important;
+}
+
+.resto-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.resto-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg2);
+  transition: all 0.2s;
+}
+
+.resto-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.resto-meta-location {
+  font-size: 14px;
+  color: var(--fg2);
+  line-height: 1.6;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PRODUCT STYLING OVERRIDES
+══════════════════════════════════════════════════════════ */
+:deep(.resto-product-name) {
+  font-family: var(--font-body) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+}
+
+:deep(.resto-product-price) {
+  font-family: var(--font-display) !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  color: var(--accent) !important;
+}
+
+:deep(.resto-badge) {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-family: var(--font-mono) !important;
+  font-size: 8px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  border-radius: 2px !important;
+  padding: 4px 8px !important;
+}
+
+:deep(.resto-tab) {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  transition: all 0.2s;
+}
+
+:deep(.resto-tab--active) {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+/* Fix for ProductSlider horizontal scroll in grid */
+:deep(.product-slider),
+:deep(.product-slider-wrapper),
+:deep(.slider-container),
+:deep(.products-slider),
+:deep(.products-slider-wrapper),
+:deep(.overflow-x-auto),
+:deep(.overflow-x-scroll) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:deep(.overflow-x-auto),
+:deep(.overflow-x-scroll) {
+  overflow-x: auto !important;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ══════════════════════════════════════════════════════════
+   REVIEWS
+══════════════════════════════════════════════════════════ */
+:deep(.resto-star-active) {
+  color: var(--accent) !important;
+}
+
+:deep(.resto-star-inactive) {
+  color: var(--fg3) !important;
+}
+
+:deep(.resto-progress-bar) {
+  background: var(--accent) !important;
+}
+
+:deep(.resto-review-card) {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+:deep(.resto-own-review) {
+  border-bottom: 1px solid var(--border) !important;
+  background: rgba(249,115,22,0.05) !important;
+}
+
+:deep(.resto-own-review-light) {
+  border-bottom: 1px solid var(--border) !important;
+  background: rgba(249,115,22,0.05) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════════════════════ */
+.resto-footer {
+  padding: 56px 48px 36px;
+  border-top: 1px solid var(--border);
+}
+
+.resto-footer__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin-bottom: 48px;
+}
+
+.resto-footer__brand {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+
+.resto-footer__tagline {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--fg2);
+  margin-top: 6px;
+}
+
+.resto-footer__links {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.resto-footer__link {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--fg2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.resto-footer__link:hover {
+  color: var(--accent);
+}
+
+.resto-footer__bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+
+.resto-footer__copy {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--fg3);
+}
+
+/* ══════════════════════════════════════════════════════════
+   MODAL
+══════════════════════════════════════════════════════════ */
+.resto-modal {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 768px) {
+  .resto-modal {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+}
+
+.resto-modal__header {
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+.resto-modal__title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+.resto-modal__close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--fg2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: all 0.2s;
+}
+
+.resto-modal__close:hover {
+  border-color: var(--fg2);
+  color: var(--fg);
+}
+
+.resto-modal__body {
+  color: var(--fg2);
+}
+
+/* ══════════════════════════════════════════════════════════
+   404
+══════════════════════════════════════════════════════════ */
+.resto-not-found {
+  min-height: 100svh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px;
+}
+
+.resto-not-found__code {
+  font-family: var(--font-display);
+  font-size: 8rem;
+  font-weight: 700;
+  color: var(--fg3);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.resto-not-found__text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--fg2);
+  margin-top: 16px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .resto-hero {
+    min-height: 580px;
+  }
+
+  .resto-hero__nav,
+  .resto-hero__content {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .resto-hero__nav {
+    padding-top: 20px;
+  }
+
+  .resto-hero__content {
+    padding-bottom: 48px;
+  }
+
+  .resto-hero__title {
+    font-size: clamp(3.5rem, 14vw, 6rem);
+  }
+
+  .resto-hero__stats {
+    gap: 32px;
+  }
+
+  .resto-hero__stat-value {
+    font-size: 36px;
+  }
+
+  .resto-hero__year {
+    font-size: 5rem;
+    right: 24px;
+    bottom: 24px;
+  }
+
+  .resto-hero__scroll {
+    left: 24px;
+    bottom: 24px;
+  }
+
+  /* Remove number column on mobile */
+  .resto-section__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resto-section__num-col {
+    display: none;
+  }
+
+  .resto-section__body {
+    padding: 36px 24px 48px;
+  }
+
+  .resto-section__title {
+    font-size: 32px;
+  }
+
+  .resto-about {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .resto-about__text {
+    font-size: 16px;
+  }
+
+  .resto-footer {
+    padding: 40px 24px 28px;
+  }
+
+  .resto-footer__top {
+    gap: 24px;
+  }
+
+  .resto-footer__links {
+    gap: 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .resto-hero {
+    min-height: 540px;
+  }
+
+  .resto-hero__nav,
+  .resto-hero__content {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .resto-hero__nav-right {
+    width: 100px;
+  }
+
+  .resto-hero__content {
+    padding-bottom: 40px;
+  }
+
+  .resto-hero__label-row {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .resto-hero__label-line {
+    width: 32px;
+  }
+
+  .resto-hero__title {
+    font-size: clamp(3rem, 16vw, 4.5rem);
+    margin-bottom: 20px;
+  }
+
+  .resto-hero__desc {
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  .resto-hero__ctas {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .resto-btn-primary,
+  .resto-btn-ghost {
+    padding: 12px 24px;
+    font-size: 11px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .resto-hero__stats {
+    gap: 24px;
+    margin-top: 24px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .resto-hero__year {
+    display: none;
+  }
+
+  .resto-hero__scroll {
+    display: none;
+  }
+
+  .resto-section__body {
+    padding: 32px 16px 40px;
+  }
+
+  .resto-section__title {
+    font-size: 28px;
+  }
+
+  .resto-nav__item {
+    padding: 14px 18px;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+  }
+
+  .resto-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════════════════════════ */
+.hide-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.capitalize {
+  text-transform: capitalize;
 }
 </style>
