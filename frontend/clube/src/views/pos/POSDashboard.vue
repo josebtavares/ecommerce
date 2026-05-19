@@ -139,26 +139,19 @@ export default {
     
     async loadPOSData() {
       try {
-        const token = localStorage.getItem('pos_access_token')
-        
-        // Buscar dados do login (lojas e POS existentes)
-        const user = JSON.parse(localStorage.getItem('pos_user') || '{}')
+        // Carregar POS existentes do localStorage (guardados durante login)
+        const posExistentes = JSON.parse(localStorage.getItem('pos_existentes') || '[]')
         
         // TODO: Por agora, assumir primeiro POS
         // Futuramente, permitir seleção se utilizador tiver múltiplos POS
-        const response = await axios.post(
-          `${process.env.VUE_APP_URL_BASE}/api/pos/login/`,
-          {
-            email: user.email,
-            password: '' // Não temos password guardado (por segurança)
-          }
-        )
-        
-        if (response.data.pos_existentes && response.data.pos_existentes.length > 0) {
-          const primeiroPos = response.data.pos_existentes[0]
+        if (posExistentes && posExistentes.length > 0) {
+          const primeiroPos = posExistentes[0]
           this.posId = primeiroPos.id
           this.posNome = primeiroPos.nome
           this.posCodigo = primeiroPos.codigo_pos
+          
+          // Guardar seleção atual
+          localStorage.setItem('pos_selected', JSON.stringify(primeiroPos))
         } else {
           // Sem POS - redirecionar para criar
           alert('Nenhum POS encontrado. Vamos criar um!')
@@ -167,15 +160,6 @@ export default {
         
       } catch (error) {
         console.error('Erro ao carregar POS:', error)
-        
-        // Fallback: tentar obter do localStorage se foi guardado antes
-        const savedPos = localStorage.getItem('pos_selected')
-        if (savedPos) {
-          const pos = JSON.parse(savedPos)
-          this.posId = pos.id
-          this.posNome = pos.nome
-          this.posCodigo = pos.codigo_pos
-        }
       }
     },
     

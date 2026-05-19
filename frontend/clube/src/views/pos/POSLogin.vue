@@ -103,12 +103,13 @@ export default {
         localStorage.setItem('pos_access_token', response.data.access_token)
         localStorage.setItem('pos_refresh_token', response.data.refresh_token)
         localStorage.setItem('pos_user', JSON.stringify(response.data.user))
+        localStorage.setItem('pos_lojas', JSON.stringify(response.data.lojas))
+        localStorage.setItem('pos_existentes', JSON.stringify(response.data.pos_existentes))
         
-        alert(`✅ Bem-vindo, ${response.data.user.nome}!\n\nLojas: ${response.data.lojas.length}\nPOS existentes: ${response.data.pos_existentes.length}`)
         
         // TODO: Redirecionar para dashboard POS
         this.$router.push('/pos/dashboard')
-        
+
         
       } catch (err) {
         console.error('❌ Erro no login:', err)
