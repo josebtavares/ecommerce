@@ -26,16 +26,16 @@ from app.models import Loja, Produto, Utilizador
 # ═══════════════════════════════════════════════════════════════════
 # AUTENTICAÇÃO
 # ═══════════════════════════════════════════════════════════════════
-
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def pos_login(request):
     """
     Login no POS com detecção automática de lojas
     Body: { email, password }
+    Aceita login por username ou email (igual ao utilizador_login)
     """
-    email = request.data.get('email')
-    password = request.data.get('password')
+    email = (request.data.get('email') or '').strip()
+    password = request.data.get('password', '')
     
     if not email or not password:
         return Response(
@@ -43,8 +43,17 @@ def pos_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Autenticar utilizador
-    user = authenticate(username=email, password=password)
+    # Tentar autenticar por username (caso seja username e não email)
+    user = authenticate(request, username=email, password=password)
+    
+    if not user:
+        # Tentar por email
+        try:
+            django_user = User.objects.get(email__iexact=email)
+            user = authenticate(request, username=django_user.username, password=password)
+        except User.DoesNotExist:
+            user = None
+    
     if not user:
         return Response(
             {'detail': 'Credenciais inválidas'},
@@ -53,10 +62,16 @@ def pos_login(request):
     
     try:
         utilizador = user.utilizador
-    except:
+    except Utilizador.DoesNotExist:
         return Response(
-            {'detail': 'Utilizador não encontrado'},
+            {'detail': 'Perfil de utilizador não encontrado'},
             status=status.HTTP_404_NOT_FOUND
+        )
+    
+    if not utilizador.is_active:
+        return Response(
+            {'detail': 'Conta desactivada'},
+            status=status.HTTP_403_FORBIDDEN
         )
     
     # Verificar lojas do utilizador
@@ -81,6 +96,7 @@ def pos_login(request):
             'id': utilizador.id,
             'nome': utilizador.nome,
             'email': user.email,
+            'username': user.username,
         },
         'tem_lojas': lojas_do_utilizador.exists(),
         'lojas': [
