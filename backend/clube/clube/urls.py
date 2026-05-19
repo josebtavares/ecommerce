@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/chat/",  include('app.Urls.chatUrl')),  # chat/urls.py
     path('admin/', admin.site.urls),
     path('app/', include('app.urls')),
+    path('api/pos/', include('app.pos.urls')),
     
 ]
 

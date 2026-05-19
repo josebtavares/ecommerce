@@ -1,0 +1,49 @@
+"""
+URLs do Sistema POS
+Rotas para autenticação, configuração, mesas, contas e operações
+"""
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    # ═══════════════════════════════════════════════════════════════════
+    # AUTENTICAÇÃO
+    # ═══════════════════════════════════════════════════════════════════
+    path('login/', views.pos_login, name='pos_login'),
+    path('register/', views.pos_register, name='pos_register'),
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # CONFIGURAÇÃO POS
+    # ═══════════════════════════════════════════════════════════════════
+    path('criar/', views.pos_criar, name='pos_criar'),
+    path('<int:pos_id>/', views.pos_detalhe, name='pos_detalhe'),
+    path('<int:pos_id>/conectar-loja/', views.pos_conectar_loja, name='pos_conectar_loja'),
+    path('<int:pos_id>/desconectar-loja/', views.pos_desconectar_loja, name='pos_desconectar_loja'),
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # PRODUTOS (CATÁLOGO)
+    # ═══════════════════════════════════════════════════════════════════
+    path('<int:pos_id>/produtos/', views.pos_produtos, name='pos_produtos'),
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # MESAS
+    # ═══════════════════════════════════════════════════════════════════
+    path('<int:pos_id>/mesas/', views.mesas_listar, name='mesas_listar'),
+    path('<int:pos_id>/mesas/criar/', views.mesa_criar, name='mesa_criar'),
+    path('<int:pos_id>/mesas/<int:mesa_id>/abrir/', views.mesa_abrir, name='mesa_abrir'),
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # CONTAS
+    # ═══════════════════════════════════════════════════════════════════
+    path('<int:pos_id>/mesas/<int:mesa_id>/conta/', views.conta_criar, name='conta_criar'),
+    path('<int:pos_id>/contas/<int:conta_id>/', views.conta_detalhe, name='conta_detalhe'),
+    path('<int:pos_id>/contas/<int:conta_id>/items/', views.conta_adicionar_item, name='conta_adicionar_item'),
+    path('<int:pos_id>/contas/<int:conta_id>/items/<int:item_id>/', views.conta_remover_item, name='conta_remover_item'),
+    path('<int:pos_id>/contas/<int:conta_id>/fechar/', views.conta_fechar, name='conta_fechar'),
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # TURNOS
+    # ═══════════════════════════════════════════════════════════════════
+    path('<int:pos_id>/turnos/abrir/', views.turno_abrir, name='turno_abrir'),
+    path('<int:pos_id>/turnos/<int:turno_id>/fechar/', views.turno_fechar, name='turno_fechar'),
+]

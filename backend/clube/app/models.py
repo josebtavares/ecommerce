@@ -205,6 +205,15 @@ class Loja(models.Model):
         default=False,
         help_text='A loja tem Flutterwave configurado e activo'
     )
+    
+    pos_ativo = models.BooleanField(
+        default=False,
+        verbose_name='POS Ativo'
+    )
+    
+    efatura_ativo = models.BooleanField(default=False)
+    efatura_nif = models.CharField(max_length=20, blank=True)
+    efatura_api_key = models.CharField(max_length=200, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']
