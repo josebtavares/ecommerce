@@ -116,10 +116,11 @@ def pos_register(request):
     Body: { nome, email, password }
     """
     from django.contrib.auth.models import User
+    from django.db import transaction
     
-    nome = request.data.get('nome')
-    email = request.data.get('email')
-    password = request.data.get('password')
+    nome = request.data.get('nome', '').strip()
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '')
     
     if not all([nome, email, password]):
         return Response(
@@ -128,28 +129,58 @@ def pos_register(request):
         )
     
     # Verificar se email já existe
-    if User.objects.filter(username=email).exists():
+    if User.objects.filter(email__iexact=email).exists():
         return Response(
             {'detail': 'Email já registado'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Criar User e Utilizador
-    user = User.objects.create_user(username=email, email=email, password=password)
-    utilizador = Utilizador.objects.create(user=user, nome=nome)
+    # Verificar se username já existe
+    username = email.split('@')[0]
+    if User.objects.filter(username=username).exists():
+        # Gerar username único
+        i = 1
+        while User.objects.filter(username=f"{username}{i}").exists():
+            i += 1
+        username = f"{username}{i}"
     
-    # Gerar tokens
-    refresh = RefreshToken.for_user(user)
-    
-    return Response({
-        'access_token': str(refresh.access_token),
-        'refresh_token': str(refresh),
-        'user': {
-            'id': utilizador.id,
-            'nome': utilizador.nome,
-            'email': user.email,
-        }
-    }, status=status.HTTP_201_CREATED)
+    try:
+        with transaction.atomic():
+            # Criar User do Django
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=nome.split()[0] if nome else '',
+                last_name=' '.join(nome.split()[1:]) if len(nome.split()) > 1 else ''
+            )
+            
+            # Criar perfil Utilizador
+            utilizador = Utilizador.objects.create(
+                user=user,
+                status='ativo',
+                verificado=False
+            )
+            
+            # Gerar tokens JWT
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'user': {
+                    'id': utilizador.id,
+                    'nome': utilizador.nome,  # usa a property
+                    'email': user.email,
+                    'username': user.username,
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+    except Exception as e:
+        return Response(
+            {'detail': f'Erro ao criar utilizador: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════
