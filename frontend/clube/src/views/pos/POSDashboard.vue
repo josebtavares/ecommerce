@@ -77,7 +77,7 @@
 import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
 import POSHistorico from './POSHistorico.vue'
-import POSCaixa from './POSCaixa.vue'
+
 import POSProdutos from './POSProdutos.vue'  // ADICIONAR
 import axios from 'axios'
 
@@ -88,7 +88,7 @@ export default {
     POSMesas,
     POSPedidos,
     POSHistorico,
-    POSCaixa,
+  
     POSProdutos  // ADICIONAR
   },
   
