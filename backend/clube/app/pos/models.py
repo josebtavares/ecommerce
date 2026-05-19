@@ -526,10 +526,20 @@ class ItemContaMesa(models.Model):
             raise ValidationError('O item não pode ter produto da loja e produto POS ao mesmo tempo.')
 
     def save(self, *args, **kwargs):
+        if self.quantidade is None:
+            self.quantidade = 1
+
+        if self.preco_unitario is None:
+            self.preco_unitario = Decimal('0.00')
+
+        self.preco_total = Decimal(str(self.quantidade)) * Decimal(str(self.preco_unitario))
+
         self.full_clean(exclude=None)
-        self.preco_total = self.quantidade * self.preco_unitario
+
         super().save(*args, **kwargs)
-        self.conta.calcular_totais()
+
+        if self.conta_id:
+            self.conta.calcular_totais()
 
 
 class PagamentoDividido(models.Model):
