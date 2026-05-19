@@ -10,6 +10,8 @@ import AdminLayout from '@/views/admin/AdminLayout.vue'
 import criarLoja from './views/criarLoja.vue';
 import GoogleCallback from './views/google/GoogleCallback.vue';
 import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
+import POSRegister from '@/views/pos/POSRegister.vue'
+import POSLogin from '@/views/pos/POSLogin.vue'
 
 
 const routes = [
@@ -75,7 +77,19 @@ const routes = [
         name: 'FlutterwaveCallback',
         component: FlutterwaveCallback,
     },
-
+    {
+        path: '/pos/register',
+        name: 'POSRegister',
+        component: POSRegister,
+        meta: { title: 'Criar Conta POS' }
+    },
+    {
+        path: '/pos/login',
+        name: 'POSLogin',
+        component: POSLogin,
+        meta: { title: 'Login POS' }
+    }
+    
     // Add other routes here
 ];
 
