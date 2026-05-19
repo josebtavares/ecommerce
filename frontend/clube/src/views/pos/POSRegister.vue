@@ -9,15 +9,29 @@
 
       <!-- Formulário -->
       <form @submit.prevent="handleRegister">
-        <!-- Nome -->
+        <!-- Primeiro Nome -->
         <div class="mb-4">
           <label class="block text-gray-700 text-sm font-semibold mb-2">
-            Nome Completo
+            Primeiro Nome *
           </label>
           <input
-            v-model="form.nome"
+            v-model="form.firstName"
             type="text"
-            placeholder="João Silva"
+            placeholder="João"
+            required
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+          />
+        </div>
+
+        <!-- Último Nome -->
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-semibold mb-2">
+            Último Nome *
+          </label>
+          <input
+            v-model="form.lastName"
+            type="text"
+            placeholder="Silva"
             required
             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
           />
@@ -26,12 +40,12 @@
         <!-- Email -->
         <div class="mb-4">
           <label class="block text-gray-700 text-sm font-semibold mb-2">
-            Email
+            Email *
           </label>
           <input
             v-model="form.email"
             type="email"
-            placeholder="joao@exemplo.com"
+            placeholder="joao.silva@exemplo.com"
             required
             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
           />
@@ -40,7 +54,7 @@
         <!-- Password -->
         <div class="mb-4">
           <label class="block text-gray-700 text-sm font-semibold mb-2">
-            Password
+            Password *
           </label>
           <input
             v-model="form.password"
@@ -56,7 +70,7 @@
         <!-- Confirmar Password -->
         <div class="mb-6">
           <label class="block text-gray-700 text-sm font-semibold mb-2">
-            Confirmar Password
+            Confirmar Password *
           </label>
           <input
             v-model="form.passwordConfirm"
@@ -111,7 +125,8 @@ export default {
   data() {
     return {
       form: {
-        nome: '',
+        firstName: '',
+        lastName: '',
         email: '',
         password: '',
         passwordConfirm: ''
@@ -126,7 +141,7 @@ export default {
       this.error = null
       
       // Validações
-      if (!this.form.nome || !this.form.email || !this.form.password) {
+      if (!this.form.firstName || !this.form.lastName || !this.form.email || !this.form.password) {
         this.error = 'Todos os campos são obrigatórios'
         return
       }
@@ -147,8 +162,9 @@ export default {
         const response = await axios.post(
           `${process.env.VUE_APP_URL_BASE}/api/pos/register/`,
           {
-            nome: this.form.nome,
-            email: this.form.email,
+            first_name: this.form.firstName.trim(),
+            last_name: this.form.lastName.trim(),
+            email: this.form.email.trim(),
             password: this.form.password
           }
         )
@@ -161,7 +177,7 @@ export default {
         localStorage.setItem('pos_user', JSON.stringify(response.data.user))
         
         // Mostrar sucesso
-        alert(`✅ Conta criada com sucesso!\n\nBem-vindo, ${response.data.user.nome}!`)
+        alert(`✅ Conta criada com sucesso!\n\nBem-vindo(a), ${this.form.firstName} ${this.form.lastName}!`)
         
         // Redirecionar para login ou dashboard
         this.$router.push('/pos/login')
@@ -185,7 +201,6 @@ export default {
 </script>
 
 <style scoped>
-/* Animações suaves */
 input:focus {
   transform: scale(1.01);
 }

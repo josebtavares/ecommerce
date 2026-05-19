@@ -112,19 +112,27 @@ def pos_login(request):
 @permission_classes([AllowAny])
 def pos_register(request):
     """
-    Registo de novo utilizador (igual ao e-commerce)
-    Body: { nome, email, password }
+    Registo de novo utilizador
+    Body: { first_name, last_name, email, password }
     """
     from django.contrib.auth.models import User
     from django.db import transaction
     
-    nome = request.data.get('nome', '').strip()
+    first_name = request.data.get('first_name', '').strip()
+    last_name = request.data.get('last_name', '').strip()
     email = request.data.get('email', '').strip()
     password = request.data.get('password', '')
     
-    if not all([nome, email, password]):
+    # Validações
+    if not all([first_name, last_name, email, password]):
         return Response(
             {'detail': 'Todos os campos são obrigatórios'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if len(password) < 6:
+        return Response(
+            {'detail': 'Password deve ter no mínimo 6 caracteres'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -135,14 +143,14 @@ def pos_register(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Verificar se username já existe
-    username = email.split('@')[0]
-    if User.objects.filter(username=username).exists():
-        # Gerar username único
-        i = 1
-        while User.objects.filter(username=f"{username}{i}").exists():
-            i += 1
-        username = f"{username}{i}"
+    # Gerar username único a partir do email
+    base_username = email.split('@')[0]
+    username = base_username
+    counter = 1
+    
+    while User.objects.filter(username=username).exists():
+        username = f"{base_username}{counter}"
+        counter += 1
     
     try:
         with transaction.atomic():
@@ -151,8 +159,8 @@ def pos_register(request):
                 username=username,
                 email=email,
                 password=password,
-                first_name=nome.split()[0] if nome else '',
-                last_name=' '.join(nome.split()[1:]) if len(nome.split()) > 1 else ''
+                first_name=first_name,
+                last_name=last_name
             )
             
             # Criar perfil Utilizador
@@ -170,7 +178,9 @@ def pos_register(request):
                 'refresh_token': str(refresh),
                 'user': {
                     'id': utilizador.id,
-                    'nome': utilizador.nome,  # usa a property
+                    'nome': utilizador.nome,  # property: first_name + last_name
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
                     'email': user.email,
                     'username': user.username,
                 }
