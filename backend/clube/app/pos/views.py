@@ -21,6 +21,7 @@ from .models import (
     TurnoPOS
 )
 from app.models import Loja, Produto, Utilizador
+from django.contrib.auth.models import User
 
 
 # ═══════════════════════════════════════════════════════════════════
