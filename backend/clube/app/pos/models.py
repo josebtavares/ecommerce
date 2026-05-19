@@ -30,17 +30,17 @@ class ConfiguracaoPOS(models.Model):
         help_text='Ex: "POS Principal", "POS Esplanada", "Caixa 1"'
     )
     
-    # Dono do POS (obrigatório)
+    # Dono do POS (obrigatório) - CAMINHO COMPLETO
     dono = models.ForeignKey(
-        'Utilizador',
+        'app.Utilizador',  # ← CORRIGIDO: app.Utilizador em vez de Utilizador
         on_delete=models.CASCADE,
         related_name='pos_geridos',
         verbose_name='Dono do POS'
     )
     
-    # Conexão com loja (OPCIONAL - null = standalone)
+    # Conexão com loja (OPCIONAL - null = standalone) - CAMINHO COMPLETO
     loja_vinculada = models.ForeignKey(
-        'Loja',
+        'app.Loja',  # ← CORRIGIDO: app.Loja em vez de Loja
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -180,7 +180,7 @@ class Mesa(models.Model):
     )
     
     atendente_atual = models.ForeignKey(
-        'Utilizador',
+        'app.Utilizador',  # ← CORRIGIDO
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -254,7 +254,7 @@ class ContaMesa(models.Model):
     )
     
     atendente = models.ForeignKey(
-        'Utilizador',
+        'app.Utilizador',  # ← CORRIGIDO
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -454,9 +454,9 @@ class ItemContaMesa(models.Model):
         verbose_name='Conta'
     )
     
-    # Referência ao produto (usa o modelo Produto do e-commerce)
+    # Referência ao produto (usa o modelo Produto do e-commerce) - CAMINHO COMPLETO
     produto = models.ForeignKey(
-        'Produto',
+        'app.Produto',  # ← CORRIGIDO
         on_delete=models.PROTECT,
         related_name='vendas_pos',
         verbose_name='Produto'
@@ -619,7 +619,7 @@ class TurnoPOS(models.Model):
     )
     
     operador = models.ForeignKey(
-        'Utilizador',
+        'app.Utilizador',  # ← CORRIGIDO
         on_delete=models.PROTECT,
         related_name='turnos_operados',
         verbose_name='Operador',
