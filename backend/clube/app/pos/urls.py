@@ -1,7 +1,3 @@
-"""
-URLs do Sistema POS
-Rotas para autenticação, configuração, mesas, contas e operações
-"""
 from django.urls import path
 from . import views
 
@@ -24,6 +20,9 @@ urlpatterns = [
     # PRODUTOS (CATÁLOGO)
     # ═══════════════════════════════════════════════════════════════════
     path('<int:pos_id>/produtos/', views.pos_produtos, name='pos_produtos'),
+    path('<int:pos_id>/produtos/criar/', views.produto_criar, name='produto_criar'),  # NOVO
+    path('<int:pos_id>/produtos/<int:produto_id>/', views.produto_atualizar, name='produto_atualizar'),  # NOVO
+    path('<int:pos_id>/produtos/<int:produto_id>/apagar/', views.produto_apagar, name='produto_apagar'),  # NOVO
     
     # ═══════════════════════════════════════════════════════════════════
     # MESAS
@@ -31,6 +30,7 @@ urlpatterns = [
     path('<int:pos_id>/mesas/', views.mesas_listar, name='mesas_listar'),
     path('<int:pos_id>/mesas/criar/', views.mesa_criar, name='mesa_criar'),
     path('<int:pos_id>/mesas/<int:mesa_id>/abrir/', views.mesa_abrir, name='mesa_abrir'),
+    path('<int:pos_id>/mesas/<int:mesa_id>/apagar/', views.mesa_apagar, name='mesa_apagar'),  # NOVO
     
     # ═══════════════════════════════════════════════════════════════════
     # CONTAS

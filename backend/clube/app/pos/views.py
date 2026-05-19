@@ -831,3 +831,179 @@ def turno_fechar(request, pos_id, turno_id):
         'diferenca': str(turno.diferenca),
         'fechado_em': turno.fechado_em
     })
+    
+    
+    
+# ═══════════════════════════════════════════════════════════════════
+# GESTÃO DE PRODUTOS POS
+# ═══════════════════════════════════════════════════════════════════
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def produto_criar(request, pos_id):
+    """
+    Criar novo produto para o POS
+    Body (multipart): { nome, descricao, preco, categoria, imagem?, controlar_stock, stock, ativo }
+    """
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    
+    nome = request.data.get('nome')
+    descricao = request.data.get('descricao', '')
+    preco = request.data.get('preco')
+    categoria = request.data.get('categoria')
+    imagem = request.FILES.get('imagem')
+    controlar_stock = request.data.get('controlar_stock', 'false').lower() == 'true'
+    stock = int(request.data.get('stock', 0))
+    ativo = request.data.get('ativo', 'true').lower() == 'true'
+    
+    if not all([nome, preco, categoria]):
+        return Response(
+            {'detail': 'Nome, preço e categoria são obrigatórios'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Se modo integrado, criar produto vinculado à loja
+        if pos.modo == 'integrado' and pos.loja_vinculada:
+            produto = Produto.objects.create(
+                loja=pos.loja_vinculada,
+                nome=nome,
+                descricao=descricao,
+                preco=Decimal(str(preco)),
+                stock=stock,
+                ativo=ativo,
+                disponivel_pos=True
+            )
+            
+            if imagem:
+                produto.imagem = imagem
+            
+            # Associar categoria se existir
+            # TODO: Implementar lógica de categoria se necessário
+            
+            produto.save()
+        else:
+            # Modo standalone - não implementado neste exemplo
+            # mas seguiria a mesma lógica
+            return Response(
+                {'detail': 'Modo standalone não implementado ainda'},
+                status=status.HTTP_501_NOT_IMPLEMENTED
+            )
+        
+        return Response({
+            'id': produto.id,
+            'nome': produto.nome,
+            'preco': str(produto.preco),
+            'categoria': categoria,
+            'ativo': produto.ativo
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response(
+            {'detail': f'Erro ao criar produto: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def produto_atualizar(request, pos_id, produto_id):
+    """
+    Atualizar produto existente
+    Body (multipart): { nome?, descricao?, preco?, categoria?, imagem?, controlar_stock?, stock?, ativo? }
+    """
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    
+    # Buscar produto
+    if pos.modo == 'integrado' and pos.loja_vinculada:
+        produto = get_object_or_404(Produto, id=produto_id, loja=pos.loja_vinculada)
+    else:
+        return Response(
+            {'detail': 'Modo standalone não implementado'},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+    
+    # Atualizar campos fornecidos
+    if 'nome' in request.data:
+        produto.nome = request.data['nome']
+    
+    if 'descricao' in request.data:
+        produto.descricao = request.data['descricao']
+    
+    if 'preco' in request.data:
+        produto.preco = Decimal(str(request.data['preco']))
+    
+    if 'stock' in request.data:
+        produto.stock = int(request.data['stock'])
+    
+    if 'ativo' in request.data:
+        ativo_value = request.data['ativo']
+        if isinstance(ativo_value, str):
+            produto.ativo = ativo_value.lower() == 'true'
+        else:
+            produto.ativo = bool(ativo_value)
+    
+    if 'imagem' in request.FILES:
+        produto.imagem = request.FILES['imagem']
+    
+    produto.save()
+    
+    return Response({
+        'id': produto.id,
+        'nome': produto.nome,
+        'preco': str(produto.preco),
+        'ativo': produto.ativo,
+        'detail': 'Produto atualizado com sucesso'
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def produto_apagar(request, pos_id, produto_id):
+    """
+    Apagar produto (desativa, não remove da BD)
+    """
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    
+    if pos.modo == 'integrado' and pos.loja_vinculada:
+        produto = get_object_or_404(Produto, id=produto_id, loja=pos.loja_vinculada)
+    else:
+        return Response(
+            {'detail': 'Modo standalone não implementado'},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+    
+    # Desativar em vez de apagar
+    produto.ativo = False
+    produto.save()
+    
+    return Response({
+        'detail': 'Produto desativado com sucesso'
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def mesa_apagar(request, pos_id, mesa_id):
+    """
+    Apagar mesa
+    """
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
+    
+    # Verificar se tem conta aberta
+    if ContaMesa.objects.filter(mesa=mesa, status='aberta').exists():
+        return Response(
+            {'detail': 'Não é possível apagar mesa com conta aberta'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    mesa.delete()
+    
+    return Response({
+        'detail': 'Mesa apagada com sucesso'
+    })
