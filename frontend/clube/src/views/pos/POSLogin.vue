@@ -107,6 +107,8 @@ export default {
         alert(`✅ Bem-vindo, ${response.data.user.nome}!\n\nLojas: ${response.data.lojas.length}\nPOS existentes: ${response.data.pos_existentes.length}`)
         
         // TODO: Redirecionar para dashboard POS
+        this.$router.push('/pos/dashboard')
+        
         
       } catch (err) {
         console.error('❌ Erro no login:', err)
