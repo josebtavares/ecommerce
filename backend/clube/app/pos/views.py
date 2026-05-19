@@ -131,6 +131,9 @@ def pos_register(request):
     """
     Registo de novo utilizador
     Body: { first_name, last_name, email, password }
+    
+    Se email já existir → tenta logar (não cria nova conta)
+    Se email não existir → cria nova conta
     """
     from django.contrib.auth.models import User
     from django.db import transaction
@@ -153,12 +156,54 @@ def pos_register(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Verificar se email já existe
-    if User.objects.filter(email__iexact=email).exists():
-        return Response(
-            {'detail': 'Email já registado'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    # ═══════════════════════════════════════════════════════════
+    # VERIFICAR SE EMAIL JÁ EXISTE
+    # ═══════════════════════════════════════════════════════════
+    try:
+        existing_user = User.objects.get(email__iexact=email)
+        
+        # Email já existe - tentar autenticar
+        user = authenticate(request, username=existing_user.username, password=password)
+        
+        if not user:
+            return Response(
+                {'detail': 'Email já registado com password diferente. Use a opção "Login".'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Autenticação bem-sucedida - retornar tokens
+        try:
+            utilizador = user.utilizador
+        except Utilizador.DoesNotExist:
+            return Response(
+                {'detail': 'Perfil de utilizador não encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Gerar tokens JWT
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'access_token': str(refresh.access_token),
+            'refresh_token': str(refresh),
+            'user': {
+                'id': utilizador.id,
+                'nome': utilizador.nome,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email': user.email,
+                'username': user.username,
+            },
+            'mensagem': 'Login bem-sucedido com conta existente'
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        # Email não existe - criar nova conta
+        pass
+    
+    # ═══════════════════════════════════════════════════════════
+    # CRIAR NOVA CONTA
+    # ═══════════════════════════════════════════════════════════
     
     # Gerar username único a partir do email
     base_username = email.split('@')[0]
@@ -195,12 +240,13 @@ def pos_register(request):
                 'refresh_token': str(refresh),
                 'user': {
                     'id': utilizador.id,
-                    'nome': utilizador.nome,  # property: first_name + last_name
+                    'nome': utilizador.nome,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
                     'email': user.email,
                     'username': user.username,
-                }
+                },
+                'mensagem': 'Conta criada com sucesso'
             }, status=status.HTTP_201_CREATED)
             
     except Exception as e:

@@ -168,19 +168,20 @@ export default {
             password: this.form.password
           }
         )
-        
-        console.log('✅ Registo bem-sucedido:', response.data)
-        
+
+        console.log('✅ Sucesso:', response.data)
+
         // Guardar tokens
         localStorage.setItem('pos_access_token', response.data.access_token)
         localStorage.setItem('pos_refresh_token', response.data.refresh_token)
         localStorage.setItem('pos_user', JSON.stringify(response.data.user))
-        
-        // Mostrar sucesso
-        alert(`✅ Conta criada com sucesso!\n\nBem-vindo(a), ${this.form.firstName} ${this.form.lastName}!`)
-        
-        // Redirecionar para login ou dashboard
-        this.$router.push('/pos/login')
+
+        // Mensagem customizada
+        const mensagem = response.data.mensagem || 'Conta criada com sucesso'
+        alert(`✅ ${mensagem}\n\nBem-vindo(a), ${this.form.firstName}!`)
+
+        // Redirecionar para dashboard POS (criar depois)
+        this.$router.push('/pos/dashboard')
         
       } catch (err) {
         console.error('❌ Erro no registo:', err)
