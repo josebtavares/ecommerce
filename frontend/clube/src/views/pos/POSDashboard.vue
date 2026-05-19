@@ -345,7 +345,7 @@
 </template>
 
 <script>
-import api from '@/api'
+import api from '@/services/api'
 
 import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'

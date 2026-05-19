@@ -201,7 +201,7 @@
 </template>
 
 <script>
-import api from '@/api'
+import api from '@/services/api'
 import MesaCard from './components/MesaCard.vue'
 import ContaModal from './components/ContaModal.vue'
 

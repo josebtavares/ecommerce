@@ -338,7 +338,7 @@
 </template>
 
 <script>
-import api from '@/api'
+import api from '@/services/api'
 import PagamentoModal from './PagamentoModal.vue'
 
 export default {
