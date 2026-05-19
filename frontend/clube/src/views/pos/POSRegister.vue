@@ -176,11 +176,15 @@ export default {
         localStorage.setItem('pos_refresh_token', response.data.refresh_token)
         localStorage.setItem('pos_user', JSON.stringify(response.data.user))
 
+        if (response.data.pos) {
+          localStorage.setItem('pos_existentes', JSON.stringify([response.data.pos]))
+          localStorage.setItem('pos_selected', JSON.stringify(response.data.pos))
+        }
+
         // Mensagem customizada
         const mensagem = response.data.mensagem || 'Conta criada com sucesso'
-        alert(`✅ ${mensagem}\n\nBem-vindo(a), ${this.form.firstName}!`)
 
-        // Redirecionar para dashboard POS (criar depois)
+        // Redirecionar para dashboard POS
         this.$router.push('/pos/dashboard')
         
       } catch (err) {

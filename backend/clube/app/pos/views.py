@@ -86,6 +86,18 @@ def pos_login(request):
         dono=utilizador,
         ativo=True
     )
+
+    # Se não houver POS ativo, criar um POS padrão
+    if not pos_existentes.exists():
+        ConfiguracaoPOS.objects.create(
+            nome='POS Principal',
+            dono=utilizador,
+            modo='standalone'
+        )
+        pos_existentes = ConfiguracaoPOS.objects.filter(
+            dono=utilizador,
+            ativo=True
+        )
     
     # Gerar tokens JWT
     refresh = RefreshToken.for_user(user)
@@ -231,6 +243,13 @@ def pos_register(request):
                 status='ativo',
                 verificado=False
             )
+
+            # Criar POS padrão para o novo utilizador
+            pos = ConfiguracaoPOS.objects.create(
+                nome='POS Principal',
+                dono=utilizador,
+                modo='standalone'
+            )
             
             # Gerar tokens JWT
             refresh = RefreshToken.for_user(user)
@@ -245,6 +264,13 @@ def pos_register(request):
                     'last_name': user.last_name,
                     'email': user.email,
                     'username': user.username,
+                },
+                'pos': {
+                    'id': pos.id,
+                    'codigo_pos': pos.codigo_pos,
+                    'nome': pos.nome,
+                    'modo': pos.modo,
+                    'loja_vinculada': None
                 },
                 'mensagem': 'Conta criada com sucesso'
             }, status=status.HTTP_201_CREATED)

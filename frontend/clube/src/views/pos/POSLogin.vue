@@ -105,9 +105,11 @@ export default {
         localStorage.setItem('pos_user', JSON.stringify(response.data.user))
         localStorage.setItem('pos_lojas', JSON.stringify(response.data.lojas))
         localStorage.setItem('pos_existentes', JSON.stringify(response.data.pos_existentes))
-        
-        
-        // TODO: Redirecionar para dashboard POS
+
+        if (response.data.pos_existentes?.length > 0) {
+          localStorage.setItem('pos_selected', JSON.stringify(response.data.pos_existentes[0]))
+        }
+
         this.$router.push('/pos/dashboard')
 
         

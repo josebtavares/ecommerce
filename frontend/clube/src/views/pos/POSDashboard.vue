@@ -74,8 +74,16 @@
       </div>
       <div v-else class="rounded-lg bg-white p-8 text-center text-gray-600 shadow-sm">
         <p class="text-lg font-semibold text-gray-800">Nenhum POS encontrado</p>
-        <p class="mt-2">A conta ainda não tem um POS configurado ou uma loja associada.</p>
-        <p class="mt-4">Crie uma loja/POS ou peça ao administrador para configurar um POS para esta conta.</p>
+        <p class="mt-2">A conta ainda não tem um POS configurado.</p>
+        <p class="mt-4">Crie o seu primeiro POS para começar a usar o sistema.</p>
+        <button
+          @click="criarPOS"
+          :disabled="creatingPos"
+          class="mt-6 inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+        >
+          <span v-if="!creatingPos">Criar POS</span>
+          <span v-else>A criar...</span>
+        </button>
       </div>
     </main>
   </div>
@@ -111,6 +119,7 @@ export default {
       pedidosPendentes: 0,
       posLoaded: false,
       noPos: false,
+      creatingPos: false,
       
       tabs: [
         { id: 'mesas', label: 'Mesas', icon: '📊' },
@@ -171,11 +180,43 @@ export default {
       }
     },
     
+    async criarPOS() {
+      try {
+        this.creatingPos = true
+        const token = localStorage.getItem('pos_access_token')
+        const response = await axios.post(
+          `${process.env.VUE_APP_URL_BASE}/api/pos/criar/`,
+          { nome: 'POS Principal' },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+
+        const novoPos = response.data
+        this.posId = novoPos.id
+        this.posNome = novoPos.nome
+        this.posCodigo = novoPos.codigo_pos
+        this.noPos = false
+
+        localStorage.setItem('pos_existentes', JSON.stringify([novoPos]))
+        localStorage.setItem('pos_selected', JSON.stringify(novoPos))
+      } catch (error) {
+        console.error('Erro ao criar POS:', error)
+        alert(error.response?.data?.detail || 'Erro ao criar POS')
+      } finally {
+        this.creatingPos = false
+      }
+    },
+
     logout() {
       if (confirm('Tem a certeza que quer sair?')) {
         localStorage.removeItem('pos_access_token')
         localStorage.removeItem('pos_refresh_token')
         localStorage.removeItem('pos_user')
+        localStorage.removeItem('pos_existentes')
         localStorage.removeItem('pos_selected')
         this.$router.push('/pos/login')
       }
