@@ -68,7 +68,15 @@
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto p-4">
-      <component :is="currentTabComponent" :pos-id="posId" />
+      <component v-if="posId" :is="currentTabComponent" :pos-id="posId" />
+      <div v-else-if="!posLoaded" class="rounded-lg bg-white p-8 text-center text-gray-600 shadow-sm">
+        A carregar dados do POS...
+      </div>
+      <div v-else class="rounded-lg bg-white p-8 text-center text-gray-600 shadow-sm">
+        <p class="text-lg font-semibold text-gray-800">Nenhum POS encontrado</p>
+        <p class="mt-2">A conta ainda não tem um POS configurado ou uma loja associada.</p>
+        <p class="mt-4">Crie uma loja/POS ou peça ao administrador para configurar um POS para esta conta.</p>
+      </div>
     </main>
   </div>
 </template>
@@ -101,6 +109,8 @@ export default {
       userName: '',
       userInitial: '',
       pedidosPendentes: 0,
+      posLoaded: false,
+      noPos: false,
       
       tabs: [
         { id: 'mesas', label: 'Mesas', icon: '📊' },
@@ -142,8 +152,6 @@ export default {
         // Carregar POS existentes do localStorage (guardados durante login)
         const posExistentes = JSON.parse(localStorage.getItem('pos_existentes') || '[]')
         
-        // TODO: Por agora, assumir primeiro POS
-        // Futuramente, permitir seleção se utilizador tiver múltiplos POS
         if (posExistentes && posExistentes.length > 0) {
           const primeiroPos = posExistentes[0]
           this.posId = primeiroPos.id
@@ -153,13 +161,13 @@ export default {
           // Guardar seleção atual
           localStorage.setItem('pos_selected', JSON.stringify(primeiroPos))
         } else {
-          // Sem POS - redirecionar para criar
-          alert('Nenhum POS encontrado. Vamos criar um!')
-          // TODO: Redirecionar para tela de criação de POS
+          this.noPos = true
         }
-        
       } catch (error) {
         console.error('Erro ao carregar POS:', error)
+        this.noPos = true
+      } finally {
+        this.posLoaded = true
       }
     },
     

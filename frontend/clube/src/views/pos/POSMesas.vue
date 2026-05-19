@@ -173,11 +173,24 @@ export default {
   },
   
   created() {
-    this.carregarMesas()
+    if (this.posId) {
+      this.carregarMesas()
+    }
+  },
+  
+  watch: {
+    posId(newId, oldId) {
+      if (newId && newId !== oldId) {
+        this.carregarMesas(true)
+      }
+    }
   },
   
   methods: {
     async carregarMesas(reset = false) {
+      if (!this.posId) {
+        return
+      }
       if (this.loading) return
       
       if (reset) {
