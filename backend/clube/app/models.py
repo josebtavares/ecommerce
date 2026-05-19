@@ -416,6 +416,11 @@ class Produto(models.Model):
     destaque    = models.BooleanField(default=False)
     ativo       = models.BooleanField(default=True)
     data_criacao= models.DateTimeField(auto_now_add=True)
+    
+    disponivel_pos = models.BooleanField(
+        default=True,
+        verbose_name='Disponível no POS'
+    )
 
     class Meta:
         ordering = ['-data_criacao']
