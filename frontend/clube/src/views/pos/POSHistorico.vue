@@ -1,45 +1,69 @@
 <template>
-  <div class="space-y-4">
-    <!-- Header com Filtros -->
-    <div class="flex justify-between items-center">
+  <div class="space-y-5">
+    <!-- Header -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h2 class="text-2xl font-bold text-gray-800">Histórico</h2>
-        <p class="text-gray-600">{{ totalCount }} contas registadas</p>
+        <h2 class="text-2xl font-black text-slate-950">Histórico</h2>
+        <p class="mt-1 text-sm font-semibold text-slate-500">
+          {{ totalCount }} contas registadas
+        </p>
       </div>
+
+      <button
+        type="button"
+        @click="carregarHistorico(true)"
+        class="h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:bg-slate-800"
+      >
+        Atualizar
+      </button>
+    </div>
+
+    <!-- Erro -->
+    <div
+      v-if="error"
+      class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+    >
+      {{ error }}
     </div>
 
     <!-- Filtros -->
-    <div class="bg-white p-4 rounded-lg shadow space-y-3">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Data Início -->
+    <section class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+          <label class="mb-2 block text-sm font-black text-slate-700">
+            Data início
+          </label>
+
           <input
             v-model="filtros.dataInicio"
             type="date"
             @change="carregarHistorico(true)"
-            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            class="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
           />
         </div>
 
-        <!-- Data Fim -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+          <label class="mb-2 block text-sm font-black text-slate-700">
+            Data fim
+          </label>
+
           <input
             v-model="filtros.dataFim"
             type="date"
             @change="carregarHistorico(true)"
-            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            class="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
           />
         </div>
 
-        <!-- Método Pagamento -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Método Pagamento</label>
+          <label class="mb-2 block text-sm font-black text-slate-700">
+            Método pagamento
+          </label>
+
           <select
             v-model="filtros.metodoPagamento"
             @change="carregarHistorico(true)"
-            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            class="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
           >
             <option value="">Todos</option>
             <option value="dinheiro">Dinheiro</option>
@@ -49,53 +73,67 @@
           </select>
         </div>
       </div>
-    </div>
+    </section>
 
     <!-- Loading -->
-    <div v-if="loading" class="text-center py-8">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      <p class="text-gray-600 mt-2">A carregar histórico...</p>
+    <div v-if="loading" class="rounded-[2rem] bg-white p-10 text-center shadow-sm">
+      <div class="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-slate-950"></div>
+      <p class="mt-3 text-sm font-bold text-slate-500">A carregar histórico...</p>
     </div>
 
-    <!-- Tabela de Histórico -->
-    <div v-else-if="historico.length > 0" class="bg-white rounded-lg shadow overflow-hidden">
-      <div class="overflow-x-auto">
+    <!-- Tabela desktop -->
+    <section
+      v-else-if="historico.length > 0"
+      class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm"
+    >
+      <div class="hidden overflow-x-auto md:block">
         <table class="w-full">
-          <thead class="bg-gray-50 border-b">
+          <thead class="border-b border-slate-200 bg-slate-50">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Data/Hora</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Mesa</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Items</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Pagamento</th>
-              <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Total</th>
-              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Ações</th>
+              <th class="px-4 py-3 text-left text-xs font-black uppercase text-slate-500">Data/Hora</th>
+              <th class="px-4 py-3 text-left text-xs font-black uppercase text-slate-500">Mesa</th>
+              <th class="px-4 py-3 text-left text-xs font-black uppercase text-slate-500">Items</th>
+              <th class="px-4 py-3 text-left text-xs font-black uppercase text-slate-500">Pagamento</th>
+              <th class="px-4 py-3 text-right text-xs font-black uppercase text-slate-500">Total</th>
+              <th class="px-4 py-3 text-center text-xs font-black uppercase text-slate-500">Ações</th>
             </tr>
           </thead>
-          <tbody class="divide-y">
-            <tr v-for="conta in historico" :key="conta.id" class="hover:bg-gray-50">
-              <td class="px-4 py-3 text-sm text-gray-800">
+
+          <tbody class="divide-y divide-slate-100">
+            <tr
+              v-for="conta in historico"
+              :key="conta.id"
+              class="hover:bg-slate-50"
+            >
+              <td class="px-4 py-3 text-sm font-semibold text-slate-700">
                 {{ formatDateTime(conta.fechada_em) }}
               </td>
-              <td class="px-4 py-3 text-sm font-medium text-gray-800">
-                {{ conta.mesa.numero }}
+
+              <td class="px-4 py-3 text-sm font-black text-slate-950">
+                {{ conta.mesa?.numero || '—' }}
               </td>
-              <td class="px-4 py-3 text-sm text-gray-600">
-                {{ conta.items.length }} item{{ conta.items.length !== 1 ? 's' : '' }}
+
+              <td class="px-4 py-3 text-sm font-semibold text-slate-600">
+                {{ conta.items?.length || 0 }} item{{ (conta.items?.length || 0) !== 1 ? 's' : '' }}
               </td>
+
               <td class="px-4 py-3">
-                <span :class="['px-2 py-1 rounded text-xs font-semibold', getMetodoBadge(conta.metodo_pagamento)]">
+                <span :class="['rounded-full px-3 py-1 text-xs font-black uppercase', getMetodoBadge(conta.metodo_pagamento)]">
                   {{ getMetodoLabel(conta.metodo_pagamento) }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-right text-sm font-bold text-blue-600">
-                {{ conta.total }}€
+
+              <td class="px-4 py-3 text-right text-sm font-black text-slate-950">
+                {{ money(conta.total) }}
               </td>
+
               <td class="px-4 py-3 text-center">
                 <button
+                  type="button"
                   @click="verDetalhes(conta)"
-                  class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
                 >
-                  Ver detalhes
+                  Ver
                 </button>
               </td>
             </tr>
@@ -103,83 +141,148 @@
         </table>
       </div>
 
-      <!-- Paginação -->
-      <div class="px-4 py-3 bg-gray-50 border-t flex justify-between items-center">
-        <p class="text-sm text-gray-600">
-          Mostrando {{ (page - 1) * limit + 1 }}–{{ Math.min(page * limit, totalCount) }} de {{ totalCount }}
-        </p>
-        <div class="flex space-x-2">
-          <button
-            @click="carregarHistorico(false, page - 1)"
-            :disabled="page <= 1"
-            class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Anterior
-          </button>
-          <button
-            @click="carregarHistorico(false, page + 1)"
-            :disabled="page >= totalPages"
-            class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Próxima
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else class="text-center py-12 bg-white rounded-lg shadow">
-      <div class="text-gray-400 text-4xl mb-2">📜</div>
-      <p class="text-gray-600">Nenhum registo encontrado</p>
-    </div>
-
-    <!-- Modal Detalhes -->
-    <div v-if="contaSelecionada" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-        <div class="p-6">
-          <div class="flex justify-between items-start mb-4">
+      <!-- Cards mobile -->
+      <div class="space-y-3 p-3 md:hidden">
+        <article
+          v-for="conta in historico"
+          :key="conta.id"
+          class="rounded-2xl bg-slate-50 p-4"
+        >
+          <div class="flex items-start justify-between gap-3">
             <div>
-              <h3 class="text-xl font-bold">Conta #{{ contaSelecionada.id }}</h3>
-              <p class="text-sm text-gray-600">{{ contaSelecionada.mesa.numero }}</p>
+              <p class="font-black text-slate-950">
+                {{ conta.mesa?.numero || 'Mesa' }}
+              </p>
+              <p class="mt-1 text-xs font-semibold text-slate-500">
+                {{ formatDateTime(conta.fechada_em) }}
+              </p>
             </div>
-            <button @click="contaSelecionada = null" class="text-gray-400 hover:text-gray-600">
-              <span class="text-2xl">×</span>
+
+            <p class="text-lg font-black text-slate-950">
+              {{ money(conta.total) }}
+            </p>
+          </div>
+
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span :class="['rounded-full px-3 py-1 text-xs font-black uppercase', getMetodoBadge(conta.metodo_pagamento)]">
+              {{ getMetodoLabel(conta.metodo_pagamento) }}
+            </span>
+
+            <button
+              type="button"
+              @click="verDetalhes(conta)"
+              class="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm"
+            >
+              Ver detalhes
             </button>
           </div>
+        </article>
+      </div>
 
-          <!-- Items -->
-          <div class="space-y-2 mb-4">
-            <h4 class="font-semibold text-gray-700">Items:</h4>
-            <div v-for="item in contaSelecionada.items" :key="item.id" class="flex justify-between p-2 bg-gray-50 rounded">
-              <div>
-                <p class="font-medium">{{ item.quantidade }}x {{ item.nome }}</p>
-                <p v-if="item.observacoes" class="text-xs text-gray-600 italic">{{ item.observacoes }}</p>
+      <!-- Paginação -->
+      <div class="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
+        <button
+          type="button"
+          @click="carregarHistorico(false, page - 1)"
+          :disabled="page <= 1"
+          class="h-10 rounded-2xl bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Anterior
+        </button>
+
+        <span class="text-sm font-black text-slate-600">
+          Página {{ page }} de {{ totalPages || 1 }}
+        </span>
+
+        <button
+          type="button"
+          @click="carregarHistorico(false, page + 1)"
+          :disabled="page >= totalPages"
+          class="h-10 rounded-2xl bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Próxima
+        </button>
+      </div>
+    </section>
+
+    <!-- Empty -->
+    <section
+      v-else
+      class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
+    >
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">
+        📜
+      </div>
+
+      <h3 class="mt-5 text-xl font-black text-slate-950">
+        Nenhum histórico encontrado
+      </h3>
+
+      <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+        As contas fechadas aparecerão aqui.
+      </p>
+    </section>
+
+    <!-- Modal Detalhes -->
+    <div
+      v-if="contaSelecionada"
+      class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      @click.self="contaSelecionada = null"
+    >
+      <div class="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+        <header class="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div>
+            <h3 class="text-xl font-black text-slate-950">
+              Conta #{{ contaSelecionada.id }}
+            </h3>
+            <p class="mt-1 text-sm font-semibold text-slate-500">
+              {{ contaSelecionada.mesa?.numero }} · {{ formatDateTime(contaSelecionada.fechada_em) }}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            @click="contaSelecionada = null"
+            class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 transition hover:bg-slate-200 hover:text-slate-950"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="max-h-[calc(90vh-100px)] overflow-y-auto p-5">
+          <div class="space-y-3">
+            <article
+              v-for="item in contaSelecionada.items"
+              :key="item.id"
+              class="rounded-2xl bg-slate-50 p-4"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="font-black text-slate-950">
+                    {{ item.quantidade }}x {{ item.nome }}
+                  </p>
+                  <p class="mt-1 text-xs font-semibold text-slate-500">
+                    {{ item.origem === 'pos' ? 'Produto POS' : 'Produto loja Bendi' }}
+                  </p>
+                </div>
+
+                <p class="font-black text-slate-950">
+                  {{ money(item.preco_total) }}
+                </p>
               </div>
-              <span class="font-bold">{{ item.preco_total }}€</span>
-            </div>
+            </article>
           </div>
 
-          <!-- Totais -->
-          <div class="border-t pt-4 space-y-2">
-            <div class="flex justify-between text-sm">
-              <span>Subtotal:</span>
-              <span class="font-semibold">{{ contaSelecionada.subtotal }}€</span>
+          <div class="mt-5 rounded-2xl bg-slate-950 p-5 text-white">
+            <div class="flex justify-between text-sm font-bold text-slate-300">
+              <span>Subtotal</span>
+              <span>{{ money(contaSelecionada.subtotal) }}</span>
             </div>
-            <div v-if="contaSelecionada.taxa_servico_valor > 0" class="flex justify-between text-sm">
-              <span>Taxa de serviço:</span>
-              <span class="font-semibold">{{ contaSelecionada.taxa_servico_valor }}€</span>
-            </div>
-            <div class="flex justify-between text-lg font-bold border-t pt-2">
-              <span>Total:</span>
-              <span class="text-blue-600">{{ contaSelecionada.total }}€</span>
-            </div>
-          </div>
 
-          <!-- Info Pagamento -->
-          <div class="mt-4 p-3 bg-blue-50 rounded">
-            <p class="text-sm"><strong>Método:</strong> {{ getMetodoLabel(contaSelecionada.metodo_pagamento) }}</p>
-            <p class="text-sm"><strong>Data:</strong> {{ formatDateTime(contaSelecionada.fechada_em) }}</p>
-            <p v-if="contaSelecionada.nif_cliente" class="text-sm"><strong>NIF:</strong> {{ contaSelecionada.nif_cliente }}</p>
+            <div class="mt-3 flex justify-between text-xl font-black">
+              <span>Total</span>
+              <span>{{ money(contaSelecionada.total) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -188,27 +291,28 @@
 </template>
 
 <script>
-import axios from 'axios'
+import api from '@/api'
 
 export default {
   name: 'POSHistorico',
-  
+
   props: {
     posId: {
-      type: Number,
+      type: [Number, String],
       required: true
     }
   },
-  
+
   data() {
     return {
       historico: [],
       loading: false,
+      error: '',
       page: 1,
       limit: 20,
       totalCount: 0,
       contaSelecionada: null,
-      
+
       filtros: {
         dataInicio: '',
         dataFim: '',
@@ -216,23 +320,24 @@ export default {
       }
     }
   },
-  
+
   computed: {
     totalPages() {
-      return Math.ceil(this.totalCount / this.limit)
+      return Math.max(1, Math.ceil(this.totalCount / this.limit))
     }
   },
-  
+
   created() {
-    // Definir data início como há 30 dias
     const hoje = new Date()
-    const ha30Dias = new Date(hoje.setDate(hoje.getDate() - 30))
+    const ha30Dias = new Date()
+    ha30Dias.setDate(hoje.getDate() - 30)
+
     this.filtros.dataInicio = ha30Dias.toISOString().split('T')[0]
-    this.filtros.dataFim = new Date().toISOString().split('T')[0]
-    
+    this.filtros.dataFim = hoje.toISOString().split('T')[0]
+
     this.carregarHistorico()
   },
-  
+
   methods: {
     async carregarHistorico(reset = false, novaPagina = this.page) {
       if (reset) {
@@ -241,65 +346,77 @@ export default {
       } else {
         this.page = novaPagina
       }
-      
+
       this.loading = true
-      
+      this.error = ''
+
       try {
-        const token = localStorage.getItem('pos_access_token')
         const params = {
           offset: (this.page - 1) * this.limit,
           limit: this.limit
         }
-        
+
         if (this.filtros.dataInicio) params.data_inicio = this.filtros.dataInicio
         if (this.filtros.dataFim) params.data_fim = this.filtros.dataFim
         if (this.filtros.metodoPagamento) params.metodo = this.filtros.metodoPagamento
-        
-        const response = await axios.get(
-          `${process.env.VUE_APP_URL_BASE}/api/pos/${this.posId}/historico/`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params
-          }
-        )
-        
-        this.historico = response.data.results || response.data
-        this.totalCount = response.data.count || this.historico.length
-        
+
+        const { data } = await api.get(`/api/pos/${this.posId}/historico/`, {
+          params
+        })
+
+        this.historico = Array.isArray(data.results)
+          ? data.results
+          : Array.isArray(data)
+            ? data
+            : []
+
+        this.totalCount = data.count || this.historico.length
       } catch (error) {
         console.error('Erro ao carregar histórico:', error)
+
+        if (error.response?.status === 404) {
+          this.error = 'Endpoint de histórico ainda não existe no backend: /historico/.'
+        } else {
+          this.error = error.response?.data?.detail || 'Erro ao carregar histórico.'
+        }
       } finally {
         this.loading = false
       }
     },
-    
+
     verDetalhes(conta) {
       this.contaSelecionada = conta
     },
-    
+
     getMetodoBadge(metodo) {
       const badges = {
-        'dinheiro': 'bg-green-100 text-green-800',
-        'cartao': 'bg-blue-100 text-blue-800',
-        'mbway': 'bg-purple-100 text-purple-800',
-        'transferencia': 'bg-orange-100 text-orange-800'
+        dinheiro: 'bg-green-100 text-green-800',
+        cartao: 'bg-blue-100 text-blue-800',
+        mbway: 'bg-purple-100 text-purple-800',
+        transferencia: 'bg-orange-100 text-orange-800',
+        dividida: 'bg-slate-100 text-slate-800'
       }
-      return badges[metodo] || 'bg-gray-100 text-gray-800'
+
+      return badges[metodo] || 'bg-slate-100 text-slate-800'
     },
-    
+
     getMetodoLabel(metodo) {
       const labels = {
-        'dinheiro': 'Dinheiro',
-        'cartao': 'Cartão',
-        'mbway': 'MBWay',
-        'transferencia': 'Transferência'
+        dinheiro: 'Dinheiro',
+        cartao: 'Cartão',
+        mbway: 'MBWay',
+        transferencia: 'Transferência',
+        dividida: 'Dividida'
       }
-      return labels[metodo] || metodo
+
+      return labels[metodo] || metodo || '—'
     },
-    
+
     formatDateTime(timestamp) {
       if (!timestamp) return ''
+
       const date = new Date(timestamp)
+
       return date.toLocaleString('pt-PT', {
         day: '2-digit',
         month: '2-digit',
@@ -307,6 +424,15 @@ export default {
         hour: '2-digit',
         minute: '2-digit'
       })
+    },
+
+    money(value) {
+      const number = Number(value || 0)
+
+      return new Intl.NumberFormat('pt-PT', {
+        style: 'currency',
+        currency: 'EUR'
+      }).format(number)
     }
   }
 }

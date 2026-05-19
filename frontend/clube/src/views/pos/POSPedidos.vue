@@ -1,295 +1,358 @@
 <template>
-  <div class="space-y-4">
+  <div class="space-y-5">
     <!-- Header -->
-    <div class="flex justify-between items-center">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h2 class="text-2xl font-bold text-gray-800">Pedidos Ativos</h2>
-        <p class="text-gray-600">{{ pedidos.length }} pedidos em curso</p>
+        <h2 class="text-2xl font-black text-slate-950">Pedidos ativos</h2>
+        <p class="mt-1 text-sm font-semibold text-slate-500">
+          {{ pedidos.length }} pedidos em curso
+        </p>
       </div>
-      <div class="flex items-center space-x-2">
-        <span class="text-sm text-gray-600">Atualizar automaticamente</span>
-        <label class="relative inline-block w-12 h-6">
-          <input v-model="autoRefresh" type="checkbox" class="sr-only peer" @change="toggleAutoRefresh">
-          <div class="w-full h-full bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+
+      <div class="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
+        <span class="text-sm font-bold text-slate-600">Auto-refresh</span>
+
+        <label class="relative inline-flex cursor-pointer items-center">
+          <input
+            v-model="autoRefresh"
+            type="checkbox"
+            class="peer sr-only"
+            @change="toggleAutoRefresh"
+          />
+          <div class="h-6 w-11 rounded-full bg-slate-300 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-slate-950 peer-checked:after:translate-x-5"></div>
         </label>
       </div>
     </div>
 
-    <!-- Filtros por Status -->
-    <div class="bg-white p-4 rounded-lg shadow">
-      <div class="flex space-x-4">
+    <!-- Erro -->
+    <div
+      v-if="error"
+      class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+    >
+      {{ error }}
+    </div>
+
+    <!-- Filtros -->
+    <div class="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+      <div class="flex gap-2 overflow-x-auto">
         <button
           v-for="filtro in filtrosStatus"
           :key="filtro.value"
+          type="button"
           @click="statusFiltro = filtro.value"
           :class="[
-            'px-4 py-2 rounded-lg font-medium transition',
+            'shrink-0 rounded-2xl px-4 py-2.5 text-sm font-black transition',
             statusFiltro === filtro.value
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/10'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-950'
           ]"
         >
-          {{ filtro.label }} ({{ contarPorStatus(filtro.value) }})
+          {{ filtro.label }}
+          <span class="ml-1 opacity-80">({{ contarPorStatus(filtro.value) }})</span>
         </button>
       </div>
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="text-center py-8">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      <p class="text-gray-600 mt-2">A carregar pedidos...</p>
+    <div v-if="loading" class="rounded-[2rem] bg-white p-10 text-center shadow-sm">
+      <div class="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-slate-950"></div>
+      <p class="mt-3 text-sm font-bold text-slate-500">A carregar pedidos...</p>
     </div>
 
-    <!-- Lista de Pedidos -->
+    <!-- Lista -->
     <div v-else-if="pedidosFiltrados.length > 0" class="space-y-4">
-      <div
+      <article
         v-for="pedido in pedidosFiltrados"
         :key="pedido.id"
-        class="bg-white rounded-lg shadow-md p-4 border-l-4"
-        :class="getStatusColor(pedido.status)"
+        class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm"
       >
-        <!-- Header do Pedido -->
-        <div class="flex justify-between items-start mb-3">
+        <header class="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 class="text-lg font-bold text-gray-800">{{ pedido.mesa.numero }}</h3>
-            <p class="text-sm text-gray-600">Conta #{{ pedido.id }}</p>
-          </div>
-          <div class="text-right">
-            <span :class="['px-3 py-1 rounded-full text-xs font-semibold', getStatusBadge(pedido.status)]">
-              {{ getStatusLabel(pedido.status) }}
-            </span>
-            <p class="text-xs text-gray-500 mt-1">{{ formatTime(pedido.aberta_em) }}</p>
-          </div>
-        </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-lg font-black text-slate-950">
+                {{ pedido.mesa?.numero || 'Mesa' }}
+              </h3>
 
-        <!-- Items do Pedido -->
-        <div class="space-y-2 mb-3">
+              <span :class="['rounded-full px-3 py-1 text-xs font-black uppercase', getStatusBadge(pedido.status)]">
+                {{ getStatusLabel(pedido.status) }}
+              </span>
+            </div>
+
+            <p class="mt-1 text-sm font-semibold text-slate-500">
+              Conta #{{ pedido.id }} · {{ formatTime(pedido.criada_em) }}
+            </p>
+          </div>
+
+          <div class="text-left sm:text-right">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Total</p>
+            <p class="text-xl font-black text-slate-950">{{ money(pedido.total) }}</p>
+          </div>
+        </header>
+
+        <div class="space-y-3 p-4">
           <div
             v-for="item in pedido.items"
             :key="item.id"
-            class="flex justify-between items-center p-2 bg-gray-50 rounded"
+            class="rounded-2xl bg-slate-50 p-3"
           >
-            <div class="flex-1">
-              <p class="font-semibold text-gray-800">{{ item.quantidade }}x {{ item.nome }}</p>
-              <p v-if="item.observacoes" class="text-xs text-gray-600 italic">{{ item.observacoes }}</p>
-              <span :class="['text-xs font-semibold', getItemStatusColor(item.status)]">
-                {{ getItemStatusLabel(item.status) }}
-              </span>
-            </div>
-            <div class="flex items-center space-x-2">
-              <span class="text-sm font-bold text-gray-700">{{ item.preco_total }}€</span>
-              <select
-                v-model="item.status"
-                @change="atualizarStatusItem(pedido.id, item.id, item.status)"
-                class="text-xs border rounded px-2 py-1"
-              >
-                <option value="pendente">Pendente</option>
-                <option value="preparando">A preparar</option>
-                <option value="pronto">Pronto</option>
-                <option value="entregue">Entregue</option>
-              </select>
-            </div>
-          </div>
-        </div>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="font-black text-slate-950">
+                    {{ item.quantidade }}x {{ item.nome }}
+                  </p>
 
-        <!-- Footer com Total -->
-        <div class="flex justify-between items-center pt-3 border-t">
-          <div class="text-sm text-gray-600">
-            <span>{{ pedido.items.length }} item{{ pedido.items.length !== 1 ? 's' : '' }}</span>
-            <span v-if="pedido.atendente_atual" class="ml-3">· Atendente: {{ pedido.atendente_atual.nome }}</span>
-          </div>
-          <div class="text-right">
-            <p class="text-xs text-gray-500">Total</p>
-            <p class="text-xl font-bold text-blue-600">{{ pedido.total }}€</p>
+                  <span
+                    :class="[
+                      'rounded-full px-2 py-0.5 text-[10px] font-black uppercase',
+                      item.origem === 'pos'
+                        ? 'bg-purple-100 text-purple-700'
+                        : 'bg-blue-100 text-blue-700'
+                    ]"
+                  >
+                    {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
+                  </span>
+                </div>
+
+                <p v-if="item.observacoes" class="mt-1 text-xs italic text-slate-500">
+                  {{ item.observacoes }}
+                </p>
+
+                <p :class="['mt-1 text-xs font-black', getItemStatusColor(item.status)]">
+                  {{ getItemStatusLabel(item.status) }}
+                </p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-black text-slate-700">
+                  {{ money(item.preco_total) }}
+                </span>
+
+                <select
+                  v-model="item.status"
+                  @change="atualizarStatusItem(pedido.id, item.id, item.status)"
+                  class="h-9 rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-slate-950"
+                >
+                  <option value="pendente">Pendente</option>
+                  <option value="preparando">A preparar</option>
+                  <option value="pronto">Pronto</option>
+                  <option value="entregue">Entregue</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
+      </article>
+    </div>
+
+    <!-- Empty -->
+    <section
+      v-else
+      class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
+    >
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">
+        🛒
       </div>
-    </div>
 
-    <!-- Empty State -->
-    <div v-else class="text-center py-12 bg-white rounded-lg shadow">
-      <div class="text-gray-400 text-4xl mb-2">🍽️</div>
-      <p class="text-gray-600">Nenhum pedido ativo</p>
-    </div>
+      <h3 class="mt-5 text-xl font-black text-slate-950">
+        Nenhum pedido ativo
+      </h3>
+
+      <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+        Os pedidos abertos aparecerão aqui depois de adicionares produtos às mesas.
+      </p>
+    </section>
   </div>
 </template>
 
 <script>
-import axios from 'axios'
+import api from '@/api'
 
 export default {
   name: 'POSPedidos',
-  
+
   props: {
     posId: {
-      type: Number,
+      type: [Number, String],
       required: true
     }
   },
-  
+
   data() {
     return {
       pedidos: [],
       loading: false,
+      error: '',
       statusFiltro: 'todas',
       autoRefresh: false,
       refreshInterval: null,
-      
+
       filtrosStatus: [
         { value: 'todas', label: 'Todas' },
         { value: 'aberta', label: 'Abertas' },
         { value: 'preparando', label: 'A preparar' },
-        { value: 'pronto', label: 'Prontos' }
+        { value: 'pronto', label: 'Prontos' },
+        { value: 'entregue', label: 'Entregues' }
       ]
     }
   },
-  
+
   computed: {
     pedidosFiltrados() {
-      if (this.statusFiltro === 'todas') {
-        return this.pedidos
-      }
-      
-      if (this.statusFiltro === 'preparando' || this.statusFiltro === 'pronto') {
-        return this.pedidos.filter(p => 
-          p.items.some(item => item.status === this.statusFiltro)
+      if (this.statusFiltro === 'todas') return this.pedidos
+
+      if (['pendente', 'preparando', 'pronto', 'entregue'].includes(this.statusFiltro)) {
+        return this.pedidos.filter((pedido) =>
+          pedido.items?.some((item) => item.status === this.statusFiltro)
         )
       }
-      
-      return this.pedidos.filter(p => p.status === this.statusFiltro)
+
+      return this.pedidos.filter((pedido) => pedido.status === this.statusFiltro)
     }
   },
-  
+
   created() {
     this.carregarPedidos()
   },
-  
+
   beforeUnmount() {
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval)
-    }
+    this.stopAutoRefresh()
   },
-  
+
   methods: {
     async carregarPedidos() {
       this.loading = true
-      
+      this.error = ''
+
       try {
-        const token = localStorage.getItem('pos_access_token')
-        const response = await axios.get(
-          `${process.env.VUE_APP_URL_BASE}/api/pos/${this.posId}/contas/ativas/`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        
-        this.pedidos = response.data
-        
+        const { data } = await api.get(`/api/pos/${this.posId}/contas/ativas/`)
+
+        this.pedidos = Array.isArray(data)
+          ? data
+          : Array.isArray(data.results)
+            ? data.results
+            : []
       } catch (error) {
         console.error('Erro ao carregar pedidos:', error)
+
+        if (error.response?.status === 404) {
+          this.error = 'Endpoint de pedidos ativos ainda não existe no backend: /contas/ativas/.'
+        } else {
+          this.error = error.response?.data?.detail || 'Erro ao carregar pedidos.'
+        }
       } finally {
         this.loading = false
       }
     },
-    
+
     toggleAutoRefresh() {
       if (this.autoRefresh) {
         this.refreshInterval = setInterval(() => {
           this.carregarPedidos()
-        }, 10000) // Atualizar a cada 10 segundos
+        }, 10000)
       } else {
-        if (this.refreshInterval) {
-          clearInterval(this.refreshInterval)
-          this.refreshInterval = null
-        }
+        this.stopAutoRefresh()
       }
     },
-    
+
+    stopAutoRefresh() {
+      if (this.refreshInterval) {
+        clearInterval(this.refreshInterval)
+        this.refreshInterval = null
+      }
+    },
+
     contarPorStatus(status) {
       if (status === 'todas') return this.pedidos.length
-      if (status === 'preparando' || status === 'pronto') {
-        return this.pedidos.filter(p => 
-          p.items.some(item => item.status === status)
+
+      if (['pendente', 'preparando', 'pronto', 'entregue'].includes(status)) {
+        return this.pedidos.filter((pedido) =>
+          pedido.items?.some((item) => item.status === status)
         ).length
       }
-      return this.pedidos.filter(p => p.status === status).length
+
+      return this.pedidos.filter((pedido) => pedido.status === status).length
     },
-    
+
     async atualizarStatusItem(contaId, itemId, novoStatus) {
       try {
-        const token = localStorage.getItem('pos_access_token')
-        await axios.patch(
-          `${process.env.VUE_APP_URL_BASE}/api/pos/${this.posId}/contas/${contaId}/items/${itemId}/`,
-          { status: novoStatus },
-          { headers: { Authorization: `Bearer ${token}` } }
+        await api.patch(
+          `/api/pos/${this.posId}/contas/${contaId}/items/${itemId}/status/`,
+          { status: novoStatus }
         )
-        
+
         await this.carregarPedidos()
-        
       } catch (error) {
         console.error('Erro ao atualizar status:', error)
-        alert('Erro ao atualizar status do item')
+        alert(error.response?.data?.detail || 'Erro ao atualizar status do item.')
       }
     },
-    
-    getStatusColor(status) {
-      const colors = {
-        'aberta': 'border-blue-500',
-        'fechada': 'border-green-500',
-        'cancelada': 'border-red-500'
-      }
-      return colors[status] || 'border-gray-300'
-    },
-    
+
     getStatusBadge(status) {
       const badges = {
-        'aberta': 'bg-blue-100 text-blue-800',
-        'fechada': 'bg-green-100 text-green-800',
-        'cancelada': 'bg-red-100 text-red-800'
+        aberta: 'bg-blue-100 text-blue-800',
+        fechada: 'bg-green-100 text-green-800',
+        cancelada: 'bg-red-100 text-red-800'
       }
-      return badges[status] || 'bg-gray-100 text-gray-800'
+
+      return badges[status] || 'bg-slate-100 text-slate-700'
     },
-    
+
     getStatusLabel(status) {
       const labels = {
-        'aberta': 'Aberta',
-        'fechada': 'Fechada',
-        'cancelada': 'Cancelada'
+        aberta: 'Aberta',
+        fechada: 'Fechada',
+        cancelada: 'Cancelada'
       }
+
       return labels[status] || status
     },
-    
+
     getItemStatusColor(status) {
       const colors = {
-        'pendente': 'text-gray-600',
-        'preparando': 'text-orange-600',
-        'pronto': 'text-green-600',
-        'entregue': 'text-blue-600',
-        'cancelado': 'text-red-600'
+        pendente: 'text-slate-600',
+        preparando: 'text-orange-600',
+        pronto: 'text-green-600',
+        entregue: 'text-blue-600',
+        cancelado: 'text-red-600'
       }
-      return colors[status] || 'text-gray-600'
+
+      return colors[status] || 'text-slate-600'
     },
-    
+
     getItemStatusLabel(status) {
       const labels = {
-        'pendente': '⏳ Pendente',
-        'preparando': '🔥 A preparar',
-        'pronto': '✅ Pronto',
-        'entregue': '🎉 Entregue',
-        'cancelado': '❌ Cancelado'
+        pendente: '⏳ Pendente',
+        preparando: '🔥 A preparar',
+        pronto: '✅ Pronto',
+        entregue: '🎉 Entregue',
+        cancelado: '❌ Cancelado'
       }
+
       return labels[status] || status
     },
-    
+
     formatTime(timestamp) {
       if (!timestamp) return ''
       const date = new Date(timestamp)
       const now = new Date()
-      const diff = Math.floor((now - date) / 1000 / 60) // minutos
-      
+      const diff = Math.floor((now - date) / 1000 / 60)
+
       if (diff < 1) return 'Agora mesmo'
       if (diff < 60) return `Há ${diff} min`
-      
+
       const hours = Math.floor(diff / 60)
       return `Há ${hours}h ${diff % 60}min`
+    },
+
+    money(value) {
+      const number = Number(value || 0)
+
+      return new Intl.NumberFormat('pt-PT', {
+        style: 'currency',
+        currency: 'EUR'
+      }).format(number)
     }
   }
 }
