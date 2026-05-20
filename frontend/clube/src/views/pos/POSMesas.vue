@@ -350,25 +350,19 @@ export default {
   
   async abrirMesaNoBackend(mesa) {
     try {
-      const token = localStorage.getItem('pos_access_token')
-      await axios.post(
-        `${process.env.VUE_APP_URL_BASE}/api/pos/${this.posId}/mesas/${mesa.id}/abrir/`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      
+      await api.post(`/api/pos/${this.posId}/mesas/${mesa.id}/abrir/`)
+
       // Recarregar mesas para ver status atualizado
-      await this.carregarMesas(true)
-      
+      await this.carregarMesas()
+
       // Agora sim, abrir modal
-      const mesaAtualizada = this.mesas.find(m => m.id === mesa.id)
+      const mesaAtualizada = this.mesas.find((m) => m.id === mesa.id)
       if (mesaAtualizada) {
         this.mesaSelecionada = mesaAtualizada
       }
-      
     } catch (error) {
       console.error('Erro ao abrir mesa:', error)
-      alert(error.response?.data?.detail || 'Erro ao abrir mesa')
+      this.error = error.response?.data?.detail || 'Erro ao abrir mesa.'
     }
   },
 
