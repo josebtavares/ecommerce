@@ -226,6 +226,7 @@ export default {
       mesas: [],
       loading: false,
       saving: false,
+      abrindoMesa: false,  // ✅ NOVA FLAG
       error: '',
       success: '',
       filtroAtivo: 'todas',
@@ -307,10 +308,9 @@ export default {
     },
 
     fecharContaModal() {
-    this.mesaSelecionada = null
-    // Recarregar mesas para ver status atualizado
-    this.carregarMesas(true)
-  },
+      this.mesaSelecionada = null
+      this.carregarMesas()
+    },
 
     async criarMesa() {
       if (!this.novaMesa.numero.trim()) {
@@ -339,32 +339,56 @@ export default {
     },
 
     abrirMesa(mesa) {
-    // Se mesa está livre, abrir primeiro
-    if (mesa.status === 'livre') {
-      this.abrirMesaNoBackend(mesa)
-    } else {
-      // Já está ocupada, abrir modal direto
-      this.mesaSelecionada = mesa
-    }
-  },
-  
-  async abrirMesaNoBackend(mesa) {
-    try {
-      await api.post(`/api/pos/${this.posId}/mesas/${mesa.id}/abrir/`)
-
-      // Recarregar mesas para ver status atualizado
-      await this.carregarMesas()
-
-      // Agora sim, abrir modal
-      const mesaAtualizada = this.mesas.find((m) => m.id === mesa.id)
-      if (mesaAtualizada) {
-        this.mesaSelecionada = mesaAtualizada
+      // ✅ PREVENIR MÚLTIPLAS CHAMADAS
+      if (this.abrindoMesa) {
+        console.log('🚫 Já está a abrir uma mesa, aguarde...')
+        return
       }
-    } catch (error) {
-      console.error('Erro ao abrir mesa:', error)
-      this.error = error.response?.data?.detail || 'Erro ao abrir mesa.'
-    }
-  },
+
+      // Se mesa está livre, abrir primeiro
+      if (mesa.status === 'livre') {
+        this.abrirMesaNoBackend(mesa)
+      } else {
+        // Já está ocupada, abrir modal direto
+        this.mesaSelecionada = mesa
+      }
+    },
+  
+    async abrirMesaNoBackend(mesa) {
+      // ✅ VERIFICAR SE JÁ ESTÁ A PROCESSAR
+      if (this.abrindoMesa) {
+        console.log('🚫 Já está a processar abertura de mesa')
+        return
+      }
+
+      this.abrindoMesa = true
+      this.clearMessages()
+
+      try {
+        console.log(`🔓 A abrir mesa ${mesa.numero}...`)
+        
+        const response = await api.post(
+          `/api/pos/${this.posId}/mesas/${mesa.id}/abrir/`
+        )
+
+        console.log('✅ Resposta do backend:', response.data)
+
+        // Recarregar mesas para ver status atualizado
+        await this.carregarMesas()
+
+        // Agora sim, abrir modal com mesa atualizada
+        const mesaAtualizada = this.mesas.find((m) => m.id === mesa.id)
+        if (mesaAtualizada) {
+          this.mesaSelecionada = mesaAtualizada
+        }
+      } catch (error) {
+        console.error('❌ Erro ao abrir mesa:', error)
+        this.error = error.response?.data?.detail || 'Erro ao abrir mesa.'
+      } finally {
+        // ✅ SEMPRE LIBERAR A FLAG
+        this.abrindoMesa = false
+      }
+    },
 
     editarMesa() {
       this.error = 'A edição de mesas ainda precisa de endpoint no backend.'
