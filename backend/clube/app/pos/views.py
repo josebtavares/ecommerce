@@ -952,24 +952,31 @@ def mesa_criar(request, pos_id):
 def mesa_abrir(request, pos_id, mesa_id):
     """
     Abrir mesa (muda status para ocupada E cria conta automaticamente)
+    POST /api/pos/{pos_id}/mesas/{mesa_id}/abrir/
     """
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
     
-    if mesa.status == 'ocupada':
-        # Verificar se já tem conta aberta
-        conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
-        if conta_existente:
-            return Response(
-                {'detail': 'Mesa já está ocupada com conta aberta'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    # VERIFICAR SE JÁ TEM CONTA ABERTA
+    conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
     
-    # Abrir mesa
-    mesa.abrir(utilizador)
+    if conta_existente:
+        # Já tem conta aberta, retornar a conta existente
+        from .serializers import MesaSerializer, ContaMesaSerializer
+        
+        return Response({
+            'detail': 'Mesa já tem conta aberta',
+            'mesa': MesaSerializer(mesa, context={'request': request}).data,
+            'conta_id': conta_existente.id,
+            'conta': ContaMesaSerializer(conta_existente, context={'request': request}).data
+        })
     
-    # Criar conta automaticamente
+    # Só abrir mesa se ainda não estiver ocupada
+    if mesa.status == 'livre':
+        mesa.abrir(utilizador)
+    
+    # Criar conta automaticamente (só se não existir)
     conta = ContaMesa.objects.create(
         pos=pos,
         mesa=mesa,
@@ -977,9 +984,11 @@ def mesa_abrir(request, pos_id, mesa_id):
         taxa_servico_percentagem=pos.taxa_servico_percentagem if pos.taxa_servico_ativa else Decimal('0.00')
     )
     
+    from .serializers import MesaSerializer
+    
     return Response({
         'detail': 'Mesa aberta com sucesso',
-        'mesa': MesaSerializer(mesa).data,
+        'mesa': MesaSerializer(mesa, context={'request': request}).data,
         'conta_id': conta.id
     })
 
