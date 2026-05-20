@@ -191,12 +191,13 @@
 
     <!-- Modal Conta -->
     <ContaModal
-      v-if="mesaSelecionada"
-      :mesa="mesaSelecionada"
-      :pos-id="posId"
-      @close="mesaSelecionada = null"
-      @atualizar="carregarMesas"
-    />
+  v-if="mesaSelecionada"
+  :mesa="mesaSelecionada"
+  :pos-id="posId"
+  @close="fecharContaModal"
+  @atualizar="carregarMesas(true)"
+/>
+    
   </div>
 </template>
 
@@ -305,6 +306,12 @@ export default {
       }
     },
 
+    fecharContaModal() {
+    this.mesaSelecionada = null
+    // Recarregar mesas para ver status atualizado
+    this.carregarMesas(true)
+  },
+
     async criarMesa() {
       if (!this.novaMesa.numero.trim()) {
         this.error = 'O número/nome da mesa é obrigatório.'
@@ -332,8 +339,38 @@ export default {
     },
 
     abrirMesa(mesa) {
+    // Se mesa está livre, abrir primeiro
+    if (mesa.status === 'livre') {
+      this.abrirMesaNoBackend(mesa)
+    } else {
+      // Já está ocupada, abrir modal direto
       this.mesaSelecionada = mesa
-    },
+    }
+  },
+  
+  async abrirMesaNoBackend(mesa) {
+    try {
+      const token = localStorage.getItem('pos_access_token')
+      await axios.post(
+        `${process.env.VUE_APP_URL_BASE}/api/pos/${this.posId}/mesas/${mesa.id}/abrir/`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      // Recarregar mesas para ver status atualizado
+      await this.carregarMesas(true)
+      
+      // Agora sim, abrir modal
+      const mesaAtualizada = this.mesas.find(m => m.id === mesa.id)
+      if (mesaAtualizada) {
+        this.mesaSelecionada = mesaAtualizada
+      }
+      
+    } catch (error) {
+      console.error('Erro ao abrir mesa:', error)
+      alert(error.response?.data?.detail || 'Erro ao abrir mesa')
+    }
+  },
 
     editarMesa() {
       this.error = 'A edição de mesas ainda precisa de endpoint no backend.'

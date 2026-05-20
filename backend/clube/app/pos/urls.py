@@ -38,6 +38,7 @@ urlpatterns = [
     ),
     path('<int:pos_id>/contas/<int:conta_id>/fechar/', views.conta_fechar, name='conta_fechar'),
     
+    
     # TURNOS
     path('<int:pos_id>/turnos/abrir/', views.turno_abrir, name='turno_abrir'),
     path('<int:pos_id>/turnos/<int:turno_id>/fechar/', views.turno_fechar, name='turno_fechar'),

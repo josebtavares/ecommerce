@@ -19,6 +19,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from backend.clube.app.pos.serializers import ContaMesaSerializer, ItemContaMesaSerializer
+
 from .models import (
     ConfiguracaoPOS,
     Mesa,
@@ -948,22 +950,37 @@ def mesa_criar(request, pos_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def mesa_abrir(request, pos_id, mesa_id):
+    """
+    Abrir mesa (muda status para ocupada E cria conta automaticamente)
+    """
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
-
-    if mesa.status != 'livre':
-        return Response({'detail': f'Mesa está {mesa.status}, não pode ser aberta'}, status=status.HTTP_400_BAD_REQUEST)
-
+    
+    if mesa.status == 'ocupada':
+        # Verificar se já tem conta aberta
+        conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
+        if conta_existente:
+            return Response(
+                {'detail': 'Mesa já está ocupada com conta aberta'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # Abrir mesa
     mesa.abrir(utilizador)
-
+    
+    # Criar conta automaticamente
+    conta = ContaMesa.objects.create(
+        pos=pos,
+        mesa=mesa,
+        atendente=utilizador,
+        taxa_servico_percentagem=pos.taxa_servico_percentagem if pos.taxa_servico_ativa else Decimal('0.00')
+    )
+    
     return Response({
-        'detail': 'Mesa aberta',
-        'mesa': {
-            'id': mesa.id,
-            'numero': mesa.numero,
-            'status': mesa.status
-        }
+        'detail': 'Mesa aberta com sucesso',
+        'mesa': MesaSerializer(mesa).data,
+        'conta_id': conta.id
     })
 
 
@@ -1270,75 +1287,84 @@ def turno_fechar(request, pos_id, turno_id):
 @permission_classes([IsAuthenticated])
 def contas_ativas(request, pos_id):
     """
-    Lista contas abertas do POS.
-    Usado no separador Pedidos.
+    Listar todas as contas ativas (status='aberta')
+    GET /api/pos/{pos_id}/contas/ativas/
     """
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-
+    
     contas = ContaMesa.objects.filter(
         pos=pos,
         status='aberta'
-    ).select_related('mesa', 'atendente').order_by('-criada_em')
-
-    return Response([
-        _conta_payload(conta, request)
-        for conta in contas
-    ])
+    ).select_related(
+        'mesa',
+        'atendente'
+    ).prefetch_related(
+        'items'
+    ).order_by('-criada_em')
+    
+    serializer = ContaMesaSerializer(contas, many=True, context={'request': request})
+    return Response(serializer.data)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def pos_historico(request, pos_id):
     """
-    Lista contas fechadas do POS.
-    Usado no separador Histórico.
-    Suporta:
-    ?data_inicio=YYYY-MM-DD
-    ?data_fim=YYYY-MM-DD
-    ?metodo=dinheiro|cartao|mbway|transferencia|dividida
-    ?offset=0
-    ?limit=20
+    Histórico de contas fechadas com paginação e filtros
+    GET /api/pos/{pos_id}/historico/
+    Query params:
+    - offset, limit (paginação)
+    - data_inicio, data_fim (filtro de data)
+    - metodo (filtro por método de pagamento)
     """
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-
-    qs = ContaMesa.objects.filter(
+    
+    # Filtros
+    contas = ContaMesa.objects.filter(
         pos=pos,
         status='fechada'
-    ).select_related('mesa', 'atendente').order_by('-fechada_em')
-
-    data_inicio = request.GET.get('data_inicio')
-    data_fim = request.GET.get('data_fim')
-    metodo = request.GET.get('metodo')
-
+    ).select_related(
+        'mesa',
+        'atendente'
+    ).prefetch_related(
+        'items'
+    )
+    
+    # Filtro por data
+    data_inicio = request.query_params.get('data_inicio')
+    data_fim = request.query_params.get('data_fim')
+    
     if data_inicio:
-        qs = qs.filter(fechada_em__date__gte=data_inicio)
-
+        contas = contas.filter(fechada_em__gte=data_inicio)
     if data_fim:
-        qs = qs.filter(fechada_em__date__lte=data_fim)
-
+        from datetime import datetime, time
+        # Adicionar 23:59:59 ao fim do dia
+        data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d')
+        data_fim_end = datetime.combine(data_fim_obj, time(23, 59, 59))
+        contas = contas.filter(fechada_em__lte=data_fim_end)
+    
+    # Filtro por método
+    metodo = request.query_params.get('metodo')
     if metodo:
-        qs = qs.filter(metodo_pagamento=metodo)
-
-    try:
-        offset = int(request.GET.get('offset', 0))
-        limit = int(request.GET.get('limit', 20))
-    except ValueError:
-        offset = 0
-        limit = 20
-
-    limit = min(max(limit, 1), 100)
-
-    total = qs.count()
-    qs = qs[offset:offset + limit]
-
+        contas = contas.filter(metodo_pagamento=metodo)
+    
+    # Ordenar por mais recente
+    contas = contas.order_by('-fechada_em')
+    
+    # Paginação
+    offset = int(request.query_params.get('offset', 0))
+    limit = int(request.query_params.get('limit', 20))
+    
+    total_count = contas.count()
+    contas_paginadas = contas[offset:offset + limit]
+    
+    serializer = ContaMesaSerializer(contas_paginadas, many=True, context={'request': request})
+    
     return Response({
-        'count': total,
-        'results': [
-            _conta_payload(conta, request)
-            for conta in qs
-        ]
+        'count': total_count,
+        'results': serializer.data
     })
 
 
@@ -1346,37 +1372,27 @@ def pos_historico(request, pos_id):
 @permission_classes([IsAuthenticated])
 def item_status_atualizar(request, pos_id, conta_id, item_id):
     """
-    Atualiza o status de um item da conta.
-    Usado no separador Pedidos.
+    Atualizar status de um item
+    PATCH /api/pos/{pos_id}/contas/{conta_id}/items/{item_id}/status/
+    Body: { status: 'pendente' | 'preparando' | 'pronto' | 'entregue' | 'cancelado' }
     """
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
     item = get_object_or_404(ItemContaMesa, id=item_id, conta=conta)
-
+    
     novo_status = request.data.get('status')
-
-    status_validos = [
-        'pendente',
-        'preparando',
-        'pronto',
-        'entregue',
-        'cancelado'
-    ]
-
-    if novo_status not in status_validos:
+    
+    if novo_status not in ['pendente', 'preparando', 'pronto', 'entregue', 'cancelado']:
         return Response(
-            {'detail': 'Status inválido.'},
+            {'detail': 'Status inválido'},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+    
     item.status = novo_status
     item.save(update_fields=['status', 'atualizado_em'])
-
+    
     return Response({
-        'detail': 'Status atualizado.',
-        'item': {
-            'id': item.id,
-            'status': item.status
-        }
+        'detail': 'Status atualizado',
+        'item': ItemContaMesaSerializer(item, context={'request': request}).data
     })
