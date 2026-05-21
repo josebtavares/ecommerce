@@ -1312,8 +1312,10 @@ def contas_ativas(request, pos_id):
         'items'
     ).order_by('-criada_em')
     
-    serializer = ContaMesaSerializer(contas, many=True, context={'request': request})
-    return Response(serializer.data)
+    return Response([
+    _conta_payload(conta, request)
+    for conta in contas
+    ])
 
 
 @api_view(['GET'])
@@ -1373,7 +1375,10 @@ def pos_historico(request, pos_id):
     
     return Response({
         'count': total_count,
-        'results': serializer.data
+        'results': [
+            _conta_payload(conta, request)
+            for conta in contas_paginadas
+        ]
     })
 
 
@@ -1403,5 +1408,15 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
     
     return Response({
         'detail': 'Status atualizado',
-        'item': ItemContaMesaSerializer(item, context={'request': request}).data
+        'item': {
+            'id': item.id,
+            'produto_id': item.produto_ref_id,
+            'origem': item.origem,
+            'nome': item.nome,
+            'quantidade': item.quantidade,
+            'preco_unitario': str(item.preco_unitario),
+            'preco_total': str(item.preco_total),
+            'observacoes': item.observacoes,
+            'status': item.status
+        }
     })
