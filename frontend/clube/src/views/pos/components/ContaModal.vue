@@ -746,7 +746,8 @@ export default {
       addingProdutoUid: null,
       showPagamentoModal: false,
       error: '',
-      mobileActiveTab: 'produtos' // 'produtos' | 'pedido'
+      mobileActiveTab: 'produtos', // 'produtos' | 'pedido'
+      scrollPosition: 0
     }
   },
 
@@ -778,6 +779,28 @@ export default {
 
   async created() {
     await Promise.all([this.iniciarConta(), this.carregarProdutos()])
+  },
+
+  mounted() {
+    // Bloquear scroll do body quando modal abre (mobile fix)
+    document.body.style.overflow = 'hidden'
+    document.body.style.position = 'fixed'
+    document.body.style.width = '100%'
+    document.body.style.top = `-${window.scrollY}px`
+    
+    // Guardar posição do scroll
+    this.scrollPosition = window.scrollY
+  },
+
+  unmounted() {
+    // Restaurar scroll do body quando modal fecha
+    document.body.style.overflow = ''
+    document.body.style.position = ''
+    document.body.style.width = ''
+    document.body.style.top = ''
+    
+    // Restaurar posição do scroll
+    window.scrollTo(0, this.scrollPosition)
   },
 
   methods: {
