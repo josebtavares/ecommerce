@@ -32,8 +32,9 @@
           <button
             type="button"
             @click="abrirConfiguracao"
-            class="rounded-2xl p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+            class="rounded-2xl p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
             title="Configurar POS"
+            :disabled="!posId"
           >
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -71,7 +72,10 @@
     </header>
 
     <!-- Navegação -->
-    <nav class="sticky top-[73px] z-30 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
+    <nav
+      v-if="posId"
+      class="sticky top-[73px] z-30 border-b border-slate-200 bg-white/90 backdrop-blur-xl"
+    >
       <div class="mx-auto max-w-7xl px-4">
         <div class="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
           <button
@@ -161,6 +165,7 @@
         />
       </section>
 
+      <!-- Loading -->
       <section
         v-else-if="!posLoaded"
         class="rounded-[2rem] border border-slate-200 bg-white p-10 text-center shadow-sm"
@@ -169,6 +174,7 @@
         <p class="font-bold text-slate-600">A carregar dados do POS...</p>
       </section>
 
+      <!-- Fallback caso o onboarding seja fechado/ignorado -->
       <section
         v-else
         class="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12"
@@ -178,27 +184,48 @@
         </div>
 
         <h2 class="mt-5 text-2xl font-black text-slate-950">
-          Nenhum POS encontrado
+          Configura o teu primeiro POS
         </h2>
 
         <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-          A tua conta ainda não tem um POS configurado. Cria o primeiro POS para começares a vender.
+          Escolhe se queres usar o POS sozinho ou integrado com uma loja Bendi.
         </p>
 
-        <button
-          type="button"
-          @click="criarPOS"
-          :disabled="creatingPos"
-          class="mt-6 inline-flex h-12 items-center justify-center rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-        >
-          <span v-if="!creatingPos">Criar POS</span>
-          <span v-else class="flex items-center gap-2">
-            <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-            A criar...
-          </span>
-        </button>
+        <div class="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <button
+            type="button"
+            @click="abrirOnboarding"
+            class="inline-flex h-12 items-center justify-center rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
+          >
+            Escolher configuração
+          </button>
+
+          <button
+            type="button"
+            @click="criarPOS"
+            :disabled="creatingPos"
+            class="inline-flex h-12 items-center justify-center rounded-2xl bg-slate-100 px-6 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span v-if="!creatingPos">Criar standalone rápido</span>
+            <span v-else class="flex items-center gap-2">
+              <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-slate-900"></span>
+              A criar...
+            </span>
+          </button>
+        </div>
       </section>
     </main>
+
+    <!-- Onboarding -->
+    <OnboardingModal
+      v-if="showOnboardingModal"
+      :lojas="lojas"
+      :onboarding-data="onboardingData"
+      :loading="creatingPos"
+      @completed="handleOnboardingCompleted"
+      @create-pos="handleOnboardingCreatePOS"
+      @close="handleOnboardingClose"
+    />
 
     <!-- Modal Configuração - BOTTOM SHEET MOBILE -->
     <div
@@ -206,7 +233,6 @@
       class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       @click.self="fecharConfiguracao"
     >
-      <!-- Mobile: Bottom Sheet | Desktop: Modal centrado -->
       <div class="w-full max-w-2xl overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
         <header class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-5">
           <div>
@@ -227,7 +253,6 @@
           </button>
         </header>
 
-        <!-- Body com scroll interno no mobile -->
         <form class="max-h-[65vh] space-y-5 overflow-y-auto p-5 sm:max-h-none" @submit.prevent="guardarConfiguracao">
           <div
             v-if="configError"
@@ -320,7 +345,6 @@
           </div>
         </form>
 
-        <!-- Footer fixo -->
         <div class="grid grid-cols-2 gap-3 border-t border-slate-200 bg-slate-50 p-5">
           <button
             type="button"
@@ -355,6 +379,7 @@ import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
 import POSHistorico from './POSHistorico.vue'
 import POSProdutos from './POSProdutos.vue'
+import OnboardingModal from './components/OnboardingModal.vue'
 
 export default {
   name: 'POSDashboard',
@@ -363,7 +388,8 @@ export default {
     POSMesas,
     POSPedidos,
     POSHistorico,
-    POSProdutos
+    POSProdutos,
+    OnboardingModal
   },
 
   data() {
@@ -385,6 +411,8 @@ export default {
       savingConfig: false,
 
       lojas: [],
+      onboardingData: null,
+      showOnboardingModal: false,
 
       showConfigModal: false,
       configError: '',
@@ -473,6 +501,7 @@ export default {
   async created() {
     this.loadUserData()
     this.loadLojasFromStorage()
+    this.loadOnboardingData()
     await this.loadPOSData()
   },
 
@@ -492,6 +521,22 @@ export default {
       }
     },
 
+    loadOnboardingData() {
+      try {
+        this.onboardingData = JSON.parse(localStorage.getItem('pos_onboarding_data') || 'null')
+      } catch {
+        this.onboardingData = null
+      }
+    },
+
+    shouldShowOnboarding() {
+      const precisaOnboarding = localStorage.getItem('pos_precisa_onboarding') === 'true'
+      const posSelecionado = localStorage.getItem('pos_selected')
+      const posId = localStorage.getItem('pos_id')
+
+      return precisaOnboarding && !posSelecionado && !posId
+    },
+
     async loadPOSData() {
       try {
         const posSelecionado = JSON.parse(localStorage.getItem('pos_selected') || 'null')
@@ -501,9 +546,15 @@ export default {
 
         if (pos?.id) {
           await this.carregarDetalhePOS(pos.id)
+        } else if (this.shouldShowOnboarding()) {
+          this.showOnboardingModal = true
         }
       } catch (error) {
         console.error('Erro ao carregar POS:', error)
+
+        if (this.shouldShowOnboarding()) {
+          this.showOnboardingModal = true
+        }
       } finally {
         this.posLoaded = true
       }
@@ -540,30 +591,73 @@ export default {
         : [pos]
 
       localStorage.setItem('pos_existentes', JSON.stringify(updated))
+      localStorage.setItem('pos_precisa_onboarding', 'false')
 
+      this.showOnboardingModal = false
       this.componentRefreshKey += 1
     },
 
-    async criarPOS() {
-      try {
-        this.creatingPos = true
+    abrirOnboarding() {
+      this.loadLojasFromStorage()
+      this.loadOnboardingData()
+      this.showOnboardingModal = true
+    },
 
-        const { data } = await api.post('/api/pos/criar/', {
-          nome: 'POS Principal',
-          modo: 'standalone'
-        })
+    handleOnboardingClose() {
+      this.showOnboardingModal = false
+    },
+
+    handleOnboardingCompleted(pos) {
+      if (pos?.id) {
+        this.setCurrentPOS(pos)
+      } else {
+        this.loadPOSData()
+      }
+    },
+
+    async handleOnboardingCreatePOS(payload) {
+      await this.criarPOSComPayload(payload)
+    },
+
+    async criarPOSComPayload(payload = {}) {
+      if (this.creatingPos) return
+
+      this.creatingPos = true
+
+      try {
+        const body = {
+          nome: payload.nome || 'POS Principal',
+          modo: payload.modo || 'standalone'
+        }
+
+        if (payload.loja_id) {
+          body.loja_id = payload.loja_id
+        }
+
+        const { data } = await api.post('/api/pos/criar/', body)
 
         this.setCurrentPOS(data)
-        localStorage.setItem('pos_existentes', JSON.stringify([data]))
       } catch (error) {
         console.error('Erro ao criar POS:', error)
-        alert(error.response?.data?.detail || 'Erro ao criar POS')
+        alert(error.response?.data?.detail || 'Erro ao criar POS.')
       } finally {
         this.creatingPos = false
       }
     },
 
+    async criarPOS() {
+      await this.criarPOSComPayload({
+        nome: 'POS Principal',
+        modo: 'standalone'
+      })
+    },
+
     abrirConfiguracao() {
+      if (!this.posId) {
+        this.abrirOnboarding()
+        return
+      }
+
       this.configError = ''
       this.configSuccess = ''
 
@@ -664,6 +758,9 @@ export default {
       localStorage.removeItem('pos_selected')
       localStorage.removeItem('pos_id')
       localStorage.removeItem('pos_tem_lojas')
+      localStorage.removeItem('pos_precisa_onboarding')
+      localStorage.removeItem('pos_onboarding_data')
+      localStorage.removeItem('pos_permissoes')
 
       this.$router.push('/pos/login')
     }

@@ -640,3 +640,228 @@ class TurnoPOS(models.Model):
         self.diferenca = self.valor_fecho - valor_esperado
 
         self.save(update_fields=['aberto', 'fechado_em', 'valor_fecho', 'diferenca'])
+        
+        
+class UtilizadorPOS(models.Model):
+    """
+    Relação entre utilizadores e POS (equipa).
+    Define papéis e permissões granulares.
+    
+    Um POS pode ter múltiplos utilizadores (equipa).
+    Um utilizador pode ter acesso a múltiplos POS.
+    """
+    
+    PAPEL_CHOICES = [
+        ('dono', 'Dono/Gerente'),
+        ('gerente', 'Gerente'),
+        ('empregado', 'Empregado'),
+        ('cozinha', 'Cozinha'),
+        ('caixa', 'Operador de Caixa'),
+    ]
+    
+    pos = models.ForeignKey(
+        ConfiguracaoPOS,
+        on_delete=models.CASCADE,
+        related_name='equipa',
+        verbose_name='POS'
+    )
+    
+    utilizador = models.ForeignKey(
+        'app.Utilizador',
+        on_delete=models.CASCADE,
+        related_name='pos_acessos',
+        verbose_name='Utilizador'
+    )
+    
+    papel = models.CharField(
+        max_length=20,
+        choices=PAPEL_CHOICES,
+        default='empregado',
+        verbose_name='Papel'
+    )
+    
+    # ========================================================================
+    # PERMISSÕES GRANULARES
+    # ========================================================================
+    
+    # Operações básicas de mesas
+    pode_abrir_mesas = models.BooleanField(
+        default=True,
+        verbose_name='Pode abrir mesas',
+        help_text='Permite abrir mesas e criar contas'
+    )
+    
+    pode_fechar_contas = models.BooleanField(
+        default=False,
+        verbose_name='Pode fechar contas',
+        help_text='Permite finalizar pagamento de contas'
+    )
+    
+    pode_cancelar_items = models.BooleanField(
+        default=False,
+        verbose_name='Pode cancelar items',
+        help_text='Permite remover items de contas abertas'
+    )
+    
+    pode_dar_descontos = models.BooleanField(
+        default=False,
+        verbose_name='Pode dar descontos',
+        help_text='Permite aplicar descontos nas contas'
+    )
+    
+    # Gestão de produtos e mesas
+    pode_gerir_produtos = models.BooleanField(
+        default=False,
+        verbose_name='Pode gerir produtos',
+        help_text='Permite criar/editar/apagar produtos'
+    )
+    
+    pode_gerir_mesas = models.BooleanField(
+        default=False,
+        verbose_name='Pode gerir mesas',
+        help_text='Permite criar/editar/apagar mesas'
+    )
+    
+    pode_gerir_utilizadores = models.BooleanField(
+        default=False,
+        verbose_name='Pode gerir utilizadores',
+        help_text='Permite adicionar/remover membros da equipa'
+    )
+    
+    # Relatórios e caixa
+    pode_ver_relatorios = models.BooleanField(
+        default=False,
+        verbose_name='Pode ver relatórios',
+        help_text='Permite acesso ao histórico e estatísticas'
+    )
+    
+    pode_abrir_fechar_turno = models.BooleanField(
+        default=False,
+        verbose_name='Pode abrir/fechar turno',
+        help_text='Permite gerir turnos e caixa'
+    )
+    
+    # Cozinha específico
+    pode_ver_pedidos = models.BooleanField(
+        default=True,
+        verbose_name='Pode ver pedidos',
+        help_text='Permite visualizar pedidos (todos têm por padrão)'
+    )
+    
+    pode_atualizar_status_items = models.BooleanField(
+        default=False,
+        verbose_name='Pode atualizar status de items',
+        help_text='Permite mudar status: pendente → preparando → pronto'
+    )
+    
+    # Meta
+    ativo = models.BooleanField(
+        default=True,
+        verbose_name='Ativo',
+        help_text='Membros inativos não têm acesso ao POS'
+    )
+    
+    criado_em = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
+    atualizado_em = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
+    
+    class Meta:
+        unique_together = ['pos', 'utilizador']
+        verbose_name = 'Utilizador do POS'
+        verbose_name_plural = 'Utilizadores do POS'
+        ordering = ['-criado_em']
+        indexes = [
+            models.Index(fields=['pos', 'ativo']),
+            models.Index(fields=['utilizador', 'ativo']),
+        ]
+    
+    def __str__(self):
+        return f"{self.utilizador.nome} - {self.pos.nome} ({self.get_papel_display()})"
+    
+    def save(self, *args, **kwargs):
+        """Define permissões padrão baseadas no papel ao criar"""
+        if not self.pk:  # Novo objeto
+            self._set_permissoes_padrao()
+        super().save(*args, **kwargs)
+    
+    def _set_permissoes_padrao(self):
+        """
+        Define permissões padrão para cada papel.
+        Chamado automaticamente ao criar novo UtilizadorPOS.
+        """
+        permissoes = {
+            'dono': {
+                # Dono tem TODAS as permissões
+                'pode_abrir_mesas': True,
+                'pode_fechar_contas': True,
+                'pode_cancelar_items': True,
+                'pode_dar_descontos': True,
+                'pode_gerir_produtos': True,
+                'pode_gerir_mesas': True,
+                'pode_gerir_utilizadores': True,
+                'pode_ver_relatorios': True,
+                'pode_abrir_fechar_turno': True,
+                'pode_ver_pedidos': True,
+                'pode_atualizar_status_items': True,
+            },
+            'gerente': {
+                # Gerente tem quase todas (exceto gerir utilizadores)
+                'pode_abrir_mesas': True,
+                'pode_fechar_contas': True,
+                'pode_cancelar_items': True,
+                'pode_dar_descontos': True,
+                'pode_gerir_produtos': True,
+                'pode_gerir_mesas': True,
+                'pode_gerir_utilizadores': False,  # ← Não pode gerir equipa
+                'pode_ver_relatorios': True,
+                'pode_abrir_fechar_turno': True,
+                'pode_ver_pedidos': True,
+                'pode_atualizar_status_items': True,
+            },
+            'empregado': {
+                # Empregado opera mesas apenas
+                'pode_abrir_mesas': True,
+                'pode_fechar_contas': False,
+                'pode_cancelar_items': False,
+                'pode_dar_descontos': False,
+                'pode_gerir_produtos': False,
+                'pode_gerir_mesas': False,
+                'pode_gerir_utilizadores': False,
+                'pode_ver_relatorios': False,
+                'pode_abrir_fechar_turno': False,
+                'pode_ver_pedidos': True,
+                'pode_atualizar_status_items': False,
+            },
+            'cozinha': {
+                # Cozinha vê e atualiza pedidos apenas
+                'pode_abrir_mesas': False,
+                'pode_fechar_contas': False,
+                'pode_cancelar_items': False,
+                'pode_dar_descontos': False,
+                'pode_gerir_produtos': False,
+                'pode_gerir_mesas': False,
+                'pode_gerir_utilizadores': False,
+                'pode_ver_relatorios': False,
+                'pode_abrir_fechar_turno': False,
+                'pode_ver_pedidos': True,
+                'pode_atualizar_status_items': True,  # ← Pode atualizar status
+            },
+            'caixa': {
+                # Caixa fecha contas e gere turno
+                'pode_abrir_mesas': False,
+                'pode_fechar_contas': True,
+                'pode_cancelar_items': False,
+                'pode_dar_descontos': False,
+                'pode_gerir_produtos': False,
+                'pode_gerir_mesas': False,
+                'pode_gerir_utilizadores': False,
+                'pode_ver_relatorios': True,
+                'pode_abrir_fechar_turno': True,
+                'pode_ver_pedidos': True,
+                'pode_atualizar_status_items': False,
+            },
+        }
+        
+        papel_permissoes = permissoes.get(self.papel, permissoes['empregado'])
+        
+        for campo, valor in papel_permissoes.items():
+            setattr(self, campo, valor)

@@ -150,7 +150,6 @@
 </template>
 
 <script>
-
 import api from '@/services/api'
 
 export default {
@@ -201,23 +200,57 @@ export default {
 
     persistSession(data) {
       const lojas = Array.isArray(data.lojas) ? data.lojas : []
-      const posExistentes = Array.isArray(data.pos_existentes) ? data.pos_existentes : []
+      const posExistentes = Array.isArray(data.pos_existentes)
+        ? data.pos_existentes
+        : []
+
       const selectedPOS = posExistentes.length > 0 ? posExistentes[0] : null
+
+      /*
+        O backend agora pode devolver precisa_onboarding=true.
+        Mesmo que por algum motivo não venha, se não houver POS existente,
+        assumimos que precisa onboarding.
+      */
+      const precisaOnboarding = Boolean(
+        data.precisa_onboarding || posExistentes.length === 0
+      )
 
       // Tokens globais usados pela api.js da Bendi
       localStorage.setItem('access_token', data.access_token)
       localStorage.setItem('refresh_token', data.refresh_token)
       localStorage.setItem('user', JSON.stringify(data.user || null))
 
-      // Dados extra específicos do POS
+      // Dados específicos do POS
       localStorage.setItem('pos_lojas', JSON.stringify(lojas))
       localStorage.setItem('pos_existentes', JSON.stringify(posExistentes))
       localStorage.setItem('pos_tem_lojas', data.tem_lojas ? 'true' : 'false')
+      localStorage.setItem('pos_precisa_onboarding', precisaOnboarding ? 'true' : 'false')
 
+      // Dados usados pelo OnboardingModal.vue
+      localStorage.setItem(
+        'pos_onboarding_data',
+        JSON.stringify({
+          tem_lojas: Boolean(data.tem_lojas),
+          lojas,
+          pos_existentes: posExistentes,
+          precisa_onboarding: precisaOnboarding,
+          mensagem: data.mensagem || ''
+        })
+      )
+
+      // Permissões do POS, caso o backend envie
+      if (data.permissoes) {
+        localStorage.setItem('pos_permissoes', JSON.stringify(data.permissoes))
+      } else {
+        localStorage.removeItem('pos_permissoes')
+      }
+
+      // Se já existe POS, seleciona o primeiro e entra direto no dashboard
       if (selectedPOS) {
         localStorage.setItem('pos_selected', JSON.stringify(selectedPOS))
         localStorage.setItem('pos_id', String(selectedPOS.id))
       } else {
+        // Se não existe POS, o dashboard vai abrir o OnboardingModal
         localStorage.removeItem('pos_selected')
         localStorage.removeItem('pos_id')
       }

@@ -29,7 +29,9 @@ from .models import (
     PagamentoDividido,
     TurnoPOS,
     ProdutoPOS,
+    UtilizadorPOS,
 )
+
 
 from app.models import (
     Loja,
@@ -273,6 +275,91 @@ def _verificar_permissao_loja_produtos(loja, utilizador):
         return UtilizadorLoja.verificar_permissao(loja, utilizador, 'gerir_produtos')
     except Exception:
         return False
+    
+def verificar_permissao_pos(pos, utilizador, permissao):
+    """
+    Verifica se utilizador tem permissão específica no POS.
+    
+    Args:
+        pos: ConfiguracaoPOS
+        utilizador: Utilizador
+        permissao: str (ex: 'pode_fechar_contas')
+    
+    Returns:
+        bool
+    """
+    # Dono tem TODAS as permissões
+    if pos.dono_id == utilizador.id:
+        return True
+    
+    try:
+        rel = UtilizadorPOS.objects.get(
+            pos=pos,
+            utilizador=utilizador,
+            ativo=True
+        )
+        return getattr(rel, permissao, False)
+    except UtilizadorPOS.DoesNotExist:
+        return False
+ 
+ 
+def obter_permissoes_utilizador(pos, utilizador):
+    """
+    Obtém todas as permissões do utilizador no POS.
+    
+    Returns:
+        dict com todas as permissões
+    """
+    if pos.dono_id == utilizador.id:
+        return {
+            'e_dono': True,
+            'papel': 'dono',
+            'pode_abrir_mesas': True,
+            'pode_fechar_contas': True,
+            'pode_cancelar_items': True,
+            'pode_dar_descontos': True,
+            'pode_gerir_produtos': True,
+            'pode_gerir_mesas': True,
+            'pode_gerir_utilizadores': True,
+            'pode_ver_relatorios': True,
+            'pode_abrir_fechar_turno': True,
+            'pode_ver_pedidos': True,
+            'pode_atualizar_status_items': True,
+        }
+    
+    try:
+        rel = UtilizadorPOS.objects.get(pos=pos, utilizador=utilizador, ativo=True)
+        return {
+            'e_dono': False,
+            'papel': rel.papel,
+            'pode_abrir_mesas': rel.pode_abrir_mesas,
+            'pode_fechar_contas': rel.pode_fechar_contas,
+            'pode_cancelar_items': rel.pode_cancelar_items,
+            'pode_dar_descontos': rel.pode_dar_descontos,
+            'pode_gerir_produtos': rel.pode_gerir_produtos,
+            'pode_gerir_mesas': rel.pode_gerir_mesas,
+            'pode_gerir_utilizadores': rel.pode_gerir_utilizadores,
+            'pode_ver_relatorios': rel.pode_ver_relatorios,
+            'pode_abrir_fechar_turno': rel.pode_abrir_fechar_turno,
+            'pode_ver_pedidos': rel.pode_ver_pedidos,
+            'pode_atualizar_status_items': rel.pode_atualizar_status_items,
+        }
+    except UtilizadorPOS.DoesNotExist:
+        return {
+            'e_dono': False,
+            'papel': None,
+            'pode_abrir_mesas': False,
+            'pode_fechar_contas': False,
+            'pode_cancelar_items': False,
+            'pode_dar_descontos': False,
+            'pode_gerir_produtos': False,
+            'pode_gerir_mesas': False,
+            'pode_gerir_utilizadores': False,
+            'pode_ver_relatorios': False,
+            'pode_abrir_fechar_turno': False,
+            'pode_ver_pedidos': False,
+            'pode_atualizar_status_items': False,
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -282,48 +369,50 @@ def _verificar_permissao_loja_produtos(loja, utilizador):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def pos_login(request):
+    """
+    Login no POS com ONBOARDING INTELIGENTE.
+    Deteta se utilizador tem lojas Bendi.
+    """
     email = (request.data.get('email') or '').strip()
     password = request.data.get('password', '')
-
+ 
     if not email or not password:
         return Response(
             {'detail': 'Email e password são obrigatórios'},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+ 
     user = authenticate(request, username=email, password=password)
-
+ 
     if not user:
         try:
             django_user = User.objects.get(email__iexact=email)
             user = authenticate(request, username=django_user.username, password=password)
         except User.DoesNotExist:
             user = None
-
+ 
     if not user:
         return Response({'detail': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
-
+ 
     try:
         utilizador = user.utilizador
     except Utilizador.DoesNotExist:
         return Response({'detail': 'Perfil de utilizador não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
+ 
     if not utilizador.is_active:
         return Response({'detail': 'Conta desactivada'}, status=status.HTTP_403_FORBIDDEN)
-
+ 
+    # ONBOARDING INTELIGENTE: Verificar lojas do utilizador
     lojas_do_utilizador = Loja.objects.filter(dono=utilizador, ativa=True)
-    pos_existentes = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-
-    if not pos_existentes.exists():
-        ConfiguracaoPOS.objects.create(
-            nome='POS Principal',
-            dono=utilizador,
-            modo='standalone'
-        )
-        pos_existentes = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-
+    
+    # Verificar POS existentes (dono OU membro da equipa)
+    pos_existentes = ConfiguracaoPOS.objects.filter(
+        Q(dono=utilizador) | Q(equipa__utilizador=utilizador, equipa__ativo=True),
+        ativo=True
+    ).distinct()
+ 
     refresh = RefreshToken.for_user(user)
-
+ 
     return Response({
         'access_token': str(refresh.access_token),
         'refresh_token': str(refresh),
@@ -333,16 +422,18 @@ def pos_login(request):
             'email': user.email,
             'username': user.username,
         },
+        
+        # ONBOARDING DATA
         'tem_lojas': lojas_do_utilizador.exists(),
         'lojas': [
             {
                 'id': l.id,
                 'nome': l.nome,
                 'logo_url': l.logo.url if l.logo else None,
-                'pos_ativo': l.pos_ativo
             }
             for l in lojas_do_utilizador
         ],
+        
         'pos_existentes': [
             {
                 'id': p.id,
@@ -355,80 +446,88 @@ def pos_login(request):
                 } if p.loja_vinculada else None
             }
             for p in pos_existentes
-        ]
+        ],
+        
+        'precisa_onboarding': not pos_existentes.exists(),
+        
+        # Permissões do primeiro POS (se existir)
+        'permissoes': obter_permissoes_utilizador(
+            pos_existentes.first(),
+            utilizador
+        ) if pos_existentes.exists() else None
     })
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def pos_register(request):
+    """
+    Registo com detecção de lojas (mesmo flow que login).
+    """
     first_name = request.data.get('first_name', '').strip()
     last_name = request.data.get('last_name', '').strip()
     email = request.data.get('email', '').strip()
     password = request.data.get('password', '')
-
+ 
     if not all([first_name, last_name, email, password]):
         return Response({'detail': 'Todos os campos são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
-
+ 
     if len(password) < 6:
         return Response({'detail': 'Password deve ter no mínimo 6 caracteres'}, status=status.HTTP_400_BAD_REQUEST)
-
+ 
+    # Verificar se email já existe
     try:
         existing_user = User.objects.get(email__iexact=email)
         user = authenticate(request, username=existing_user.username, password=password)
-
+ 
         if not user:
             return Response(
                 {'detail': 'Email já registado com password diferente. Use a opção "Login".'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+ 
         utilizador = user.utilizador
         refresh = RefreshToken.for_user(user)
-
+ 
+        # User existente - redirecionar para login
+        lojas = Loja.objects.filter(dono=utilizador, ativa=True)
         pos_existentes = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-        if not pos_existentes.exists():
-            ConfiguracaoPOS.objects.create(nome='POS Principal', dono=utilizador, modo='standalone')
-            pos_existentes = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-
+ 
         return Response({
             'access_token': str(refresh.access_token),
             'refresh_token': str(refresh),
             'user': {
                 'id': utilizador.id,
                 'nome': utilizador.nome,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
                 'email': user.email,
-                'username': user.username,
             },
+            'tem_lojas': lojas.exists(),
+            'lojas': [{'id': l.id, 'nome': l.nome} for l in lojas],
             'pos_existentes': [
                 {
                     'id': p.id,
                     'codigo_pos': p.codigo_pos,
                     'nome': p.nome,
                     'modo': p.modo,
-                    'loja_vinculada': {
-                        'id': p.loja_vinculada.id,
-                        'nome': p.loja_vinculada.nome
-                    } if p.loja_vinculada else None
                 }
                 for p in pos_existentes
             ],
+            'precisa_onboarding': not pos_existentes.exists(),
             'mensagem': 'Login bem-sucedido com conta existente'
         }, status=status.HTTP_200_OK)
-
+ 
     except User.DoesNotExist:
         pass
-
+ 
+    # Criar nova conta
     base_username = email.split('@')[0]
     username = base_username
     counter = 1
-
+ 
     while User.objects.filter(username=username).exists():
         username = f"{base_username}{counter}"
         counter += 1
-
+ 
     try:
         with transaction.atomic():
             user = User.objects.create_user(
@@ -438,42 +537,31 @@ def pos_register(request):
                 first_name=first_name,
                 last_name=last_name
             )
-
+ 
             utilizador = Utilizador.objects.create(
                 user=user,
                 status='ativo',
                 verificado=False
             )
-
-            pos = ConfiguracaoPOS.objects.create(
-                nome='POS Principal',
-                dono=utilizador,
-                modo='standalone'
-            )
-
+ 
             refresh = RefreshToken.for_user(user)
-
+ 
+            # User novo não tem lojas nem POS
             return Response({
                 'access_token': str(refresh.access_token),
                 'refresh_token': str(refresh),
                 'user': {
                     'id': utilizador.id,
                     'nome': utilizador.nome,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name,
                     'email': user.email,
-                    'username': user.username,
                 },
-                'pos': {
-                    'id': pos.id,
-                    'codigo_pos': pos.codigo_pos,
-                    'nome': pos.nome,
-                    'modo': pos.modo,
-                    'loja_vinculada': None
-                },
+                'tem_lojas': False,
+                'lojas': [],
+                'pos_existentes': [],
+                'precisa_onboarding': True,  # ← IMPORTANTE
                 'mensagem': 'Conta criada com sucesso'
             }, status=status.HTTP_201_CREATED)
-
+ 
     except Exception as e:
         return Response(
             {'detail': f'Erro ao criar utilizador: {str(e)}'},
@@ -1420,3 +1508,172 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
             'status': item.status
         }
     })
+    
+    
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def pos_equipa(request, pos_id):
+    """
+    GET: Listar membros da equipa
+    POST: Adicionar novo membro
+    """
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, ativo=True)
+    
+    # Verificar se tem acesso ao POS
+    e_dono = pos.dono_id == utilizador.id
+    e_membro = UtilizadorPOS.objects.filter(
+        pos=pos, utilizador=utilizador, ativo=True
+    ).exists()
+    
+    if not e_dono and not e_membro:
+        return Response(
+            {'detail': 'Não tens acesso a este POS.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Verificar permissão para gerir utilizadores
+    if not e_dono and not verificar_permissao_pos(pos, utilizador, 'pode_gerir_utilizadores'):
+        return Response(
+            {'detail': 'Não tens permissão para gerir utilizadores.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # GET: Listar equipa
+    if request.method == 'GET':
+        membros = UtilizadorPOS.objects.filter(pos=pos).select_related('utilizador', 'utilizador__user')
+        
+        return Response([
+            {
+                'id': m.id,
+                'utilizador': {
+                    'id': m.utilizador.id,
+                    'nome': m.utilizador.nome,
+                    'email': m.utilizador.user.email,
+                },
+                'papel': m.papel,
+                'papel_display': m.get_papel_display(),
+                'permissoes': {
+                    'pode_abrir_mesas': m.pode_abrir_mesas,
+                    'pode_fechar_contas': m.pode_fechar_contas,
+                    'pode_cancelar_items': m.pode_cancelar_items,
+                    'pode_dar_descontos': m.pode_dar_descontos,
+                    'pode_gerir_produtos': m.pode_gerir_produtos,
+                    'pode_gerir_mesas': m.pode_gerir_mesas,
+                    'pode_gerir_utilizadores': m.pode_gerir_utilizadores,
+                    'pode_ver_relatorios': m.pode_ver_relatorios,
+                    'pode_abrir_fechar_turno': m.pode_abrir_fechar_turno,
+                    'pode_ver_pedidos': m.pode_ver_pedidos,
+                    'pode_atualizar_status_items': m.pode_atualizar_status_items,
+                },
+                'ativo': m.ativo,
+                'criado_em': m.criado_em.isoformat() if m.criado_em else None,
+            }
+            for m in membros
+        ])
+    
+    # POST: Adicionar membro
+    if request.method == 'POST':
+        email = request.data.get('email')
+        papel = request.data.get('papel', 'empregado')
+        
+        if not email:
+            return Response({'detail': 'Email é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validar papel
+        papeis_validos = ['gerente', 'empregado', 'cozinha', 'caixa']
+        if papel not in papeis_validos:
+            return Response(
+                {'detail': f'Papel inválido. Use: {", ".join(papeis_validos)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Procurar utilizador
+        try:
+            user = User.objects.get(email__iexact=email)
+            utilizador_convidado = user.utilizador
+        except User.DoesNotExist:
+            return Response(
+                {'detail': 'Utilizador não encontrado. Ele precisa criar conta primeiro.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Utilizador.DoesNotExist:
+            return Response(
+                {'detail': 'Utilizador não tem perfil Bendi.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verificar se já é membro
+        if UtilizadorPOS.objects.filter(pos=pos, utilizador=utilizador_convidado).exists():
+            return Response(
+                {'detail': 'Este utilizador já faz parte da equipa.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Criar relação (permissões definidas automaticamente)
+        rel = UtilizadorPOS.objects.create(
+            pos=pos,
+            utilizador=utilizador_convidado,
+            papel=papel
+        )
+        
+        return Response({
+            'detail': 'Utilizador adicionado à equipa com sucesso.',
+            'membro': {
+                'id': rel.id,
+                'utilizador': {
+                    'id': rel.utilizador.id,
+                    'nome': rel.utilizador.nome,
+                    'email': rel.utilizador.user.email,
+                },
+                'papel': rel.papel,
+                'papel_display': rel.get_papel_display(),
+            }
+        }, status=status.HTTP_201_CREATED)
+ 
+ 
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def pos_equipa_membro(request, pos_id, membro_id):
+    """
+    PATCH: Atualizar papel/permissões
+    DELETE: Remover membro
+    """
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, ativo=True)
+    
+    # Verificar permissão
+    if pos.dono_id != utilizador.id and not verificar_permissao_pos(pos, utilizador, 'pode_gerir_utilizadores'):
+        return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    membro = get_object_or_404(UtilizadorPOS, id=membro_id, pos=pos)
+    
+    # PATCH: Atualizar
+    if request.method == 'PATCH':
+        if 'papel' in request.data:
+            membro.papel = request.data['papel']
+            membro._set_permissoes_padrao()
+        
+        # Permitir override de permissões específicas
+        permissoes_editaveis = [
+            'pode_abrir_mesas', 'pode_fechar_contas', 'pode_cancelar_items',
+            'pode_dar_descontos', 'pode_gerir_produtos', 'pode_gerir_mesas',
+            'pode_ver_relatorios', 'pode_abrir_fechar_turno',
+            'pode_ver_pedidos', 'pode_atualizar_status_items'
+        ]
+        
+        for perm in permissoes_editaveis:
+            if perm in request.data:
+                setattr(membro, perm, request.data[perm])
+        
+        if 'ativo' in request.data:
+            membro.ativo = request.data['ativo']
+        
+        membro.save()
+        
+        return Response({'detail': 'Membro atualizado com sucesso.'})
+    
+    # DELETE: Remover
+    if request.method == 'DELETE':
+        membro.delete()
+        return Response({'detail': 'Membro removido da equipa.'}, status=status.HTTP_204_NO_CONTENT)

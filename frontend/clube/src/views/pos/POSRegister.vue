@@ -23,7 +23,7 @@
               </h1>
 
               <p class="mt-5 max-w-lg text-base leading-7 text-slate-300">
-                Cria uma conta, abre o teu POS principal automaticamente e depois podes integrar com uma loja Bendi quando quiseres.
+                Cria a tua conta e escolhe depois se queres usar o POS sozinho, integrado com uma loja Bendi ou em modo híbrido.
               </p>
             </div>
           </div>
@@ -36,12 +36,12 @@
 
             <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
               <p class="text-2xl font-black">02</p>
-              <p class="mt-1 text-xs text-slate-400">POS criado</p>
+              <p class="mt-1 text-xs text-slate-400">Escolher modo</p>
             </div>
 
             <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
               <p class="text-2xl font-black">03</p>
-              <p class="mt-1 text-xs text-slate-400">Vendas</p>
+              <p class="mt-1 text-xs text-slate-400">Começar vendas</p>
             </div>
           </div>
         </aside>
@@ -59,7 +59,7 @@
               </h2>
 
               <p class="mt-2 text-sm text-slate-500">
-                Usa os teus dados para criar uma conta Bendi com acesso ao POS.
+                Cria uma conta Bendi e configura o teu POS no próximo passo.
               </p>
             </header>
 
@@ -171,7 +171,7 @@
                 :disabled="loading || !canSubmit"
                 class="flex h-12 w-full items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
               >
-                <span v-if="!loading">Criar conta e entrar</span>
+                <span v-if="!loading">Criar conta e continuar</span>
 
                 <span v-else class="flex items-center gap-2">
                   <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
@@ -310,6 +310,10 @@ export default {
       const posExistentes = this.resolvePOSList(data)
       const selectedPOS = posExistentes.length > 0 ? posExistentes[0] : null
 
+      const precisaOnboarding = Boolean(
+        data.precisa_onboarding || posExistentes.length === 0
+      )
+
       // Tokens globais usados pela api.js da Bendi
       localStorage.setItem('access_token', data.access_token)
       localStorage.setItem('refresh_token', data.refresh_token)
@@ -319,6 +323,24 @@ export default {
       localStorage.setItem('pos_lojas', JSON.stringify(lojas))
       localStorage.setItem('pos_existentes', JSON.stringify(posExistentes))
       localStorage.setItem('pos_tem_lojas', data.tem_lojas ? 'true' : 'false')
+      localStorage.setItem('pos_precisa_onboarding', precisaOnboarding ? 'true' : 'false')
+
+      localStorage.setItem(
+        'pos_onboarding_data',
+        JSON.stringify({
+          tem_lojas: Boolean(data.tem_lojas),
+          lojas,
+          pos_existentes: posExistentes,
+          precisa_onboarding: precisaOnboarding,
+          mensagem: data.mensagem || ''
+        })
+      )
+
+      if (data.permissoes) {
+        localStorage.setItem('pos_permissoes', JSON.stringify(data.permissoes))
+      } else {
+        localStorage.removeItem('pos_permissoes')
+      }
 
       if (selectedPOS) {
         localStorage.setItem('pos_selected', JSON.stringify(selectedPOS))
