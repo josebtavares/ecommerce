@@ -35,6 +35,34 @@
             ×
           </button>
         </div>
+
+        <div class="mt-4 flex gap-2 lg:hidden">
+          <button
+            type="button"
+            @click="activePanel = 'produtos'"
+            :class="[
+              'flex-1 rounded-2xl border px-4 py-3 text-sm font-black transition',
+              activePanel === 'produtos'
+                ? 'border-slate-950 bg-slate-950 text-white'
+                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+            ]"
+          >
+            Produtos
+          </button>
+
+          <button
+            type="button"
+            @click="activePanel = 'pedido'"
+            :class="[
+              'flex-1 rounded-2xl border px-4 py-3 text-sm font-black transition',
+              activePanel === 'pedido'
+                ? 'border-slate-950 bg-slate-950 text-white'
+                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+            ]"
+          >
+            Pedido
+          </button>
+        </div>
       </header>
 
       <!-- Error -->
@@ -48,7 +76,7 @@
       <!-- Body -->
       <div class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_420px]">
         <!-- Produtos -->
-        <section class="min-h-0 border-b border-slate-200 p-4 lg:border-b-0 lg:border-r lg:p-6">
+        <section :class="['min-h-0 border-b border-slate-200 p-4 lg:border-b-0 lg:border-r lg:p-6', activePanel === 'produtos' ? 'block' : 'hidden lg:block']">
           <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 class="text-xl font-black text-slate-950">Adicionar produtos</h3>
@@ -83,6 +111,36 @@
               <option value="pos">POS</option>
               <option value="loja">Loja</option>
             </select>
+          </div>
+
+          <div v-if="categoriasDisponiveis.length" class="mb-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              @click="categoriaFiltro = ''"
+              :class="[
+                'rounded-2xl px-3 py-2 text-xs font-black transition',
+                !categoriaFiltro
+                  ? 'bg-slate-950 text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              ]"
+            >
+              Todas
+            </button>
+
+            <button
+              v-for="categoria in categoriasDisponiveis"
+              :key="categoria"
+              type="button"
+              @click="categoriaFiltro = categoria"
+              :class="[
+                'rounded-2xl px-3 py-2 text-xs font-black transition',
+                categoriaFiltro === categoria
+                  ? 'bg-slate-950 text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              ]"
+            >
+              {{ categoria }}
+            </button>
           </div>
 
           <div
@@ -177,7 +235,7 @@
         </section>
 
         <!-- Conta -->
-        <aside class="flex min-h-0 flex-col bg-slate-50">
+        <aside :class="['flex min-h-0 flex-col bg-slate-50', activePanel === 'pedido' ? 'block' : 'hidden lg:flex']">
           <div class="border-b border-slate-200 bg-white p-4">
             <div class="flex items-center justify-between gap-3">
               <div>
@@ -366,15 +424,26 @@ export default {
       produtos: [],
       searchQuery: '',
       origemFiltro: '',
+      categoriaFiltro: '',
       loadingConta: false,
       loadingProdutos: false,
       addingProdutoUid: null,
       showPagamentoModal: false,
+      activePanel: 'produtos',
       error: ''
     }
   },
 
   computed: {
+    categoriasDisponiveis() {
+      const categoriasSet = new Set()
+      this.produtos.forEach((produto) => {
+        if (produto.categoria && produto.categoria !== 'Sem categoria') {
+          categoriasSet.add(produto.categoria)
+        }
+      })
+      return Array.from(categoriasSet).sort((a, b) => a.localeCompare(b, 'pt', { sensitivity: 'base' }))
+    },
     items() {
       return Array.isArray(this.conta?.items) ? this.conta.items : []
     },
@@ -382,18 +451,35 @@ export default {
     produtosFiltrados() {
       const query = this.searchQuery.toLowerCase().trim()
 
-      return this.produtos.filter((produto) => {
-        const matchesSearch =
-          !query ||
-          String(produto.nome || '').toLowerCase().includes(query) ||
-          String(produto.descricao || '').toLowerCase().includes(query) ||
-          String(produto.categoria || '').toLowerCase().includes(query)
+      return this.produtos
+        .filter((produto) => {
+          const matchesSearch =
+            !query ||
+            String(produto.nome || '').toLowerCase().includes(query) ||
+            String(produto.descricao || '').toLowerCase().includes(query) ||
+            String(produto.categoria || '').toLowerCase().includes(query)
 
-        const matchesOrigem =
-          !this.origemFiltro || produto.origem === this.origemFiltro
+          const matchesOrigem =
+            !this.origemFiltro || produto.origem === this.origemFiltro
 
-        return matchesSearch && matchesOrigem
-      })
+          const matchesCategoria =
+            !this.categoriaFiltro || produto.categoria === this.categoriaFiltro
+
+          return matchesSearch && matchesOrigem && matchesCategoria
+        })
+        .sort((a, b) => {
+          const catA = a.categoria || 'Sem categoria'
+          const catB = b.categoria || 'Sem categoria'
+
+          if (catA === catB) {
+            return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt', { sensitivity: 'base' })
+          }
+
+          if (catA === 'Sem categoria') return 1
+          if (catB === 'Sem categoria') return -1
+
+          return catA.localeCompare(catB, 'pt', { sensitivity: 'base' })
+        })
     }
   },
 
