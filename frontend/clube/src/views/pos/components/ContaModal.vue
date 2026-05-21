@@ -1,8 +1,6 @@
 <template>
   <div class="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
     <!-- Mobile: Bottom Sheet com offset -->
-    <div class="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl lg:hidden lg:h-[90vh] lg:max-w-7xl lg:rounded-[2rem]">
-    <!-- Mobile: Bottom Sheet com offset -->
     <div class="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl lg:hidden">
       
       <!-- ═══════════════════════════════════════════════════════════ -->
@@ -52,9 +50,7 @@
       </div>
 
       <!-- MOBILE: Tabs Produtos/Pedido -->
-      
-      <!-- MOBILE: Tabs Produtos/Pedido -->
-      <div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <!-- Tab Navigation -->
         <div class="shrink-0 border-b border-slate-200 bg-white">
           <div class="flex">
