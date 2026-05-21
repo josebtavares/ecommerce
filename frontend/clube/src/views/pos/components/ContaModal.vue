@@ -55,7 +55,7 @@
       <!-- ═══════════════════════════════════════════════════════════ -->
       
       <!-- MOBILE: Tabs Produtos/Pedido -->
-      <div class="flex min-h-0 flex-1 flex-col lg:hidden">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
         <!-- Tab Navigation -->
         <div class="shrink-0 border-b border-slate-200 bg-white">
           <div class="flex">
@@ -90,9 +90,9 @@
         </div>
 
         <!-- Tab Content -->
-        <div class="min-h-0 flex-1 overflow-y-auto">
+        <div class="min-h-0 flex-1 overflow-hidden">
           <!-- Produtos Tab -->
-          <div v-show="mobileActiveTab === 'produtos'" class="h-full p-4">
+          <div v-show="mobileActiveTab === 'produtos'" class="flex h-full flex-col overflow-y-auto p-4">
             <div class="flex h-full flex-col">
               <!-- Header -->
               <div class="mb-4 flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -166,7 +166,7 @@
               </div>
 
               <!-- Grid Produtos -->
-              <div class="min-h-0 flex-1 overflow-y-auto">
+              <div class="min-h-0 flex-1">
                 <!-- Loading -->
                 <div
                   v-if="loadingProdutos && produtos.length === 0"
@@ -260,7 +260,7 @@
           </div>
 
           <!-- Pedido Tab -->
-          <div v-show="mobileActiveTab === 'pedido'" class="flex min-h-full flex-col">
+          <div v-show="mobileActiveTab === 'pedido'" class="flex h-full flex-col overflow-hidden">
             <div class="flex-1 overflow-y-auto p-4">
               <!-- Loading -->
               <div
