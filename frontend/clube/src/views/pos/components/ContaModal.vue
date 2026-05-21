@@ -6,7 +6,7 @@
     <div class="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl lg:hidden">
       
       <!-- ═══════════════════════════════════════════════════════════ -->
-      <!-- HEADER -->
+      <!-- HEADER MOBILE -->
       <!-- ═══════════════════════════════════════════════════════════ -->
       <header class="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
         <div class="flex items-center justify-between gap-4">
@@ -43,9 +43,7 @@
         </div>
       </header>
 
-      <!-- ═══════════════════════════════════════════════════════════ -->
-      <!-- ERRO -->
-      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- ERRO MOBILE -->
       <div
         v-if="error"
         class="mx-4 mt-3 shrink-0 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700"
@@ -53,9 +51,7 @@
         {{ error }}
       </div>
 
-      <!-- ═══════════════════════════════════════════════════════════ -->
-      <!-- LAYOUT MOBILE -->
-      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- MOBILE: Tabs Produtos/Pedido -->
       
       <!-- MOBILE: Tabs Produtos/Pedido -->
       <div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
@@ -395,11 +391,9 @@
     </div>
 
     <!-- Desktop: Modal normal centrado -->
-    <div class="hidden h-[90vh] max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl lg:flex">
+    <div class="hidden h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl lg:flex">
       
-      <!-- ═══════════════════════════════════════════════════════════ -->
       <!-- HEADER DESKTOP -->
-      <!-- ═══════════════════════════════════════════════════════════ -->
       <header class="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
         <div class="flex items-center justify-between gap-4">
           <div class="min-w-0">
@@ -444,6 +438,7 @@
       </div>
 
       <!-- DESKTOP: Split Layout -->
+      <div class="min-h-0 flex-1 grid grid-cols-[1fr_420px]">
         <!-- Produtos -->
         <section class="min-h-0 overflow-hidden border-r border-slate-200 p-6">
           <div class="flex h-full flex-col">
