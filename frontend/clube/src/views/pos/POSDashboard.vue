@@ -200,13 +200,14 @@
       </section>
     </main>
 
-    <!-- Modal Configuração -->
+    <!-- Modal Configuração - BOTTOM SHEET MOBILE -->
     <div
       v-if="showConfigModal"
       class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       @click.self="fecharConfiguracao"
     >
-      <div class="max-h-[95vh] w-full max-w-2xl overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+      <!-- Mobile: Bottom Sheet | Desktop: Modal centrado -->
+      <div class="w-full max-w-2xl overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
         <header class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-5">
           <div>
             <h3 class="text-xl font-black text-slate-950">
@@ -226,7 +227,8 @@
           </button>
         </header>
 
-        <form class="space-y-5 p-5" @submit.prevent="guardarConfiguracao">
+        <!-- Body com scroll interno no mobile -->
+        <form class="max-h-[65vh] space-y-5 overflow-y-auto p-5 sm:max-h-none" @submit.prevent="guardarConfiguracao">
           <div
             v-if="configError"
             class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
@@ -316,29 +318,31 @@
               </label>
             </div>
           </div>
-
-          <div class="grid grid-cols-2 gap-3 pt-4">
-            <button
-              type="button"
-              @click="fecharConfiguracao"
-              class="h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              :disabled="savingConfig"
-              class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span v-if="!savingConfig">Guardar</span>
-              <span v-else class="flex items-center gap-2">
-                <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-                A guardar...
-              </span>
-            </button>
-          </div>
         </form>
+
+        <!-- Footer fixo -->
+        <div class="grid grid-cols-2 gap-3 border-t border-slate-200 bg-slate-50 p-5">
+          <button
+            type="button"
+            @click="fecharConfiguracao"
+            class="h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            @click="guardarConfiguracao"
+            :disabled="savingConfig"
+            class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span v-if="!savingConfig">Guardar</span>
+            <span v-else class="flex items-center gap-2">
+              <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+              A guardar...
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
