@@ -3,6 +3,7 @@
     class="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
     @click.self="$emit('close')"
   >
+    <!-- Mobile: Bottom Sheet auto-height | Desktop: Modal centrado -->
     <div class="w-full max-w-lg overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
       <!-- Header -->
       <header class="border-b border-slate-200 p-5 sm:p-6">
@@ -27,7 +28,7 @@
       </header>
 
       <!-- Body -->
-      <section class="p-5 sm:p-6">
+      <section class="max-h-[60vh] overflow-y-auto p-5 sm:max-h-none sm:p-6">
         <!-- Total -->
         <div class="rounded-[1.5rem] bg-slate-950 p-5 text-white shadow-lg shadow-slate-950/20">
           <div class="flex items-center justify-between gap-4">
