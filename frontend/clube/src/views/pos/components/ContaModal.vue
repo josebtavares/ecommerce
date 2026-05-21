@@ -1,21 +1,24 @@
 <template>
   <div class="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-    <div class="flex h-screen w-full flex-col overflow-hidden bg-white sm:h-[90vh] sm:max-w-7xl sm:rounded-[2rem] sm:shadow-2xl">
+    <!-- Mobile: Bottom Sheet com offset -->
+    <div class="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl lg:hidden lg:h-[90vh] lg:max-w-7xl lg:rounded-[2rem]">
+    <!-- Mobile: Bottom Sheet com offset -->
+    <div class="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl lg:hidden">
       
       <!-- ═══════════════════════════════════════════════════════════ -->
       <!-- HEADER -->
       <!-- ═══════════════════════════════════════════════════════════ -->
-      <header class="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+      <header class="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
         <div class="flex items-center justify-between gap-4">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <h2 class="truncate text-xl font-black text-slate-950 sm:text-2xl">
+              <h2 class="truncate text-xl font-black text-slate-950">
                 {{ mesa.numero }}
               </h2>
 
               <span
                 :class="[
-                  'rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide sm:px-3 sm:text-xs',
+                  'rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide',
                   mesa.status === 'ocupada'
                     ? 'bg-blue-50 text-blue-700'
                     : 'bg-emerald-50 text-emerald-700'
@@ -25,7 +28,7 @@
               </span>
             </div>
 
-            <p class="mt-1 text-xs font-semibold text-slate-500 sm:text-sm">
+            <p class="mt-1 text-xs font-semibold text-slate-500">
               Capacidade: {{ mesa.capacidade }} · Conta #{{ conta?.id || '—' }}
             </p>
           </div>
@@ -33,7 +36,7 @@
           <button
             type="button"
             @click="$emit('close')"
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 transition hover:bg-slate-200 hover:text-slate-950 sm:h-11 sm:w-11"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 transition hover:bg-slate-200 hover:text-slate-950"
           >
             ×
           </button>
@@ -45,13 +48,13 @@
       <!-- ═══════════════════════════════════════════════════════════ -->
       <div
         v-if="error"
-        class="mx-4 mt-3 shrink-0 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 sm:mx-6 sm:mt-4 sm:px-4 sm:py-3 sm:text-sm"
+        class="mx-4 mt-3 shrink-0 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700"
       >
         {{ error }}
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════ -->
-      <!-- LAYOUT: MOBILE = TABS | DESKTOP = SPLIT -->
+      <!-- LAYOUT MOBILE -->
       <!-- ═══════════════════════════════════════════════════════════ -->
       
       <!-- MOBILE: Tabs Produtos/Pedido -->
@@ -389,9 +392,58 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Desktop: Modal normal centrado -->
+    <div class="hidden h-[90vh] max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl lg:flex">
+      
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- HEADER DESKTOP -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <header class="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="truncate text-2xl font-black text-slate-950">
+                {{ mesa.numero }}
+              </h2>
+
+              <span
+                :class="[
+                  'rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide',
+                  mesa.status === 'ocupada'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'bg-emerald-50 text-emerald-700'
+                ]"
+              >
+                {{ mesa.status || 'livre' }}
+              </span>
+            </div>
+
+            <p class="mt-1 text-sm font-semibold text-slate-500">
+              Capacidade: {{ mesa.capacidade }} · Conta #{{ conta?.id || '—' }}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            @click="$emit('close')"
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 transition hover:bg-slate-200 hover:text-slate-950"
+          >
+            ×
+          </button>
+        </div>
+      </header>
+
+      <!-- ERRO DESKTOP -->
+      <div
+        v-if="error"
+        class="mx-6 mt-4 shrink-0 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+      >
+        {{ error }}
+      </div>
 
       <!-- DESKTOP: Split Layout -->
-      <div class="hidden min-h-0 flex-1 lg:grid lg:grid-cols-[1fr_420px]">
         <!-- Produtos -->
         <section class="min-h-0 overflow-hidden border-r border-slate-200 p-6">
           <div class="flex h-full flex-col">
