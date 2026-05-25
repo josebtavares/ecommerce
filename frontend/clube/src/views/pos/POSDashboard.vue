@@ -380,6 +380,7 @@ import POSPedidos from './POSPedidos.vue'
 import POSHistorico from './POSHistorico.vue'
 import POSProdutos from './POSProdutos.vue'
 import OnboardingModal from './components/OnboardingModal.vue'
+import POSEquipa from './POSEquipa.vue'
 
 export default {
   name: 'POSDashboard',
@@ -389,7 +390,8 @@ export default {
     POSPedidos,
     POSHistorico,
     POSProdutos,
-    OnboardingModal
+    OnboardingModal,
+    POSEquipa
   },
 
   data() {
@@ -430,7 +432,8 @@ export default {
         { id: 'mesas', label: 'Mesas', icon: '🍽️' },
         { id: 'pedidos', label: 'Pedidos', icon: '🛒' },
         { id: 'produtos', label: 'Produtos', icon: '📦' },
-        { id: 'historico', label: 'Histórico', icon: '📜' }
+        { id: 'historico', label: 'Histórico', icon: '📜' },
+        { id: 'equipa', label: 'Equipa', icon: '👥' }, 
       ],
 
       modoOptions: [
@@ -459,7 +462,8 @@ export default {
         mesas: 'POSMesas',
         pedidos: 'POSPedidos',
         produtos: 'POSProdutos',
-        historico: 'POSHistorico'
+        historico: 'POSHistorico',
+        equipa: 'POSEquipa', 
       }
 
       return componentMap[this.activeTab] || 'POSMesas'
