@@ -652,23 +652,34 @@ export default {
       })
     },
 
-    abrirConfiguracao() {
-      if (!this.posId) {
-        this.abrirOnboarding()
-        return
-      }
+  async abrirConfiguracao() {
+  if (!this.posId) {
+    this.abrirOnboarding()
+    return
+  }
 
-      this.configError = ''
-      this.configSuccess = ''
+  this.configError = ''
+  this.configSuccess = ''
 
-      this.configForm = {
-        nome: this.posNome || 'POS Principal',
-        loja_id: this.lojaVinculada?.id || '',
-        modo: this.modo || 'standalone'
-      }
+  // Recarregar lojas do backend
+  try {
+    const { data } = await api.get('/api/loja/minhas/')
+    this.lojas = data
+    localStorage.setItem('pos_lojas', JSON.stringify(data))
+  } catch (error) {
+    console.error('Erro ao recarregar lojas:', error)
+    // Fallback: usar localStorage
+    this.loadLojasFromStorage()
+  }
 
-      this.showConfigModal = true
-    },
+  this.configForm = {
+    nome: this.posNome || 'POS Principal',
+    loja_id: this.lojaVinculada?.id || '',
+    modo: this.modo || 'standalone'
+  }
+
+  this.showConfigModal = true
+},
 
     fecharConfiguracao() {
       this.showConfigModal = false
