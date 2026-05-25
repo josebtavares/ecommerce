@@ -652,23 +652,37 @@ export default {
       })
     },
 
-    abrirConfiguracao() {
-      if (!this.posId) {
-        this.abrirOnboarding()
-        return
-      }
-
-      this.configError = ''
-      this.configSuccess = ''
-
-      this.configForm = {
-        nome: this.posNome || 'POS Principal',
-        loja_id: this.lojaVinculada?.id || '',
-        modo: this.modo || 'standalone'
-      }
-
-      this.showConfigModal = true
-    },
+    async abrirConfiguracaoComReloadBackend() {
+  if (!this.posId) {
+    this.abrirOnboarding()
+    return
+  }
+ 
+  this.configError = ''
+  this.configSuccess = ''
+ 
+  // Recarregar lojas do localStorage
+  this.loadLojasFromStorage()
+ 
+  // OU recarregar do backend (mais confiável mas mais lento):
+  try {
+    const { data } = await api.get('/api/lojas/minhas/')  // Endpoint hipotético
+    this.lojas = data
+    localStorage.setItem('pos_lojas', JSON.stringify(data))
+  } catch (error) {
+    console.error('Erro ao recarregar lojas:', error)
+    // Fallback para localStorage
+    this.loadLojasFromStorage()
+  }
+ 
+  this.configForm = {
+    nome: this.posNome || 'POS Principal',
+    loja_id: this.lojaVinculada?.id || '',
+    modo: this.modo || 'standalone'
+  }
+ 
+  this.showConfigModal = true
+},
 
     fecharConfiguracao() {
       this.showConfigModal = false
