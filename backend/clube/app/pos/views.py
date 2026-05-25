@@ -643,7 +643,20 @@ def pos_conectar_loja(request, pos_id):
         modo = 'integrado'
 
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-    loja = get_object_or_404(Loja, id=loja_id, dono=utilizador)
+    
+    #CORREÇÃO: Aceitar dono OU membro da loja
+    try:
+        loja = Loja.objects.get(
+            Q(id=loja_id) & (
+                Q(dono=utilizador) | 
+                Q(staff__utilizador=utilizador, staff__ativo=True)
+            )
+        )
+    except Loja.DoesNotExist:
+        return Response(
+            {'detail': 'Loja não encontrada ou sem permissão.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
     pos.conectar_loja(loja, modo=modo)
 
