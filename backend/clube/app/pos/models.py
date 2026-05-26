@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
 import uuid
-
+from django.contrib.auth.hashers import make_password, check_password
 
 class ConfiguracaoPOS(models.Model):
     """
@@ -645,11 +645,27 @@ class TurnoPOS(models.Model):
 class UtilizadorPOS(models.Model):
     """
     Relação entre utilizadores e POS (equipa).
-    Define papéis e permissões granulares.
     
-    Um POS pode ter múltiplos utilizadores (equipa).
-    Um utilizador pode ter acesso a múltiplos POS.
+    Suporta DOIS tipos de utilizadores:
+    
+    1. UTILIZADOR BENDI (tipo='bendi'):
+       - utilizador != None
+       - Tem conta completa na plataforma Bendi
+       - Pode ter loja própria
+       - Pode ser membro de múltiplos POS
+    
+    2. UTILIZADOR POS-ONLY (tipo='pos_only'):
+       - utilizador == None
+       - Criado pelo dono do POS
+       - Não tem conta Bendi
+       - Usa email_pos, nome_pos, password_pos
+       - Pode fazer upgrade para conta Bendi depois
     """
+    
+    TIPO_CHOICES = [
+        ('bendi', 'Utilizador Bendi'),
+        ('pos_only', 'POS-only'),
+    ]
     
     PAPEL_CHOICES = [
         ('dono', 'Dono/Gerente'),
@@ -660,19 +676,59 @@ class UtilizadorPOS(models.Model):
     ]
     
     pos = models.ForeignKey(
-        ConfiguracaoPOS,
+        'ConfiguracaoPOS',
         on_delete=models.CASCADE,
-        related_name='equipa',
+        related_name='staff',
         verbose_name='POS'
     )
     
+    # ========================================================================
+    # UTILIZADOR BENDI (opcional)
+    # ========================================================================
     utilizador = models.ForeignKey(
         'app.Utilizador',
         on_delete=models.CASCADE,
-        related_name='pos_acessos',
-        verbose_name='Utilizador'
+        null=True,
+        blank=True,
+        related_name='pos_memberships',
+        verbose_name='Utilizador Bendi',
+        help_text='Null se for POS-only'
     )
     
+    # ========================================================================
+    # UTILIZADOR POS-ONLY (usado se utilizador == None)
+    # ========================================================================
+    tipo = models.CharField(
+        max_length=10,
+        choices=TIPO_CHOICES,
+        default='bendi',
+        verbose_name='Tipo de utilizador'
+    )
+    
+    email_pos = models.EmailField(
+        blank=True,
+        null=True,
+        verbose_name='Email (POS-only)',
+        help_text='Usado apenas se tipo=pos_only'
+    )
+    
+    nome_pos = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Nome (POS-only)',
+        help_text='Usado apenas se tipo=pos_only'
+    )
+    
+    password_pos = models.CharField(
+        max_length=128,
+        blank=True,
+        verbose_name='Password hash (POS-only)',
+        help_text='Hash bcrypt/pbkdf2 - usado apenas se tipo=pos_only'
+    )
+    
+    # ========================================================================
+    # PAPEL E PERMISSÕES
+    # ========================================================================
     papel = models.CharField(
         max_length=20,
         choices=PAPEL_CHOICES,
@@ -680,117 +736,122 @@ class UtilizadorPOS(models.Model):
         verbose_name='Papel'
     )
     
-    # ========================================================================
-    # PERMISSÕES GRANULARES
-    # ========================================================================
+    # Permissões granulares (igual ao código anterior)
+    pode_abrir_mesas = models.BooleanField(default=True, verbose_name='Pode abrir mesas')
+    pode_fechar_contas = models.BooleanField(default=False, verbose_name='Pode fechar contas')
+    pode_cancelar_items = models.BooleanField(default=False, verbose_name='Pode cancelar items')
+    pode_dar_descontos = models.BooleanField(default=False, verbose_name='Pode dar descontos')
+    pode_gerir_produtos = models.BooleanField(default=False, verbose_name='Pode gerir produtos')
+    pode_gerir_mesas = models.BooleanField(default=False, verbose_name='Pode gerir mesas')
+    pode_gerir_utilizadores = models.BooleanField(default=False, verbose_name='Pode gerir utilizadores')
+    pode_ver_relatorios = models.BooleanField(default=False, verbose_name='Pode ver relatórios')
+    pode_abrir_fechar_turno = models.BooleanField(default=False, verbose_name='Pode abrir/fechar turno')
+    pode_ver_pedidos = models.BooleanField(default=True, verbose_name='Pode ver pedidos')
+    pode_atualizar_status_items = models.BooleanField(default=False, verbose_name='Pode atualizar status de items')
     
-    # Operações básicas de mesas
-    pode_abrir_mesas = models.BooleanField(
-        default=True,
-        verbose_name='Pode abrir mesas',
-        help_text='Permite abrir mesas e criar contas'
-    )
-    
-    pode_fechar_contas = models.BooleanField(
-        default=False,
-        verbose_name='Pode fechar contas',
-        help_text='Permite finalizar pagamento de contas'
-    )
-    
-    pode_cancelar_items = models.BooleanField(
-        default=False,
-        verbose_name='Pode cancelar items',
-        help_text='Permite remover items de contas abertas'
-    )
-    
-    pode_dar_descontos = models.BooleanField(
-        default=False,
-        verbose_name='Pode dar descontos',
-        help_text='Permite aplicar descontos nas contas'
-    )
-    
-    # Gestão de produtos e mesas
-    pode_gerir_produtos = models.BooleanField(
-        default=False,
-        verbose_name='Pode gerir produtos',
-        help_text='Permite criar/editar/apagar produtos'
-    )
-    
-    pode_gerir_mesas = models.BooleanField(
-        default=False,
-        verbose_name='Pode gerir mesas',
-        help_text='Permite criar/editar/apagar mesas'
-    )
-    
-    pode_gerir_utilizadores = models.BooleanField(
-        default=False,
-        verbose_name='Pode gerir utilizadores',
-        help_text='Permite adicionar/remover membros da equipa'
-    )
-    
-    # Relatórios e caixa
-    pode_ver_relatorios = models.BooleanField(
-        default=False,
-        verbose_name='Pode ver relatórios',
-        help_text='Permite acesso ao histórico e estatísticas'
-    )
-    
-    pode_abrir_fechar_turno = models.BooleanField(
-        default=False,
-        verbose_name='Pode abrir/fechar turno',
-        help_text='Permite gerir turnos e caixa'
-    )
-    
-    # Cozinha específico
-    pode_ver_pedidos = models.BooleanField(
-        default=True,
-        verbose_name='Pode ver pedidos',
-        help_text='Permite visualizar pedidos (todos têm por padrão)'
-    )
-    
-    pode_atualizar_status_items = models.BooleanField(
-        default=False,
-        verbose_name='Pode atualizar status de items',
-        help_text='Permite mudar status: pendente → preparando → pronto'
-    )
-    
-    # Meta
-    ativo = models.BooleanField(
-        default=True,
-        verbose_name='Ativo',
-        help_text='Membros inativos não têm acesso ao POS'
-    )
-    
+    ativo = models.BooleanField(default=True, verbose_name='Ativo')
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
     
     class Meta:
-        unique_together = ['pos', 'utilizador']
         verbose_name = 'Utilizador do POS'
         verbose_name_plural = 'Utilizadores do POS'
         ordering = ['-criado_em']
         indexes = [
             models.Index(fields=['pos', 'ativo']),
-            models.Index(fields=['utilizador', 'ativo']),
+            models.Index(fields=['tipo']),
+        ]
+        
+        constraints = [
+            # Utilizador Bendi: único por POS
+            models.UniqueConstraint(
+                condition=models.Q(utilizador__isnull=False),
+                fields=['pos', 'utilizador'],
+                name='unique_pos_utilizador_bendi'
+            ),
+            
+            # POS-only: email único por POS
+            models.UniqueConstraint(
+                condition=models.Q(tipo='pos_only'),
+                fields=['pos', 'email_pos'],
+                name='unique_pos_email_pos_only'
+            ),
         ]
     
     def __str__(self):
-        return f"{self.utilizador.nome} - {self.pos.nome} ({self.get_papel_display()})"
+        return f"{self.nome} ({self.papel}) - {self.pos.nome}"
+    
+    # ========================================================================
+    # PROPRIEDADES UNIFICADAS
+    # ========================================================================
+    
+    @property
+    def email(self):
+        """Email unificado (Bendi ou POS-only)"""
+        if self.tipo == 'bendi' and self.utilizador:
+            return self.utilizador.user.email
+        return self.email_pos or ''
+    
+    @property
+    def nome(self):
+        """Nome unificado (Bendi ou POS-only)"""
+        if self.tipo == 'bendi' and self.utilizador:
+            return self.utilizador.nome
+        return self.nome_pos or ''
+    
+    # ========================================================================
+    # AUTENTICAÇÃO POS-ONLY
+    # ========================================================================
+    
+    def set_password_pos(self, raw_password):
+        """Define password para utilizador POS-only"""
+        if not raw_password:
+            raw_password = User.objects.make_random_password(length=12)
+        
+        self.password_pos = make_password(raw_password)
+        return raw_password  # Retorna para mostrar ao utilizador
+    
+    def check_password_pos(self, raw_password):
+        """Verifica password de utilizador POS-only"""
+        if not self.password_pos:
+            return False
+        return check_password(raw_password, self.password_pos)
+    
+    # ========================================================================
+    # VALIDAÇÃO E SAVE
+    # ========================================================================
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        
+        # Validar tipo Bendi
+        if self.tipo == 'bendi':
+            if not self.utilizador:
+                raise ValidationError('Utilizador Bendi precisa de referência ao Utilizador')
+        
+        # Validar tipo POS-only
+        if self.tipo == 'pos_only':
+            if self.utilizador:
+                raise ValidationError('Utilizador POS-only não pode ter referência ao Utilizador Bendi')
+            
+            if not self.email_pos:
+                raise ValidationError('Email é obrigatório para POS-only')
+            
+            if not self.nome_pos:
+                raise ValidationError('Nome é obrigatório para POS-only')
     
     def save(self, *args, **kwargs):
-        """Define permissões padrão baseadas no papel ao criar"""
-        if not self.pk:  # Novo objeto
+        """Define permissões padrão ao criar"""
+        if not self.pk:
             self._set_permissoes_padrao()
+        
+        self.full_clean()
         super().save(*args, **kwargs)
     
     def _set_permissoes_padrao(self):
-        """
-        Define permissões padrão para cada papel.
-        Chamado automaticamente ao criar novo UtilizadorPOS.
-        """
+        """Define permissões baseadas no papel (igual ao código anterior)"""
         permissoes = {
             'dono': {
-                # Dono tem TODAS as permissões
                 'pode_abrir_mesas': True,
                 'pode_fechar_contas': True,
                 'pode_cancelar_items': True,
@@ -804,21 +865,19 @@ class UtilizadorPOS(models.Model):
                 'pode_atualizar_status_items': True,
             },
             'gerente': {
-                # Gerente tem quase todas (exceto gerir utilizadores)
                 'pode_abrir_mesas': True,
                 'pode_fechar_contas': True,
                 'pode_cancelar_items': True,
                 'pode_dar_descontos': True,
                 'pode_gerir_produtos': True,
                 'pode_gerir_mesas': True,
-                'pode_gerir_utilizadores': False,  # ← Não pode gerir equipa
+                'pode_gerir_utilizadores': False,
                 'pode_ver_relatorios': True,
                 'pode_abrir_fechar_turno': True,
                 'pode_ver_pedidos': True,
                 'pode_atualizar_status_items': True,
             },
             'empregado': {
-                # Empregado opera mesas apenas
                 'pode_abrir_mesas': True,
                 'pode_fechar_contas': False,
                 'pode_cancelar_items': False,
@@ -832,7 +891,6 @@ class UtilizadorPOS(models.Model):
                 'pode_atualizar_status_items': False,
             },
             'cozinha': {
-                # Cozinha vê e atualiza pedidos apenas
                 'pode_abrir_mesas': False,
                 'pode_fechar_contas': False,
                 'pode_cancelar_items': False,
@@ -843,10 +901,9 @@ class UtilizadorPOS(models.Model):
                 'pode_ver_relatorios': False,
                 'pode_abrir_fechar_turno': False,
                 'pode_ver_pedidos': True,
-                'pode_atualizar_status_items': True,  # ← Pode atualizar status
+                'pode_atualizar_status_items': True,
             },
             'caixa': {
-                # Caixa fecha contas e gere turno
                 'pode_abrir_mesas': False,
                 'pode_fechar_contas': True,
                 'pode_cancelar_items': False,

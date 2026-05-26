@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-5">
-    <!-- Header com botão adicionar -->
+    <!-- Header -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h2 class="text-2xl font-black text-slate-950">
@@ -24,10 +24,7 @@
     </div>
 
     <!-- Loading -->
-    <div
-      v-if="loading"
-      class="flex items-center justify-center py-12"
-    >
+    <div v-if="loading" class="flex items-center justify-center py-12">
       <div class="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-slate-950"></div>
     </div>
 
@@ -54,13 +51,13 @@
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-blue-50 p-4">
-          <p class="text-xs font-bold text-blue-700">Gerentes</p>
-          <p class="mt-1 text-2xl font-black text-blue-900">{{ membrosPorPapel.gerente || 0 }}</p>
+          <p class="text-xs font-bold text-blue-700">Bendi</p>
+          <p class="mt-1 text-2xl font-black text-blue-900">{{ membrosPorTipo.bendi || 0 }}</p>
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-purple-50 p-4">
-          <p class="text-xs font-bold text-purple-700">Empregados</p>
-          <p class="mt-1 text-2xl font-black text-purple-900">{{ membrosPorPapel.empregado || 0 }}</p>
+          <p class="text-xs font-bold text-purple-700">POS-only</p>
+          <p class="mt-1 text-2xl font-black text-purple-900">{{ membrosPorTipo.pos_only || 0 }}</p>
         </div>
       </div>
 
@@ -75,17 +72,17 @@
             <!-- Info do membro -->
             <div class="flex items-center gap-4">
               <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-200 text-lg font-black text-slate-700">
-                {{ membro.utilizador.nome.charAt(0).toUpperCase() }}
+                {{ membro.nome.charAt(0).toUpperCase() }}
               </div>
 
               <div class="min-w-0">
                 <h3 class="truncate font-black text-slate-950">
-                  {{ membro.utilizador.nome }}
+                  {{ membro.nome }}
                 </h3>
                 <p class="truncate text-sm font-semibold text-slate-500">
-                  {{ membro.utilizador.email }}
+                  {{ membro.email }}
                 </p>
-                <div class="mt-1 flex items-center gap-2">
+                <div class="mt-1 flex items-center gap-2 flex-wrap">
                   <span
                     :class="[
                       'inline-flex rounded-full px-2 py-0.5 text-xs font-black',
@@ -93,6 +90,14 @@
                     ]"
                   >
                     {{ membro.papel_display }}
+                  </span>
+                  <span
+                    :class="[
+                      'inline-flex rounded-full px-2 py-0.5 text-xs font-black',
+                      tipoBadgeClass(membro.tipo)
+                    ]"
+                  >
+                    {{ tipoLabel(membro.tipo) }}
                   </span>
                   <span
                     v-if="!membro.ativo"
@@ -115,7 +120,6 @@
               </button>
 
               <button
-                v-if="membro.papel !== 'dono'"
                 type="button"
                 @click="editarMembro(membro)"
                 class="h-10 rounded-2xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700"
@@ -124,7 +128,7 @@
               </button>
 
               <button
-                v-if="membro.papel !== 'dono' && membro.ativo"
+                v-if="membro.ativo"
                 type="button"
                 @click="confirmarRemover(membro)"
                 class="h-10 rounded-2xl bg-red-50 px-4 text-sm font-black text-red-700 transition hover:bg-red-100"
@@ -202,9 +206,76 @@
             {{ addError }}
           </div>
 
+          <div
+            v-if="addSuccess"
+            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700"
+          >
+            {{ addSuccess }}
+          </div>
+
+          <!-- Tipo de utilizador -->
           <div>
             <label class="mb-2 block text-sm font-black text-slate-700">
-              Email do utilizador
+              Tipo de utilizador
+            </label>
+
+            <div class="grid grid-cols-2 gap-3">
+              <label
+                :class="[
+                  'cursor-pointer rounded-2xl border-2 p-3 transition',
+                  addForm.tipo === 'bendi'
+                    ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                ]"
+              >
+                <input
+                  v-model="addForm.tipo"
+                  type="radio"
+                  value="bendi"
+                  class="hidden"
+                />
+                <p class="text-sm font-black">🌐 Utilizador Bendi</p>
+                <p
+                  :class="[
+                    'mt-1 text-xs font-semibold',
+                    addForm.tipo === 'bendi' ? 'text-slate-300' : 'text-slate-500'
+                  ]"
+                >
+                  Tem conta na plataforma
+                </p>
+              </label>
+
+              <label
+                :class="[
+                  'cursor-pointer rounded-2xl border-2 p-3 transition',
+                  addForm.tipo === 'pos_only'
+                    ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                ]"
+              >
+                <input
+                  v-model="addForm.tipo"
+                  type="radio"
+                  value="pos_only"
+                  class="hidden"
+                />
+                <p class="text-sm font-black">🔒 POS-only</p>
+                <p
+                  :class="[
+                    'mt-1 text-xs font-semibold',
+                    addForm.tipo === 'pos_only' ? 'text-slate-300' : 'text-slate-500'
+                  ]"
+                >
+                  Apenas este POS
+                </p>
+              </label>
+            </div>
+          </div>
+
+          <!-- Email -->
+          <div>
+            <label class="mb-2 block text-sm font-black text-slate-700">
+              Email
             </label>
             <input
               v-model.trim="addForm.email"
@@ -214,10 +285,46 @@
               class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
             />
             <p class="mt-2 text-xs font-semibold text-slate-400">
-              O utilizador precisa ter conta Bendi registada
+              <span v-if="addForm.tipo === 'bendi'">
+                Precisa ter conta Bendi registada
+              </span>
+              <span v-else>
+                Não pode existir conta Bendi com este email
+              </span>
             </p>
           </div>
 
+          <!-- Nome (só POS-only) -->
+          <div v-if="addForm.tipo === 'pos_only'">
+            <label class="mb-2 block text-sm font-black text-slate-700">
+              Nome completo
+            </label>
+            <input
+              v-model.trim="addForm.nome"
+              type="text"
+              placeholder="João Silva"
+              :required="addForm.tipo === 'pos_only'"
+              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+            />
+          </div>
+
+          <!-- Password (só POS-only) -->
+          <div v-if="addForm.tipo === 'pos_only'">
+            <label class="mb-2 block text-sm font-black text-slate-700">
+              Password inicial (opcional)
+            </label>
+            <input
+              v-model="addForm.password"
+              type="password"
+              placeholder="••••••••"
+              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+            />
+            <p class="mt-2 text-xs font-semibold text-slate-400">
+              Deixa vazio para gerar automaticamente
+            </p>
+          </div>
+
+          <!-- Papel -->
           <div>
             <label class="mb-2 block text-sm font-black text-slate-700">
               Papel
@@ -290,7 +397,7 @@
             <div>
               <h3 class="text-xl font-black text-slate-950">Editar Membro</h3>
               <p class="mt-1 text-sm font-semibold text-slate-500">
-                {{ membroEditando?.utilizador.nome }}
+                {{ membroEditando?.nome }}
               </p>
             </div>
             <button
@@ -346,7 +453,7 @@
             </div>
           </div>
 
-          <!-- Permissões customizadas (opcional) -->
+          <!-- Permissões customizadas -->
           <details class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <summary class="cursor-pointer font-black text-slate-700">
               Permissões personalizadas (avançado)
@@ -419,8 +526,12 @@ export default {
       showAddModal: false,
       adding: false,
       addError: null,
+      addSuccess: null,
       addForm: {
+        tipo: 'bendi',
         email: '',
+        nome: '',
+        password: '',
         papel: 'empregado'
       },
 
@@ -463,9 +574,9 @@ export default {
       return this.membros.filter(m => m.ativo).length
     },
 
-    membrosPorPapel() {
+    membrosPorTipo() {
       return this.membros.reduce((acc, m) => {
-        acc[m.papel] = (acc[m.papel] || 0) + 1
+        acc[m.tipo] = (acc[m.tipo] || 0) + 1
         return acc
       }, {})
     }
@@ -496,16 +607,42 @@ export default {
 
       this.adding = true
       this.addError = null
+      this.addSuccess = null
 
       try {
-        const { data } = await api.post(`/api/pos/${this.posId}/equipa/`, {
+        const payload = {
+          tipo: this.addForm.tipo,
           email: this.addForm.email,
           papel: this.addForm.papel
-        })
+        }
 
-        this.membros.push(data)
-        this.showAddModal = false
-        this.addForm = { email: '', papel: 'empregado' }
+        // Adicionar campos POS-only se necessário
+        if (this.addForm.tipo === 'pos_only') {
+          payload.nome = this.addForm.nome
+          if (this.addForm.password) {
+            payload.password = this.addForm.password
+          }
+        }
+
+        const { data } = await api.post(`/api/pos/${this.posId}/equipa/`, payload)
+
+        this.membros.push(data.membro)
+
+        // Mostrar password se foi gerada
+        if (data.password_gerada) {
+          this.addSuccess = `Membro criado! Password: ${data.password_gerada}`
+          // Não fechar modal para copiar password
+        } else {
+          this.showAddModal = false
+        }
+
+        this.addForm = {
+          tipo: 'bendi',
+          email: '',
+          nome: '',
+          password: '',
+          papel: 'empregado'
+        }
       } catch (err) {
         console.error('Erro ao adicionar membro:', err)
         this.addError = err.response?.data?.detail || 'Erro ao adicionar membro'
@@ -541,7 +678,8 @@ export default {
 
         const index = this.membros.findIndex(m => m.id === this.membroEditando.id)
         if (index !== -1) {
-          this.membros.splice(index, 1, data)
+          // Atualizar membro localmente
+          Object.assign(this.membros[index], data.membro)
         }
 
         this.showEditModal = false
@@ -555,7 +693,7 @@ export default {
     },
 
     async confirmarRemover(membro) {
-      if (!confirm(`Tem certeza que deseja remover ${membro.utilizador.nome} da equipa?`)) {
+      if (!confirm(`Tem certeza que deseja remover ${membro.nome} da equipa?`)) {
         return
       }
 
@@ -589,6 +727,16 @@ export default {
         caixa: 'bg-cyan-100 text-cyan-700'
       }
       return classes[papel] || 'bg-slate-100 text-slate-700'
+    },
+
+    tipoBadgeClass(tipo) {
+      return tipo === 'bendi'
+        ? 'bg-blue-100 text-blue-700'
+        : 'bg-purple-100 text-purple-700'
+    },
+
+    tipoLabel(tipo) {
+      return tipo === 'bendi' ? '🌐 Bendi' : '🔒 POS-only'
     },
 
     formatarPermissao(chave) {

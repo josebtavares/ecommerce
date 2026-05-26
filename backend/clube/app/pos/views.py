@@ -19,6 +19,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
+ 
+from django.contrib.auth.hashers import make_password
+
 from .serializers import ContaMesaSerializer, ItemContaMesaSerializer, MesaSerializer
 
 from .models import (
@@ -1528,12 +1531,12 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
 def pos_equipa(request, pos_id):
     """
     GET: Listar membros da equipa
-    POST: Adicionar novo membro
+    POST: Adicionar novo membro (Bendi OU POS-only)
     """
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, ativo=True)
     
-    # Verificar se tem acesso ao POS
+    # Verificar acesso ao POS
     e_dono = pos.dono_id == utilizador.id
     e_membro = UtilizadorPOS.objects.filter(
         pos=pos, utilizador=utilizador, ativo=True
@@ -1552,20 +1555,25 @@ def pos_equipa(request, pos_id):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    # GET: Listar equipa
+    # ========================================================================
+    # GET: LISTAR EQUIPA
+    # ========================================================================
     if request.method == 'GET':
-        membros = UtilizadorPOS.objects.filter(pos=pos).select_related('utilizador', 'utilizador__user')
+        membros = UtilizadorPOS.objects.filter(pos=pos).select_related(
+            'utilizador',
+            'utilizador__user'
+        ).order_by('-criado_em')
         
-        return Response([
-            {
+        data = []
+        for m in membros:
+            data.append({
                 'id': m.id,
-                'utilizador': {
-                    'id': m.utilizador.id,
-                    'nome': m.utilizador.nome,
-                    'email': m.utilizador.user.email,
-                },
+                'tipo': m.tipo,
+                'email': m.email,
+                'nome': m.nome,
                 'papel': m.papel,
                 'papel_display': m.get_papel_display(),
+                'ativo': m.ativo,
                 'permissoes': {
                     'pode_abrir_mesas': m.pode_abrir_mesas,
                     'pode_fechar_contas': m.pode_fechar_contas,
@@ -1579,77 +1587,163 @@ def pos_equipa(request, pos_id):
                     'pode_ver_pedidos': m.pode_ver_pedidos,
                     'pode_atualizar_status_items': m.pode_atualizar_status_items,
                 },
-                'ativo': m.ativo,
                 'criado_em': m.criado_em.isoformat() if m.criado_em else None,
-            }
-            for m in membros
-        ])
+            })
+        
+        return Response(data)
     
-    # POST: Adicionar membro
-    if request.method == 'POST':
-        email = request.data.get('email')
+    # ========================================================================
+    # POST: ADICIONAR MEMBRO
+    # ========================================================================
+    elif request.method == 'POST':
+        email = request.data.get('email', '').strip()
         papel = request.data.get('papel', 'empregado')
+        tipo = request.data.get('tipo', 'bendi')
+        nome = request.data.get('nome', '').strip()
+        password = request.data.get('password', '')
         
+        # Validações básicas
         if not email:
-            return Response({'detail': 'Email é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Email é obrigatório'}, status=400)
         
-        # Validar papel
         papeis_validos = ['gerente', 'empregado', 'cozinha', 'caixa']
         if papel not in papeis_validos:
             return Response(
                 {'detail': f'Papel inválido. Use: {", ".join(papeis_validos)}'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=400
             )
         
-        # Procurar utilizador
-        try:
-            user = User.objects.get(email__iexact=email)
-            utilizador_convidado = user.utilizador
-        except User.DoesNotExist:
+        # ====================================================================
+        # TIPO: UTILIZADOR BENDI
+        # ====================================================================
+        if tipo == 'bendi':
+            # Verificar se utilizador Bendi existe
+            try:
+                user = User.objects.get(email__iexact=email)
+                utilizador_bendi = user.utilizador
+            except User.DoesNotExist:
+                return Response(
+                    {'detail': 'Utilizador Bendi não encontrado. Crie como POS-only.'},
+                    status=404
+                )
+            except Utilizador.DoesNotExist:
+                return Response(
+                    {'detail': 'Utilizador não tem perfil Bendi.'},
+                    status=404
+                )
+            
+            # Verificar se já está na equipa
+            if UtilizadorPOS.objects.filter(pos=pos, utilizador=utilizador_bendi).exists():
+                return Response(
+                    {'detail': 'Utilizador já está na equipa'},
+                    status=400
+                )
+            
+            # Verificar se é dono de outra loja
+            if Loja.objects.filter(dono=utilizador_bendi, ativa=True).exists():
+                return Response(
+                    {'detail': 'Este utilizador é dono de loja e não pode ser staff de POS'},
+                    status=400
+                )
+            
+            # Verificar se é dono de outro POS
+            if ConfiguracaoPOS.objects.filter(dono=utilizador_bendi, ativo=True).exclude(id=pos_id).exists():
+                return Response(
+                    {'detail': 'Este utilizador já tem POS próprio e não pode ser staff noutro'},
+                    status=400
+                )
+            
+            # Criar membro Bendi
+            membro = UtilizadorPOS.objects.create(
+                pos=pos,
+                utilizador=utilizador_bendi,
+                tipo='bendi',
+                papel=papel
+            )
+        
+        # ====================================================================
+        # TIPO: UTILIZADOR POS-ONLY
+        # ====================================================================
+        elif tipo == 'pos_only':
+            # Verificar se email já existe no Bendi
+            if User.objects.filter(email__iexact=email).exists():
+                return Response(
+                    {'detail': 'Email já tem conta Bendi. Adicione como tipo Bendi.'},
+                    status=400
+                )
+            
+            # Verificar se email já está no POS
+            if UtilizadorPOS.objects.filter(pos=pos, email_pos__iexact=email).exists():
+                return Response(
+                    {'detail': 'Email já está na equipa'},
+                    status=400
+                )
+            
+            if not nome:
+                return Response(
+                    {'detail': 'Nome é obrigatório para POS-only'},
+                    status=400
+                )
+            
+            # Criar membro POS-only
+            membro = UtilizadorPOS(
+                pos=pos,
+                tipo='pos_only',
+                email_pos=email,
+                nome_pos=nome,
+                papel=papel
+            )
+            
+            # Definir password (gera automaticamente se vazio)
+            password_gerada = membro.set_password_pos(password)
+            membro.save()
+            
+            # Retornar com password se foi gerada
+            response_data = {
+                'detail': 'Utilizador POS-only criado com sucesso.',
+                'membro': {
+                    'id': membro.id,
+                    'tipo': membro.tipo,
+                    'email': membro.email,
+                    'nome': membro.nome,
+                    'papel': membro.papel,
+                    'papel_display': membro.get_papel_display(),
+                    'ativo': membro.ativo,
+                }
+            }
+            
+            if not password:
+                response_data['password_gerada'] = password_gerada
+                response_data['aviso'] = 'Password gerada automaticamente. Anote para dar ao utilizador.'
+            
+            return Response(response_data, status=201)
+        
+        else:
             return Response(
-                {'detail': 'Utilizador não encontrado. Ele precisa criar conta primeiro.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Utilizador.DoesNotExist:
-            return Response(
-                {'detail': 'Utilizador não tem perfil Bendi.'},
-                status=status.HTTP_404_NOT_FOUND
+                {'detail': 'Tipo inválido. Use "bendi" ou "pos_only"'},
+                status=400
             )
         
-        # Verificar se já é membro
-        if UtilizadorPOS.objects.filter(pos=pos, utilizador=utilizador_convidado).exists():
-            return Response(
-                {'detail': 'Este utilizador já faz parte da equipa.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Criar relação (permissões definidas automaticamente)
-        rel = UtilizadorPOS.objects.create(
-            pos=pos,
-            utilizador=utilizador_convidado,
-            papel=papel
-        )
-        
+        # Resposta padrão (Bendi)
         return Response({
             'detail': 'Utilizador adicionado à equipa com sucesso.',
             'membro': {
-                'id': rel.id,
-                'utilizador': {
-                    'id': rel.utilizador.id,
-                    'nome': rel.utilizador.nome,
-                    'email': rel.utilizador.user.email,
-                },
-                'papel': rel.papel,
-                'papel_display': rel.get_papel_display(),
+                'id': membro.id,
+                'tipo': membro.tipo,
+                'email': membro.email,
+                'nome': membro.nome,
+                'papel': membro.papel,
+                'papel_display': membro.get_papel_display(),
+                'ativo': membro.ativo,
             }
-        }, status=status.HTTP_201_CREATED)
+        }, status=201)
  
  
-@api_view(['PATCH', 'DELETE'])
+api_view(['PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def pos_equipa_membro(request, pos_id, membro_id):
     """
-    PATCH: Atualizar papel/permissões
+    PATCH: Atualizar papel/permissões (email NÃO editável)
     DELETE: Remover membro
     """
     utilizador = request.user.utilizador
@@ -1657,12 +1751,15 @@ def pos_equipa_membro(request, pos_id, membro_id):
     
     # Verificar permissão
     if pos.dono_id != utilizador.id and not verificar_permissao_pos(pos, utilizador, 'pode_gerir_utilizadores'):
-        return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'detail': 'Sem permissão.'}, status=403)
     
     membro = get_object_or_404(UtilizadorPOS, id=membro_id, pos=pos)
     
-    # PATCH: Atualizar
+    # ========================================================================
+    # PATCH: ATUALIZAR
+    # ========================================================================
     if request.method == 'PATCH':
+        # Atualizar papel
         if 'papel' in request.data:
             membro.papel = request.data['papel']
             membro._set_permissoes_padrao()
@@ -1679,14 +1776,204 @@ def pos_equipa_membro(request, pos_id, membro_id):
             if perm in request.data:
                 setattr(membro, perm, request.data[perm])
         
+        # Atualizar nome (só POS-only)
+        if 'nome' in request.data and membro.tipo == 'pos_only':
+            membro.nome_pos = request.data['nome']
+        
+        # Atualizar password (só POS-only)
+        if 'password' in request.data and membro.tipo == 'pos_only':
+            membro.set_password_pos(request.data['password'])
+        
+        # Ativo/Inativo
         if 'ativo' in request.data:
             membro.ativo = request.data['ativo']
         
         membro.save()
         
-        return Response({'detail': 'Membro atualizado com sucesso.'})
+        return Response({
+            'detail': 'Membro atualizado com sucesso.',
+            'membro': {
+                'id': membro.id,
+                'tipo': membro.tipo,
+                'email': membro.email,
+                'nome': membro.nome,
+                'papel': membro.papel,
+                'ativo': membro.ativo,
+            }
+        })
     
-    # DELETE: Remover
+    # ========================================================================
+    # DELETE: REMOVER
+    # ========================================================================
     if request.method == 'DELETE':
         membro.delete()
-        return Response({'detail': 'Membro removido da equipa.'}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {'detail': 'Membro removido da equipa.'},
+            status=204
+        )
+ 
+ 
+# ═══════════════════════════════════════════════════════════════════
+# VERIFICAR TIPO DE EMAIL (auxiliar para frontend)
+# ═══════════════════════════════════════════════════════════════════
+ 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def verificar_tipo_email(request):
+    """
+    Verifica se email existe e que tipo de conta é.
+    GET /api/pos/verificar-email/?email=joao@exemplo.com
+    """
+    email = request.GET.get('email', '').strip()
+    
+    if not email:
+        return Response({'detail': 'Email é obrigatório'}, status=400)
+    
+    # Verificar conta Bendi
+    if User.objects.filter(email__iexact=email).exists():
+        return Response({
+            'existe': True,
+            'tipo': 'bendi',
+            'mensagem': 'Email já tem conta Bendi'
+        })
+    
+    # Verificar POS-only
+    membros = UtilizadorPOS.objects.filter(
+        tipo='pos_only',
+        email_pos__iexact=email
+    ).select_related('pos')
+    
+    if membros.exists():
+        return Response({
+            'existe': True,
+            'tipo': 'pos_only',
+            'nome': membros.first().nome_pos,
+            'pos_nomes': [m.pos.nome for m in membros],
+            'mensagem': 'Email tem acesso a POS como membro'
+        })
+    
+    # Email disponível
+    return Response({
+        'existe': False,
+        'tipo': None,
+        'mensagem': 'Email disponível'
+    })
+ 
+ 
+# ═══════════════════════════════════════════════════════════════════
+# UPGRADE POS-ONLY → CONTA BENDI
+# ═══════════════════════════════════════════════════════════════════
+ 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def pos_only_upgrade_to_bendi(request):
+    """
+    Converte conta POS-only para conta Bendi completa.
+    
+    POST /api/pos/upgrade-conta/
+    Body: {
+        email: "joao@exemplo.com",
+        password: "nova_password_bendi",
+        nome: "João Silva" (opcional)
+    }
+    """
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '')
+    nome_override = request.data.get('nome', '').strip()
+    
+    if not email or not password:
+        return Response(
+            {'detail': 'Email e password são obrigatórios'},
+            status=400
+        )
+    
+    if len(password) < 6:
+        return Response(
+            {'detail': 'Password deve ter no mínimo 6 caracteres'},
+            status=400
+        )
+    
+    # Verificar se existe como POS-only
+    membros_pos = UtilizadorPOS.objects.filter(
+        tipo='pos_only',
+        email_pos__iexact=email
+    ).select_related('pos')
+    
+    if not membros_pos.exists():
+        return Response(
+            {'detail': 'Email não encontrado como utilizador POS-only'},
+            status=404
+        )
+    
+    # Verificar se JÁ existe conta Bendi
+    if User.objects.filter(email__iexact=email).exists():
+        return Response(
+            {'detail': 'Já existe conta Bendi com este email'},
+            status=400
+        )
+    
+    try:
+        with transaction.atomic():
+            # Usar nome do primeiro membro se não foi passado
+            primeiro_membro = membros_pos.first()
+            nome_completo = nome_override or primeiro_membro.nome_pos
+            
+            # Dividir nome em first_name e last_name
+            partes_nome = nome_completo.split()
+            first_name = partes_nome[0] if partes_nome else ''
+            last_name = ' '.join(partes_nome[1:]) if len(partes_nome) > 1 else ''
+            
+            # 1. Criar User Django
+            username = email.split('@')[0]
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{email.split('@')[0]}{counter}"
+                counter += 1
+            
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name
+            )
+            
+            # 2. Criar Utilizador Bendi
+            utilizador_bendi = Utilizador.objects.create(
+                user=user,
+                status='ativo',
+                verificado=False
+            )
+            
+            # 3. MIGRAR todos os UtilizadorPOS para referência Bendi
+            pos_nomes = []
+            for membro in membros_pos:
+                membro.utilizador = utilizador_bendi
+                membro.tipo = 'bendi'
+                membro.email_pos = ''
+                membro.nome_pos = ''
+                membro.password_pos = ''
+                membro.save()
+                pos_nomes.append(membro.pos.nome)
+            
+            # 4. Gerar tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'detail': 'Conta POS-only convertida para Bendi com sucesso!',
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'user': {
+                    'id': utilizador_bendi.id,
+                    'nome': utilizador_bendi.nome,
+                    'email': user.email,
+                },
+                'pos_migrados': pos_nomes,
+                'mensagem': f'Agora tens acesso completo à plataforma Bendi e continuas com acesso a: {", ".join(pos_nomes)}'
+            }, status=201)
+    
+    except Exception as e:
+        return Response(
+            {'detail': f'Erro ao fazer upgrade: {str(e)}'},
+            status=500
+        )

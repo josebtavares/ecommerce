@@ -43,7 +43,14 @@ urlpatterns = [
     path('<int:pos_id>/turnos/abrir/', views.turno_abrir, name='turno_abrir'),
     path('<int:pos_id>/turnos/<int:turno_id>/fechar/', views.turno_fechar, name='turno_fechar'),
     
-    # EQUIPA
-    path('<int:pos_id>/equipa/', views.pos_equipa, name='pos_equipa'),
-    path('<int:pos_id>/equipa/<int:membro_id>/', views.pos_equipa_membro, name='pos_equipa_membro'),
+     # GESTÃO DE EQUIPA
+    # ========================================================================
+    path('pos/<int:pos_id>/equipa/', views.pos_equipa, name='pos_equipa'),
+    path('pos/<int:pos_id>/equipa/<int:membro_id>/', views.pos_equipa_membro, name='pos_equipa_membro'),
+    
+    # ========================================================================
+    # UTILIDADES
+    # ========================================================================
+    path('pos/verificar-email/', views.verificar_tipo_email, name='verificar_tipo_email'),
+    path('pos/upgrade-conta/', views.pos_only_upgrade_to_bendi, name='pos_only_upgrade'),
 ]
