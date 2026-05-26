@@ -45,12 +45,12 @@ urlpatterns = [
     
      # GESTÃO DE EQUIPA
     # ========================================================================
-    path('pos/<int:pos_id>/equipa/', views.pos_equipa, name='pos_equipa'),
-    path('pos/<int:pos_id>/equipa/<int:membro_id>/', views.pos_equipa_membro, name='pos_equipa_membro'),
+    path('<int:pos_id>/equipa/', views.pos_equipa, name='pos_equipa'),
+    path('<int:pos_id>/equipa/<int:membro_id>/', views.pos_equipa_membro, name='pos_equipa_membro'),
     
     # ========================================================================
     # UTILIDADES
     # ========================================================================
-    path('pos/verificar-email/', views.verificar_tipo_email, name='verificar_tipo_email'),
-    path('pos/upgrade-conta/', views.pos_only_upgrade_to_bendi, name='pos_only_upgrade'),
+    path('verificar-email/', views.verificar_tipo_email, name='verificar_tipo_email'),
+    path('upgrade-conta/', views.pos_only_upgrade_to_bendi, name='pos_only_upgrade'),
 ]
