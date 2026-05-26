@@ -410,7 +410,7 @@ def pos_login(request):
     
     # Verificar POS existentes (dono OU membro da equipa)
     pos_existentes = ConfiguracaoPOS.objects.filter(
-        Q(dono=utilizador) | Q(equipa__utilizador=utilizador, equipa__ativo=True),
+        Q(dono=utilizador) | Q(staff__utilizador=utilizador, staff__ativo=True),
         ativo=True
     ).distinct()
  
