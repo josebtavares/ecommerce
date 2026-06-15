@@ -279,13 +279,22 @@ def pos_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    user = authenticate(request, username=email, password=password)
-    if not user:
-        try:
-            django_user = User.objects.get(email__iexact=email)
-            user = authenticate(request, username=django_user.username, password=password)
-        except User.DoesNotExist:
-            user = None
+    try:
+        django_user = User.objects.get(email__iexact=email)
+    except User.DoesNotExist:
+        django_user = None
+
+    if not django_user:
+        return Response(
+            {'detail': 'Credenciais inválidas'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    user = authenticate(
+        request,
+        username=django_user.username,
+        password=password
+    )
 
     if not user:
         return Response({'detail': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
