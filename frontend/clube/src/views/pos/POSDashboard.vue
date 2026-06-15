@@ -19,7 +19,16 @@
         </div>
 
         <div class="flex items-center gap-2 sm:gap-4">
+          <!-- Info utilizador -->
           <div class="hidden items-center gap-2 sm:flex">
+            <!-- Badge de membro de equipa -->
+            <span
+              v-if="isMembro"
+              class="rounded-xl bg-blue-100 px-2 py-1 text-xs font-black text-blue-700"
+            >
+              {{ membroPapelLabel }}
+            </span>
+
             <div class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-black text-slate-700">
               {{ userInitial }}
             </div>
@@ -29,7 +38,9 @@
             </span>
           </div>
 
+          <!-- Botão configuração (só para conta principal) -->
           <button
+            v-if="!isMembro"
             type="button"
             @click="abrirConfiguracao"
             class="rounded-2xl p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
@@ -79,7 +90,7 @@
       <div class="mx-auto max-w-7xl px-4">
         <div class="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
           <button
-            v-for="tab in tabs"
+            v-for="tab in tabsVisiveis"
             :key="tab.id"
             type="button"
             @click="activeTab = tab.id"
@@ -99,9 +110,9 @@
 
     <!-- Conteúdo -->
     <main class="mx-auto max-w-7xl p-4 sm:p-6">
-      <!-- Barra de estado do POS -->
+      <!-- Barra de estado do POS (só para conta principal) -->
       <section
-        v-if="posId"
+        v-if="posId && !isMembro"
         class="mb-5 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm"
       >
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -162,6 +173,8 @@
           :is="currentTabComponent"
           :key="`${currentTabComponent}-${posId}-${componentRefreshKey}`"
           :pos-id="posId"
+          :permissoes="permissoes"
+          :is-membro="isMembro"
         />
       </section>
 
@@ -174,7 +187,7 @@
         <p class="font-bold text-slate-600">A carregar dados do POS...</p>
       </section>
 
-      <!-- Fallback caso o onboarding seja fechado/ignorado -->
+      <!-- Onboarding (só conta principal) -->
       <section
         v-else
         class="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12"
@@ -227,18 +240,16 @@
       @close="handleOnboardingClose"
     />
 
-    <!-- Modal Configuração - BOTTOM SHEET MOBILE -->
+    <!-- Modal Configuração (só conta principal) -->
     <div
-      v-if="showConfigModal"
+      v-if="showConfigModal && !isMembro"
       class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       @click.self="fecharConfiguracao"
     >
       <div class="w-full max-w-2xl overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
         <header class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-5">
           <div>
-            <h3 class="text-xl font-black text-slate-950">
-              Configuração do POS
-            </h3>
+            <h3 class="text-xl font-black text-slate-950">Configuração do POS</h3>
             <p class="mt-1 text-sm font-semibold text-slate-500">
               Define se o POS trabalha sozinho, com loja Bendi ou em modo híbrido.
             </p>
@@ -269,10 +280,7 @@
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Nome do POS
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Nome do POS</label>
             <input
               v-model.trim="configForm.nome"
               type="text"
@@ -282,34 +290,20 @@
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Loja Bendi
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Loja Bendi</label>
             <select
               v-model="configForm.loja_id"
               class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
             >
               <option value="">Sem loja vinculada</option>
-              <option
-                v-for="loja in lojas"
-                :key="loja.id"
-                :value="loja.id"
-              >
+              <option v-for="loja in lojas" :key="loja.id" :value="loja.id">
                 {{ loja.nome }}
               </option>
             </select>
-
-            <p class="mt-2 text-xs font-semibold text-slate-400">
-              As lojas vêm do login POS. Se criaste uma loja agora, faz logout/login para atualizar a lista.
-            </p>
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Modo de operação
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Modo de operação</label>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label
                 v-for="modoOption in modoOptions"
@@ -321,17 +315,8 @@
                     : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 ]"
               >
-                <input
-                  v-model="configForm.modo"
-                  type="radio"
-                  :value="modoOption.value"
-                  class="hidden"
-                />
-
-                <p class="text-sm font-black">
-                  {{ modoOption.label }}
-                </p>
-
+                <input v-model="configForm.modo" type="radio" :value="modoOption.value" class="hidden" />
+                <p class="text-sm font-black">{{ modoOption.label }}</p>
                 <p
                   :class="[
                     'mt-2 text-xs font-semibold leading-5',
@@ -379,8 +364,8 @@ import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
 import POSHistorico from './POSHistorico.vue'
 import POSProdutos from './POSProdutos.vue'
-import OnboardingModal from './components/OnboardingModal.vue'
 import POSEquipa from './POSEquipa.vue'
+import OnboardingModal from './components/OnboardingModal.vue'
 
 export default {
   name: 'POSDashboard',
@@ -390,8 +375,8 @@ export default {
     POSPedidos,
     POSHistorico,
     POSProdutos,
-    OnboardingModal,
-    POSEquipa
+    POSEquipa,
+    OnboardingModal
   },
 
   data() {
@@ -405,8 +390,12 @@ export default {
       lojaVinculada: null,
       currentPOS: null,
 
+      // Sessão
+      tipoSessao: 'principal',   // 'principal' | 'membro'
       userName: '',
       userInitial: '',
+      permissoes: null,
+      membroPapel: '',
 
       posLoaded: false,
       creatingPos: false,
@@ -428,12 +417,13 @@ export default {
         modo: 'standalone'
       },
 
-      tabs: [
-        { id: 'mesas', label: 'Mesas', icon: '🍽️' },
-        { id: 'pedidos', label: 'Pedidos', icon: '🛒' },
-        { id: 'produtos', label: 'Produtos', icon: '📦' },
-        { id: 'historico', label: 'Histórico', icon: '📜' },
-        { id: 'equipa', label: 'Equipa', icon: '👥' }, 
+      // Todas as tabs possíveis
+      allTabs: [
+        { id: 'mesas',    label: 'Mesas',     icon: '🍽️', apenasNaoMembro: false },
+        { id: 'pedidos',  label: 'Pedidos',   icon: '🛒', apenasNaoMembro: false },
+        { id: 'produtos', label: 'Produtos',  icon: '📦', apenasNaoMembro: false },
+        { id: 'historico',label: 'Histórico', icon: '📜', apenasNaoMembro: false },
+        { id: 'equipa',   label: 'Equipa',    icon: '👥', apenasNaoMembro: true  },
       ],
 
       modoOptions: [
@@ -457,66 +447,109 @@ export default {
   },
 
   computed: {
-    currentTabComponent() {
-      const componentMap = {
-        mesas: 'POSMesas',
-        pedidos: 'POSPedidos',
-        produtos: 'POSProdutos',
-        historico: 'POSHistorico',
-        equipa: 'POSEquipa', 
-      }
+    // Sessão membro de equipa?
+    isMembro() {
+      return this.tipoSessao === 'membro'
+    },
 
-      return componentMap[this.activeTab] || 'POSMesas'
+    // Papel legível do membro
+    membroPapelLabel() {
+      const labels = {
+        gerente:   'Gerente',
+        empregado: 'Empregado',
+        cozinha:   'Cozinha',
+        caixa:     'Caixa',
+      }
+      return labels[this.membroPapel] || this.membroPapel
+    },
+
+    // Tabs filtradas por tipo de sessão e permissões
+    tabsVisiveis() {
+      return this.allTabs.filter(tab => {
+        // Tab exclusiva de não-membro
+        if (tab.apenasNaoMembro && this.isMembro) return false
+
+        // Filtrar por permissões do membro
+        if (this.isMembro && this.permissoes) {
+          if (tab.id === 'historico' && !this.permissoes.pode_ver_relatorios) return false
+          if (tab.id === 'produtos'  && !this.permissoes.pode_gerir_produtos)  return false
+        }
+
+        return true
+      })
+    },
+
+    currentTabComponent() {
+      const map = {
+        mesas:    'POSMesas',
+        pedidos:  'POSPedidos',
+        produtos: 'POSProdutos',
+        historico:'POSHistorico',
+        equipa:   'POSEquipa',
+      }
+      return map[this.activeTab] || 'POSMesas'
     },
 
     modoLabel() {
-      const labels = {
-        standalone: 'Standalone',
-        integrado: 'Integrado',
-        hibrido: 'Híbrido'
-      }
-
-      return labels[this.modo] || 'Standalone'
+      return { standalone: 'Standalone', integrado: 'Integrado', hibrido: 'Híbrido' }[this.modo] || 'Standalone'
     },
 
     modoDescription() {
-      if (this.modo === 'integrado') {
-        return 'O POS usa apenas produtos da loja Bendi vinculada.'
-      }
-
-      if (this.modo === 'hibrido') {
-        return 'O POS usa produtos próprios e produtos da loja Bendi.'
-      }
-
+      if (this.modo === 'integrado') return 'O POS usa apenas produtos da loja Bendi vinculada.'
+      if (this.modo === 'hibrido')   return 'O POS usa produtos próprios e produtos da loja Bendi.'
       return 'O POS usa apenas produtos próprios, sem depender de uma loja.'
     },
 
     modoBadgeClass() {
-      const classes = {
+      return {
         standalone: 'bg-purple-50 text-purple-700',
-        integrado: 'bg-blue-50 text-blue-700',
-        hibrido: 'bg-emerald-50 text-emerald-700'
-      }
-
-      return classes[this.modo] || classes.standalone
+        integrado:  'bg-blue-50 text-blue-700',
+        hibrido:    'bg-emerald-50 text-emerald-700',
+      }[this.modo] || 'bg-purple-50 text-purple-700'
     }
   },
 
   async created() {
-    this.loadUserData()
+    this.loadSessao()
     this.loadLojasFromStorage()
     this.loadOnboardingData()
     await this.loadPOSData()
   },
 
   methods: {
-    loadUserData() {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
+    // ── SESSÃO ──────────────────────────────────────────────────────
+    loadSessao() {
+      this.tipoSessao = localStorage.getItem('tipo_sessao') || 'principal'
 
-      this.userName = user.nome || user.first_name || user.username || 'Utilizador'
-      this.userInitial = this.userName.charAt(0).toUpperCase()
+      if (this.tipoSessao === 'membro') {
+        // Sessão de membro de equipa
+        const membro = JSON.parse(localStorage.getItem('pos_membro') || '{}')
+        const pos    = JSON.parse(localStorage.getItem('pos_membro_pos') || '{}')
+
+        this.userName    = membro.nome || 'Membro'
+        this.userInitial = (membro.nome || 'M').charAt(0).toUpperCase()
+        this.membroPapel = membro.papel || ''
+        this.permissoes  = JSON.parse(localStorage.getItem('pos_membro_permissoes') || 'null')
+
+        // Definir POS diretamente (membro entra sempre no POS associado)
+        if (pos?.id) {
+          this.posId       = pos.id
+          this.posNome     = pos.nome || 'POS'
+          this.posCodigo   = pos.codigo_pos || ''
+          this.modo        = pos.modo || 'standalone'
+          this.lojaVinculada = pos.loja_vinculada || null
+          this.posLoaded   = true
+        }
+      } else {
+        // Sessão de conta principal
+        const user = JSON.parse(localStorage.getItem('pos_user') || '{}')
+        this.userName    = user.nome || user.first_name || user.username || 'Utilizador'
+        this.userInitial = this.userName.charAt(0).toUpperCase()
+        this.permissoes  = null
+      }
     },
 
+    // ── LOJAS / ONBOARDING ──────────────────────────────────────────
     loadLojasFromStorage() {
       try {
         this.lojas = JSON.parse(localStorage.getItem('pos_lojas') || '[]')
@@ -534,18 +567,20 @@ export default {
     },
 
     shouldShowOnboarding() {
+      if (this.isMembro) return false   // membros nunca precisam de onboarding
       const precisaOnboarding = localStorage.getItem('pos_precisa_onboarding') === 'true'
-      const posSelecionado = localStorage.getItem('pos_selected')
       const posId = localStorage.getItem('pos_id')
-
-      return precisaOnboarding && !posSelecionado && !posId
+      return precisaOnboarding && !posId
     },
 
+    // ── CARREGAR POS ────────────────────────────────────────────────
     async loadPOSData() {
+      // Membro já tem POS carregado em loadSessao()
+      if (this.isMembro) return
+
       try {
         const posSelecionado = JSON.parse(localStorage.getItem('pos_selected') || 'null')
-        const posExistentes = JSON.parse(localStorage.getItem('pos_existentes') || '[]')
-
+        const posExistentes  = JSON.parse(localStorage.getItem('pos_existentes') || '[]')
         const pos = posSelecionado || posExistentes[0] || null
 
         if (pos?.id) {
@@ -555,7 +590,6 @@ export default {
         }
       } catch (error) {
         console.error('Erro ao carregar POS:', error)
-
         if (this.shouldShowOnboarding()) {
           this.showOnboardingModal = true
         }
@@ -570,76 +604,52 @@ export default {
         this.setCurrentPOS(data)
       } catch (error) {
         console.error('Erro ao carregar detalhe do POS:', error)
-
         const posSelecionado = JSON.parse(localStorage.getItem('pos_selected') || 'null')
-        if (posSelecionado?.id) {
-          this.setCurrentPOS(posSelecionado)
-        }
+        if (posSelecionado?.id) this.setCurrentPOS(posSelecionado)
       }
     },
 
     setCurrentPOS(pos) {
-      this.currentPOS = pos
-      this.posId = pos.id
-      this.posNome = pos.nome || 'POS Principal'
-      this.posCodigo = pos.codigo_pos || ''
-      this.modo = pos.modo || 'standalone'
+      this.currentPOS    = pos
+      this.posId         = pos.id
+      this.posNome       = pos.nome || 'POS Principal'
+      this.posCodigo     = pos.codigo_pos || ''
+      this.modo          = pos.modo || 'standalone'
       this.lojaVinculada = pos.loja_vinculada || null
 
-      localStorage.setItem('pos_selected', JSON.stringify(pos))
-      localStorage.setItem('pos_id', String(pos.id))
+      localStorage.setItem('pos_selected',  JSON.stringify(pos))
+      localStorage.setItem('pos_id',        String(pos.id))
+      localStorage.setItem('pos_precisa_onboarding', 'false')
 
       const posExistentes = JSON.parse(localStorage.getItem('pos_existentes') || '[]')
       const updated = posExistentes.length
-        ? posExistentes.map((item) => item.id === pos.id ? { ...item, ...pos } : item)
+        ? posExistentes.map(item => item.id === pos.id ? { ...item, ...pos } : item)
         : [pos]
-
       localStorage.setItem('pos_existentes', JSON.stringify(updated))
-      localStorage.setItem('pos_precisa_onboarding', 'false')
 
       this.showOnboardingModal = false
       this.componentRefreshKey += 1
     },
 
+    // ── ONBOARDING ──────────────────────────────────────────────────
     abrirOnboarding() {
       this.loadLojasFromStorage()
       this.loadOnboardingData()
       this.showOnboardingModal = true
     },
 
-    handleOnboardingClose() {
-      this.showOnboardingModal = false
-    },
+    handleOnboardingClose()           { this.showOnboardingModal = false },
+    handleOnboardingCompleted(pos)    { pos?.id ? this.setCurrentPOS(pos) : this.loadPOSData() },
+    async handleOnboardingCreatePOS(payload) { await this.criarPOSComPayload(payload) },
 
-    handleOnboardingCompleted(pos) {
-      if (pos?.id) {
-        this.setCurrentPOS(pos)
-      } else {
-        this.loadPOSData()
-      }
-    },
-
-    async handleOnboardingCreatePOS(payload) {
-      await this.criarPOSComPayload(payload)
-    },
-
+    // ── CRIAR POS ───────────────────────────────────────────────────
     async criarPOSComPayload(payload = {}) {
       if (this.creatingPos) return
-
       this.creatingPos = true
-
       try {
-        const body = {
-          nome: payload.nome || 'POS Principal',
-          modo: payload.modo || 'standalone'
-        }
-
-        if (payload.loja_id) {
-          body.loja_id = payload.loja_id
-        }
-
+        const body = { nome: payload.nome || 'POS Principal', modo: payload.modo || 'standalone' }
+        if (payload.loja_id) body.loja_id = payload.loja_id
         const { data } = await api.post('/api/pos/criar/', body)
-
         this.setCurrentPOS(data)
       } catch (error) {
         console.error('Erro ao criar POS:', error)
@@ -650,57 +660,48 @@ export default {
     },
 
     async criarPOS() {
-      await this.criarPOSComPayload({
-        nome: 'POS Principal',
-        modo: 'standalone'
-      })
+      await this.criarPOSComPayload({ nome: 'POS Principal', modo: 'standalone' })
     },
 
-  async abrirConfiguracao() {
-  if (!this.posId) {
-    this.abrirOnboarding()
-    return
-  }
+    // ── CONFIGURAÇÃO ────────────────────────────────────────────────
+    async abrirConfiguracao() {
+      if (!this.posId) { this.abrirOnboarding(); return }
 
-  this.configError = ''
-  this.configSuccess = ''
+      this.configError   = ''
+      this.configSuccess = ''
 
-  // Recarregar lojas do backend
-  try {
-    const { data } = await api.get('/app/loja/minhas/')
-    this.lojas = data
-    localStorage.setItem('pos_lojas', JSON.stringify(data))
-  } catch (error) {
-    console.error('Erro ao recarregar lojas:', error)
-    // Fallback: usar localStorage
-    this.loadLojasFromStorage()
-  }
+      // Recarregar lojas do backend (URL correta)
+      try {
+        const { data } = await api.get('/api/app/loja/minhas/')
+        this.lojas = data
+        localStorage.setItem('pos_lojas', JSON.stringify(data))
+      } catch (error) {
+        console.error('Erro ao recarregar lojas:', error)
+        this.loadLojasFromStorage()
+      }
 
-  this.configForm = {
-    nome: this.posNome || 'POS Principal',
-    loja_id: this.lojaVinculada?.id || '',
-    modo: this.modo || 'standalone'
-  }
+      this.configForm = {
+        nome:    this.posNome || 'POS Principal',
+        loja_id: this.lojaVinculada?.id || '',
+        modo:    this.modo || 'standalone'
+      }
 
-  this.showConfigModal = true
-},
+      this.showConfigModal = true
+    },
 
     fecharConfiguracao() {
       this.showConfigModal = false
-      this.configError = ''
-      this.configSuccess = ''
+      this.configError     = ''
+      this.configSuccess   = ''
     },
 
     async guardarConfiguracao() {
       if (!this.posId || this.savingConfig) return
 
-      this.configError = ''
+      this.configError   = ''
       this.configSuccess = ''
 
-      if (
-        ['integrado', 'hibrido'].includes(this.configForm.modo) &&
-        !this.configForm.loja_id
-      ) {
+      if (['integrado', 'hibrido'].includes(this.configForm.modo) && !this.configForm.loja_id) {
         this.configError = 'Para usar modo integrado ou híbrido, escolhe uma loja Bendi.'
         return
       }
@@ -711,30 +712,22 @@ export default {
         if (this.configForm.loja_id) {
           const { data } = await api.post(`/api/pos/${this.posId}/conectar-loja/`, {
             loja_id: this.configForm.loja_id,
-            modo: this.configForm.modo
+            modo:    this.configForm.modo
           })
-
-          const pos = data.pos || data
-          this.setCurrentPOS(pos)
+          this.setCurrentPOS(data.pos || data)
         } else {
           const { data } = await api.post(`/api/pos/${this.posId}/desconectar-loja/`)
-          const pos = data.pos || data
-          this.setCurrentPOS(pos)
+          this.setCurrentPOS(data.pos || data)
         }
 
         if (this.configForm.nome && this.configForm.nome !== this.posNome) {
-          const { data } = await api.patch(`/api/pos/${this.posId}/`, {
-            nome: this.configForm.nome
-          })
-
+          const { data } = await api.patch(`/api/pos/${this.posId}/`, { nome: this.configForm.nome })
           this.setCurrentPOS(data)
         }
 
         this.configSuccess = 'Configuração guardada com sucesso.'
+        setTimeout(() => this.fecharConfiguracao(), 700)
 
-        setTimeout(() => {
-          this.fecharConfiguracao()
-        }, 700)
       } catch (error) {
         console.error('Erro ao guardar configuração:', error)
         this.configError = error.response?.data?.detail || 'Erro ao guardar configuração do POS.'
@@ -745,37 +738,29 @@ export default {
 
     async desconectarLoja() {
       if (!confirm('Desconectar este POS da loja Bendi? O POS passará para modo standalone.')) return
-
       this.savingConfig = true
-
       try {
         const { data } = await api.post(`/api/pos/${this.posId}/desconectar-loja/`)
-        const pos = data.pos || data
-
-        this.setCurrentPOS(pos)
+        this.setCurrentPOS(data.pos || data)
       } catch (error) {
-        console.error('Erro ao desconectar loja:', error)
         alert(error.response?.data?.detail || 'Erro ao desconectar loja.')
       } finally {
         this.savingConfig = false
       }
     },
 
+    // ── LOGOUT ──────────────────────────────────────────────────────
     logout() {
       if (!confirm('Tem a certeza que quer sair?')) return
 
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('user')
-
-      localStorage.removeItem('pos_lojas')
-      localStorage.removeItem('pos_existentes')
-      localStorage.removeItem('pos_selected')
-      localStorage.removeItem('pos_id')
-      localStorage.removeItem('pos_tem_lojas')
-      localStorage.removeItem('pos_precisa_onboarding')
-      localStorage.removeItem('pos_onboarding_data')
-      localStorage.removeItem('pos_permissoes')
+      // Limpar tudo
+      const keys = [
+        'access_token', 'refresh_token', 'tipo_sessao',
+        'pos_user', 'pos_lojas', 'pos_existentes', 'pos_selected',
+        'pos_id', 'pos_tem_lojas', 'pos_precisa_onboarding', 'pos_onboarding_data',
+        'pos_membro', 'pos_membro_pos', 'pos_membro_permissoes',
+      ]
+      keys.forEach(k => localStorage.removeItem(k))
 
       this.$router.push('/pos/login')
     }

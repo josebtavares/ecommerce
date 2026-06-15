@@ -3,20 +3,15 @@
     class="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
     @click.self="$emit('close')"
   >
-    <!-- Mobile: Bottom Sheet auto-height | Desktop: Modal centrado -->
     <div class="w-full max-w-lg overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+
       <!-- Header -->
       <header class="border-b border-slate-200 p-5 sm:p-6">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-2xl font-black text-slate-950">
-              Finalizar pagamento
-            </h2>
-            <p class="mt-1 text-sm font-semibold text-slate-500">
-              Conta #{{ conta.id }}
-            </p>
+            <h2 class="text-2xl font-black text-slate-950">Finalizar pagamento</h2>
+            <p class="mt-1 text-sm font-semibold text-slate-500">Conta #{{ conta.id }}</p>
           </div>
-
           <button
             type="button"
             @click="$emit('close')"
@@ -29,19 +24,15 @@
 
       <!-- Body -->
       <section class="max-h-[60vh] overflow-y-auto p-5 sm:max-h-none sm:p-6">
+
         <!-- Total -->
         <div class="rounded-[1.5rem] bg-slate-950 p-5 text-white shadow-lg shadow-slate-950/20">
           <div class="flex items-center justify-between gap-4">
             <div>
               <p class="text-sm font-bold text-slate-300">Total a pagar</p>
-              <p class="mt-1 text-3xl font-black tracking-tight">
-                {{ money(conta.total) }}
-              </p>
+              <p class="mt-1 text-3xl font-black tracking-tight">{{ money(conta.total) }}</p>
             </div>
-
-            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-3xl">
-              💳
-            </div>
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-3xl">💳</div>
           </div>
         </div>
 
@@ -55,9 +46,7 @@
 
         <!-- Métodos -->
         <div class="mt-5">
-          <label class="mb-3 block text-sm font-black text-slate-700">
-            Método de pagamento
-          </label>
+          <label class="mb-3 block text-sm font-black text-slate-700">Método de pagamento</label>
 
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
@@ -75,9 +64,7 @@
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <div class="text-2xl">{{ metodo.icon }}</div>
-                  <p class="mt-2 text-sm font-black">
-                    {{ metodo.label }}
-                  </p>
+                  <p class="mt-2 text-sm font-black">{{ metodo.label }}</p>
                   <p
                     :class="[
                       'mt-1 text-xs font-semibold',
@@ -105,7 +92,6 @@
             NIF do cliente
             <span class="font-semibold text-slate-400">(opcional)</span>
           </label>
-
           <input
             v-model.trim="nifCliente"
             type="text"
@@ -114,10 +100,6 @@
             maxlength="20"
             class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
           />
-
-          <p class="mt-2 text-xs font-semibold text-slate-400">
-            Será enviado para o backend no campo <code>nif_cliente</code>.
-          </p>
         </div>
       </section>
 
@@ -139,7 +121,6 @@
           class="flex h-12 items-center justify-center rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
         >
           <span v-if="!processando">Confirmar</span>
-
           <span v-else class="flex items-center gap-2">
             <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
             A processar...
@@ -161,45 +142,26 @@ export default {
       type: Object,
       required: true
     },
-
     posId: {
       type: [Number, String],
       required: true
     }
   },
 
+  emits: ['close', 'pago'],
+
   data() {
     return {
       metodoSelecionado: null,
-      nifCliente: '',
-      processando: false,
-      error: '',
+      nifCliente:        '',
+      processando:       false,
+      error:             '',
 
       metodosPagamento: [
-        {
-          value: 'dinheiro',
-          label: 'Dinheiro',
-          descricao: 'Pagamento em numerário',
-          icon: '💵'
-        },
-        {
-          value: 'cartao',
-          label: 'Cartão',
-          descricao: 'Débito ou crédito',
-          icon: '💳'
-        },
-        {
-          value: 'mbway',
-          label: 'MBWay',
-          descricao: 'Pagamento via MBWay',
-          icon: '📱'
-        },
-        {
-          value: 'transferencia',
-          label: 'Transferência',
-          descricao: 'Transferência bancária',
-          icon: '🏦'
-        }
+        { value: 'dinheiro',      label: 'Dinheiro',      descricao: 'Pagamento em numerário',     icon: '💵' },
+        { value: 'cartao',        label: 'Cartão',         descricao: 'Débito ou crédito',          icon: '💳' },
+        { value: 'mbway',         label: 'MBWay',          descricao: 'Pagamento via MBWay',        icon: '📱' },
+        { value: 'transferencia', label: 'Transferência',  descricao: 'Transferência bancária',     icon: '🏦' },
       ]
     }
   },
@@ -209,30 +171,24 @@ export default {
       if (!this.metodoSelecionado || this.processando) return
 
       this.processando = true
-      this.error = ''
+      this.error       = ''
 
       try {
         await api.post(`/api/pos/${this.posId}/contas/${this.conta.id}/fechar/`, {
           metodo_pagamento: this.metodoSelecionado,
-          nif_cliente: this.nifCliente || ''
+          nif_cliente:      this.nifCliente || ''
         })
 
         this.$emit('pago')
-      } catch (error) {
-        console.error('Erro ao processar pagamento:', error)
-        this.error = error.response?.data?.detail || 'Erro ao processar pagamento.'
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao processar pagamento.'
       } finally {
         this.processando = false
       }
     },
 
     money(value) {
-      const number = Number(value || 0)
-
-      return new Intl.NumberFormat('pt-PT', {
-        style: 'currency',
-        currency: 'EUR'
-      }).format(number)
+      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
     }
   }
 }

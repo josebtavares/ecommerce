@@ -11,7 +11,6 @@
 
       <div class="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
         <span class="text-sm font-bold text-slate-600">Auto-refresh</span>
-
         <label class="relative inline-flex cursor-pointer items-center">
           <input
             v-model="autoRefresh"
@@ -72,12 +71,10 @@
               <h3 class="text-lg font-black text-slate-950">
                 {{ pedido.mesa?.numero || 'Mesa' }}
               </h3>
-
               <span :class="['rounded-full px-3 py-1 text-xs font-black uppercase', getStatusBadge(pedido.status)]">
                 {{ getStatusLabel(pedido.status) }}
               </span>
             </div>
-
             <p class="mt-1 text-sm font-semibold text-slate-500">
               Conta #{{ pedido.id }} · {{ formatTime(pedido.criada_em) }}
             </p>
@@ -101,13 +98,10 @@
                   <p class="font-black text-slate-950">
                     {{ item.quantidade }}x {{ item.nome }}
                   </p>
-
                   <span
                     :class="[
                       'rounded-full px-2 py-0.5 text-[10px] font-black uppercase',
-                      item.origem === 'pos'
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-blue-100 text-blue-700'
+                      item.origem === 'pos' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
                     ]"
                   >
                     {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
@@ -128,7 +122,9 @@
                   {{ money(item.preco_total) }}
                 </span>
 
+                <!-- Selector de status: só visível se tiver permissão -->
                 <select
+                  v-if="podeAtualizarStatus"
                   v-model="item.status"
                   @change="atualizarStatusItem(pedido.id, item.id, item.status)"
                   class="h-9 rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-slate-950"
@@ -139,6 +135,14 @@
                   <option value="entregue">Entregue</option>
                   <option value="cancelado">Cancelado</option>
                 </select>
+
+                <!-- Sem permissão: mostra só o badge de status -->
+                <span
+                  v-else
+                  :class="['rounded-xl px-3 py-1.5 text-xs font-black', getItemStatusBadge(item.status)]"
+                >
+                  {{ getItemStatusLabel(item.status) }}
+                </span>
               </div>
             </div>
           </div>
@@ -154,11 +158,7 @@
       <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">
         🛒
       </div>
-
-      <h3 class="mt-5 text-xl font-black text-slate-950">
-        Nenhum pedido ativo
-      </h3>
-
+      <h3 class="mt-5 text-xl font-black text-slate-950">Nenhum pedido ativo</h3>
       <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
         Os pedidos abertos aparecerão aqui depois de adicionares produtos às mesas.
       </p>
@@ -176,6 +176,14 @@ export default {
     posId: {
       type: [Number, String],
       required: true
+    },
+    permissoes: {
+      type: Object,
+      default: null
+    },
+    isMembro: {
+      type: Boolean,
+      default: false
     }
   },
 
@@ -189,11 +197,11 @@ export default {
       refreshInterval: null,
 
       filtrosStatus: [
-        { value: 'todas', label: 'Todas' },
-        { value: 'aberta', label: 'Abertas' },
+        { value: 'todas',      label: 'Todas' },
+        { value: 'aberta',     label: 'Abertas' },
         { value: 'preparando', label: 'A preparar' },
-        { value: 'pronto', label: 'Prontos' },
-        { value: 'entregue', label: 'Entregues' }
+        { value: 'pronto',     label: 'Prontos' },
+        { value: 'entregue',   label: 'Entregues' },
       ]
     }
   },
@@ -203,13 +211,19 @@ export default {
       if (this.statusFiltro === 'todas') return this.pedidos
 
       if (['pendente', 'preparando', 'pronto', 'entregue'].includes(this.statusFiltro)) {
-        return this.pedidos.filter((pedido) =>
-          pedido.items?.some((item) => item.status === this.statusFiltro)
+        return this.pedidos.filter(p =>
+          p.items?.some(i => i.status === this.statusFiltro)
         )
       }
 
-      return this.pedidos.filter((pedido) => pedido.status === this.statusFiltro)
-    }
+      return this.pedidos.filter(p => p.status === this.statusFiltro)
+    },
+
+    // Conta principal → tudo permitido. Membro → verificar permissão.
+    podeAtualizarStatus() {
+      if (!this.isMembro) return true
+      return this.permissoes?.pode_atualizar_status_items ?? false
+    },
   },
 
   created() {
@@ -227,19 +241,12 @@ export default {
 
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/contas/ativas/`)
-
-        this.pedidos = Array.isArray(data)
-          ? data
-          : Array.isArray(data.results)
-            ? data.results
-            : []
-      } catch (error) {
-        console.error('Erro ao carregar pedidos:', error)
-
-        if (error.response?.status === 404) {
-          this.error = 'Endpoint de pedidos ativos ainda não existe no backend: /contas/ativas/.'
+        this.pedidos = Array.isArray(data) ? data : (data.results ?? [])
+      } catch (err) {
+        if (err.response?.status === 404) {
+          this.error = 'Endpoint de pedidos ativos não encontrado.'
         } else {
-          this.error = error.response?.data?.detail || 'Erro ao carregar pedidos.'
+          this.error = err.response?.data?.detail || 'Erro ao carregar pedidos.'
         }
       } finally {
         this.loading = false
@@ -248,9 +255,7 @@ export default {
 
     toggleAutoRefresh() {
       if (this.autoRefresh) {
-        this.refreshInterval = setInterval(() => {
-          this.carregarPedidos()
-        }, 10000)
+        this.refreshInterval = setInterval(() => this.carregarPedidos(), 10000)
       } else {
         this.stopAutoRefresh()
       }
@@ -267,93 +272,83 @@ export default {
       if (status === 'todas') return this.pedidos.length
 
       if (['pendente', 'preparando', 'pronto', 'entregue'].includes(status)) {
-        return this.pedidos.filter((pedido) =>
-          pedido.items?.some((item) => item.status === status)
+        return this.pedidos.filter(p =>
+          p.items?.some(i => i.status === status)
         ).length
       }
 
-      return this.pedidos.filter((pedido) => pedido.status === status).length
+      return this.pedidos.filter(p => p.status === status).length
     },
 
     async atualizarStatusItem(contaId, itemId, novoStatus) {
+      if (!this.podeAtualizarStatus) return
+
       try {
         await api.patch(
           `/api/pos/${this.posId}/contas/${contaId}/items/${itemId}/status/`,
           { status: novoStatus }
         )
-
         await this.carregarPedidos()
-      } catch (error) {
-        console.error('Erro ao atualizar status:', error)
-        alert(error.response?.data?.detail || 'Erro ao atualizar status do item.')
+      } catch (err) {
+        alert(err.response?.data?.detail || 'Erro ao atualizar status do item.')
       }
     },
 
+    // ── Labels e badges ────────────────────────────────────────────
     getStatusBadge(status) {
-      const badges = {
-        aberta: 'bg-blue-100 text-blue-800',
-        fechada: 'bg-green-100 text-green-800',
-        cancelada: 'bg-red-100 text-red-800'
-      }
-
-      return badges[status] || 'bg-slate-100 text-slate-700'
+      return {
+        aberta:    'bg-blue-100 text-blue-800',
+        fechada:   'bg-green-100 text-green-800',
+        cancelada: 'bg-red-100 text-red-800',
+      }[status] || 'bg-slate-100 text-slate-700'
     },
 
     getStatusLabel(status) {
-      const labels = {
-        aberta: 'Aberta',
-        fechada: 'Fechada',
-        cancelada: 'Cancelada'
-      }
-
-      return labels[status] || status
+      return { aberta: 'Aberta', fechada: 'Fechada', cancelada: 'Cancelada' }[status] || status
     },
 
     getItemStatusColor(status) {
-      const colors = {
-        pendente: 'text-slate-600',
+      return {
+        pendente:   'text-slate-600',
         preparando: 'text-orange-600',
-        pronto: 'text-green-600',
-        entregue: 'text-blue-600',
-        cancelado: 'text-red-600'
-      }
+        pronto:     'text-green-600',
+        entregue:   'text-blue-600',
+        cancelado:  'text-red-600',
+      }[status] || 'text-slate-600'
+    },
 
-      return colors[status] || 'text-slate-600'
+    getItemStatusBadge(status) {
+      return {
+        pendente:   'bg-slate-100 text-slate-700',
+        preparando: 'bg-orange-100 text-orange-700',
+        pronto:     'bg-green-100 text-green-700',
+        entregue:   'bg-blue-100 text-blue-700',
+        cancelado:  'bg-red-100 text-red-700',
+      }[status] || 'bg-slate-100 text-slate-700'
     },
 
     getItemStatusLabel(status) {
-      const labels = {
-        pendente: '⏳ Pendente',
+      return {
+        pendente:   '⏳ Pendente',
         preparando: '🔥 A preparar',
-        pronto: '✅ Pronto',
-        entregue: '🎉 Entregue',
-        cancelado: '❌ Cancelado'
-      }
-
-      return labels[status] || status
+        pronto:     '✅ Pronto',
+        entregue:   '🎉 Entregue',
+        cancelado:  '❌ Cancelado',
+      }[status] || status
     },
 
     formatTime(timestamp) {
       if (!timestamp) return ''
-      const date = new Date(timestamp)
-      const now = new Date()
-      const diff = Math.floor((now - date) / 1000 / 60)
-
-      if (diff < 1) return 'Agora mesmo'
+      const diff = Math.floor((new Date() - new Date(timestamp)) / 60000)
+      if (diff < 1)  return 'Agora mesmo'
       if (diff < 60) return `Há ${diff} min`
-
-      const hours = Math.floor(diff / 60)
-      return `Há ${hours}h ${diff % 60}min`
+      const h = Math.floor(diff / 60)
+      return `Há ${h}h ${diff % 60}min`
     },
 
     money(value) {
-      const number = Number(value || 0)
-
-      return new Intl.NumberFormat('pt-PT', {
-        style: 'currency',
-        currency: 'EUR'
-      }).format(number)
-    }
+      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
+    },
   }
 }
 </script>

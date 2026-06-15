@@ -9,7 +9,9 @@
         </p>
       </div>
 
+      <!-- Botão só visível se tiver permissão para gerir mesas -->
       <button
+        v-if="podeGerirMesas"
         type="button"
         @click="abrirModalCriarMesa"
         class="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
@@ -54,7 +56,7 @@
       </div>
     </div>
 
-    <!-- Loading -->
+    <!-- Loading skeleton -->
     <div
       v-if="loading && mesas.length === 0"
       class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"
@@ -66,7 +68,7 @@
       ></div>
     </div>
 
-    <!-- Empty -->
+    <!-- Empty state -->
     <div
       v-else-if="mesasFiltradas.length === 0"
       class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
@@ -75,15 +77,19 @@
         🍽️
       </div>
 
-      <h3 class="mt-5 text-xl font-black text-slate-950">
-        Nenhuma mesa encontrada
-      </h3>
+      <h3 class="mt-5 text-xl font-black text-slate-950">Nenhuma mesa encontrada</h3>
 
       <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-        Cria mesas para começar a abrir contas, adicionar produtos e processar pagamentos.
+        <span v-if="podeGerirMesas">
+          Cria mesas para começar a abrir contas, adicionar produtos e processar pagamentos.
+        </span>
+        <span v-else>
+          Ainda não existem mesas criadas neste POS.
+        </span>
       </p>
 
       <button
+        v-if="podeGerirMesas"
         type="button"
         @click="abrirModalCriarMesa"
         class="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
@@ -92,7 +98,7 @@
       </button>
     </div>
 
-    <!-- Grid -->
+    <!-- Grid de mesas -->
     <div
       v-else
       class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"
@@ -101,6 +107,8 @@
         v-for="mesa in mesasFiltradas"
         :key="mesa.id"
         :mesa="mesa"
+        :pode-abrir="podeAbrirMesas"
+        :pode-gerir="podeGerirMesas"
         @click="abrirMesa(mesa)"
         @editar="editarMesa(mesa)"
         @apagar="apagarMesa(mesa)"
@@ -121,14 +129,9 @@
       <div class="w-full max-w-md rounded-t-[2rem] bg-white p-6 shadow-2xl sm:rounded-[2rem]">
         <div class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-black text-slate-950">
-              Nova mesa
-            </h3>
-            <p class="mt-1 text-sm text-slate-500">
-              Define o número/nome e a capacidade.
-            </p>
+            <h3 class="text-xl font-black text-slate-950">Nova mesa</h3>
+            <p class="mt-1 text-sm text-slate-500">Define o número/nome e a capacidade.</p>
           </div>
-
           <button
             type="button"
             @click="fecharModalMesa"
@@ -140,10 +143,7 @@
 
         <form class="space-y-4" @submit.prevent="criarMesa">
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Número/Nome
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Número/Nome</label>
             <input
               v-model.trim="novaMesa.numero"
               type="text"
@@ -154,10 +154,7 @@
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Capacidade
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Capacidade</label>
             <input
               v-model.number="novaMesa.capacidade"
               type="number"
@@ -176,7 +173,6 @@
             >
               Cancelar
             </button>
-
             <button
               type="submit"
               :disabled="saving"
@@ -191,13 +187,13 @@
 
     <!-- Modal Conta -->
     <ContaModal
-  v-if="mesaSelecionada"
-  :mesa="mesaSelecionada"
-  :pos-id="posId"
-  @close="fecharContaModal"
-  @atualizar="carregarMesas(true)"
-/>
-    
+      v-if="mesaSelecionada"
+      :mesa="mesaSelecionada"
+      :pos-id="posId"
+      :permissoes="permissoes"
+      @close="fecharContaModal"
+      @atualizar="carregarMesas"
+    />
   </div>
 </template>
 
@@ -209,15 +205,21 @@ import ContaModal from './components/ContaModal.vue'
 export default {
   name: 'POSMesas',
 
-  components: {
-    MesaCard,
-    ContaModal
-  },
+  components: { MesaCard, ContaModal },
 
   props: {
     posId: {
       type: [Number, String],
       required: true
+    },
+    // Permissões passadas pelo POSDashboard (null = conta principal = tudo permitido)
+    permissoes: {
+      type: Object,
+      default: null
+    },
+    isMembro: {
+      type: Boolean,
+      default: false
     }
   },
 
@@ -226,24 +228,21 @@ export default {
       mesas: [],
       loading: false,
       saving: false,
-      abrindoMesa: false,  // ✅ NOVA FLAG
+      abrindoMesa: false,
       error: '',
       success: '',
       filtroAtivo: 'todas',
       showMesaModal: false,
       mesaSelecionada: null,
 
-      novaMesa: {
-        numero: '',
-        capacidade: 4
-      },
+      novaMesa: { numero: '', capacidade: 4 },
 
       filtros: [
-        { value: 'todas', label: 'Todas' },
-        { value: 'livre', label: 'Livres' },
-        { value: 'ocupada', label: 'Ocupadas' },
+        { value: 'todas',     label: 'Todas' },
+        { value: 'livre',     label: 'Livres' },
+        { value: 'ocupada',   label: 'Ocupadas' },
         { value: 'reservada', label: 'Reservadas' },
-        { value: 'limpeza', label: 'Limpeza' }
+        { value: 'limpeza',   label: 'Limpeza' },
       ]
     }
   },
@@ -251,8 +250,19 @@ export default {
   computed: {
     mesasFiltradas() {
       if (this.filtroAtivo === 'todas') return this.mesas
-      return this.mesas.filter((mesa) => mesa.status === this.filtroAtivo)
-    }
+      return this.mesas.filter(m => m.status === this.filtroAtivo)
+    },
+
+    // Conta principal → tudo permitido. Membro → verificar permissão.
+    podeAbrirMesas() {
+      if (!this.isMembro) return true
+      return this.permissoes?.pode_abrir_mesas ?? false
+    },
+
+    podeGerirMesas() {
+      if (!this.isMembro) return true
+      return this.permissoes?.pode_gerir_mesas ?? false
+    },
   },
 
   created() {
@@ -261,9 +271,7 @@ export default {
 
   watch: {
     posId(newId, oldId) {
-      if (newId && newId !== oldId) {
-        this.carregarMesas()
-      }
+      if (newId && newId !== oldId) this.carregarMesas()
     }
   },
 
@@ -276,15 +284,9 @@ export default {
 
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/mesas/`)
-
-        this.mesas = Array.isArray(data)
-          ? data
-          : Array.isArray(data.results)
-            ? data.results
-            : []
-      } catch (error) {
-        console.error('Erro ao carregar mesas:', error)
-        this.error = error.response?.data?.detail || 'Erro ao carregar mesas.'
+        this.mesas = Array.isArray(data) ? data : (data.results ?? [])
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao carregar mesas.'
       } finally {
         this.loading = false
       }
@@ -292,19 +294,13 @@ export default {
 
     abrirModalCriarMesa() {
       this.clearMessages()
-      this.novaMesa = {
-        numero: '',
-        capacidade: 4
-      }
+      this.novaMesa = { numero: '', capacidade: 4 }
       this.showMesaModal = true
     },
 
     fecharModalMesa() {
       this.showMesaModal = false
-      this.novaMesa = {
-        numero: '',
-        capacidade: 4
-      }
+      this.novaMesa = { numero: '', capacidade: 4 }
     },
 
     fecharContaModal() {
@@ -323,100 +319,86 @@ export default {
 
       try {
         await api.post(`/api/pos/${this.posId}/mesas/criar/`, {
-          numero: this.novaMesa.numero.trim(),
+          numero:     this.novaMesa.numero.trim(),
           capacidade: this.novaMesa.capacidade || 4
         })
 
         this.success = 'Mesa criada com sucesso.'
         this.fecharModalMesa()
         await this.carregarMesas()
-      } catch (error) {
-        console.error('Erro ao criar mesa:', error)
-        this.error = error.response?.data?.detail || 'Erro ao criar mesa.'
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao criar mesa.'
       } finally {
         this.saving = false
       }
     },
 
     abrirMesa(mesa) {
-      // ✅ PREVENIR MÚLTIPLAS CHAMADAS
-      if (this.abrindoMesa) {
-        console.log('🚫 Já está a abrir uma mesa, aguarde...')
+      // Membro sem permissão para abrir mesas
+      if (this.isMembro && !this.podeAbrirMesas) {
+        this.error = 'Não tens permissão para abrir mesas.'
         return
       }
 
-      // Se mesa está livre, abrir primeiro
+      if (this.abrindoMesa) return
+
       if (mesa.status === 'livre') {
         this.abrirMesaNoBackend(mesa)
       } else {
-        // Já está ocupada, abrir modal direto
+        // Já ocupada → abrir modal direto
         this.mesaSelecionada = mesa
       }
     },
-  
+
     async abrirMesaNoBackend(mesa) {
-      // ✅ VERIFICAR SE JÁ ESTÁ A PROCESSAR
-      if (this.abrindoMesa) {
-        console.log('🚫 Já está a processar abertura de mesa')
-        return
-      }
+      if (this.abrindoMesa) return
 
       this.abrindoMesa = true
       this.clearMessages()
 
       try {
-        console.log(`🔓 A abrir mesa ${mesa.numero}...`)
-        
-        const response = await api.post(
-          `/api/pos/${this.posId}/mesas/${mesa.id}/abrir/`
-        )
-
-        console.log('✅ Resposta do backend:', response.data)
-
-        // Recarregar mesas para ver status atualizado
+        await api.post(`/api/pos/${this.posId}/mesas/${mesa.id}/abrir/`)
         await this.carregarMesas()
 
-        // Agora sim, abrir modal com mesa atualizada
-        const mesaAtualizada = this.mesas.find((m) => m.id === mesa.id)
-        if (mesaAtualizada) {
-          this.mesaSelecionada = mesaAtualizada
-        }
-      } catch (error) {
-        console.error('❌ Erro ao abrir mesa:', error)
-        this.error = error.response?.data?.detail || 'Erro ao abrir mesa.'
+        const mesaAtualizada = this.mesas.find(m => m.id === mesa.id)
+        if (mesaAtualizada) this.mesaSelecionada = mesaAtualizada
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao abrir mesa.'
       } finally {
-        // ✅ SEMPRE LIBERAR A FLAG
         this.abrindoMesa = false
       }
     },
 
     editarMesa() {
-      this.error = 'A edição de mesas ainda precisa de endpoint no backend.'
+      this.error = 'A edição de mesas ainda não está disponível.'
     },
 
     async apagarMesa(mesa) {
+      if (!this.podeGerirMesas) {
+        this.error = 'Não tens permissão para apagar mesas.'
+        return
+      }
+
       if (!confirm(`Apagar ${mesa.numero}?`)) return
 
       this.clearMessages()
 
       try {
         await api.delete(`/api/pos/${this.posId}/mesas/${mesa.id}/apagar/`)
-
         this.success = 'Mesa apagada com sucesso.'
         await this.carregarMesas()
-      } catch (error) {
-        console.error('Erro ao apagar mesa:', error)
-        this.error = error.response?.data?.detail || 'Erro ao apagar mesa.'
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao apagar mesa.'
       }
     },
 
     contarMesas(status) {
       if (status === 'todas') return this.mesas.length
-      return this.mesas.filter((mesa) => mesa.status === status).length
+      return this.mesas.filter(m => m.status === status).length
     },
 
     clearMessages() {
-      this.error = ''
+      this.error   = ''
       this.success = ''
     }
   }

@@ -10,6 +10,7 @@
       </div>
 
       <button
+        v-if="podeGerirProdutos"
         type="button"
         @click="abrirModalCriar"
         class="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
@@ -22,22 +23,12 @@
     <section class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p class="text-sm font-black text-slate-950">
-            Modo atual: {{ modoLabel }}
-          </p>
+          <p class="text-sm font-black text-slate-950">Modo atual: {{ modoLabel }}</p>
           <p class="mt-1 text-xs font-semibold text-slate-500">
-            <span v-if="modo === 'standalone'">
-              Este POS usa apenas produtos próprios.
-            </span>
-            <span v-else-if="modo === 'integrado'">
-              Este POS usa apenas produtos da loja Bendi vinculada.
-            </span>
-            <span v-else-if="modo === 'hibrido'">
-              Este POS usa produtos próprios e produtos da loja Bendi.
-            </span>
-            <span v-else>
-              A carregar configuração do POS...
-            </span>
+            <span v-if="modo === 'standalone'">Este POS usa apenas produtos próprios.</span>
+            <span v-else-if="modo === 'integrado'">Este POS usa apenas produtos da loja Bendi vinculada.</span>
+            <span v-else-if="modo === 'hibrido'">Este POS usa produtos próprios e produtos da loja Bendi.</span>
+            <span v-else>A carregar configuração do POS...</span>
           </p>
         </div>
 
@@ -47,7 +38,6 @@
         >
           Loja: {{ lojaVinculada.nome }}
         </div>
-
         <div
           v-else
           class="rounded-2xl bg-amber-50 px-4 py-2 text-sm font-black text-amber-700"
@@ -96,9 +86,7 @@
           class="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
         >
           <option value="">Todas categorias</option>
-          <option v-for="cat in categorias" :key="cat" :value="cat">
-            {{ cat }}
-          </option>
+          <option v-for="cat in categorias" :key="cat" :value="cat">{{ cat }}</option>
         </select>
 
         <select
@@ -117,11 +105,7 @@
       v-if="loading && produtos.length === 0"
       class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"
     >
-      <div
-        v-for="i in 10"
-        :key="i"
-        class="h-64 animate-pulse rounded-[1.5rem] bg-slate-100"
-      ></div>
+      <div v-for="i in 10" :key="i" class="h-64 animate-pulse rounded-[1.5rem] bg-slate-100"></div>
     </div>
 
     <!-- Empty -->
@@ -129,19 +113,19 @@
       v-else-if="produtosFiltrados.length === 0"
       class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
     >
-      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">
-        📦
-      </div>
-
-      <h3 class="mt-5 text-xl font-black text-slate-950">
-        Nenhum produto encontrado
-      </h3>
-
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">📦</div>
+      <h3 class="mt-5 text-xl font-black text-slate-950">Nenhum produto encontrado</h3>
       <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-        Cria produtos próprios do POS ou liga o POS a uma loja Bendi para importar o catálogo.
+        <span v-if="podeGerirProdutos">
+          Cria produtos próprios do POS ou liga o POS a uma loja Bendi para importar o catálogo.
+        </span>
+        <span v-else>
+          Ainda não existem produtos disponíveis neste POS.
+        </span>
       </p>
 
       <button
+        v-if="podeGerirProdutos"
         type="button"
         @click="abrirModalCriar"
         class="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
@@ -167,21 +151,13 @@
             :alt="produto.nome"
             class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
-
-          <div
-            v-else
-            class="flex h-full w-full items-center justify-center text-4xl text-slate-300"
-          >
-            📦
-          </div>
+          <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300">📦</div>
 
           <div class="absolute left-2 top-2 flex flex-wrap gap-1">
             <span
               :class="[
                 'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide',
-                produto.origem === 'pos'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-blue-600 text-white'
+                produto.origem === 'pos' ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
               ]"
             >
               {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}
@@ -198,9 +174,7 @@
           <div
             :class="[
               'absolute right-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide',
-              produtoAtivo(produto)
-                ? 'bg-emerald-500 text-white'
-                : 'bg-red-500 text-white'
+              produtoAtivo(produto) ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
             ]"
           >
             {{ produtoAtivo(produto) ? 'Ativo' : 'Inativo' }}
@@ -217,16 +191,14 @@
           </p>
 
           <div class="mt-3 flex items-center justify-between gap-2">
-            <span class="text-lg font-black text-slate-950">
-              {{ money(produto.preco) }}
-            </span>
-
+            <span class="text-lg font-black text-slate-950">{{ money(produto.preco) }}</span>
             <span class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-500">
               Stock: {{ produto.stock ?? '—' }}
             </span>
           </div>
 
-          <div class="mt-4 grid grid-cols-2 gap-2">
+          <!-- Ações só visíveis se tiver permissão -->
+          <div v-if="podeGerirProdutos" class="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
               @click="editarProduto(produto)"
@@ -280,40 +252,22 @@
 
         <form class="max-h-[calc(95vh-88px)] space-y-4 overflow-y-auto p-5" @submit.prevent="salvarProduto">
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Origem do produto
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Origem do produto</label>
             <select
               v-model="formProduto.origem"
               :disabled="!!produtoEditando"
               class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <option
-                v-if="podeCriarProdutoPOS"
-                value="pos"
-              >
-                Produto próprio do POS
-              </option>
-
-              <option
-                v-if="podeCriarProdutoLoja"
-                value="loja"
-              >
-                Produto da loja Bendi
-              </option>
+              <option v-if="podeCriarProdutoPOS" value="pos">Produto próprio do POS</option>
+              <option v-if="podeCriarProdutoLoja" value="loja">Produto da loja Bendi</option>
             </select>
-
             <p class="mt-2 text-xs font-semibold text-slate-400">
               Em modo standalone só podes criar produtos próprios do POS. Em híbrido podes criar nos dois lados.
             </p>
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Nome *
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Nome *</label>
             <input
               v-model.trim="formProduto.nome"
               type="text"
@@ -324,10 +278,7 @@
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Descrição
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Descrição</label>
             <textarea
               v-model.trim="formProduto.descricao"
               rows="3"
@@ -338,10 +289,7 @@
 
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="mb-2 block text-sm font-black text-slate-700">
-                Preço *
-              </label>
-
+              <label class="mb-2 block text-sm font-black text-slate-700">Preço *</label>
               <input
                 v-model.number="formProduto.preco"
                 type="number"
@@ -354,10 +302,7 @@
             </div>
 
             <div>
-              <label class="mb-2 block text-sm font-black text-slate-700">
-                Categoria
-              </label>
-
+              <label class="mb-2 block text-sm font-black text-slate-700">Categoria</label>
               <input
                 v-model.trim="formProduto.categoria"
                 type="text"
@@ -365,7 +310,6 @@
                 placeholder="Ex: Bebidas"
                 class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
               />
-
               <datalist id="categorias-list">
                 <option v-for="cat in categorias" :key="cat" :value="cat" />
               </datalist>
@@ -377,18 +321,13 @@
               <input
                 v-model="formProduto.controlar_stock"
                 type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-slate-950"
+                class="h-4 w-4 rounded border-slate-300 accent-slate-950"
               />
-              <span class="ml-2 text-sm font-black text-slate-700">
-                Controlar stock
-              </span>
+              <span class="ml-2 text-sm font-black text-slate-700">Controlar stock</span>
             </label>
 
             <div>
-              <label class="mb-2 block text-sm font-black text-slate-700">
-                Stock
-              </label>
-
+              <label class="mb-2 block text-sm font-black text-slate-700">Stock</label>
               <input
                 v-model.number="formProduto.stock"
                 type="number"
@@ -400,10 +339,7 @@
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Imagem/Ficheiro
-            </label>
-
+            <label class="mb-2 block text-sm font-black text-slate-700">Imagem/Ficheiro</label>
             <input
               type="file"
               accept="image/*,video/*"
@@ -412,16 +348,8 @@
             />
 
             <div v-if="imagemPreview" class="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-              <img
-                v-if="isImagePreview"
-                :src="imagemPreview"
-                class="h-44 w-full object-cover"
-              />
-
-              <div
-                v-else
-                class="flex h-24 items-center justify-center text-sm font-bold text-slate-500"
-              >
+              <img v-if="isImagePreview" :src="imagemPreview" class="h-44 w-full object-cover" />
+              <div v-else class="flex h-24 items-center justify-center text-sm font-bold text-slate-500">
                 Ficheiro selecionado
               </div>
             </div>
@@ -429,25 +357,13 @@
 
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label class="flex h-12 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4">
-              <input
-                v-model="formProduto.ativo"
-                type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-slate-950"
-              />
-              <span class="ml-2 text-sm font-black text-slate-700">
-                Produto ativo
-              </span>
+              <input v-model="formProduto.ativo" type="checkbox" class="h-4 w-4 rounded border-slate-300 accent-slate-950" />
+              <span class="ml-2 text-sm font-black text-slate-700">Produto ativo</span>
             </label>
 
             <label class="flex h-12 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4">
-              <input
-                v-model="formProduto.disponivel_pos"
-                type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-slate-950"
-              />
-              <span class="ml-2 text-sm font-black text-slate-700">
-                Disponível no POS
-              </span>
+              <input v-model="formProduto.disponivel_pos" type="checkbox" class="h-4 w-4 rounded border-slate-300 accent-slate-950" />
+              <span class="ml-2 text-sm font-black text-slate-700">Disponível no POS</span>
             </label>
           </div>
 
@@ -465,10 +381,7 @@
               :disabled="salvando || !formProduto.origem"
               class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span v-if="!salvando">
-                {{ produtoEditando ? 'Atualizar' : 'Criar' }}
-              </span>
-
+              <span v-if="!salvando">{{ produtoEditando ? 'Atualizar' : 'Criar' }}</span>
               <span v-else class="flex items-center gap-2">
                 <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
                 A guardar...
@@ -491,6 +404,15 @@ export default {
     posId: {
       type: [Number, String],
       required: true
+    },
+    // Permissões passadas pelo POSDashboard (null = conta principal = tudo permitido)
+    permissoes: {
+      type: Object,
+      default: null
+    },
+    isMembro: {
+      type: Boolean,
+      default: false
     }
   },
 
@@ -531,14 +453,14 @@ export default {
   },
 
   computed: {
-    modoLabel() {
-      const labels = {
-        standalone: 'Standalone',
-        integrado: 'Integrado',
-        hibrido: 'Híbrido'
-      }
+    // Conta principal → tudo permitido. Membro → verificar permissão.
+    podeGerirProdutos() {
+      if (!this.isMembro) return true
+      return this.permissoes?.pode_gerir_produtos ?? false
+    },
 
-      return labels[this.modo] || '—'
+    modoLabel() {
+      return { standalone: 'Standalone', integrado: 'Integrado', hibrido: 'Híbrido' }[this.modo] || '—'
     },
 
     podeCriarProdutoPOS() {
@@ -550,33 +472,22 @@ export default {
     },
 
     categorias() {
-      const categoriasProdutos = this.produtos
-        .map((produto) => produto.categoria)
-        .filter(Boolean)
-
-      return [...new Set(categoriasProdutos)]
+      return [...new Set(this.produtos.map(p => p.categoria).filter(Boolean))]
     },
 
     produtosFiltrados() {
       const query = this.searchQuery.toLowerCase().trim()
 
-      return this.produtos.filter((produto) => {
+      return this.produtos.filter(produto => {
         const matchesSearch =
           !query ||
           String(produto.nome || '').toLowerCase().includes(query) ||
           String(produto.descricao || '').toLowerCase().includes(query) ||
           String(produto.categoria || '').toLowerCase().includes(query)
 
-        const matchesCategoria =
-          !this.categoriaFiltro || produto.categoria === this.categoriaFiltro
-
-        const matchesOrigem =
-          !this.origemFiltro || produto.origem === this.origemFiltro
-
-        const ativoProduto = this.produtoAtivo(produto)
-
-        const matchesAtivo =
-          this.ativoFiltro === '' || String(ativoProduto) === this.ativoFiltro
+        const matchesCategoria = !this.categoriaFiltro || produto.categoria === this.categoriaFiltro
+        const matchesOrigem    = !this.origemFiltro    || produto.origem === this.origemFiltro
+        const matchesAtivo     = this.ativoFiltro === '' || String(this.produtoAtivo(produto)) === this.ativoFiltro
 
         return matchesSearch && matchesCategoria && matchesOrigem && matchesAtivo
       })
@@ -589,9 +500,7 @@ export default {
 
   watch: {
     posId(newId, oldId) {
-      if (newId && newId !== oldId) {
-        this.carregarProdutos()
-      }
+      if (newId && newId !== oldId) this.carregarProdutos()
     }
   },
 
@@ -605,61 +514,60 @@ export default {
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/produtos/?gestao=1`)
 
-        this.modo = data.modo || ''
+        this.modo         = data.modo || ''
         this.lojaVinculada = data.loja_vinculada || null
 
-        this.produtos = Array.isArray(data.results)
-          ? data.results.map(this.normalizarProduto)
-          : Array.isArray(data)
-            ? data.map(this.normalizarProduto)
-            : []
-      } catch (error) {
-        console.error('Erro ao carregar produtos:', error)
-        this.error = error.response?.data?.detail || 'Erro ao carregar produtos.'
+        const lista = Array.isArray(data.results) ? data.results
+                    : Array.isArray(data)          ? data
+                    : []
+
+        this.produtos = lista.map(this.normalizarProduto)
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao carregar produtos.'
       } finally {
         this.loading = false
       }
     },
 
     abrirModalCriar() {
+      if (!this.podeGerirProdutos) return
+
       this.clearMessages()
       this.produtoEditando = null
       this.resetForm()
 
-      if (this.podeCriarProdutoPOS) {
-        this.formProduto.origem = 'pos'
-      } else if (this.podeCriarProdutoLoja) {
-        this.formProduto.origem = 'loja'
-      } else {
-        this.formProduto.origem = ''
-      }
+      this.formProduto.origem = this.podeCriarProdutoPOS  ? 'pos'
+                               : this.podeCriarProdutoLoja ? 'loja'
+                               : ''
 
       this.showProdutoModal = true
     },
 
     editarProduto(produto) {
+      if (!this.podeGerirProdutos) return
+
       this.clearMessages()
       this.produtoEditando = produto
-      this.showProdutoModal = true
-
       this.formProduto = {
-        origem: produto.origem || 'pos',
-        nome: produto.nome || '',
-        descricao: produto.descricao || '',
-        preco: Number(produto.preco || 0),
-        categoria: produto.categoria || '',
+        origem:          produto.origem || 'pos',
+        nome:            produto.nome || '',
+        descricao:       produto.descricao || '',
+        preco:           Number(produto.preco || 0),
+        categoria:       produto.categoria || '',
         controlar_stock: Boolean(produto.controlar_stock),
-        stock: Number(produto.stock || 0),
-        ativo: this.produtoAtivo(produto),
-        disponivel_pos: produto.disponivel_pos ?? true,
-        imagem: null
+        stock:           Number(produto.stock || 0),
+        ativo:           this.produtoAtivo(produto),
+        disponivel_pos:  produto.disponivel_pos ?? true,
+        imagem:          null
       }
-
       this.imagemPreview = produto.imagem_url || null
       this.isImagePreview = true
+      this.showProdutoModal = true
     },
 
     async toggleAtivo(produto) {
+      if (!this.podeGerirProdutos) return
+
       this.clearMessages()
 
       try {
@@ -667,22 +575,17 @@ export default {
         formData.append('origem', produto.origem)
         formData.append('ativo', String(!this.produtoAtivo(produto)))
 
-        await api.patch(
-          `/api/pos/${this.posId}/produtos/${produto.id}/`,
-          formData
-        )
+        await api.patch(`/api/pos/${this.posId}/produtos/${produto.id}/`, formData)
 
         this.success = 'Produto atualizado com sucesso.'
         await this.carregarProdutos()
-      } catch (error) {
-        console.error('Erro ao atualizar produto:', error)
-        this.error = error.response?.data?.detail || 'Erro ao atualizar produto.'
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao atualizar produto.'
       }
     },
 
     handleImagemUpload(event) {
       const file = event.target.files?.[0]
-
       if (!file) return
 
       this.formProduto.imagem = file
@@ -690,9 +593,7 @@ export default {
 
       if (this.isImagePreview) {
         const reader = new FileReader()
-        reader.onload = (e) => {
-          this.imagemPreview = e.target.result
-        }
+        reader.onload = e => { this.imagemPreview = e.target.result }
         reader.readAsDataURL(file)
       } else {
         this.imagemPreview = 'file'
@@ -702,43 +603,34 @@ export default {
     async salvarProduto() {
       this.clearMessages()
 
-      const validationError = this.validarForm()
-      if (validationError) {
-        this.error = validationError
-        return
-      }
+      const erro = this.validarForm()
+      if (erro) { this.error = erro; return }
 
       this.salvando = true
 
       try {
         const formData = new FormData()
-
-        formData.append('origem', this.formProduto.origem)
-        formData.append('nome', this.formProduto.nome.trim())
-        formData.append('descricao', this.formProduto.descricao || '')
-        formData.append('preco', String(this.formProduto.preco))
-        formData.append('categoria', this.formProduto.categoria || 'Sem categoria')
+        formData.append('origem',          this.formProduto.origem)
+        formData.append('nome',            this.formProduto.nome.trim())
+        formData.append('descricao',       this.formProduto.descricao || '')
+        formData.append('preco',           String(this.formProduto.preco))
+        formData.append('categoria',       this.formProduto.categoria || 'Sem categoria')
         formData.append('controlar_stock', String(Boolean(this.formProduto.controlar_stock)))
-        formData.append('stock', String(Number(this.formProduto.stock || 0)))
-        formData.append('ativo', String(Boolean(this.formProduto.ativo)))
-        formData.append('disponivel_pos', String(Boolean(this.formProduto.disponivel_pos)))
+        formData.append('stock',           String(Number(this.formProduto.stock || 0)))
+        formData.append('ativo',           String(Boolean(this.formProduto.ativo)))
+        formData.append('disponivel_pos',  String(Boolean(this.formProduto.disponivel_pos)))
 
-        // Para produtos da loja Bendi, a backend também aceita "categoria" e cria CategoriaLoja.
         if (this.formProduto.origem === 'loja' && this.formProduto.categoria) {
           formData.append('novas_categorias', this.formProduto.categoria.trim())
         }
 
         if (this.formProduto.imagem) {
-          // Backend aceita ambos; para loja Bendi usa ficheiro, para POS usa imagem.
-          formData.append('imagem', this.formProduto.imagem)
+          formData.append('imagem',   this.formProduto.imagem)
           formData.append('ficheiro', this.formProduto.imagem)
         }
 
         if (this.produtoEditando) {
-          await api.patch(
-            `/api/pos/${this.posId}/produtos/${this.produtoEditando.id}/`,
-            formData
-          )
+          await api.patch(`/api/pos/${this.posId}/produtos/${this.produtoEditando.id}/`, formData)
           this.success = 'Produto atualizado com sucesso.'
         } else {
           await api.post(`/api/pos/${this.posId}/produtos/criar/`, formData)
@@ -747,9 +639,8 @@ export default {
 
         this.fecharModal()
         await this.carregarProdutos()
-      } catch (error) {
-        console.error('Erro ao salvar produto:', error)
-        this.error = error.response?.data?.detail || this.formatBackendError(error.response?.data) || 'Erro ao salvar produto.'
+      } catch (err) {
+        this.error = err.response?.data?.detail || this.formatBackendError(err.response?.data) || 'Erro ao guardar produto.'
       } finally {
         this.salvando = false
       }
@@ -757,104 +648,59 @@ export default {
 
     fecharModal() {
       this.showProdutoModal = false
-      this.produtoEditando = null
+      this.produtoEditando  = null
       this.resetForm()
     },
 
     resetForm() {
-      this.imagemPreview = null
+      this.imagemPreview  = null
       this.isImagePreview = true
-
       this.formProduto = {
-        origem: 'pos',
-        nome: '',
-        descricao: '',
-        preco: 0,
-        categoria: '',
-        controlar_stock: false,
-        stock: 0,
-        ativo: true,
-        disponivel_pos: true,
-        imagem: null
+        origem: 'pos', nome: '', descricao: '', preco: 0,
+        categoria: '', controlar_stock: false, stock: 0,
+        ativo: true, disponivel_pos: true, imagem: null
       }
     },
 
     validarForm() {
-      if (!this.formProduto.origem) {
-        return 'Escolhe a origem do produto.'
-      }
-
-      if (this.formProduto.origem === 'pos' && !this.podeCriarProdutoPOS && !this.produtoEditando) {
-        return 'Este POS não permite criar produtos próprios.'
-      }
-
-      if (this.formProduto.origem === 'loja' && !this.podeCriarProdutoLoja && !this.produtoEditando) {
-        return 'Este POS não permite criar produtos da loja.'
-      }
-
-      if (!this.formProduto.nome.trim()) {
-        return 'O nome do produto é obrigatório.'
-      }
-
-      if (Number(this.formProduto.preco) < 0) {
-        return 'O preço não pode ser negativo.'
-      }
-
-      if (Number(this.formProduto.stock) < 0) {
-        return 'O stock não pode ser negativo.'
-      }
-
+      if (!this.formProduto.origem) return 'Escolhe a origem do produto.'
+      if (this.formProduto.origem === 'pos'  && !this.podeCriarProdutoPOS  && !this.produtoEditando) return 'Este POS não permite criar produtos próprios.'
+      if (this.formProduto.origem === 'loja' && !this.podeCriarProdutoLoja && !this.produtoEditando) return 'Este POS não permite criar produtos da loja.'
+      if (!this.formProduto.nome.trim()) return 'O nome do produto é obrigatório.'
+      if (Number(this.formProduto.preco) < 0) return 'O preço não pode ser negativo.'
+      if (Number(this.formProduto.stock) < 0) return 'O stock não pode ser negativo.'
       return null
     },
 
     normalizarProduto(produto) {
-      const categoria =
-        produto.categoria ||
-        produto.categorias?.[0]?.nome ||
-        produto.tipo?.nome ||
-        'Sem categoria'
-
       return {
         ...produto,
-        uid: produto.uid || `${produto.origem}-${produto.id}`,
-        categoria,
-        imagem_url: produto.imagem_url || produto.ficheiro_url || null,
-        ativo: produto.ativo ?? true,
+        uid:          produto.uid || `${produto.origem}-${produto.id}`,
+        categoria:    produto.categoria || produto.categorias?.[0]?.nome || produto.tipo?.nome || 'Sem categoria',
+        imagem_url:   produto.imagem_url || produto.ficheiro_url || null,
+        ativo:        produto.ativo ?? true,
         disponivel_pos: produto.disponivel_pos ?? true,
-        stock: produto.stock ?? 0,
-        origem: produto.origem || 'pos'
+        stock:        produto.stock ?? 0,
+        origem:       produto.origem || 'pos'
       }
     },
 
-    produtoAtivo(produto) {
-      return produto.ativo ?? true
-    },
+    produtoAtivo(produto) { return produto.ativo ?? true },
 
     money(value) {
-      const number = Number(value || 0)
-
-      return new Intl.NumberFormat('pt-PT', {
-        style: 'currency',
-        currency: 'EUR'
-      }).format(number)
+      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
     },
 
     formatBackendError(data) {
       if (!data || typeof data !== 'object') return ''
-
-      const firstKey = Object.keys(data)[0]
-      const value = data[firstKey]
-
-      if (Array.isArray(value)) return `${firstKey}: ${value.join(', ')}`
-      if (typeof value === 'string') return `${firstKey}: ${value}`
-
+      const key = Object.keys(data)[0]
+      const val = data[key]
+      if (Array.isArray(val))      return `${key}: ${val.join(', ')}`
+      if (typeof val === 'string') return `${key}: ${val}`
       return ''
     },
 
-    clearMessages() {
-      this.error = ''
-      this.success = ''
-    }
+    clearMessages() { this.error = ''; this.success = '' }
   }
 }
 </script>

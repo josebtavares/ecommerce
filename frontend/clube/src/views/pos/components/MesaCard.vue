@@ -11,7 +11,7 @@
       cardClasses
     ]"
   >
-    <!-- brilho decorativo -->
+    <!-- Brilho decorativo -->
     <div
       :class="[
         'pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl transition-opacity group-hover:opacity-80',
@@ -19,7 +19,7 @@
       ]"
     ></div>
 
-    <!-- topo -->
+    <!-- Topo: badge de status + botão editar -->
     <div class="relative flex items-start justify-between gap-3">
       <div
         :class="[
@@ -31,7 +31,9 @@
         {{ statusText }}
       </div>
 
+      <!-- Botão editar: só visível se tiver permissão para gerir mesas -->
       <button
+        v-if="podeGerir"
         type="button"
         class="rounded-xl p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-950"
         title="Editar mesa"
@@ -46,9 +48,12 @@
           />
         </svg>
       </button>
+
+      <!-- Placeholder para manter layout quando sem permissão -->
+      <div v-else class="h-7 w-7"></div>
     </div>
 
-    <!-- centro -->
+    <!-- Centro: número e info -->
     <div class="relative mt-5">
       <p class="truncate text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
         {{ mesa.numero }}
@@ -68,19 +73,16 @@
       </div>
     </div>
 
-    <!-- rodapé -->
+    <!-- Rodapé: atendente + botão apagar -->
     <div class="relative mt-5 flex items-end justify-between gap-3">
       <div class="min-w-0">
-        <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">
-          Atendente
-        </p>
-
-        <p class="mt-1 truncate text-sm font-black text-slate-700">
-          {{ atendenteNome }}
-        </p>
+        <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Atendente</p>
+        <p class="mt-1 truncate text-sm font-black text-slate-700">{{ atendenteNome }}</p>
       </div>
 
+      <!-- Botão apagar: só visível se tiver permissão para gerir mesas -->
       <button
+        v-if="podeGerir"
         type="button"
         class="rounded-xl p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
         title="Apagar mesa"
@@ -107,19 +109,29 @@ export default {
     mesa: {
       type: Object,
       required: true
+    },
+    // Passado pelo POSMesas: true = pode editar/apagar
+    podeGerir: {
+      type: Boolean,
+      default: true
+    },
+    // Passado pelo POSMesas: true = pode clicar para abrir
+    podeAbrir: {
+      type: Boolean,
+      default: true
     }
   },
 
+  emits: ['click', 'editar', 'apagar'],
+
   computed: {
     statusText() {
-      const texts = {
-        livre: 'Livre',
-        ocupada: 'Ocupada',
+      return {
+        livre:     'Livre',
+        ocupada:   'Ocupada',
         reservada: 'Reservada',
-        limpeza: 'Limpeza'
-      }
-
-      return texts[this.mesa.status] || this.mesa.status || 'Indefinido'
+        limpeza:   'Limpeza',
+      }[this.mesa.status] || this.mesa.status || 'Indefinido'
     },
 
     atendenteNome() {
@@ -127,48 +139,45 @@ export default {
     },
 
     cardClasses() {
-      const classes = {
-        livre: 'border-emerald-200 hover:border-emerald-300 focus:ring-emerald-100',
-        ocupada: 'border-blue-200 hover:border-blue-300 focus:ring-blue-100',
+      const base = {
+        livre:     'border-emerald-200 hover:border-emerald-300 focus:ring-emerald-100',
+        ocupada:   'border-blue-200 hover:border-blue-300 focus:ring-blue-100',
         reservada: 'border-amber-200 hover:border-amber-300 focus:ring-amber-100',
-        limpeza: 'border-slate-200 hover:border-slate-300 focus:ring-slate-100'
-      }
+        limpeza:   'border-slate-200 hover:border-slate-300 focus:ring-slate-100',
+      }[this.mesa.status] || 'border-slate-200 hover:border-slate-300 focus:ring-slate-100'
 
-      return classes[this.mesa.status] || 'border-slate-200 hover:border-slate-300 focus:ring-slate-100'
+      // Visual de cursor desativado se não puder abrir
+      return this.podeAbrir
+        ? base
+        : `${base} cursor-not-allowed opacity-70`
     },
 
     badgeClasses() {
-      const classes = {
-        livre: 'bg-emerald-50 text-emerald-700',
-        ocupada: 'bg-blue-50 text-blue-700',
+      return {
+        livre:     'bg-emerald-50 text-emerald-700',
+        ocupada:   'bg-blue-50 text-blue-700',
         reservada: 'bg-amber-50 text-amber-700',
-        limpeza: 'bg-slate-100 text-slate-600'
-      }
-
-      return classes[this.mesa.status] || 'bg-slate-100 text-slate-600'
+        limpeza:   'bg-slate-100 text-slate-600',
+      }[this.mesa.status] || 'bg-slate-100 text-slate-600'
     },
 
     dotClasses() {
-      const classes = {
-        livre: 'bg-emerald-500',
-        ocupada: 'bg-blue-500',
+      return {
+        livre:     'bg-emerald-500',
+        ocupada:   'bg-blue-500',
         reservada: 'bg-amber-500',
-        limpeza: 'bg-slate-500'
-      }
-
-      return classes[this.mesa.status] || 'bg-slate-500'
+        limpeza:   'bg-slate-500',
+      }[this.mesa.status] || 'bg-slate-500'
     },
 
     glowClasses() {
-      const classes = {
-        livre: 'bg-emerald-300/50',
-        ocupada: 'bg-blue-300/50',
+      return {
+        livre:     'bg-emerald-300/50',
+        ocupada:   'bg-blue-300/50',
         reservada: 'bg-amber-300/50',
-        limpeza: 'bg-slate-300/50'
-      }
-
-      return classes[this.mesa.status] || 'bg-slate-300/50'
-    }
+        limpeza:   'bg-slate-300/50',
+      }[this.mesa.status] || 'bg-slate-300/50'
+    },
   }
 }
 </script>

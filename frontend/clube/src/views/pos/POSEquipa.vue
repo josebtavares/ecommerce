@@ -1,25 +1,24 @@
 <template>
   <div class="space-y-5">
+
     <!-- Header -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h2 class="text-2xl font-black text-slate-950">
-          Gestão de Equipa
-        </h2>
+        <h2 class="text-2xl font-black text-slate-950">Gestão de Equipa</h2>
         <p class="mt-1 text-sm font-semibold text-slate-500">
-          Adiciona e gere os membros que têm acesso a este POS
+          Cria e gere os membros que acedem a este POS
         </p>
       </div>
 
       <button
         type="button"
-        @click="showAddModal = true"
+        @click="abrirModalAdicionar"
         class="flex h-12 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-800"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
-        Adicionar Membro
+        Novo Membro
       </button>
     </div>
 
@@ -36,32 +35,30 @@
       {{ error }}
     </div>
 
-    <!-- Lista de membros -->
+    <!-- Conteúdo -->
     <div v-else class="space-y-4">
+
       <!-- Stats -->
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div class="rounded-2xl border border-slate-200 bg-white p-4">
           <p class="text-xs font-bold text-slate-500">Total</p>
           <p class="mt-1 text-2xl font-black text-slate-950">{{ membros.length }}</p>
         </div>
-
         <div class="rounded-2xl border border-slate-200 bg-emerald-50 p-4">
           <p class="text-xs font-bold text-emerald-700">Ativos</p>
           <p class="mt-1 text-2xl font-black text-emerald-900">{{ membrosAtivos }}</p>
         </div>
-
         <div class="rounded-2xl border border-slate-200 bg-blue-50 p-4">
-          <p class="text-xs font-bold text-blue-700">Bendi</p>
-          <p class="mt-1 text-2xl font-black text-blue-900">{{ membrosPorTipo.bendi || 0 }}</p>
+          <p class="text-xs font-bold text-blue-700">Gerentes</p>
+          <p class="mt-1 text-2xl font-black text-blue-900">{{ contagemPapel('gerente') }}</p>
         </div>
-
         <div class="rounded-2xl border border-slate-200 bg-purple-50 p-4">
-          <p class="text-xs font-bold text-purple-700">POS-only</p>
-          <p class="mt-1 text-2xl font-black text-purple-900">{{ membrosPorTipo.pos_only || 0 }}</p>
+          <p class="text-xs font-bold text-purple-700">Empregados</p>
+          <p class="mt-1 text-2xl font-black text-purple-900">{{ contagemPapel('empregado') }}</p>
         </div>
       </div>
 
-      <!-- Tabela/Cards -->
+      <!-- Lista de membros -->
       <div class="space-y-3">
         <div
           v-for="membro in membros"
@@ -69,35 +66,21 @@
           class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
         >
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <!-- Info do membro -->
+
+            <!-- Info -->
             <div class="flex items-center gap-4">
-              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-200 text-lg font-black text-slate-700">
+              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-lg font-black text-white">
                 {{ membro.nome.charAt(0).toUpperCase() }}
               </div>
 
               <div class="min-w-0">
-                <h3 class="truncate font-black text-slate-950">
-                  {{ membro.nome }}
-                </h3>
-                <p class="truncate text-sm font-semibold text-slate-500">
-                  {{ membro.email }}
-                </p>
-                <div class="mt-1 flex items-center gap-2 flex-wrap">
+                <h3 class="truncate font-black text-slate-950">{{ membro.nome }}</h3>
+                <p class="truncate text-sm font-semibold text-slate-400">@{{ membro.username_pos }}</p>
+                <div class="mt-1 flex flex-wrap items-center gap-2">
                   <span
-                    :class="[
-                      'inline-flex rounded-full px-2 py-0.5 text-xs font-black',
-                      papelBadgeClass(membro.papel)
-                    ]"
+                    :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-black', papelBadgeClass(membro.papel)]"
                   >
                     {{ membro.papel_display }}
-                  </span>
-                  <span
-                    :class="[
-                      'inline-flex rounded-full px-2 py-0.5 text-xs font-black',
-                      tipoBadgeClass(membro.tipo)
-                    ]"
-                  >
-                    {{ tipoLabel(membro.tipo) }}
                   </span>
                   <span
                     v-if="!membro.ativo"
@@ -113,22 +96,21 @@
             <div class="flex flex-wrap gap-2">
               <button
                 type="button"
-                @click="verPermissoes(membro)"
+                @click="togglePermissoes(membro.id)"
                 class="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
-                Ver Permissões
+                {{ membroExpandido === membro.id ? 'Fechar' : 'Permissões' }}
               </button>
 
               <button
                 type="button"
-                @click="editarMembro(membro)"
+                @click="abrirModalEditar(membro)"
                 class="h-10 rounded-2xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700"
               >
                 Editar
               </button>
 
               <button
-                v-if="membro.ativo"
                 type="button"
                 @click="confirmarRemover(membro)"
                 class="h-10 rounded-2xl bg-red-50 px-4 text-sm font-black text-red-700 transition hover:bg-red-100"
@@ -138,19 +120,20 @@
             </div>
           </div>
 
-          <!-- Permissões resumo (colapsável) -->
+          <!-- Permissões expandidas -->
           <div
-            v-if="membro.id === membroExpandido"
-            class="mt-4 grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-4 sm:grid-cols-2"
+            v-if="membroExpandido === membro.id"
+            class="mt-4 grid grid-cols-1 gap-1 rounded-xl bg-slate-50 p-4 sm:grid-cols-2"
           >
             <div
               v-for="(valor, chave) in membro.permissoes"
               :key="chave"
-              class="flex items-center justify-between text-sm"
+              class="flex items-center justify-between py-1 text-sm"
             >
-              <span class="font-semibold text-slate-600">{{ formatarPermissao(chave) }}</span>
-              <span v-if="valor" class="font-black text-emerald-600">✓</span>
-              <span v-else class="font-black text-slate-300">✗</span>
+              <span class="font-semibold text-slate-600">{{ nomePermissao(chave) }}</span>
+              <span :class="valor ? 'text-emerald-600' : 'text-slate-300'" class="font-black">
+                {{ valor ? '✓' : '✗' }}
+              </span>
             </div>
           </div>
         </div>
@@ -160,37 +143,35 @@
           v-if="membros.length === 0"
           class="rounded-2xl border border-slate-200 bg-white p-12 text-center"
         >
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-3xl">
-            👥
-          </div>
-          <h3 class="mt-4 text-lg font-black text-slate-950">
-            Nenhum membro ainda
-          </h3>
+          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-3xl">👥</div>
+          <h3 class="mt-4 text-lg font-black text-slate-950">Sem membros ainda</h3>
           <p class="mt-2 text-sm text-slate-500">
-            Adiciona o primeiro membro da equipa do POS
+            Cria o primeiro membro da equipa. Ele usará um username e password para entrar no POS.
           </p>
         </div>
       </div>
     </div>
 
-    <!-- Modal Adicionar Membro -->
+    <!-- ══════════════════════════════════════════════════════
+         MODAL: ADICIONAR MEMBRO
+    ══════════════════════════════════════════════════════ -->
     <div
       v-if="showAddModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      @click.self="showAddModal = false"
+      class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      @click.self="fecharModalAdicionar"
     >
-      <div class="w-full max-w-lg overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+      <div class="w-full max-w-lg overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
         <header class="border-b border-slate-200 p-5">
           <div class="flex items-start justify-between">
             <div>
-              <h3 class="text-xl font-black text-slate-950">Adicionar Membro</h3>
+              <h3 class="text-xl font-black text-slate-950">Novo Membro</h3>
               <p class="mt-1 text-sm font-semibold text-slate-500">
-                Convida um utilizador para a equipa do POS
+                O membro usará o username e password para entrar no POS
               </p>
             </div>
             <button
               type="button"
-              @click="showAddModal = false"
+              @click="fecharModalAdicionar"
               class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 transition hover:bg-slate-200"
             >
               ×
@@ -198,211 +179,166 @@
           </div>
         </header>
 
-        <form class="space-y-4 p-5" @submit.prevent="adicionarMembro">
-          <div
-            v-if="addError"
-            class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
-          >
-            {{ addError }}
-          </div>
+        <div class="max-h-[70vh] overflow-y-auto sm:max-h-none">
+          <form class="space-y-4 p-5" @submit.prevent="adicionarMembro">
 
-          <div
-            v-if="addSuccess"
-            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700"
-          >
-            {{ addSuccess }}
-          </div>
-
-          <!-- Tipo de utilizador -->
-          <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Tipo de utilizador
-            </label>
-
-            <div class="grid grid-cols-2 gap-3">
-              <label
-                :class="[
-                  'cursor-pointer rounded-2xl border-2 p-3 transition',
-                  addForm.tipo === 'bendi'
-                    ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                ]"
-              >
-                <input
-                  v-model="addForm.tipo"
-                  type="radio"
-                  value="bendi"
-                  class="hidden"
-                />
-                <p class="text-sm font-black">🌐 Utilizador Bendi</p>
-                <p
-                  :class="[
-                    'mt-1 text-xs font-semibold',
-                    addForm.tipo === 'bendi' ? 'text-slate-300' : 'text-slate-500'
-                  ]"
-                >
-                  Tem conta na plataforma
-                </p>
-              </label>
-
-              <label
-                :class="[
-                  'cursor-pointer rounded-2xl border-2 p-3 transition',
-                  addForm.tipo === 'pos_only'
-                    ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                ]"
-              >
-                <input
-                  v-model="addForm.tipo"
-                  type="radio"
-                  value="pos_only"
-                  class="hidden"
-                />
-                <p class="text-sm font-black">🔒 POS-only</p>
-                <p
-                  :class="[
-                    'mt-1 text-xs font-semibold',
-                    addForm.tipo === 'pos_only' ? 'text-slate-300' : 'text-slate-500'
-                  ]"
-                >
-                  Apenas este POS
-                </p>
-              </label>
-            </div>
-          </div>
-
-          <!-- Email -->
-          <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Email
-            </label>
-            <input
-              v-model.trim="addForm.email"
-              type="email"
-              placeholder="colaborador@exemplo.com"
-              required
-              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
-            />
-            <p class="mt-2 text-xs font-semibold text-slate-400">
-              <span v-if="addForm.tipo === 'bendi'">
-                Precisa ter conta Bendi registada
-              </span>
-              <span v-else>
-                Não pode existir conta Bendi com este email
-              </span>
-            </p>
-          </div>
-
-          <!-- Nome (só POS-only) -->
-          <div v-if="addForm.tipo === 'pos_only'">
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Nome completo
-            </label>
-            <input
-              v-model.trim="addForm.nome"
-              type="text"
-              placeholder="João Silva"
-              :required="addForm.tipo === 'pos_only'"
-              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
-            />
-          </div>
-
-          <!-- Password (só POS-only) -->
-          <div v-if="addForm.tipo === 'pos_only'">
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Password inicial (opcional)
-            </label>
-            <input
-              v-model="addForm.password"
-              type="password"
-              placeholder="••••••••"
-              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
-            />
-            <p class="mt-2 text-xs font-semibold text-slate-400">
-              Deixa vazio para gerar automaticamente
-            </p>
-          </div>
-
-          <!-- Papel -->
-          <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Papel
-            </label>
-
-            <div class="grid grid-cols-2 gap-3">
-              <label
-                v-for="papel in papeisDisponiveis"
-                :key="papel.value"
-                :class="[
-                  'cursor-pointer rounded-2xl border-2 p-3 transition',
-                  addForm.papel === papel.value
-                    ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                ]"
-              >
-                <input
-                  v-model="addForm.papel"
-                  type="radio"
-                  :value="papel.value"
-                  class="hidden"
-                />
-                <p class="text-sm font-black">{{ papel.label }}</p>
-                <p
-                  :class="[
-                    'mt-1 text-xs font-semibold',
-                    addForm.papel === papel.value ? 'text-slate-300' : 'text-slate-500'
-                  ]"
-                >
-                  {{ papel.description }}
-                </p>
-              </label>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3 pt-2">
-            <button
-              type="button"
-              @click="showAddModal = false"
-              class="h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50"
+            <!-- Erro / Sucesso -->
+            <div
+              v-if="addError"
+              class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
             >
-              Cancelar
-            </button>
+              {{ addError }}
+            </div>
 
-            <button
-              type="submit"
-              :disabled="adding"
-              class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            <!-- Password gerada (mostrar e manter modal aberto) -->
+            <div
+              v-if="addSuccess"
+              class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
             >
-              <span v-if="!adding">Adicionar</span>
-              <span v-else class="flex items-center gap-2">
-                <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-                A adicionar...
-              </span>
-            </button>
-          </div>
-        </form>
+              <p class="text-sm font-black text-emerald-800">✓ Membro criado com sucesso!</p>
+              <div
+                v-if="addSuccess.password_gerada"
+                class="mt-3 rounded-xl bg-emerald-100 p-3"
+              >
+                <p class="text-xs font-bold text-emerald-700">Password gerada automaticamente:</p>
+                <p class="mt-1 font-mono text-lg font-black tracking-widest text-emerald-900">
+                  {{ addSuccess.password_gerada }}
+                </p>
+                <p class="mt-1 text-xs font-semibold text-emerald-600">
+                  Anota esta password — não será mostrada novamente.
+                </p>
+                <button
+                  type="button"
+                  @click="copiarPassword(addSuccess.password_gerada)"
+                  class="mt-2 rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-black text-white"
+                >
+                  {{ copiado ? '✓ Copiado!' : 'Copiar' }}
+                </button>
+              </div>
+              <button
+                type="button"
+                @click="fecharModalAdicionar"
+                class="mt-3 h-10 w-full rounded-2xl bg-slate-950 text-sm font-black text-white"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <!-- Formulário (esconder após sucesso) -->
+            <template v-if="!addSuccess">
+              <!-- Nome -->
+              <div>
+                <label class="mb-2 block text-sm font-black text-slate-700">Nome completo</label>
+                <input
+                  v-model.trim="addForm.nome"
+                  type="text"
+                  placeholder="Ex: Joana Silva"
+                  required
+                  class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+                />
+              </div>
+
+              <!-- Username -->
+              <div>
+                <label class="mb-2 block text-sm font-black text-slate-700">Username</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">@</span>
+                  <input
+                    v-model.trim="addForm.username_pos"
+                    type="text"
+                    placeholder="joana"
+                    required
+                    minlength="3"
+                    pattern="[a-zA-Z0-9_.]*"
+                    class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-8 pr-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+                  />
+                </div>
+                <p class="mt-1.5 text-xs font-semibold text-slate-400">
+                  Letras, números, _ e . · Único neste POS
+                </p>
+              </div>
+
+              <!-- Password -->
+              <div>
+                <label class="mb-2 block text-sm font-black text-slate-700">
+                  Password
+                  <span class="ml-1 text-xs font-semibold text-slate-400">(opcional — gera automaticamente)</span>
+                </label>
+                <input
+                  v-model="addForm.password"
+                  type="text"
+                  placeholder="Deixa vazio para gerar"
+                  class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 font-mono text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+                />
+              </div>
+
+              <!-- Papel -->
+              <div>
+                <label class="mb-2 block text-sm font-black text-slate-700">Papel</label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label
+                    v-for="p in papeisDisponiveis"
+                    :key="p.value"
+                    :class="[
+                      'cursor-pointer rounded-2xl border-2 p-3 transition',
+                      addForm.papel === p.value
+                        ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    ]"
+                  >
+                    <input v-model="addForm.papel" type="radio" :value="p.value" class="hidden" />
+                    <p class="text-sm font-black">{{ p.label }}</p>
+                    <p :class="['mt-1 text-xs font-semibold', addForm.papel === p.value ? 'text-slate-300' : 'text-slate-500']">
+                      {{ p.description }}
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  @click="fecharModalAdicionar"
+                  class="h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  :disabled="adding"
+                  class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-60"
+                >
+                  <span v-if="!adding">Criar Membro</span>
+                  <span v-else class="flex items-center gap-2">
+                    <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                    A criar...
+                  </span>
+                </button>
+              </div>
+            </template>
+          </form>
+        </div>
       </div>
     </div>
 
-    <!-- Modal Editar Membro -->
+    <!-- ══════════════════════════════════════════════════════
+         MODAL: EDITAR MEMBRO
+    ══════════════════════════════════════════════════════ -->
     <div
       v-if="showEditModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      @click.self="showEditModal = false"
+      class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      @click.self="fecharModalEditar"
     >
-      <div class="w-full max-w-lg overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+      <div class="w-full max-w-lg overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
         <header class="border-b border-slate-200 p-5">
           <div class="flex items-start justify-between">
             <div>
               <h3 class="text-xl font-black text-slate-950">Editar Membro</h3>
-              <p class="mt-1 text-sm font-semibold text-slate-500">
-                {{ membroEditando?.nome }}
-              </p>
+              <p class="mt-1 text-sm font-semibold text-slate-500">{{ membroEditando?.nome }}</p>
             </div>
             <button
               type="button"
-              @click="showEditModal = false"
+              @click="fecharModalEditar"
               class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 transition hover:bg-slate-200"
             >
               ×
@@ -410,96 +346,131 @@
           </div>
         </header>
 
-        <form class="space-y-4 p-5" @submit.prevent="salvarEdicao">
-          <div
-            v-if="editError"
-            class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
-          >
-            {{ editError }}
-          </div>
+        <div class="max-h-[70vh] overflow-y-auto sm:max-h-none">
+          <form class="space-y-4 p-5" @submit.prevent="salvarEdicao">
 
-          <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">
-              Papel
-            </label>
+            <div
+              v-if="editError"
+              class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+            >
+              {{ editError }}
+            </div>
 
-            <div class="grid grid-cols-2 gap-3">
-              <label
-                v-for="papel in papeisDisponiveis"
-                :key="papel.value"
-                :class="[
-                  'cursor-pointer rounded-2xl border-2 p-3 transition',
-                  editForm.papel === papel.value
-                    ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                ]"
-              >
+            <!-- Nome -->
+            <div>
+              <label class="mb-2 block text-sm font-black text-slate-700">Nome completo</label>
+              <input
+                v-model.trim="editForm.nome"
+                type="text"
+                required
+                class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+              />
+            </div>
+
+            <!-- Username -->
+            <div>
+              <label class="mb-2 block text-sm font-black text-slate-700">Username</label>
+              <div class="relative">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">@</span>
                 <input
-                  v-model="editForm.papel"
-                  type="radio"
-                  :value="papel.value"
-                  class="hidden"
+                  v-model.trim="editForm.username_pos"
+                  type="text"
+                  required
+                  minlength="3"
+                  class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-8 pr-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
                 />
-                <p class="text-sm font-black">{{ papel.label }}</p>
-                <p
+              </div>
+            </div>
+
+            <!-- Nova password (opcional) -->
+            <div>
+              <label class="mb-2 block text-sm font-black text-slate-700">
+                Nova password
+                <span class="ml-1 text-xs font-semibold text-slate-400">(deixa vazio para não alterar)</span>
+              </label>
+              <input
+                v-model="editForm.password"
+                type="text"
+                placeholder="••••••••"
+                class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 font-mono text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+              />
+            </div>
+
+            <!-- Papel -->
+            <div>
+              <label class="mb-2 block text-sm font-black text-slate-700">Papel</label>
+              <div class="grid grid-cols-2 gap-3">
+                <label
+                  v-for="p in papeisDisponiveis"
+                  :key="p.value"
                   :class="[
-                    'mt-1 text-xs font-semibold',
-                    editForm.papel === papel.value ? 'text-slate-300' : 'text-slate-500'
+                    'cursor-pointer rounded-2xl border-2 p-3 transition',
+                    editForm.papel === p.value
+                      ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                   ]"
                 >
-                  {{ papel.description }}
-                </p>
-              </label>
+                  <input v-model="editForm.papel" type="radio" :value="p.value" class="hidden" />
+                  <p class="text-sm font-black">{{ p.label }}</p>
+                  <p :class="['mt-1 text-xs font-semibold', editForm.papel === p.value ? 'text-slate-300' : 'text-slate-500']">
+                    {{ p.description }}
+                  </p>
+                </label>
+              </div>
             </div>
-          </div>
 
-          <!-- Permissões customizadas -->
-          <details class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <summary class="cursor-pointer font-black text-slate-700">
-              Permissões personalizadas (avançado)
-            </summary>
-            <div class="mt-3 space-y-2">
-              <label
-                v-for="(valor, chave) in editForm.permissoes"
-                :key="chave"
-                class="flex items-center justify-between py-2"
+            <!-- Permissões customizadas -->
+            <details class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <summary class="cursor-pointer text-sm font-black text-slate-700">
+                Permissões personalizadas (avançado)
+              </summary>
+              <div class="mt-3 space-y-1">
+                <label
+                  v-for="(valor, chave) in editForm.permissoes"
+                  :key="chave"
+                  class="flex items-center justify-between py-1.5"
+                >
+                  <span class="text-sm font-semibold text-slate-600">{{ nomePermissao(chave) }}</span>
+                  <input
+                    v-model="editForm.permissoes[chave]"
+                    type="checkbox"
+                    class="h-5 w-5 rounded border-slate-300 accent-slate-950"
+                  />
+                </label>
+              </div>
+            </details>
+
+            <!-- Ativo/Inativo -->
+            <label class="flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200 bg-white p-4">
+              <span class="text-sm font-black text-slate-700">Membro ativo</span>
+              <input v-model="editForm.ativo" type="checkbox" class="h-5 w-5 rounded border-slate-300 accent-slate-950" />
+            </label>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                @click="fecharModalEditar"
+                class="h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
-                <span class="text-sm font-semibold text-slate-600">
-                  {{ formatarPermissao(chave) }}
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                :disabled="editing"
+                class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-60"
+              >
+                <span v-if="!editing">Guardar</span>
+                <span v-else class="flex items-center gap-2">
+                  <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                  A guardar...
                 </span>
-                <input
-                  v-model="editForm.permissoes[chave]"
-                  type="checkbox"
-                  class="h-5 w-5 rounded border-slate-300 text-slate-950 focus:ring-2 focus:ring-slate-950"
-                />
-              </label>
+              </button>
             </div>
-          </details>
-
-          <div class="grid grid-cols-2 gap-3 pt-2">
-            <button
-              type="button"
-              @click="showEditModal = false"
-              class="h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:bg-slate-50"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              :disabled="editing"
-              class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span v-if="!editing">Guardar</span>
-              <span v-else class="flex items-center gap-2">
-                <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
-                A guardar...
-              </span>
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -510,10 +481,7 @@ export default {
   name: 'POSEquipa',
 
   props: {
-    posId: {
-      type: Number,
-      required: true
-    }
+    posId: { type: Number, required: true },
   },
 
   data() {
@@ -523,49 +491,39 @@ export default {
       membros: [],
       membroExpandido: null,
 
+      // Modal adicionar
       showAddModal: false,
       adding: false,
       addError: null,
       addSuccess: null,
+      copiado: false,
       addForm: {
-        tipo: 'bendi',
-        email: '',
         nome: '',
+        username_pos: '',
         password: '',
-        papel: 'empregado'
+        papel: 'empregado',
       },
 
+      // Modal editar
       showEditModal: false,
       editing: false,
       editError: null,
       membroEditando: null,
       editForm: {
-        papel: '',
-        permissoes: {}
+        nome: '',
+        username_pos: '',
+        password: '',
+        papel: 'empregado',
+        ativo: true,
+        permissoes: {},
       },
 
       papeisDisponiveis: [
-        {
-          value: 'gerente',
-          label: 'Gerente',
-          description: 'Acesso total exceto gerir utilizadores'
-        },
-        {
-          value: 'empregado',
-          label: 'Empregado',
-          description: 'Abre mesas e vê pedidos'
-        },
-        {
-          value: 'cozinha',
-          label: 'Cozinha',
-          description: 'Vê e atualiza status de pedidos'
-        },
-        {
-          value: 'caixa',
-          label: 'Caixa',
-          description: 'Fecha contas e gere turno'
-        }
-      ]
+        { value: 'gerente',   label: 'Gerente',   description: 'Acesso quase total' },
+        { value: 'empregado', label: 'Empregado', description: 'Abre mesas e vê pedidos' },
+        { value: 'cozinha',   label: 'Cozinha',   description: 'Vê e atualiza pedidos' },
+        { value: 'caixa',     label: 'Caixa',     description: 'Fecha contas e turno' },
+      ],
     }
   },
 
@@ -573,13 +531,6 @@ export default {
     membrosAtivos() {
       return this.membros.filter(m => m.ativo).length
     },
-
-    membrosPorTipo() {
-      return this.membros.reduce((acc, m) => {
-        acc[m.tipo] = (acc[m.tipo] || 0) + 1
-        return acc
-      }, {})
-    }
   },
 
   created() {
@@ -587,15 +538,14 @@ export default {
   },
 
   methods: {
+    // ── API ────────────────────────────────────────────────────────
     async carregarEquipa() {
       this.loading = true
       this.error = null
-
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/equipa/`)
         this.membros = data
       } catch (err) {
-        console.error('Erro ao carregar equipa:', err)
         this.error = err.response?.data?.detail || 'Erro ao carregar equipa'
       } finally {
         this.loading = false
@@ -603,158 +553,155 @@ export default {
     },
 
     async adicionarMembro() {
-      if (!this.addForm.email) return
-
       this.adding = true
       this.addError = null
-      this.addSuccess = null
 
       try {
         const payload = {
-          tipo: this.addForm.tipo,
-          email: this.addForm.email,
-          papel: this.addForm.papel
+          nome:        this.addForm.nome,
+          username_pos: this.addForm.username_pos,
+          papel:       this.addForm.papel,
         }
-
-        // Adicionar campos POS-only se necessário
-        if (this.addForm.tipo === 'pos_only') {
-          payload.nome = this.addForm.nome
-          if (this.addForm.password) {
-            payload.password = this.addForm.password
-          }
+        if (this.addForm.password) {
+          payload.password = this.addForm.password
         }
 
         const { data } = await api.post(`/api/pos/${this.posId}/equipa/`, payload)
 
-        this.membros.push(data.membro)
+        // Adicionar à lista
+        this.membros.push(data)
 
-        // Mostrar password se foi gerada
-        if (data.password_gerada) {
-          this.addSuccess = `Membro criado! Password: ${data.password_gerada}`
-          // Não fechar modal para copiar password
-        } else {
-          this.showAddModal = false
-        }
-
-        this.addForm = {
-          tipo: 'bendi',
-          email: '',
-          nome: '',
-          password: '',
-          papel: 'empregado'
+        // Mostrar sucesso (com password se foi gerada)
+        this.addSuccess = {
+          password_gerada: data.password_gerada || null,
         }
       } catch (err) {
-        console.error('Erro ao adicionar membro:', err)
-        this.addError = err.response?.data?.detail || 'Erro ao adicionar membro'
+        this.addError = err.response?.data?.detail || 'Erro ao criar membro'
       } finally {
         this.adding = false
       }
     },
 
-    editarMembro(membro) {
-      this.membroEditando = membro
-      this.editForm = {
-        papel: membro.papel,
-        permissoes: { ...membro.permissoes }
-      }
-      this.editError = null
-      this.showEditModal = true
-    },
-
     async salvarEdicao() {
-      if (!this.membroEditando) return
-
       this.editing = true
       this.editError = null
 
       try {
-        const { data } = await api.patch(
-          `/api/pos/${this.posId}/equipa/${this.membroEditando.id}/`,
-          {
-            papel: this.editForm.papel,
-            ...this.editForm.permissoes
-          }
-        )
-
-        const index = this.membros.findIndex(m => m.id === this.membroEditando.id)
-        if (index !== -1) {
-          // Atualizar membro localmente
-          Object.assign(this.membros[index], data.membro)
+        const payload = {
+          nome:        this.editForm.nome,
+          username_pos: this.editForm.username_pos,
+          papel:       this.editForm.papel,
+          ativo:       this.editForm.ativo,
+          ...this.editForm.permissoes,
+        }
+        if (this.editForm.password) {
+          payload.password = this.editForm.password
         }
 
-        this.showEditModal = false
-        this.membroEditando = null
+        const { data } = await api.patch(
+          `/api/pos/${this.posId}/equipa/${this.membroEditando.id}/`,
+          payload
+        )
+
+        const idx = this.membros.findIndex(m => m.id === this.membroEditando.id)
+        if (idx !== -1) this.membros.splice(idx, 1, data)
+
+        this.fecharModalEditar()
       } catch (err) {
-        console.error('Erro ao editar membro:', err)
-        this.editError = err.response?.data?.detail || 'Erro ao editar membro'
+        this.editError = err.response?.data?.detail || 'Erro ao guardar'
       } finally {
         this.editing = false
       }
     },
 
     async confirmarRemover(membro) {
-      if (!confirm(`Tem certeza que deseja remover ${membro.nome} da equipa?`)) {
-        return
-      }
+      if (!confirm(`Remover "${membro.nome}" (@${membro.username_pos}) da equipa?`)) return
 
       try {
         await api.delete(`/api/pos/${this.posId}/equipa/${membro.id}/`)
-
-        const index = this.membros.findIndex(m => m.id === membro.id)
-        if (index !== -1) {
-          this.membros.splice(index, 1)
-        }
+        this.membros = this.membros.filter(m => m.id !== membro.id)
       } catch (err) {
-        console.error('Erro ao remover membro:', err)
         alert(err.response?.data?.detail || 'Erro ao remover membro')
       }
     },
 
-    verPermissoes(membro) {
-      if (this.membroExpandido === membro.id) {
-        this.membroExpandido = null
-      } else {
-        this.membroExpandido = membro.id
+    // ── MODAIS ─────────────────────────────────────────────────────
+    abrirModalAdicionar() {
+      this.addForm    = { nome: '', username_pos: '', password: '', papel: 'empregado' }
+      this.addError   = null
+      this.addSuccess = null
+      this.copiado    = false
+      this.showAddModal = true
+    },
+
+    fecharModalAdicionar() {
+      this.showAddModal = false
+      // Se criou membro com sucesso, recarregar lista
+      if (this.addSuccess) this.carregarEquipa()
+    },
+
+    abrirModalEditar(membro) {
+      this.membroEditando = membro
+      this.editForm = {
+        nome:        membro.nome,
+        username_pos: membro.username_pos,
+        password:    '',
+        papel:       membro.papel,
+        ativo:       membro.ativo,
+        permissoes:  { ...membro.permissoes },
       }
+      this.editError    = null
+      this.showEditModal = true
+    },
+
+    fecharModalEditar() {
+      this.showEditModal  = false
+      this.membroEditando = null
+    },
+
+    // ── HELPERS ────────────────────────────────────────────────────
+    togglePermissoes(id) {
+      this.membroExpandido = this.membroExpandido === id ? null : id
+    },
+
+    contagemPapel(papel) {
+      return this.membros.filter(m => m.papel === papel && m.ativo).length
     },
 
     papelBadgeClass(papel) {
-      const classes = {
-        dono: 'bg-purple-100 text-purple-700',
-        gerente: 'bg-blue-100 text-blue-700',
+      return {
+        gerente:   'bg-blue-100 text-blue-700',
         empregado: 'bg-emerald-100 text-emerald-700',
-        cozinha: 'bg-orange-100 text-orange-700',
-        caixa: 'bg-cyan-100 text-cyan-700'
+        cozinha:   'bg-orange-100 text-orange-700',
+        caixa:     'bg-cyan-100 text-cyan-700',
+      }[papel] || 'bg-slate-100 text-slate-700'
+    },
+
+    nomePermissao(chave) {
+      return {
+        pode_abrir_mesas:         'Abrir mesas',
+        pode_fechar_contas:       'Fechar contas',
+        pode_cancelar_items:      'Cancelar items',
+        pode_dar_descontos:       'Dar descontos',
+        pode_gerir_produtos:      'Gerir produtos',
+        pode_gerir_mesas:         'Gerir mesas',
+        pode_gerir_utilizadores:  'Gerir utilizadores',
+        pode_ver_relatorios:      'Ver relatórios',
+        pode_abrir_fechar_turno:  'Abrir/Fechar turno',
+        pode_ver_pedidos:         'Ver pedidos',
+        pode_atualizar_status_items: 'Atualizar status',
+      }[chave] || chave
+    },
+
+    async copiarPassword(pw) {
+      try {
+        await navigator.clipboard.writeText(pw)
+        this.copiado = true
+        setTimeout(() => { this.copiado = false }, 2000)
+      } catch {
+        // fallback silencioso
       }
-      return classes[papel] || 'bg-slate-100 text-slate-700'
     },
-
-    tipoBadgeClass(tipo) {
-      return tipo === 'bendi'
-        ? 'bg-blue-100 text-blue-700'
-        : 'bg-purple-100 text-purple-700'
-    },
-
-    tipoLabel(tipo) {
-      return tipo === 'bendi' ? '🌐 Bendi' : '🔒 POS-only'
-    },
-
-    formatarPermissao(chave) {
-      const nomes = {
-        pode_abrir_mesas: 'Abrir mesas',
-        pode_fechar_contas: 'Fechar contas',
-        pode_cancelar_items: 'Cancelar items',
-        pode_dar_descontos: 'Dar descontos',
-        pode_gerir_produtos: 'Gerir produtos',
-        pode_gerir_mesas: 'Gerir mesas',
-        pode_gerir_utilizadores: 'Gerir utilizadores',
-        pode_ver_relatorios: 'Ver relatórios',
-        pode_abrir_fechar_turno: 'Abrir/Fechar turno',
-        pode_ver_pedidos: 'Ver pedidos',
-        pode_atualizar_status_items: 'Atualizar status'
-      }
-      return nomes[chave] || chave
-    }
-  }
+  },
 }
 </script>
