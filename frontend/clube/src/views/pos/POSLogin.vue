@@ -287,17 +287,63 @@ export default {
 
     // ── HELPERS ───────────────────────────────────────────────────
     _guardarSessaoPrincipal(data) {
-      localStorage.setItem('access_token', data.access_token)
-      localStorage.setItem('refresh_token', data.refresh_token)
-      localStorage.setItem('tipo_sessao', 'principal')
-      localStorage.setItem('pos_user', JSON.stringify(data.user))
-      localStorage.setItem('pos_lojas', JSON.stringify(data.lojas || []))
+  const lojas = Array.isArray(data.lojas) ? data.lojas : []
+  const posExistentes = Array.isArray(data.pos_existentes) ? data.pos_existentes : []
+  const selectedPOS = posExistentes.length > 0 ? posExistentes[0] : null
 
-      // Limpar dados de sessão de membro anterior
-      localStorage.removeItem('pos_membro')
-      localStorage.removeItem('pos_membro_pos')
-      localStorage.removeItem('pos_membro_permissoes')
-    },
+  const precisaOnboarding = Boolean(
+    data.precisa_onboarding || posExistentes.length === 0
+  )
+
+  // Sessão principal
+  localStorage.setItem('access_token', data.access_token)
+  localStorage.setItem('refresh_token', data.refresh_token)
+  localStorage.setItem('tipo_sessao', 'principal')
+
+  // User POS
+  localStorage.setItem('pos_user', JSON.stringify(data.user || null))
+
+  // Compatibilidade com outros ficheiros antigos que usam "user"
+  localStorage.setItem('user', JSON.stringify(data.user || null))
+
+  // Dados do POS
+  localStorage.setItem('pos_lojas', JSON.stringify(lojas))
+  localStorage.setItem('pos_existentes', JSON.stringify(posExistentes))
+  localStorage.setItem('pos_tem_lojas', data.tem_lojas ? 'true' : 'false')
+  localStorage.setItem('pos_precisa_onboarding', precisaOnboarding ? 'true' : 'false')
+
+  localStorage.setItem(
+    'pos_onboarding_data',
+    JSON.stringify({
+      tem_lojas: Boolean(data.tem_lojas),
+      lojas,
+      pos_existentes: posExistentes,
+      precisa_onboarding: precisaOnboarding,
+      mensagem: data.mensagem || ''
+    })
+  )
+
+  if (data.permissoes) {
+    localStorage.setItem('pos_permissoes', JSON.stringify(data.permissoes))
+  } else {
+    localStorage.removeItem('pos_permissoes')
+  }
+
+  // Se já existe POS, selecionar o primeiro automaticamente
+  if (selectedPOS) {
+    localStorage.setItem('pos_selected', JSON.stringify(selectedPOS))
+    localStorage.setItem('pos_id', String(selectedPOS.id))
+    localStorage.setItem('pos_precisa_onboarding', 'false')
+  } else {
+    localStorage.removeItem('pos_selected')
+    localStorage.removeItem('pos_id')
+  }
+
+  // Limpar dados de sessão de membro anterior
+  localStorage.removeItem('pos_membro')
+  localStorage.removeItem('pos_membro_pos')
+  localStorage.removeItem('pos_membro_permissoes')
+},
 
     _guardarSessaoMembro(data) {
       localStorage.setItem('access_token', data.access_token)
@@ -313,12 +359,15 @@ export default {
     },
 
     _redirecionar(data) {
-      if (data.precisa_onboarding) {
-        this.$router.push('/pos/dashboard?onboarding=1')
-      } else {
-        this.$router.push('/pos/dashboard')
-      }
-    },
+  const posExistentes = Array.isArray(data.pos_existentes) ? data.pos_existentes : []
+
+  if (data.precisa_onboarding && posExistentes.length === 0) {
+    this.$router.push('/pos/dashboard?onboarding=1')
+    return
+  }
+
+  this.$router.push('/pos/dashboard')
+},
   },
 }
 </script>
