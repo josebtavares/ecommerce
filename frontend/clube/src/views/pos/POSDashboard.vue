@@ -672,7 +672,7 @@ export default {
 
       // Recarregar lojas do backend (URL correta)
       try {
-        const { data } = await api.get('/api/app/loja/minhas/')
+        const { data } = await api.get('/app/loja/minhas/')
         this.lojas = data
         localStorage.setItem('pos_lojas', JSON.stringify(data))
       } catch (error) {
