@@ -619,19 +619,25 @@ def pos_conectar_loja(request, pos_id):
 
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
 
-    try:
-        loja = Loja.objects.get(
-            Q(id=loja_id) & (Q(dono=utilizador) | Q(staff__utilizador=utilizador, staff__ativo=True))
+
+    loja = Loja.objects.filter(
+        Q(id=loja_id) & (
+            Q(dono=utilizador) |
+            Q(staff__utilizador=utilizador, staff__ativo=True)
         )
-    except Loja.DoesNotExist:
-        return Response({'detail': 'Loja não encontrada ou sem permissão.'}, status=status.HTTP_404_NOT_FOUND)
+    ).distinct().first()
+
+    if not loja:
+        return Response(
+            {'detail': 'Loja não encontrada ou sem permissão.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
     pos.conectar_loja(loja, modo=modo)
     loja.pos_ativo = True
     loja.save(update_fields=['pos_ativo'])
 
     return Response({'detail': f'POS conectado à loja {loja.nome}', 'pos': _pos_response(pos)})
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
