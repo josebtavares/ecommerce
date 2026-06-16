@@ -103,18 +103,30 @@ def _get_stock_loja(produto):
     return None
 
 
-def _get_pos_for_request(request, pos_id):
+def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
     """Retorna o POS acessível pelo request de conta principal ou membro de equipa."""
     membro = get_membro_from_request(request)
+
     if membro:
-        pos = get_object_or_404(ConfiguracaoPOS, id=pos_id)
-        if pos.id != membro.pos.id:
+        query = ConfiguracaoPOS.objects.filter(id=pos_id)
+        if ativo:
+            query = query.filter(ativo=True)
+        pos = get_object_or_404(query)
+        if pos.id != membro.pos.id or require_owner:
             raise Http404()
-        return pos, membro
+        return pos, membro, None
 
     utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-    return pos, None
+    query = ConfiguracaoPOS.objects.filter(id=pos_id, dono=utilizador)
+    if ativo:
+        query = query.filter(ativo=True)
+    pos = get_object_or_404(query)
+    return pos, None, utilizador
+
+
+def _get_pos_for_request(request, pos_id):
+    pos, membro, _ = _resolve_pos_request(request, pos_id, ativo=False)
+    return pos, membro
 
 
 def _set_stock_loja(produto, stock):
@@ -681,8 +693,7 @@ def pos_desconectar_loja(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def pos_produtos(request, pos_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    pos, membro, _ = _resolve_pos_request(request, pos_id, ativo=True)
 
     gestao = request.GET.get('gestao') in ['1', 'true', 'True']
     origem = request.GET.get('origem', 'todos')
@@ -998,9 +1009,8 @@ def mesa_apagar(request, pos_id, mesa_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def conta_criar(request, pos_id, mesa_id):
-    utilizador  = request.user.utilizador
-    pos         = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-    mesa        = get_object_or_404(Mesa, id=mesa_id, pos=pos)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
+    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
     conta_aberta = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
 
     if request.method == 'GET':
@@ -1023,8 +1033,7 @@ def conta_criar(request, pos_id, mesa_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def conta_detalhe(request, pos_id, conta_id):
-    utilizador = request.user.utilizador
-    pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
     conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
     return Response(_conta_payload(conta, request))
 
@@ -1033,9 +1042,8 @@ def conta_detalhe(request, pos_id, conta_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def conta_adicionar_item(request, pos_id, conta_id):
-    utilizador  = request.user.utilizador
-    pos         = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-    conta       = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
 
     if conta.status != 'aberta':
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1087,8 +1095,7 @@ def conta_adicionar_item(request, pos_id, conta_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def conta_remover_item(request, pos_id, conta_id, item_id):
-    utilizador = request.user.utilizador
-    pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
     conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
     item  = get_object_or_404(ItemContaMesa, id=item_id, conta=conta)
 
@@ -1108,8 +1115,7 @@ def conta_remover_item(request, pos_id, conta_id, item_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def conta_fechar(request, pos_id, conta_id):
-    utilizador = request.user.utilizador
-    pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
     conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
 
     if conta.status != 'aberta':
@@ -1136,8 +1142,7 @@ def conta_fechar(request, pos_id, conta_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def contas_ativas(request, pos_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
     contas = ContaMesa.objects.filter(pos=pos, status='aberta').select_related('mesa', 'atendente').prefetch_related('items').order_by('-criada_em')
     return Response([_conta_payload(c, request) for c in contas])
 
@@ -1146,8 +1151,7 @@ def contas_ativas(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def pos_historico(request, pos_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
 
     contas = ContaMesa.objects.filter(pos=pos, status='fechada').select_related('mesa', 'atendente').prefetch_related('items')
 
@@ -1176,8 +1180,7 @@ def pos_historico(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def item_status_atualizar(request, pos_id, conta_id, item_id):
-    utilizador  = request.user.utilizador
-    pos         = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
     conta       = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
     item        = get_object_or_404(ItemContaMesa, id=item_id, conta=conta)
     novo_status = request.data.get('status')
