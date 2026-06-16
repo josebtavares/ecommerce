@@ -255,12 +255,12 @@ export default {
 
     // Conta principal → tudo permitido. Membro → verificar permissão.
     podeAbrirMesas() {
-      if (!this.isMembro) return true
+      
       return this.permissoes?.pode_abrir_mesas ?? false
     },
 
     podeGerirMesas() {
-      if (!this.isMembro) return true
+      
       return this.permissoes?.pode_gerir_mesas ?? false
     },
   },
