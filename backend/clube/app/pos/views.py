@@ -45,6 +45,16 @@ try:
     from app.models import Inventario
 except Exception:
     Inventario = None
+    
+from .permissions import (
+    POSAuthentication,
+    IsPOSAuthenticated,
+    IsContaPrincipal,
+    is_membro,
+    get_membro_from_request,
+)
+
+from rest_framework.decorators import authentication_classes
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -653,7 +663,8 @@ def pos_desconectar_loja(request, pos_id):
 # ═══════════════════════════════════════════════════════════════════
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def pos_produtos(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
@@ -839,7 +850,8 @@ def produto_atualizar(request, pos_id, produto_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def produto_apagar(request, pos_id, produto_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
@@ -870,7 +882,8 @@ def produto_apagar(request, pos_id, produto_id):
 # ═══════════════════════════════════════════════════════════════════
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def mesas_listar(request, pos_id):
     utilizador = request.user.utilizador
     pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -891,7 +904,8 @@ def mesas_listar(request, pos_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def mesa_criar(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -908,7 +922,8 @@ def mesa_criar(request, pos_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def mesa_abrir(request, pos_id, mesa_id):
     utilizador = request.user.utilizador
     pos  = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -939,7 +954,8 @@ def mesa_abrir(request, pos_id, mesa_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def mesa_apagar(request, pos_id, mesa_id):
     utilizador = request.user.utilizador
     pos  = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -957,7 +973,8 @@ def mesa_apagar(request, pos_id, mesa_id):
 # ═══════════════════════════════════════════════════════════════════
 
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def conta_criar(request, pos_id, mesa_id):
     utilizador  = request.user.utilizador
     pos         = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -981,7 +998,8 @@ def conta_criar(request, pos_id, mesa_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def conta_detalhe(request, pos_id, conta_id):
     utilizador = request.user.utilizador
     pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -990,7 +1008,8 @@ def conta_detalhe(request, pos_id, conta_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def conta_adicionar_item(request, pos_id, conta_id):
     utilizador  = request.user.utilizador
     pos         = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -1043,7 +1062,8 @@ def conta_adicionar_item(request, pos_id, conta_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def conta_remover_item(request, pos_id, conta_id, item_id):
     utilizador = request.user.utilizador
     pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -1063,7 +1083,8 @@ def conta_remover_item(request, pos_id, conta_id, item_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def conta_fechar(request, pos_id, conta_id):
     utilizador = request.user.utilizador
     pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -1090,7 +1111,8 @@ def conta_fechar(request, pos_id, conta_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def contas_ativas(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -1099,7 +1121,8 @@ def contas_ativas(request, pos_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def pos_historico(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -1128,7 +1151,8 @@ def pos_historico(request, pos_id):
 
 
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def item_status_atualizar(request, pos_id, conta_id, item_id):
     utilizador  = request.user.utilizador
     pos         = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -1158,7 +1182,8 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
 # ═══════════════════════════════════════════════════════════════════
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def turno_abrir(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
@@ -1175,7 +1200,8 @@ def turno_abrir(request, pos_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 def turno_fechar(request, pos_id, turno_id):
     utilizador = request.user.utilizador
     pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
