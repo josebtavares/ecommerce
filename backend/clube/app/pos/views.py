@@ -9,6 +9,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -100,6 +101,20 @@ def _get_stock_loja(produto):
     except Exception:
         pass
     return None
+
+
+def _get_pos_for_request(request, pos_id):
+    """Retorna o POS acessível pelo request de conta principal ou membro de equipa."""
+    membro = get_membro_from_request(request)
+    if membro:
+        pos = get_object_or_404(ConfiguracaoPOS, id=pos_id)
+        if pos.id != membro.pos.id:
+            raise Http404()
+        return pos, membro
+
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    return pos, None
 
 
 def _set_stock_loja(produto, stock):
@@ -885,8 +900,7 @@ def produto_apagar(request, pos_id, produto_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def mesas_listar(request, pos_id):
-    utilizador = request.user.utilizador
-    pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro = _get_pos_for_request(request, pos_id)
     mesas = Mesa.objects.filter(pos=pos, ativa=True).order_by('numero')
 
     return Response([
@@ -907,8 +921,10 @@ def mesas_listar(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def mesa_criar(request, pos_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro = _get_pos_for_request(request, pos_id)
+    if membro and not membro.pode_gerir_mesas:
+        return Response({'detail': 'Sem permissão para criar mesas.'}, status=status.HTTP_403_FORBIDDEN)
+
     numero     = request.data.get('numero')
     capacidade = request.data.get('capacidade', 4)
 
@@ -925,8 +941,10 @@ def mesa_criar(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def mesa_abrir(request, pos_id, mesa_id):
-    utilizador = request.user.utilizador
-    pos  = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro = _get_pos_for_request(request, pos_id)
+    if membro and not membro.pode_abrir_mesas:
+        return Response({'detail': 'Sem permissão para abrir mesas.'}, status=status.HTTP_403_FORBIDDEN)
+
     mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
 
     conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
@@ -939,10 +957,12 @@ def mesa_abrir(request, pos_id, mesa_id):
         })
 
     if mesa.status == 'livre':
-        mesa.abrir(utilizador)
+        mesa.abrir(None if membro else request.user.utilizador)
 
     conta = ContaMesa.objects.create(
-        pos=pos, mesa=mesa, atendente=utilizador,
+        pos=pos,
+        mesa=mesa,
+        atendente=None if membro else request.user.utilizador,
         taxa_servico_percentagem=pos.taxa_servico_percentagem if pos.taxa_servico_ativa else Decimal('0.00')
     )
 
@@ -957,8 +977,10 @@ def mesa_abrir(request, pos_id, mesa_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def mesa_apagar(request, pos_id, mesa_id):
-    utilizador = request.user.utilizador
-    pos  = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    pos, membro = _get_pos_for_request(request, pos_id)
+    if membro and not membro.pode_gerir_mesas:
+        return Response({'detail': 'Sem permissão para apagar mesas.'}, status=status.HTTP_403_FORBIDDEN)
+
     mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
 
     if ContaMesa.objects.filter(mesa=mesa, status='aberta').exists():
