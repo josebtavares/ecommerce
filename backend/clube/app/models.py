@@ -401,7 +401,7 @@ class Produto(models.Model):
     ficheiro    = models.FileField(
                     upload_to=produto_upload,
                     validators=[FileExtensionValidator(
-                        ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'webm', 'mov', 'mkv']
+                        ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'webm', 'mov', 'mkv','avif','webp']
                     )],
                     blank=True, null=True
                   )
