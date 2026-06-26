@@ -12,6 +12,7 @@ from .models import (
     TurnoPOS,
     UtilizadorPOS,       # ← NOVO: importar modelo atualizado
 )
+
 from app.models import Loja, Produto, Utilizador
 
 
