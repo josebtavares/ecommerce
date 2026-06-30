@@ -510,12 +510,6 @@ import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 
-import ProductInfoCard   from '@/components/product/productInfoCard.vue'
-import MultiCart         from '@/components/cart/multiCart.vue'
-import ProductSlider     from '@/components/sliders/ProductSlider.vue'
-import Profile           from '@/components/profile/UserProfile.vue'
-import ProductCatalog    from '@/components/catalog/ProductCatalog.vue'
-import AvaliacaoLoja     from '@/components/avaliacao/avaliacaoLoja.vue'
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
 
