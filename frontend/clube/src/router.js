@@ -12,6 +12,13 @@ import GoogleCallback from './views/google/GoogleCallback.vue';
 import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 
 
+
+// POS Components
+import POSRegister from '@/views/pos/POSRegister.vue'
+import POSLogin from '@/views/pos/POSLogin.vue'
+import POSDashboard from '@/views/pos/POSDashboard.vue'
+
+
 const routes = [
     {
         path: '/Login',
@@ -75,7 +82,28 @@ const routes = [
         name: 'FlutterwaveCallback',
         component: FlutterwaveCallback,
     },
-
+    {
+        path: '/pos/register',
+        name: 'POSRegister',
+        component: POSRegister,
+        meta: { title: 'Criar Conta POS' }
+    },
+    {
+        path: '/pos/login',
+        name: 'POSLogin',
+        component: POSLogin,
+        meta: { title: 'Login POS' }
+    },
+    {
+        path: '/pos/dashboard',
+        name: 'POSDashboard',
+        component: POSDashboard,
+        meta: { 
+            title: 'Dashboard POS',
+            requiresPOSAuth: true  // Nova flag para autenticação POS
+        }
+    }
+    
     // Add other routes here
 ];
 

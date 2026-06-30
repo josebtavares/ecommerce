@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'axes',
     # local
     'app',
+    'app.pos', 
 ]
 
 MIDDLEWARE = [
