@@ -11,6 +11,10 @@ const PUBLIC_URLS = [
   '/app/utilizador/recuperar_senha/',
   '/app/utilizador/recuperar_senha/confirmar/',
   '/api/token/refresh/',
+
+   // POS
+  '/api/pos/login/',
+  '/api/pos/register/',
 ];
 
 const isPublic = (url) => PUBLIC_URLS.some(pub => url?.includes(pub));

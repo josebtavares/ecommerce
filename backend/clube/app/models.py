@@ -205,6 +205,15 @@ class Loja(models.Model):
         default=False,
         help_text='A loja tem Flutterwave configurado e activo'
     )
+    
+    pos_ativo = models.BooleanField(
+        default=False,
+        verbose_name='POS Ativo'
+    )
+    
+    efatura_ativo = models.BooleanField(default=False)
+    efatura_nif = models.CharField(max_length=20, blank=True)
+    efatura_api_key = models.CharField(max_length=200, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -392,7 +401,7 @@ class Produto(models.Model):
     ficheiro    = models.FileField(
                     upload_to=produto_upload,
                     validators=[FileExtensionValidator(
-                        ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'webm', 'mov', 'mkv']
+                        ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'webm', 'mov', 'mkv','avif','webp']
                     )],
                     blank=True, null=True
                   )
@@ -407,6 +416,11 @@ class Produto(models.Model):
     destaque    = models.BooleanField(default=False)
     ativo       = models.BooleanField(default=True)
     data_criacao= models.DateTimeField(auto_now_add=True)
+    
+    disponivel_pos = models.BooleanField(
+        default=True,
+        verbose_name='Disponível no POS'
+    )
 
     class Meta:
         ordering = ['-data_criacao']

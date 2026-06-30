@@ -89,10 +89,10 @@
           
           <!-- Tabs -->
           <div class="flex gap-2 mt-4">
-            <button @click="activeTab = 'pesquisar'" :class="['flex-1 py-2 rounded-lg text-sm font-semibold transition', activeTab === 'pesquisar' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+            <button @click="mudarTab('pesquisar')" :class="['flex-1 py-2 rounded-lg text-sm font-semibold transition', activeTab === 'pesquisar' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
               Pesquisar existente
             </button>
-            <button @click="activeTab = 'criar'" :class="['flex-1 py-2 rounded-lg text-sm font-semibold transition', activeTab === 'criar' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+            <button @click="mudarTab('criar')" :class="['flex-1 py-2 rounded-lg text-sm font-semibold transition', activeTab === 'criar' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
               Criar novo
             </button>
           </div>
@@ -106,46 +106,62 @@
             
             <!-- Barra de pesquisa -->
             <div class="relative">
-              <input v-model="pesquisaUtilizador" @input="debouncedPesquisa" type="text" placeholder="Username, email ou nome..." class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 pr-8" />
+              <input v-model="pesquisaUtilizador" @input="debouncedPesquisa" type="text" placeholder="Pesquisar por username, email ou nome..." class="w-full px-3 py-2.5 pl-10 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 pr-8" />
+              <svg class="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
               <svg v-if="loadingPesquisa" class="animate-spin h-4 w-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
                 <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
               </svg>
             </div>
 
+            <!-- Loading inicial -->
+            <div v-if="loadingInicial" class="space-y-2">
+              <div v-for="n in 5" :key="n" class="h-14 bg-zinc-800 rounded-xl animate-pulse"></div>
+            </div>
+
             <!-- Lista de resultados -->
-            <div v-if="resultadosPesquisa.length > 0" class="space-y-2 max-h-80 overflow-y-auto">
+            <div v-else-if="resultadosPesquisa.length > 0" class="space-y-2 max-h-96 overflow-y-auto pr-1">
               <button v-for="u in resultadosPesquisa" :key="u.id" @click="selecionarUtilizador(u)" :class="['w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition text-left', utilizadorSelecionado?.id === u.id ? 'bg-red-500/20 border-2 border-red-500' : 'bg-zinc-800 hover:bg-zinc-700 border-2 border-transparent']">
-                <div class="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                <div class="w-9 h-9 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
                   <span class="text-sm font-bold text-zinc-300">{{ u.nome?.charAt(0) || u.username?.charAt(0) }}</span>
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-zinc-200 truncate">{{ u.nome }}</p>
                   <p class="text-xs text-zinc-500 truncate">@{{ u.username }} · {{ u.email }}</p>
                 </div>
+                <svg v-if="utilizadorSelecionado?.id === u.id" class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
               </button>
             </div>
 
+            <!-- Sem resultados -->
+            <div v-else class="text-center py-12">
+              <svg class="w-12 h-12 mx-auto text-zinc-700 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <p class="text-sm text-zinc-500">{{ pesquisaUtilizador ? 'Nenhum utilizador encontrado' : 'Nenhum utilizador disponível' }}</p>
+              <p v-if="pesquisaUtilizador" class="text-xs text-zinc-600 mt-1">Tenta pesquisar por outro termo</p>
+            </div>
+
             <!-- Load more -->
-            <button v-if="hasMoreResults" @click="carregarMais" :disabled="loadingMore" class="w-full py-2 rounded-lg bg-zinc-800 text-zinc-400 text-sm hover:bg-zinc-700 transition flex items-center justify-center gap-2 disabled:opacity-50">
+            <button v-if="hasMoreResults && !loadingInicial" @click="carregarMais" :disabled="loadingMore" class="w-full py-2.5 rounded-lg bg-zinc-800 text-zinc-400 text-sm hover:bg-zinc-700 transition flex items-center justify-center gap-2 disabled:opacity-50">
               <svg v-if="loadingMore" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
                 <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
               </svg>
-              {{ loadingMore ? 'A carregar...' : 'Carregar mais' }}
+              {{ loadingMore ? 'A carregar...' : `Carregar mais (${totalCount - resultadosPesquisa.length} restantes)` }}
             </button>
 
-            <p v-if="pesquisaUtilizador && resultadosPesquisa.length === 0 && !loadingPesquisa" class="text-xs text-zinc-500 text-center py-4">
-              Nenhum utilizador encontrado.
-            </p>
-
             <!-- Role -->
-            <div v-if="utilizadorSelecionado">
-              <label class="text-xs text-zinc-500 mb-1 block">Role</label>
-              <select v-model="novoRole" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+            <div v-if="utilizadorSelecionado" class="pt-4 border-t border-zinc-800">
+              <label class="text-xs text-zinc-500 mb-1.5 block">Role na loja</label>
+              <select v-model="novoRole" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
                 <option v-for="r in roles" :key="r.value" :value="r.value">{{ r.label }}</option>
               </select>
-              <p class="text-xs text-zinc-600 mt-1">{{ rolesInfo.find(r => r.role === novoRole)?.descricao }}</p>
+              <p class="text-xs text-zinc-600 mt-1.5">{{ rolesInfo.find(r => r.role === novoRole)?.descricao }}</p>
             </div>
           </div>
 
@@ -233,12 +249,13 @@ export default {
       loadingAdicionar: false,
       erroAdicionar: '',
 
-      activeTab: 'pesquisar', // 'pesquisar' | 'criar'
+      activeTab: 'pesquisar',
 
       // pesquisa
       pesquisaUtilizador: '',
       resultadosPesquisa: [],
       loadingPesquisa: false,
+      loadingInicial: false,
       utilizadorSelecionado: null,
       debounceTimer: null,
       offset: 0,
@@ -299,11 +316,14 @@ export default {
       return map[role] || 'bg-zinc-500/20 text-zinc-400'
     },
 
-    abrirModal () {
+    async abrirModal () {
       this.showModal = true
       this.activeTab = 'pesquisar'
       this.erroAdicionar = ''
       this.limparFormularios()
+      
+      // Carregar lista inicial de utilizadores
+      await this.carregarUtilizadoresIniciais()
     },
 
     fecharModal () {
@@ -330,15 +350,51 @@ export default {
       this.novoRole = 'staff'
     },
 
+    async mudarTab (tab) {
+      this.activeTab = tab
+      if (tab === 'pesquisar' && this.resultadosPesquisa.length === 0 && !this.pesquisaUtilizador) {
+        await this.carregarUtilizadoresIniciais()
+      }
+    },
+
+    async carregarUtilizadoresIniciais () {
+      this.loadingInicial = true
+      this.offset = 0
+      try {
+        const { data } = await api.get('/app/utilizador/search/?q=&offset=0&limit=20')
+        const idsStaff = this.staff.map(m => m.utilizador?.id)
+        this.resultadosPesquisa = data.results.filter(u => !idsStaff.includes(u.id))
+        this.totalCount = data.count
+        this.offset = 20
+        this.hasMoreResults = data.next_offset !== null
+      } catch (e) {
+        console.error(e)
+        this.resultadosPesquisa = []
+      } finally {
+        this.loadingInicial = false
+      }
+    },
+
     selecionarUtilizador (u) {
-      this.utilizadorSelecionado = u
+      if (this.utilizadorSelecionado?.id === u.id) {
+        this.utilizadorSelecionado = null
+      } else {
+        this.utilizadorSelecionado = u
+      }
     },
 
     debouncedPesquisa () {
       clearTimeout(this.debounceTimer)
-      this.resultadosPesquisa = []
       this.utilizadorSelecionado = null
+      
+      if (this.pesquisaUtilizador.length === 0) {
+        // Se limpar a pesquisa, recarrega a lista inicial
+        this.carregarUtilizadoresIniciais()
+        return
+      }
+      
       if (this.pesquisaUtilizador.length < 2) return
+      
       this.debounceTimer = setTimeout(() => this.pesquisarUtilizadores(), 400)
     },
 
@@ -444,13 +500,11 @@ export default {
       this.loadingAdicionar = true
       try {
         if (this.activeTab === 'pesquisar') {
-          // Adicionar utilizador existente
           await api.post(`/app/loja/${this.lojaId}/staff/adicionar/`, {
             utilizador_id: this.utilizadorSelecionado.id,
             role: this.novoRole,
           })
         } else {
-          // Criar novo utilizador + adicionar
           await api.post(`/app/loja/${this.lojaId}/staff/criar-utilizador/`, {
             ...this.novoUtilizador,
             role: this.novoRole,
