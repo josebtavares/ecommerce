@@ -75,6 +75,32 @@
           </div>
 
           <template v-else-if="detalhes[enc.id]">
+
+            <!-- ── CONTACTO DO CLIENTE ── -->
+            <div class="bg-zinc-800/50 rounded-xl p-3 space-y-1.5">
+              <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Contacto do cliente</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-zinc-500 w-16 flex-shrink-0">👤 Nome:</span>
+                <span class="text-zinc-200 font-semibold">{{ detalhes[enc.id].comprador_nome || detalhes[enc.id].comprador_username }}</span>
+              </div>
+              <div v-if="detalhes[enc.id].comprador_email" class="flex items-center gap-2 text-xs">
+                <span class="text-zinc-500 w-16 flex-shrink-0">✉️ Email:</span>
+                <a :href="`mailto:${detalhes[enc.id].comprador_email}`"
+                   class="text-red-400 hover:text-red-300 transition underline">
+                  {{ detalhes[enc.id].comprador_email }}
+                </a>
+              </div>
+              <div v-if="detalhes[enc.id].comprador_telefone" class="flex items-center gap-2 text-xs">
+                <span class="text-zinc-500 w-16 flex-shrink-0">📞 Tel:</span>
+                <a :href="`tel:${detalhes[enc.id].comprador_telefone}`"
+                   class="text-red-400 hover:text-red-300 transition underline">
+                  {{ detalhes[enc.id].comprador_telefone }}
+                </a>
+              </div>
+              <div v-if="!detalhes[enc.id].comprador_email && !detalhes[enc.id].comprador_telefone"
+                   class="text-xs text-zinc-600 italic">Sem contacto disponível</div>
+            </div>
+
             <!-- Itens -->
             <div>
               <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Produtos</p>
@@ -103,11 +129,11 @@
             <div v-if="detalhes[enc.id].morada_entrega || detalhes[enc.id].notas"
                  class="border-t border-zinc-800 pt-3 space-y-1 text-xs">
               <div v-if="detalhes[enc.id].morada_entrega" class="flex gap-2">
-                <span class="text-zinc-500 flex-shrink-0">Morada:</span>
+                <span class="text-zinc-500 flex-shrink-0">📍 Morada:</span>
                 <span class="text-zinc-300">{{ detalhes[enc.id].morada_entrega }}</span>
               </div>
               <div v-if="detalhes[enc.id].notas" class="flex gap-2">
-                <span class="text-zinc-500 flex-shrink-0">Notas:</span>
+                <span class="text-zinc-500 flex-shrink-0">📝 Notas:</span>
                 <span class="text-zinc-300 italic">{{ detalhes[enc.id].notas }}</span>
               </div>
             </div>
@@ -214,22 +240,32 @@
           </button>
         </div>
 
+        <!-- Info cliente no modal -->
+        <div v-if="modalCondutor.comprador_email || modalCondutor.comprador_telefone"
+             class="bg-zinc-800/50 rounded-xl p-3 space-y-1 text-xs">
+          <p class="text-zinc-500 font-semibold mb-1">Cliente</p>
+          <div v-if="modalCondutor.comprador_email" class="flex items-center gap-2">
+            <span class="text-zinc-500">✉️</span>
+            <span class="text-zinc-300">{{ modalCondutor.comprador_email }}</span>
+          </div>
+          <div v-if="modalCondutor.comprador_telefone" class="flex items-center gap-2">
+            <span class="text-zinc-500">📞</span>
+            <span class="text-zinc-300">{{ modalCondutor.comprador_telefone }}</span>
+          </div>
+        </div>
+
         <!-- Lista condutores -->
         <div>
           <p class="text-xs text-zinc-500 mb-3">Selecciona um condutor (opcional):</p>
-
           <div v-if="loadingCondutores" class="space-y-2">
             <div v-for="n in 3" :key="n" class="h-12 bg-zinc-800 rounded-xl animate-pulse"></div>
           </div>
-
           <div v-else-if="condutores.length === 0"
                class="text-center py-6 text-zinc-500 text-sm bg-zinc-800/50 rounded-xl">
             <p>Sem condutores disponíveis.</p>
             <p class="text-xs mt-1 text-zinc-600">Podes enviar sem atribuir condutor.</p>
           </div>
-
           <div v-else class="space-y-2">
-            <!-- Opção sem condutor -->
             <button @click="condutorSelecionado = null"
               :class="['w-full flex items-center gap-3 p-3 rounded-xl border-2 transition text-left',
                        condutorSelecionado === null ? 'border-zinc-500 bg-zinc-800' : 'border-zinc-700 hover:border-zinc-600']">
@@ -244,8 +280,6 @@
               </div>
               <div v-if="condutorSelecionado === null" class="ml-auto w-4 h-4 rounded-full bg-zinc-500 flex-shrink-0"></div>
             </button>
-
-            <!-- Condutores disponíveis -->
             <button v-for="c in condutores" :key="c.id"
               @click="condutorSelecionado = c.id"
               :class="['w-full flex items-center gap-3 p-3 rounded-xl border-2 transition text-left',
@@ -262,7 +296,6 @@
           </div>
         </div>
 
-        <!-- Botões -->
         <div class="flex gap-3 pt-2">
           <button @click="modalCondutor = null"
             class="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
@@ -327,7 +360,6 @@ export default {
         { value: 'concluido', label: 'Concluídas', active: 'bg-green-500/20 text-green-400'   },
         { value: 'cancelado', label: 'Canceladas', active: 'bg-red-500/20 text-red-400'       },
       ],
-      // modal condutor
       modalCondutor:      null,
       condutores:         [],
       condutorSelecionado: null,
@@ -363,10 +395,8 @@ export default {
       return map[s] || 'bg-zinc-500/15 text-zinc-400'
     },
 
-    // filtra estados disponíveis consoante o tipo de entrega
     estadosDisponiveis (enc) {
       if (enc.tipo_entrega === 'levantamento') {
-        // takeaway: sem "enviado"
         return this.todosEstados.filter(s => s.value !== 'enviado')
       }
       return this.todosEstados
@@ -424,40 +454,32 @@ export default {
       finally { this.loadingDetalhe = null }
     },
 
-    // ── Intercept click em estado ───────────────────────────
     clicarEstado (enc, novoStatus) {
       if (novoStatus === enc.status) return
       if (this.estadosBloqueados.includes(enc.status)) return
-
-      // transições válidas — não pode retroceder após enviado
       const ordemEstados = ['pendente', 'pago', 'preparando', 'enviado', 'concluido']
       const idxActual = ordemEstados.indexOf(enc.status)
       const idxNovo   = ordemEstados.indexOf(novoStatus)
-
-      // permite cancelar em qualquer estado não bloqueado
-      // não permite retroceder (ex: enviado → preparando)
       if (novoStatus !== 'cancelado' && idxNovo < idxActual) {
         alert('Não é possível retroceder o estado de uma encomenda já enviada.')
         return
       }
-
-      // takeaway não pode ir para "enviado"
-      if (novoStatus === 'enviado' && enc.tipo_entrega === 'levantamento') {
-        return
-      }
-
-      // se é entrega ao domicílio e vai para "enviado" → abre modal condutor
+      if (novoStatus === 'enviado' && enc.tipo_entrega === 'levantamento') return
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'entrega') {
         this.abrirModalCondutor(enc)
         return
       }
-
-      // caso contrário muda directamente
       this.mudarStatus(enc, novoStatus)
     },
 
     async abrirModalCondutor (enc) {
-      this.modalCondutor = { ...enc, morada_entrega: this.detalhes[enc.id]?.morada_entrega || '' }
+      const detalhe = this.detalhes[enc.id] || {}
+      this.modalCondutor = {
+        ...enc,
+        morada_entrega:      detalhe.morada_entrega      || '',
+        comprador_email:     detalhe.comprador_email     || '',
+        comprador_telefone:  detalhe.comprador_telefone  || '',
+      }
       this.condutorSelecionado = null
       this.loadingCondutores = true
       try {
@@ -476,15 +498,10 @@ export default {
       this.loadingEnvio = true
       const encId = this.modalCondutor.id
       try {
-        // 1 — cria entrega (com ou sem condutor)
         const payload = {}
         if (this.condutorSelecionado) payload.condutor_id = this.condutorSelecionado
         await api.post(`/app/loja/${this.lojaId}/encomendas/${encId}/entrega/criar/`, payload)
-
-        // 2 — muda status para enviado via API
         await api.patch(`/app/loja/${this.lojaId}/encomendas/${encId}/status/`, { status: 'enviado' })
-
-        // 3 — actualiza a lista e detalhes localmente usando a referência real
         const encReal = this.encomendas.find(e => e.id === encId)
         if (encReal) {
           this.contagem = {
@@ -496,18 +513,15 @@ export default {
         }
         if (this.detalhes[encId]) {
           this.detalhes[encId].status = 'enviado'
-          // actualiza também o condutor no detalhe expandido
           if (this.condutorSelecionado) {
             const condutor = this.condutores.find(c => c.id === this.condutorSelecionado)
             if (condutor) this.detalhes[encId].entrega_condutor = condutor.nome
             this.detalhes[encId].entrega_status = 'atribuido'
           }
         }
-
         this.modalCondutor = null
       } catch (e) {
         console.error(e)
-        // em caso de erro, re-busca para ter estado consistente
         await this.fetchEncomendas()
         await this.fetchContagens()
         this.modalCondutor = null

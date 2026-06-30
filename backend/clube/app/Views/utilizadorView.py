@@ -380,37 +380,44 @@ def password_reset_confirm(request):
 @permission_classes([IsAuthenticated])
 def utilizador_search(request):
     """
-    GET /app/utilizador/search/?q=joao
-    Pesquisa utilizadores por username ou email.
-    Qualquer utilizador autenticado pode usar — serve para adicionar staff.
-    Devolve apenas dados públicos (id, username, nome, email).
+    GET /app/utilizador/search/?q=joao&offset=0&limit=20
     """
     q = request.query_params.get('q', '').strip()
-    if len(q) < 2:
-        return Response(
-            {'detail': 'Pesquisa deve ter pelo menos 2 caracteres.'},
-            status=status.HTTP_400_BAD_REQUEST
+    
+    try:
+        offset = max(int(request.query_params.get('offset', 0)), 0)
+        limit = min(int(request.query_params.get('limit', 20)), 50)
+    except ValueError:
+        return Response({'detail': 'offset/limit inválidos.'}, status=400)
+
+    qs = Utilizador.objects.select_related('user').filter(status='ativo')
+    
+    if q:
+        qs = qs.filter(
+            Q(user__username__icontains=q) |
+            Q(user__email__icontains=q) |
+            Q(user__first_name__icontains=q) |
+            Q(user__last_name__icontains=q)
         )
- 
-    utilizadores = Utilizador.objects.select_related('user').filter(
-        Q(user__username__icontains=q) |
-        Q(user__email__icontains=q) |
-        Q(user__first_name__icontains=q) |
-        Q(user__last_name__icontains=q)
-    ).exclude(
-        user=request.user  # exclui o próprio utilizador
-    ).filter(status='ativo')[:10]
- 
-    results = [
-        {
-            'id':       u.id,
-            'username': u.user.username,
-            'nome':     u.nome,
-            'email':    u.user.email,
-        }
-        for u in utilizadores
-    ]
-    return Response(results, status=status.HTTP_200_OK)
+
+    qs = qs.exclude(user=request.user)
+    
+    total = qs.count()
+    results = qs[offset:offset + limit]
+
+    return Response({
+        'count': total,
+        'next_offset': offset + limit if offset + limit < total else None,
+        'results': [
+            {
+                'id': u.id,
+                'username': u.user.username,
+                'nome': u.nome,
+                'email': u.user.email,
+            }
+            for u in results
+        ]
+    })
 
 
 @api_view(['GET'])
@@ -504,13 +511,13 @@ def google_callback(request):
     try:
         utilizador = user.utilizador
         # marcar como verificado se ainda não estava
-        if not utilizador.verificado:
-            utilizador.verificado = True
-            utilizador.save(update_fields=['verificado'])
+        # if not utilizador.verificado:
+        #     utilizador.verificado = True
+        #     utilizador.save(update_fields=['verificado'])
     except Utilizador.DoesNotExist:
         utilizador = Utilizador.objects.create(
             user=user,
-            verificado=True,
+            verificado=False,
         )
         # Download da foto do Google
         if foto_url:

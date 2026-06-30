@@ -20,8 +20,15 @@
     <template v-else-if="loja">
       <!-- ── HERO ── -->
       <section class="relative h-[55vh] min-h-[360px] overflow-hidden">
-        <img :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
-             :alt="loja.nome" class="w-full h-full object-cover" />
+        <video v-if="isVideo(loja.banner_url)"
+          :src="loja.banner_url"
+          class="w-full h-full object-cover"
+          autoplay muted loop playsinline></video>
+        <img v-else
+          :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+          :alt="loja.nome" class="w-full h-full object-cover" />
+
+            
         <div class="absolute inset-0 bg-gradient-to-t"
              :class="isDark ? 'from-zinc-950 via-zinc-950/50 to-transparent' : 'from-gray-900/80 via-gray-900/30 to-transparent'"/>
 
@@ -341,7 +348,11 @@ export default {
       emit('toggle-dark', isDark.value)  // avisa o LojaPublica.vue para guardar no localStorage
     }
 
-    return { isDark, cssVars, user, toggleDark, ...lojaData }
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
+    }
+
+    return { isDark, cssVars, user, toggleDark, isVideo, ...lojaData }
   }
 }
 </script>

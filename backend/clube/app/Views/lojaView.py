@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from ..Views.notificacaoView import notificar_admins, notificar, notificar_staff
-from ..models import Loja, UtilizadorLoja, Utilizador
+from ..models import Loja, UtilizadorLoja, Utilizador, User
 from ..Serializers.LojaSerializer import (
     LojaSerializer,
     LojaPublicSerializer,
@@ -90,8 +90,18 @@ def loja_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def loja_get(request, id):
-    """GET /app/loja/<id>/"""
-    loja = get_object_or_404(Loja, id=id, ativa=True)
+    loja = get_object_or_404(Loja, id=id)
+    
+    # loja inactiva — só o dono/staff pode ver
+    if not loja.ativa:
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Loja não encontrada.'}, status=404)
+        membro = UtilizadorLoja.objects.filter(
+            loja=loja, utilizador=request.user.utilizador, ativo=True
+        ).first()
+        if not membro and not request.user.is_staff:
+            return Response({'detail': 'Loja não encontrada.'}, status=404)
+    
     return Response(LojaPublicSerializer(loja, context={'request': request}).data)
 
 
@@ -465,7 +475,7 @@ def categoria_list(request):
 def metodos_pagamento_publico(request, loja_id):
     """GET /app/loja/<loja_id>/pagamento/metodos/"""
     from ..models import MetodoPagamento
-    loja = get_object_or_404(Loja, id=loja_id, ativa=True)
+    loja = get_object_or_404(Loja, id=loja_id)
     metodos = MetodoPagamento.objects.filter(loja=loja, ativo=True)
     return Response([{'id': m.id, 'tipo': m.tipo, 'ativo': m.ativo} for m in metodos])
 
@@ -612,3 +622,67 @@ def loja_dashboard(request, loja_id):
         'entregas_falhadas':    entregas_falhadas,
         'taxa_entrega':         taxa_entrega,
     })
+    
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def staff_criar_utilizador(request, loja_id):
+    """
+    POST /app/loja/<loja_id>/staff/criar-utilizador/
+    Cria utilizador novo + adiciona à loja com role especificado
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_staff')
+    if erro:
+        return erro
+
+    # Validar dados do utilizador
+    username = request.data.get('username', '').strip()
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '')
+    role = request.data.get('role', 'staff')
+
+    if not username or not email or not password:
+        return Response({'detail': 'Username, email e password são obrigatórios.'}, status=400)
+
+    if User.objects.filter(username=username).exists():
+        return Response({'detail': 'Username já existe.'}, status=400)
+    
+    if User.objects.filter(email=email).exists():
+        return Response({'detail': 'Email já está registado.'}, status=400)
+
+    # Criar User Django
+    user = User.objects.create_user(
+        username=username,
+        email=email,
+        password=password,
+        first_name=request.data.get('first_name', ''),
+        last_name=request.data.get('last_name', '')
+    )
+
+    # Criar Utilizador
+    utilizador = Utilizador.objects.create(
+        user=user,
+        telefone=request.data.get('telefone', ''),
+        morada=request.data.get('morada', ''),
+        verificado=False  # criado por gestor → não verificado
+    )
+
+    # Adicionar à loja com role
+    membro = UtilizadorLoja.objects.create(
+        loja=loja,
+        utilizador=utilizador,
+        role=role,
+        ativo=True
+    )
+
+    if role == 'condutor':
+        _sincronizar_condutor(loja, utilizador, request.data.get('tipo_veiculo', ''))
+
+    _notificar_novo_staff(utilizador, loja, role)
+
+    return Response(
+        UtilizadorLojaSerializer(membro, context={'request': request}).data,
+        status=201
+    )
