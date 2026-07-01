@@ -1351,3 +1351,23 @@ def pos_equipa_membro(request, pos_id, membro_id):
     if request.method == 'DELETE':
         membro.delete()
         return Response({'detail': 'Membro removido.'}, status=204)
+    
+    
+# views.py — adicionar esta função
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pos_verificar_username(request, pos_id):
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    username = (request.GET.get('username') or '').strip().lower()
+    if not username:
+        return Response({'disponivel': False, 'sugestoes': []})
+    existe = UtilizadorPOS.objects.filter(pos=pos, username_pos__iexact=username).exists()
+    if not existe:
+        return Response({'disponivel': True, 'sugestoes': []})
+    existentes = set(UtilizadorPOS.objects.filter(pos=pos).values_list('username_pos', flat=True))
+    sugestoes = []
+    for candidato in [f'{username}2', f'{username}3', f'{username}_{pos.id}', f'{username[0:8]}_{len(username)}']:
+        if candidato not in existentes and len(sugestoes) < 3:
+            sugestoes.append(candidato)
+    return Response({'disponivel': False, 'sugestoes': sugestoes})
