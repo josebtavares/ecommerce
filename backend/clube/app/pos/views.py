@@ -776,11 +776,18 @@ def pos_produtos(request, pos_id):
 
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 @transaction.atomic
 def produto_criar(request, pos_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id, ativo=True)
+
+    # Membros precisam de permissão explícita
+    if membro and not membro.pode_gerir_produtos:
+        return Response(
+            {'detail': 'Sem permissão para gerir produtos.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     origem         = request.data.get('origem') or ('loja' if pos.modo == 'integrado' else 'pos')
     nome           = (request.data.get('nome') or '').strip()
@@ -790,7 +797,7 @@ def produto_criar(request, pos_id):
     imagem         = request.FILES.get('imagem') or request.FILES.get('ficheiro')
     ativo          = _str_to_bool(request.data.get('ativo'), True)
     disponivel_pos = _str_to_bool(request.data.get('disponivel_pos'), True)
-    controlar_stock= _str_to_bool(request.data.get('controlar_stock'), False)
+    controlar_stock = _str_to_bool(request.data.get('controlar_stock'), False)
     stock          = int(request.data.get('stock', 0) or 0)
 
     if not nome or preco is None:
@@ -808,6 +815,14 @@ def produto_criar(request, pos_id):
         return Response(_produto_pos_payload(produto, request), status=status.HTTP_201_CREATED)
 
     if origem == 'loja':
+        # Membros não podem criar produtos na loja Bendi —
+        # isso afecta o catálogo público online, responsabilidade do dono
+        if membro:
+            return Response(
+                {'detail': 'Membros só podem criar produtos próprios do POS, não da loja Bendi.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'POS precisa estar integrado ou híbrido.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -842,14 +857,22 @@ def produto_criar(request, pos_id):
 
     return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
 
-
 @api_view(['PUT', 'PATCH'])
 @parser_classes([MultiPartParser, FormParser])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])   # ← substituir IsAuthenticated
+@permission_classes([IsPOSAuthenticated])       # ← substituir IsAuthenticated
 @transaction.atomic
 def produto_atualizar(request, pos_id, produto_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    # ← substituir as duas primeiras linhas por isto:
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id, ativo=True)
+
+    # Membros precisam de permissão explícita
+    if membro and not membro.pode_gerir_produtos:
+        return Response(
+            {'detail': 'Sem permissão para gerir produtos.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
     origem = request.data.get('origem') or request.GET.get('origem') or 'pos'
 
     if origem == 'pos':
@@ -879,6 +902,13 @@ def produto_atualizar(request, pos_id, produto_id):
         return Response(_produto_pos_payload(produto, request))
 
     if origem == 'loja':
+        # Membros não gerem produtos da loja Bendi directamente
+        if membro:
+            return Response(
+                {'detail': 'Membros não podem gerir produtos da loja Bendi.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'Este POS não está ligado a uma loja.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -915,7 +945,6 @@ def produto_atualizar(request, pos_id, produto_id):
         return Response(_produto_loja_payload(produto, request))
 
     return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
-
 
 @api_view(['DELETE'])
 @authentication_classes([POSAuthentication])
