@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'channels',
     'axes',
+    'django_ratelimit', 
     # local
     'app',
     'app.pos', 
@@ -209,6 +210,9 @@ CACHES = {
         }
     }
 }
+
+RATELIMIT_USE_CACHE = 'default'   # usa o Redis já configurado
+RATELIMIT_ENABLE    = True        # desativar em testes com RATELIMIT_ENABLE=False
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
