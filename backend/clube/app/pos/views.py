@@ -57,6 +57,44 @@ from .permissions import (
 
 from rest_framework.decorators import authentication_classes
 
+# ── Rate limiting ──────────────────────────────────────────────────
+from django_ratelimit.core import is_ratelimited
+from functools import wraps
+from django.http import Http404
+
+ 
+ 
+def pos_ratelimit(key='ip', rate='10/m', method='POST'):
+    """
+    Decorator de rate limiting compatível com DRF.
+    Devolve Response 429 em vez de HttpResponse Django.
+ 
+    Limites aplicados:
+      pos_login        → 10/min por IP, 5/min por email
+      pos_membro_login → 15/min por IP
+      pos_register     → 5/hora por IP
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapped(request, *args, **kwargs):
+            limited = is_ratelimited(
+                request=request,
+                group=f'pos_{func.__name__}',
+                key=key,
+                rate=rate,
+                method=method,
+                increment=True,
+            )
+            if limited:
+                return Response(
+                    {'detail': 'Demasiadas tentativas. Aguarda um momento antes de tentar novamente.'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+            return func(request, *args, **kwargs)
+        return wrapped
+    return decorator
+ 
+
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPERS
@@ -302,6 +340,8 @@ def _conta_payload(conta, request=None):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@pos_ratelimit(key='ip', rate='10/m')
+@pos_ratelimit(key='post:email', rate='5/m')
 def pos_login(request):
     """
     Login de conta principal (dono do POS).
@@ -382,6 +422,7 @@ def pos_login(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@pos_ratelimit(key='ip', rate='15/m') 
 def pos_membro_login(request):
     """
     Login de membro de equipa.
@@ -498,6 +539,7 @@ def pos_membro_login(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@pos_ratelimit(key='ip', rate='5/h')
 def pos_register(request):
     """Registo de conta principal."""
     first_name = request.data.get('first_name', '').strip()
@@ -734,11 +776,18 @@ def pos_produtos(request, pos_id):
 
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
 @transaction.atomic
 def produto_criar(request, pos_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id, ativo=True)
+
+    # Membros precisam de permissão explícita
+    if membro and not membro.pode_gerir_produtos:
+        return Response(
+            {'detail': 'Sem permissão para gerir produtos.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     origem         = request.data.get('origem') or ('loja' if pos.modo == 'integrado' else 'pos')
     nome           = (request.data.get('nome') or '').strip()
@@ -748,7 +797,7 @@ def produto_criar(request, pos_id):
     imagem         = request.FILES.get('imagem') or request.FILES.get('ficheiro')
     ativo          = _str_to_bool(request.data.get('ativo'), True)
     disponivel_pos = _str_to_bool(request.data.get('disponivel_pos'), True)
-    controlar_stock= _str_to_bool(request.data.get('controlar_stock'), False)
+    controlar_stock = _str_to_bool(request.data.get('controlar_stock'), False)
     stock          = int(request.data.get('stock', 0) or 0)
 
     if not nome or preco is None:
@@ -766,6 +815,14 @@ def produto_criar(request, pos_id):
         return Response(_produto_pos_payload(produto, request), status=status.HTTP_201_CREATED)
 
     if origem == 'loja':
+        # Membros não podem criar produtos na loja Bendi —
+        # isso afecta o catálogo público online, responsabilidade do dono
+        if membro:
+            return Response(
+                {'detail': 'Membros só podem criar produtos próprios do POS, não da loja Bendi.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'POS precisa estar integrado ou híbrido.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -800,14 +857,22 @@ def produto_criar(request, pos_id):
 
     return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
 
-
 @api_view(['PUT', 'PATCH'])
 @parser_classes([MultiPartParser, FormParser])
-@permission_classes([IsAuthenticated])
+@authentication_classes([POSAuthentication])   # ← substituir IsAuthenticated
+@permission_classes([IsPOSAuthenticated])       # ← substituir IsAuthenticated
 @transaction.atomic
 def produto_atualizar(request, pos_id, produto_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    # ← substituir as duas primeiras linhas por isto:
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id, ativo=True)
+
+    # Membros precisam de permissão explícita
+    if membro and not membro.pode_gerir_produtos:
+        return Response(
+            {'detail': 'Sem permissão para gerir produtos.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
     origem = request.data.get('origem') or request.GET.get('origem') or 'pos'
 
     if origem == 'pos':
@@ -837,6 +902,13 @@ def produto_atualizar(request, pos_id, produto_id):
         return Response(_produto_pos_payload(produto, request))
 
     if origem == 'loja':
+        # Membros não gerem produtos da loja Bendi directamente
+        if membro:
+            return Response(
+                {'detail': 'Membros não podem gerir produtos da loja Bendi.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'Este POS não está ligado a uma loja.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -874,13 +946,13 @@ def produto_atualizar(request, pos_id, produto_id):
 
     return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
 
-
 @api_view(['DELETE'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def produto_apagar(request, pos_id, produto_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id, ativo=True)
+    if membro and not membro.pode_gerir_produtos:
+        return Response({'detail': 'Sem permissão.'}, status=403)
     origem = request.GET.get('origem') or request.data.get('origem') or 'pos'
 
     if origem == 'pos':
@@ -1351,3 +1423,23 @@ def pos_equipa_membro(request, pos_id, membro_id):
     if request.method == 'DELETE':
         membro.delete()
         return Response({'detail': 'Membro removido.'}, status=204)
+    
+    
+# views.py — adicionar esta função
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pos_verificar_username(request, pos_id):
+    utilizador = request.user.utilizador
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    username = (request.GET.get('username') or '').strip().lower()
+    if not username:
+        return Response({'disponivel': False, 'sugestoes': []})
+    existe = UtilizadorPOS.objects.filter(pos=pos, username_pos__iexact=username).exists()
+    if not existe:
+        return Response({'disponivel': True, 'sugestoes': []})
+    existentes = set(UtilizadorPOS.objects.filter(pos=pos).values_list('username_pos', flat=True))
+    sugestoes = []
+    for candidato in [f'{username}2', f'{username}3', f'{username}_{pos.id}', f'{username[0:8]}_{len(username)}']:
+        if candidato not in existentes and len(sugestoes) < 3:
+            sugestoes.append(candidato)
+    return Response({'disponivel': False, 'sugestoes': sugestoes})
