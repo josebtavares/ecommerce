@@ -57,6 +57,44 @@ from .permissions import (
 
 from rest_framework.decorators import authentication_classes
 
+# ── Rate limiting ──────────────────────────────────────────────────
+from django_ratelimit.core import is_ratelimited
+from functools import wraps
+from django.http import Http404
+
+ 
+ 
+def pos_ratelimit(key='ip', rate='10/m', method='POST'):
+    """
+    Decorator de rate limiting compatível com DRF.
+    Devolve Response 429 em vez de HttpResponse Django.
+ 
+    Limites aplicados:
+      pos_login        → 10/min por IP, 5/min por email
+      pos_membro_login → 15/min por IP
+      pos_register     → 5/hora por IP
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapped(request, *args, **kwargs):
+            limited = is_ratelimited(
+                request=request,
+                group=f'pos_{func.__name__}',
+                key=key,
+                rate=rate,
+                method=method,
+                increment=True,
+            )
+            if limited:
+                return Response(
+                    {'detail': 'Demasiadas tentativas. Aguarda um momento antes de tentar novamente.'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+            return func(request, *args, **kwargs)
+        return wrapped
+    return decorator
+ 
+
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPERS
@@ -302,6 +340,8 @@ def _conta_payload(conta, request=None):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@pos_ratelimit(key='ip', rate='10/m')
+@pos_ratelimit(key='post:email', rate='5/m')
 def pos_login(request):
     """
     Login de conta principal (dono do POS).
@@ -382,6 +422,7 @@ def pos_login(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@pos_ratelimit(key='ip', rate='15/m') 
 def pos_membro_login(request):
     """
     Login de membro de equipa.
@@ -498,6 +539,7 @@ def pos_membro_login(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@pos_ratelimit(key='ip', rate='5/h')
 def pos_register(request):
     """Registo de conta principal."""
     first_name = request.data.get('first_name', '').strip()
@@ -879,8 +921,9 @@ def produto_atualizar(request, pos_id, produto_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def produto_apagar(request, pos_id, produto_id):
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id, ativo=True)
+    if membro and not membro.pode_gerir_produtos:
+        return Response({'detail': 'Sem permissão.'}, status=403)
     origem = request.GET.get('origem') or request.data.get('origem') or 'pos'
 
     if origem == 'pos':
