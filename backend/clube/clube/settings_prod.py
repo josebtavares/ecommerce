@@ -152,3 +152,15 @@ sentry_sdk.init(
     traces_sample_rate=0.1,
     send_default_pii=False,
 )
+
+# ══════════════════════════════════════════════════════════════
+# HTTPS — Enforcement em produção
+# ══════════════════════════════════════════════════════════════
+SECURE_SSL_REDIRECT             = True
+SESSION_COOKIE_SECURE           = True
+CSRF_COOKIE_SECURE              = True
+SECURE_HSTS_SECONDS             = 31536000      # 1 ano
+SECURE_HSTS_INCLUDE_SUBDOMAINS  = True
+
+# Rate limiting em produção — desactivar nunca
+RATELIMIT_ENABLE = True
