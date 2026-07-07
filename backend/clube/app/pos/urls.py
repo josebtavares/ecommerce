@@ -42,4 +42,9 @@ urlpatterns = [
     # ── EQUIPA ────────────────────────────────────────────────────────
     path('<int:pos_id>/equipa/',                        views.pos_equipa,        name='pos_equipa'),
     path('<int:pos_id>/equipa/<int:membro_id>/',        views.pos_equipa_membro, name='pos_equipa_membro'),
+    
+    # ── USERNAME CHECK ────────────────────────────────────────────────────────
+
+    path('<int:pos_id>/equipa/verificar-username/', views.pos_verificar_username, name='pos_verificar_username'),
+
 ]
