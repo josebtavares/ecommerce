@@ -503,12 +503,13 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
-import ProductCatalog from '@/components/lojaComponents/ProductCatalog.vue'
-import ProductSlider from '@/components/lojaComponents/ProductSlider.vue'
-import AvaliacaoLoja from '@/components/lojaComponents/avaliacaoLoja.vue'
-import ProductInfoCard from '@/components/lojaComponents/ProductInfoCard.vue'
-import MultiCart from '@/components/lojaComponents/multiCart.vue'
-import Profile from '@/components/lojaComponents/UserProfile.vue'
+import ProductCatalog    from '@/components/catalog/ProductCatalog.vue'
+import ProductSlider from '@/components/sliders/ProductSlider.vue'
+import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
+import ProductInfoCard from '@/components/product/productInfoCard.vue'
+import MultiCart from '@/components/cart/multiCart.vue'
+import Profile from '@/components/profile/UserProfile.vue'
+
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
 

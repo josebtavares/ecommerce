@@ -3,10 +3,10 @@
     class="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
     @click.self="canClose ? $emit('close') : null"
   >
-    <div class="max-h-[96vh] w-full max-w-4xl overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+    <div class="flex max-h-[96vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
 
       <!-- Header -->
-      <header class="relative overflow-hidden border-b border-slate-200 bg-slate-950 p-6 text-white sm:p-8">
+      <header class="relative shrink-0 overflow-hidden border-b border-slate-200 bg-slate-950 p-6 text-white sm:p-8">
         <div class="absolute -right-20 -top-20 h-52 w-52 rounded-full bg-blue-500/20 blur-3xl"></div>
         <div class="absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-emerald-500/20 blur-3xl"></div>
 
@@ -38,7 +38,7 @@
       </header>
 
       <!-- Body -->
-      <section class="max-h-[calc(96vh-176px)] overflow-y-auto p-5 sm:p-6">
+      <section class="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
 
         <!-- Erro -->
         <div
@@ -200,7 +200,7 @@
       </section>
 
       <!-- Footer -->
-      <footer class="grid grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-[1fr_auto] sm:items-center">
+      <footer class="grid shrink-0 grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-[1fr_auto] sm:items-center">
         <p class="text-xs font-semibold leading-5 text-slate-500">
           Podes alterar esta configuração depois no botão "Configurar POS".
         </p>

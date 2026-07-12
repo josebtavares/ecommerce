@@ -77,9 +77,7 @@
                 <h3 class="truncate font-black text-slate-950">{{ membro.nome }}</h3>
                 <p class="truncate text-sm font-semibold text-slate-400">@{{ membro.username_pos }}</p>
                 <div class="mt-1 flex flex-wrap items-center gap-2">
-                  <span
-                    :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-black', papelBadgeClass(membro.papel)]"
-                  >
+                  <span :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-black', papelBadgeClass(membro.papel)]">
                     {{ membro.papel_display }}
                   </span>
                   <span
@@ -160,8 +158,8 @@
       class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       @click.self="fecharModalAdicionar"
     >
-      <div class="w-full max-w-lg overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
-        <header class="border-b border-slate-200 p-5">
+      <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+        <header class="shrink-0 border-b border-slate-200 p-5">
           <div class="flex items-start justify-between">
             <div>
               <h3 class="text-xl font-black text-slate-950">Novo Membro</h3>
@@ -179,7 +177,7 @@
           </div>
         </header>
 
-        <div class="max-h-[70vh] overflow-y-auto sm:max-h-none">
+        <div class="min-h-0 flex-1 overflow-y-auto">
           <form class="space-y-4 p-5" @submit.prevent="adicionarMembro">
 
             <!-- Erro / Sucesso -->
@@ -190,16 +188,10 @@
               {{ addError }}
             </div>
 
-            <!-- Password gerada (mostrar e manter modal aberto) -->
-            <div
-              v-if="addSuccess"
-              class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
-            >
+            <!-- Password gerada -->
+            <div v-if="addSuccess" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <p class="text-sm font-black text-emerald-800">✓ Membro criado com sucesso!</p>
-              <div
-                v-if="addSuccess.password_gerada"
-                class="mt-3 rounded-xl bg-emerald-100 p-3"
-              >
+              <div v-if="addSuccess.password_gerada" class="mt-3 rounded-xl bg-emerald-100 p-3">
                 <p class="text-xs font-bold text-emerald-700">Password gerada automaticamente:</p>
                 <p class="mt-1 font-mono text-lg font-black tracking-widest text-emerald-900">
                   {{ addSuccess.password_gerada }}
@@ -224,8 +216,9 @@
               </button>
             </div>
 
-            <!-- Formulário (esconder após sucesso) -->
+            <!-- Formulário -->
             <template v-if="!addSuccess">
+
               <!-- Nome -->
               <div>
                 <label class="mb-2 block text-sm font-black text-slate-700">Nome completo</label>
@@ -238,7 +231,7 @@
                 />
               </div>
 
-              <!-- Username -->
+              <!-- Username com verificação em tempo real -->
               <div>
                 <label class="mb-2 block text-sm font-black text-slate-700">Username</label>
                 <div class="relative">
@@ -250,12 +243,52 @@
                     required
                     minlength="3"
                     pattern="[a-zA-Z0-9_.]*"
-                    class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-8 pr-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+                    @input="onUsernameInput"
+                    :class="[
+                      'h-12 w-full rounded-2xl border bg-slate-50 pl-8 pr-10 text-sm outline-none transition focus:bg-white focus:ring-4',
+                      usernameStatus === 'disponivel'
+                        ? 'border-emerald-400 focus:border-emerald-500 focus:ring-emerald-500/10'
+                        : usernameStatus === 'indisponivel'
+                          ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10'
+                          : 'border-slate-200 focus:border-slate-950 focus:ring-slate-950/10'
+                    ]"
                   />
+                  <!-- Ícone de estado -->
+                  <span class="absolute right-4 top-1/2 -translate-y-1/2">
+                    <span v-if="verificandoUsername" class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600 inline-block"></span>
+                    <span v-else-if="usernameStatus === 'disponivel'" class="text-emerald-500 font-black text-sm">✓</span>
+                    <span v-else-if="usernameStatus === 'indisponivel'" class="text-red-500 font-black text-sm">✗</span>
+                  </span>
                 </div>
-                <p class="mt-1.5 text-xs font-semibold text-slate-400">
-                  Letras, números, _ e . · Único neste POS
-                </p>
+
+                <!-- Feedback de disponibilidade -->
+                <div class="mt-1.5">
+                  <p v-if="usernameStatus === 'disponivel'" class="text-xs font-semibold text-emerald-600">
+                    Username disponível neste POS
+                  </p>
+                  <p v-else-if="usernameStatus === 'indisponivel'" class="text-xs font-semibold text-red-600">
+                    Username já existe neste POS
+                  </p>
+                  <p v-else class="text-xs font-semibold text-slate-400">
+                    Letras, números, _ e . · Único neste POS
+                  </p>
+                </div>
+
+                <!-- Sugestões -->
+                <div v-if="sugestoesUsername.length > 0" class="mt-2">
+                  <p class="text-xs font-bold text-slate-500 mb-1.5">Sugestões disponíveis:</p>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-for="sugestao in sugestoesUsername"
+                      :key="sugestao"
+                      type="button"
+                      @click="usarSugestao(sugestao)"
+                      class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-700 transition hover:border-slate-950 hover:bg-white"
+                    >
+                      @{{ sugestao }}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <!-- Password -->
@@ -305,7 +338,7 @@
                 </button>
                 <button
                   type="submit"
-                  :disabled="adding"
+                  :disabled="adding || usernameStatus === 'indisponivel' || verificandoUsername"
                   class="flex h-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-60"
                 >
                   <span v-if="!adding">Criar Membro</span>
@@ -329,8 +362,8 @@
       class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       @click.self="fecharModalEditar"
     >
-      <div class="w-full max-w-lg overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
-        <header class="border-b border-slate-200 p-5">
+      <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+        <header class="shrink-0 border-b border-slate-200 p-5">
           <div class="flex items-start justify-between">
             <div>
               <h3 class="text-xl font-black text-slate-950">Editar Membro</h3>
@@ -346,7 +379,7 @@
           </div>
         </header>
 
-        <div class="max-h-[70vh] overflow-y-auto sm:max-h-none">
+        <div class="min-h-0 flex-1 overflow-y-auto">
           <form class="space-y-4 p-5" @submit.prevent="salvarEdicao">
 
             <div
@@ -367,7 +400,7 @@
               />
             </div>
 
-            <!-- Username -->
+            <!-- Username (no editar, não verifica em tempo real — só valida no submit) -->
             <div>
               <label class="mb-2 block text-sm font-black text-slate-700">Username</label>
               <div class="relative">
@@ -380,9 +413,12 @@
                   class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-8 pr-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
                 />
               </div>
+              <p class="mt-1.5 text-xs font-semibold text-slate-400">
+                Deixa igual para não alterar
+              </p>
             </div>
 
-            <!-- Nova password (opcional) -->
+            <!-- Nova password -->
             <div>
               <label class="mb-2 block text-sm font-black text-slate-700">
                 Nova password
@@ -491,6 +527,12 @@ export default {
       membros: [],
       membroExpandido: null,
 
+      // Verificação de username em tempo real
+      verificandoUsername: false,
+      usernameStatus: null,       // null | 'disponivel' | 'indisponivel'
+      sugestoesUsername: [],
+      _usernameDebounce: null,
+
       // Modal adicionar
       showAddModal: false,
       adding: false,
@@ -553,14 +595,17 @@ export default {
     },
 
     async adicionarMembro() {
+      // Guard extra: não deixar submeter se username está indisponível
+      if (this.usernameStatus === 'indisponivel') return
+
       this.adding = true
       this.addError = null
 
       try {
         const payload = {
-          nome:        this.addForm.nome,
+          nome:         this.addForm.nome,
           username_pos: this.addForm.username_pos,
-          papel:       this.addForm.papel,
+          papel:        this.addForm.papel,
         }
         if (this.addForm.password) {
           payload.password = this.addForm.password
@@ -568,13 +613,8 @@ export default {
 
         const { data } = await api.post(`/api/pos/${this.posId}/equipa/`, payload)
 
-        // Adicionar à lista
         this.membros.push(data)
-
-        // Mostrar sucesso (com password se foi gerada)
-        this.addSuccess = {
-          password_gerada: data.password_gerada || null,
-        }
+        this.addSuccess = { password_gerada: data.password_gerada || null }
       } catch (err) {
         this.addError = err.response?.data?.detail || 'Erro ao criar membro'
       } finally {
@@ -588,10 +628,10 @@ export default {
 
       try {
         const payload = {
-          nome:        this.editForm.nome,
+          nome:         this.editForm.nome,
           username_pos: this.editForm.username_pos,
-          papel:       this.editForm.papel,
-          ativo:       this.editForm.ativo,
+          papel:        this.editForm.papel,
+          ativo:        this.editForm.ativo,
           ...this.editForm.permissoes,
         }
         if (this.editForm.password) {
@@ -625,32 +665,87 @@ export default {
       }
     },
 
+    // ── VERIFICAÇÃO DE USERNAME ────────────────────────────────────
+    onUsernameInput() {
+      const username = this.addForm.username_pos
+
+      // Reset
+      this.usernameStatus = null
+      this.sugestoesUsername = []
+
+      // Só verificar se tiver pelo menos 3 caracteres
+      if (!username || username.length < 3) return
+
+      // Só aceitar caracteres válidos (não verificar se tiver chars inválidos)
+      if (!/^[a-zA-Z0-9_.]+$/.test(username)) return
+
+      // Debounce — esperar 400ms após o utilizador parar de escrever
+      clearTimeout(this._usernameDebounce)
+      this._usernameDebounce = setTimeout(() => {
+        this.verificarUsername(username)
+      }, 400)
+    },
+
+    async verificarUsername(username) {
+      this.verificandoUsername = true
+      try {
+        const { data } = await api.get(
+          `/api/pos/${this.posId}/equipa/verificar-username/`,
+          { params: { username } }
+        )
+
+        // Confirmar que o input ainda tem o mesmo valor (pode ter mudado durante o debounce)
+        if (this.addForm.username_pos !== username) return
+
+        if (data.disponivel) {
+          this.usernameStatus   = 'disponivel'
+          this.sugestoesUsername = []
+        } else {
+          this.usernameStatus   = 'indisponivel'
+          this.sugestoesUsername = data.sugestoes || []
+        }
+      } catch {
+        // Erro silencioso — não bloquear o utilizador se a verificação falhar
+        this.usernameStatus = null
+      } finally {
+        this.verificandoUsername = false
+      }
+    },
+
+    usarSugestao(sugestao) {
+      this.addForm.username_pos = sugestao
+      this.usernameStatus       = 'disponivel'
+      this.sugestoesUsername    = []
+    },
+
     // ── MODAIS ─────────────────────────────────────────────────────
     abrirModalAdicionar() {
-      this.addForm    = { nome: '', username_pos: '', password: '', papel: 'empregado' }
-      this.addError   = null
-      this.addSuccess = null
-      this.copiado    = false
-      this.showAddModal = true
+      this.addForm          = { nome: '', username_pos: '', password: '', papel: 'empregado' }
+      this.addError         = null
+      this.addSuccess       = null
+      this.copiado          = false
+      this.usernameStatus   = null
+      this.sugestoesUsername = []
+      this.showAddModal     = true
     },
 
     fecharModalAdicionar() {
+      clearTimeout(this._usernameDebounce)
       this.showAddModal = false
-      // Se criou membro com sucesso, recarregar lista
       if (this.addSuccess) this.carregarEquipa()
     },
 
     abrirModalEditar(membro) {
       this.membroEditando = membro
       this.editForm = {
-        nome:        membro.nome,
+        nome:         membro.nome,
         username_pos: membro.username_pos,
-        password:    '',
-        papel:       membro.papel,
-        ativo:       membro.ativo,
-        permissoes:  { ...membro.permissoes },
+        password:     '',
+        papel:        membro.papel,
+        ativo:        membro.ativo,
+        permissoes:   { ...membro.permissoes },
       }
-      this.editError    = null
+      this.editError     = null
       this.showEditModal = true
     },
 
@@ -679,16 +774,16 @@ export default {
 
     nomePermissao(chave) {
       return {
-        pode_abrir_mesas:         'Abrir mesas',
-        pode_fechar_contas:       'Fechar contas',
-        pode_cancelar_items:      'Cancelar items',
-        pode_dar_descontos:       'Dar descontos',
-        pode_gerir_produtos:      'Gerir produtos',
-        pode_gerir_mesas:         'Gerir mesas',
-        pode_gerir_utilizadores:  'Gerir utilizadores',
-        pode_ver_relatorios:      'Ver relatórios',
-        pode_abrir_fechar_turno:  'Abrir/Fechar turno',
-        pode_ver_pedidos:         'Ver pedidos',
+        pode_abrir_mesas:            'Abrir mesas',
+        pode_fechar_contas:          'Fechar contas',
+        pode_cancelar_items:         'Cancelar items',
+        pode_dar_descontos:          'Dar descontos',
+        pode_gerir_produtos:         'Gerir produtos',
+        pode_gerir_mesas:            'Gerir mesas',
+        pode_gerir_utilizadores:     'Gerir utilizadores',
+        pode_ver_relatorios:         'Ver relatórios',
+        pode_abrir_fechar_turno:     'Abrir/Fechar turno',
+        pode_ver_pedidos:            'Ver pedidos',
         pode_atualizar_status_items: 'Atualizar status',
       }[chave] || chave
     },
