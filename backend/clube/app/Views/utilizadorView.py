@@ -51,6 +51,8 @@ def _build_user_payload(utilizador: Utilizador, request=None) -> dict:
             request.build_absolute_uri(utilizador.foto.url)
             if request else utilizador.foto.url
         )
+    else:
+        foto_url = f"https://pub-803c78caa4b242b8b54656a45db9fb42.r2.dev/utilizadores/default.png"
 
     return {
         'id'             : utilizador.id,

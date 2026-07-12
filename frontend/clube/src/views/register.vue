@@ -266,7 +266,7 @@ export default {
       morada:        '',
       password:      '',
       file:          null,
-      previewUrl:    `${process.env.VUE_APP_URL_BASE}/media/utilizadores/default.png`,
+      previewUrl: 'https://pub-803c78caa4b242b8b54656a45db9fb42.r2.dev/utilizadores/default.png',
       errors:        [],
       loadingGoogle: false,
       isDark: savedTheme ? savedTheme === 'dark' : true,
@@ -323,7 +323,7 @@ export default {
         this.previewUrl = URL.createObjectURL(f)
       } else {
         this.file = null
-        this.previewUrl = `${process.env.VUE_APP_URL_BASE}/media/utilizadores/default.png`
+        this.previewUrl = 'https://pub-803c78caa4b242b8b54656a45db9fb42.r2.dev/utilizadores/default.png'
       }
     },
 
