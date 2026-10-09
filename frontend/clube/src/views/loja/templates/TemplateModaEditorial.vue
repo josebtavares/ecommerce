@@ -579,7 +579,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData } from '@/composables/useLojaData'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
@@ -611,6 +611,7 @@ export default {
 
   setup(props, { emit }) {
     const isDark = ref(props.tema?.darkMode !== false)
+    watch(() => props.tema?.darkMode, v => { isDark.value = v !== false })
     const activeSection = ref('edit-sobre')
     const lojaData = useLojaData()
 
@@ -708,6 +709,11 @@ export default {
   --font-body: 'Barlow', sans-serif;
   --font-mono: 'DM Mono', monospace;
 
+  /* carrinho · sino · perfil alinhados com a nav do hero (assets/loja-acoes.css) */
+  /* mesma geometria do Restaurante Moderno: 68px / 28px (mobile 60px / 14px) */
+  --acoes-altura: 68px;
+  --acoes-direita: 28px;
+
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
@@ -790,7 +796,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 24px 48px;
+  /* altura e margens iguais à "barra" dos ícones da direita → mesma linha */
+  height: var(--acoes-altura);
+  padding: 0 var(--acoes-direita);
 }
 
 .editorial-hero__left-controls {
@@ -999,7 +1007,7 @@ export default {
   background: var(--bg);
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 25; /* abaixo do carrinho (z-30) e perfil (z-40) */
   overflow-x: auto;
 }
 
@@ -1450,16 +1458,9 @@ export default {
     min-height: 560px;
   }
 
-  .editorial-hero__nav,
   .editorial-hero__content {
     padding-left: 20px;
     padding-right: 20px;
-  }
-
-  .editorial-hero__nav {
-    justify-content: flex-start;
-    padding-top: 20px;
-    padding-bottom: 16px;
   }
 
   .editorial-hero__left-controls {
@@ -1556,14 +1557,16 @@ export default {
   }
 }
 
+@media (max-width: 640px) {
+  .editorial-root {
+    --acoes-altura: 60px;
+    --acoes-direita: 14px;
+  }
+}
+
 @media (max-width: 520px) {
   .editorial-hero {
     min-height: 520px;
-  }
-
-  .editorial-hero__nav {
-    padding-left: 16px;
-    padding-right: 16px;
   }
 
   .editorial-hero__content {

@@ -1,0 +1,58 @@
+/* ══════════════════════════════════════════════════════════════
+   Ações fixas da loja — carrinho · notificações · perfil
+   ══════════════════════════════════════════════════════════════
+   Os 3 botões formam um grupo à direita, centrado verticalmente
+   numa "barra" virtual no topo do ecrã. Cada template alinha-os com
+   a sua navegação definindo, no elemento raiz:
+
+     --acoes-altura   altura da barra de navegação do template
+     --acoes-direita  distância à margem direita (= padding da nav)
+     --acoes-topo     (opcional) deslocamento do topo, default 0
+
+   e reserva espaço para o grupo com:
+     padding-right: calc(var(--acoes-direita) + var(--acoes-espaco) + <folga>)
+
+   Sem variáveis definidas, usa os valores por defeito abaixo.
+*/
+:root {
+  --acoes-botao:  36px;
+  --acoes-gap:    10px;
+  /* largura total do grupo (3 botões + 2 espaços) */
+  --acoes-espaco: calc(3 * var(--acoes-botao) + 2 * var(--acoes-gap));
+}
+
+.loja-acoes-slot {
+  position: fixed;
+  top: var(--acoes-topo, 0px);
+  height: var(--acoes-altura, 52px);
+  display: flex;
+  align-items: center;
+  gap: var(--acoes-gap);
+}
+
+@media (min-width: 768px) {
+  .loja-acoes-slot { height: var(--acoes-altura, 84px); }
+}
+
+/* sino + perfil: encostado à direita */
+.loja-acoes-slot--perfil {
+  right: var(--acoes-direita, 2.5vw);
+}
+
+/* carrinho: logo à esquerda do sino + perfil */
+.loja-acoes-slot--carrinho {
+  right: calc(var(--acoes-direita, 2.5vw) + 2 * var(--acoes-botao) + 2 * var(--acoes-gap));
+}
+
+.loja-acao-btn {
+  position: relative;
+  width: var(--acoes-botao);
+  height: var(--acoes-botao);
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background-color .2s, box-shadow .2s;
+}

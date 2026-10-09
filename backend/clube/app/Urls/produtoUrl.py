@@ -1,5 +1,5 @@
 from django.urls import path
-from ..Views import produtoView
+from ..Views import produtoView, varianteView
 
 urlpatterns = [
 
@@ -26,4 +26,8 @@ urlpatterns = [
     
     # ── NOVO: eliminar imagem individual ──────────────────────
     path('loja/<int:loja_id>/produtos/<int:id>/imagens/<int:img_id>/', produtoView.produto_imagem_delete, name='produto-imagem-delete'),
+
+    # ── Stock por variação ────────────────────────────────────
+    path('loja/<int:loja_id>/produtos/<int:id>/variantes/', varianteView.produto_variantes, name='produto-variantes'),
+    path('loja/<int:loja_id>/produtos/<int:id>/variantes/<int:variante_id>/ajustar/', varianteView.variante_ajustar_stock, name='variante-ajustar'),
 ]

@@ -23,7 +23,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/services/api'
 import { getTemplate, TEMPLATE_COMPONENTS } from '@/config/lojaTemplates'
@@ -39,6 +39,7 @@ export default {
     const loadingTemplate   = ref(true)
     const templateComponent = ref(null)
     const temaActivo        = ref(null)
+    let darkModeBase        = true   // modo por defeito da loja (BD)
 
     async function resolveTemplate (lojaId) {
       loadingTemplate.value   = true
@@ -67,9 +68,24 @@ export default {
           templateId, corPrimaria, corSecundaria, darkMode: darkModeDB,
         }))
 
-        // ── 4. Preferência dark/light do UTILIZADOR (tem prioridade sobre BD) ─
-        const userDark = localStorage.getItem(`user_dark_${lojaId}`)
-        const darkMode = userDark !== null ? userDark === 'true' : darkModeDB
+        // ── 4. Preferência dark/light do VISITANTE ────────────────────────────
+        // Só vale enquanto o modo por defeito da loja for o mesmo de quando a
+        // escolheu; se o dono mudar o modo no backoffice, a mudança prevalece.
+        darkModeBase = darkModeDB
+        let darkMode = darkModeDB
+        const pref = lerPrefDark(lojaId)
+        if (pref && pref.base === darkModeDB) darkMode = pref.valor
+
+        // ── 4b. Modo preview do backoffice (?preview=1&tpl=…&c1=…&c2=…&dark=…) ─
+        // Só altera o que é mostrado — nada é guardado na BD nem na cache.
+        const q = route.query
+        if (q.preview) {
+          const cor = v => (typeof v === 'string' && /^#?[0-9a-f]{6}$/i.test(v) ? '#' + v.replace('#', '') : null)
+          if (q.tpl && TEMPLATE_COMPONENTS[q.tpl]) templateId = q.tpl
+          corPrimaria   = cor(q.c1) || corPrimaria
+          corSecundaria = cor(q.c2) || corSecundaria
+          if (q.dark !== undefined) darkMode = q.dark === '1'
+        }
 
         temaActivo.value = { id: templateId, corPrimaria, corSecundaria, darkMode }
 
@@ -101,19 +117,49 @@ export default {
         }
       } finally {
         loadingTemplate.value = false
+        // em preview dentro de um iframe, avisa o backoffice que já pode enviar o tema
+        if (route.query.preview && window.parent !== window) {
+          window.parent.postMessage({ type: 'preview-pronto' }, window.location.origin)
+        }
       }
+    }
+
+    function lerPrefDark (lojaId) {
+      try {
+        const p = JSON.parse(localStorage.getItem(`user_dark_${lojaId}`))
+        return p && typeof p.valor === 'boolean' ? p : null
+      } catch { return null }   // formato antigo ('true'/'false') é ignorado
     }
 
     // Utilizador togglou dark/light — guarda preferência local
     function onToggleDark (novoValor) {
       const lojaId = route.params.id
-      localStorage.setItem(`user_dark_${lojaId}`, String(novoValor))
+      if (!route.query.preview) {
+        localStorage.setItem(`user_dark_${lojaId}`, JSON.stringify({ valor: novoValor, base: darkModeBase }))
+      }
       if (temaActivo.value) {
         temaActivo.value = { ...temaActivo.value, darkMode: novoValor }
       }
     }
 
-    onMounted(() => resolveTemplate(route.params.id))
+    // Preview ao vivo: o backoffice (janela pai) envia cores/modo sem recarregar
+    function onPreviewMessage (e) {
+      if (e.origin !== window.location.origin || e.data?.type !== 'tema-preview') return
+      if (!route.query.preview || !temaActivo.value) return
+      const { corPrimaria, corSecundaria, darkMode } = e.data
+      temaActivo.value = {
+        ...temaActivo.value,
+        ...(corPrimaria   && { corPrimaria }),
+        ...(corSecundaria && { corSecundaria }),
+        ...(typeof darkMode === 'boolean' && { darkMode }),
+      }
+    }
+
+    onMounted(() => {
+      resolveTemplate(route.params.id)
+      window.addEventListener('message', onPreviewMessage)
+    })
+    onUnmounted(() => window.removeEventListener('message', onPreviewMessage))
     watch(() => route.params.id, id => { if (id) resolveTemplate(id) })
 
     return { loadingTemplate, templateComponent, temaActivo, onToggleDark }

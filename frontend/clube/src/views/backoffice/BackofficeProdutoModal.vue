@@ -254,6 +254,28 @@
           </div>
         </div>
 
+        <!-- ══ STOCK POR VARIAÇÃO ══ -->
+        <div v-if="atributosVariante.length" class="space-y-3">
+          <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+            📦 Stock por variação
+            <span class="px-1.5 py-0.5 bg-amber-500/10 text-amber-300 rounded text-[10px] font-medium normal-case">
+              {{ atributosVariante.join(' × ') }}
+            </span>
+          </p>
+
+          <p v-if="!produto" class="text-xs text-zinc-500 leading-relaxed px-3 py-3 border border-dashed border-zinc-800 rounded-xl">
+            Depois de criares o produto, abre-o de novo para definires o stock de cada combinação
+            (ou faz isso no módulo Inventário).
+          </p>
+          <template v-else>
+            <p v-if="opcoesVarianteAlteradas"
+               class="text-xs text-amber-300 bg-amber-500/5 border border-amber-500/30 rounded-xl px-3 py-2">
+              Alteraste as opções de {{ atributosVariante.join(' / ') }}. Guarda o produto para actualizar as combinações da grelha.
+            </p>
+            <VariantesStockEditor :lojaId="lojaId" :produtoId="produto.id" :key="'var-' + produto.id" />
+          </template>
+        </div>
+
         <!-- ══ ACTIONS ══ -->
         <div class="flex gap-3 pt-2 border-t border-zinc-800">
           <button type="button" @click="$emit('close')"
@@ -278,9 +300,11 @@
 <script>
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import VariantesStockEditor from '@/components/inventario/VariantesStockEditor.vue'
 
 export default {
   name: 'BackofficeProdutoModal',
+  components: { VariantesStockEditor },
   props: {
     lojaId:  [String, Number],
     produto: { type: Object, default: null },
@@ -329,6 +353,20 @@ export default {
       return this.tipoSelecionado.atributos_schema.map(a =>
         typeof a === 'string' ? { nome: a, tipo: 'texto', opcoes: [], obrigatorio: false } : a
       )
+    },
+
+    // atributos do tipo com stock próprio por opção (ex.: tamanho, cor)
+    atributosVariante () {
+      return this.schemaNormalizado.filter(a => a.tipo === 'choices' && a.variante).map(a => a.nome)
+    },
+
+    // opções-variante no formulário ≠ guardadas → a grelha só reflecte depois de guardar
+    opcoesVarianteAlteradas () {
+      if (!this.produto) return false
+      if (String(this.form.tipo_id || '') !== String(this.produto.tipo?.id || '')) return this.atributosVariante.length > 0
+      const norm = v => (Array.isArray(v) ? v : (v ? [v] : [])).map(String).sort().join('|')
+      const guardados = this.produto.atributos || {}
+      return this.atributosVariante.some(n => norm(this.form.atributos[n]) !== norm(guardados[n]))
     },
   },
 

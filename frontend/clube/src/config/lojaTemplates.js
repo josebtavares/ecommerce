@@ -29,6 +29,7 @@ export const TEMPLATES = [
   },
   {
     id: 'vibrante',
+    usaCorSecundaria: true,   // fundo do modo escuro
     nome: 'Vibrante',
     descricao: 'Formas geométricas, texto outline, marquee animado. Energia pura.',
     preview: '🎨',
@@ -42,13 +43,14 @@ export const TEMPLATES = [
   // ── RESTAURANTE ───────────────────────────────────────────────────────────
   {
     id: 'restaurante_moderno',
+    usaCorSecundaria: true,   // fundo do modo escuro
     nome: 'Restaurante Moderno',
-    descricao: 'Hero cinematográfico com parallax, sidebar de categorias.',
+    descricao: 'Hero com cartão de serviço, sugestões do chef em bento e carta com índice e pesquisa.',
     preview: '🍽️',
     categorias: ['restaurante'],
     tag: 'Food',
-    primaryDefault:    '#e11d48',
-    secundariaDefault: '#0f0f0f',
+    primaryDefault:    '#e4572e',
+    secundariaDefault: '#14110f',
     darkDefault: true,
   },
   {

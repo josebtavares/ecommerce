@@ -167,6 +167,35 @@
 
           <!-- TAB: Criar novo -->
           <div v-else class="space-y-4">
+            <!-- Foto (opcional) -->
+            <div class="flex items-center gap-4">
+              <div class="relative flex-shrink-0 cursor-pointer group" @click="$refs.fotoInput.click()">
+                <img v-if="fotoPreview" :src="fotoPreview" alt="Foto"
+                     class="w-14 h-14 rounded-full object-cover border-2 border-zinc-700 group-hover:border-red-500 transition-colors" />
+                <div v-else class="w-14 h-14 rounded-full border-2 border-dashed border-zinc-700 group-hover:border-red-500 bg-zinc-800 flex items-center justify-center transition-colors">
+                  <span class="text-sm font-bold text-zinc-500">{{ (novoUtilizador.first_name || novoUtilizador.username || '?').charAt(0).toUpperCase() }}</span>
+                </div>
+                <div class="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  </svg>
+                </div>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-zinc-300">Foto de perfil <span class="text-zinc-600">(opcional)</span></p>
+                <div class="flex items-center gap-3 mt-0.5">
+                  <button type="button" @click="$refs.fotoInput.click()" class="text-xs text-red-400 hover:text-red-300 transition">
+                    {{ fotoFicheiro ? 'Trocar' : 'Escolher ficheiro' }}
+                  </button>
+                  <button v-if="fotoFicheiro" type="button" @click="removerFoto" class="text-xs text-zinc-500 hover:text-zinc-300 transition">
+                    Remover
+                  </button>
+                </div>
+                <p class="text-[10px] text-zinc-600 mt-0.5">JPG, PNG ou WebP · máx. 5 MB</p>
+              </div>
+              <input ref="fotoInput" type="file" accept="image/*" @change="onFotoChange" class="hidden" />
+            </div>
+
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="text-xs text-zinc-500 mb-1 block">Primeiro nome</label>
@@ -201,7 +230,8 @@
 
             <div>
               <label class="text-xs text-zinc-500 mb-1 block">Password *</label>
-              <input v-model="novoUtilizador.password" type="password" required class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Mínimo 8 caracteres" />
+              <input v-model="novoUtilizador.password" type="password" required autocomplete="new-password" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Mínimo 8 caracteres" />
+              <PasswordForca :password="novoUtilizador.password" :isDark="true" />
             </div>
 
             <div>
@@ -236,9 +266,12 @@
 
 <script>
 import api from '@/services/api'
+import PasswordForca from '@/components/forms/PasswordForca.vue'
+import { passwordValida } from '@/utils/password'
 
 export default {
   name: 'BackofficeStaff',
+  components: { PasswordForca },
   props: { lojaId: [String, Number] },
 
   data () {
@@ -273,6 +306,8 @@ export default {
         telefone: '',
         morada: ''
       },
+      fotoFicheiro: null,
+      fotoPreview: null,
 
       novoRole: 'staff',
 
@@ -297,7 +332,8 @@ export default {
       if (this.activeTab === 'pesquisar') {
         return !!this.utilizadorSelecionado
       } else {
-        return this.novoUtilizador.username && this.novoUtilizador.email && this.novoUtilizador.password
+        return !!(this.novoUtilizador.username && this.novoUtilizador.email &&
+                  passwordValida(this.novoUtilizador.password))
       }
     }
   },
@@ -314,6 +350,30 @@ export default {
         condutor:     'bg-purple-500/20 text-purple-400',
       }
       return map[role] || 'bg-zinc-500/20 text-zinc-400'
+    },
+
+    onFotoChange (e) {
+      const f = e.target.files?.[0]
+      e.target.value = ''   // permite escolher o mesmo ficheiro de novo
+      if (!f) return
+      if (!f.type.startsWith('image/')) {
+        this.erroAdicionar = 'A foto tem de ser uma imagem.'
+        return
+      }
+      if (f.size > 5 * 1024 * 1024) {
+        this.erroAdicionar = 'A foto não pode ter mais de 5 MB.'
+        return
+      }
+      this.erroAdicionar = ''
+      this.removerFoto()
+      this.fotoFicheiro = f
+      this.fotoPreview  = URL.createObjectURL(f)
+    },
+
+    removerFoto () {
+      if (this.fotoPreview) URL.revokeObjectURL(this.fotoPreview)
+      this.fotoFicheiro = null
+      this.fotoPreview  = null
     },
 
     async abrirModal () {
@@ -347,6 +407,7 @@ export default {
         telefone: '',
         morada: ''
       }
+      this.removerFoto()
       this.novoRole = 'staff'
     },
 
@@ -505,9 +566,16 @@ export default {
             role: this.novoRole,
           })
         } else {
-          await api.post(`/app/loja/${this.lojaId}/staff/criar-utilizador/`, {
-            ...this.novoUtilizador,
-            role: this.novoRole,
+          if (!passwordValida(this.novoUtilizador.password)) {
+            this.erroAdicionar = 'A password não cumpre todos os requisitos de segurança.'
+            return
+          }
+          const form = new FormData()
+          Object.entries(this.novoUtilizador).forEach(([k, v]) => form.append(k, v ?? ''))
+          form.append('role', this.novoRole)
+          if (this.fotoFicheiro) form.append('foto', this.fotoFicheiro)
+          await api.post(`/app/loja/${this.lojaId}/staff/criar-utilizador/`, form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
           })
         }
         this.fecharModal()

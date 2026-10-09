@@ -489,7 +489,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useLojaData }   from '@/composables/useLojaData'
 import ProductInfoCard   from '@/components/product/productInfoCard.vue'
 import MultiCart         from '@/components/cart/multiCart.vue'
@@ -506,6 +506,7 @@ export default {
 
   setup (props, { emit }) {
     const isDark   = ref(props.tema?.darkMode !== false)
+    watch(() => props.tema?.darkMode, v => { isDark.value = v !== false })
     const lojaData = useLojaData()
 
     const cssVars = computed(() => ({

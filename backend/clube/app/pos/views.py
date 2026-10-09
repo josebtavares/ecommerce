@@ -170,6 +170,9 @@ def _get_pos_for_request(request, pos_id):
 def _set_stock_loja(produto, stock):
     if Inventario is None:
         return
+    # com stock por variação o total é a soma das variantes — gerido no backoffice
+    if getattr(produto, 'stock_por_variante', False):
+        return
     try:
         inv, _ = Inventario.objects.get_or_create(
             loja=produto.loja,

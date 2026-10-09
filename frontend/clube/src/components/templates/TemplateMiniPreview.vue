@@ -141,29 +141,39 @@
 
     <!-- ── RESTAURANTE MODERNO ── -->
     <template v-else-if="id === 'restaurante_moderno'">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,0.04) 0,rgba(255,255,255,0.04) 10px,rgba(255,255,255,0.01) 10px,rgba(255,255,255,0.01) 20px)"></div>
-      <div style="position:absolute;inset:0;background:rgba(9,9,11,0.65)"></div>
-      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 30%,rgba(9,9,11,0.7) 100%)"></div>
-      <div style="position:absolute;bottom:0;left:0;right:0;height:65%;background:linear-gradient(to top,#09090b,transparent)"></div>
-      <div style="position:absolute;top:8px;left:9px;display:flex;align-items:center;gap:4px">
-        <div style="width:12px;height:0.5px;background:rgba(255,255,255,0.4)"></div>
-        <span style="font-size:4px;letter-spacing:0.25em;text-transform:uppercase;color:rgba(255,255,255,0.4)">Voltar</span>
+      <!-- foto do hero -->
+      <div :style="{ position:'absolute', inset:'0', background:'radial-gradient(circle at 72% 28%,'+primary+'88,transparent 55%),radial-gradient(circle at 18% 85%,'+primary+'40,transparent 50%),#1a1512' }"></div>
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(12,9,7,.92),rgba(12,9,7,.3) 55%,rgba(12,9,7,.2)),linear-gradient(to right,rgba(12,9,7,.5),transparent 60%)"></div>
+      <!-- top bar -->
+      <div style="position:absolute;top:6px;left:8px;right:8px;display:flex;align-items:center;gap:4px">
+        <div :style="{ width:'9px', height:'9px', borderRadius:'50%', background:primary, fontSize:'5px', fontWeight:'800', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Georgia,serif' }">A</div>
+        <span style="font-size:5px;font-weight:600;font-family:Georgia,serif">Armazém</span>
+        <div style="margin-left:auto;display:flex;gap:5px;font-size:3.5px;color:rgba(255,255,255,.7)"><span>Chef</span><span>Carta</span><span>Visite-nos</span></div>
       </div>
-      <div style="position:absolute;bottom:10px;left:9px">
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
-          <div :style="{ width:'10px', height:'0.5px', background:primary }"></div>
-          <span style="font-size:3.5px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.4)">Restauração</span>
+      <!-- copy -->
+      <div style="position:absolute;bottom:11px;left:9px;width:58%">
+        <div style="display:flex;gap:2px;margin-bottom:4px">
+          <span :style="{ padding:'1.5px 4px', borderRadius:'6px', background:primary, fontSize:'3.5px', fontWeight:'700' }">Restaurante</span>
+          <span style="padding:1.5px 4px;border-radius:6px;background:rgba(255,255,255,.14);font-size:3.5px">Lisboa</span>
         </div>
-        <div style="font-size:19px;font-weight:900;letter-spacing:-0.03em;line-height:0.9;color:#fff">Armazém Geral</div>
-        <div style="font-size:4px;color:rgba(255,255,255,0.45);margin-top:3px;margin-bottom:4px">Curadoria de sabores únicos</div>
+        <div style="font-size:18px;font-weight:800;letter-spacing:-0.03em;line-height:0.92;font-family:Georgia,serif;margin-bottom:4px">Armazém Geral</div>
+        <div style="font-size:3.8px;color:rgba(255,255,255,.7);margin-bottom:5px;line-height:1.4">Cozinha de autor com produtos da época.</div>
         <div style="display:flex;gap:3px">
-          <div :style="{ padding:'3px 7px', background:primary, color:'#fff', fontSize:'4px', fontWeight:'700', textTransform:'uppercase' }">Ver Menu</div>
-          <div style="padding:3px 7px;border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.6);font-size:4px;font-weight:700">★ Reviews</div>
+          <div :style="{ padding:'3px 7px', borderRadius:'8px', background:primary, fontSize:'4px', fontWeight:'700' }">Ver a carta ↓</div>
+          <div style="padding:3px 7px;border-radius:8px;background:rgba(255,255,255,.12);border:0.5px solid rgba(255,255,255,.25);font-size:4px;font-weight:700">Sugestões do chef</div>
         </div>
       </div>
-      <div style="position:absolute;bottom:24px;right:9px;text-align:right">
-        <div style="font-size:16px;font-weight:900;color:#fff;line-height:1">4.8</div>
-        <div style="font-size:3.5px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.25)">/ 5 stars</div>
+      <!-- cartão de serviço -->
+      <div style="position:absolute;bottom:11px;right:9px;width:30%;padding:5px 6px;border-radius:6px;background:rgba(20,16,13,.6);border:0.5px solid rgba(255,255,255,.15)">
+        <div style="font-size:3px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:2px">Serviço</div>
+        <div v-for="([l,v]) in [['Entrega','desde 0€'],['Take-away','Sim'],['Pratos','42']]" :key="l"
+             style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:0.5px solid rgba(255,255,255,.1);font-size:3.5px">
+          <span style="color:rgba(255,255,255,.7)">{{ l }}</span><span style="font-weight:700">{{ v }}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:3px;margin-top:3px">
+          <span style="font-size:11px;font-weight:800;font-family:Georgia,serif;line-height:1">4.8</span>
+          <span :style="{ fontSize:'4px', color:primary }">★★★★★</span>
+        </div>
       </div>
     </template>
 
@@ -309,7 +319,7 @@ const BG_MAP = {
   'moda_boutique':       '#0a0805',
   'moda_editorial':      '#09090b',
   'restaurante_bistro':  '#fdf6ec',
-  'restaurante_moderno': '#09090b',
+  'restaurante_moderno': '#14110f',
   'tech_store':          '#020617',
   'vibrante':            '#09090b',
   'natureza':            '#051a0a',

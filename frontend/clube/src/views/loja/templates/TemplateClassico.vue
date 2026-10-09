@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen transition-colors duration-300"
+  <div class="classico-root min-h-screen transition-colors duration-300"
        :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-gray-50 text-zinc-900'"
        :style="cssVars">
 
@@ -34,7 +34,7 @@
 
         <!-- Botão voltar -->
         <button @click="$router.back()"
-          class="absolute top-5 left-5 w-9 h-9 rounded-full bg-black/50 hover:bg-black/70
+          class="classico-topo classico-topo--voltar w-9 h-9 rounded-full bg-black/50 hover:bg-black/70
                  flex items-center justify-center transition backdrop-blur-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -43,7 +43,7 @@
 
         <!-- Toggle dark/light — ao lado do botão voltar -->
         <button @click="toggleDark"
-          class="absolute top-5 left-16 w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-sm"
+          class="classico-topo classico-topo--tema w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-sm"
           :class="isDark ? 'bg-black/50 hover:bg-black/70' : 'bg-white/70 hover:bg-white/90'">
           <!-- Ícone sol (modo dark → carrega para light) -->
           <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -316,7 +316,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useLojaData }   from '@/composables/useLojaData'
 import ProductInfoCard   from '@/components/product/productInfoCard.vue'
 import MultiCart         from '@/components/cart/multiCart.vue'
@@ -336,6 +336,7 @@ export default {
 
   setup (props, { emit }) {
     const isDark   = ref(props.tema?.darkMode !== false)
+    watch(() => props.tema?.darkMode, v => { isDark.value = v !== false })
     const lojaData = useLojaData()
     const cssVars  = computed(() => ({
       '--cor-primaria':   props.tema?.corPrimaria   || '#dc2626',
@@ -356,3 +357,26 @@ export default {
   }
 }
 </script>
+<style scoped>
+/* Mesma geometria do Restaurante Moderno: barra virtual de 68px / margem 28px
+   (mobile 60px / 14px). Os ícones da direita (assets/loja-acoes.css) e os
+   botões voltar + tema da esquerda ficam centrados na mesma linha. */
+.classico-root {
+  --acoes-altura: 68px;
+  --acoes-direita: 28px;
+}
+
+@media (max-width: 640px) {
+  .classico-root {
+    --acoes-altura: 60px;
+    --acoes-direita: 14px;
+  }
+}
+
+.classico-topo {
+  position: absolute;
+  top: calc((var(--acoes-altura) - 36px) / 2);
+}
+.classico-topo--voltar { left: var(--acoes-direita); }
+.classico-topo--tema   { left: calc(var(--acoes-direita) + 36px + 10px); }
+</style>

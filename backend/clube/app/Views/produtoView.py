@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from ..models import Produto, TipoProduto, Loja, UtilizadorLoja,ProdutoImagem
 from ..Serializers.ProdutoSerializer import ProdutoSerializer, TipoProdutoSerializer
 from ..utils.pagination import paginar
+from ..utils.variantes import sincronizar_variantes
 
 
 # ══════════════════════════════════════════════════════════════
@@ -198,7 +199,7 @@ def produto_list_pagination(request):
     Funciona para QUALQUER tipo de produto e QUALQUER atributo
     sem precisar de mudar o código — basta passar atributo_<chave>=<valor>.
     """
-    qs = Produto.objects.select_related('loja', 'tipo').filter(ativo=True)
+    qs = Produto.objects.select_related('loja', 'tipo', 'inventario').prefetch_related('variantes').filter(ativo=True)
 
     # ── 1) filtro por loja ────────────────────────────────────
     loja_id = request.GET.get('loja_id')
@@ -339,7 +340,7 @@ def produto_list_loja(request, loja_id):
     if erro:
         return erro
 
-    qs = Produto.objects.select_related('tipo').filter(loja_id=loja_id)
+    qs = Produto.objects.select_related('tipo', 'inventario').prefetch_related('variantes').filter(loja_id=loja_id)
 
     q = request.GET.get('q')
     if q:
@@ -452,7 +453,11 @@ def produto_update(request, loja_id, id):
  
     produto = serializer.save()
     loja = produto.loja
- 
+
+    # opções/tipo mudaram → grelha de variantes acompanha (novas a 0, removidas desactivadas)
+    if produto.stock_por_variante and ('atributos' in campos or 'tipo_id' in campos):
+        sincronizar_variantes(produto)
+
     categoria_ids_raw = request.data.getlist('categoria_ids')
     if categoria_ids_raw:
         from ..models import CategoriaLoja

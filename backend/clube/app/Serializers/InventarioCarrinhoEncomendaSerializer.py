@@ -3,6 +3,7 @@ from ..models import Inventario, Carrinho, ItemCarrinho, Encomenda, ItemEncomend
 
 from .ProdutoSerializer import ProdutoMiniSerializer
 from .LojaSerializer import LojaMiniSerializer
+from ..utils.variantes import tem_atributos_variante
 
 
 # ══════════════════════════════════════════════════════════════
@@ -12,6 +13,9 @@ from .LojaSerializer import LojaMiniSerializer
 class InventarioSerializer(serializers.ModelSerializer):
     produto_nome = serializers.CharField(source='produto.nome', read_only=True)
     produto_sku  = serializers.CharField(source='produto.sku',  read_only=True)
+    stock_por_variante  = serializers.BooleanField(source='produto.stock_por_variante', read_only=True)
+    variantes           = serializers.SerializerMethodField()
+    variantes_pendentes = serializers.SerializerMethodField()
 
     class Meta:
         model  = Inventario
@@ -20,9 +24,22 @@ class InventarioSerializer(serializers.ModelSerializer):
             'produto', 'produto_nome', 'produto_sku',
             'quantidade',
             'preco_custo', 'preco_venda',
+            'stock_por_variante', 'variantes', 'variantes_pendentes',
             'data_atualizacao',
         ]
         read_only_fields = ['data_atualizacao']
+
+    def get_variantes(self, obj):
+        """Resumo das variantes activas (para o chip e a lista no Inventário)."""
+        if not obj.produto.stock_por_variante:
+            return []
+        return [
+            {'id': v.id, 'chave': v.chave, 'combinacao': v.combinacao, 'quantidade': v.quantidade}
+            for v in obj.produto.variantes.all() if v.ativo
+        ]
+
+    def get_variantes_pendentes(self, obj):
+        return not obj.produto.stock_por_variante and tem_atributos_variante(obj.produto)
 
     def validate_quantidade(self, value):
         if value < 0:
@@ -51,14 +68,30 @@ class ItemCarrinhoSerializer(serializers.ModelSerializer):
         source='produto',
         write_only=True,
     )
-    subtotal = serializers.SerializerMethodField()
+    subtotal       = serializers.SerializerMethodField()
+    preco_unitario = serializers.SerializerMethodField()
+    variante       = serializers.SerializerMethodField()
 
     class Meta:
         model  = ItemCarrinho
-        fields = ['id', 'produto', 'produto_id', 'quantidade', 'atributos', 'subtotal']
+        fields = ['id', 'produto', 'produto_id', 'quantidade', 'atributos',
+                  'variante', 'preco_unitario', 'subtotal']
+
+    def get_preco_unitario(self, obj):
+        return str(obj.preco_unitario)
 
     def get_subtotal(self, obj):
-        return round(float(obj.produto.preco) * obj.quantidade, 2)
+        return round(float(obj.preco_unitario) * obj.quantidade, 2)
+
+    def get_variante(self, obj):
+        """Variante escolhida + stock actual dela (para avisar se baixou entretanto)."""
+        v = obj.variante
+        if not v:
+            return None
+        return {
+            'id': v.id, 'combinacao': v.combinacao, 'ativo': v.ativo,
+            'quantidade_disponivel': v.quantidade,
+        }
 
     def validate_quantidade(self, value):
         if value < 1:
@@ -96,8 +129,8 @@ class CarrinhoSerializer(serializers.ModelSerializer):
 
     def get_total(self, obj):
         return round(sum(
-            float(item.produto.preco) * item.quantidade
-            for item in obj.itens.select_related('produto').all()
+            float(item.preco_unitario) * item.quantidade
+            for item in obj.itens.select_related('produto', 'variante').all()
         ), 2)
 
     def get_total_itens(self, obj):
@@ -114,7 +147,7 @@ class ItemEncomendaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ItemEncomenda
-        fields = ['id', 'produto', 'quantidade', 'preco', 'atributos', 'subtotal']
+        fields = ['id', 'produto', 'quantidade', 'preco', 'atributos', 'variante', 'subtotal']
 
     def get_subtotal(self, obj):
         return round(float(obj.preco) * obj.quantidade, 2)
