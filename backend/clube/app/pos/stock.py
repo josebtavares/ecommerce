@@ -1,0 +1,108 @@
+"""
+Stock nas vendas do POS.
+
+O stock pertence ao produto, não ao canal:
+  - produto da loja Bendi (origem "loja") → stock da Bendi (Inventario / VarianteProduto),
+    partilhado com as vendas online
+  - produto próprio do POS (origem "pos")  → stock do POS (ProdutoPOS.stock / VarianteProdutoPOS)
+
+O stock é descontado quando o item é ADICIONADO à conta (reserva enquanto está na mesa)
+e reposto quando o item é removido/cancelado ou a conta é cancelada.
+Chamar sempre dentro de transaction.atomic (usa select_for_update).
+"""
+from django.db.models import F
+
+from ..models import Produto, Inventario, VarianteProduto
+from ..utils.variantes import resolver_variante, atualizar_total_inventario
+from .models import ProdutoPOS, VarianteProdutoPOS
+
+
+def _msg(nome, variante, disponivel):
+    nome = nome + (f' ({variante.descricao()})' if variante else '')
+    if disponivel <= 0:
+        return f'"{nome}" está esgotado.'
+    return f'Stock insuficiente de "{nome}". Disponível: {disponivel}.'
+
+
+def reservar_stock(produto, quantidade, atributos):
+    """
+    Valida e desconta o stock para um item novo da conta.
+    produto: app.Produto ou pos.ProdutoPOS (já obtido; a linha é bloqueada aqui).
+    Devolve (info, None) ou (None, mensagem_de_erro), com
+      info = { variante, variante_pos, preco_unitario, nome }
+    """
+    e_pos = isinstance(produto, ProdutoPOS)
+    modelo = ProdutoPOS if e_pos else Produto
+    produto = modelo.objects.select_for_update().get(pk=produto.pk)
+
+    info = {'variante': None, 'variante_pos': None,
+            'preco_unitario': produto.preco, 'nome': produto.nome}
+
+    variante, erro = resolver_variante(produto, atributos, lock=True)
+    if erro:
+        return None, erro
+
+    if variante is not None:
+        if variante.quantidade < quantidade:
+            return None, _msg(produto.nome, variante, variante.quantidade)
+        antes = variante.quantidade
+        variante.quantidade -= quantidade
+        variante.save(update_fields=['quantidade', 'data_atualizacao'])
+        atualizar_total_inventario(produto)
+        info['variante_pos' if e_pos else 'variante'] = variante
+        info['preco_unitario'] = variante.preco_efetivo
+        info['nome'] = f'{produto.nome} ({variante.descricao()})'
+        if not e_pos:
+            _alerta(produto, antes, variante.quantidade, variante)
+        return info, None
+
+    if e_pos:
+        if produto.controlar_stock:
+            if produto.stock < quantidade:
+                return None, _msg(produto.nome, None, produto.stock)
+            produto.stock -= quantidade
+            produto.save(update_fields=['stock'])
+        return info, None
+
+    inv = Inventario.objects.select_for_update().filter(produto=produto).first()
+    if inv:
+        if inv.quantidade < quantidade:
+            return None, _msg(produto.nome, None, inv.quantidade)
+        antes = inv.quantidade
+        inv.quantidade -= quantidade
+        inv.save(update_fields=['quantidade', 'data_atualizacao'])
+        _alerta(produto, antes, inv.quantidade)
+    return info, None
+
+
+def repor_stock_item(item):
+    """Devolve ao stock as unidades de um item da conta (remoção, cancelamento)."""
+    q = item.quantidade
+    if item.variante_pos_id:
+        VarianteProdutoPOS.objects.filter(id=item.variante_pos_id).update(quantidade=F('quantidade') + q)
+        atualizar_total_inventario(ProdutoPOS.objects.get(id=item.variante_pos.produto_id))
+    elif item.variante_id:
+        VarianteProduto.objects.filter(id=item.variante_id).update(quantidade=F('quantidade') + q)
+        atualizar_total_inventario(Produto.objects.get(id=item.variante.produto_id))
+    elif item.produto_pos_id:
+        ProdutoPOS.objects.filter(id=item.produto_pos_id, controlar_stock=True).update(stock=F('stock') + q)
+    elif item.produto_id:
+        Inventario.objects.filter(produto_id=item.produto_id).update(quantidade=F('quantidade') + q)
+
+
+def _alerta(produto, antes, depois, variante=None):
+    # mesmo alerta de stock baixo das vendas online (dono/gestor da loja)
+    from ..Views.inventariocarrinhoencomendaView import _alerta_stock_baixo
+    _alerta_stock_baixo(produto.loja, produto, antes, depois, variante)
+
+
+def cancelar_conta(conta, motivo=''):
+    """
+    Cancela a conta inteira: repõe o stock dos itens não cancelados, marca-os
+    cancelados, recalcula o total e liberta a mesa. Usado no POS e no admin.
+    """
+    conta.cancelar(motivo)          # repõe o stock dos itens não cancelados
+    conta.items.exclude(status='cancelado').update(status='cancelado')
+    conta.calcular_totais()
+    if conta.mesa_id:
+        conta.mesa.fechar()

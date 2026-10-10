@@ -54,10 +54,23 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-zinc-800/50">
-          <tr v-for="inv in inventario" :key="inv.id" class="hover:bg-zinc-800/30 transition">
+          <template v-for="inv in inventario" :key="inv.id">
+          <tr class="hover:bg-zinc-800/30 transition">
             <td class="px-4 py-3">
               <p class="text-sm font-medium text-zinc-200">{{ inv.produto_nome }}</p>
               <p class="text-xs text-zinc-600">{{ inv.produto_sku }}</p>
+              <!-- resumo das variações -->
+              <button v-if="inv.stock_por_variante" type="button" @click="toggleVariantes(inv)"
+                class="mt-1 inline-flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 transition">
+                📦 {{ inv.variantes.length }} variações
+                <span v-if="esgotadas(inv)" class="text-red-400">· {{ esgotadas(inv) }} esgotada{{ esgotadas(inv) > 1 ? 's' : '' }}</span>
+                <span v-else-if="emBaixo(inv)" class="text-amber-400">· {{ emBaixo(inv) }} em baixo</span>
+                <span class="transition-transform" :class="aberto === inv.id && 'rotate-180'">▾</span>
+              </button>
+              <button v-else-if="inv.variantes_pendentes" type="button" @click="toggleVariantes(inv)"
+                class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20 transition">
+                ⚠️ Definir stock por variação
+              </button>
             </td>
             <td class="px-4 py-3 text-center">
               <span :class="[
@@ -67,6 +80,7 @@
                 inv.quantidade <= 20      ? 'bg-yellow-500/15 text-yellow-400' :
                                             'bg-green-500/15 text-green-400'
               ]">{{ inv.quantidade }} un.</span>
+              <p v-if="inv.stock_por_variante" class="text-[10px] text-zinc-600 mt-1">total</p>
             </td>
             <td class="px-4 py-3 text-center text-sm text-zinc-500 hidden sm:table-cell">
               {{ formatPrice(inv.preco_custo) }}
@@ -75,12 +89,26 @@
               {{ formatPrice(inv.preco_venda) }}
             </td>
             <td class="px-4 py-3 text-center">
-              <button @click="abrirAjuste(inv)"
-                class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-300 transition">
-                Ajustar
-              </button>
+              <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                <button v-if="inv.stock_por_variante || inv.variantes_pendentes" @click="toggleVariantes(inv)"
+                  :class="['px-3 py-1.5 rounded-lg text-xs font-medium transition',
+                           aberto === inv.id ? 'bg-amber-500/20 text-amber-200' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300']">
+                  Variações
+                </button>
+                <button @click="abrirAjuste(inv)"
+                  class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-300 transition">
+                  {{ inv.stock_por_variante ? 'Preços' : 'Ajustar' }}
+                </button>
+              </div>
             </td>
           </tr>
+          <!-- grelha de variações (expandida) -->
+          <tr v-if="aberto === inv.id" class="bg-zinc-950/40">
+            <td colspan="5" class="px-4 py-4">
+              <VariantesStockEditor :lojaId="lojaId" :produtoId="inv.produto" @guardado="onVariantesGuardadas" />
+            </td>
+          </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -122,10 +150,15 @@
          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
          @click.self="modalAjuste = null">
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-sm p-6 shadow-2xl">
-        <h3 class="text-base font-bold text-zinc-100 mb-1">Ajustar stock</h3>
+        <h3 class="text-base font-bold text-zinc-100 mb-1">{{ modalAjuste.stock_por_variante ? 'Preços' : 'Ajustar stock' }}</h3>
         <p class="text-xs text-zinc-500 mb-5">{{ modalAjuste.produto_nome }}</p>
         <div class="space-y-4">
-          <div>
+          <p v-if="modalAjuste.stock_por_variante"
+             class="text-xs text-amber-200/90 bg-amber-500/5 border border-amber-500/30 rounded-xl px-3 py-2 leading-relaxed">
+            Este produto usa stock por variação ({{ modalAjuste.quantidade }} un. no total).
+            Ajusta as quantidades em <b>Variações</b>.
+          </p>
+          <div v-else>
             <label class="text-xs text-zinc-500 mb-1 block">Ajuste de quantidade</label>
             <input v-model.number="ajusteValor" type="number" placeholder="+10 ou -5"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
@@ -165,6 +198,7 @@
             <span v-else>Guardar</span>
           </button>
         </div>
+        <p v-if="erroAjuste" class="mt-3 text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{{ erroAjuste }}</p>
       </div>
     </div>
   </div>
@@ -172,9 +206,11 @@
 
 <script>
 import api from '@/services/api'
+import VariantesStockEditor from '@/components/inventario/VariantesStockEditor.vue'
 
 export default {
   name: 'BackofficeInventario',
+  components: { VariantesStockEditor },
   props: { lojaId: [String, Number] },
 
   data () {
@@ -192,6 +228,8 @@ export default {
       ajustePrecoC: 0,
       ajustePrecoV: 0,
       loadingAjuste: false,
+      erroAjuste: '',
+      aberto: null,   // id da linha com a grelha de variações aberta
     }
   },
 
@@ -214,9 +252,9 @@ export default {
       this.debounceTimer = setTimeout(() => this.fetchInventario(1), 350)
     },
 
-    async fetchInventario (pagina = this.page) {
+    async fetchInventario (pagina = this.page, silencioso = false) {
       this.page    = pagina
-      this.loading = true
+      if (!silencioso) this.loading = true
       try {
         const params = {
           limit:  this.limit,
@@ -233,6 +271,7 @@ export default {
 
     abrirAjuste (inv) {
       this.modalAjuste  = inv
+      this.erroAjuste   = ''
       this.ajusteValor  = 0
       this.ajustePrecoC = parseFloat(inv.preco_custo)
       this.ajustePrecoV = parseFloat(inv.preco_venda)
@@ -240,17 +279,37 @@ export default {
 
     async guardarAjuste () {
       this.loadingAjuste = true
+      this.erroAjuste = ''
       try {
-        await api.post(`/app/loja/${this.lojaId}/inventario/`, {
+        const body = {
           produto_id:  this.modalAjuste.produto,
-          quantidade:  this.modalAjuste.quantidade + (this.ajusteValor || 0),
           preco_custo: this.ajustePrecoC,
           preco_venda: this.ajustePrecoV,
-        })
+        }
+        // com stock por variação a quantidade é gerida por variação (o backend rejeita o total)
+        if (!this.modalAjuste.stock_por_variante) {
+          body.quantidade = this.modalAjuste.quantidade + (this.ajusteValor || 0)
+        }
+        await api.post(`/app/loja/${this.lojaId}/inventario/`, body)
         this.modalAjuste = null
         await this.fetchInventario()
-      } catch (e) { console.error(e) }
-      finally { this.loadingAjuste = false }
+      } catch (e) {
+        const d = e.response?.data
+        this.erroAjuste = d?.detail || (d && Object.values(d).flat()[0]) || 'Erro ao guardar.'
+      } finally { this.loadingAjuste = false }
+    },
+
+    // ── Variações ───────────────────────────────────────────
+    toggleVariantes (inv) {
+      this.aberto = this.aberto === inv.id ? null : inv.id
+    },
+
+    esgotadas (inv) { return inv.variantes.filter(v => v.quantidade === 0).length },
+    emBaixo (inv)   { return inv.variantes.filter(v => v.quantidade > 0 && v.quantidade <= 5).length },
+
+    // actualiza a linha (total, resumo) sem fechar a grelha
+    async onVariantesGuardadas () {
+      await this.fetchInventario(this.page, true)
     },
   }
 }

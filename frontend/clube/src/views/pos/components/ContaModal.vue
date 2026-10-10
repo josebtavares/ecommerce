@@ -205,6 +205,7 @@
                     <div class="min-w-0">
                       <div class="flex items-center gap-2">
                         <h4 class="truncate text-sm font-black text-slate-950">{{ item.nome }}</h4>
+                        <p v-if="item.opcoes_texto" class="truncate text-[11px] font-bold text-amber-700">{{ item.opcoes_texto }}</p>
                         <span :class="['rounded-full px-2 py-0.5 text-[10px] font-black uppercase', item.origem === 'pos' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
                           {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
                         </span>
@@ -273,6 +274,10 @@
                   Sem permissão
                 </div>
               </div>
+              <button v-if="podeCancelarItems" type="button" @click="cancelarConta"
+                class="mt-2 h-10 w-full rounded-2xl text-xs font-black text-red-600 transition hover:bg-red-50">
+                Cancelar conta
+              </button>
             </div>
           </div>
         </div>
@@ -466,6 +471,7 @@
                   <div class="min-w-0">
                     <div class="flex items-center gap-2">
                       <h4 class="truncate text-sm font-black text-slate-950">{{ item.nome }}</h4>
+                      <p v-if="item.opcoes_texto" class="truncate text-[11px] font-bold text-amber-700">{{ item.opcoes_texto }}</p>
                       <span :class="['rounded-full px-2 py-0.5 text-[10px] font-black uppercase', item.origem === 'pos' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
                         {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
                       </span>
@@ -536,10 +542,23 @@
                 Sem permissão
               </div>
             </div>
+            <button v-if="podeCancelarItems" type="button" @click="cancelarConta"
+              class="mt-2 h-10 w-full rounded-2xl text-xs font-black text-red-600 transition hover:bg-red-50">
+              Cancelar conta
+            </button>
           </footer>
         </aside>
       </div>
     </div>
+
+    <!-- Escolha de opções / variação -->
+    <VariantePicker
+      v-if="produtoEscolha"
+      :produto="produtoEscolha"
+      :adding="!!addingProdutoUid"
+      @close="produtoEscolha = null"
+      @confirmar="onEscolhaConfirmada"
+    />
 
     <!-- Modal Pagamento -->
     <PagamentoModal
@@ -554,12 +573,15 @@
 
 <script>
 import api from '@/services/api'
+import { toast } from 'vue3-toastify'
 import PagamentoModal from './PagamentoModal.vue'
+import VariantePicker from './VariantePicker.vue'
+import { precisaEscolha } from '@/utils/variantes'
 
 export default {
   name: 'ContaModal',
 
-  components: { PagamentoModal },
+  components: { PagamentoModal, VariantePicker },
 
   props: {
     mesa: {
@@ -595,6 +617,7 @@ export default {
       loadingProdutos: false,
       addingProdutoUid: null,
       showPagamentoModal: false,
+      produtoEscolha: null,   // produto à espera de escolha de opções
       error: '',
       mobileActiveTab: 'produtos',
       scrollPosition: 0
@@ -701,6 +724,21 @@ export default {
       if (!this.conta?.id) { this.error = 'A conta ainda não está pronta.'; return }
       if (!produto.disponivel) { this.error = 'Este produto não está disponível.'; return }
 
+      // produto com opções (tamanho, cor, gelo…) → escolher primeiro
+      if (precisaEscolha(produto)) {
+        this.error = ''
+        this.produtoEscolha = produto
+        return
+      }
+      await this.adicionarItem(produto, {}, 1)
+    },
+
+    async onEscolhaConfirmada({ atributos, quantidade }) {
+      const ok = await this.adicionarItem(this.produtoEscolha, atributos, quantidade)
+      if (ok) this.produtoEscolha = null
+    },
+
+    async adicionarItem(produto, atributos, quantidade) {
       this.addingProdutoUid = this.produtoUid(produto)
       this.error = ''
 
@@ -708,17 +746,42 @@ export default {
         await api.post(`/api/pos/${this.posId}/contas/${this.conta.id}/items/`, {
           produto_id:  produto.id,
           origem:      produto.origem,
-          quantidade:  1,
+          quantidade,
+          atributos,
           observacoes: ''
         })
         await this.recarregarConta()
         await this.carregarProdutos()
 
         if (window.innerWidth < 1024) this.mobileActiveTab = 'pedido'
+        return true
       } catch (err) {
-        this.error = err.response?.data?.detail || 'Erro ao adicionar produto.'
+        // ex.: "Stock insuficiente de 'Limonada (grande)'. Disponível: 1."
+        const msg = err.response?.data?.detail || 'Erro ao adicionar produto.'
+        this.error = msg
+        if (this.produtoEscolha) toast.error(msg)
+        await this.carregarProdutos()   // o stock pode ter mudado — o seletor actualiza
+        if (this.produtoEscolha) {
+          this.produtoEscolha = this.produtos.find(p => this.produtoUid(p) === this.produtoUid(produto)) || this.produtoEscolha
+        }
+        return false
       } finally {
         this.addingProdutoUid = null
+      }
+    },
+
+    async cancelarConta() {
+      if (!this.podeCancelarItems || !this.conta?.id) return
+      const motivo = window.prompt('Cancelar a conta inteira? O stock de todos os itens volta a ficar disponível.\n\nMotivo (opcional):', '')
+      if (motivo === null) return
+      this.error = ''
+      try {
+        await api.post(`/api/pos/${this.posId}/contas/${this.conta.id}/cancelar/`, { motivo })
+        toast.success('Conta cancelada. Stock reposto.')
+        this.$emit('atualizar')
+        this.$emit('close')
+      } catch (err) {
+        this.error = err.response?.data?.detail || 'Erro ao cancelar a conta.'
       }
     },
 

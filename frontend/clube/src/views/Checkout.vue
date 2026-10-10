@@ -208,15 +208,21 @@
               <div class="flex-1 min-w-0">
                 <p class="text-xs font-medium text-zinc-200 truncate">{{ item.produto?.nome }}</p>
                 <p class="text-xs text-zinc-500">x{{ item.quantidade }}</p>
-                <div v-if="item.atributos && Object.keys(item.atributos).length > 0" class="flex flex-wrap gap-1 mt-1">
-                  <span v-for="(val, key) in item.atributos" :key="key"
+                <p v-if="item.variante && item.quantidade > (item.variante.ativo ? item.variante.quantidade_disponivel : 0)"
+                   class="text-[11px] text-amber-500 mt-0.5">
+                  ⚠️ {{ (item.variante.ativo ? item.variante.quantidade_disponivel : 0) > 0
+                        ? `Só restam ${item.variante.quantidade_disponivel} desta combinação — ajusta no carrinho.`
+                        : 'Esta combinação esgotou — remove-a do carrinho.' }}
+                </p>
+                <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1">
+                  <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
                         class="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] rounded capitalize">
                     {{ key }}: <span class="text-zinc-300 font-medium">{{ val }}</span>
                   </span>
                 </div>
               </div>
               <span class="text-xs font-bold text-zinc-300 flex-shrink-0">
-                {{ formatPrice(parseFloat(item.produto?.preco || 0) * item.quantidade) }}
+                {{ formatPrice(parseFloat(item.preco_unitario ?? item.produto?.preco ?? 0) * item.quantidade) }}
               </span>
             </div>
           </div>
@@ -291,6 +297,7 @@
 <script>
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import { formatarAtributos, temAtributos } from '@/utils/atributos'
 
 // mapa de ícones e descrições para cada tipo de método
 const METODO_INFO = {
@@ -345,7 +352,7 @@ export default {
     lojaId ()           { return this.$route.params.lojaId },
     opcaoSelecionada () { return this.opcoesEntrega.find(o => o.id === this.opcaoEntregaId) || null },
     subtotal () {
-      return this.itens.reduce((s, i) => s + parseFloat(i.produto?.preco || 0) * i.quantidade, 0)
+      return this.itens.reduce((s, i) => s + parseFloat(i.preco_unitario ?? i.produto?.preco ?? 0) * i.quantidade, 0)
     },
     custoEntrega () {
       if (this.tipoEntrega !== 'entrega' || !this.opcaoSelecionada) return 0
@@ -375,6 +382,7 @@ export default {
   },
 
   methods: {
+    formatarAtributos, temAtributos,
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
@@ -447,9 +455,15 @@ export default {
         if (this.tipoEntrega === 'entrega' && this.opcaoEntregaId) {
           payload.opcao_entrega_id = this.opcaoEntregaId
         }
-        const { data: encomenda } = await api.post(
-          `/app/loja/${this.lojaId}/encomenda/criar/`, payload
-        )
+        let encomenda
+        try {
+          ({ data: encomenda } = await api.post(`/app/loja/${this.lojaId}/encomenda/criar/`, payload))
+        } catch (e) {
+          // ex.: "Stock insuficiente de 'Camisola (preto · S)'. Disponível: 1."
+          this.erro = e.response?.data?.detail || 'Erro ao criar a encomenda. Tenta novamente.'
+          await this.fetchCarrinho()   // mostra o stock actualizado em cada item
+          return
+        }
 
         // 2a — Flutterwave: redirecionar para página externa
         if (this.metodoPagamento === 'flutterwave') {
@@ -479,7 +493,7 @@ export default {
         this.$router.push({ name: 'EncomendaSucesso', params: { id: encomenda.id } })
       })
 
-      if (!this.loadingConfirmar && !this.redirectindoFlutterwave && this.$route.name !== 'EncomendaSucesso') {
+      if (!this.erro && !this.loadingConfirmar && !this.redirectindoFlutterwave && this.$route.name !== 'EncomendaSucesso') {
         this.erro = 'Erro ao processar a encomenda. Verifica os dados e tenta novamente.'
       }
     },

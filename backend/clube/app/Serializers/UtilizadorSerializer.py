@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.db import transaction
 from ..models import Utilizador
+from ..utils.password import mensagem_password_fraca
 
 
 # ══════════════════════════════════════════════════════════════
@@ -18,7 +19,7 @@ class UtilizadorSerializer(serializers.ModelSerializer):
     foto_url        = serializers.SerializerMethodField()
 
     # ── Escrita (write-only) — usados no registo/update ──────
-    password        = serializers.CharField(write_only=True, min_length=4, required=False)
+    password        = serializers.CharField(write_only=True, required=False)
     new_username    = serializers.CharField(write_only=True, required=False)
     new_email       = serializers.EmailField(write_only=True, required=False)
     new_first_name  = serializers.CharField(write_only=True, required=False)
@@ -46,6 +47,13 @@ class UtilizadorSerializer(serializers.ModelSerializer):
         if obj.foto and request:
             return request.build_absolute_uri(obj.foto.url)
         return None
+
+    # registo e alteração de password no perfil usam as mesmas regras do staff
+    def validate_password(self, value):
+        msg = mensagem_password_fraca(value)
+        if msg:
+            raise serializers.ValidationError(msg)
+        return value
 
     # ── CREATE ────────────────────────────────────────────────
     @transaction.atomic
@@ -153,3 +161,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     token        = serializers.CharField()
     new_password = serializers.CharField(min_length=8)
  
+
+    def validate_new_password(self, value):
+        msg = mensagem_password_fraca(value)
+        if msg:
+            raise serializers.ValidationError(msg)
+        return value

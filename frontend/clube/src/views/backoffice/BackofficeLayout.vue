@@ -8,13 +8,13 @@
 
     <!-- ═══ SIDEBAR ═══ -->
     <aside :class="[
-      'fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-zinc-900 border-r border-zinc-800 flex flex-col',
+      'fixed lg:sticky lg:top-0 lg:h-screen lg:self-start inset-y-0 left-0 z-40 w-72 bg-zinc-900 border-r border-zinc-800 flex flex-col',
       'transition-transform duration-300 ease-in-out',
       sidebarAberta ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
     ]">
 
       <!-- Loja info -->
-      <div class="p-5 border-b border-zinc-800 flex items-center justify-between">
+      <div class="p-5 border-b border-zinc-800 flex items-center justify-between flex-shrink-0">
         <div v-if="loadingLoja" class="flex items-center gap-3 flex-1">
           <div class="w-10 h-10 rounded-xl bg-zinc-800 animate-pulse flex-shrink-0"></div>
           <div class="flex-1 space-y-1">
@@ -45,7 +45,7 @@
       </div>
 
       <!-- Nav -->
-      <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+      <nav class="flex-1 min-h-0 p-4 space-y-1 overflow-y-auto">
         <p class="text-xs font-semibold text-zinc-600 uppercase tracking-wider px-3 mb-2">Gestão</p>
         <BackofficeSidebarItem
           v-for="item in navItems" :key="item.key"
@@ -60,7 +60,7 @@
       </nav>
 
       <!-- Footer -->
-      <div class="p-4 border-t border-zinc-800 space-y-1">
+      <div class="p-4 border-t border-zinc-800 space-y-1 flex-shrink-0">
         <button @click="$router.push(`/loja/${lojaId}`)"
           class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition text-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

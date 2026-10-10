@@ -1,5 +1,6 @@
 from django.urls import path
 from ..Views import adminView
+from ..pos import views_admin as pos_admin
 
 urlpatterns = [
 
@@ -42,6 +43,15 @@ urlpatterns = [
     
     #-─ Relatórios ──────────────────────────────────────────────
     path('admin/relatorios/', adminView.admin_relatorios, name='admin-relatorios'),
+
+    #-─ POS (visão e suporte da plataforma) ───────────────────────
+    path('admin/pos/',                                    pos_admin.admin_pos_list,           name='admin-pos-list'),
+    path('admin/pos/<int:pos_id>/',                       pos_admin.admin_pos_detalhe,        name='admin-pos-detalhe'),
+    path('admin/pos/<int:pos_id>/suspender/',             pos_admin.admin_pos_suspender,      name='admin-pos-suspender'),
+    path('admin/pos/<int:pos_id>/reativar/',              pos_admin.admin_pos_reativar,       name='admin-pos-reativar'),
+    path('admin/pos/<int:pos_id>/desligar-loja/',         pos_admin.admin_pos_desligar_loja,  name='admin-pos-desligar-loja'),
+    path('admin/pos/<int:pos_id>/contas/<int:conta_id>/cancelar/', pos_admin.admin_pos_cancelar_conta, name='admin-pos-cancelar-conta'),
+    path('admin/pos/<int:pos_id>/membros/<int:membro_id>/password/', pos_admin.admin_pos_membro_password, name='admin-pos-membro-password'),
 ]
 
    

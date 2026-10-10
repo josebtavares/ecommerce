@@ -7,6 +7,7 @@
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
     <MultiCart ref="cart" :isDark="isDark" />
+    <PaginaInfoModal :slug="paginaAberta" :isDark="isDark" @close="paginaAberta = null" />
 
     <!-- Botão toggle dark/light — canto superior esquerdo, ao lado do hamburger -->
     <div class="fixed top-2 md:top-4 left-16 z-30 flex items-center gap-2">
@@ -282,21 +283,14 @@
                 <li @click="scrollToSection('produtos')" class="hover:text-red-500 cursor-pointer transition">Produtos</li>
               </ul>
             </div>
-            <div>
+            <div v-for="sec in seccoesRodape" :key="sec.key">
               <h4 class="text-xs font-semibold uppercase tracking-wider mb-4"
-                  :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">Suporte</h4>
+                  :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">{{ sec.label }}</h4>
               <ul class="space-y-2 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
-                <li class="hover:text-red-500 cursor-pointer transition">Ajuda</li>
-                <li class="hover:text-red-500 cursor-pointer transition">Contacto</li>
-                <li class="hover:text-red-500 cursor-pointer transition">FAQ</li>
-              </ul>
-            </div>
-            <div>
-              <h4 class="text-xs font-semibold uppercase tracking-wider mb-4"
-                  :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">Legal</h4>
-              <ul class="space-y-2 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
-                <li class="hover:text-red-500 cursor-pointer transition">Termos de Serviço</li>
-                <li class="hover:text-red-500 cursor-pointer transition">Privacidade</li>
+                <li v-for="p in sec.paginas" :key="p.slug">
+                  <button @click="paginaAberta = p.slug"
+                    class="hover:text-red-500 transition text-left">{{ p.titulo }}</button>
+                </li>
               </ul>
             </div>
           </div>
@@ -323,6 +317,7 @@ import MultiCart       from '@/components/cart/multiCart.vue'
 import StoreSlider     from '@/components/sliders/StoreSlider.vue'
 import ProductSlider   from '@/components/sliders/ProductSlider.vue'
 import StoreCatalog    from '@/components/catalog/StoreCatalog.vue'
+import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 import api from '@/services/api'
@@ -350,7 +345,7 @@ const TIPO_ICONS = {
 
 export default {
   name: 'AppHome',
-  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog },
+  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, PaginaInfoModal },
 
   data () {
     return {
@@ -369,10 +364,22 @@ export default {
       sectionRefs: {},
       logoDefault,
       logoLight,
+      paginasRodape: [],
+      paginaAberta: null,
     }
   },
 
   computed: {
+    // Colunas "Suporte" e "Legal" do rodapé — só páginas activas no admin
+    seccoesRodape () {
+      return [
+        { key: 'suporte', label: 'Suporte' },
+        { key: 'legal',   label: 'Legal' },
+      ]
+        .map(s => ({ ...s, paginas: this.paginasRodape.filter(p => p.seccao === s.key).sort((a, b) => a.ordem - b.ordem) }))
+        .filter(s => s.paginas.length)
+    },
+
     selectedCategoriaLabel () {
       return this.categoriasExistentes.find(c => c.value === this.selectedCategoria)?.label || ''
     },
@@ -390,6 +397,7 @@ export default {
       this.fetchCategoriasExistentes(),
       this.fetchTiposExistentes(),
       this.fetchCategoriasPlataforma(),
+      this.fetchPaginasRodape(),
     ])
   },
 
@@ -401,6 +409,13 @@ export default {
 
   methods: {
     goToStore (id) { this.sidebarAberta = false; this.$router.push(`/loja/${id}`) },
+
+    async fetchPaginasRodape () {
+      try {
+        const { data } = await api.get('/app/paginas/')
+        this.paginasRodape = data || []
+      } catch (e) { this.paginasRodape = [] }
+    },
     openProduct (produto) { this.selectedProduct = produto; this.selectedLoja = produto.loja },
     tipoIcon (nome) { return TIPO_ICONS[nome?.toLowerCase()] || '📦' },
 
