@@ -1,10 +1,14 @@
 <template>
-  <div :class="['text-white fixed top-2 md:top-6 right-[2.5vw] z-20 flex items-center gap-6', !isDark && 'text-zinc-800']">
+  <!-- Posição partilhada com o carrinho — ver assets/loja-acoes.css -->
+  <div :class="['loja-acoes-slot loja-acoes-slot--perfil z-20 text-white', !isDark && 'text-zinc-800']">
     <NotificacaoSino :isDark="isDark" />
-    <font-awesome-icon :icon="['fas', 'user']" size="xl"
-      class="cursor-pointer transition-colors"
-      :class="isDark ? 'text-white' : 'text-zinc-700 hover:text-zinc-900'"
-      @click="toggle" />
+    <button @click="toggle" aria-label="Perfil"
+      class="loja-acao-btn"
+      :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
+      <font-awesome-icon :icon="['fas', 'user']"
+        class="text-[15px]"
+        :class="isDark ? 'text-white' : 'text-zinc-700'" />
+    </button>
 
     <!-- Backdrop -->
     <transition enter-active-class="transition duration-200" enter-from-class="opacity-0"
@@ -108,9 +112,10 @@
             <div class="space-y-3">
               <div>
                 <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Nova password</label>
-                <input v-model="formPassword.password" type="password"
+                <input v-model="formPassword.password" type="password" autocomplete="new-password"
                   class="w-full px-3 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
                   :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+                <PasswordForca :password="formPassword.password" :isDark="isDark" />
               </div>
               <div>
                 <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Confirmar password</label>
@@ -200,8 +205,8 @@
                           <div class="flex-1 min-w-0">
                             <p class="text-sm truncate" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ item.produto?.nome }}</p>
                             <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.</p>
-                            <div v-if="item.atributos && Object.keys(item.atributos).length > 0" class="flex flex-wrap gap-1 mt-1">
-                              <span v-for="(val, key) in item.atributos" :key="key"
+                            <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1">
+                              <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
                                     class="px-1.5 py-0.5 text-[10px] rounded capitalize"
                                     :class="isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-gray-200 text-zinc-600'">
                                 {{ key }}: <span class="font-medium">{{ val }}</span>
@@ -343,6 +348,9 @@ import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
+import PasswordForca from '@/components/forms/PasswordForca.vue'
+import { passwordValida } from '@/utils/password'
+import { formatarAtributos, temAtributos } from '@/utils/atributos'
 
 const props = defineProps({
   data:   { type: Object,  default: () => ({}) },
@@ -483,11 +491,18 @@ async function saveProfile() {
 async function savePassword() {
   passwordError.value = ''
   if (!formPassword.value.password) { passwordError.value = 'Introduz a nova password.'; return }
+  if (!passwordValida(formPassword.value.password)) { passwordError.value = 'A password não cumpre todos os requisitos de segurança.'; return }
   if (formPassword.value.password !== formPassword.value.confirm) { passwordError.value = 'As passwords não coincidem.'; return }
   await wrapPassword(async () => {
     const fd = new FormData()
     fd.append('password', formPassword.value.password)
-    await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    try {
+      await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    } catch (e) {
+      const d = e.response?.data
+      passwordError.value = (d && (d.password?.[0] || d.detail)) || 'Não foi possível alterar a password.'
+      return
+    }
     formPassword.value = { password: '', confirm: '' }
     toast.success('Password alterada!', { autoClose: 1500 })
   })

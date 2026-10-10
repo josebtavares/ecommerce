@@ -108,6 +108,9 @@
                   </span>
                 </div>
 
+                <p v-if="item.opcoes_texto" class="mt-1 text-xs font-bold text-amber-700">
+                  {{ item.opcoes_texto }}
+                </p>
                 <p v-if="item.observacoes" class="mt-1 text-xs italic text-slate-500">
                   {{ item.observacoes }}
                 </p>

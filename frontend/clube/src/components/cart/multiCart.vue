@@ -1,21 +1,20 @@
 <template>
   <!-- Cart Toggle Button -->
-  <!-- Alinhado com UserProfile: top-2 md:top-6, à esquerda do sino+user (~5.5rem) -->
-  <div class="fixed top-2 md:top-[1.35rem] right-[6rem] md:right-[calc(2.5vw+5.5rem)] z-30">
+  <!-- Posição partilhada com sino + perfil — ver assets/loja-acoes.css -->
+  <div class="loja-acoes-slot loja-acoes-slot--carrinho z-30">
     <button
       @click="toggleCart"
-      class="relative p-2.5 rounded-full transition-all shadow-lg group border"
-      :class="isDark
-        ? 'bg-zinc-900 border-zinc-700 hover:border-red-500'
-        : 'bg-white border-gray-300 hover:border-red-400 shadow-md'"
+      aria-label="Carrinho"
+      class="loja-acao-btn group"
+      :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-           :class="isDark ? 'text-zinc-300 group-hover:text-red-500' : 'text-zinc-600 group-hover:text-red-500'">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+           :class="isDark ? 'text-white' : 'text-zinc-700'">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
       <span v-if="totalItems > 0"
-        class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-600 text-white
-               text-xs font-bold flex items-center justify-center animate-pulse">
+        class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white
+               text-[10px] font-bold flex items-center justify-center">
         {{ totalItems }}
       </span>
     </button>
@@ -144,10 +143,10 @@
 
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold truncate" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ item.produto?.nome }}</p>
-                <p class="text-sm font-bold text-red-500 mt-0.5">{{ formatPrice(item.produto?.preco) }}</p>
+                <p class="text-sm font-bold text-red-500 mt-0.5">{{ formatPrice(item.preco_unitario ?? item.produto?.preco) }}</p>
 
-                <div v-if="item.atributos && Object.keys(item.atributos).length > 0" class="flex flex-wrap gap-1 mt-1.5">
-                  <span v-for="(val, key) in item.atributos" :key="key"
+                <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1.5">
+                  <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
                         class="px-1.5 py-0.5 text-[10px] rounded capitalize"
                         :class="isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-gray-100 text-zinc-500'">
                     {{ key }}: <span class="font-medium" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ val }}</span>
@@ -166,8 +165,8 @@
                   </button>
                   <span class="text-sm font-bold w-6 text-center"
                         :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ item.quantidade }}</span>
-                  <button @click="updateQty(item, 1)"
-                    class="w-7 h-7 rounded-lg flex items-center justify-center transition"
+                  <button @click="updateQty(item, 1)" :disabled="limiteVariante(item) !== null && item.quantidade >= limiteVariante(item)"
+                    class="w-7 h-7 rounded-lg flex items-center justify-center transition disabled:opacity-40"
                     :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3"
                          :class="isDark ? 'text-zinc-400' : 'text-zinc-500'"
@@ -176,6 +175,11 @@
                     </svg>
                   </button>
                 </div>
+
+                <!-- stock da combinação mudou desde que foi adicionada -->
+                <p v-if="avisoVariante(item)" class="mt-1.5 text-[11px] text-amber-500 leading-snug">
+                  ⚠️ {{ avisoVariante(item) }}
+                </p>
               </div>
 
               <div class="flex flex-col items-end justify-between flex-shrink-0">
@@ -186,7 +190,7 @@
                   </svg>
                 </button>
                 <p class="text-sm font-bold" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
-                  {{ formatPrice(parseFloat(item.produto?.preco || 0) * item.quantidade) }}
+                  {{ formatPrice(parseFloat(item.preco_unitario ?? item.produto?.preco ?? 0) * item.quantidade) }}
                 </p>
               </div>
             </div>
@@ -236,6 +240,8 @@
 
 <script>
 import api from '@/services/api'
+import { formatarAtributos, temAtributos } from '@/utils/atributos'
+import { toast } from 'vue3-toastify'
 
 export default {
   name: 'multiCart',
@@ -275,7 +281,7 @@ export default {
     activeLoja ()    { return this.lojas.find(l => l.id === this.activeLojaId) || null },
     activeItens ()   { return this.carrinhos[this.activeLojaId]?.itens || [] },
     activeSubtotal () {
-      return this.activeItens.reduce((s, i) => s + (parseFloat(i.produto?.preco || 0) * i.quantidade), 0)
+      return this.activeItens.reduce((s, i) => s + (parseFloat(i.preco_unitario ?? i.produto?.preco ?? 0) * i.quantidade), 0)
     },
   },
 
@@ -290,6 +296,21 @@ export default {
   },
 
   methods: {
+    formatarAtributos, temAtributos,
+
+    // stock disponível da combinação escolhida (null = produto sem variações)
+    limiteVariante (item) {
+      const v = item.variante
+      if (!v) return null
+      return v.ativo ? v.quantidade_disponivel : 0
+    },
+
+    avisoVariante (item) {
+      const lim = this.limiteVariante(item)
+      if (lim === null || item.quantidade <= lim) return ''
+      if (lim <= 0) return 'Esta combinação esgotou — remove-a ou escolhe outra.'
+      return `Só restam ${lim} — reduz a quantidade para finalizar.`
+    },
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
@@ -325,7 +346,7 @@ export default {
         await api.patch(`/app/loja/${lojaId}/carrinho/item/${item.id}/`, { quantidade: novaQty })
       } catch (e) {
         if (itemRef) itemRef.quantidade = novaQty - delta
-        console.error(e)
+        toast.error(e.response?.data?.detail || 'Não foi possível actualizar a quantidade.')
       }
     },
 

@@ -22,11 +22,19 @@
 
       <div v-if="aberto"
            data-sino-dropdown
-           class="fixed z-[9999] border flex flex-col overflow-hidden shadow-2xl max-h-[80vh]"
-           :class="isDark
-             ? 'bg-zinc-900 border-zinc-800 rounded-2xl'
-             : 'bg-white border-gray-200 rounded-2xl'"
+           class="sino-dropdown fixed z-[9999] border flex flex-col shadow-2xl rounded-2xl"
+           :class="[
+             isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200',
+             abreParaCima ? 'sino-dropdown--cima' : 'sino-dropdown--baixo',
+           ]"
            :style="dropdownStyle">
+
+        <!-- Seta a apontar para o sino -->
+        <span class="sino-seta"
+              :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'"
+              :style="{ left: setaLeft + 'px' }"></span>
+
+        <div class="flex flex-col min-h-0 flex-1 overflow-hidden rounded-2xl">
 
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
@@ -120,7 +128,7 @@
                   <div class="flex items-center gap-1.5 flex-shrink-0">
                     <span v-if="!notif.lida" class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
                     <button @click.stop="apagar(notif)"
-                      class="w-5 h-5 rounded flex items-center justify-center text-lg leading-none transition opacity-0 group-hover:opacity-100"
+                      class="w-5 h-5 rounded flex items-center justify-center text-lg leading-none transition sm:opacity-0 sm:group-hover:opacity-100"
                       :class="isDark ? 'text-zinc-600 hover:text-red-400' : 'text-gray-300 hover:text-red-400'">
                       ×
                     </button>
@@ -143,6 +151,7 @@
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </teleport>
@@ -185,9 +194,9 @@ export default {
       notificacoes: [], naoLidas: 0,
       lojas: [], lojaFiltro: null,
       offset: 0, temMais: false,
-      _ws: null, _wsTimer: null, _wsTentativas: 0,
-      isMobile: window.innerWidth < 640,
       dropdownStyle: {},
+      setaLeft: 0,
+      abreParaCima: false,
     }
   },
 
@@ -199,15 +208,33 @@ export default {
     },
   },
 
-  mounted () {
-    this.fetchLojas()
+  created () {
+    // estado do WebSocket — não reactivo (chaves com "_" não são expostas pelo Vue 3)
+    this.ws = null
+    this.wsTimer = null
+    this.pollTimer = null
+    this.wsTentativas = 0
+    this.destruido = false
+  },
+
+  async mounted () {
     document.addEventListener('click', this.clickFora)
-    this._wsLigar()
+    this.fetchLojas()
+    if (!localStorage.getItem('access_token')) return
+    // 1) contador por HTTP — o interceptor renova o token se tiver expirado
+    await this.fetchContador()
+    // 2) só depois liga o WebSocket, já com um token válido
+    this.wsLigar()
   },
 
   beforeUnmount () {
+    this.destruido = true
     document.removeEventListener('click', this.clickFora)
-    this._wsDesligar()
+    window.removeEventListener('resize', this.onReposicionar)
+    window.removeEventListener('scroll', this.onReposicionar, true)
+    window.removeEventListener('keydown', this.onTecla)
+    cancelAnimationFrame(this.rafPos)
+    this.wsDesligar()
   },
 
   methods: {
@@ -221,23 +248,54 @@ export default {
     },
 
     async toggle () {
-      this.isMobile = window.innerWidth < 640
-      this.aberto   = !this.aberto
+      if (!this.aberto) this.calcularPosicao()   // posição pronta antes do 1º frame
+      this.aberto = !this.aberto
       if (this.aberto && this.notificacoes.length === 0) await this.fetchNotificacoes()
     },
 
+    /**
+     * Ancora o popup ao sino:
+     *  - largura fluida: min(384px, largura do ecrã − 2×margem)
+     *  - borda direita alinhada com a do sino; desliza para não sair do ecrã
+     *  - abre para baixo; se não houver espaço (≥ 260px), abre para cima
+     *  - altura máxima = espaço disponível nesse lado
+     *  - seta sempre apontada ao centro do sino
+     */
     calcularPosicao () {
-      if (!this.$refs.sinoRef) return
-      const rect   = this.$refs.sinoRef.getBoundingClientRect()
-      const top    = Math.max(8, rect.bottom + 8)
-      const mobile = window.innerWidth < 640
-      if (mobile) {
-        const width = window.innerWidth - 16
-        this.dropdownStyle = { top: `${top}px`, right: '8px', left: '8px', width: `${width}px`, maxHeight: `${window.innerHeight - top - 16}px` }
-      } else {
-        const right = Math.max(8, window.innerWidth - rect.right)
-        this.dropdownStyle = { top: `${top}px`, right: `${right}px`, width: '384px', maxHeight: `${window.innerHeight - top - 16}px` }
-      }
+      const sino = this.$refs.sinoRef
+      if (!sino) return
+      const r  = sino.getBoundingClientRect()
+      const vw = document.documentElement.clientWidth   // sem a barra de scroll
+      const vh = window.innerHeight
+      const M  = vw < 640 ? 8 : 12      // margem às bordas do ecrã
+      const GAP = 10                    // distância ao sino (espaço para a seta)
+
+      const width = Math.min(384, vw - 2 * M)
+      let left = r.right - width
+      left = Math.max(M, Math.min(left, vw - width - M))
+
+      const espacoBaixo = vh - r.bottom - GAP - M
+      const espacoCima  = r.top - GAP - M
+      this.abreParaCima = espacoBaixo < 260 && espacoCima > espacoBaixo
+
+      const maxH = Math.max(160, Math.min(560, this.abreParaCima ? espacoCima : espacoBaixo))
+      const style = { left: `${left}px`, width: `${width}px`, maxHeight: `${maxH}px` }
+      if (this.abreParaCima) style.bottom = `${vh - r.top + GAP}px`
+      else                   style.top    = `${r.bottom + GAP}px`
+      this.dropdownStyle = style
+
+      // seta: centro do sino relativo ao popup, sem encostar aos cantos arredondados
+      this.setaLeft = Math.max(16, Math.min(r.left + r.width / 2 - left - 6, width - 28))
+    },
+
+    onReposicionar () {
+      if (!this.aberto) return
+      cancelAnimationFrame(this.rafPos)
+      this.rafPos = requestAnimationFrame(() => this.calcularPosicao())
+    },
+
+    onTecla (e) {
+      if (e.key === 'Escape' && this.aberto) this.aberto = false
     },
 
     async fetchLojas () {
@@ -247,18 +305,25 @@ export default {
       } catch (e) { /* sem lojas */ }
     },
 
-    _wsUrl () {
+    wsUrl () {
       const base  = process.env.VUE_APP_WS_URL || 'ws://localhost:8000/ws'
       const token = localStorage.getItem('access_token') || ''
       return `${base}/notificacoes/?token=${token}`
     },
 
-    _wsLigar () {
-      if (!localStorage.getItem('access_token')) return
-      if (this._ws?.readyState === WebSocket.OPEN) return
-      this._ws = new WebSocket(this._wsUrl())
-      this._ws.onopen  = () => { this._wsTentativas = 0 }
-      this._ws.onmessage = (e) => {
+    wsLigar () {
+      if (this.destruido || !localStorage.getItem('access_token')) return
+      if (this.ws && this.ws.readyState <= WebSocket.OPEN) return   // a ligar ou ligado
+
+      const ws = new WebSocket(this.wsUrl())
+      this.ws = ws
+
+      ws.onopen = () => {
+        this.wsTentativas = 0
+        clearInterval(this.pollTimer); this.pollTimer = null   // tempo real activo → sem polling
+      }
+
+      ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
           if (msg.type === 'nova') {
@@ -270,22 +335,33 @@ export default {
           if (msg.type === 'contador') this.naoLidas = msg.nao_lidas
         } catch (err) { /* silencioso */ }
       }
-      this._ws.onclose = (e) => {
-        if (e.code !== 4001) {
-          const delay = Math.min(1000 * 2 ** this._wsTentativas, 30000)
-          this._wsTentativas++
-          this._wsTimer = setTimeout(() => this._wsLigar(), delay)
-        } else {
-          this._wsTimer = setInterval(() => this.fetchContador(), 30000)
-          this.fetchContador()
-        }
+
+      // Uma ligação recusada (ex.: token expirado) chega como 1006, não 4001.
+      // Em qualquer queda: actualiza o contador por HTTP (renova o token),
+      // garante polling enquanto não houver socket, e tenta religar com backoff.
+      ws.onclose = (e) => {
+        if (this.ws === ws) this.ws = null
+        if (this.destruido || e.code === 1000) return
+
+        if (!this.pollTimer) this.pollTimer = setInterval(() => this.fetchContador(), 30000)
+
+        const delay = Math.min(1000 * 2 ** this.wsTentativas, 30000)
+        this.wsTentativas = Math.min(this.wsTentativas + 1, 6)
+        clearTimeout(this.wsTimer)
+        this.wsTimer = setTimeout(async () => {
+          await this.fetchContador()
+          this.wsLigar()
+        }, delay)
       }
-      this._ws.onerror = () => { this._ws?.close() }
+
+      ws.onerror = () => { ws.close() }
     },
 
-    _wsDesligar () {
-      clearTimeout(this._wsTimer); clearInterval(this._wsTimer)
-      this._ws?.close(1000); this._ws = null
+    wsDesligar () {
+      clearTimeout(this.wsTimer)
+      clearInterval(this.pollTimer)
+      this.wsTimer = this.pollTimer = null
+      if (this.ws) { this.ws.onclose = null; this.ws.close(1000); this.ws = null }
     },
 
     async fetchContador () {
@@ -347,8 +423,13 @@ export default {
 
   watch: {
     lojaFiltro () { this.offset = 0; this.notificacoes = []; this.fetchNotificacoes() },
-    async aberto (val) {
-      if (val) { await this.$nextTick(); this.calcularPosicao() }
+    // enquanto aberto, acompanha redimensionamento, rotação e scroll
+    aberto (val) {
+      const fn = val ? 'addEventListener' : 'removeEventListener'
+      window[fn]('resize', this.onReposicionar)
+      window[fn]('scroll', this.onReposicionar, true)
+      window[fn]('keydown', this.onTecla)
+      if (val) this.$nextTick(() => this.calcularPosicao())
     },
   },
 }
@@ -358,4 +439,23 @@ export default {
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Popup (teleportado para o body — estilos scoped continuam a aplicar-se) */
+.sino-dropdown { animation: sinoIn .16s ease-out; }
+.sino-dropdown--baixo { transform-origin: top right; }
+.sino-dropdown--cima  { transform-origin: bottom right; animation-name: sinoInCima; }
+
+.sino-seta {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-style: solid;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.sino-dropdown--baixo .sino-seta { top: -7px;    border-width: 1px 0 0 1px; }
+.sino-dropdown--cima  .sino-seta { bottom: -7px; border-width: 0 1px 1px 0; }
+
+@keyframes sinoIn     { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+@keyframes sinoInCima { from { opacity: 0; transform: translateY(4px)  scale(.98); } }
 </style>

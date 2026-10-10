@@ -47,6 +47,9 @@ class Utilizador(models.Model):
             'gerir_encomendas',
             'gerir_pagamentos',
             'gerir_tipos_globais',
+            'gerir_conteudo',
+            'ver_pos',
+            'gerir_pos',
         ],
         'moderador': [
             'ver_stats',
@@ -58,11 +61,15 @@ class Utilizador(models.Model):
             'gerir_utilizadores',
             'gerir_lojas',
             'gerir_encomendas',
+            'gerir_conteudo',
+            'ver_pos',
+            'gerir_pos',
         ],
         'contabilista': [
             'ver_stats',
             'gerir_pagamentos',
             'gerir_encomendas',
+            'ver_pos',
         ],
     }
  
@@ -348,6 +355,13 @@ class TipoProduto(models.Model):
                          related_name='tipos_produto',
                          null=True, blank=True,
                        )
+    # tipo próprio de um POS (para os produtos próprios do POS). loja=None e pos=None → global.
+    pos              = models.ForeignKey(
+                         'pos.ConfiguracaoPOS',
+                         on_delete=models.CASCADE,
+                         related_name='tipos_produto',
+                         null=True, blank=True,
+                       )
     nome             = models.CharField(max_length=100)   # removido unique=True
     descricao        = models.CharField(max_length=255, blank=True, default='')
     atributos_schema = models.JSONField(default=list)
@@ -360,8 +374,14 @@ class TipoProduto(models.Model):
     def __str__(self):
         if self.loja:
             return f'{self.nome} ({self.loja.nome})'
+        if self.pos_id:
+            return f'{self.nome} [POS {self.pos_id}]'
         return f'{self.nome} [global]'
- 
+
+    @property
+    def is_global(self):
+        return self.loja_id is None and self.pos_id is None
+
     def validar_atributos(self, atributos: dict) -> list:
         """
         Verifica atributos obrigatórios em falta.
@@ -422,6 +442,10 @@ class Produto(models.Model):
         verbose_name='Disponível no POS'
     )
 
+    # True quando o dono configurou stock por variação (grelha de VarianteProduto).
+    # Enquanto False, o produto usa o stock total do Inventario (comportamento antigo).
+    stock_por_variante = models.BooleanField(default=False)
+
     class Meta:
         ordering = ['-data_criacao']
 
@@ -481,6 +505,41 @@ class Inventario(models.Model):
         return f'Inventário: {self.produto.nome} — {self.quantidade} un.'
 
 
+class VarianteProduto(models.Model):
+    """
+    Uma combinação concreta das opções-variante de um produto, com stock próprio.
+      combinacao: {"cor": "preto", "tamanho": "M"}  (só atributos com "variante": true no tipo)
+      chave:      "cor=preto|tamanho=M"              (ordenada, única por produto)
+    Combinações que deixam de existir são desactivadas (nunca apagadas) para manter
+    o histórico das encomendas. Com produto.stock_por_variante, o Inventario do
+    produto guarda a soma das variantes activas.
+    """
+    produto    = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='variantes')
+    combinacao = models.JSONField(default=dict)
+    chave      = models.CharField(max_length=500)
+    quantidade = models.PositiveIntegerField(default=0)
+    preco      = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                     validators=[MinValueValidator(0)],
+                                     help_text='Vazio → usa o preço do produto')
+    sku        = models.CharField(max_length=100, blank=True, default='')
+    ativo      = models.BooleanField(default=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('produto', 'chave')]
+        ordering = ['chave']
+
+    @property
+    def preco_efetivo(self):
+        return self.preco if self.preco is not None else self.produto.preco
+
+    def descricao(self):
+        return ' · '.join(str(v) for v in self.combinacao.values())
+
+    def __str__(self):
+        return f'{self.produto.nome} [{self.descricao()}] — {self.quantidade} un.'
+
+
 # ══════════════════════════════════════════════════════════════
 # CARRINHO
 # ══════════════════════════════════════════════════════════════
@@ -503,8 +562,14 @@ class ItemCarrinho(models.Model):
     produto     = models.ForeignKey(Produto, on_delete=models.CASCADE)
     quantidade  = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
     atributos   = models.JSONField(default=dict, blank=True)
+    variante    = models.ForeignKey('VarianteProduto', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='+')
 
-    
+    @property
+    def preco_unitario(self):
+        if self.variante_id and self.variante.preco is not None:
+            return self.variante.preco
+        return self.produto.preco
 
     def __str__(self):
         return f'{self.quantidade}x {self.produto.nome}'
@@ -557,6 +622,8 @@ class ItemEncomenda(models.Model):
     quantidade  = models.PositiveIntegerField(default=1)
     preco       = models.DecimalField(max_digits=10, decimal_places=2)  # snapshot do preço
     atributos   = models.JSONField(default=dict, blank=True)  # ← novo
+    variante    = models.ForeignKey('VarianteProduto', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='itens_encomenda')
 
 
     def __str__(self):
@@ -1079,3 +1146,45 @@ class PodeVerRelatorios(PermissaoLoja):
 
 class PodeGerirTemplate(PermissaoLoja):
     permissao_necessaria = 'gerir_template'
+
+# ══════════════════════════════════════════════════════════════
+# PÁGINAS INSTITUCIONAIS DA PLATAFORMA (rodapé da home)
+# ══════════════════════════════════════════════════════════════
+
+class PaginaInstitucional(models.Model):
+    """
+    Conteúdo editável no painel de admin e mostrado num popup na home.
+      conteudo → texto livre (parágrafos, "## Título", "- item")
+      dados    → campos estruturados conforme o tipo de página:
+                   faq:      {"perguntas": [{"pergunta": "...", "resposta": "..."}]}
+                   contacto: {"email", "telefone", "whatsapp", "morada", "horario"}
+    """
+    SLUGS = [
+        ('ajuda',       'Ajuda'),
+        ('contacto',    'Contacto'),
+        ('faq',         'FAQ'),
+        ('termos',      'Termos de Serviço'),
+        ('privacidade', 'Privacidade'),
+    ]
+    SECCOES = [
+        ('suporte', 'Suporte'),
+        ('legal',   'Legal'),
+    ]
+
+    slug             = models.SlugField(max_length=30, unique=True, choices=SLUGS)
+    seccao           = models.CharField(max_length=10, choices=SECCOES, default='suporte')
+    titulo           = models.CharField(max_length=120)
+    conteudo         = models.TextField(blank=True, default='')
+    dados            = models.JSONField(default=dict, blank=True)
+    ativo            = models.BooleanField(default=True)
+    ordem            = models.PositiveSmallIntegerField(default=0)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+    atualizado_por   = models.ForeignKey(
+        Utilizador, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+
+    class Meta:
+        ordering = ['seccao', 'ordem']
+
+    def __str__(self):
+        return self.titulo

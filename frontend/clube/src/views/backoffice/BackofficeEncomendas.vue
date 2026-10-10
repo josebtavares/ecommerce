@@ -112,9 +112,9 @@
                   <div class="flex-1 min-w-0">
                     <p class="text-sm text-zinc-200 truncate">{{ item.produto?.nome }}</p>
                     <p class="text-xs text-zinc-500">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.</p>
-                    <div v-if="item.atributos && Object.keys(item.atributos).length > 0"
+                    <div v-if="temAtributos(item.atributos)"
                          class="flex flex-wrap gap-1 mt-1">
-                      <span v-for="(val, key) in item.atributos" :key="key"
+                      <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
                             class="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] rounded capitalize">
                         {{ key }}: <span class="text-zinc-300 font-medium">{{ val }}</span>
                       </span>
@@ -320,6 +320,7 @@
 
 <script>
 import api from '@/services/api'
+import { formatarAtributos, temAtributos } from '@/utils/atributos'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -382,6 +383,7 @@ export default {
   },
 
   methods: {
+    formatarAtributos, temAtributos,
     formatPrice (val) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0) },
     formatDate (d)    { return new Date(d).toLocaleDateString('pt-PT') },
 
