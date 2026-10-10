@@ -48,6 +48,8 @@ class Utilizador(models.Model):
             'gerir_pagamentos',
             'gerir_tipos_globais',
             'gerir_conteudo',
+            'ver_pos',
+            'gerir_pos',
         ],
         'moderador': [
             'ver_stats',
@@ -60,11 +62,14 @@ class Utilizador(models.Model):
             'gerir_lojas',
             'gerir_encomendas',
             'gerir_conteudo',
+            'ver_pos',
+            'gerir_pos',
         ],
         'contabilista': [
             'ver_stats',
             'gerir_pagamentos',
             'gerir_encomendas',
+            'ver_pos',
         ],
     }
  
@@ -350,6 +355,13 @@ class TipoProduto(models.Model):
                          related_name='tipos_produto',
                          null=True, blank=True,
                        )
+    # tipo próprio de um POS (para os produtos próprios do POS). loja=None e pos=None → global.
+    pos              = models.ForeignKey(
+                         'pos.ConfiguracaoPOS',
+                         on_delete=models.CASCADE,
+                         related_name='tipos_produto',
+                         null=True, blank=True,
+                       )
     nome             = models.CharField(max_length=100)   # removido unique=True
     descricao        = models.CharField(max_length=255, blank=True, default='')
     atributos_schema = models.JSONField(default=list)
@@ -362,8 +374,14 @@ class TipoProduto(models.Model):
     def __str__(self):
         if self.loja:
             return f'{self.nome} ({self.loja.nome})'
+        if self.pos_id:
+            return f'{self.nome} [POS {self.pos_id}]'
         return f'{self.nome} [global]'
- 
+
+    @property
+    def is_global(self):
+        return self.loja_id is None and self.pos_id is None
+
     def validar_atributos(self, atributos: dict) -> list:
         """
         Verifica atributos obrigatórios em falta.

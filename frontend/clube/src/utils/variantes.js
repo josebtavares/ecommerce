@@ -83,3 +83,92 @@ export function intervaloPreco (produto, escolhas) {
   if (!precos.length) return null
   return { min: Math.min(...precos), max: Math.max(...precos) }
 }
+
+/**
+ * Atributos de escolha do tipo do produto, só com as opções que o produto tem
+ * (ex.: tamanho: [pequeno, grande], gelo: [sim, não]). Usado no POS.
+ */
+export function opcoesDoProduto (produto) {
+  const valores = produto?.atributos || {}
+  return (produto?.tipo?.atributos_schema || [])
+    .filter(a => typeof a === 'object' && a.tipo === 'choices')
+    .map(a => {
+      const tem = valores[a.nome]
+      const lista = Array.isArray(tem) ? tem : (tem ? [tem] : [])
+      return { ...a, opcoes: (a.opcoes || []).filter(o => lista.includes(o)) }
+    })
+    .filter(a => a.opcoes.length)
+}
+
+/** O produto precisa que se escolham opções antes de ir para a conta? */
+export function precisaEscolha (produto) {
+  return opcoesDoProduto(produto).length > 0
+}
+
+// ── Grelha no formulário do produto (antes de gravar) ─────────────────────
+// Mesma regra do backend (app/utils/variantes.py → combinacoes_produto/chave_de).
+
+/** "cor=preto|tamanho=M" — chaves ordenadas, igual ao backend. */
+export function chaveDe (combinacao) {
+  return Object.keys(combinacao).sort().map(k => `${k}=${combinacao[k]}`).join('|')
+}
+
+/** Nomes dos atributos-variante (📦) de um schema de tipo, pela ordem do schema. */
+export function atributosVarianteSchema (schema) {
+  return (schema || [])
+    .filter(a => typeof a === 'object' && a.tipo === 'choices' && a.variante)
+    .map(a => a.nome)
+}
+
+/**
+ * Combinações possíveis a partir do schema do tipo e das opções seleccionadas
+ * no formulário: [{ chave, combinacao }]. Atributos 📦 sem opções são ignorados.
+ */
+export function combinacoesDe (schema, atributos) {
+  const valores = n => {
+    const v = (atributos || {})[n]
+    const lista = Array.isArray(v) ? v : (v ? [v] : [])
+    return [...new Set(lista.map(x => String(x).trim()).filter(Boolean))]
+  }
+  const nomes = atributosVarianteSchema(schema).filter(n => valores(n).length)
+  if (!nomes.length) return []
+  let combos = [{}]
+  for (const n of nomes) {
+    combos = combos.flatMap(c => valores(n).map(v => ({ ...c, [n]: v })))
+  }
+  return combos.map(combinacao => ({ chave: chaveDe(combinacao), combinacao }))
+}
+
+/** Reconstrói as linhas da grelha para novas combinações, mantendo os valores já escritos. */
+export function mesclarLinhas (combos, linhasAnteriores) {
+  const antes = Object.fromEntries((linhasAnteriores || []).map(l => [l.chave, l]))
+  return combos.map(({ chave, combinacao }) => ({
+    chave, combinacao,
+    quantidade: antes[chave]?.quantidade ?? 0,
+    preco:      antes[chave]?.preco ?? '',
+    sku:        antes[chave]?.sku ?? '',
+  }))
+}
+
+/** Linhas da grelha → formato do backend (campo "variantes" do formulário do produto). */
+export function linhasParaPayload (linhas) {
+  return (linhas || []).map(l => ({
+    chave: l.chave,
+    quantidade: Number(l.quantidade) || 0,
+    preco: l.preco === '' || l.preco === null || l.preco === undefined ? null : String(l.preco),
+    sku: String(l.sku || '').trim(),
+  }))
+}
+
+/** Todas as quantidades são inteiros ≥ 0? */
+export function grelhaValida (linhas) {
+  return (linhas || []).every(l => l.quantidade !== '' && Number.isInteger(Number(l.quantidade)) && Number(l.quantidade) >= 0)
+}
+
+/** Linhas iniciais a partir das variantes guardadas de um produto (payload da API). */
+export function linhasDoProduto (produto) {
+  return (produto?.variantes || []).map(v => ({
+    chave: v.chave, combinacao: v.combinacao,
+    quantidade: v.quantidade ?? 0, preco: v.preco ?? '', sku: v.sku || '',
+  }))
+}

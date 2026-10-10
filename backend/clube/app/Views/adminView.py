@@ -451,7 +451,7 @@ def admin_tipos_list_criar(request):
     if erro: return erro
 
     if request.method == 'GET':
-        qs = TipoProduto.objects.filter(loja__isnull=True).order_by('nome')
+        qs = TipoProduto.objects.filter(loja__isnull=True, pos__isnull=True).order_by('nome')
         serializer = TipoProdutoSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -472,7 +472,7 @@ def admin_tipos_gerir(request, tipo_id):
     erro = _exige_admin(request, 'gerir_tipos_globais')
     if erro: return erro
 
-    tipo = get_object_or_404(TipoProduto, id=tipo_id, loja__isnull=True)
+    tipo = get_object_or_404(TipoProduto, id=tipo_id, loja__isnull=True, pos__isnull=True)
 
     if request.method == 'DELETE':
         tipo.ativo = False

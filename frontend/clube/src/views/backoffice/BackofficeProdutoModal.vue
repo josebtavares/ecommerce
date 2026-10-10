@@ -263,18 +263,16 @@
             </span>
           </p>
 
-          <p v-if="!produto" class="text-xs text-zinc-500 leading-relaxed px-3 py-3 border border-dashed border-zinc-800 rounded-xl">
-            Depois de criares o produto, abre-o de novo para definires o stock de cada combinação
-            (ou faz isso no módulo Inventário).
+          <p v-if="!combinacoesForm.length" class="text-xs text-zinc-500 leading-relaxed px-3 py-3 border border-dashed border-zinc-800 rounded-xl">
+            Selecciona as opções de {{ atributosVariante.join(' / ') }} acima para definires o stock de cada combinação.
           </p>
-          <template v-else>
-            <p v-if="opcoesVarianteAlteradas"
-               class="text-xs text-amber-300 bg-amber-500/5 border border-amber-500/30 rounded-xl px-3 py-2">
-              Alteraste as opções de {{ atributosVariante.join(' / ') }}. Guarda o produto para actualizar as combinações da grelha.
-            </p>
-            <VariantesStockEditor :lojaId="lojaId" :produtoId="produto.id" :key="'var-' + produto.id" />
-          </template>
+          <VariantesGrelhaForm v-else
+            v-model:ativo="grelha.ativo" v-model:linhas="grelha.linhas"
+            :atributos="atributosVarianteComOpcoes" :preco-produto="form.preco"
+            :stock-total-antigo="produto && !produto.stock_por_variante ? (produto.stock?.quantidade ?? 0) : null" />
         </div>
+
+        <p v-if="erroGuardar" class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">{{ erroGuardar }}</p>
 
         <!-- ══ ACTIONS ══ -->
         <div class="flex gap-3 pt-2 border-t border-zinc-800">
@@ -300,11 +298,14 @@
 <script>
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
-import VariantesStockEditor from '@/components/inventario/VariantesStockEditor.vue'
+import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
+import {
+  combinacoesDe, mesclarLinhas, linhasDoProduto, linhasParaPayload, grelhaValida,
+} from '@/utils/variantes'
 
 export default {
   name: 'BackofficeProdutoModal',
-  components: { VariantesStockEditor },
+  components: { VariantesGrelhaForm },
   props: {
     lojaId:  [String, Number],
     produto: { type: Object, default: null },
@@ -319,6 +320,9 @@ export default {
   data () {
     return {
       tipos: [],
+      // stock por variação: novo produto → ligado por defeito; existente → como estiver gravado
+      grelha: { ativo: !this.produto || !!this.produto.stock_por_variante, linhas: linhasDoProduto(this.produto) },
+      erroGuardar: '',
       categoriasDaLoja: [],
       // Imagem principal
       ficheiro: null,
@@ -360,13 +364,20 @@ export default {
       return this.schemaNormalizado.filter(a => a.tipo === 'choices' && a.variante).map(a => a.nome)
     },
 
-    // opções-variante no formulário ≠ guardadas → a grelha só reflecte depois de guardar
-    opcoesVarianteAlteradas () {
-      if (!this.produto) return false
-      if (String(this.form.tipo_id || '') !== String(this.produto.tipo?.id || '')) return this.atributosVariante.length > 0
-      const norm = v => (Array.isArray(v) ? v : (v ? [v] : [])).map(String).sort().join('|')
-      const guardados = this.produto.atributos || {}
-      return this.atributosVariante.some(n => norm(this.form.atributos[n]) !== norm(guardados[n]))
+    // combinações calculadas a partir das opções seleccionadas — a grelha acompanha em tempo real
+    combinacoesForm () {
+      return combinacoesDe(this.schemaNormalizado, this.form.atributos)
+    },
+
+    atributosVarianteComOpcoes () {
+      return this.atributosVariante.filter(n => this.combinacoesForm.some(c => n in c.combinacao))
+    },
+  },
+
+  watch: {
+    // novas combinações entram a 0; removidas saem; as quantidades já escritas mantêm-se
+    combinacoesForm (combos) {
+      this.grelha.linhas = mesclarLinhas(combos, this.grelha.linhas)
     },
   },
 
@@ -550,12 +561,29 @@ export default {
           fd.append('imagens_eliminar', JSON.stringify(this.imagensParaEliminar))
         }
 
-        if (this.produto) {
-          await api.patch(`/app/loja/${this.lojaId}/produtos/${this.produto.id}/editar/`, fd,
-            { headers: { 'Content-Type': 'multipart/form-data' } })
-        } else {
-          await api.post(`/app/loja/${this.lojaId}/produtos/criar/`, fd,
-            { headers: { 'Content-Type': 'multipart/form-data' } })
+        // Stock por variação — vai no mesmo pedido (o backend grava tudo-ou-nada)
+        this.erroGuardar = ''
+        if (this.combinacoesForm.length) {
+          if (this.grelha.ativo && !grelhaValida(this.grelha.linhas)) {
+            this.erroGuardar = 'Há quantidades inválidas na grelha de stock por variação.'
+            return
+          }
+          fd.append('stock_por_variante', this.grelha.ativo ? 'true' : 'false')
+          if (this.grelha.ativo) fd.append('variantes', JSON.stringify(linhasParaPayload(this.grelha.linhas)))
+        }
+
+        try {
+          if (this.produto) {
+            await api.patch(`/app/loja/${this.lojaId}/produtos/${this.produto.id}/editar/`, fd,
+              { headers: { 'Content-Type': 'multipart/form-data' } })
+          } else {
+            await api.post(`/app/loja/${this.lojaId}/produtos/criar/`, fd,
+              { headers: { 'Content-Type': 'multipart/form-data' } })
+          }
+        } catch (e) {
+          const d = e.response?.data
+          this.erroGuardar = d?.detail || (d && typeof d === 'object' && Object.values(d).flat()[0]) || 'Erro ao guardar o produto.'
+          return
         }
         this.$emit('saved')
       })

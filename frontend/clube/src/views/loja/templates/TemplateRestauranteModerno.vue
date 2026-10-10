@@ -53,7 +53,7 @@
         </div>
 
         <nav class="rm-bar__links">
-          <button v-if="destaques.length" @click="scrollToId('rm-chef')">Chef</button>
+          <button v-if="totalDestaques" @click="scrollToId('rm-chef')">Chef</button>
           <button @click="scrollToId('rm-carta')">Carta</button>
           <button @click="scrollToId('rm-catalogo')">Catálogo</button>
           <button @click="scrollToId('rm-visite')">Visite-nos</button>
@@ -106,7 +106,7 @@
                 Ver a carta
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
               </button>
-              <button v-if="destaques.length" class="rm-btn rm-btn--glass" @click="scrollToId('rm-chef')">
+              <button v-if="totalDestaques" class="rm-btn rm-btn--glass" @click="scrollToId('rm-chef')">
                 Sugestões do chef
               </button>
             </div>
@@ -130,7 +130,7 @@
             </div>
             <div class="rm-service__row">
               <span>Pratos na carta</span>
-              <span>{{ produtos.length }}</span>
+              <span>{{ totalProdutos ?? "—" }}</span>
             </div>
 
             <div class="rm-service__rating">
@@ -152,16 +152,21 @@
         <!-- ══════════════════════════════════════════
              SUGESTÕES DO CHEF — bento
         ══════════════════════════════════════════ -->
-        <section v-if="destaques.length" id="rm-chef" class="rm-section">
+        <section v-if="totalDestaques" id="rm-chef" class="rm-section">
           <div class="rm-wrap">
             <div class="rm-heading">
               <span class="rm-heading__eyebrow">Escolhas da casa</span>
               <h2 class="rm-heading__title">Sugestões do <em>chef</em></h2>
             </div>
 
-            <div class="rm-bento" :class="'rm-bento--' + Math.min(destaques.length, 5)">
+            <!-- uma página: os 5 primeiros destaques -->
+            <ProdutosPaginados :params="{ loja_id: lojaId, destaque: 'true' }" :limit="5" :lazy="false"
+                               class="rm-bento" :class="'rm-bento--' + Math.min(totalDestaques, 5)" v-slot="l">
+              <template v-if="l.carregando">
+                <div v-for="n in Math.min(totalDestaques, 5)" :key="n" class="rm-dish rm-skel" :class="{ 'rm-dish--hero': n === 1 }"></div>
+              </template>
               <article
-                v-for="(p, i) in destaques"
+                v-for="(p, i) in l.itens"
                 :key="p.id"
                 class="rm-dish"
                 :class="{ 'rm-dish--hero': i === 0 }"
@@ -182,12 +187,12 @@
                   </div>
                 </div>
               </article>
-            </div>
+            </ProdutosPaginados>
           </div>
         </section>
 
         <!-- ══════════════════════════════════════════
-             A CARTA
+             A CARTA — cada grupo pede os seus pratos página a página
         ══════════════════════════════════════════ -->
         <section id="rm-carta" class="rm-section rm-section--carta">
           <div class="rm-wrap">
@@ -207,9 +212,8 @@
                   :class="{ 'rm-chip--active': grupoActivo === g.key }"
                   @click="irParaGrupo(g.key)"
                 >
-                  <span v-if="g.icone">{{ g.icone }}</span>
                   {{ g.nome }}
-                  <span class="rm-chip__count">{{ g.itens.length }}</span>
+                  <span class="rm-chip__count">{{ g.total }}</span>
                 </button>
               </template>
               <span class="rm-chips__sep"></span>
@@ -218,7 +222,7 @@
               </button>
             </div>
 
-            <div v-if="loadingProdutos" class="rm-menu-skeleton">
+            <div v-if="loading" class="rm-menu-skeleton">
               <div v-for="i in 6" :key="i" class="rm-skel"></div>
             </div>
 
@@ -240,38 +244,46 @@
                 <div class="rm-group__head">
                   <h3 class="rm-group__title">{{ g.nome }}</h3>
                   <span class="rm-group__line"></span>
-                  <span class="rm-group__count">{{ g.itens.length }} {{ g.itens.length === 1 ? 'prato' : 'pratos' }}</span>
+                  <span class="rm-group__count">{{ g.total }} {{ g.total === 1 ? 'prato' : 'pratos' }}</span>
                 </div>
 
-                <div class="rm-items">
-                  <button
-                    v-for="p in g.itens"
-                    :key="p.id"
-                    class="rm-item"
-                    :class="{ 'rm-item--out': esgotado(p) }"
-                    @click="selectedProduct = p"
-                  >
-                    <div class="rm-item__thumb">
-                      <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
-                      <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
-                      <span v-else>{{ p.nome.charAt(0) }}</span>
-                    </div>
+                <ProdutosPaginados :params="g.params" :limit="LIMITE" v-slot="l">
+                  <div class="rm-items">
+                    <template v-if="l.carregando">
+                      <div v-for="n in Math.min(g.total, LIMITE)" :key="n" class="rm-skel"></div>
+                    </template>
+                    <button
+                      v-for="p in l.itens"
+                      :key="p.id"
+                      class="rm-item"
+                      :class="{ 'rm-item--out': esgotado(p) }"
+                      @click="selectedProduct = p"
+                    >
+                      <div class="rm-item__thumb">
+                        <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
+                        <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                        <span v-else>{{ p.nome.charAt(0) }}</span>
+                      </div>
 
-                    <div class="rm-item__body">
-                      <div class="rm-item__top">
-                        <span class="rm-item__name">{{ p.nome }}</span>
-                        <span class="rm-item__dots"></span>
-                        <span class="rm-item__price">{{ formatPrice(p.preco) }}</span>
+                      <div class="rm-item__body">
+                        <div class="rm-item__top">
+                          <span class="rm-item__name">{{ p.nome }}</span>
+                          <span class="rm-item__dots"></span>
+                          <span class="rm-item__price">{{ formatPrice(p.preco) }}</span>
+                        </div>
+                        <p v-if="p.descricao" class="rm-item__desc">{{ p.descricao }}</p>
+                        <div class="rm-item__tags">
+                          <span v-if="esgotado(p)" class="rm-tag rm-tag--out">Esgotado</span>
+                          <span v-if="p.destaque" class="rm-tag rm-tag--accent">Chef</span>
+                          <span v-for="t in tagsProduto(p)" :key="t" class="rm-tag">{{ t }}</span>
+                        </div>
                       </div>
-                      <p v-if="p.descricao" class="rm-item__desc">{{ p.descricao }}</p>
-                      <div class="rm-item__tags">
-                        <span v-if="esgotado(p)" class="rm-tag rm-tag--out">Esgotado</span>
-                        <span v-if="p.destaque" class="rm-tag rm-tag--accent">Chef</span>
-                        <span v-for="t in tagsProduto(p)" :key="t" class="rm-tag">{{ t }}</span>
-                      </div>
-                    </div>
+                    </button>
+                  </div>
+                  <button v-if="l.temMais || l.aCarregarMais" class="rm-mais" :disabled="l.aCarregarMais" @click="l.carregarMais()">
+                    {{ l.aCarregarMais ? 'A carregar…' : `Ver mais pratos (${l.total - l.itens.length})` }}
                   </button>
-                </div>
+                </ProdutosPaginados>
               </div>
             </div>
           </div>
@@ -358,7 +370,7 @@
                 <div class="rm-info-block__label">Pagamento</div>
                 <div class="rm-pay">
                   <span v-for="m in metodosPagamento" :key="m.id" class="rm-pay__chip">
-                    {{ metodoPagamentoIcon(m.tipo) }} {{ m.tipo }}
+                    {{ m.tipo }}
                   </span>
                 </div>
               </div>
@@ -439,7 +451,7 @@
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import api from '@/services/api'
+import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import { useLojaData } from '@/composables/useLojaData'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
@@ -450,12 +462,14 @@ import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 // atributos que fazem sentido mostrar como etiqueta numa carta
 const TAGS_ATRIBUTOS = ['calorias', 'picante', 'alergenos', 'volume', 'porcao', 'dose', 'vegetariano', 'vegan']
 
-const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', carta: 'Carta' }
+const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Carta' }
+
+const LIMITE = 6   // pratos por página em cada grupo
 
 export default {
   name: 'TemplateRestauranteModerno',
 
-  components: { ProductInfoCard, MultiCart, Profile, AvaliacaoLoja, ProductCatalog },
+  components: { ProductInfoCard, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 
@@ -469,8 +483,6 @@ export default {
     const user     = ref(JSON.parse(localStorage.getItem('user') || '{}'))
     const currentYear = new Date().getFullYear()
 
-    const produtos        = ref([])
-    const loadingProdutos = ref(true)
     const grupoActivo     = ref(null)
     const scrolled        = ref(false)
 
@@ -481,53 +493,9 @@ export default {
       '--cor-secundaria': props.tema?.corSecundaria || '#14110f',
     }))
 
-    // ── Produtos (carta completa, paginada no backend a 100) ──────────
-    async function fetchProdutos () {
-      loadingProdutos.value = true
-      const todos = []
-      let offset = 0
-      try {
-        while (offset !== null && todos.length < 600) {
-          const { data } = await api.get('/app/produto/', {
-            params: { loja_id: lojaData.lojaId.value, limit: 100, offset },
-          })
-          todos.push(...(data.results || data))
-          offset = data.next_offset ?? null
-        }
-      } catch (e) {
-        console.error(e)
-      }
-      produtos.value = todos
-      loadingProdutos.value = false
-    }
-
-    const destaques = computed(() => produtos.value.filter(p => p.destaque).slice(0, 5))
-
-    // Como no Clássico: primeiro "Por tipo", depois "Por categoria",
-    // pela ordem definida na loja. Um produto pode aparecer nas duas secções.
-    const grupos = computed(() => {
-      const lista = []
-
-      lojaData.tiposExistentes.value.forEach(t => {
-        const itens = produtos.value.filter(p => p.tipo?.id === t.id)
-        if (itens.length) {
-          lista.push({ key: 't' + t.id, seccao: 'tipo', nome: t.nome, icone: lojaData.tipoIcon(t.nome), itens })
-        }
-      })
-
-      lojaData.categoriasExistentes.value.forEach(c => {
-        const itens = produtos.value.filter(p => p.categorias?.some(pc => pc.id === c.id))
-        if (itens.length) {
-          lista.push({ key: 'c' + c.id, seccao: 'categoria', nome: c.nome, icone: c.icone || '', itens })
-        }
-      })
-
-      // loja sem tipos nem categorias → uma única carta com tudo
-      if (!lista.length && produtos.value.length) {
-        lista.push({ key: 'carta', seccao: 'carta', nome: 'Todos os pratos', icone: '', itens: produtos.value })
-      }
-      return lista
-    })
+    // Como no Clássico: primeiro "Por tipo", depois "Por categoria", pela ordem da loja.
+    // Só metadados e contagens — cada grupo pede os pratos página a página.
+    const grupos = lojaData.gruposProdutos
 
     const entregaDesde = computed(() => {
       const precos = lojaData.opcoesEntrega.value.map(o => Number(o.preco))
@@ -605,13 +573,12 @@ export default {
       document.querySelectorAll('[id^="rm-grupo-"]').forEach(el => groupObserver.observe(el))
     }
 
-    watch(grupos, async () => {
+    watch([grupos, lojaData.loading], async () => {
       await nextTick()
       observarGrupos()
     })
 
     onMounted(() => {
-      fetchProdutos()
       window.addEventListener('scroll', onScroll, { passive: true })
       onScroll()
     })
@@ -625,8 +592,8 @@ export default {
       ...lojaData,
       isDark, user, currentYear, cssVars,
       SECCOES,
-      produtos, loadingProdutos, grupoActivo, scrolled,
-      destaques, grupos, entregaDesde, ratingFormatted,
+      LIMITE, grupoActivo, scrolled,
+      grupos, entregaDesde, ratingFormatted,
       tituloPolitica, textoPolitica,
       toggleDark, isVideo, truncate, esgotado, tagsProduto, irParaGrupo,
     }
@@ -1015,6 +982,14 @@ export default {
 
 .rm-menu-skeleton { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 40px; }
 .rm-skel { height: 104px; border-radius: 18px; background: var(--bg2); animation: rmPulse 1.4s ease-in-out infinite; }
+.rm-dish.rm-skel { height: auto; min-height: 200px; cursor: default; }
+.rm-mais {
+  margin-top: 14px; padding: 10px 20px; border-radius: 999px; cursor: pointer;
+  background: transparent; border: 2px solid var(--line); color: var(--fg);
+  font-family: var(--font-body); font-size: 14px; font-weight: 700; transition: border-color .2s, color .2s;
+}
+.rm-mais:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.rm-mais:disabled { opacity: .6; cursor: default; }
 @keyframes rmPulse { 50% { opacity: .5; } }
 .rm-empty { padding: 60px 0; text-align: center; color: var(--fg3); font-family: var(--font-display); font-style: italic; font-size: 20px; }
 

@@ -51,7 +51,7 @@ class TipoProdutoSerializer(serializers.ModelSerializer):
         read_only_fields = ['is_global']
 
     def get_is_global(self, obj):
-        return obj.loja is None
+        return obj.is_global
 
     def validate_atributos_schema(self, value):
         if not isinstance(value, list):

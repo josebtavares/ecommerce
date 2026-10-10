@@ -153,7 +153,7 @@
 
               <div v-if="loja.entrega_ativa">
                 <div class="editorial-hero__stat-val editorial-hero__stat-val--ac">
-                  ✓
+                  Sim
                 </div>
                 <div class="editorial-hero__stat-label">Entrega</div>
               </div>

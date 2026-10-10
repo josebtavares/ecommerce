@@ -222,7 +222,7 @@ SESSION_CACHE_ALIAS = 'default'
 # ══════════════════════════════════════════════════════════════
 AXES_FAILURE_LIMIT        = 5        # bloqueia apos 5 tentativas falhadas
 AXES_COOLOFF_TIME         = 1        # desbloqueia apos 1 hora
-AXES_LOCKOUT_PARAMETERS   = ['ip_address']  # bloqueia por IP
+AXES_LOCKOUT_PARAMETERS   = [['username', 'ip_address']]  # bloqueia a CONTA nesse IP (não o IP inteiro)
 AXES_RESET_ON_SUCCESS     = True     # reset do contador apos login com sucesso
 AXES_LOCKOUT_CALLABLE     = None     # comportamento padrao (retorna 403)
 AXES_ENABLE_ADMIN         = True     # ve tentativas bloqueadas no Django Admin
