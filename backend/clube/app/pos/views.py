@@ -68,6 +68,10 @@ from functools import wraps
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied
 
+# lojas que um POS pode usar: aprovadas pela plataforma (uma loja fechada pelo dono continua a
+# poder vender ao balcão; pendentes e suspensas não)
+LOJAS_VINCULAVEIS = ('ativa', 'fechada')
+
  
  
 def pos_ratelimit(key='ip', rate='10/m', method='POST'):
@@ -427,7 +431,7 @@ def pos_login(request):
         return Response({'detail': 'Perfil não encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
     pos_list = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-    lojas    = Loja.objects.filter(dono=utilizador, ativa=True)
+    lojas    = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
     refresh  = RefreshToken.for_user(user)
 
     return Response({
@@ -620,7 +624,7 @@ def pos_register(request):
         utilizador     = user.utilizador
         refresh        = RefreshToken.for_user(user)
         pos_existentes = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-        lojas          = Loja.objects.filter(dono=utilizador, ativa=True)
+        lojas          = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
 
         return Response({
             'tipo_sessao': 'principal',
@@ -693,7 +697,7 @@ def pos_meus(request):
     except Exception:
         return Response({'detail': 'Sessão de membro não tem POS próprios.'}, status=status.HTTP_403_FORBIDDEN)
     pos_list = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True).select_related('loja_vinculada').order_by('criado_em')
-    lojas = Loja.objects.filter(dono=utilizador, ativa=True)
+    lojas = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
     return Response({
         'pos': [_pos_response(p) for p in pos_list],
         'lojas': [{'id': l.id, 'nome': l.nome, 'categoria': l.categoria} for l in lojas],
@@ -716,7 +720,7 @@ def pos_criar(request):
     config = ConfiguracaoPOS.objects.create(nome=nome, dono=utilizador, modo='standalone')
 
     if loja_id:
-        loja = get_object_or_404(Loja, id=loja_id, dono=utilizador)
+        loja = get_object_or_404(Loja, id=loja_id, dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
         config.conectar_loja(loja, modo='hibrido' if modo == 'hibrido' else 'integrado')
     else:
         config.modo = 'standalone'
@@ -772,7 +776,7 @@ def pos_conectar_loja(request, pos_id):
 
 
     loja = Loja.objects.filter(
-        Q(id=loja_id) & (
+        Q(id=loja_id) & Q(estado__in=LOJAS_VINCULAVEIS) & (
             Q(dono=utilizador) |
             Q(staff__utilizador=utilizador, staff__ativo=True)
         )
@@ -1145,10 +1149,18 @@ def mesa_criar(request, pos_id):
 
     if not numero:
         return Response({'detail': 'Número da mesa é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
-    if Mesa.objects.filter(pos=pos, numero=numero).exists():
+    existente = Mesa.objects.filter(pos=pos, numero=numero).first()
+    if existente and existente.ativa:
         return Response({'detail': 'Já existe uma mesa com este número'}, status=status.HTTP_400_BAD_REQUEST)
 
-    mesa = Mesa.objects.create(pos=pos, numero=numero, capacidade=capacidade)
+    if existente:
+        # mesa removida antes (desactivada para manter o histórico de contas) → volta a usar-se
+        existente.ativa      = True
+        existente.capacidade = capacidade
+        existente.save(update_fields=['ativa', 'capacidade'])
+        mesa = existente
+    else:
+        mesa = Mesa.objects.create(pos=pos, numero=numero, capacidade=capacidade)
     return Response({'id': mesa.id, 'numero': mesa.numero, 'capacidade': mesa.capacidade, 'status': mesa.status}, status=status.HTTP_201_CREATED)
 
 
@@ -1160,7 +1172,7 @@ def mesa_abrir(request, pos_id, mesa_id):
     if membro and not membro.pode_abrir_mesas:
         return Response({'detail': 'Sem permissão para abrir mesas.'}, status=status.HTTP_403_FORBIDDEN)
 
-    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
+    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos, ativa=True)   # mesas removidas não abrem
 
     conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
     if conta_existente:
@@ -1200,6 +1212,12 @@ def mesa_apagar(request, pos_id, mesa_id):
 
     if ContaMesa.objects.filter(mesa=mesa, status='aberta').exists():
         return Response({'detail': 'Não é possível apagar mesa com conta aberta'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # mesa com histórico de contas (vendas) → só desactiva: as contas são registos financeiros
+    if ContaMesa.objects.filter(mesa=mesa).exists():
+        mesa.ativa = False
+        mesa.save(update_fields=['ativa'])
+        return Response({'detail': 'Mesa removida (o histórico de contas foi mantido)'})
 
     mesa.delete()
     return Response({'detail': 'Mesa apagada com sucesso'})

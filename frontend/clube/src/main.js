@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import videoVisivel from './directives/videoVisivel';
 import App from './App.vue';
 import router from './router'; // Import the router
 import '@/assets/toastify.css';
@@ -21,6 +22,7 @@ library.add(faBars, fas, faCommentDots); // Add the icons to the library
 const app = createApp(App);
 
 app.component('font-awesome-icon', FontAwesomeIcon);
+app.directive('video-visivel', videoVisivel); // vídeos só tocam quando visíveis (directives/videoVisivel.js)
 
 app.use(router); // Use the router
 

@@ -709,8 +709,10 @@ export default {
       // Recarregar lojas do backend (URL correta)
       try {
         const { data } = await api.get('/app/loja/minhas/')
-        this.lojas = data
-        localStorage.setItem('pos_lojas', JSON.stringify(data))
+        // o POS só pode usar lojas aprovadas (activas ou fechadas pelo dono) — como o backend
+        const vinculaveis = (data.results || data).filter(l => ['ativa', 'fechada'].includes(l.estado))
+        this.lojas = vinculaveis
+        localStorage.setItem('pos_lojas', JSON.stringify(vinculaveis))
       } catch (error) {
         console.error('Erro ao recarregar lojas:', error)
         this.loadLojasFromStorage()

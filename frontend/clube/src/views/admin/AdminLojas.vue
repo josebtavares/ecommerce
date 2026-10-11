@@ -12,11 +12,10 @@
                  placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
       </div>
       <div class="flex gap-2 flex-wrap">
-        <select v-model="filtroAtiva" @change="fetchLojas(1)"
+        <select v-model="filtroEstado" @change="fetchLojas(1)"
           class="px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-300 focus:outline-none transition">
-          <option value="">Todas</option>
-          <option value="true">Activas</option>
-          <option value="false">Inactivas</option>
+          <option value="">Todos os estados</option>
+          <option v-for="(e, chave) in ESTADOS" :key="chave" :value="chave">{{ e.plural }}</option>
         </select>
         <select v-model="filtroCategoria" @change="fetchLojas(1)"
           class="px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-300 focus:outline-none transition">
@@ -49,8 +48,8 @@
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-0.5 flex-wrap">
               <p class="text-sm font-bold text-zinc-200 group-hover:text-red-400 transition">{{ loja.nome }}</p>
-              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', loja.ativa ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400']">
-                {{ loja.ativa ? 'Activa' : 'Inactiva' }}
+              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', estadoInfo(loja).classe]">
+                {{ estadoInfo(loja).label }}
               </span>
             </div>
             <p class="text-xs text-zinc-500 truncate">
@@ -59,15 +58,10 @@
             </p>
           </div>
 
-          <!-- Acção rápida toggle — sempre visível -->
-          <button @click.stop="toggleAtiva(loja)"
-            :class="[
-              'flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition',
-              loja.ativa
-                ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
-                : 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-            ]">
-            {{ loja.ativa ? 'Desactivar' : 'Activar' }}
+          <!-- Acção rápida conforme o estado (loja fechada pelo dono: só o dono reabre) -->
+          <button v-if="acaoRapida(loja)" @click.stop="executarAcao(loja, acaoRapida(loja))"
+            :class="['flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition', ACOES[acaoRapida(loja)].classe]">
+            {{ ACOES[acaoRapida(loja)].label }}
           </button>
         </div>
 
@@ -142,12 +136,13 @@
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1 flex-wrap">
               <h2 class="text-base font-bold text-zinc-100">{{ lojaDetalhe.nome }}</h2>
-              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', lojaDetalhe.ativa ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400']">
-                {{ lojaDetalhe.ativa ? 'Activa' : 'Inactiva' }}
+              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', estadoInfo(lojaDetalhe).classe]">
+                {{ estadoInfo(lojaDetalhe).label }}
               </span>
             </div>
             <p class="text-xs text-zinc-500">{{ lojaDetalhe.categoria }} · {{ lojaDetalhe.localizacao || 'Sem localização' }}</p>
             <p class="text-xs text-zinc-600 mt-0.5">Dono: {{ lojaDetalhe.dono.username }}</p>
+            <p v-if="lojaDetalhe.estado_motivo" class="text-xs text-zinc-500 mt-0.5">Motivo: {{ lojaDetalhe.estado_motivo }}</p>
           </div>
           <button @click="lojaDetalhe = null"
             class="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition flex-shrink-0">
@@ -216,19 +211,44 @@
 
           <!-- Acções -->
           <div class="flex flex-col sm:flex-row gap-3 pt-2 border-t border-zinc-800">
-            <button @click="toggleAtiva(lojaDetalhe); lojaDetalhe.ativa = !lojaDetalhe.ativa"
-              :class="[
-                'flex-1 py-2.5 rounded-xl text-sm font-bold transition',
-                lojaDetalhe.ativa
-                  ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
-                  : 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-              ]">
-              {{ lojaDetalhe.ativa ? 'Desactivar loja' : 'Activar loja' }}
+            <button v-for="a in acoesDisponiveis(lojaDetalhe)" :key="a" @click="executarAcao(lojaDetalhe, a)"
+              :class="['flex-1 py-2.5 rounded-xl text-sm font-bold transition', ACOES[a].classe]">
+              {{ ACOES[a].label }} loja
             </button>
+            <p v-if="lojaDetalhe.estado === 'fechada'" class="flex-1 py-2.5 text-xs text-zinc-500 text-center self-center">
+              Fechada pelo dono — só o dono a pode reabrir.
+            </p>
             <a :href="`/loja/${lojaDetalhe.id}`" target="_blank"
               class="flex-1 py-2.5 rounded-xl text-sm font-bold bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition text-center">
-              Ver loja pública →
+              Ver loja pública <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
             </a>
+          </div>
+
+          <!-- Eliminar definitivamente -->
+          <div class="rounded-xl border border-red-500/20 p-4 space-y-3">
+            <h3 class="text-xs font-bold text-red-400 uppercase tracking-wider">
+              <font-awesome-icon :icon="['fas', 'trash']" class="mr-1.5" />Eliminar definitivamente
+            </h3>
+            <p v-if="!eliminacao" class="text-xs text-zinc-500">A verificar…</p>
+            <template v-else-if="!eliminacao.pode">
+              <p class="text-xs text-zinc-400">Esta loja não pode ser eliminada:</p>
+              <ul class="text-xs text-zinc-500 list-disc pl-5 space-y-0.5">
+                <li v-for="r in eliminacao.razoes" :key="r">{{ r }}</li>
+              </ul>
+              <p class="text-[11px] text-zinc-600">Registos financeiros (encomendas, pagamentos, comissões, vendas POS) nunca são apagados — suspende a loja em vez disso.</p>
+            </template>
+            <template v-else>
+              <p class="text-xs text-zinc-400">
+                Apaga a loja, produtos, categorias e staff. Os ficheiros (logo, banner, imagens, vídeos)
+                são removidos em segundo plano. <b class="text-red-400">Não pode ser desfeito.</b>
+              </p>
+              <input v-model="confirmacaoNome" :placeholder="`Escreve «${lojaDetalhe.nome}» para confirmar`"
+                class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
+              <button @click="eliminarLoja(lojaDetalhe)" :disabled="confirmacaoNome.trim() !== lojaDetalhe.nome || aEliminar"
+                class="w-full py-2.5 rounded-xl text-sm font-bold transition bg-red-600 hover:bg-red-500 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+                {{ aEliminar ? 'A eliminar…' : 'Eliminar definitivamente' }}
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -240,13 +260,30 @@
 <script>
 import api from '@/services/api'
 
+// estados da loja (backend: Loja.estado)
+const ESTADOS = {
+  pendente: { label: 'Pendente', plural: 'Pendentes', classe: 'bg-yellow-500/15 text-yellow-400' },
+  ativa:    { label: 'Activa',   plural: 'Activas',   classe: 'bg-green-500/15 text-green-400' },
+  fechada:  { label: 'Fechada',  plural: 'Fechadas pelo dono', classe: 'bg-zinc-700 text-zinc-300' },
+  suspensa: { label: 'Suspensa', plural: 'Suspensas', classe: 'bg-red-500/15 text-red-400' },
+}
+// acções do admin (backend: PATCH /app/admin/lojas/<id>/ { acao, motivo })
+const ACOES = {
+  aprovar:   { label: 'Aprovar',   origens: ['pendente'],           classe: 'bg-green-500/15 text-green-400 hover:bg-green-500/25' },
+  rejeitar:  { label: 'Rejeitar',  origens: ['pendente'],           classe: 'bg-red-500/15 text-red-400 hover:bg-red-500/25', motivo: true },
+  suspender: { label: 'Suspender', origens: ['ativa', 'fechada'],   classe: 'bg-red-500/15 text-red-400 hover:bg-red-500/25', motivo: true },
+  reativar:  { label: 'Reactivar', origens: ['suspensa'],           classe: 'bg-green-500/15 text-green-400 hover:bg-green-500/25' },
+}
+
 export default {
   name: 'AdminLojas',
   data () {
     return {
+      ESTADOS, ACOES,
+      eliminacao: null, confirmacaoNome: '', aEliminar: false,
       loading: true, lojas: [], totalCount: 0,
       page: 1, limit: 20,
-      q: '', filtroAtiva: '', filtroCategoria: '',
+      q: '', filtroEstado: '', filtroCategoria: '',
       debounceTimer: null,
       lojaDetalhe: null,
       categorias: [],
@@ -282,23 +319,65 @@ export default {
       try {
         const params = { offset: (this.page - 1) * this.limit, limit: this.limit }
         if (this.q) params.q = this.q
-        if (this.filtroAtiva !== '') params.ativa = this.filtroAtiva
+        if (this.filtroEstado) params.estado = this.filtroEstado
         if (this.filtroCategoria) params.categoria = this.filtroCategoria
         const { data } = await api.get('/app/admin/lojas/', { params })
         this.lojas = (data.results || data).map(l => ({ ...l, _comissao_edit: l.percentagem_comissao ?? 10 }))
         this.totalCount = data.count ?? this.lojas.length
-        if (pagina === 1 && !this.filtroCategoria && !this.filtroAtiva && !this.q) {
+        if (pagina === 1 && !this.filtroCategoria && !this.filtroEstado && !this.q) {
           const cats = [...new Set(this.lojas.map(l => l.categoria).filter(Boolean))]
           if (cats.length > this.categorias.length) this.categorias = cats
         }
       } catch (e) { console.error(e) }
       finally { this.loading = false }
     },
-    async toggleAtiva (loja) {
+    estadoInfo (loja) {
+      return ESTADOS[loja.estado] || (loja.ativa ? ESTADOS.ativa : ESTADOS.pendente)
+    },
+    acoesDisponiveis (loja) {
+      return Object.keys(ACOES).filter(a => ACOES[a].origens.includes(loja.estado))
+    },
+    acaoRapida (loja) {
+      return ({ pendente: 'aprovar', ativa: 'suspender', suspensa: 'reativar' })[loja.estado] || null
+    },
+    async executarAcao (loja, acao) {
+      const cfg = ACOES[acao]
+      let motivo = ''
+      if (cfg.motivo) {
+        motivo = window.prompt(`${cfg.label} "${loja.nome}" — motivo (o dono vai vê-lo):`, '')
+        if (motivo === null) return          // cancelou
+      } else if (!confirm(`${cfg.label} a loja "${loja.nome}"?`)) {
+        return
+      }
       try {
-        const { data } = await api.patch(`/app/admin/lojas/${loja.id}/`, { ativa: !loja.ativa })
-        loja.ativa = data.ativa
-      } catch (e) { console.error(e) }
+        const { data } = await api.patch(`/app/admin/lojas/${loja.id}/`, { acao, motivo })
+        Object.assign(loja, { ativa: data.ativa, estado: data.estado, estado_motivo: data.estado_motivo })
+        if (this.lojaDetalhe?.id === loja.id) this.verificarEliminacao(loja)
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível alterar o estado da loja.')
+      }
+    },
+    async verificarEliminacao (loja) {
+      this.eliminacao = null
+      this.confirmacaoNome = ''
+      try {
+        const { data } = await api.get(`/app/admin/lojas/${loja.id}/eliminar/`)
+        this.eliminacao = data
+      } catch (e) {
+        this.eliminacao = { pode: false, razoes: ['não foi possível verificar'] }
+      }
+    },
+    async eliminarLoja (loja) {
+      this.aEliminar = true
+      try {
+        await api.delete(`/app/admin/lojas/${loja.id}/eliminar/`, { data: { confirmacao: this.confirmacaoNome.trim() } })
+        this.lojaDetalhe = null
+        await this.fetchLojas()
+      } catch (e) {
+        const d = e.response?.data
+        alert([d?.detail || 'Não foi possível eliminar a loja.', ...(d?.razoes || [])].join('\n• '))
+        this.verificarEliminacao(loja)
+      } finally { this.aEliminar = false }
     },
     async guardarComissao (loja) {
       try {
@@ -307,6 +386,7 @@ export default {
     },
     async abrirDetalhe (loja) {
       this.lojaDetalhe = loja
+      this.verificarEliminacao(loja)
       this.detalheComissoes = null
       this.loadingDetalhe = true
       try {

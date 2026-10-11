@@ -41,7 +41,7 @@
 
       <!-- ══ HERO ══ -->
       <section class="lx-hero">
-        <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" class="lx-hero__media" autoplay muted loop playsinline></video>
+        <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" class="lx-hero__media" v-video-visivel muted loop playsinline></video>
         <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" class="lx-hero__media" />
         <div class="lx-hero__veu"></div>
         <div class="lx-hero__moldura"></div>
@@ -92,7 +92,7 @@
                 <Transition name="lx-troca" mode="out-in">
                   <div :key="atual(l).id" class="lx-vitrine__peca">
                     <button class="lx-foco" @click="selectedProduct = atual(l)">
-                      <video v-if="isVideo(atual(l).ficheiro_url)" :src="atual(l).ficheiro_url" muted loop autoplay playsinline></video>
+                      <video v-if="isVideo(atual(l).ficheiro_url)" :src="atual(l).ficheiro_url" :poster="atual(l).ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                       <img v-else-if="atual(l).ficheiro_url" :src="atual(l).ficheiro_url" :alt="atual(l).nome" />
                       <span v-else class="lx-foco__inicial">{{ atual(l).nome.charAt(0) }}</span>
                     </button>
@@ -153,7 +153,7 @@
                 </template>
                 <button v-for="(p, i) in l.itens" :key="p.id" class="lx-peca" @click="selectedProduct = p">
                   <span class="lx-peca__foco">
-                    <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
+                    <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                     <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                     <span v-else class="lx-foco__inicial">{{ p.nome.charAt(0) }}</span>
                     <span v-if="esgotado(p)" class="lx-peca__esgotado">Esgotado</span>

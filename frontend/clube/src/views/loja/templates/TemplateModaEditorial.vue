@@ -45,9 +45,9 @@
       <section class="editorial-hero" ref="heroRef">
         <video
           v-if="isVideo(loja.banner_url)"
-          :src="loja.banner_url"
+          :src="loja.banner_url" :poster="loja.banner_poster_url"
           class="editorial-hero__img"
-          autoplay
+          v-video-visivel
           muted
           loop
           playsinline

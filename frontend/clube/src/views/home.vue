@@ -159,9 +159,9 @@
               @click="goToStore(store.id)" class="cursor-pointer">
               <div class="relative h-full w-full">
                 <video v-if="isVideo(store.banner_url)"
-                  :src="store.banner_url"
+                  :src="store.banner_url" :poster="store.banner_poster_url"
                   class="w-full h-full object-cover"
-                  autoplay muted loop playsinline></video>
+                  v-video-visivel muted loop playsinline></video>
                 <img v-else
                   :src="store.banner_url || '/placeholder-banner.jpg'"
                   :alt="store.nome"

@@ -98,7 +98,7 @@
             <span class="ts-ecra__marca ts-ecra__marca--c"></span>
             <span class="ts-ecra__marca ts-ecra__marca--d"></span>
             <div class="ts-ecra__vidro">
-              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" autoplay muted loop playsinline></video>
+              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel muted loop playsinline></video>
               <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" />
               <div v-else class="ts-ecra__vazio">{{ loja.nome.charAt(0) }}</div>
             </div>
@@ -131,7 +131,7 @@
               </template>
               <button v-for="p in l.itens" :key="p.id" class="ts-cartao" @click="selectedProduct = p">
                 <span class="ts-cartao__img">
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted loop autoplay playsinline></video>
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="ts-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                   <span class="ts-badge ts-mono">Destaque</span>
@@ -189,7 +189,7 @@
               </template>
               <button v-for="p in l.itens" :key="p.id" class="ts-cartao" @click="selectedProduct = p">
                 <span class="ts-cartao__img">
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="ts-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                 </span>

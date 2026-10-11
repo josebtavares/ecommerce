@@ -45,8 +45,16 @@
             <span class="text-sm font-bold text-green-400">{{ stats.lojas.ativas }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-sm text-zinc-400">Pendentes/Inactivas</span>
+            <span class="text-sm text-zinc-400">Pendentes de aprovação</span>
             <span class="text-sm font-bold text-yellow-400">{{ stats.lojas.pendentes }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-zinc-400">Fechadas pelo dono</span>
+            <span class="text-sm font-bold text-zinc-300">{{ stats.lojas.fechadas ?? 0 }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-zinc-400">Suspensas</span>
+            <span class="text-sm font-bold text-red-400">{{ stats.lojas.suspensas ?? 0 }}</span>
           </div>
         </div>
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5 space-y-3">

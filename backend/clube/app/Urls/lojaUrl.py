@@ -1,5 +1,5 @@
 from django.urls import path
-from ..Views import lojaView
+from ..Views import lojaView, videoView
 
 urlpatterns = [
 
@@ -18,8 +18,12 @@ urlpatterns = [
     # ── Backoffice ────────────────────────────────────────────
     path('loja/<int:id>/backoffice/',                   lojaView.loja_backoffice,       name='loja-backoffice'),
     path('loja/<int:id>/editar/',                       lojaView.loja_update,           name='loja-update'),
-    path('loja/<int:id>/eliminar/',                     lojaView.loja_delete,           name='loja-delete'),
+    path('loja/<int:id>/eliminar/',                     lojaView.loja_fechar,           name='loja-delete'),   # compat.: fecha, não apaga
+    path('loja/<int:id>/fechar/',                       lojaView.loja_fechar,           name='loja-fechar'),
+    path('loja/<int:id>/reabrir/',                      lojaView.loja_reabrir,          name='loja-reabrir'),
     path('loja/<int:loja_id>/dashboard/',               lojaView.loja_dashboard,        name='loja-dashboard'),
+    path('loja/<int:loja_id>/videos/',                  videoView.videos_estado,        name='loja-videos'),
+    path('loja/<int:loja_id>/videos/reprocessar/',      videoView.videos_reprocessar,   name='loja-videos-reprocessar'),
 
     # ── Staff ─────────────────────────────────────────────────
     path('loja/<int:loja_id>/staff/',                   lojaView.staff_list,            name='staff-list'),
