@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, views_variantes
 
 urlpatterns = [
     # ── AUTENTICAÇÃO ─────────────────────────────────────────────────
@@ -8,6 +8,7 @@ urlpatterns = [
     path('register/',     views.pos_register,     name='pos_register'),
 
     # ── CONFIGURAÇÃO POS ──────────────────────────────────────────────
+    path('meus/',                            views.pos_meus,            name='pos_meus'),
     path('criar/',                           views.pos_criar,           name='pos_criar'),
     path('<int:pos_id>/',                    views.pos_detalhe,         name='pos_detalhe'),
     path('<int:pos_id>/conectar-loja/',      views.pos_conectar_loja,   name='pos_conectar_loja'),
@@ -18,6 +19,11 @@ urlpatterns = [
     path('<int:pos_id>/produtos/criar/',                    views.produto_criar,     name='produto_criar'),
     path('<int:pos_id>/produtos/<int:produto_id>/',         views.produto_atualizar, name='produto_atualizar'),
     path('<int:pos_id>/produtos/<int:produto_id>/apagar/',  views.produto_apagar,    name='produto_apagar'),
+    path('<int:pos_id>/produtos/<int:produto_id>/variantes/', views_variantes.pos_produto_variantes, name='pos_produto_variantes'),
+
+    # ── TIPOS DE PRODUTO ──────────────────────────────────────────────
+    path('<int:pos_id>/tipos/',                    views_variantes.pos_tipos,      name='pos_tipos'),
+    path('<int:pos_id>/tipos/<int:tipo_id>/',      views_variantes.pos_tipo_gerir, name='pos_tipo_gerir'),
 
     # ── MESAS ─────────────────────────────────────────────────────────
     path('<int:pos_id>/mesas/',                        views.mesas_listar, name='mesas_listar'),
@@ -34,6 +40,7 @@ urlpatterns = [
     path('<int:pos_id>/contas/<int:conta_id>/items/<int:item_id>/',          views.conta_remover_item,   name='conta_remover_item'),
     path('<int:pos_id>/contas/<int:conta_id>/items/<int:item_id>/status/',   views.item_status_atualizar,name='item_status_atualizar'),
     path('<int:pos_id>/contas/<int:conta_id>/fechar/',                       views.conta_fechar,         name='conta_fechar'),
+    path('<int:pos_id>/contas/<int:conta_id>/cancelar/',                     views.conta_cancelar,       name='conta_cancelar'),
 
     # ── TURNOS ────────────────────────────────────────────────────────
     path('<int:pos_id>/turnos/abrir/',                   views.turno_abrir,  name='turno_abrir'),

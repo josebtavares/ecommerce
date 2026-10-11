@@ -108,12 +108,15 @@
                   </span>
                 </div>
 
+                <p v-if="item.opcoes_texto" class="mt-1 text-xs font-bold text-amber-700">
+                  {{ item.opcoes_texto }}
+                </p>
                 <p v-if="item.observacoes" class="mt-1 text-xs italic text-slate-500">
                   {{ item.observacoes }}
                 </p>
 
                 <p :class="['mt-1 text-xs font-black', getItemStatusColor(item.status)]">
-                  {{ getItemStatusLabel(item.status) }}
+                  <font-awesome-icon :icon="['fas', getItemStatusIcon(item.status)]" class="mr-1" />{{ getItemStatusLabel(item.status) }}
                 </p>
               </div>
 
@@ -141,7 +144,7 @@
                   v-else
                   :class="['rounded-xl px-3 py-1.5 text-xs font-black', getItemStatusBadge(item.status)]"
                 >
-                  {{ getItemStatusLabel(item.status) }}
+                  <font-awesome-icon :icon="['fas', getItemStatusIcon(item.status)]" class="mr-1" />{{ getItemStatusLabel(item.status) }}
                 </span>
               </div>
             </div>
@@ -155,8 +158,8 @@
       v-else
       class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
     >
-      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">
-        🛒
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl text-slate-400 shadow-sm">
+        <font-awesome-icon :icon="['fas', 'cart-shopping']" />
       </div>
       <h3 class="mt-5 text-xl font-black text-slate-950">Nenhum pedido ativo</h3>
       <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
@@ -329,12 +332,22 @@ export default {
 
     getItemStatusLabel(status) {
       return {
-        pendente:   '⏳ Pendente',
-        preparando: '🔥 A preparar',
-        pronto:     '✅ Pronto',
-        entregue:   '🎉 Entregue',
-        cancelado:  '❌ Cancelado',
+        pendente:   'Pendente',
+        preparando: 'A preparar',
+        pronto:     'Pronto',
+        entregue:   'Entregue',
+        cancelado:  'Cancelado',
       }[status] || status
+    },
+
+    getItemStatusIcon(status) {
+      return {
+        pendente:   'hourglass-half',
+        preparando: 'fire',
+        pronto:     'circle-check',
+        entregue:   'check-double',
+        cancelado:  'circle-xmark',
+      }[status] || 'circle'
     },
 
     formatTime(timestamp) {

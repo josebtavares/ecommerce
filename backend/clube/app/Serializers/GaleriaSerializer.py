@@ -15,12 +15,14 @@ class GaleriaSerializer(serializers.ModelSerializer):
     )
 
     ficheiro_url = serializers.SerializerMethodField()
+    ficheiro_poster_url = serializers.SerializerMethodField()
 
     class Meta:
         model  = Galeria
+        read_only_fields = ['ficheiro_estado']
         fields = [
             'id', 'titulo', 'descricao',
-            'ficheiro', 'ficheiro_url',
+            'ficheiro', 'ficheiro_url', 'ficheiro_poster_url', 'ficheiro_estado',
             'utilizador', 'utilizador_id',   # ← ambos
             'data', 'status','likes', 'comentarios'
         ]
@@ -28,3 +30,7 @@ class GaleriaSerializer(serializers.ModelSerializer):
     def get_ficheiro_url(self, obj):
         req = self.context.get('request')
         return req.build_absolute_uri(obj.ficheiro.url) if obj.ficheiro else None
+
+    def get_ficheiro_poster_url(self, obj):
+        req = self.context.get('request')
+        return req.build_absolute_uri(obj.ficheiro_poster.url) if obj.ficheiro_poster and req else None

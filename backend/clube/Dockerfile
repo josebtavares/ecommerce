@@ -9,10 +9,11 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# instala dependências do sistema (necessárias para psycopg2)
+# instala dependências do sistema (psycopg2; ffmpeg para otimizar vídeos)
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # instala dependências Python

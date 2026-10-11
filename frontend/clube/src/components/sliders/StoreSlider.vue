@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
-        <span v-if="icon" class="text-xl">{{ icon }}</span>
+        <span v-if="icon" class="w-8 h-8 rounded-lg flex items-center justify-center text-red-500" :class="isDark ? 'bg-red-500/10' : 'bg-red-50'"><font-awesome-icon :icon="['fas', icon]" class="w-3.5 h-3.5" /></span>
         <h2 class="text-lg font-bold transition-colors"
             :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ title }}</h2>
         <span v-if="!loading" class="text-xs transition-colors"
@@ -40,9 +40,9 @@
         >
           <!-- DEPOIS -->
           <video v-if="isVideo(loja.banner_url)"
-            :src="loja.banner_url"
+            :src="loja.banner_url" :poster="loja.banner_poster_url"
             class="w-full h-full object-cover"
-            autoplay muted loop playsinline></video>
+            v-video-visivel muted loop playsinline></video>
           <img v-else
             :src="loja.banner_url || loja.logo_url || defaultImg"
             :alt="loja.nome"
@@ -130,7 +130,7 @@ export default {
 
   props: {
     title:    { type: String,  required: true },
-    icon:     { type: String,  default: '' },
+    icon:     { type: String,  default: '' },   // nome de ícone Font Awesome (solid)
     params:   { type: Object,  default: () => ({}) },
     endpoint: { type: String,  default: '/app/loja/' },
     limit:    { type: Number,  default: 8 },

@@ -3,6 +3,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
+import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
 
 export function useLojaData () {
   const route  = useRoute()
@@ -15,6 +16,8 @@ export function useLojaData () {
   const metodosPagamento   = ref([])
   const tiposExistentes    = ref([])
   const categoriasExistentes = ref([])  // CategoriaLoja objects
+  const totalProdutos      = ref(null)  // produtos activos da loja
+  const totalDestaques     = ref(0)     // produtos activos em destaque
   const selectedProduct    = ref(null)
   const sidebarAberta      = ref(false)
   const modalPolitica      = ref(null)
@@ -30,6 +33,25 @@ export function useLojaData () {
     loja.value?.politica_privacidade ||
     metodosPagamento.value.length > 0
   )
+
+  // Secções "Por tipo" e "Por categoria" — só metadados e contagens; cada template pede
+  // os produtos de cada grupo página a página (components/produtos/ProdutosPaginados.vue).
+  // Sem tipos nem categorias, um único grupo com todos os produtos.
+  const gruposProdutos = computed(() => {
+    const id = lojaId.value
+    const lista = [
+      ...tiposExistentes.value
+        .filter(t => t.total_produtos > 0)
+        .map(t => ({ key: 't' + t.id, seccao: 'tipo', nome: t.nome, total: t.total_produtos, params: { loja_id: id, tipo_id: t.id } })),
+      ...categoriasExistentes.value
+        .filter(c => c.total_produtos > 0)
+        .map(c => ({ key: 'c' + c.id, seccao: 'categoria', nome: c.nome, total: c.total_produtos, params: { loja_id: id, categoria_id: c.id } })),
+    ]
+    if (!lista.length && totalProdutos.value) {
+      lista.push({ key: 'todos', seccao: 'todos', nome: 'Todos os produtos', total: totalProdutos.value, params: { loja_id: id } })
+    }
+    return lista
+  })
 
   // CSS variables dinâmicas baseadas nas cores da loja
   const cssVars = computed(() => {
@@ -66,12 +88,11 @@ export function useLojaData () {
 
   async function fetchTiposExistentes (id) {
     try {
-      const { data } = await api.get('/app/produto/', { params: { loja_id: id, limit: 200 } })
-      const map = {}
-      ;(data.results || data).forEach(p => {
-        if (p.tipo && !map[p.tipo.id]) map[p.tipo.id] = p.tipo
-      })
-      tiposExistentes.value = Object.values(map)
+      // só tipos + contagens — não descarrega produtos
+      const { data } = await api.get(`/app/loja/${id}/produtos/tipos/`)
+      tiposExistentes.value = data.tipos || []
+      totalProdutos.value = data.total ?? null
+      totalDestaques.value = data.destaques || 0
     } catch (e) { console.error(e) }
   }
 
@@ -102,21 +123,9 @@ export function useLojaData () {
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
   }
 
-  function tipoIcon (tipo) {
-    const icons = {
-      prato: '🍽️', comida: '🍔', bebida: '🥤', sobremesa: '🍰',
-      roupa: '👗', calcado: '👟', acessorio: '👜',
-      eletronico: '📱', telemovel: '📱', tablet: '💻',
-      fruta: '🍎', legume: '🥦', carne: '🥩',
-      livro: '📚', manga: '📖', revista: '📰',
-    }
-    return icons[tipo?.toLowerCase()] || '📦'
-  }
+  const tipoIcon = iconeTipoProduto
 
-  function metodoPagamentoIcon (tipo) {
-    const map = { cartao: '💳', dinheiro: '💵', mbway: '📱', paypal: '🅿️', stripe: '💳' }
-    return map[tipo] || '💰'
-  }
+  const metodoPagamentoIcon = iconePagamento
 
   function scrollToId (id) {
     const el = document.getElementById(id)
@@ -139,10 +148,10 @@ export function useLojaData () {
   return {
     // state
     loading, loja, opcoesEntrega, metodosPagamento,
-    tiposExistentes, categoriasExistentes,
+    tiposExistentes, categoriasExistentes, totalProdutos, totalDestaques,
     selectedProduct, sidebarAberta, modalPolitica,
     // computed
-    temSidebar, temFooter, cssVars, lojaId,
+    temSidebar, temFooter, cssVars, lojaId, gruposProdutos,
     // helpers
     backendUrl, formatPrice, tipoIcon, metodoPagamentoIcon,
     scrollToId, onRatingUpdated, logOut,

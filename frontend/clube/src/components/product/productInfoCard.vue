@@ -15,12 +15,16 @@
 
           <!-- Imagem actual -->
           <div class="relative w-full h-full cursor-pointer group"
-               @click="todasImagens[imagemActiva]?.url && (imagemFullscreen = true)">
-            <img :src="todasImagens[imagemActiva]?.url || defaultImg" :alt="produto.nome"
+               @click="todasImagens[imagemActiva]?.url && !todasImagens[imagemActiva]?.video && (imagemFullscreen = true)">
+            <!-- vídeo do produto: toca com controlos (é o único vídeo no ecrã) -->
+            <video v-if="todasImagens[imagemActiva]?.video" :key="todasImagens[imagemActiva].url"
+                   :src="todasImagens[imagemActiva].url" :poster="todasImagens[imagemActiva].poster"
+                   class="w-full h-full object-cover" autoplay muted loop playsinline controls></video>
+            <img v-else :src="todasImagens[imagemActiva]?.url || defaultImg" :alt="produto.nome"
                  class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
 
             <!-- Overlay hover -->
-            <div v-if="todasImagens[imagemActiva]?.url"
+            <div v-if="todasImagens[imagemActiva]?.url && !todasImagens[imagemActiva]?.video"
                  class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity
                         flex flex-col items-center justify-center gap-2">
               <div class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center">
@@ -48,7 +52,7 @@
             <!-- Badge destaque -->
             <span v-if="produto.destaque"
                   class="absolute top-3 left-3 px-2 py-1 bg-red-600 text-white text-xs font-bold rounded">
-              ⭐ Destaque
+              <font-awesome-icon :icon="['fas', 'star']" class="mr-1" />Destaque
             </span>
 
             <!-- Botão fechar (mobile) -->
@@ -86,7 +90,7 @@
               @click.stop="imagemActiva = idx"
               class="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden border-2 transition"
               :class="imagemActiva === idx ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'">
-              <img :src="img.url || defaultImg" :alt="'Imagem ' + (idx+1)" class="w-full h-full object-cover" />
+              <img :src="img.poster || (img.video ? defaultImg : img.url) || defaultImg" :alt="'Imagem ' + (idx+1)" class="w-full h-full object-cover" />
             </button>
           </div>
 
@@ -132,7 +136,9 @@
 
             <!-- Nome e preço -->
             <h2 class="text-2xl font-bold mb-1" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ produto.nome }}</h2>
-            <p class="text-2xl font-bold text-red-500 mb-4">{{ formatPrice(produto.preco) }}</p>
+            <p class="text-2xl font-bold text-red-500 mb-4">
+              <span v-if="precoDesde" class="text-sm font-semibold opacity-70 mr-1">desde</span>{{ formatPrice(precoUnitario) }}
+            </p>
 
             <!-- Descrição -->
             <p class="text-sm leading-relaxed mb-4" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
@@ -150,15 +156,27 @@
                 <div class="flex flex-wrap gap-2">
                   <button v-for="opcao in attr.opcoesDisponiveis" :key="opcao"
                     @click="toggleSeleccao(attr.nome, opcao)"
+                    :disabled="estado(attr.nome, opcao) === 'esgotada'"
+                    :title="tituloOpcao(attr.nome, opcao)"
                     :class="[
-                      'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border',
+                      'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border relative overflow-hidden',
                       seleccoes[attr.nome] === opcao
                         ? 'bg-red-600 border-red-500 text-white'
-                        : isDark
-                          ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100'
-                          : 'bg-gray-100 border-gray-300 text-zinc-600 hover:border-gray-400 hover:text-zinc-900'
+                        : estado(attr.nome, opcao) === 'esgotada'
+                          ? (isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-gray-50 border-gray-200 text-zinc-300 cursor-not-allowed')
+                          : estado(attr.nome, opcao) === 'esgotada_combo'
+                            ? (isDark ? 'bg-zinc-900 border-dashed border-zinc-700 text-zinc-500 hover:text-zinc-300' : 'bg-gray-50 border-dashed border-gray-300 text-zinc-400 hover:text-zinc-600')
+                            : isDark
+                              ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100'
+                              : 'bg-gray-100 border-gray-300 text-zinc-600 hover:border-gray-400 hover:text-zinc-900'
                     ]">
                     {{ opcao }}
+                    <!-- risco diagonal: esgotado (total ou com as escolhas actuais) -->
+                    <span v-if="seleccoes[attr.nome] !== opcao && ['esgotada', 'esgotada_combo'].includes(estado(attr.nome, opcao))"
+                          class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span class="absolute w-full h-px rotate-[25deg] opacity-50"
+                            :class="isDark ? 'bg-zinc-500' : 'bg-gray-400'"></span>
+                    </span>
                   </button>
 
                   <!-- Opções do schema global mas não disponíveis no produto (desativadas) -->
@@ -191,14 +209,14 @@
 
             <!-- Stock -->
             <div class="flex items-center gap-2 mb-4">
-              <div :class="['w-2 h-2 rounded-full', stock > 0 ? 'bg-green-500' : 'bg-red-500']"></div>
-              <span class="text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
-                {{ stock > 0 ? `${stock} em stock` : 'Sem stock' }}
+              <div :class="['w-2 h-2 rounded-full', corStock]"></div>
+              <span class="text-sm" :class="[isDark ? 'text-zinc-400' : 'text-zinc-500', poucasUnidades && 'text-amber-500 font-semibold']">
+                {{ textoStock }}
               </span>
             </div>
 
             <!-- Aviso obrigatórios -->
-            <p v-if="obrigatoriosPorPreencher.length > 0"
+            <p v-if="obrigatoriosPorPreencher.length > 0 && stock > 0"
                class="text-xs text-yellow-500 mb-4 flex items-center gap-1.5">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -219,7 +237,7 @@
                   </svg>
                 </button>
                 <span class="text-lg font-bold w-8 text-center" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ qty }}</span>
-                <button @click="qty < stock && qty++" :disabled="qty >= stock || loading"
+                <button @click="qty < maxQty && qty++" :disabled="qty >= maxQty || loading"
                   class="w-8 h-8 rounded-lg flex items-center justify-center transition disabled:opacity-40"
                   :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'"
@@ -229,7 +247,7 @@
                 </button>
               </div>
               <span class="text-sm font-bold ml-auto" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
-                Total: {{ formatPrice(produto.preco * qty) }}
+                Total: {{ formatPrice(precoUnitario * qty) }}
               </span>
             </div>
 
@@ -250,6 +268,7 @@
               </svg>
               <span v-if="loading">A adicionar…</span>
               <span v-else-if="stock === 0">Sem stock</span>
+              <span v-else-if="varianteSelecionadaEsgotada">Combinação esgotada</span>
               <span v-else class="flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -311,6 +330,11 @@
 <script>
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api'
+import { toast } from 'vue3-toastify'
+import {
+  usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
+  variantesPorEscolher, stockCompativel, intervaloPreco,
+} from '@/utils/variantes'
 
 export default {
   name: 'ProductInfoCard',
@@ -348,7 +372,11 @@ export default {
       const imgs = []
       // 1. imagem principal
       if (this.produto?.ficheiro_url) {
-        imgs.push({ url: this.produto.ficheiro_url, legenda: '' })
+        imgs.push({
+          url: this.produto.ficheiro_url, legenda: '',
+          video: /\.(mp4|webm|mov|mkv|m4v)$/i.test(this.produto.ficheiro_url),
+          poster: this.produto.ficheiro_poster_url || null,
+        })
       }
       // 2. imagens adicionais (do novo endpoint)
       const adicionais = this.produto?.imagens || []
@@ -427,14 +455,80 @@ export default {
         }))
     },
 
+    // ── Stock por variação ────────────────────────────────────────
+    comVariantes () { return usaVariantes(this.produto) },
+
+    variante () {
+      return this.comVariantes ? varianteEscolhida(this.produto, this.seleccoes) : null
+    },
+
+    varianteSelecionadaEsgotada () {
+      return !!this.variante && this.variante.quantidade <= 0
+    },
+
+    // stock relevante: da combinação escolhida, ou das compatíveis com o que já está escolhido
+    stockVisivel () {
+      if (!this.comVariantes) return this.stock
+      if (this.variante) return this.variante.quantidade
+      return stockCompativel(this.produto, this.seleccoes)
+    },
+
+    // quantidade máxima no selector: só com a combinação completa escolhida
+    maxQty () {
+      if (!this.comVariantes) return this.stock
+      return this.variante ? this.variante.quantidade : 1
+    },
+
+    poucasUnidades () {
+      const s = this.comVariantes ? (this.variante?.quantidade ?? 0) : this.stock
+      return s > 0 && s <= 5
+    },
+
+    textoStock () {
+      if (this.stock <= 0) return 'Sem stock'
+      if (!this.comVariantes) return this.poucasUnidades ? `Só restam ${this.stock}` : `${this.stock} em stock`
+      if (this.variante) {
+        const q = this.variante.quantidade
+        if (q <= 0) return 'Esta combinação está esgotada — escolhe outra'
+        return q <= 5 ? `Só restam ${q} nesta combinação` : `${q} em stock`
+      }
+      const falta = variantesPorEscolher(this.produto, this.seleccoes)
+      return `Disponível · escolhe ${falta.join(' e ')} para ver o stock`
+    },
+
+    corStock () {
+      if (this.stock <= 0 || this.varianteSelecionadaEsgotada) return 'bg-red-500'
+      return this.poucasUnidades ? 'bg-amber-500' : 'bg-green-500'
+    },
+
+    precoUnitario () {
+      if (!this.comVariantes) return this.produto?.preco
+      if (this.variante) return this.variante.preco_efetivo
+      return this.intervalo ? this.intervalo.min : this.produto?.preco
+    },
+
+    intervalo () {
+      return this.comVariantes ? intervaloPreco(this.produto, this.seleccoes) : null
+    },
+
+    // preços diferentes entre combinações ainda possíveis → "desde X"
+    precoDesde () {
+      return !this.variante && !!this.intervalo && this.intervalo.min !== this.intervalo.max
+    },
+
     obrigatoriosPorPreencher () {
-      return this.atributosChoices
+      const obrig = this.atributosChoices
         .filter(a => a.obrigatorio && !this.seleccoes[a.nome])
         .map(a => a.nome)
+      // atributos-variante são sempre necessários (definem o stock)
+      const variantes = this.comVariantes ? variantesPorEscolher(this.produto, this.seleccoes) : []
+      return [...new Set([...obrig, ...variantes])]
     },
 
     podeAdicionar () {
-      return this.obrigatoriosPorPreencher.length === 0
+      if (this.obrigatoriosPorPreencher.length > 0) return false
+      if (this.comVariantes) return !!this.variante && this.variante.quantidade >= this.qty
+      return true
     },
 
     mostrarBotaoLoja () {
@@ -452,6 +546,10 @@ export default {
       this.imagemFullscreen = false
       this.imagemActiva = 0
     },
+    // ao trocar de combinação, a quantidade não pode passar o stock dela
+    maxQty (max) {
+      if (this.qty > max) this.qty = Math.max(1, max)
+    },
   },
 
   methods: {
@@ -464,9 +562,26 @@ export default {
         const novas = { ...this.seleccoes }
         delete novas[nome]
         this.seleccoes = novas
+      } else if (this.comVariantes) {
+        if (this.estado(nome, opcao) === 'esgotada') return
+        // larga escolhas que ficariam sem stock com esta opção
+        this.seleccoes = escolherOpcao(this.produto, this.seleccoes, nome, opcao)
       } else {
         this.seleccoes = { ...this.seleccoes, [nome]: opcao }
       }
+    },
+
+    // estado de uma opção (só atributos-variante; os outros estão sempre disponíveis)
+    estado (nome, opcao) {
+      if (!this.comVariantes || !atributosVariante(this.produto).includes(nome)) return 'disponivel'
+      return estadoOpcao(this.produto, this.seleccoes, nome, opcao)
+    },
+
+    tituloOpcao (nome, opcao) {
+      const e = this.estado(nome, opcao)
+      if (e === 'esgotada') return 'Esgotado'
+      if (e === 'esgotada_combo') return 'Esgotado com as opções escolhidas — clica para ver outras combinações'
+      return ''
     },
 
     prevImagem () {
@@ -479,11 +594,17 @@ export default {
     async addToCart () {
       if (!this.loja || !this.produto || this.stock === 0 || !this.podeAdicionar) return
       await this.wrap(async () => {
-        await api.post(`/app/loja/${this.loja.id}/carrinho/adicionar/`, {
-          produto_id: this.produto.id,
-          quantidade: this.qty,
-          atributos:  this.seleccoes,
-        })
+        try {
+          await api.post(`/app/loja/${this.loja.id}/carrinho/adicionar/`, {
+            produto_id: this.produto.id,
+            quantidade: this.qty,
+            atributos:  this.seleccoes,
+          })
+        } catch (e) {
+          // ex.: stock mudou entretanto ("Stock insuficiente… Disponível: 1")
+          toast.error(e.response?.data?.detail || 'Não foi possível adicionar ao carrinho.')
+          return
+        }
         this.$emit('added-to-cart', { loja: this.loja })
         this.$emit('close')
       })

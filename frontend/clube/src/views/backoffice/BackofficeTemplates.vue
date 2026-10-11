@@ -1,6 +1,6 @@
 <!-- BackofficeTemplates.vue — Aparência da loja com previews ricos -->
 <template>
-  <div class="space-y-6 max-w-5xl">
+  <div class="space-y-6 max-w-6xl">
 
     <div>
       <h2 class="text-lg font-bold text-zinc-100">Aparência da loja</h2>
@@ -14,7 +14,7 @@
                  abaAtiva === tab.id
                    ? 'border-red-500 text-zinc-100'
                    : 'border-transparent text-zinc-500 hover:text-zinc-300']">
-        {{ tab.label }}
+        <font-awesome-icon :icon="['fas', tab.icon]" class="mr-1.5" />{{ tab.label }}
       </button>
     </div>
 
@@ -93,7 +93,7 @@
       <!-- Preview link -->
       <div class="flex items-center gap-3 p-4 bg-zinc-900/50 rounded-2xl border border-zinc-800 border-dashed mt-4">
         <span class="text-zinc-500 text-sm">Ver como fica em tempo real:</span>
-        <a :href="`/loja/${lojaId}?preview=1`" target="_blank"
+        <a :href="previewUrl(form.template_id, form.cor_primaria, form.cor_secundaria, form.dark_mode)" target="_blank"
            class="text-red-400 hover:text-red-300 text-sm font-semibold transition flex items-center gap-1">
           Abrir pré-visualização
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -103,78 +103,136 @@
       </div>
     </div>
 
-    <!-- ── ABA: CORES ── -->
-    <div v-if="abaAtiva === 'cores'" class="space-y-5">
-      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5 space-y-4">
-        <h3 class="text-sm font-bold text-zinc-200">🎨 Cores do tema</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div v-for="(campo, key) in camposCor" :key="key">
-            <label class="text-xs text-zinc-500 mb-2 block">{{ campo.label }}</label>
-            <div class="flex items-center gap-3">
-              <input type="color" v-model="form[key]"
-                class="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent flex-shrink-0" />
-              <input v-model="form[key]" type="text" maxlength="7"
-                class="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
-                       focus:outline-none focus:border-red-500 font-mono" />
-            </div>
-            <p class="text-[10px] text-zinc-600 mt-1">{{ campo.hint }}</p>
-          </div>
-        </div>
+    <!-- ── ABA: CORES & MODO ── -->
+    <div v-if="abaAtiva === 'cores'" class="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-5 items-start">
 
-        <!-- Preview de cor ao vivo -->
-        <div class="space-y-2 pt-2">
-          <p class="text-xs text-zinc-500">Preview</p>
-          <div class="flex gap-3 items-stretch h-10">
-            <div class="flex-1 rounded-lg transition-all" :style="{ background: form.cor_primaria }"></div>
-            <div class="flex-1 rounded-lg border border-zinc-700 transition-all" :style="{ background: form.cor_secundaria }"></div>
-          </div>
-          <!-- Mini template preview com as cores selecionadas -->
-          <div class="relative rounded-xl overflow-hidden border border-zinc-800 mt-3" style="height:120px">
+      <!-- Controlos -->
+      <div class="space-y-4">
+        <!-- Template actual -->
+        <div class="flex items-center gap-3 p-3 bg-zinc-900 rounded-2xl border border-zinc-800">
+          <div class="w-14 h-9 rounded-lg overflow-hidden flex-shrink-0 border border-zinc-800">
             <TemplateMiniPreview :template="previewTemplateCores" />
           </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-[10px] uppercase tracking-wider text-zinc-500">Template</p>
+            <p class="text-sm font-bold text-zinc-100 truncate">{{ templateAtual.nome }}</p>
+          </div>
+          <button @click="abaAtiva = 'template'" class="text-xs text-zinc-400 hover:text-zinc-200 transition">Trocar</button>
+        </div>
+
+        <!-- Cores -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-zinc-200"><font-awesome-icon :icon="['fas', 'palette']" class="mr-1.5 text-zinc-500" />Cores</h3>
+            <button @click="reporPadrao"
+              class="text-[11px] text-zinc-500 hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'rotate-left']" class="mr-1" />Repor padrão do template</button>
+          </div>
+
+          <div v-for="(campo, key) in camposCorVisiveis" :key="key">
+            <label class="text-xs text-zinc-400 mb-1.5 block font-medium">{{ campo.label }}</label>
+            <div class="flex items-center gap-2">
+              <label class="relative w-10 h-10 rounded-xl overflow-hidden border border-zinc-700 cursor-pointer flex-shrink-0"
+                     :style="{ background: form[key] }">
+                <input type="color" :value="form[key]" @input="form[key] = $event.target.value; textoCor[key] = $event.target.value"
+                       class="absolute inset-0 opacity-0 cursor-pointer" />
+              </label>
+              <input v-model="textoCor[key]" @input="onTextoCor(key)" @blur="textoCor[key] = form[key]"
+                type="text" maxlength="7" spellcheck="false"
+                :class="['flex-1 min-w-0 px-3 py-2 bg-zinc-800 border rounded-xl text-sm text-zinc-100 focus:outline-none font-mono uppercase',
+                         corValida(textoCor[key]) ? 'border-zinc-700 focus:border-red-500' : 'border-red-500/70']" />
+            </div>
+            <p class="text-[10px] mt-1" :class="corValida(textoCor[key]) ? 'text-zinc-600' : 'text-red-400'">
+              {{ corValida(textoCor[key]) ? campo.hint : 'Formato inválido — usa #RRGGBB (ex: #E4572E)' }}
+            </p>
+            <p v-if="key === 'cor_primaria' && contrasteFraco"
+               class="text-[10px] mt-1 text-amber-400">
+              <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />Pouco contraste com o fundo {{ form.dark_mode ? 'escuro' : 'claro' }} — textos e botões podem ficar difíceis de ler.
+            </p>
+          </div>
+
+          <p v-if="!templateAtual.usaCorSecundaria"
+             class="text-[10px] text-zinc-600 leading-relaxed border-t border-zinc-800 pt-3">
+            Este template usa apenas a cor primária — o fundo é definido pelo próprio design e pelo modo escuro/claro.
+          </p>
+
+          <!-- Paletas sugeridas -->
+          <div class="border-t border-zinc-800 pt-3">
+            <p class="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Paletas sugeridas</p>
+            <div class="grid grid-cols-3 gap-2">
+              <button v-for="sug in sugestoesCor" :key="sug.label" @click="aplicarSugestao(sug)"
+                :class="['group flex flex-col items-center gap-1.5 p-2 rounded-xl border transition',
+                         sugestaoActiva(sug) ? 'border-red-500/60 bg-red-500/5' : 'border-zinc-800 hover:border-zinc-600']">
+                <span class="flex">
+                  <span class="w-5 h-5 rounded-full border-2 border-zinc-900" :style="{ background: sug.primary }"></span>
+                  <span v-if="templateAtual.usaCorSecundaria" class="w-5 h-5 -ml-2 rounded-full border-2 border-zinc-900" :style="{ background: sug.secundaria }"></span>
+                </span>
+                <span class="text-[10px] text-zinc-400 group-hover:text-zinc-200">{{ sug.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modo por defeito -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
+          <h3 class="text-sm font-bold text-zinc-200 mb-3"><font-awesome-icon :icon="['fas', 'circle-half-stroke']" class="mr-1.5 text-zinc-500" />Modo por defeito</h3>
+          <div class="grid grid-cols-2 gap-2">
+            <button v-for="m in [[true, 'moon', 'Escuro'], [false, 'sun', 'Claro']]" :key="String(m[0])"
+              @click="form.dark_mode = m[0]"
+              :class="['py-3 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2',
+                       form.dark_mode === m[0] ? 'bg-zinc-800 border-red-500/60 text-zinc-100' : 'border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300']">
+              <font-awesome-icon :icon="['fas', m[1]]" /> {{ m[2] }}
+            </button>
+          </div>
+          <p class="text-[10px] text-zinc-600 mt-2 leading-relaxed">
+            É o modo com que a loja abre. O visitante pode alternar na página; se mudares aqui, a tua escolha volta a prevalecer.
+          </p>
         </div>
       </div>
 
-      <!-- Modo dark/light -->
-      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
-        <h3 class="text-sm font-bold text-zinc-200 mb-3">🌙 Modo por defeito</h3>
-        <div class="flex gap-3">
-          <button @click="form.dark_mode = true"
-            :class="['flex-1 py-3 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2',
-                     form.dark_mode ? 'bg-zinc-800 border-red-500/50 text-zinc-100' : 'border-zinc-700 text-zinc-500 hover:border-zinc-600']">
-            🌙 Dark
-          </button>
-          <button @click="form.dark_mode = false"
-            :class="['flex-1 py-3 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2',
-                     !form.dark_mode ? 'bg-zinc-800 border-red-500/50 text-zinc-100' : 'border-zinc-700 text-zinc-500 hover:border-zinc-600']">
-            ☀️ Light
-          </button>
+      <!-- Preview ao vivo -->
+      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-3 lg:sticky lg:top-4">
+        <div class="flex items-center justify-between gap-2 mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span class="text-xs font-semibold text-zinc-300">Pré-visualização ao vivo</span>
+          </div>
+          <div class="flex rounded-lg bg-zinc-950 border border-zinc-800 p-0.5">
+            <button v-for="d in [['desktop','desktop'],['mobile','mobile-screen']]" :key="d[0]"
+              @click="coresDevice = d[0]" :title="d[0] === 'desktop' ? 'Desktop' : 'Mobile'"
+              :class="['px-2.5 py-1 rounded-md text-xs transition',
+                       coresDevice === d[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+              <font-awesome-icon :icon="['fas', d[1]]" />
+            </button>
+          </div>
         </div>
-        <p class="text-[10px] text-zinc-600 mt-2">O visitante pode sempre mudar na página da loja.</p>
-      </div>
-
-      <!-- Sugestões de cor por template -->
-      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
-        <h3 class="text-sm font-bold text-zinc-200 mb-3">💡 Sugestões para <span class="text-red-400">{{ templateAtual?.nome }}</span></h3>
-        <div class="flex flex-wrap gap-2">
-          <button v-for="sug in sugestoesCor" :key="sug.label"
-            @click="aplicarSugestao(sug)"
-            class="flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 transition text-xs text-zinc-400 hover:text-zinc-200">
-            <div class="w-3 h-3 rounded-full" :style="{ background: sug.primary }"></div>
-            {{ sug.label }}
-          </button>
+        <div class="h-[60vh] min-h-[380px] rounded-xl bg-zinc-950">
+          <TemplatePreviewFrame
+            :src="coresPreviewSrc"
+            :device="coresDevice"
+            :tema="{ corPrimaria: form.cor_primaria, corSecundaria: form.cor_secundaria, darkMode: form.dark_mode }"
+          />
         </div>
+        <p class="text-[10px] text-zinc-600 mt-2 px-1">As alterações aparecem aqui de imediato, mas só ficam visíveis aos clientes depois de guardares.</p>
       </div>
     </div>
 
     <!-- Mensagem de erro -->
     <div v-if="erro" class="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">{{ erro }}</div>
 
-    <!-- Botão guardar -->
-    <div class="flex justify-end">
-      <button @click="guardar" :disabled="loading"
+    <!-- Barra guardar -->
+    <div class="sticky bottom-0 z-10 -mx-1 px-1 py-3 flex items-center justify-end gap-3 flex-wrap"
+         :class="temAlteracoes ? 'bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent' : ''">
+      <span v-if="temAlteracoes" class="text-xs text-amber-400 flex items-center gap-1.5 mr-auto">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Alterações por guardar
+      </span>
+      <span v-else-if="guardadoEm" class="text-xs text-green-500 mr-auto"><font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Guardado</span>
+      <button v-if="temAlteracoes" @click="descartar" :disabled="loading"
+        class="px-4 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 hover:text-zinc-200 border border-zinc-700 hover:border-zinc-500 transition">
+        Descartar
+      </button>
+      <button @click="guardar" :disabled="loading || !temAlteracoes || !formValido"
         :class="['px-6 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2',
-                 loading ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500 text-white']">
+                 loading || !temAlteracoes || !formValido ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500 text-white']">
         <svg v-if="loading" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
           <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" class="opacity-75"/>
@@ -189,72 +247,75 @@
            class="fixed inset-0 z-[200] flex items-center justify-center p-4"
            style="background:rgba(0,0,0,0.9);backdrop-filter:blur(14px)"
            @click.self="previewModal = null">
-        <div class="w-full max-w-3xl max-h-[90vh] rounded-2xl overflow-hidden flex flex-col border border-zinc-800 shadow-2xl"
+        <div class="w-full max-w-7xl h-[92vh] rounded-2xl overflow-hidden flex flex-col border border-zinc-800 shadow-2xl"
              style="background:#0a0a0b;animation:scaleIn 0.25s ease">
 
           <!-- Header modal -->
-          <div class="flex items-center justify-between px-5 py-3 border-b border-zinc-800 flex-shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-2.5 h-2.5 rounded-full"
-                   :style="{ background: previewModal.primaryDefault, boxShadow: '0 0 8px '+previewModal.primaryDefault+'60' }"></div>
-              <span class="text-sm font-bold text-zinc-100">{{ previewModal.nome }}</span>
-              <span class="text-xs text-zinc-500">{{ previewModal.tag }}</span>
+          <div class="flex items-center justify-between gap-3 px-5 py-3 border-b border-zinc-800 flex-shrink-0 flex-wrap">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                   :style="{ background: previewCores.c1, boxShadow: '0 0 8px '+previewCores.c1+'60' }"></div>
+              <span class="text-sm font-bold text-zinc-100 truncate">{{ previewModal.nome }}</span>
+              <span class="text-xs text-zinc-500 hidden sm:inline">{{ previewModal.tag }}</span>
             </div>
+
+            <!-- Dispositivo + modo -->
+            <div class="flex items-center gap-2">
+              <div class="flex rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
+                <button v-for="d in [['desktop','desktop','Desktop'],['mobile','mobile-screen','Mobile']]" :key="d[0]"
+                  @click="previewDevice = d[0]"
+                  :class="['px-2.5 py-1 rounded-md text-xs font-semibold transition',
+                           previewDevice === d[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+                  <font-awesome-icon :icon="['fas', d[1]]" class="mr-1" />{{ d[2] }}
+                </button>
+              </div>
+              <div class="flex rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
+                <button v-for="m in [[true,'moon'],[false,'sun']]" :key="String(m[0])"
+                  @click="previewDark = m[0]" :title="m[0] ? 'Escuro' : 'Claro'"
+                  :class="['px-2.5 py-1 rounded-md text-xs transition',
+                           previewDark === m[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+                  <font-awesome-icon :icon="['fas', m[1]]" />
+                </button>
+              </div>
+            </div>
+
             <div class="flex items-center gap-2">
               <!-- nav prev/next -->
               <button @click="navPreview(-1)"
-                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition">←</button>
+                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'chevron-left']" /></button>
               <span class="text-xs text-zinc-600 w-10 text-center">{{ idxPreview + 1 }} / {{ TEMPLATES.length }}</span>
               <button @click="navPreview(1)"
-                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition">→</button>
+                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'chevron-right']" /></button>
               <button @click="previewModal = null"
                 class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-sm flex items-center justify-center hover:text-zinc-200 transition ml-1">×</button>
             </div>
           </div>
 
-          <!-- Preview content — larger version usando mini preview escalado -->
-          <div class="flex-1 overflow-y-auto scrollbar-hide">
-            <!-- Hero escalado -->
-            <div class="relative w-full" style="aspect-ratio:16/9">
-              <TemplateMiniPreview :template="previewModal" style="position:absolute;inset:0;font-size:220%" />
-            </div>
-
-            <!-- Info card -->
-            <div class="p-5 space-y-3">
-              <div class="flex items-start justify-between">
-                <div>
-                  <h3 class="text-base font-bold text-zinc-100">{{ previewModal.nome }}</h3>
-                  <p class="text-xs text-zinc-500 mt-1">{{ previewModal.descricao }}</p>
-                </div>
-                <span class="px-2 py-0.5 rounded-full text-xs font-semibold ml-4 flex-shrink-0"
-                      :style="tagStyle(previewModal.tag)">{{ previewModal.tag }}</span>
-              </div>
-              <div class="flex flex-wrap gap-1.5">
-                <span v-for="cat in previewModal.categorias" :key="cat"
-                      class="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded-full capitalize">
-                  {{ cat === 'todos' ? 'Genérico' : cat }}
-                </span>
-              </div>
-              <!-- Cor sugerida -->
-              <div class="flex items-center gap-2 pt-1">
-                <div class="w-3 h-3 rounded-full flex-shrink-0"
-                     :style="{ background: previewModal.primaryDefault, boxShadow: '0 0 6px '+previewModal.primaryDefault+'50' }"></div>
-                <span class="text-xs text-zinc-600 font-mono">Cor padrão: {{ previewModal.primaryDefault }}</span>
-              </div>
-            </div>
+          <!-- Preview real: a loja verdadeira, com este template, num iframe -->
+          <div class="flex-1 min-h-0 p-3 sm:p-5 bg-zinc-950">
+            <TemplatePreviewFrame :src="previewSrc" :device="previewDevice" />
           </div>
 
           <!-- Footer modal -->
-          <div class="px-5 py-3 border-t border-zinc-800 flex items-center justify-between flex-shrink-0">
-            <div>
-              <p class="text-xs text-zinc-500">Ideal para</p>
-              <p class="text-xs text-zinc-300 mt-0.5">{{ previewModal.categorias.map(c => c === 'todos' ? 'Genérico' : c).join(', ') }}</p>
+          <div class="px-5 py-3 border-t border-zinc-800 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
+            <div class="min-w-0">
+              <p class="text-xs text-zinc-300 truncate">{{ previewModal.descricao }}</p>
+              <p class="text-[11px] text-zinc-500 mt-0.5">
+                Com os produtos reais da tua loja ·
+                {{ previewModal.id === form.template_id ? 'as tuas cores actuais' : 'cores padrão do template' }}
+              </p>
             </div>
-            <button @click="selecionarDoModal"
-              class="px-5 py-2 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
-              :style="{ background: previewModal.primaryDefault || '#dc2626', boxShadow: '0 4px 16px '+previewModal.primaryDefault+'40' }">
-              Selecionar este template
-            </button>
+            <div class="flex items-center gap-2">
+              <a :href="previewSrc" target="_blank"
+                 class="px-3 py-2 rounded-xl text-xs font-semibold text-zinc-400 border border-zinc-700 hover:text-zinc-200 hover:border-zinc-500 transition">
+                Abrir em nova aba <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
+              </a>
+              <button @click="selecionarDoModal"
+                class="px-5 py-2 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
+                :style="{ background: previewCores.c1, boxShadow: '0 4px 16px '+previewCores.c1+'40' }">
+                Selecionar este template
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -266,7 +327,9 @@
 <script>
 import { TEMPLATES, CATEGORIAS_FILTRO } from '@/config/lojaTemplates'
 import TemplateMiniPreview from '@/components/templates/TemplateMiniPreview.vue'
+import TemplatePreviewFrame from '@/components/templates/TemplatePreviewFrame.vue'
 import api from '@/services/api'
+import { toast } from 'vue3-toastify'
 
 const TAG_STYLES = {
   'Versátil':  { background:'rgba(220,38,38,0.12)',  color:'#f87171', border:'1px solid rgba(220,38,38,0.25)'   },
@@ -283,7 +346,7 @@ const TAG_STYLES = {
 
 export default {
   name: 'BackofficeTemplates',
-  components: { TemplateMiniPreview },
+  components: { TemplateMiniPreview, TemplatePreviewFrame },
   props: { lojaId: [String, Number] },
 
   data () {
@@ -291,25 +354,32 @@ export default {
       TEMPLATES,
       abaAtiva: 'template',
       tabs: [
-        { id: 'template', label: '📐 Template' },
-        { id: 'cores',    label: '🎨 Cores & Modo' },
+        { id: 'template', label: 'Template',     icon: 'pen-ruler' },
+        { id: 'cores',    label: 'Cores & Modo', icon: 'palette' },
       ],
       filtroCategoria: null,
       categoriasFiltro: CATEGORIAS_FILTRO,
       loading: false,
       erro: '',
       previewModal: null,
+      previewDevice: 'desktop',
+      previewDark: true,
+      coresDevice: 'desktop',
       form: {
         template_id:    'classico',
         cor_primaria:   '#dc2626',
         cor_secundaria: '#1c1c1e',
         dark_mode:      true,
       },
+      // texto dos inputs de cor — só passa para o form quando é um hex válido
+      textoCor: { cor_primaria: '#dc2626', cor_secundaria: '#1c1c1e' },
+      // último estado guardado na BD (para detectar alterações)
+      guardado: null,
+      guardadoEm: null,
       camposCor: {
-        cor_primaria:   { label: 'Cor primária',   hint: 'Botões, destaques, badges, preços'   },
-        cor_secundaria: { label: 'Cor secundária', hint: 'Fundos, backgrounds secundários'     },
+        cor_primaria:   { label: 'Cor primária',   hint: 'Botões, destaques, preços e ícones.' },
+        cor_secundaria: { label: 'Cor secundária', hint: 'Cor de fundo da loja no modo escuro.' },
       },
-      sugestoesCor: [],
     }
   },
 
@@ -330,7 +400,25 @@ export default {
       return TEMPLATES.findIndex(t => t.id === this.previewModal.id)
     },
 
-    // Versão do template com as cores actuais para preview na aba Cores
+    // Template seleccionado → cores do formulário; outro → cores padrão dele
+    previewCores () {
+      const t = this.previewModal
+      if (!t) return { c1: '#dc2626', c2: '#1c1c1e' }
+      if (t.id === this.form.template_id) return { c1: this.form.cor_primaria, c2: this.form.cor_secundaria }
+      return { c1: t.primaryDefault, c2: t.secundariaDefault }
+    },
+
+    previewSrc () {
+      if (!this.previewModal) return ''
+      return this.previewUrl(this.previewModal.id, this.previewCores.c1, this.previewCores.c2, this.previewDark)
+    },
+
+    // Só muda quando muda o template — cores e modo vão por postMessage, sem recarregar
+    coresPreviewSrc () {
+      return this.previewUrl(this.form.template_id, this.form.cor_primaria, this.form.cor_secundaria, this.form.dark_mode, true)
+    },
+
+    // Versão do template com as cores actuais (miniatura na aba Cores)
     previewTemplateCores () {
       return {
         ...this.templateAtual,
@@ -338,27 +426,55 @@ export default {
         secundariaDefault: this.form.cor_secundaria,
       }
     },
-  },
 
-  watch: {
-    templateAtual: {
-      immediate: true,
-      handler (tpl) {
-        if (!tpl) return
-        this.sugestoesCor = [
-          { label: 'Padrão',    primary: tpl.primaryDefault,    secundaria: tpl.secundariaDefault },
-          { label: 'Quente',    primary: '#e11d48',              secundaria: '#0f0a0b' },
-          { label: 'Frio',      primary: '#06b6d4',              secundaria: '#020617' },
-          { label: 'Terra',     primary: '#d97706',              secundaria: '#1a1208' },
-          { label: 'Verde',     primary: '#16a34a',              secundaria: '#051a0a' },
-          { label: 'Roxo',      primary: '#7c3aed',              secundaria: '#0d0b14' },
-        ]
-      },
+    camposCorVisiveis () {
+      if (this.templateAtual.usaCorSecundaria) return this.camposCor
+      return { cor_primaria: this.camposCor.cor_primaria }
+    },
+
+    sugestoesCor () {
+      const tpl = this.templateAtual
+      return [
+        { label: 'Padrão', primary: tpl.primaryDefault, secundaria: tpl.secundariaDefault },
+        { label: 'Tomate', primary: '#e4572e',          secundaria: '#14110f' },
+        { label: 'Rubi',   primary: '#e11d48',          secundaria: '#0f0a0b' },
+        { label: 'Oceano', primary: '#0891b2',          secundaria: '#04131a' },
+        { label: 'Âmbar',  primary: '#d97706',          secundaria: '#1a1208' },
+        { label: 'Folha',  primary: '#16a34a',          secundaria: '#06140a' },
+        { label: 'Ameixa', primary: '#7c3aed',          secundaria: '#0d0b14' },
+        { label: 'Ouro',   primary: '#c9a84c',          secundaria: '#0b0905' },
+        { label: 'Grafite',primary: '#71717a',          secundaria: '#0c0c0e' },
+      ]
+    },
+
+    formValido () {
+      return this.corValida(this.textoCor.cor_primaria) && this.corValida(this.textoCor.cor_secundaria)
+    },
+
+    temAlteracoes () {
+      if (!this.guardado) return false
+      return Object.keys(this.form).some(k => this.form[k] !== this.guardado[k])
+    },
+
+    // Contraste (WCAG) da cor primária com o fundo típico do modo escolhido
+    contrasteFraco () {
+      const fundo = this.form.dark_mode
+        ? (this.templateAtual.usaCorSecundaria ? this.form.cor_secundaria : '#111111')
+        : '#f7f7f7'
+      return contraste(this.form.cor_primaria, fundo) < 2.2
     },
   },
 
   async created () {
     await this.fetchAparencia()
+  },
+
+  beforeUnmount () {
+    window.removeEventListener('beforeunload', this.avisoSair)
+  },
+
+  mounted () {
+    window.addEventListener('beforeunload', this.avisoSair)
   },
 
   methods: {
@@ -367,56 +483,157 @@ export default {
     },
 
     abrirPreview (tpl) {
+      this.previewDark  = tpl.id === this.form.template_id ? this.form.dark_mode : tpl.darkDefault !== false
       this.previewModal = tpl
+    },
+
+    previewUrl (tplId, c1, c2, dark, semCores = false) {
+      const q = new URLSearchParams({ preview: '1', tpl: tplId })
+      if (!semCores) {
+        q.set('c1', (c1 || '').replace('#', ''))
+        q.set('c2', (c2 || '').replace('#', ''))
+        q.set('dark', dark ? '1' : '0')
+      }
+      return `/loja/${this.lojaId}?${q}`
     },
 
     navPreview (dir) {
       const idx = (this.idxPreview + dir + TEMPLATES.length) % TEMPLATES.length
-      this.previewModal = TEMPLATES[idx]
+      this.abrirPreview(TEMPLATES[idx])
     },
 
     selecionarDoModal () {
       if (!this.previewModal) return
-      this.form.template_id    = this.previewModal.id
-      this.form.cor_primaria   = this.previewModal.primaryDefault
-      this.form.cor_secundaria = this.previewModal.secundariaDefault
+      const cores = this.previewCores
+      this.form.template_id = this.previewModal.id
+      this.setCor('cor_primaria', cores.c1)
+      this.setCor('cor_secundaria', cores.c2)
+      this.form.dark_mode   = this.previewDark
       this.previewModal = null
       this.abaAtiva = 'cores'
     },
 
-    aplicarSugestao (sug) {
-      this.form.cor_primaria   = sug.primary
-      if (sug.secundaria) this.form.cor_secundaria = sug.secundaria
+    // ── Cores ───────────────────────────────────────────────
+    corValida (v) {
+      return /^#[0-9a-f]{6}$/i.test(v || '')
     },
 
+    normalizarCor (v, fallback) {
+      let s = String(v || '').trim()
+      if (s && s[0] !== '#') s = '#' + s
+      if (/^#[0-9a-f]{3}$/i.test(s)) s = '#' + s.slice(1).split('').map(c => c + c).join('')
+      return this.corValida(s) ? s.toLowerCase() : fallback
+    },
+
+    setCor (key, valor) {
+      const cor = this.normalizarCor(valor, this.form[key])
+      this.form[key]     = cor
+      this.textoCor[key] = cor
+    },
+
+    onTextoCor (key) {
+      let v = this.textoCor[key].trim()
+      if (v && v[0] !== '#') { v = '#' + v; this.textoCor[key] = v }
+      if (this.corValida(v)) this.form[key] = v.toLowerCase()
+    },
+
+    aplicarSugestao (sug) {
+      this.setCor('cor_primaria', sug.primary)
+      if (this.templateAtual.usaCorSecundaria && sug.secundaria) this.setCor('cor_secundaria', sug.secundaria)
+    },
+
+    sugestaoActiva (sug) {
+      const prim = sug.primary?.toLowerCase() === this.form.cor_primaria
+      if (!this.templateAtual.usaCorSecundaria) return prim
+      return prim && sug.secundaria?.toLowerCase() === this.form.cor_secundaria
+    },
+
+    reporPadrao () {
+      const t = this.templateAtual
+      this.setCor('cor_primaria', t.primaryDefault)
+      this.setCor('cor_secundaria', t.secundariaDefault)
+      this.form.dark_mode = t.darkDefault !== false
+    },
+
+    descartar () {
+      if (!this.guardado) return
+      this.form = { ...this.guardado }
+      this.textoCor = { cor_primaria: this.form.cor_primaria, cor_secundaria: this.form.cor_secundaria }
+      this.erro = ''
+    },
+
+    avisoSair (e) {
+      if (!this.temAlteracoes) return
+      e.preventDefault()
+      e.returnValue = ''
+    },
+
+    // ── API ─────────────────────────────────────────────────
     async fetchAparencia () {
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/`)
-        this.form.template_id    = data.template_id    || 'classico'
-        this.form.cor_primaria   = data.cor_primaria   || '#dc2626'
-        this.form.cor_secundaria = data.cor_secundaria || '#1c1c1e'
-        this.form.dark_mode      = data.dark_mode      !== undefined ? data.dark_mode : true
-      } catch (e) { console.error(e) }
+        this.form = {
+          template_id:    TEMPLATES.some(t => t.id === data.template_id) ? data.template_id : 'classico',
+          cor_primaria:   this.normalizarCor(data.cor_primaria,   '#dc2626'),
+          cor_secundaria: this.normalizarCor(data.cor_secundaria, '#1c1c1e'),
+          dark_mode:      data.dark_mode !== undefined ? !!data.dark_mode : true,
+        }
+        this.textoCor = { cor_primaria: this.form.cor_primaria, cor_secundaria: this.form.cor_secundaria }
+        this.guardado = { ...this.form }
+      } catch (e) {
+        console.error(e)
+        this.erro = 'Não foi possível carregar a aparência da loja.'
+      }
     },
 
     async guardar () {
+      if (!this.formValido) {
+        this.erro = 'Corrige as cores inválidas antes de guardar.'
+        return
+      }
       this.loading = true
       this.erro    = ''
       try {
-        await api.patch(`/app/loja/${this.lojaId}/aparencia/`, this.form)
+        const { data } = await api.patch(`/app/loja/${this.lojaId}/aparencia/`, this.form)
+        // usa o que o servidor confirmou como estado guardado
+        this.form = {
+          template_id:    data.template_id,
+          cor_primaria:   data.cor_primaria,
+          cor_secundaria: data.cor_secundaria,
+          dark_mode:      data.dark_mode,
+        }
+        this.textoCor = { cor_primaria: this.form.cor_primaria, cor_secundaria: this.form.cor_secundaria }
+        this.guardado   = { ...this.form }
+        this.guardadoEm = Date.now()
         localStorage.setItem(`loja_template_${this.lojaId}`, JSON.stringify({
           templateId:    this.form.template_id,
           corPrimaria:   this.form.cor_primaria,
           corSecundaria: this.form.cor_secundaria,
           darkMode:      this.form.dark_mode,
         }))
+        toast.success('Aparência guardada — já está visível na loja.')
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Erro ao guardar.'
+        toast.error(this.erro)
       } finally {
         this.loading = false
       }
     },
   },
+}
+
+// ── Contraste WCAG entre duas cores hex ─────────────────────
+function luminancia (hex) {
+  const n = parseInt(hex.slice(1), 16)
+  return [n >> 16, (n >> 8) & 255, n & 255]
+    .map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+    .reduce((acc, c, i) => acc + c * [0.2126, 0.7152, 0.0722][i], 0)
+}
+
+function contraste (a, b) {
+  if (!/^#[0-9a-f]{6}$/i.test(a) || !/^#[0-9a-f]{6}$/i.test(b)) return 21
+  const [l1, l2] = [luminancia(a), luminancia(b)].sort((x, y) => y - x)
+  return (l1 + 0.05) / (l2 + 0.05)
 }
 </script>
 

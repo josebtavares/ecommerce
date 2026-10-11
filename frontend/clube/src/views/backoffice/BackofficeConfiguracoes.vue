@@ -10,7 +10,7 @@
         <div class="h-56 rounded-xl overflow-hidden bg-zinc-800 cursor-pointer group relative"
             @click="$refs.bannerInput.click()">
           <video v-if="bannerPreview && isBannerVideo"
-            :src="bannerPreview" class="w-full h-full object-cover"
+            :src="bannerPreview" :poster="bannerPoster || null" class="w-full h-full object-cover"
             autoplay muted loop playsinline></video>
           <img v-else-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
           <div v-else class="w-full h-full flex items-center justify-center text-zinc-600 text-xs">
@@ -19,7 +19,26 @@
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
             <span class="text-white text-xs font-medium">Alterar banner</span>
           </div>
+          <!-- estado da otimização do vídeo (app/utils/video.py) -->
+          <span v-if="!bannerFicheiro && emCurso(bannerEstado)"
+                class="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/75 text-zinc-200 text-[11px] font-semibold flex items-center gap-1.5"
+                title="O vídeo está a ser convertido para uma versão mais leve. Até lá a loja mostra o original.">
+            <font-awesome-icon :icon="['fas', 'spinner']" spin /> A otimizar vídeo…
+          </span>
+          <button v-else-if="!bannerFicheiro && bannerEstado === 'erro'" type="button" @click.stop="tentarBannerDeNovo"
+                  class="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-red-600/90 hover:bg-red-500 text-white text-[11px] font-semibold flex items-center gap-1.5 transition"
+                  title="Não foi possível otimizar o vídeo. A loja continua a mostrar o original.">
+            <font-awesome-icon :icon="['fas', 'rotate-right']" /> Otimização falhou · tentar de novo
+          </button>
+          <span v-else-if="!bannerFicheiro && bannerEstado === 'pronto'"
+                class="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/60 text-green-400 text-[11px] font-semibold flex items-center gap-1.5">
+            <font-awesome-icon :icon="['fas', 'film']" /> Vídeo otimizado
+          </span>
         </div>
+        <p v-if="bannerFicheiro && isBannerVideo" class="text-[11px] text-zinc-500 mt-2">
+          <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />
+          Depois de guardares, o vídeo é otimizado em segundo plano para carregar mais depressa. Podes continuar a usar o backoffice.
+        </p>
         <input ref="bannerInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" class="hidden" @change="onBanner" />
 
         <div class="absolute -bottom-4 left-4 cursor-pointer group" @click="$refs.logoInput.click()">
@@ -169,7 +188,10 @@
              class="flex items-center justify-between p-3 rounded-xl transition"
              :class="metodoActivo(m.tipo) ? 'bg-red-500/10 border border-red-500/30' : 'bg-zinc-800/50 border border-transparent'">
           <div class="flex items-center gap-3">
-            <span class="text-xl">{{ m.icon }}</span>
+            <span :class="['w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0',
+                           metodoActivo(m.tipo) ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-400']">
+              <font-awesome-icon :icon="['fas', m.icon]" class="w-4 h-4" />
+            </span>
             <div>
               <p class="text-sm font-medium text-zinc-200">{{ m.label }}</p>
               <p class="text-xs text-zinc-500">{{ m.descricao }}</p>
@@ -190,7 +212,7 @@
       <div v-if="metodoActivo('flutterwave')"
            class="mt-4 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 space-y-3">
         <div class="flex items-center gap-2 mb-2">
-          <span class="text-lg">🌍</span>
+          <font-awesome-icon :icon="['fas', 'earth-africa']" class="w-4 h-4 text-zinc-400" />
           <p class="text-sm font-semibold text-zinc-200">Configuração Flutterwave</p>
         </div>
         <p class="text-xs text-zinc-500">
@@ -207,7 +229,7 @@
             Encontras em Flutterwave Dashboard → Subaccounts → o teu Subaccount ID
           </p>
           <p class="text-xs text-zinc-500 mt-2">
-            ⚠️ Taxa de processamento Flutterwave (~1.4% a 3%) é descontada automaticamente 
+            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1 text-amber-500" />Taxa de processamento Flutterwave (~1.4% a 3%) é descontada automaticamente 
             de cada pagamento recebido.
           </p>
         </div>
@@ -218,7 +240,7 @@
                      : 'bg-red-600 hover:bg-red-500 text-white']">
           {{ loadingFlw ? 'A guardar…' : 'Guardar configuração Flutterwave' }}
         </button>
-        <p v-if="flwGuardado" class="text-xs text-green-400 text-center">✓ Configuração guardada</p>
+        <p v-if="flwGuardado" class="text-xs text-green-400 text-center"><font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Configuração guardada</p>
       </div>
     </div>
 
@@ -261,20 +283,52 @@
       </svg>
       {{ loadingSave ? 'A guardar…' : 'Guardar configurações' }}
     </button>
+
+    <!-- Fechar loja (só o dono) — reabre-se no aviso do topo do backoffice -->
+    <div v-if="podeFechar && loja?.estado === 'ativa'"
+         class="bg-zinc-900 rounded-2xl border border-red-500/20 p-6">
+      <h2 class="text-sm font-bold text-red-400 uppercase tracking-wider mb-2">
+        <font-awesome-icon :icon="['fas', 'door-closed']" class="mr-1.5" />Fechar loja
+      </h2>
+      <p class="text-xs text-zinc-400 leading-relaxed">
+        A loja deixa de aparecer no site e de receber encomendas novas. Nada é apagado: produtos,
+        histórico e encomendas em curso continuam aqui, e podes reabrir quando quiseres.
+      </p>
+      <template v-if="confirmarFecho">
+        <label class="text-xs text-zinc-500 mt-4 mb-1 block">Motivo (opcional, fica visível para ti e para a plataforma)</label>
+        <input v-model="motivoFecho" maxlength="300" placeholder="ex.: férias até dia 20"
+          class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
+        <div class="flex gap-2 mt-3">
+          <button @click="confirmarFecho = false" class="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
+            Cancelar
+          </button>
+          <button @click="fecharLoja" :disabled="aFechar"
+            class="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold transition">
+            {{ aFechar ? 'A fechar…' : 'Confirmar fecho' }}
+          </button>
+        </div>
+      </template>
+      <button v-else @click="confirmarFecho = true"
+        class="mt-4 px-4 py-2 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition">
+        Fechar loja
+      </button>
+    </div>
   </div>
 </template>
 
 <script>
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import { iconePagamento } from '@/utils/icones'
+import { criarVigia, emCurso, reprocessarVideo } from '@/utils/videoEstado'
 
 const TODOS_METODOS = [
-  { tipo: 'dinheiro',      icon: '💵', label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
-  { tipo: 'flutterwave',   icon: '🌍', label: 'Flutterwave',        descricao: 'Cartão Visa/Mastercard, Mobile Money' },
-  { tipo: 'mbway',         icon: '📱', label: 'MBWay',              descricao: 'Pagamento via MBWay (Portugal)' },
-  { tipo: 'transferencia', icon: '🏦', label: 'Transferência',      descricao: 'Transferência bancária' },
-  { tipo: 'mobile_money',  icon: '📲', label: 'Mobile Money',       descricao: 'Pagamento móvel local' },
-  { tipo: 'cartao',        icon: '💳', label: 'Cartão (Stripe)',     descricao: 'Cartão via Stripe (Europa)' },
+  { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
+  { tipo: 'flutterwave',   icon: iconePagamento('flutterwave'),   label: 'Flutterwave',        descricao: 'Cartão Visa/Mastercard, Mobile Money' },
+  { tipo: 'mbway',         icon: iconePagamento('mbway'),         label: 'MBWay',              descricao: 'Pagamento via MBWay (Portugal)' },
+  { tipo: 'transferencia', icon: iconePagamento('transferencia'), label: 'Transferência',      descricao: 'Transferência bancária' },
+  { tipo: 'mobile_money',  icon: iconePagamento('mobile_money'),  label: 'Mobile Money',       descricao: 'Pagamento móvel local' },
+  { tipo: 'cartao',        icon: iconePagamento('cartao'),        label: 'Cartão (Stripe)',     descricao: 'Cartão via Stripe (Europa)' },
   { tipo: 'paypal',        icon: '🅿️',  label: 'PayPal',            descricao: 'Pagamento via PayPal' },
 ]
 function isVideo (url) {
@@ -286,6 +340,7 @@ export default {
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },
+    podeFechar: { type: Boolean, default: false },   // permissão apagar_loja (dono)
   },
   emits: ['updated'],
 
@@ -305,6 +360,11 @@ export default {
       bannerFicheiro: null,
       logoPreview:    '',
       bannerPreview:  '',
+      confirmarFecho: false,
+      motivoFecho:    '',
+      aFechar:        false,
+      bannerEstado:   '',   // otimização do vídeo: '' | pendente | a_processar | pronto | erro
+      bannerPoster:   '',
       opcoesEntrega:  [],
       novaOpcao:      false,
       formOpcao:      { nome: '', preco: 0, tempo_estimado: '', area_cobertura: '' },
@@ -334,7 +394,20 @@ export default {
     },
   },
 
+  beforeUnmount () {
+    this.vigia?.parar()
+  },
+
   async created () {
+    this.vigia = criarVigia(this.lojaId, data => {
+      if (!data.banner || this.bannerFicheiro) return
+      this.bannerEstado  = data.banner.estado
+      this.bannerPoster  = data.banner.poster_url || ''
+      this.bannerPreview = data.banner.url || this.bannerPreview
+      this.isBannerVideo = isVideo(this.bannerPreview)
+    })
+    // o watcher `immediate` corre antes do created: se já vinha em curso, começa a vigiar agora
+    if (emCurso(this.bannerEstado)) this.vigia.vigiar([], true)
     await Promise.all([
       this.fetchOpcoes(),
       this.fetchMetodos(),
@@ -361,6 +434,33 @@ export default {
       this.logoPreview   = l.logo_url   || ''
       this.bannerPreview = l.banner_url || ''
       this.isBannerVideo  = isVideo(l.banner_url || '') 
+      this.bannerEstado  = l.banner_estado     || ''
+      this.bannerPoster  = l.banner_poster_url || ''
+      if (emCurso(this.bannerEstado)) this.vigia?.vigiar([], true)
+    },
+
+    emCurso,
+
+    async fecharLoja () {
+      this.aFechar = true
+      try {
+        await api.post(`/app/loja/${this.lojaId}/fechar/`, { motivo: this.motivoFecho.trim() })
+        this.confirmarFecho = false
+        this.motivoFecho    = ''
+        this.$emit('updated')       // o layout recarrega a loja e mostra o aviso "Loja fechada"
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível fechar a loja.')
+      } finally { this.aFechar = false }
+    },
+
+    async tentarBannerDeNovo () {
+      try {
+        const v = await reprocessarVideo(this.lojaId, 'loja', this.lojaId)
+        this.bannerEstado = v.estado
+        this.vigia?.vigiar([], true)
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível voltar a otimizar o vídeo.')
+      }
     },
 
     onLogo (e)   { const f = e.target.files[0]; if (f) { this.logoFicheiro   = f; this.logoPreview   = URL.createObjectURL(f) } },
@@ -430,9 +530,16 @@ export default {
         })
         if (this.logoFicheiro)   fd.append('logo',   this.logoFicheiro)
         if (this.bannerFicheiro) fd.append('banner', this.bannerFicheiro)
-        await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
+        const { data } = await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
         })
+        if (this.bannerFicheiro) {
+          // o vídeo novo entra na fila de otimização; o estado aparece no banner
+          this.bannerFicheiro = null
+          this.bannerEstado   = data?.banner_estado || ''
+          this.bannerPoster   = ''
+          if (emCurso(this.bannerEstado)) this.vigia?.vigiar([], true)
+        }
         this.$emit('updated')
       })
     },

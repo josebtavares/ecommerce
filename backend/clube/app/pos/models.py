@@ -104,6 +104,12 @@ class ConfiguracaoPOS(models.Model):
         help_text='POS inativos não aparecem na lista'
     )
 
+    # Suspensão pela plataforma (admin Bendi) — distinto de `ativo`, que é do dono.
+    # Um POS suspenso não opera (vendas, mesas, produtos, login de membros).
+    suspenso = models.BooleanField(default=False)
+    suspenso_motivo = models.CharField(max_length=300, blank=True, default='')
+    suspenso_em = models.DateTimeField(null=True, blank=True)
+
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
 
@@ -270,6 +276,15 @@ class ProdutoPOS(models.Model):
     controlar_stock = models.BooleanField(default=False, verbose_name='Controlar stock')
     stock = models.IntegerField(default=0, validators=[MinValueValidator(0)])
 
+    # Tipo e atributos (globais ou tipos próprios do POS) — mesmo formato da loja
+    tipo = models.ForeignKey(
+        'app.TipoProduto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='produtos_pos',
+    )
+    atributos = models.JSONField(default=dict, blank=True)
+    # True → stock gerido por VarianteProdutoPOS; `stock` passa a ser a soma das variantes
+    stock_por_variante = models.BooleanField(default=False)
+
     ativo = models.BooleanField(default=True)
     disponivel_pos = models.BooleanField(default=True)
 
@@ -299,6 +314,36 @@ class ProdutoPOS(models.Model):
         return True
 
 
+class VarianteProdutoPOS(models.Model):
+    """
+    Combinação de opções de um produto próprio do POS, com stock próprio.
+    Espelha app.VarianteProduto (mesma lógica em app/utils/variantes.py).
+    """
+    produto    = models.ForeignKey(ProdutoPOS, on_delete=models.CASCADE, related_name='variantes')
+    combinacao = models.JSONField(default=dict)
+    chave      = models.CharField(max_length=500)
+    quantidade = models.PositiveIntegerField(default=0)
+    preco      = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                     validators=[MinValueValidator(Decimal('0.00'))])
+    sku        = models.CharField(max_length=100, blank=True, default='')
+    ativo      = models.BooleanField(default=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('produto', 'chave')]
+        ordering = ['chave']
+
+    @property
+    def preco_efetivo(self):
+        return self.preco if self.preco is not None else self.produto.preco
+
+    def descricao(self):
+        return ' · '.join(str(v) for v in self.combinacao.values())
+
+    def __str__(self):
+        return f'{self.produto.nome} [{self.descricao()}] — {self.quantidade} un.'
+
+
 class ContaMesa(models.Model):
     """
     Conta/pedido de uma mesa.
@@ -306,14 +351,14 @@ class ContaMesa(models.Model):
     """
     pos = models.ForeignKey(
         ConfiguracaoPOS,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,      # vendas do POS são registos financeiros
         related_name='contas',
         verbose_name='POS'
     )
 
     mesa = models.ForeignKey(
         Mesa,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,      # apagar uma mesa nunca apaga as contas dela
         related_name='contas',
         verbose_name='Mesa'
     )
@@ -386,8 +431,9 @@ class ContaMesa(models.Model):
         return f"Conta #{self.id} - {self.mesa.numero} - {self.total}€"
 
     def calcular_totais(self):
+        # itens cancelados não são cobrados
         self.subtotal = sum(
-            item.preco_total for item in self.items.all()
+            item.preco_total for item in self.items.exclude(status='cancelado')
         ) or Decimal('0.00')
 
         if self.taxa_servico_percentagem > 0:
@@ -416,6 +462,9 @@ class ContaMesa(models.Model):
         self.mesa.fechar()
 
     def cancelar(self, motivo=''):
+        from .stock import repor_stock_item   # evita import circular
+        for item in self.items.exclude(status='cancelado'):
+            repor_stock_item(item)
         self.status = 'cancelada'
         if motivo:
             self.observacoes += f"\n[CANCELADA] {motivo} em {timezone.now()}"
@@ -456,6 +505,16 @@ class ItemContaMesa(models.Model):
         verbose_name='Produto próprio do POS'
     )
 
+    # Variação vendida (só uma das duas, conforme a origem do produto)
+    variante = models.ForeignKey(
+        'app.VarianteProduto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='vendas_pos',
+    )
+    variante_pos = models.ForeignKey(
+        VarianteProdutoPOS, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='vendas',
+    )
+    atributos = models.JSONField(default=dict, blank=True)   # opções escolhidas (snapshot)
     nome = models.CharField(
         max_length=200,
         verbose_name='Nome do produto',
@@ -587,7 +646,7 @@ class TurnoPOS(models.Model):
     """
     pos = models.ForeignKey(
         ConfiguracaoPOS,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,      # turnos de caixa são registos financeiros
         related_name='turnos',
         verbose_name='POS'
     )

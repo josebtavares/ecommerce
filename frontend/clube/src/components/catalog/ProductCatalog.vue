@@ -201,7 +201,7 @@
              cardClass
            ]">
         <div :class="['relative overflow-hidden', imageContainerClass]" :style="{ height: imageHeight }">
-          <img :src="produto.ficheiro_url || defaultImg" :alt="produto.nome"
+          <img :src="produto.ficheiro_poster_url || produto.ficheiro_url || defaultImg" :alt="produto.nome"
                :class="['w-full h-full object-cover transition-transform duration-300', imageHoverEffect]" />
           <span v-if="produto.destaque && showBadges"
                 :class="['absolute top-2 right-2 px-1.5 py-0.5 text-white text-[10px] font-bold', badgeClass]">
@@ -229,7 +229,7 @@
           ]">
             {{ produto.nome }}
           </p>
-          <div v-if="produto.atributos && Object.keys(produto.atributos).length && showAttributes" class="flex flex-wrap gap-1 mt-1">
+          <div v-if="showAttributes && Object.keys(slicedAtributos(produto.atributos)).length" class="flex flex-wrap gap-1 mt-1">
             <span v-for="(val, key) in slicedAtributos(produto.atributos)" :key="key"
                   :class="['px-1.5 py-0.5 text-[10px]', attributeClass, isDark ? 'bg-zinc-800 text-zinc-500' : 'bg-gray-100 text-zinc-500']">{{ val }}</span>
           </div>
@@ -266,6 +266,7 @@
 
 <script>
 import api from '@/services/api'
+import { formatarAtributos } from '@/utils/atributos'
 
 export default {
   name: 'ProductCatalog',
@@ -393,7 +394,8 @@ export default {
       const s = typeof str === 'object' ? (str.nome || '') : String(str)
       return s.charAt(0).toUpperCase() + s.slice(1)
     },
-    slicedAtributos (a) { return Object.fromEntries(Object.entries(a).slice(0, 2)) },
+    // Atributos podem vir como valor simples ("médio") ou lista (["médio", "sem picante"])
+    slicedAtributos (a) { return formatarAtributos(a, 2) },
 
     async fetchTipos () {
       try {

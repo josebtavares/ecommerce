@@ -143,7 +143,7 @@
             :style="{ height: imageHeight }"
           >
             <img
-              :src="produto.ficheiro_url || defaultImg"
+              :src="produto.ficheiro_poster_url || produto.ficheiro_url || defaultImg"
               :alt="produto.nome"
               :class="[
                 'w-full h-full object-cover transition-transform duration-300',
@@ -278,7 +278,7 @@ export default {
 
     // Badge
     showBadges: { type: Boolean, default: true },
-    badgeText: { type: String, default: '⭐' },
+    badgeText: { type: String, default: 'Destaque' },
     badgeClass: { type: String, default: 'bg-red-600 rounded' },
 
     // Display options

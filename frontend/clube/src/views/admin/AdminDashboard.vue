@@ -11,7 +11,9 @@
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div v-for="kpi in kpis" :key="kpi.label"
              class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
-          <p class="text-2xl">{{ kpi.icon }}</p>
+          <span class="w-10 h-10 rounded-xl flex items-center justify-center" :class="kpi.cor">
+            <font-awesome-icon :icon="['fas', kpi.icon]" class="w-4 h-4" />
+          </span>
           <p class="text-2xl font-extrabold text-zinc-100 mt-2">{{ kpi.valor }}</p>
           <p class="text-xs text-zinc-500 mt-1">{{ kpi.label }}</p>
           <p v-if="kpi.sub" class="text-xs mt-1" :class="kpi.subColor || 'text-zinc-600'">{{ kpi.sub }}</p>
@@ -43,8 +45,16 @@
             <span class="text-sm font-bold text-green-400">{{ stats.lojas.ativas }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-sm text-zinc-400">Pendentes/Inactivas</span>
+            <span class="text-sm text-zinc-400">Pendentes de aprovação</span>
             <span class="text-sm font-bold text-yellow-400">{{ stats.lojas.pendentes }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-zinc-400">Fechadas pelo dono</span>
+            <span class="text-sm font-bold text-zinc-300">{{ stats.lojas.fechadas ?? 0 }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-zinc-400">Suspensas</span>
+            <span class="text-sm font-bold text-red-400">{{ stats.lojas.suspensas ?? 0 }}</span>
           </div>
         </div>
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5 space-y-3">
@@ -86,12 +96,12 @@ export default {
     kpis () {
       if (!this.stats) return []
       return [
-        { icon: '🏪', valor: this.stats.lojas.total,              label: 'Lojas totais',      sub: `${this.stats.lojas.ativas} activas`, subColor: 'text-green-500' },
-        { icon: '👥', valor: this.stats.utilizadores.total,       label: 'Utilizadores',      sub: `${this.stats.utilizadores.verificados} verificados`, subColor: 'text-blue-400' },
-        { icon: '📦', valor: this.stats.produtos,                 label: 'Produtos activos'   },
-        { icon: '🛍️', valor: this.stats.encomendas.total,         label: 'Encomendas totais'  },
-        { icon: '💶', valor: `€${parseFloat(this.stats.vendas_total).toFixed(2)}`, label: 'Volume de vendas', subColor: 'text-green-400' },
-        { icon: '⏳', valor: this.stats.lojas.pendentes,           label: 'Lojas pendentes',   sub: 'a aguardar activacao', subColor: 'text-yellow-400' },
+        { icon: 'store',        cor: 'bg-red-500/10 text-red-400',     valor: this.stats.lojas.total,              label: 'Lojas totais',      sub: `${this.stats.lojas.ativas} activas`, subColor: 'text-green-500' },
+        { icon: 'users',        cor: 'bg-blue-500/10 text-blue-400',   valor: this.stats.utilizadores.total,       label: 'Utilizadores',      sub: `${this.stats.utilizadores.verificados} verificados`, subColor: 'text-blue-400' },
+        { icon: 'box',          cor: 'bg-amber-500/10 text-amber-400', valor: this.stats.produtos,                 label: 'Produtos activos'   },
+        { icon: 'bag-shopping', cor: 'bg-violet-500/10 text-violet-400', valor: this.stats.encomendas.total,       label: 'Encomendas totais'  },
+        { icon: 'euro-sign',    cor: 'bg-green-500/10 text-green-400', valor: `€${parseFloat(this.stats.vendas_total).toFixed(2)}`, label: 'Volume de vendas', subColor: 'text-green-400' },
+        { icon: 'hourglass-half', cor: 'bg-yellow-500/10 text-yellow-400', valor: this.stats.lojas.pendentes,      label: 'Lojas pendentes',   sub: 'a aguardar activacao', subColor: 'text-yellow-400' },
       ]
     },
   },

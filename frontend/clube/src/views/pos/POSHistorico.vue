@@ -6,7 +6,7 @@
       v-if="isMembro && !podeVerRelatorios"
       class="rounded-[2rem] border border-slate-200 bg-white p-12 text-center shadow-sm"
     >
-      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl">🔒</div>
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl text-slate-400"><font-awesome-icon :icon="['fas', 'lock']" /></div>
       <h3 class="mt-4 text-xl font-black text-slate-950">Sem permissão</h3>
       <p class="mt-2 text-sm text-slate-500">Não tens permissão para ver o histórico de contas.</p>
     </div>
@@ -197,7 +197,7 @@
         v-else
         class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
       >
-        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">📜</div>
+        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl text-slate-400 shadow-sm"><font-awesome-icon :icon="['fas', 'clock-rotate-left']" /></div>
         <h3 class="mt-5 text-xl font-black text-slate-950">Nenhum histórico encontrado</h3>
         <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">As contas fechadas aparecerão aqui.</p>
       </section>

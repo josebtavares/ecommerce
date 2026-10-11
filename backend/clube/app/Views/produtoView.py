@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
 import json
 
@@ -13,6 +13,8 @@ from rest_framework.response import Response
 from ..models import Produto, TipoProduto, Loja, UtilizadorLoja,ProdutoImagem
 from ..Serializers.ProdutoSerializer import ProdutoSerializer, TipoProdutoSerializer
 from ..utils.pagination import paginar
+from ..utils.variantes import sincronizar_variantes, aplicar_grelha_do_pedido
+from ..utils.tipos import tipos_para_loja, tipo_permitido
 
 
 # ══════════════════════════════════════════════════════════════
@@ -27,7 +29,7 @@ def tipo_produto_list(request):
     Devolve tipos globais (loja=null) activos.
     Usado no home para os sliders dinâmicos por tipo.
     """
-    tipos = TipoProduto.objects.filter(ativo=True, loja__isnull=True)
+    tipos = TipoProduto.objects.filter(ativo=True, loja__isnull=True, pos__isnull=True)
     serializer = TipoProdutoSerializer(tipos, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -47,7 +49,7 @@ def tipo_produto_list_loja(request, loja_id):
         return erro
 
     tipos = TipoProduto.objects.filter(
-        Q(loja__isnull=True, ativo=True) |  # globais: só activos
+        Q(loja__isnull=True, pos__isnull=True, ativo=True) |  # globais: só activos
         Q(loja_id=loja_id)                  # da loja: activos E inactivos
     ).order_by('loja', 'nome')
 
@@ -182,6 +184,29 @@ def produto_categorias_plataforma(request):
         for c in categorias
     ])
     
+def _gere_loja(request, loja_id):
+    """O utilizador é staff da plataforma ou membro activo desta loja (backoffice)?"""
+    u = request.user
+    if not u.is_authenticated:
+        return False
+    if u.is_staff:
+        return True
+    return UtilizadorLoja.objects.filter(
+        loja_id=loja_id, utilizador__user=u, ativo=True
+    ).exists()
+
+
+def _so_lojas_visiveis(request, qs, loja_id=None):
+    """
+    Listagens públicas: só produtos de lojas activas (pendentes, fechadas e suspensas não
+    aparecem na home nem nas pesquisas). Quem gere a loja pedida continua a ver os produtos
+    dela — o backoffice usa estes endpoints mesmo com a loja fechada.
+    """
+    if loja_id and str(loja_id).isdigit() and _gere_loja(request, loja_id):
+        return qs
+    return qs.filter(loja__ativa=True)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def produto_list_pagination(request):
@@ -198,22 +223,23 @@ def produto_list_pagination(request):
     Funciona para QUALQUER tipo de produto e QUALQUER atributo
     sem precisar de mudar o código — basta passar atributo_<chave>=<valor>.
     """
-    qs = Produto.objects.select_related('loja', 'tipo').filter(ativo=True)
+    qs = Produto.objects.select_related('loja', 'tipo', 'inventario').prefetch_related('variantes').filter(ativo=True)
 
     # ── 1) filtro por loja ────────────────────────────────────
     loja_id = request.GET.get('loja_id')
     if loja_id:
         qs = qs.filter(loja_id=loja_id)
+    qs = _so_lojas_visiveis(request, qs, loja_id)
 
     # ── 2) filtro por tipo de produto ─────────────────────────
     tipo = request.GET.get('tipo')
     if tipo:
         qs = qs.filter(tipo__nome__iexact=tipo)
-        
-    tipo = request.GET.get('tipo')
-    if tipo:
-        qs = qs.filter(tipo__nome__iexact=tipo)
- 
+
+    tipo_id = request.GET.get('tipo_id')
+    if tipo_id and tipo_id.isdigit():
+        qs = qs.filter(tipo_id=tipo_id)
+
     # ── filtro por categoria do produto ───────────────────────
     categoria_id = request.GET.get('categoria_id')
     if categoria_id:
@@ -263,6 +289,9 @@ def produto_list_pagination(request):
     if request.GET.get('destaque') == 'true':
         qs = qs.filter(destaque=True)
 
+    # ordem estável — sem ela o offset pode repetir/saltar produtos entre páginas
+    qs = qs.order_by('-id')
+
     response, erro = paginar(request, qs, ProdutoSerializer, limit_default=20)
     if erro:
         return erro
@@ -276,6 +305,8 @@ def produto_get(request, id):
     GET /app/produto/<id>/
     """
     produto = get_object_or_404(Produto, id=id, ativo=True)
+    if not produto.loja.ativa and not _gere_loja(request, produto.loja_id):
+        return Response({'detail': 'Produto não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
     serializer = ProdutoSerializer(produto, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -339,7 +370,7 @@ def produto_list_loja(request, loja_id):
     if erro:
         return erro
 
-    qs = Produto.objects.select_related('tipo').filter(loja_id=loja_id)
+    qs = Produto.objects.select_related('tipo', 'inventario').prefetch_related('variantes').filter(loja_id=loja_id)
 
     q = request.GET.get('q')
     if q:
@@ -378,7 +409,9 @@ def produto_create(request, loja_id):
  
     tipo_id = request.data.get('tipo_id')
     if tipo_id:
-        tipo = get_object_or_404(TipoProduto, id=tipo_id, ativo=True)
+        tipo = tipo_permitido(tipos_para_loja(loja), tipo_id)
+        if not tipo:
+            return Response({'tipo_id': 'Tipo inválido para esta loja.'}, status=status.HTTP_400_BAD_REQUEST)
         em_falta = tipo.validar_atributos(atributos)
         if em_falta:
             return Response({'atributos': f'Campos obrigatórios em falta: {em_falta}'}, status=status.HTTP_400_BAD_REQUEST)
@@ -415,7 +448,13 @@ def produto_create(request, loja_id):
  
     # ── NOVO: processar imagens adicionais ─────────────────────
     _gerir_imagens(produto, request)
- 
+
+    # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
+    erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+    if erro_grelha:
+        transaction.set_rollback(True)
+        return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
+
     return Response(ProdutoSerializer(produto, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
 
@@ -443,6 +482,8 @@ def produto_update(request, loja_id, id):
     for field in ['nome', 'preco', 'sku', 'descricao', 'destaque', 'ativo', 'tipo_id']:
         if field in request.data:
             campos[field] = request.data[field]
+    if campos.get('tipo_id') and tipo_permitido(tipos_para_loja(produto.loja), campos['tipo_id']) is False:
+        return Response({'tipo_id': 'Tipo inválido para esta loja.'}, status=status.HTTP_400_BAD_REQUEST)
     if atributos_parsed is not None:
         campos['atributos'] = atributos_parsed
 
@@ -452,7 +493,11 @@ def produto_update(request, loja_id, id):
  
     produto = serializer.save()
     loja = produto.loja
- 
+
+    # opções/tipo mudaram → grelha de variantes acompanha (novas a 0, removidas desactivadas)
+    if produto.stock_por_variante and ('atributos' in campos or 'tipo_id' in campos):
+        sincronizar_variantes(produto)
+
     categoria_ids_raw = request.data.getlist('categoria_ids')
     if categoria_ids_raw:
         from ..models import CategoriaLoja
@@ -473,7 +518,14 @@ def produto_update(request, loja_id, id):
  
     # ── NOVO: processar imagens adicionais ─────────────────────
     _gerir_imagens(produto, request)
- 
+
+    # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
+    erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+    if erro_grelha:
+        transaction.set_rollback(True)
+        return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
+    produto.refresh_from_db()
+
     return Response(ProdutoSerializer(produto, context={'request': request}).data)
 
 
@@ -504,6 +556,32 @@ def produto_imagem_delete(request, loja_id, id, img_id):
     imagem  = get_object_or_404(ProdutoImagem, id=img_id, produto=produto)
     imagem.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def produto_tipos_loja(request, loja_id):
+    """
+    GET /app/loja/<loja_id>/produtos/tipos/
+    Tipos com produtos activos nesta loja, com a contagem de cada um,
+    e o total de produtos activos. Usado pelas templates da página pública
+    para montar as secções "Por tipo" sem descarregar os produtos.
+    """
+    qs = _so_lojas_visiveis(request, Produto.objects.filter(loja_id=loja_id, ativo=True), loja_id)
+    tipos = (
+        qs.filter(tipo__isnull=False)
+        .values('tipo_id', 'tipo__nome')
+        .annotate(total_produtos=Count('id'))
+        .order_by('tipo__nome')
+    )
+    return Response({
+        'total': qs.count(),
+        'destaques': qs.filter(destaque=True).count(),
+        'tipos': [
+            {'id': t['tipo_id'], 'nome': t['tipo__nome'], 'total_produtos': t['total_produtos']}
+            for t in tipos
+        ],
+    })
 
 
 @api_view(['GET'])

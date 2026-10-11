@@ -1,12 +1,13 @@
-<!-- TemplateRestauranteModerno.vue — Cinematic Restaurant Template
-     Split-screen hero · Vertical side nav · Bento grid sections
-     Typography: Instrument Serif (títulos) + Inter (corpo)
-     Acento configurável via --cor-primaria (default: #c9a961 dourado)
+<!-- TemplateRestauranteModerno.vue — Revamp
+     Hero full-bleed com cartão de serviço · Sugestões do chef em bento
+     A Carta: índice sticky + pratos agrupados por categoria (linhas com leader pontilhado)
+     Tipografia: Fraunces (títulos) + Manrope (corpo)
+     Acento configurável via --cor-primaria (default: #e4572e tomate)
 -->
 <template>
   <div
-    class="resto-root"
-    :class="isDark ? 'resto-dark' : 'resto-light'"
+    class="rm-root"
+    :class="isDark ? 'rm-dark' : 'rm-light'"
     :style="cssVars"
   >
     <ProductInfoCard
@@ -26,1422 +27,1135 @@
       @log_out="logOut()"
     />
 
-    <!-- Loading State -->
-    <div v-if="loading" class="resto-loading">
-      <div class="resto-loading__ring">
-        <div class="resto-loading__ring-inner"></div>
+    <!-- Loading -->
+    <div v-if="loading" class="rm-loading">
+      <div class="rm-loading__plate">
+        <span class="rm-loading__dot"></span>
       </div>
-      <span class="resto-loading__text">Carregando</span>
+      <span class="rm-loading__text">A preparar a mesa…</span>
     </div>
 
     <template v-else-if="loja">
       <!-- ══════════════════════════════════════════
-           HERO — Split Screen Cinematic
+           TOP BAR
       ══════════════════════════════════════════ -->
-      <section class="resto-hero">
-        <!-- Left Panel - Content -->
-        <div class="resto-hero__left">
-          <!-- Top Bar -->
-          <div class="resto-hero__topbar">
-            <button @click="$router.back()" class="resto-back">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
-              </svg>
-            </button>
-            
-            <div class="resto-hero__brand-tag">
-              {{ loja.categoria || 'Restaurante' }}
-            </div>
+      <header class="rm-bar" :class="{ 'rm-bar--solid': scrolled }">
+        <div class="rm-bar__left">
+          <button class="rm-icon-btn" @click="$router.back()" aria-label="Voltar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
 
-            <button @click="toggleDark" class="resto-theme-toggle">
-              <svg v-if="isDark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <circle cx="12" cy="12" r="5"/>
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-              </svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-            </button>
-          </div>
-
-          <!-- Hero Content -->
-          <div class="resto-hero__content">
-            <div class="resto-hero__location">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                <circle cx="12" cy="10" r="3"/>
-              </svg>
-              <span>{{ loja.localizacao || 'Portugal' }}</span>
-            </div>
-
-            <h1 class="resto-hero__title">
-              {{ loja.nome }}
-            </h1>
-
-            <p v-if="loja.descricao" class="resto-hero__desc">
-              {{ truncateText(loja.descricao, 160) }}
-            </p>
-
-            <!-- Stats Row -->
-            <div class="resto-hero__stats">
-              <div v-if="loja.rating_medio" class="resto-stat">
-                <span class="resto-stat__value">{{ ratingFormatted }}</span>
-                <span class="resto-stat__label">Rating</span>
-              </div>
-              <div v-if="loja.total_avaliacoes" class="resto-stat">
-                <span class="resto-stat__value">{{ loja.total_avaliacoes }}+</span>
-                <span class="resto-stat__label">Reviews</span>
-              </div>
-              <div v-if="loja.entrega_ativa" class="resto-stat">
-                <span class="resto-stat__value resto-stat__value--icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M5 12l5 5L20 7"/>
-                  </svg>
-                </span>
-                <span class="resto-stat__label">Delivery</span>
-              </div>
-            </div>
-
-            <!-- CTAs -->
-            <div class="resto-hero__ctas">
-              <button @click="scrollToId('resto-menu')" class="resto-btn resto-btn--primary">
-                <span>Explorar Menu</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M7 17L17 7M17 7H7M17 7v10"/>
-                </svg>
-              </button>
-              <button @click="scrollToId('resto-avaliacoes')" class="resto-btn resto-btn--outline">
-                Ver Avaliações
-              </button>
-            </div>
-          </div>
-
-          <!-- Bottom Info -->
-          <div class="resto-hero__bottom">
-            <div class="resto-hero__scroll-hint">
-              <span>Scroll para explorar</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M12 5v14M19 12l-7 7-7-7"/>
-              </svg>
-            </div>
+          <div class="rm-bar__brand">
+            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="rm-bar__logo" />
+            <span v-else class="rm-bar__logo rm-bar__logo--initial">{{ loja.nome.charAt(0) }}</span>
+            <span class="rm-bar__name">{{ loja.nome }}</span>
           </div>
         </div>
 
-        <!-- Right Panel - Media -->
-        <div class="resto-hero__right">
-          <div class="resto-hero__media-wrapper">
-            <video
-              v-if="isVideo(loja.banner_url)"
-              :src="loja.banner_url"
-              class="resto-hero__media"
-              autoplay
-              muted
-              loop
-              playsinline
-            ></video>
-            <img
-              v-else
-              :src="loja.banner_url || backendUrl + '/media/lojas/default_banner.jpg'"
-              :alt="loja.nome"
-              class="resto-hero__media"
-            />
-            <!-- Subtle corner gradient only -->
-            <div class="resto-hero__media-corners"></div>
+        <nav class="rm-bar__links">
+          <button v-if="totalDestaques" @click="scrollToId('rm-chef')">Chef</button>
+          <button @click="scrollToId('rm-carta')">Carta</button>
+          <button @click="scrollToId('rm-catalogo')">Catálogo</button>
+          <button @click="scrollToId('rm-visite')">Visite-nos</button>
+          <button @click="scrollToId('rm-avaliacoes')">Avaliações</button>
+        </nav>
+
+        <button class="rm-icon-btn rm-bar__theme" @click="toggleDark" aria-label="Alternar tema">
+          <svg v-if="isDark" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </header>
+
+      <!-- ══════════════════════════════════════════
+           HERO
+      ══════════════════════════════════════════ -->
+      <section class="rm-hero">
+        <video
+          v-if="isVideo(loja.banner_url)"
+          :src="loja.banner_url" :poster="loja.banner_poster_url"
+          class="rm-hero__media"
+          v-video-visivel muted loop playsinline
+        ></video>
+        <img
+          v-else-if="loja.banner_url"
+          :src="loja.banner_url"
+          :alt="loja.nome"
+          class="rm-hero__media"
+        />
+        <div v-else class="rm-hero__media rm-hero__media--empty"></div>
+        <div class="rm-hero__shade"></div>
+
+        <div class="rm-hero__inner">
+          <div class="rm-hero__copy">
+            <div class="rm-hero__pills">
+              <span class="rm-pill rm-pill--accent">{{ loja.categoria || 'Restaurante' }}</span>
+              <span v-if="loja.localizacao" class="rm-pill">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                {{ loja.localizacao }}
+              </span>
+            </div>
+
+            <h1 class="rm-hero__title">{{ loja.nome }}</h1>
+
+            <p v-if="loja.descricao" class="rm-hero__desc">
+              {{ truncate(loja.descricao, 170) }}
+            </p>
+
+            <div class="rm-hero__ctas">
+              <button class="rm-btn rm-btn--accent" @click="scrollToId('rm-carta')">
+                Ver a carta
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+              </button>
+              <button v-if="totalDestaques" class="rm-btn rm-btn--glass" @click="scrollToId('rm-chef')">
+                Sugestões do chef
+              </button>
+            </div>
           </div>
 
-          <!-- Floating Rating Badge -->
-          <div v-if="loja.rating_medio" class="resto-hero__floating-badge">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
-            <span>{{ ratingFormatted }}</span>
-          </div>
+          <!-- Cartão de serviço -->
+          <aside class="rm-service">
+            <div class="rm-service__head">Serviço</div>
+
+            <div class="rm-service__row">
+              <span>Entrega</span>
+              <span :class="loja.entrega_ativa ? 'rm-ok' : 'rm-off'">
+                {{ loja.entrega_ativa ? (entregaDesde !== null ? 'desde ' + entregaDesde : 'Sim') : 'Indisponível' }}
+              </span>
+            </div>
+            <div class="rm-service__row">
+              <span>Take-away</span>
+              <span :class="loja.levantamento_ativo ? 'rm-ok' : 'rm-off'">
+                {{ loja.levantamento_ativo ? 'Sim' : 'Indisponível' }}
+              </span>
+            </div>
+            <div class="rm-service__row">
+              <span>Pratos na carta</span>
+              <span>{{ totalProdutos ?? "—" }}</span>
+            </div>
+
+            <div class="rm-service__rating">
+              <span class="rm-service__score">{{ ratingFormatted }}</span>
+              <div>
+                <div class="rm-stars">
+                  <svg v-for="i in 5" :key="i" width="12" height="12" viewBox="0 0 24 24"
+                       :class="i <= Math.round(loja.rating_medio || 0) ? 'rm-star--on' : 'rm-star--off'"
+                       fill="currentColor"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.2-6.2 3.2L7 14.2 2 9.3l6.9-1z"/></svg>
+                </div>
+                <span class="rm-service__reviews">{{ loja.total_avaliacoes || 0 }} avaliações</span>
+              </div>
+            </div>
+          </aside>
         </div>
       </section>
 
-      <!-- ══════════════════════════════════════════
-           NAVIGATION - Horizontal Tabs
-      ══════════════════════════════════════════ -->
-      <nav class="resto-tabs" ref="stickyNav">
-        <div class="resto-tabs__inner hide-scroll">
-          <button
-            class="resto-tabs__item"
-            :class="{ 'resto-tabs__item--active': activeSection === 'resto-sobre' }"
-            @click="scrollToId('resto-sobre')"
-          >
-            Sobre
-          </button>
-          <button
-            class="resto-tabs__item"
-            :class="{ 'resto-tabs__item--active': activeSection === 'resto-destaques' }"
-            @click="scrollToId('resto-destaques')"
-          >
-            Destaques
-          </button>
-          <button
-            v-for="tipo in tiposExistentes"
-            :key="tipo.id"
-            class="resto-tabs__item"
-            :class="{ 'resto-tabs__item--active': activeSection === 'resto-tipo-' + tipo.id }"
-            @click="scrollToId('resto-tipo-' + tipo.id)"
-          >
-            {{ tipo.nome }}
-          </button>
-          <button
-            v-for="cat in categoriasExistentes"
-            :key="cat.id"
-            class="resto-tabs__item"
-            :class="{ 'resto-tabs__item--active': activeSection === 'resto-cat-' + cat.id }"
-            @click="scrollToId('resto-cat-' + cat.id)"
-          >
-            {{ cat.nome }}
-          </button>
-          <button
-            class="resto-tabs__item"
-            :class="{ 'resto-tabs__item--active': activeSection === 'resto-menu' }"
-            @click="scrollToId('resto-menu')"
-          >
-            Menu
-          </button>
-          <button
-            class="resto-tabs__item"
-            :class="{ 'resto-tabs__item--active': activeSection === 'resto-avaliacoes' }"
-            @click="scrollToId('resto-avaliacoes')"
-          >
-            Avaliações
-          </button>
-        </div>
-      </nav>
-
-      <!-- ══════════════════════════════════════════
-           MAIN CONTENT
-      ══════════════════════════════════════════ -->
-      <main class="resto-main">
-        <!-- SOBRE - Bento Style -->
-        <section class="resto-section" id="resto-sobre">
-          <div class="resto-section__header">
-            <span class="resto-section__tag">01</span>
-            <h2 class="resto-section__title">Sobre Nós</h2>
-          </div>
-
-          <div class="resto-bento">
-            <!-- Main About Card -->
-            <div class="resto-bento__card resto-bento__card--large">
-              <div class="resto-bento__card-content">
-                <p class="resto-about-text">
-                  {{ loja.descricao || 'Um restaurante construído com paixão pela gastronomia, onde cada prato conta uma história e cada refeição é uma experiência memorável.' }}
-                </p>
-              </div>
+      <main>
+        <!-- ══════════════════════════════════════════
+             SUGESTÕES DO CHEF — bento
+        ══════════════════════════════════════════ -->
+        <section v-if="totalDestaques" id="rm-chef" class="rm-section">
+          <div class="rm-wrap">
+            <div class="rm-heading">
+              <span class="rm-heading__eyebrow">Escolhas da casa</span>
+              <h2 class="rm-heading__title">Sugestões do <em>chef</em></h2>
             </div>
 
-            <!-- Delivery Card -->
-            <div v-if="opcoesEntrega.length" class="resto-bento__card">
-              <div class="resto-bento__card-header">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <rect x="1" y="3" width="15" height="13" rx="2"/>
-                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
-                  <circle cx="5.5" cy="18.5" r="2.5"/>
-                  <circle cx="18.5" cy="18.5" r="2.5"/>
-                </svg>
-                <span>Entrega</span>
-              </div>
-              <div class="resto-bento__card-body">
-                <div
-                  v-for="opcao in opcoesEntrega"
-                  :key="opcao.id"
-                  class="resto-delivery-row"
+            <!-- uma página: os 5 primeiros destaques -->
+            <ProdutosPaginados :params="{ loja_id: lojaId, destaque: 'true' }" :limit="5" :lazy="false"
+                               class="rm-bento" :class="'rm-bento--' + Math.min(totalDestaques, 5)" v-slot="l">
+              <template v-if="l.carregando">
+                <div v-for="n in Math.min(totalDestaques, 5)" :key="n" class="rm-dish rm-skel" :class="{ 'rm-dish--hero': n === 1 }"></div>
+              </template>
+              <article
+                v-for="(p, i) in l.itens"
+                :key="p.id"
+                class="rm-dish"
+                :class="{ 'rm-dish--hero': i === 0 }"
+                @click="selectedProduct = p"
+              >
+                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" class="rm-dish__img" muted loop v-video-visivel playsinline></video>
+                <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" class="rm-dish__img" loading="lazy" />
+                <div v-else class="rm-dish__img rm-dish__img--empty">{{ p.nome.charAt(0) }}</div>
+                <div class="rm-dish__shade"></div>
+
+                <div class="rm-dish__body">
+                  <span v-if="i === 0" class="rm-dish__tag">Assinatura</span>
+                  <h3 class="rm-dish__name">{{ p.nome }}</h3>
+                  <p v-if="i === 0 && p.descricao" class="rm-dish__desc">{{ truncate(p.descricao, 110) }}</p>
+                  <div class="rm-dish__foot">
+                    <span class="rm-dish__price">{{ formatPrice(p.preco) }}</span>
+                    <span class="rm-dish__add" aria-hidden="true">+</span>
+                  </div>
+                </div>
+              </article>
+            </ProdutosPaginados>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════
+             A CARTA — cada grupo pede os seus pratos página a página
+        ══════════════════════════════════════════ -->
+        <section id="rm-carta" class="rm-section rm-section--carta">
+          <div class="rm-wrap">
+            <div class="rm-heading">
+              <span class="rm-heading__eyebrow">Menu</span>
+              <h2 class="rm-heading__title">A <em>carta</em></h2>
+            </div>
+
+            <!-- Chips de secção (sticky): tipos · categorias · catálogo -->
+            <div v-if="grupos.length" class="rm-chips hide-scroll">
+              <template v-for="(g, i) in grupos" :key="g.key">
+                <span v-if="i === 0 || grupos[i - 1].seccao !== g.seccao" class="rm-chips__label">
+                  {{ SECCOES[g.seccao] }}
+                </span>
+                <button
+                  class="rm-chip"
+                  :class="{ 'rm-chip--active': grupoActivo === g.key }"
+                  @click="irParaGrupo(g.key)"
                 >
-                  <span>{{ opcao.nome }}</span>
-                  <span class="resto-delivery-price">
-                    {{ opcao.preco == 0 ? 'Grátis' : formatPrice(opcao.preco) }}
-                  </span>
+                  {{ g.nome }}
+                  <span class="rm-chip__count">{{ g.total }}</span>
+                </button>
+              </template>
+              <span class="rm-chips__sep"></span>
+              <button class="rm-chip rm-chip--outline" @click="scrollToId('rm-catalogo')">
+                Catálogo completo →
+              </button>
+            </div>
+
+            <div v-if="loading" class="rm-menu-skeleton">
+              <div v-for="i in 6" :key="i" class="rm-skel"></div>
+            </div>
+
+            <div v-else-if="!grupos.length" class="rm-empty">
+              <p>A carta ainda está a ser preparada.</p>
+            </div>
+
+            <div v-else class="rm-menu">
+              <div
+                v-for="(g, i) in grupos"
+                :key="g.key"
+                :id="'rm-grupo-' + g.key"
+                class="rm-group"
+              >
+                <div v-if="i === 0 || grupos[i - 1].seccao !== g.seccao" class="rm-seccao">
+                  <span>{{ SECCOES[g.seccao] }}</span>
+                </div>
+
+                <div class="rm-group__head">
+                  <h3 class="rm-group__title">{{ g.nome }}</h3>
+                  <span class="rm-group__line"></span>
+                  <span class="rm-group__count">{{ g.total }} {{ g.total === 1 ? 'prato' : 'pratos' }}</span>
+                </div>
+
+                <ProdutosPaginados :params="g.params" :limit="LIMITE" v-slot="l">
+                  <div class="rm-items">
+                    <template v-if="l.carregando">
+                      <div v-for="n in Math.min(g.total, LIMITE)" :key="n" class="rm-skel"></div>
+                    </template>
+                    <button
+                      v-for="p in l.itens"
+                      :key="p.id"
+                      class="rm-item"
+                      :class="{ 'rm-item--out': esgotado(p) }"
+                      @click="selectedProduct = p"
+                    >
+                      <div class="rm-item__thumb">
+                        <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
+                        <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                        <span v-else>{{ p.nome.charAt(0) }}</span>
+                      </div>
+
+                      <div class="rm-item__body">
+                        <div class="rm-item__top">
+                          <span class="rm-item__name">{{ p.nome }}</span>
+                          <span class="rm-item__dots"></span>
+                          <span class="rm-item__price">{{ formatPrice(p.preco) }}</span>
+                        </div>
+                        <p v-if="p.descricao" class="rm-item__desc">{{ p.descricao }}</p>
+                        <div class="rm-item__tags">
+                          <span v-if="esgotado(p)" class="rm-tag rm-tag--out">Esgotado</span>
+                          <span v-if="p.destaque" class="rm-tag rm-tag--accent">Chef</span>
+                          <span v-for="t in tagsProduto(p)" :key="t" class="rm-tag">{{ t }}</span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                  <button v-if="l.temMais || l.aCarregarMais" class="rm-mais" :disabled="l.aCarregarMais" @click="l.carregarMais()">
+                    {{ l.aCarregarMais ? 'A carregar…' : `Ver mais pratos (${l.total - l.itens.length})` }}
+                  </button>
+                </ProdutosPaginados>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════
+             CATÁLOGO COMPLETO — pesquisa e filtros em todos os produtos
+        ══════════════════════════════════════════ -->
+        <section id="rm-catalogo" class="rm-section rm-section--catalogo">
+          <div class="rm-wrap">
+            <div class="rm-heading">
+              <span class="rm-heading__eyebrow">Todos os produtos</span>
+              <h2 class="rm-heading__title">Catálogo <em>completo</em></h2>
+              <p class="rm-heading__sub">Pesquisa e filtra por tipo, categoria ou preço.</p>
+            </div>
+
+            <div class="rm-catalog">
+              <ProductCatalog
+                :loja-id="lojaId"
+                :isDark="isDark"
+                grid-class="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                image-height="200px"
+                card-border-radius="rounded-3xl"
+                skeleton-class="rounded-3xl"
+                hover-effect="hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+                hover-border-class=""
+                filter-container-radius="rounded-3xl"
+                input-border-radius="rounded-full"
+                input-focus-class="rm-input-focus"
+                tab-border-radius="rounded-full"
+                active-tab-class="rm-cat-tab--active"
+                inactive-tab-dark-class="rm-cat-tab"
+                inactive-tab-light-class="rm-cat-tab"
+                active-sub-tab-class="rm-cat-tab--active"
+                inactive-sub-tab-dark-class="rm-cat-tab"
+                inactive-sub-tab-light-class="rm-cat-tab"
+                category-border-class="rm-cat-border"
+                product-name-class="rm-cat-name"
+                product-name-hover-class="group-hover:opacity-75"
+                price-class="rm-cat-price"
+                badge-text="Chef"
+                badge-class="rm-cat-badge"
+                indicator-active-class="rm-cat-indicator"
+                clear-filter-class="rm-cat-clear"
+                clear-all-class="rm-cat-clear-all"
+                spinner-class="rm-cat-spinner"
+                :show-stock="false"
+                :show-category-badges="false"
+                empty-text="Nenhum prato encontrado."
+                @product-click="selectedProduct = $event"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════
+             VISITE-NOS
+        ══════════════════════════════════════════ -->
+        <section id="rm-visite" class="rm-section rm-section--visite">
+          <div class="rm-wrap rm-visite">
+            <div class="rm-visite__quote">
+              <span class="rm-heading__eyebrow">A nossa casa</span>
+              <blockquote>
+                “{{ loja.descricao || 'Cozinha honesta, ingredientes da época e uma mesa onde todos se sentem em casa.' }}”
+              </blockquote>
+              <div class="rm-visite__sign">— {{ loja.nome }}</div>
+            </div>
+
+            <div class="rm-visite__info">
+              <div v-if="loja.localizacao" class="rm-info-block">
+                <div class="rm-info-block__label">Onde estamos</div>
+                <div class="rm-info-block__value">{{ loja.localizacao }}</div>
+              </div>
+
+              <div v-if="opcoesEntrega.length" class="rm-info-block">
+                <div class="rm-info-block__label">Entregas</div>
+                <div v-for="o in opcoesEntrega" :key="o.id" class="rm-info-row">
+                  <span>{{ o.nome }}</span>
+                  <span class="rm-info-row__val">{{ Number(o.preco) === 0 ? 'Grátis' : formatPrice(o.preco) }}</span>
                 </div>
               </div>
-            </div>
 
-            <!-- Payment Card -->
-            <div v-if="metodosPagamento.length" class="resto-bento__card">
-              <div class="resto-bento__card-header">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <rect x="1" y="4" width="22" height="16" rx="2"/>
-                  <line x1="1" y1="10" x2="23" y2="10"/>
-                </svg>
-                <span>Pagamento</span>
-              </div>
-              <div class="resto-bento__card-body">
-                <div class="resto-chips">
-                  <span v-for="m in metodosPagamento" :key="m.id" class="resto-chip">
+              <div v-if="metodosPagamento.length" class="rm-info-block">
+                <div class="rm-info-block__label">Pagamento</div>
+                <div class="rm-pay">
+                  <span v-for="m in metodosPagamento" :key="m.id" class="rm-pay__chip">
                     {{ m.tipo }}
                   </span>
                 </div>
               </div>
-            </div>
 
-            <!-- Location Card -->
-            <div v-if="loja.localizacao" class="resto-bento__card resto-bento__card--accent">
-              <div class="resto-bento__card-header">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                  <circle cx="12" cy="10" r="3"/>
-                </svg>
-                <span>Localização</span>
-              </div>
-              <div class="resto-bento__card-body">
-                <p class="resto-location-text">{{ loja.localizacao }}</p>
-              </div>
+              <button class="rm-btn rm-btn--accent rm-visite__cta" @click="scrollToId('rm-carta')">
+                Fazer o meu pedido
+              </button>
             </div>
           </div>
         </section>
 
-        <!-- DESTAQUES -->
-        <section class="resto-section" id="resto-destaques">
-          <div class="resto-section__header">
-            <span class="resto-section__tag">02</span>
-            <h2 class="resto-section__title">Destaques do Chef</h2>
+        <!-- ══════════════════════════════════════════
+             AVALIAÇÕES
+        ══════════════════════════════════════════ -->
+        <section id="rm-avaliacoes" class="rm-section">
+          <div class="rm-wrap">
+            <div class="rm-heading">
+              <span class="rm-heading__eyebrow">Quem já provou</span>
+              <h2 class="rm-heading__title">Avaliações</h2>
+            </div>
+
+            <AvaliacaoLoja
+              :loja-id="lojaId"
+              :isDark="isDark"
+              summary-border-radius="rounded-3xl"
+              form-border-radius="rounded-3xl"
+              review-card-border-radius="rounded-2xl"
+              button-border-radius="rounded-full"
+              textarea-border-radius="rounded-2xl"
+              :star-active-class="'rm-star--on'"
+              :star-inactive-class="'rm-star--off'"
+              progress-bar-class="rm-progress"
+              :submit-button-class="'rm-btn rm-btn--accent w-full justify-center'"
+              :review-card-class="'rm-review-card'"
+              :own-review-border-class="'rm-review-own'"
+              :load-more-button-class="'rm-btn rm-btn--ghost'"
+              @rating-updated="onRatingUpdated"
+            />
           </div>
-
-          <ProductSlider
-            title="Destaques"
-            :params="{ loja_id: lojaId, destaque: true }"
-            :isDark="isDark"
-            card-width="280px"
-            image-height="320px"
-            card-height="460px"
-            card-border-radius="rounded-2xl"
-            hover-effect="hover:scale-[1.02] hover:shadow-2xl transition-all duration-500"
-            hover-border-class=""
-            product-name-class="resto-product-name"
-            price-class="resto-product-price"
-            badge-text="CHEF"
-            badge-class="resto-badge-chef"
-            :show-store-name="false"
-            :show-stock="false"
-            @product-click="selectedProduct = $event"
-          />
-        </section>
-
-        <!-- POR TIPO -->
-        <section
-          v-for="(tipo, idx) in tiposExistentes"
-          :key="tipo.id"
-          :id="'resto-tipo-' + tipo.id"
-          class="resto-section"
-        >
-          <div class="resto-section__header">
-            <span class="resto-section__tag">{{ String(idx + 3).padStart(2, '0') }}</span>
-            <h2 class="resto-section__title">{{ tipo.nome }}</h2>
-          </div>
-
-          <ProductSlider
-            :title="tipo.nome"
-            :params="{ loja_id: lojaId, tipo: tipo.nome }"
-            :isDark="isDark"
-            card-width="260px"
-            image-height="300px"
-            card-height="440px"
-            card-border-radius="rounded-2xl"
-            hover-effect="hover:scale-[1.02] hover:shadow-xl transition-all duration-500"
-            hover-border-class=""
-            product-name-class="resto-product-name"
-            price-class="resto-product-price"
-            :show-store-name="false"
-            :show-stock="false"
-            @product-click="selectedProduct = $event"
-          />
-        </section>
-
-        <!-- POR CATEGORIA -->
-        <section
-          v-for="(cat, idx) in categoriasExistentes"
-          :key="cat.id"
-          :id="'resto-cat-' + cat.id"
-          class="resto-section"
-        >
-          <div class="resto-section__header">
-            <span class="resto-section__tag">{{ String(tiposExistentes.length + idx + 3).padStart(2, '0') }}</span>
-            <h2 class="resto-section__title">{{ cat.nome }}</h2>
-          </div>
-
-          <ProductSlider
-            :title="cat.nome"
-            :params="{ loja_id: lojaId, categoria_id: cat.id }"
-            :isDark="isDark"
-            card-width="260px"
-            image-height="300px"
-            card-height="440px"
-            card-border-radius="rounded-2xl"
-            hover-effect="hover:scale-[1.02] hover:shadow-xl transition-all duration-500"
-            hover-border-class=""
-            product-name-class="resto-product-name"
-            price-class="resto-product-price"
-            :show-store-name="false"
-            :show-stock="false"
-            @product-click="selectedProduct = $event"
-          />
-        </section>
-
-        <!-- MENU COMPLETO -->
-        <section class="resto-section resto-section--full" id="resto-menu">
-          <div class="resto-section__header">
-            <span class="resto-section__tag">MENU</span>
-            <h2 class="resto-section__title">Carta Completa</h2>
-          </div>
-
-          <ProductCatalog
-            :loja-id="lojaId"
-            :isDark="isDark"
-            grid-class="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-            image-height="280px"
-            card-border-radius="rounded-2xl"
-            hover-effect="hover:scale-[1.02] hover:shadow-xl transition-all duration-500"
-            hover-border-class=""
-            tab-border-radius="rounded-full"
-            :active-tab-class="'resto-catalog-tab--active'"
-            :inactive-tab-dark-class="'resto-catalog-tab resto-catalog-tab--dark'"
-            :inactive-tab-light-class="'resto-catalog-tab resto-catalog-tab--light'"
-            input-border-radius="rounded-xl"
-            filter-container-radius="rounded-2xl"
-            product-name-class="resto-product-name"
-            product-name-hover-class="group-hover:opacity-80"
-            price-class="resto-product-price"
-            :show-stock="false"
-            :show-badges="true"
-            :show-category-badges="false"
-            @product-click="selectedProduct = $event"
-          />
-        </section>
-
-        <!-- AVALIAÇÕES -->
-        <section class="resto-section" id="resto-avaliacoes">
-          <div class="resto-section__header">
-            <span class="resto-section__tag">REVIEWS</span>
-            <h2 class="resto-section__title">Avaliações</h2>
-          </div>
-
-          <AvaliacaoLoja
-            :loja-id="lojaId"
-            :isDark="isDark"
-            summary-border-radius="rounded-2xl"
-            form-border-radius="rounded-2xl"
-            review-card-border-radius="rounded-2xl"
-            button-border-radius="rounded-xl"
-            textarea-border-radius="rounded-xl"
-            :star-active-class="'resto-star--active'"
-            :star-inactive-class="'resto-star--inactive'"
-            progress-bar-class="resto-progress"
-            :submit-button-class="'resto-btn resto-btn--primary w-full justify-center'"
-            :review-card-class="'resto-review-card'"
-            :own-review-border-class="isDark ? 'resto-review--own-dark' : 'resto-review--own-light'"
-          />
         </section>
       </main>
 
       <!-- ══════════════════════════════════════════
            FOOTER
       ══════════════════════════════════════════ -->
-      <footer class="resto-footer">
-        <div class="resto-footer__inner">
-          <div class="resto-footer__brand">
-            <span class="resto-footer__name">{{ loja.nome }}</span>
-            <span class="resto-footer__tagline">Experiência Gastronómica</span>
-          </div>
-
-          <div class="resto-footer__links">
-            <button @click="showPoliticaPrivacidade = true" class="resto-footer__link">
-              Privacidade
-            </button>
-            <button @click="showTermosServico = true" class="resto-footer__link">
-              Termos
-            </button>
-          </div>
-
-          <div class="resto-footer__copy">
-            &copy; {{ currentYear }} {{ loja.nome }}
+      <footer class="rm-footer">
+        <div class="rm-wrap">
+          <div class="rm-footer__name">{{ loja.nome }}</div>
+          <div class="rm-footer__row">
+            <span class="rm-footer__copy">© {{ currentYear }} {{ loja.nome }}<template v-if="loja.localizacao"> · {{ loja.localizacao }}</template></span>
+            <div class="rm-footer__links">
+              <button v-if="loja.politica_devolucao" @click="modalPolitica = 'devolucao'">Devoluções</button>
+              <button v-if="loja.termos_servico" @click="modalPolitica = 'termos'">Termos</button>
+              <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'">Privacidade</button>
+            </div>
           </div>
         </div>
       </footer>
 
-      <!-- Modals -->
-      <Teleport to="body">
-        <div v-if="showPoliticaPrivacidade" class="resto-modal-overlay" @click.self="showPoliticaPrivacidade = false">
-          <div class="resto-modal">
-            <div class="resto-modal__header">
-              <h3>Política de Privacidade</h3>
-              <button @click="showPoliticaPrivacidade = false" class="resto-modal__close">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            <div class="resto-modal__body">
-              <p>{{ loja.politica_privacidade || 'Respeitamos a sua privacidade e protegemos os seus dados pessoais de acordo com a legislação aplicável.' }}</p>
-            </div>
+      <!-- Modal políticas -->
+      <div v-if="modalPolitica" class="rm-modal-overlay" @click.self="modalPolitica = null">
+        <div class="rm-modal">
+          <div class="rm-modal__head">
+            <h3>{{ tituloPolitica }}</h3>
+            <button class="rm-icon-btn" @click="modalPolitica = null" aria-label="Fechar">×</button>
           </div>
+          <div class="rm-modal__body">{{ textoPolitica }}</div>
         </div>
-
-        <div v-if="showTermosServico" class="resto-modal-overlay" @click.self="showTermosServico = false">
-          <div class="resto-modal">
-            <div class="resto-modal__header">
-              <h3>Termos de Serviço</h3>
-              <button @click="showTermosServico = false" class="resto-modal__close">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            <div class="resto-modal__body">
-              <p>{{ loja.termos_servico || 'Ao utilizar os nossos serviços, concorda com os termos e condições aqui descritos.' }}</p>
-            </div>
-          </div>
-        </div>
-      </Teleport>
+      </div>
     </template>
+
+    <div v-else class="rm-notfound">
+      <p>Restaurante não encontrado</p>
+      <button class="rm-btn rm-btn--ghost" @click="$router.back()">← Voltar</button>
+    </div>
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import api from '@/services/api'
-import ProductCatalog    from '@/components/catalog/ProductCatalog.vue'
-import ProductSlider from '@/components/sliders/ProductSlider.vue'
-import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
+<script>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
+import { useLojaData } from '@/composables/useLojaData'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
+import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
+import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 
+// atributos que fazem sentido mostrar como etiqueta numa carta
+const TAGS_ATRIBUTOS = ['calorias', 'picante', 'alergenos', 'volume', 'porcao', 'dose', 'vegetariano', 'vegan']
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
+const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Carta' }
 
-const props = defineProps({
-  tema: {
-    type: Object,
-    default: () => ({})
-  }
-})
+const LIMITE = 6   // pratos por página em cada grupo
 
-const emit = defineEmits(['toggle-dark'])
+export default {
+  name: 'TemplateRestauranteModerno',
 
-const route = useRoute()
-const router = useRouter()
+  components: { ProductInfoCard, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
 
-// State
-const loading = ref(true)
-const loja = ref(null)
-const user = ref(null)
-const selectedProduct = ref(null)
-const activeSection = ref('resto-sobre')
-const showPoliticaPrivacidade = ref(false)
-const showTermosServico = ref(false)
+  emits: ['toggle-dark'],
 
-// Theme
-const isDark = computed(() => props.tema?.modo_escuro ?? false)
+  props: {
+    tema: { type: Object, default: () => ({}) },
+  },
 
-const toggleDark = () => {
-  emit('toggle-dark')
-}
+  setup (props, { emit }) {
+    const lojaData = useLojaData()
+    const isDark   = ref(props.tema?.darkMode !== false)
+    const user     = ref(JSON.parse(localStorage.getItem('user') || '{}'))
+    const currentYear = new Date().getFullYear()
 
-// Computed
-const lojaId = computed(() => route.params.loja_id || route.params.id)
-const currentYear = computed(() => new Date().getFullYear())
+    const grupoActivo     = ref(null)
+    const scrolled        = ref(false)
 
-const ratingFormatted = computed(() => {
-  if (!loja.value?.rating_medio) return '0.0'
-  return Number(loja.value.rating_medio).toFixed(1)
-})
+    watch(() => props.tema?.darkMode, v => { if (v !== undefined) isDark.value = v !== false })
 
-const tiposExistentes = computed(() => loja.value?.tipos_existentes || [])
-const categoriasExistentes = computed(() => loja.value?.categorias_existentes || [])
-const opcoesEntrega = computed(() => loja.value?.opcoes_entrega || [])
-const metodosPagamento = computed(() => loja.value?.metodos_pagamento || [])
+    const cssVars = computed(() => ({
+      '--cor-primaria':   props.tema?.corPrimaria   || '#e4572e',
+      '--cor-secundaria': props.tema?.corSecundaria || '#14110f',
+    }))
 
-const cssVars = computed(() => ({
-  '--cor-primaria': props.tema?.cor_primaria || '#c9a961',
-  '--cor-secundaria': props.tema?.cor_secundaria || '#1a1a1a'
-}))
+    // Como no Clássico: primeiro "Por tipo", depois "Por categoria", pela ordem da loja.
+    // Só metadados e contagens — cada grupo pede os pratos página a página.
+    const grupos = lojaData.gruposProdutos
 
-// Methods
-const truncateText = (text, maxLength) => {
-  if (!text) return ''
-  return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
-}
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('pt-PT', {
-    style: 'currency',
-    currency: 'EUR'
-  }).format(price)
-}
-
-const isVideo = (url) => {
-  if (!url) return false
-  return /\.(mp4|webm|ogg)$/i.test(url)
-}
-
-const scrollToId = (id) => {
-  const element = document.getElementById(id)
-  if (element) {
-    const navHeight = 64
-    const top = element.getBoundingClientRect().top + window.scrollY - navHeight
-    window.scrollTo({ top, behavior: 'smooth' })
-  }
-}
-
-const logOut = async () => {
-  try {
-    await api.post('/api/logout/')
-    router.push('/')
-  } catch (error) {
-    console.error('Logout error:', error)
-  }
-}
-
-// Intersection Observer for active section
-let observer = null
-
-const setupIntersectionObserver = () => {
-  const options = {
-    root: null,
-    rootMargin: '-100px 0px -50% 0px',
-    threshold: 0
-  }
-
-  observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        activeSection.value = entry.target.id
-      }
+    const entregaDesde = computed(() => {
+      const precos = lojaData.opcoesEntrega.value.map(o => Number(o.preco))
+      if (!precos.length) return null
+      const min = Math.min(...precos)
+      return min === 0 ? 'grátis' : lojaData.formatPrice(min)
     })
-  }, options)
 
-  const sections = document.querySelectorAll('.resto-section[id]')
-  sections.forEach((section) => observer.observe(section))
+    const ratingFormatted = computed(() => {
+      const r = lojaData.loja.value?.rating_medio
+      return r ? Number(r).toFixed(1) : '—'
+    })
+
+    const tituloPolitica = computed(() => ({
+      devolucao: 'Devoluções', termos: 'Termos de serviço', privacidade: 'Privacidade',
+    })[lojaData.modalPolitica.value] || '')
+
+    const textoPolitica = computed(() => {
+      const l = lojaData.loja.value
+      if (!l) return ''
+      return ({
+        devolucao: l.politica_devolucao, termos: l.termos_servico, privacidade: l.politica_privacidade,
+      })[lojaData.modalPolitica.value] || ''
+    })
+
+    // ── Helpers ───────────────────────────────────────────────────────
+    function toggleDark () {
+      isDark.value = !isDark.value
+      emit('toggle-dark', isDark.value)
+    }
+
+    function isVideo (url) {
+      return /\.(mp4|webm|mov|mkv)(\?|$)/i.test(url || '')
+    }
+
+    function truncate (txt, n) {
+      if (!txt) return ''
+      return txt.length > n ? txt.slice(0, n).trimEnd() + '…' : txt
+    }
+
+    function esgotado (p) {
+      return p.stock && Number(p.stock.quantidade) <= 0
+    }
+
+    function tagsProduto (p) {
+      const attrs = p.atributos_normalizados || {}
+      const tags = []
+      Object.entries(attrs).forEach(([k, vals]) => {
+        if (!TAGS_ATRIBUTOS.includes(k.toLowerCase()) || !vals?.length) return
+        const v = vals.join(', ')
+        tags.push(k.toLowerCase() === 'calorias' && /^\d+$/.test(v) ? `${v} kcal` : v)
+      })
+      return tags.slice(0, 3)
+    }
+
+    function irParaGrupo (key) {
+      grupoActivo.value = key
+      lojaData.scrollToId('rm-grupo-' + key)
+    }
+
+    // ── Scroll: barra sólida + grupo activo ─────────────────────────
+    let groupObserver = null
+
+    function onScroll () {
+      scrolled.value = window.scrollY > 60
+    }
+
+    function observarGrupos () {
+      groupObserver?.disconnect()
+      groupObserver = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) grupoActivo.value = e.target.id.replace('rm-grupo-', '')
+        })
+      }, { rootMargin: '-30% 0px -60% 0px' })
+      document.querySelectorAll('[id^="rm-grupo-"]').forEach(el => groupObserver.observe(el))
+    }
+
+    watch([grupos, lojaData.loading], async () => {
+      await nextTick()
+      observarGrupos()
+    })
+
+    onMounted(() => {
+      window.addEventListener('scroll', onScroll, { passive: true })
+      onScroll()
+    })
+
+    onUnmounted(() => {
+      window.removeEventListener('scroll', onScroll)
+      groupObserver?.disconnect()
+    })
+
+    return {
+      ...lojaData,
+      isDark, user, currentYear, cssVars,
+      SECCOES,
+      LIMITE, grupoActivo, scrolled,
+      grupos, entregaDesde, ratingFormatted,
+      tituloPolitica, textoPolitica,
+      toggleDark, isVideo, truncate, esgotado, tagsProduto, irParaGrupo,
+    }
+  },
 }
-
-// Fetch data
-const fetchData = async () => {
-  loading.value = true
-  try {
-    const [lojaRes, userRes] = await Promise.all([
-      api.get(`/api/lojas/${lojaId.value}/`),
-      api.get('/api/user/').catch(() => ({ data: null }))
-    ])
-    loja.value = lojaRes.data
-    user.value = userRes.data
-  } catch (error) {
-    console.error('Error fetching data:', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(async () => {
-  await fetchData()
-  setTimeout(setupIntersectionObserver, 100)
-})
-
-onUnmounted(() => {
-  if (observer) observer.disconnect()
-})
-
-watch(lojaId, fetchData)
 </script>
 
 <style scoped>
-/* ═══════════════════════════════════════════════════════════════
-   FONTS
-═══════════════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,400;1,9..144,600&family=Manrope:wght@400;500;600;700;800&display=swap');
 
-/* ═══════════════════════════════════════════════════════════════
-   ROOT & THEME
-═══════════════════════════════════════════════════════════════ */
-.resto-root {
-  --font-display: 'Instrument Serif', Georgia, serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  
+/* ── Tokens ──────────────────────────────────────────────── */
+.rm-root {
+  --accent: var(--cor-primaria, #e4572e);
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --radius: 22px;
+  --bar-h: 68px;
+  --bar-pad: 28px;
+
+  /* carrinho · notificações · perfil centrados na barra (assets/loja-acoes.css) */
+  --acoes-altura: var(--bar-h);
+  --acoes-direita: var(--bar-pad);
+
   font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--fg);
   min-height: 100vh;
-  transition: background-color 0.4s ease, color 0.4s ease;
+  overflow-x: hidden;
+  transition: background .4s, color .4s;
 }
 
-.resto-light {
-  --bg-primary: #fafafa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f5f5f5;
-  --text-primary: #0a0a0a;
-  --text-secondary: #525252;
-  --text-tertiary: #a3a3a3;
-  --border-color: #e5e5e5;
-  --border-subtle: #f0f0f0;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+.rm-dark {
+  --bg: var(--cor-secundaria, #14110f);
+  --bg2: color-mix(in srgb, var(--bg) 88%, #fff 12%);
+  --bg3: color-mix(in srgb, var(--bg) 80%, #fff 20%);
+  --fg: #f6f1ea;
+  --fg2: rgba(246, 241, 234, .66);
+  --fg3: rgba(246, 241, 234, .38);
+  --line: rgba(246, 241, 234, .12);
 }
 
-.resto-dark {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #141414;
-  --bg-tertiary: #1f1f1f;
-  --text-primary: #fafafa;
-  --text-secondary: #a3a3a3;
-  --text-tertiary: #525252;
-  --border-color: #262626;
-  --border-subtle: #1a1a1a;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+.rm-light {
+  --bg: #f7f2eb;
+  --bg2: #fffdf9;
+  --bg3: #efe7dc;
+  --fg: #1d1915;
+  --fg2: rgba(29, 25, 21, .68);
+  --fg3: rgba(29, 25, 21, .42);
+  --line: rgba(29, 25, 21, .12);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   LOADING
-═══════════════════════════════════════════════════════════════ */
-.resto-loading {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
-  background: var(--bg-primary);
-  z-index: 100;
+.rm-wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 32px;
 }
 
-.resto-loading__ring {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 2px solid var(--border-color);
-  border-top-color: var(--cor-primaria);
-  animation: resto-spin 1s linear infinite;
+/* ── Loading ─────────────────────────────────────────────── */
+.rm-loading {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: var(--bg);
 }
-
-.resto-loading__text {
-  font-size: 0.75rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
+.rm-loading__plate {
+  width: 64px; height: 64px; border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  animation: rmSpin 1s linear infinite;
 }
+.rm-loading__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.rm-loading__text { font-family: var(--font-display); font-style: italic; color: var(--fg2); }
+@keyframes rmSpin { to { transform: rotate(360deg); } }
 
-@keyframes resto-spin {
-  to { transform: rotate(360deg); }
+/* ── Top bar ─────────────────────────────────────────────── */
+.rm-bar {
+  /* abaixo do botão do carrinho (z-30) e do perfil (z-40), acima dos chips (z-20) */
+  position: fixed; top: 0; left: 0; right: 0; z-index: 25;
+  height: var(--bar-h);
+  display: flex; align-items: center; gap: 24px;
+  /* espaço à direita para os botões flutuantes de carrinho/perfil */
+  padding: 0 calc(var(--bar-pad) + var(--acoes-espaco) + 20px) 0 var(--bar-pad);
+  color: #fff;
+  transition: background .3s, color .3s, box-shadow .3s;
 }
-
-/* ═══════════════════════════════════════════════════════════════
-   HERO - SPLIT SCREEN
-═══════════════════════════════════════════════════════════════ */
-.resto-hero {
-  display: grid;
-  grid-template-columns: 1fr;
-  min-height: 100vh;
+.rm-bar--solid {
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px);
+  color: var(--fg);
+  box-shadow: 0 1px 0 var(--line);
 }
-
-@media (min-width: 1024px) {
-  .resto-hero {
-    grid-template-columns: 1fr 1fr;
-  }
+.rm-bar__left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.rm-bar__brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rm-bar__logo {
+  width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
 }
+.rm-bar__logo--initial {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff;
+  font-family: var(--font-display); font-weight: 800; font-size: 16px;
+}
+.rm-bar__name {
+  font-family: var(--font-display); font-weight: 600; font-size: 18px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rm-bar__links { display: flex; gap: 4px; margin-left: auto; }
+.rm-bar__links button {
+  padding: 8px 14px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: inherit; opacity: .8;
+  background: none; border: none; cursor: pointer; transition: opacity .2s, background .2s;
+}
+.rm-bar__links button:hover { opacity: 1; background: color-mix(in srgb, currentColor 10%, transparent); }
+.rm-bar__theme { flex-shrink: 0; }
 
-/* Left Panel */
-.resto-hero__left {
-  display: flex;
-  flex-direction: column;
-  padding: 1.5rem;
+.rm-icon-btn {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  color: inherit; cursor: pointer; font-size: 20px; line-height: 1;
+  transition: background .2s;
+}
+.rm-icon-btn:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+
+/* ── Hero ────────────────────────────────────────────────── */
+.rm-hero {
   position: relative;
-}
-
-@media (min-width: 768px) {
-  .resto-hero__left {
-    padding: 2rem 3rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .resto-hero__left {
-    padding: 2.5rem 4rem;
-  }
-}
-
-.resto-hero__topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-  padding-right: 120px; /* Space for UserProfile/Cart */
-}
-
-@media (min-width: 1024px) {
-  .resto-hero__topbar {
-    padding-right: 0;
-  }
-}
-
-.resto-back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.resto-back:hover {
-  background: var(--bg-tertiary);
-  transform: scale(1.05);
-}
-
-.resto-hero__brand-tag {
-  font-size: 0.7rem;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--cor-primaria);
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--cor-primaria);
-  border-radius: 100px;
-}
-
-.resto-theme-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.resto-theme-toggle:hover {
-  background: var(--bg-tertiary);
-}
-
-/* Hero Content */
-.resto-hero__content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  max-width: 560px;
-}
-
-.resto-hero__location {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-bottom: 1.5rem;
-}
-
-.resto-hero__title {
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
-  font-weight: 400;
-  line-height: 1.1;
-  margin-bottom: 1.5rem;
-  color: var(--text-primary);
-}
-
-.resto-hero__desc {
-  font-size: 1rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
-  margin-bottom: 2rem;
-  max-width: 480px;
-}
-
-/* Stats */
-.resto-hero__stats {
-  display: flex;
-  gap: 2.5rem;
-  margin-bottom: 2.5rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.resto-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.resto-stat__value {
-  font-family: var(--font-display);
-  font-size: 1.75rem;
-  color: var(--text-primary);
-}
-
-.resto-stat__value--icon {
-  color: var(--cor-primaria);
-}
-
-.resto-stat__label {
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-}
-
-/* CTAs */
-.resto-hero__ctas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.resto-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 100px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  border: none;
-}
-
-.resto-btn--primary {
-  background: var(--cor-primaria);
-  color: #0a0a0a;
-}
-
-.resto-btn--primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(201, 169, 97, 0.3);
-}
-
-.resto-btn--outline {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-}
-
-.resto-btn--outline:hover {
-  background: var(--bg-secondary);
-  border-color: var(--text-primary);
-}
-
-/* Bottom */
-.resto-hero__bottom {
-  margin-top: auto;
-  padding-top: 2rem;
-}
-
-.resto-hero__scroll-hint {
-  display: none;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  letter-spacing: 0.1em;
-}
-
-@media (min-width: 1024px) {
-  .resto-hero__scroll-hint {
-    display: flex;
-  }
-}
-
-/* Right Panel - Media */
-.resto-hero__right {
-  position: relative;
-  min-height: 50vh;
+  min-height: 92vh;
+  display: flex; align-items: flex-end;
+  color: #fff;
   overflow: hidden;
 }
-
-@media (min-width: 1024px) {
-  .resto-hero__right {
-    min-height: 100vh;
-  }
+.rm-hero__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.rm-hero__media--empty {
+  background:
+    radial-gradient(circle at 75% 30%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 55%),
+    radial-gradient(circle at 20% 80%, color-mix(in srgb, var(--accent) 25%, transparent), transparent 50%),
+    #1a1512;
 }
-
-.resto-hero__media-wrapper {
-  position: absolute;
-  inset: 0;
+.rm-hero__shade {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(to top, rgba(12,9,7,.92) 0%, rgba(12,9,7,.35) 45%, rgba(12,9,7,.25) 100%),
+    linear-gradient(to right, rgba(12,9,7,.55), transparent 60%);
 }
-
-.resto-hero__media {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.rm-hero__inner {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 1240px; margin: 0 auto;
+  padding: 140px 32px 64px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 48px; align-items: end;
 }
-
-.resto-hero__media-corners {
-  position: absolute;
-  inset: 0;
-  background: 
-    linear-gradient(135deg, var(--bg-primary) 0%, transparent 15%),
-    linear-gradient(-135deg, transparent 85%, var(--bg-primary) 100%);
-  pointer-events: none;
-}
-
-/* Floating Badge */
-.resto-hero__floating-badge {
-  position: absolute;
-  bottom: 2rem;
-  left: 2rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  background: rgba(255, 255, 255, 0.95);
+.rm-hero__pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.rm-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: capitalize;
+  background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
   backdrop-filter: blur(8px);
-  border-radius: 100px;
-  color: #0a0a0a;
-  font-weight: 600;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
-
-.resto-hero__floating-badge svg {
-  color: var(--cor-primaria);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   NAVIGATION TABS
-═══════════════════════════════════════════════════════════════ */
-.resto-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.resto-tabs__inner {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.75rem 1.5rem;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (min-width: 768px) {
-  .resto-tabs__inner {
-    padding: 0.75rem 3rem;
-    justify-content: center;
-  }
-}
-
-.resto-tabs__item {
-  flex-shrink: 0;
-  padding: 0.625rem 1.25rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  border-radius: 100px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.resto-tabs__item:hover {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
-}
-
-.resto-tabs__item--active {
-  color: #0a0a0a;
-  background: var(--cor-primaria);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   MAIN CONTENT
-═══════════════════════════════════════════════════════════════ */
-.resto-main {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-@media (min-width: 768px) {
-  .resto-main {
-    padding: 0 3rem;
-  }
-}
-
-.resto-section {
-  padding: 4rem 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-@media (min-width: 768px) {
-  .resto-section {
-    padding: 6rem 0;
-  }
-}
-
-.resto-section--full {
-  max-width: none;
-}
-
-.resto-section__header {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 3rem;
-}
-
-.resto-section__tag {
+.rm-pill--accent { background: var(--accent); border-color: transparent; }
+.rm-hero__title {
   font-family: var(--font-display);
-  font-size: 0.875rem;
-  font-style: italic;
-  color: var(--cor-primaria);
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--cor-primaria);
-  border-radius: 100px;
+  font-weight: 800;
+  font-size: clamp(3.2rem, 8vw, 7.5rem);
+  line-height: .92;
+  letter-spacing: -.03em;
+  margin: 0 0 22px;
+  text-wrap: balance;
+}
+.rm-hero__desc {
+  max-width: 560px; font-size: 16px; line-height: 1.65; color: rgba(255,255,255,.78);
+  margin: 0 0 30px;
+}
+.rm-hero__ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* Service card */
+.rm-service {
+  background: rgba(20,16,13,.55);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(18px);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+.rm-service__head {
+  font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+  color: rgba(255,255,255,.5); margin-bottom: 10px;
+}
+.rm-service__row {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.1);
+  font-size: 14px; color: rgba(255,255,255,.75);
+}
+.rm-service__row span:last-child { font-weight: 700; color: #fff; text-align: right; }
+.rm-ok { color: #fff !important; }
+.rm-ok::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: #4ade80; margin-right: 7px; vertical-align: middle;
+}
+.rm-off { color: rgba(255,255,255,.45) !important; font-weight: 500 !important; }
+.rm-service__rating { display: flex; align-items: center; gap: 14px; padding-top: 16px; }
+.rm-service__score { font-family: var(--font-display); font-size: 44px; font-weight: 800; line-height: 1; }
+.rm-service__reviews { font-size: 12px; color: rgba(255,255,255,.55); }
+.rm-stars { display: flex; gap: 2px; margin-bottom: 4px; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.rm-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 24px; border-radius: 999px;
+  font-family: var(--font-body); font-size: 14px; font-weight: 700;
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform .2s, opacity .2s, background .2s;
+}
+.rm-btn:hover { transform: translateY(-1px); }
+.rm-btn--accent { background: var(--accent); color: #fff; }
+.rm-btn--accent:hover { opacity: .9; }
+.rm-btn--glass { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); color: #fff; backdrop-filter: blur(8px); }
+.rm-btn--ghost { background: transparent; border-color: var(--line); color: var(--fg); }
+
+/* ── Sections ────────────────────────────────────────────── */
+.rm-section { padding: 96px 0; scroll-margin-top: var(--bar-h); }
+.rm-section + .rm-section { border-top: 1px solid var(--line); }
+.rm-heading { margin-bottom: 40px; }
+.rm-heading--row { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.rm-heading__eyebrow {
+  display: block; margin-bottom: 10px;
+  font-size: 12px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--accent);
+}
+.rm-heading__title {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: clamp(2.4rem, 5vw, 4rem); line-height: 1; letter-spacing: -.02em;
+  margin: 0;
+}
+.rm-heading__title em { font-style: italic; font-weight: 400; color: var(--accent); }
+
+/* ── Bento (chef) ────────────────────────────────────────── */
+.rm-bento {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 240px;
+}
+.rm-bento--1 { grid-template-columns: 1fr; }
+.rm-bento--1 .rm-dish--hero { grid-column: auto; }
+.rm-bento--2 { grid-template-columns: 2fr 1fr; }
+.rm-bento--2 .rm-dish--hero { grid-column: auto; }
+.rm-bento--2 .rm-dish:not(.rm-dish--hero) { grid-row: span 2; }
+.rm-bento--3 { grid-template-columns: 2fr 1fr; }
+.rm-bento--3 .rm-dish--hero { grid-column: auto; }
+.rm-dish--hero { grid-column: span 2; grid-row: span 2; }
+.rm-bento--4 .rm-dish:last-child { grid-column: span 2; }
+
+.rm-dish {
+  position: relative; overflow: hidden; cursor: pointer;
+  border-radius: var(--radius);
+  background: var(--bg3);
+  color: #fff;
+  isolation: isolate;
+}
+.rm-dish__img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  transition: transform .7s cubic-bezier(.2,.7,.2,1);
+}
+.rm-dish:hover .rm-dish__img { transform: scale(1.06); }
+.rm-dish__img--empty {
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 80px; font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg3));
+}
+.rm-dish__shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(10,8,6,.85) 0%, rgba(10,8,6,.15) 55%, transparent 100%);
+}
+.rm-dish__body {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
+  padding: 18px 20px;
+}
+.rm-dish__tag {
+  display: inline-block; margin-bottom: 10px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  background: var(--accent);
+}
+.rm-dish__name {
+  font-family: var(--font-display); font-weight: 600; font-size: 20px; line-height: 1.15;
+  margin: 0 0 6px;
+}
+.rm-dish--hero .rm-dish__name { font-size: clamp(1.8rem, 3vw, 2.6rem); }
+.rm-dish__desc { font-size: 14px; line-height: 1.55; color: rgba(255,255,255,.75); margin: 0 0 10px; max-width: 460px; }
+.rm-dish__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rm-dish__price { font-weight: 800; font-size: 15px; }
+.rm-dish__add {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: #111; font-size: 20px; font-weight: 600;
+  transform: scale(.85); opacity: 0; transition: all .25s;
+}
+.rm-dish:hover .rm-dish__add { transform: scale(1); opacity: 1; }
+
+/* ── Carta ───────────────────────────────────────────────── */
+.rm-heading__sub { margin: 12px 0 0; font-size: 15px; color: var(--fg2); }
+
+.rm-chips__label {
+  flex-shrink: 0; align-self: center; padding: 0 4px 0 2px;
+  font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--fg3);
+}
+.rm-chips__label:not(:first-child) { margin-left: 10px; }
+.rm-chips__sep { flex-shrink: 0; width: 1px; margin: 4px 6px; background: var(--line); }
+.rm-chip--outline { background: transparent; border-color: var(--accent); color: var(--accent); }
+.rm-chip--outline:hover { background: var(--accent); color: #fff; }
+
+.rm-seccao {
+  display: flex; align-items: center; gap: 14px; margin: 8px 0 28px;
+  font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--accent);
+}
+.rm-seccao::after { content: ''; flex: 1; height: 2px; background: var(--accent); opacity: .25; }
+.rm-group + .rm-group .rm-seccao { margin-top: 32px; }
+
+.rm-chips {
+  position: sticky; top: var(--bar-h); z-index: 20;
+  display: flex; gap: 8px; overflow-x: auto;
+  margin: 0 -32px 36px; padding: 12px 32px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+.rm-chip {
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 9px 16px; border-radius: 999px;
+  font-family: var(--font-body); font-size: 13px; font-weight: 600; text-transform: capitalize;
+  background: var(--bg2); color: var(--fg2); border: 1px solid var(--line);
+  cursor: pointer; transition: all .2s;
+}
+.rm-chip:hover { color: var(--fg); }
+.rm-chip--active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.rm-chip__count {
+  font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
-.resto-section__title {
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  font-weight: 400;
+.rm-group { scroll-margin-top: 140px; margin-bottom: 56px; }
+.rm-group:last-child { margin-bottom: 0; }
+.rm-group__head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.rm-group__title {
+  font-family: var(--font-display); font-weight: 600; font-style: italic;
+  font-size: 28px; margin: 0; text-transform: capitalize; white-space: nowrap;
+}
+.rm-group__line { flex: 1; height: 1px; background: var(--line); }
+.rm-group__count { font-size: 12px; color: var(--fg3); white-space: nowrap; }
+
+.rm-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 40px; }
+.rm-item {
+  display: flex; gap: 18px; align-items: flex-start; text-align: left;
+  padding: 16px; margin: 0 -16px; width: calc(100% + 32px);
+  border-radius: 18px; background: none; border: none; color: inherit; cursor: pointer;
+  font-family: inherit; transition: background .2s;
+}
+.rm-item:hover { background: var(--bg2); }
+.rm-item--out { opacity: .5; }
+.rm-item__thumb {
+  width: 88px; height: 88px; border-radius: 16px; overflow: hidden; flex-shrink: 0;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg3));
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 30px; font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.rm-item__thumb img, .rm-item__thumb video { width: 100%; height: 100%; object-fit: cover; }
+.rm-item__body { flex: 1; min-width: 0; }
+.rm-item__top { display: flex; align-items: baseline; gap: 10px; }
+.rm-item__name { font-weight: 700; font-size: 16px; line-height: 1.3; }
+.rm-item__dots { flex: 1; min-width: 20px; border-bottom: 2px dotted var(--line); transform: translateY(-4px); }
+.rm-item__price { font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--accent); white-space: nowrap; }
+.rm-item__desc {
+  margin: 6px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--fg2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.rm-item__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.rm-item__tags:empty { display: none; }
+.rm-tag {
+  padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: var(--bg3); color: var(--fg2);
+}
+.rm-tag--accent { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.rm-tag--out { background: var(--fg); color: var(--bg); }
+
+.rm-menu-skeleton { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 40px; }
+.rm-skel { height: 104px; border-radius: 18px; background: var(--bg2); animation: rmPulse 1.4s ease-in-out infinite; }
+.rm-dish.rm-skel { height: auto; min-height: 200px; cursor: default; }
+.rm-mais {
+  margin-top: 14px; padding: 10px 20px; border-radius: 999px; cursor: pointer;
+  background: transparent; border: 2px solid var(--line); color: var(--fg);
+  font-family: var(--font-body); font-size: 14px; font-weight: 700; transition: border-color .2s, color .2s;
+}
+.rm-mais:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.rm-mais:disabled { opacity: .6; cursor: default; }
+@keyframes rmPulse { 50% { opacity: .5; } }
+.rm-empty { padding: 60px 0; text-align: center; color: var(--fg3); font-family: var(--font-display); font-style: italic; font-size: 20px; }
+
+/* ── Catálogo (ProductCatalog adaptado aos tokens do template) ── */
+.rm-catalog :deep(.bg-zinc-900),
+.rm-catalog :deep(.bg-white) { background: var(--bg2) !important; }
+.rm-catalog :deep(.bg-zinc-800),
+.rm-catalog :deep(.bg-gray-50),
+.rm-catalog :deep(.bg-gray-100),
+.rm-catalog :deep(.bg-zinc-700),
+.rm-catalog :deep(.bg-gray-200) { background: var(--bg3) !important; }
+.rm-catalog :deep(.border-zinc-800),
+.rm-catalog :deep(.border-zinc-700),
+.rm-catalog :deep(.border-gray-200),
+.rm-catalog :deep(.border-gray-300) { border-color: var(--line) !important; }
+.rm-catalog :deep(.text-zinc-100),
+.rm-catalog :deep(.text-zinc-900) { color: var(--fg) !important; }
+.rm-catalog :deep(input),
+.rm-catalog :deep(select) { color: var(--fg) !important; font-family: var(--font-body); }
+.rm-catalog :deep(input::placeholder) { color: var(--fg3) !important; }
+
+.rm-catalog :deep(.rm-input-focus:focus),
+.rm-catalog :deep(input:focus),
+.rm-catalog :deep(select:focus) { border-color: var(--accent) !important; outline: none; }
+.rm-catalog :deep(.rm-cat-tab) {
+  background: var(--bg2); color: var(--fg2); border: 1px solid var(--line);
+  font-weight: 600; text-transform: capitalize;
+}
+.rm-catalog :deep(.rm-cat-tab:hover) { color: var(--fg); }
+.rm-catalog :deep(.rm-cat-tab--active) {
+  background: var(--fg) !important; color: var(--bg) !important; border: 1px solid var(--fg);
+  font-weight: 700; text-transform: capitalize;
+}
+.rm-catalog :deep(.rm-cat-border) { border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
+.rm-catalog :deep(.rm-cat-name) { font-family: var(--font-body); font-weight: 700; }
+.rm-catalog :deep(.rm-cat-price) { font-family: var(--font-display); font-weight: 600; color: var(--accent) !important; }
+.rm-catalog :deep(.rm-cat-badge) {
+  background: var(--accent) !important; color: #fff !important; border-radius: 999px !important;
+  font-weight: 700; letter-spacing: .04em;
+}
+.rm-catalog :deep(.rm-cat-indicator) { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; color: var(--accent) !important; }
+.rm-catalog :deep(.rm-cat-clear) { background: color-mix(in srgb, var(--accent) 12%, transparent) !important; color: var(--accent) !important; }
+.rm-catalog :deep(.rm-cat-clear-all) { color: var(--accent) !important; }
+.rm-catalog :deep(.rm-cat-spinner) { color: var(--accent) !important; }
+
+/* ── Visite-nos ──────────────────────────────────────────── */
+.rm-section--visite { background: var(--bg2); }
+.rm-visite { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 72px; align-items: start; }
+.rm-visite__quote blockquote {
+  margin: 0; font-family: var(--font-display); font-style: italic; font-weight: 400;
+  font-size: clamp(1.6rem, 3vw, 2.4rem); line-height: 1.3; letter-spacing: -.01em;
+}
+.rm-visite__sign { margin-top: 22px; font-weight: 700; color: var(--fg2); }
+.rm-visite__info { display: flex; flex-direction: column; gap: 28px; }
+.rm-info-block__label {
+  font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--fg3); margin-bottom: 10px;
+}
+.rm-info-block__value { font-size: 17px; font-weight: 600; }
+.rm-info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.rm-info-row:last-child { border-bottom: none; }
+.rm-info-row__val { font-weight: 700; color: var(--accent); }
+.rm-pay { display: flex; flex-wrap: wrap; gap: 8px; }
+.rm-pay__chip {
+  padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; text-transform: capitalize;
+  background: var(--bg); border: 1px solid var(--line);
+}
+.rm-visite__cta { align-self: flex-start; }
+
+/* ── Reviews (classes passadas ao AvaliacaoLoja) ─────────── */
+.rm-service .rm-star--off { color: rgba(255,255,255,.25) !important; }
+:deep(.rm-star--on) { color: var(--accent) !important; }
+:deep(.rm-star--off) { color: var(--line) !important; }
+:deep(.rm-progress) { background: var(--accent) !important; }
+:deep(.rm-review-card) { background: var(--bg2) !important; border: 1px solid var(--line) !important; }
+:deep(.rm-review-own) { border: 1px solid var(--accent) !important; }
+:deep(.rm-btn) {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 22px; border-radius: 999px; font-weight: 700; cursor: pointer;
+}
+:deep(.rm-btn--accent) { background: var(--accent) !important; color: #fff !important; }
+:deep(.rm-btn--ghost) { background: transparent; border: 1px solid var(--line); color: var(--fg); }
+
+/* ── Footer ──────────────────────────────────────────────── */
+.rm-footer { padding: 72px 0 36px; border-top: 1px solid var(--line); }
+.rm-footer__name {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(3rem, 10vw, 8rem); line-height: .9; letter-spacing: -.04em;
+  color: color-mix(in srgb, var(--fg) 12%, transparent);
+  margin-bottom: 32px; word-break: break-word;
+}
+.rm-footer__row { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.rm-footer__copy { font-size: 13px; color: var(--fg3); }
+.rm-footer__links { display: flex; gap: 22px; }
+.rm-footer__links button {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 13px; font-weight: 600; color: var(--fg2);
+}
+.rm-footer__links button:hover { color: var(--accent); }
+
+/* ── Modal ───────────────────────────────────────────────── */
+.rm-modal-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(6px);
+}
+.rm-modal {
+  width: 100%; max-width: 560px; max-height: 80vh; overflow-y: auto;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.rm-modal__head {
+  position: sticky; top: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid var(--line);
+}
+.rm-modal__head h3 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.rm-modal__body { padding: 22px; font-size: 14px; line-height: 1.7; color: var(--fg2); white-space: pre-wrap; }
+
+.rm-notfound {
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  font-family: var(--font-display); font-size: 28px;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   BENTO GRID
-═══════════════════════════════════════════════════════════════ */
-.resto-bento {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
+.hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+.hide-scroll::-webkit-scrollbar { display: none; }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .rm-bar__links { display: none; }
+  .rm-bar__theme { margin-left: auto; }
+  .rm-hero__inner { grid-template-columns: 1fr; gap: 28px; }
+  .rm-service { max-width: 420px; }
+  .rm-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 220px; }
+  .rm-bento--1 { grid-template-columns: 1fr; }
+  .rm-items, .rm-menu-skeleton { grid-template-columns: 1fr; }
+  .rm-visite { grid-template-columns: 1fr; gap: 40px; }
 }
 
-@media (min-width: 768px) {
-  .resto-bento {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .resto-bento {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.resto-bento__card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 1.5rem;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-}
-
-.resto-bento__card:hover {
-  border-color: var(--cor-primaria);
-}
-
-.resto-bento__card--large {
-  grid-column: 1 / -1;
-}
-
-@media (min-width: 1024px) {
-  .resto-bento__card--large {
-    grid-column: span 2;
-  }
-}
-
-.resto-bento__card--accent {
-  background: var(--cor-primaria);
-  border-color: var(--cor-primaria);
-  color: #0a0a0a;
-}
-
-.resto-bento__card--accent .resto-bento__card-header {
-  color: #0a0a0a;
-}
-
-.resto-bento__card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin-bottom: 1.25rem;
-}
-
-.resto-bento__card-body {
-  font-size: 0.9rem;
-}
-
-.resto-about-text {
-  font-size: 1.125rem;
-  line-height: 1.8;
-  color: var(--text-secondary);
-}
-
-.resto-delivery-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.625rem 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.resto-delivery-row:last-child {
-  border-bottom: none;
-}
-
-.resto-delivery-price {
-  font-weight: 500;
-  color: var(--cor-primaria);
-}
-
-.resto-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.resto-chip {
-  padding: 0.375rem 0.875rem;
-  font-size: 0.75rem;
-  background: var(--bg-tertiary);
-  border-radius: 100px;
-  color: var(--text-secondary);
-}
-
-.resto-location-text {
-  font-size: 1rem;
-  line-height: 1.6;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   PRODUCT STYLES
-═══════════════════════════════════════════════════════════════ */
-:deep(.resto-product-name) {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 400;
-}
-
-:deep(.resto-product-price) {
-  color: var(--cor-primaria);
-  font-weight: 500;
-}
-
-:deep(.resto-badge-chef) {
-  background: var(--cor-primaria);
-  color: #0a0a0a;
-  font-size: 0.65rem;
-  letter-spacing: 0.1em;
-  padding: 0.25rem 0.75rem;
-  border-radius: 100px;
-}
-
-/* Catalog Tabs */
-:deep(.resto-catalog-tab) {
-  padding: 0.5rem 1.25rem;
-  font-size: 0.8rem;
-  border-radius: 100px;
-  transition: all 0.2s ease;
-}
-
-:deep(.resto-catalog-tab--light) {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-:deep(.resto-catalog-tab--dark) {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-:deep(.resto-catalog-tab--active) {
-  background: var(--cor-primaria) !important;
-  color: #0a0a0a !important;
-}
-
-/* Stars */
-:deep(.resto-star--active) {
-  color: var(--cor-primaria);
-}
-
-:deep(.resto-star--inactive) {
-  color: var(--border-color);
-}
-
-:deep(.resto-progress) {
-  background: var(--cor-primaria);
-}
-
-:deep(.resto-review-card) {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-}
-
-:deep(.resto-review--own-light) {
-  border-color: var(--cor-primaria);
-}
-
-:deep(.resto-review--own-dark) {
-  border-color: var(--cor-primaria);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   FOOTER
-═══════════════════════════════════════════════════════════════ */
-.resto-footer {
-  border-top: 1px solid var(--border-color);
-  padding: 3rem 1.5rem;
-}
-
-@media (min-width: 768px) {
-  .resto-footer {
-    padding: 4rem 3rem;
-  }
-}
-
-.resto-footer__inner {
-  max-width: 1400px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  align-items: center;
-  text-align: center;
-}
-
-@media (min-width: 768px) {
-  .resto-footer__inner {
-    flex-direction: row;
-    justify-content: space-between;
-    text-align: left;
-  }
-}
-
-.resto-footer__brand {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.resto-footer__name {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-}
-
-.resto-footer__tagline {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.resto-footer__links {
-  display: flex;
-  gap: 2rem;
-}
-
-.resto-footer__link {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.resto-footer__link:hover {
-  color: var(--cor-primaria);
-}
-
-.resto-footer__copy {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   MODALS
-═══════════════════════════════════════════════════════════════ */
-.resto-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 1rem;
-}
-
-.resto-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 1.5rem;
-  width: 100%;
-  max-width: 500px;
-  max-height: 80vh;
-  overflow: hidden;
-}
-
-.resto-modal__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.resto-modal__header h3 {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 400;
-}
-
-.resto-modal__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bg-tertiary);
-  border: none;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.resto-modal__close:hover {
-  background: var(--border-color);
-}
-
-.resto-modal__body {
-  padding: 1.5rem;
-  overflow-y: auto;
-  max-height: 60vh;
-}
-
-.resto-modal__body p {
-  font-size: 0.9rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════════ */
-.hide-scroll {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.hide-scroll::-webkit-scrollbar {
-  display: none;
+@media (max-width: 640px) {
+  .rm-wrap { padding: 0 16px; }
+  .rm-root { --bar-h: 60px; --bar-pad: 14px; }
+  .rm-bar { padding-right: calc(var(--bar-pad) + var(--acoes-espaco) + 10px); gap: 10px; }
+  .rm-bar__name { font-size: 15px; }
+  .rm-hero { min-height: 88vh; }
+  .rm-hero__inner { padding: 110px 16px 36px; }
+  .rm-hero__desc { font-size: 14px; }
+  .rm-service { padding: 16px; }
+  .rm-service__score { font-size: 36px; }
+  .rm-section { padding: 64px 0; }
+  .rm-heading { margin-bottom: 28px; }
+  .rm-chips { margin: 0 -16px 28px; padding: 10px 16px; }
+  .rm-bento { grid-template-columns: 1fr 1fr; grid-auto-rows: 180px; gap: 10px; }
+  .rm-bento--1, .rm-bento--2, .rm-bento--3 { grid-template-columns: 1fr 1fr; }
+  .rm-bento--2 .rm-dish:not(.rm-dish--hero) { grid-row: auto; grid-column: span 2; }
+  .rm-bento--3 .rm-dish--hero, .rm-bento--1 .rm-dish--hero { grid-column: span 2; }
+  .rm-dish__body { padding: 14px; }
+  .rm-dish__name { font-size: 16px; }
+  .rm-dish__add { opacity: 1; transform: scale(.85); }
+  .rm-item { padding: 12px; margin: 0 -12px; width: calc(100% + 24px); gap: 14px; }
+  .rm-item__thumb { width: 72px; height: 72px; border-radius: 14px; }
+  .rm-item__name { font-size: 15px; }
+  .rm-item__dots { display: none; }
+  .rm-item__top { justify-content: space-between; }
+  .rm-group__title { font-size: 24px; }
+  .rm-group__count { display: none; }
+  .rm-footer { padding: 56px 0 28px; }
 }
 </style>

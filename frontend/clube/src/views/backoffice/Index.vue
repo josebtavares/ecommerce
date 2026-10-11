@@ -1,3 +1,4 @@
+<!-- eslint-disable vue/multi-word-component-names -- ficheiro de entrada do backoffice (rota) -->
 <template>
   <BackofficeLayout />
 </template>

@@ -15,7 +15,7 @@
                  activeCategoria === cat.value
                    ? 'bg-red-600 text-white'
                    : isDark ? 'bg-zinc-800 text-zinc-400 hover:text-zinc-200' : 'bg-stone-200 text-zinc-600 hover:text-zinc-900']">
-        <span>{{ cat.icon }}</span>
+        <font-awesome-icon v-if="cat.icon" :icon="['fas', cat.icon]" class="w-3.5 h-3.5" />
         {{ cat.label }}
       </button>
     </div>
@@ -103,9 +103,9 @@
            style="height:240px">
                   <!-- DEPOIS -->
           <video v-if="isVideo(loja.banner_url)"
-            :src="loja.banner_url"
+            :src="loja.banner_url" :poster="loja.banner_poster_url"
             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            autoplay muted loop playsinline></video>
+            v-video-visivel muted loop playsinline></video>
           <img v-else
             :src="loja.banner_url || loja.logo_url || defaultImg"
             :alt="loja.nome"
@@ -174,6 +174,7 @@
 
 <script>
 import api from '@/services/api'
+import { iconeCategoria } from '@/utils/icones'
 
 export default {
   name: 'StoreCatalog',
@@ -187,16 +188,16 @@ export default {
     return {
       defaultImg: (process.env.VUE_APP_URL_BASE || 'http://localhost:8000') + '/media/lojas/default_banner.jpg',
       categorias: [
-        { value: 'restaurante',  label: 'Restaurante',  icon: '🍔' },
-        { value: 'moda',         label: 'Moda',         icon: '👗' },
-        { value: 'tecnologia',   label: 'Tecnologia',   icon: '📱' },
-        { value: 'supermercado', label: 'Supermercado', icon: '🛒' },
-        { value: 'farmacia',     label: 'Farmácia',     icon: '💊' },
-        { value: 'desporto',     label: 'Desporto',     icon: '⚽' },
-        { value: 'casa',         label: 'Casa',         icon: '🏠' },
-        { value: 'beleza',       label: 'Beleza',       icon: '💄' },
-        { value: 'livraria',     label: 'Livraria',     icon: '📚' },
-        { value: 'outros',       label: 'Outros',       icon: '🏪' },
+        { value: 'restaurante',  label: 'Restaurante',  icon: iconeCategoria(null, 'restaurante') },
+        { value: 'moda',         label: 'Moda',         icon: iconeCategoria(null, 'moda') },
+        { value: 'tecnologia',   label: 'Tecnologia',   icon: iconeCategoria(null, 'tecnologia') },
+        { value: 'supermercado', label: 'Supermercado', icon: iconeCategoria(null, 'supermercado') },
+        { value: 'farmacia',     label: 'Farmácia',     icon: iconeCategoria(null, 'farmacia') },
+        { value: 'desporto',     label: 'Desporto',     icon: iconeCategoria(null, 'desporto') },
+        { value: 'casa',         label: 'Casa',         icon: iconeCategoria(null, 'casa') },
+        { value: 'beleza',       label: 'Beleza',       icon: iconeCategoria(null, 'beleza') },
+        { value: 'livraria',     label: 'Livraria',     icon: iconeCategoria(null, 'livraria') },
+        { value: 'outros',       label: 'Outros',       icon: iconeCategoria(null, 'outros') },
       ],
       activeCategoria: null,
       lojas: [], total: 0, offset: 0,

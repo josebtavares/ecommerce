@@ -46,7 +46,7 @@
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <p class="text-sm font-bold text-zinc-200">{{ u.username }}</p>
-            <span v-if="u.verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold">✓ Verificado</span>
+            <span v-if="u.verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold inline-flex items-center gap-1"><font-awesome-icon :icon="['fas', 'circle-check']" /> Verificado</span>
             <span v-if="u.is_staff" class="px-1.5 py-0.5 bg-red-500/15 text-red-400 text-[10px] rounded font-bold">Staff</span>
             <span v-if="u.role_admin" class="px-1.5 py-0.5 bg-purple-500/15 text-purple-400 text-[10px] rounded font-bold capitalize">{{ u.role_admin }}</span>
             <span v-if="u.status !== 'ativo'" :class="['px-1.5 py-0.5 text-[10px] rounded font-bold', u.status === 'banido' ? 'bg-red-500/15 text-red-400' : 'bg-yellow-500/15 text-yellow-400']">
@@ -59,12 +59,12 @@
         <div class="flex gap-2 flex-shrink-0 opacity-100 group-hover:opacity-100 transition">
           <button @click="toggleVerificado(u)" :title="u.verificado ? 'Remover verificacao' : 'Verificar'"
             :class="['w-8 h-8 rounded-lg flex items-center justify-center transition text-xs',
-                     u.verificado ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-green-400']">✓</button>
+                     u.verificado ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-green-400']"><font-awesome-icon :icon="['fas', 'check']" /></button>
           <button @click="toggleBan(u)" :title="u.status === 'banido' ? 'Remover ban' : 'Banir'"
             :class="['w-8 h-8 rounded-lg flex items-center justify-center transition text-xs',
-                     u.status === 'banido' ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-red-400']">🚫</button>
-          <button @click="abrirEditarRole(u)"
-            class="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-500 hover:text-purple-400 flex items-center justify-center transition text-xs">⚙️</button>
+                     u.status === 'banido' ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-red-400']"><font-awesome-icon :icon="['fas', 'ban']" /></button>
+          <button @click="abrirEditarRole(u)" title="Permissões"
+            class="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-500 hover:text-purple-400 flex items-center justify-center transition text-xs"><font-awesome-icon :icon="['fas', 'gear']" /></button>
         </div>
       </div>
 

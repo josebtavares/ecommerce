@@ -9,15 +9,26 @@
         </p>
       </div>
 
-      <button
-        v-if="podeGerirProdutos"
-        type="button"
-        @click="abrirModalCriar"
-        class="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
-      >
-        + Novo produto
-      </button>
+      <div v-if="podeGerirProdutos" class="flex gap-2">
+        <button
+          v-if="podeCriarProdutoPOS"
+          type="button"
+          @click="showTiposModal = true"
+          class="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+        >
+          <font-awesome-icon :icon="['fas', 'tags']" class="mr-1.5" />Tipos
+        </button>
+        <button
+          type="button"
+          @click="abrirModalCriar"
+          class="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
+        >
+          + Novo produto
+        </button>
+      </div>
     </div>
+
+    <TiposModal v-if="showTiposModal" :pos-id="posId" @close="showTiposModal = false" @alterado="carregarProdutos" />
 
     <!-- Info modo -->
     <section class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
@@ -113,7 +124,7 @@
       v-else-if="produtosFiltrados.length === 0"
       class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
     >
-      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">📦</div>
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl text-slate-400 shadow-sm"><font-awesome-icon :icon="['fas', 'box']" /></div>
       <h3 class="mt-5 text-xl font-black text-slate-950">Nenhum produto encontrado</h3>
       <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
         <span v-if="podeGerirProdutos">
@@ -151,7 +162,7 @@
             :alt="produto.nome"
             class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
-          <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300">📦</div>
+          <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300"><font-awesome-icon :icon="['fas', 'box']" /></div>
 
           <div class="absolute left-2 top-2 flex flex-wrap gap-1">
             <span
@@ -196,6 +207,18 @@
               Stock: {{ produto.stock ?? '—' }}
             </span>
           </div>
+
+          <!-- stock por variação -->
+          <p v-if="produto.stock_por_variante" class="mt-2 text-[11px] font-bold text-slate-500">
+            <font-awesome-icon :icon="['fas', 'boxes-stacked']" /> {{ produto.variantes.length }} variações
+            <span v-if="produto.variantes.some(v => v.quantidade === 0)" class="text-red-600">
+              · {{ produto.variantes.filter(v => v.quantidade === 0).length }} esgotada(s)
+            </span>
+          </p>
+          <button v-else-if="produto.variantes_pendentes && podeGerirProdutos" type="button" @click="editarProduto(produto)"
+            class="mt-2 w-full rounded-lg bg-amber-50 px-2 py-1 text-left text-[11px] font-black text-amber-700 hover:bg-amber-100">
+            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> Definir stock por variação
+          </button>
 
           <!-- Ações só visíveis se tiver permissão -->
           <div v-if="podeGerirProdutos" class="mt-4 grid grid-cols-2 gap-2">
@@ -316,7 +339,50 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <!-- Tipo + atributos -->
+          <div>
+            <label class="mb-2 block text-sm font-black text-slate-700">Tipo de produto</label>
+            <select
+              v-model="formProduto.tipo_id"
+              @change="onTipoChange"
+              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white"
+            >
+              <option value="">Sem tipo</option>
+              <optgroup v-for="g in gruposTipos" :key="g.label" :label="g.label">
+                <option v-for="t in g.itens" :key="t.id" :value="String(t.id)" class="capitalize">{{ t.nome }}</option>
+              </optgroup>
+            </select>
+            <p class="mt-2 text-xs font-semibold text-slate-400">
+              {{ formProduto.origem === 'loja'
+                  ? 'Produtos da loja usam os tipos globais e os da loja Bendi.'
+                  : 'Produtos do POS usam os tipos globais e os tipos deste POS (botão Tipos).' }}
+            </p>
+          </div>
+
+          <div v-if="tipoSelecionado && schemaTipo.length" class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-xs font-black uppercase tracking-wider text-slate-500 capitalize">Atributos · {{ tipoSelecionado.nome }}</p>
+            <div v-for="a in schemaTipo" :key="a.nome">
+              <label class="mb-2 flex items-center gap-1 text-xs font-black capitalize text-slate-600">
+                <font-awesome-icon v-if="a.variante" :icon="['fas', 'boxes-stacked']" title="Stock por opção" class="text-amber-600" /> {{ a.nome }}
+                <span v-if="a.obrigatorio" class="text-red-500">*</span>
+                <span v-if="a.tipo === 'choices'" class="font-semibold normal-case text-slate-400">· escolhe uma ou mais</span>
+              </label>
+              <div v-if="a.tipo === 'choices'" class="flex flex-wrap gap-2">
+                <button v-for="op in a.opcoes" :key="op" type="button" @click="toggleOpcao(a.nome, op)"
+                  :class="['h-9 rounded-xl border px-3 text-xs font-black transition',
+                           opcaoSelecionada(a.nome, op) ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400']">
+                  {{ op }}
+                </button>
+              </div>
+              <input v-else v-model="formProduto.atributos[a.nome]" :type="a.tipo === 'numero' ? 'number' : 'text'" :placeholder="a.nome"
+                class="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-950" />
+            </div>
+          </div>
+
+          <div v-if="grelhaAtiva" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
+            <font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock gerido por variação — define as quantidades em <b>Stock por variação</b> abaixo.
+          </div>
+          <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label class="flex h-12 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4">
               <input
                 v-model="formProduto.controlar_stock"
@@ -336,6 +402,20 @@
                 class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
               />
             </div>
+          </div>
+
+          <!-- Stock por variação (vai no mesmo pedido do produto) -->
+          <div v-if="atributosVarianteForm.length" class="space-y-3">
+            <p class="text-sm font-black text-slate-700"><font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock por variação
+              <span class="ml-1 rounded-lg bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800">{{ atributosVarianteForm.join(' × ') }}</span>
+            </p>
+            <p v-if="!combinacoesForm.length" class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500">
+              Escolhe as opções de {{ atributosVarianteForm.join(' / ') }} acima para definir o stock de cada combinação.
+            </p>
+            <VariantesGrelhaForm v-else claro
+              v-model:ativo="grelha.ativo" v-model:linhas="grelha.linhas"
+              :atributos="atributosVarianteComOpcoes" :preco-produto="formProduto.preco"
+              :stock-total-antigo="produtoEditando && !produtoEditando.stock_por_variante ? Number(produtoEditando.stock || 0) : null" />
           </div>
 
           <div>
@@ -367,6 +447,8 @@
             </label>
           </div>
 
+          <p v-if="error" class="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{{ error }}</p>
+
           <div class="grid grid-cols-2 gap-3 pt-4">
             <button
               type="button"
@@ -396,9 +478,23 @@
 
 <script>
 import api from '@/services/api'
+import TiposModal from './components/TiposModal.vue'
+import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
+import {
+  combinacoesDe, mesclarLinhas, linhasDoProduto, linhasParaPayload, grelhaValida,
+} from '@/utils/variantes'
+
+const FORM_VAZIO = () => ({
+  origem: 'pos', nome: '', descricao: '', preco: 0,
+  categoria: '', controlar_stock: false, stock: 0,
+  ativo: true, disponivel_pos: true, imagem: null,
+  tipo_id: '', atributos: {},
+})
 
 export default {
   name: 'POSProdutos',
+
+  components: { TiposModal, VariantesGrelhaForm },
 
   props: {
     posId: {
@@ -437,18 +533,10 @@ export default {
       error: '',
       success: '',
 
-      formProduto: {
-        origem: 'pos',
-        nome: '',
-        descricao: '',
-        preco: 0,
-        categoria: '',
-        controlar_stock: false,
-        stock: 0,
-        ativo: true,
-        disponivel_pos: true,
-        imagem: null
-      }
+      showTiposModal: false,
+      tipos: [],          // tipos disponíveis para a origem do formulário
+      grelha: { ativo: true, linhas: [] },   // stock por variação do formulário
+      formProduto: FORM_VAZIO(),
     }
   },
 
@@ -473,6 +561,43 @@ export default {
 
     categorias() {
       return [...new Set(this.produtos.map(p => p.categoria).filter(Boolean))]
+    },
+
+    // ── Tipos e variações ────────────────────────────────────
+    gruposTipos() {
+      const g = (origem, label) => ({ label, itens: this.tipos.filter(t => t.origem === origem) })
+      return [
+        g('pos', 'Deste POS'),
+        g('loja', 'Da loja'),
+        g('global', 'Globais'),
+      ].filter(x => x.itens.length)
+    },
+
+    tipoSelecionado() {
+      return this.tipos.find(t => String(t.id) === String(this.formProduto.tipo_id)) || null
+    },
+
+    schemaTipo() {
+      return (this.tipoSelecionado?.atributos_schema || [])
+        .map(a => (typeof a === 'string' ? { nome: a, tipo: 'texto', opcoes: [] } : a))
+    },
+
+    atributosVarianteForm() {
+      return this.schemaTipo.filter(a => a.tipo === 'choices' && a.variante).map(a => a.nome)
+    },
+
+    // combinações calculadas a partir das opções seleccionadas — a grelha acompanha em tempo real
+    combinacoesForm() {
+      return combinacoesDe(this.schemaTipo, this.formProduto.atributos)
+    },
+
+    atributosVarianteComOpcoes() {
+      return this.atributosVarianteForm.filter(n => this.combinacoesForm.some(c => n in c.combinacao))
+    },
+
+    // stock por variação ligado → os campos de stock total desaparecem
+    grelhaAtiva() {
+      return this.combinacoesForm.length > 0 && this.grelha.ativo
     },
 
     produtosFiltrados() {
@@ -501,7 +626,15 @@ export default {
   watch: {
     posId(newId, oldId) {
       if (newId && newId !== oldId) this.carregarProdutos()
-    }
+    },
+    // produtos do POS e da loja usam conjuntos de tipos diferentes
+    'formProduto.origem'(origem) {
+      if (this.showProdutoModal && origem) this.carregarTipos(origem)
+    },
+    // novas combinações entram a 0; removidas saem; as quantidades já escritas mantêm-se
+    combinacoesForm(combos) {
+      this.grelha.linhas = mesclarLinhas(combos, this.grelha.linhas)
+    },
   },
 
   methods: {
@@ -541,6 +674,36 @@ export default {
                                : ''
 
       this.showProdutoModal = true
+      this.grelha = { ativo: true, linhas: [] }   // produto novo: stock por variação ligado por defeito
+      if (this.formProduto.origem) this.carregarTipos(this.formProduto.origem)
+    },
+
+    async carregarTipos(origem) {
+      try {
+        const { data } = await api.get(`/api/pos/${this.posId}/tipos/`, { params: { para: origem } })
+        this.tipos = data
+      } catch {
+        this.tipos = []
+      }
+    },
+
+    onTipoChange() {
+      // atributos de outro tipo não fazem sentido no novo
+      this.formProduto.atributos = {}
+    },
+
+    opcaoSelecionada(nome, op) {
+      const v = this.formProduto.atributos[nome]
+      return Array.isArray(v) ? v.includes(op) : v === op
+    },
+
+    toggleOpcao(nome, op) {
+      const atual = this.formProduto.atributos[nome]
+      const lista = Array.isArray(atual) ? [...atual] : (atual ? [atual] : [])
+      const i = lista.indexOf(op)
+      if (i >= 0) lista.splice(i, 1)
+      else lista.push(op)
+      this.formProduto.atributos = { ...this.formProduto.atributos, [nome]: lista }
     },
 
     editarProduto(produto) {
@@ -558,11 +721,15 @@ export default {
         stock:           Number(produto.stock || 0),
         ativo:           this.produtoAtivo(produto),
         disponivel_pos:  produto.disponivel_pos ?? true,
-        imagem:          null
+        imagem:          null,
+        tipo_id:         produto.tipo_id ? String(produto.tipo_id) : '',
+        atributos:       JSON.parse(JSON.stringify(produto.atributos || {})),
       }
       this.imagemPreview = produto.imagem_url || null
       this.isImagePreview = true
       this.showProdutoModal = true
+      this.grelha = { ativo: !!produto.stock_por_variante, linhas: linhasDoProduto(produto) }
+      this.carregarTipos(produto.origem || 'pos')
     },
 
     async toggleAtivo(produto) {
@@ -615,10 +782,27 @@ export default {
         formData.append('descricao',       this.formProduto.descricao || '')
         formData.append('preco',           String(this.formProduto.preco))
         formData.append('categoria',       this.formProduto.categoria || 'Sem categoria')
-        formData.append('controlar_stock', String(Boolean(this.formProduto.controlar_stock)))
-        formData.append('stock',           String(Number(this.formProduto.stock || 0)))
+        // com stock por variação o total é a soma das variações
+        if (!this.grelhaAtiva) {
+          formData.append('controlar_stock', String(Boolean(this.formProduto.controlar_stock)))
+          formData.append('stock',           String(Number(this.formProduto.stock || 0)))
+        }
+        // grelha no mesmo pedido (o backend grava produto + variações tudo-ou-nada)
+        if (this.combinacoesForm.length) {
+          if (this.grelha.ativo && !grelhaValida(this.grelha.linhas)) {
+            this.error = 'Há quantidades inválidas na grelha de stock por variação.'
+            this.salvando = false
+            return
+          }
+          formData.append('stock_por_variante', this.grelha.ativo ? 'true' : 'false')
+          if (this.grelha.ativo) formData.append('variantes', JSON.stringify(linhasParaPayload(this.grelha.linhas)))
+        }
         formData.append('ativo',           String(Boolean(this.formProduto.ativo)))
         formData.append('disponivel_pos',  String(Boolean(this.formProduto.disponivel_pos)))
+        formData.append('tipo_id',         this.formProduto.tipo_id || '')
+        if (this.tipoSelecionado) {
+          formData.append('atributos', JSON.stringify(this.atributosParaEnviar()))
+        }
 
         if (this.formProduto.origem === 'loja' && this.formProduto.categoria) {
           formData.append('novas_categorias', this.formProduto.categoria.trim())
@@ -646,6 +830,16 @@ export default {
       }
     },
 
+    // só os atributos do tipo escolhido, sem valores vazios
+    atributosParaEnviar() {
+      const out = {}
+      this.schemaTipo.forEach(a => {
+        const v = this.formProduto.atributos[a.nome]
+        if (Array.isArray(v) ? v.length : (v !== undefined && v !== null && String(v).trim() !== '')) out[a.nome] = v
+      })
+      return out
+    },
+
     fecharModal() {
       this.showProdutoModal = false
       this.produtoEditando  = null
@@ -655,11 +849,7 @@ export default {
     resetForm() {
       this.imagemPreview  = null
       this.isImagePreview = true
-      this.formProduto = {
-        origem: 'pos', nome: '', descricao: '', preco: 0,
-        categoria: '', controlar_stock: false, stock: 0,
-        ativo: true, disponivel_pos: true, imagem: null
-      }
+      this.formProduto = FORM_VAZIO()
     },
 
     validarForm() {

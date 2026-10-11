@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen transition-colors duration-300"
+  <div class="classico-root min-h-screen transition-colors duration-300"
        :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-gray-50 text-zinc-900'"
        :style="cssVars">
 
@@ -21,9 +21,9 @@
       <!-- ── HERO ── -->
       <section class="relative h-[55vh] min-h-[360px] overflow-hidden">
         <video v-if="isVideo(loja.banner_url)"
-          :src="loja.banner_url"
+          :src="loja.banner_url" :poster="loja.banner_poster_url"
           class="w-full h-full object-cover"
-          autoplay muted loop playsinline></video>
+          v-video-visivel muted loop playsinline></video>
         <img v-else
           :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
           :alt="loja.nome" class="w-full h-full object-cover" />
@@ -34,7 +34,7 @@
 
         <!-- Botão voltar -->
         <button @click="$router.back()"
-          class="absolute top-5 left-5 w-9 h-9 rounded-full bg-black/50 hover:bg-black/70
+          class="classico-topo classico-topo--voltar w-9 h-9 rounded-full bg-black/50 hover:bg-black/70
                  flex items-center justify-center transition backdrop-blur-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -43,7 +43,7 @@
 
         <!-- Toggle dark/light — ao lado do botão voltar -->
         <button @click="toggleDark"
-          class="absolute top-5 left-16 w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-sm"
+          class="classico-topo classico-topo--tema w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-sm"
           :class="isDark ? 'bg-black/50 hover:bg-black/70' : 'bg-white/70 hover:bg-white/90'">
           <!-- Ícone sol (modo dark → carrega para light) -->
           <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -70,12 +70,26 @@
             </span>
             <h1 class="text-3xl md:text-4xl font-extrabold text-white leading-tight">{{ loja.nome }}</h1>
             <div class="flex items-center gap-4 mt-2 text-sm text-zinc-300 flex-wrap">
-              <span v-if="loja.localizacao">📍 {{ loja.localizacao }}</span>
-              <span v-if="loja.rating_medio">
-                ⭐ {{ loja.rating_medio }}
+              <span v-if="loja.localizacao" class="inline-flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {{ loja.localizacao }}
+              </span>
+              <span v-if="loja.rating_medio" class="inline-flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                {{ loja.rating_medio }}
                 <span v-if="loja.total_avaliacoes" class="text-zinc-500">({{ loja.total_avaliacoes }})</span>
               </span>
-              <span v-if="loja.entrega_ativa" class="text-green-400">✓ Entrega disponível</span>
+              <span v-if="loja.entrega_ativa" class="inline-flex items-center gap-1 text-green-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Entrega disponível
+              </span>
             </div>
           </div>
         </div>
@@ -106,7 +120,6 @@
                 @click="scrollToId('tipo-' + tipo.id); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition text-left"
                 :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-gray-100 hover:text-zinc-900'">
-                <span>{{ tipoIcon(tipo.nome) }}</span>
                 <span class="capitalize">{{ tipo.nome }}</span>
               </button>
             </div>
@@ -118,7 +131,6 @@
                 @click="scrollToId('cat-' + cat.id); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition text-left"
                 :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-gray-100 hover:text-zinc-900'">
-                <span>{{ cat.icone }}</span>
                 <span class="capitalize">{{ cat.nome }}</span>
               </button>
             </div>
@@ -126,12 +138,12 @@
               <button @click="scrollToId('catalogo'); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition text-left"
                 :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-gray-100'">
-                🔍 Catálogo completo
+                Catálogo completo
               </button>
               <button @click="scrollToId('avaliacoes'); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition text-left"
                 :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-gray-100'">
-                ⭐ Avaliações
+                Avaliações
               </button>
             </div>
           </aside>
@@ -167,7 +179,7 @@
                     <span v-for="m in metodosPagamento" :key="m.id"
                           class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
                           :class="isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-gray-100 text-zinc-600'">
-                      {{ metodoPagamentoIcon(m.tipo) }} {{ m.tipo }}
+                      {{ m.tipo }}
                     </span>
                   </div>
                 </div>
@@ -195,7 +207,7 @@
             </div>
 
             <!-- Sliders -->
-            <ProductSlider title="Em Destaque" icon="⭐"
+            <ProductSlider title="Em Destaque"
               :params="{ loja_id: lojaId, destaque: true }" :isDark="isDark"
               @product-click="selectedProduct = $event" />
 
@@ -207,7 +219,7 @@
                 <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
               </div>
               <div v-for="tipo in tiposExistentes" :key="'tipo-' + tipo.id" :id="'tipo-' + tipo.id">
-                <ProductSlider :title="tipo.nome" :icon="tipoIcon(tipo.nome)"
+                <ProductSlider :title="tipo.nome"
                   :params="{ loja_id: lojaId, tipo: tipo.nome }" :isDark="isDark"
                   @product-click="selectedProduct = $event" />
               </div>
@@ -221,7 +233,7 @@
                 <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
               </div>
               <div v-for="cat in categoriasExistentes" :key="'cat-' + cat.id" :id="'cat-' + cat.id">
-                <ProductSlider :title="cat.nome" :icon="cat.icone || '📂'"
+                <ProductSlider :title="cat.nome"
                   :params="{ loja_id: lojaId, categoria_id: cat.id }" :isDark="isDark"
                   @product-click="selectedProduct = $event" />
               </div>
@@ -316,7 +328,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useLojaData }   from '@/composables/useLojaData'
 import ProductInfoCard   from '@/components/product/productInfoCard.vue'
 import MultiCart         from '@/components/cart/multiCart.vue'
@@ -336,6 +348,7 @@ export default {
 
   setup (props, { emit }) {
     const isDark   = ref(props.tema?.darkMode !== false)
+    watch(() => props.tema?.darkMode, v => { isDark.value = v !== false })
     const lojaData = useLojaData()
     const cssVars  = computed(() => ({
       '--cor-primaria':   props.tema?.corPrimaria   || '#dc2626',
@@ -356,3 +369,26 @@ export default {
   }
 }
 </script>
+<style scoped>
+/* Mesma geometria do Restaurante Moderno: barra virtual de 68px / margem 28px
+   (mobile 60px / 14px). Os ícones da direita (assets/loja-acoes.css) e os
+   botões voltar + tema da esquerda ficam centrados na mesma linha. */
+.classico-root {
+  --acoes-altura: 68px;
+  --acoes-direita: 28px;
+}
+
+@media (max-width: 640px) {
+  .classico-root {
+    --acoes-altura: 60px;
+    --acoes-direita: 14px;
+  }
+}
+
+.classico-topo {
+  position: absolute;
+  top: calc((var(--acoes-altura) - 36px) / 2);
+}
+.classico-topo--voltar { left: var(--acoes-direita); }
+.classico-topo--tema   { left: calc(var(--acoes-direita) + 36px + 10px); }
+</style>

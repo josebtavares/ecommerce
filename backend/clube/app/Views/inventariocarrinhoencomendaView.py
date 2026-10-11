@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, F
 from django.shortcuts import get_object_or_404
 
 from rest_framework import status
@@ -14,7 +14,7 @@ from ..models import (
     Inventario, Produto,
     Carrinho, ItemCarrinho,
     Encomenda, ItemEncomenda,
-    Loja, UtilizadorLoja,
+    Loja, UtilizadorLoja, VarianteProduto,
 )
 from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
     InventarioSerializer,
@@ -25,6 +25,7 @@ from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
     AtualizarStatusEncomendaSerializer,
 )
 from ..utils.pagination import paginar
+from ..utils.variantes import resolver_variante, atualizar_total_inventario
 
 
 # ══════════════════════════════════════════════════════════════
@@ -67,15 +68,25 @@ def inventario_list_ou_criar(request, loja_id):
         return erro
  
     if request.method == 'GET':
-        qs = Inventario.objects.select_related('produto').filter(loja=loja)
- 
+        qs = (Inventario.objects
+              .select_related('produto__tipo')
+              .prefetch_related('produto__variantes')
+              .filter(loja=loja)
+              .order_by('produto__nome'))
+
         q = request.GET.get('q')
         if q:
             qs = qs.filter(
                 Q(produto__nome__icontains=q) | Q(produto__sku__icontains=q)
             )
         if request.GET.get('stock_baixo') == 'true':
-            qs = qs.filter(quantidade__lte=5)
+            # produto simples com total baixo, ou produto com variações com ALGUMA combinação em baixo
+            qs = qs.filter(
+                Q(produto__stock_por_variante=False, quantidade__lte=LIMITE_STOCK_BAIXO) |
+                Q(produto__stock_por_variante=True,
+                  produto__variantes__ativo=True,
+                  produto__variantes__quantidade__lte=LIMITE_STOCK_BAIXO)
+            ).distinct()
  
         response, erro = paginar(request, qs, InventarioSerializer)
         if erro:
@@ -84,7 +95,12 @@ def inventario_list_ou_criar(request, loja_id):
  
     # POST — cria ou actualiza
     produto = get_object_or_404(Produto, id=request.data.get('produto_id'), loja=loja)
- 
+    if produto.stock_por_variante and 'quantidade' in request.data:
+        return Response(
+            {'detail': 'Este produto usa stock por variação — ajusta a quantidade de cada variação.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     inventario, criado = Inventario.objects.get_or_create(
         loja=loja, produto=produto,
         defaults={'quantidade': 0, 'preco_custo': 0, 'preco_venda': produto.preco}
@@ -120,6 +136,41 @@ def carrinho_get(request, loja_id):
 
     serializer = CarrinhoSerializer(carrinho, context={'request': request})
     return Response(serializer.data)
+
+def _stock_disponivel(produto, variante=None):
+    """Stock da variante (se houver) ou do inventário do produto; None = sem controlo de stock."""
+    if variante is not None:
+        return variante.quantidade
+    try:
+        return produto.inventario.quantidade
+    except Inventario.DoesNotExist:
+        return None
+
+
+LIMITE_STOCK_BAIXO = 5
+
+
+def _alerta_stock_baixo(loja, produto, antes, depois, variante=None):
+    """Notifica dono/gestor só quando o stock CRUZA o limite (evita spam a cada venda)."""
+    if not (antes > LIMITE_STOCK_BAIXO >= depois):
+        return
+    nome = produto.nome + (f' — {variante.descricao()}' if variante else '')
+    notificar_staff(
+        loja=loja,
+        roles=['dono', 'gestor'],
+        tipo='stock_baixo',
+        titulo=f'⚠️ Stock baixo: {nome}',
+        mensagem='Esgotado.' if depois <= 0 else f'Apenas {depois} unidades restantes.',
+        link=f'/loja/{loja.id}/backoffice',
+    )
+
+
+def _msg_stock(produto, variante, disponivel):
+    nome = produto.nome + (f' ({variante.descricao()})' if variante else '')
+    if disponivel <= 0:
+        return f'"{nome}" está esgotado.'
+    return f'Stock insuficiente de "{nome}". Disponível: {disponivel}.'
+
 
 def _atributos_iguais(a: dict, b: dict) -> bool:
     """
@@ -167,42 +218,38 @@ def carrinho_adicionar(request, loja_id):
     if not isinstance(atributos, dict):
         atributos = {}
  
+    if quantidade < 1:
+        return Response({'detail': 'A quantidade mínima é 1.'}, status=status.HTTP_400_BAD_REQUEST)
+
     carrinho, _ = Carrinho.objects.get_or_create(
         utilizador=utilizador, loja=loja
     )
- 
-    # validar stock
-    try:
-        stock = produto.inventario.quantidade
-        if quantidade > stock:
-            return Response(
-                {'detail': f'Stock insuficiente. Disponível: {stock}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    except Inventario.DoesNotExist:
-        pass
- 
+
+    # produto com stock por variação → a combinação escolhida tem de existir
+    variante, erro_variante = resolver_variante(produto, atributos)
+    if erro_variante:
+        return Response({'detail': erro_variante}, status=status.HTTP_400_BAD_REQUEST)
+
     # procurar item com o mesmo produto E os mesmos atributos
     item_existente = None
     for item in ItemCarrinho.objects.filter(carrinho=carrinho, produto=produto):
         if _atributos_iguais(item.atributos or {}, atributos):
             item_existente = item
             break
- 
+
+    nova_qty = quantidade + (item_existente.quantidade if item_existente else 0)
+    disponivel = _stock_disponivel(produto, variante)
+    if disponivel is not None and nova_qty > disponivel:
+        return Response(
+            {'detail': _msg_stock(produto, variante, disponivel)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     if item_existente:
         # mesmos atributos → incrementar quantidade
-        nova_qty = item_existente.quantidade + quantidade
-        # re-validar stock com nova quantidade total
-        try:
-            if nova_qty > produto.inventario.quantidade:
-                return Response(
-                    {'detail': f'Stock insuficiente. Disponível: {produto.inventario.quantidade}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        except Inventario.DoesNotExist:
-            pass
         item_existente.quantidade = nova_qty
-        item_existente.save(update_fields=['quantidade'])
+        item_existente.variante   = variante
+        item_existente.save(update_fields=['quantidade', 'variante'])
     else:
         # atributos diferentes → criar item separado
         ItemCarrinho.objects.create(
@@ -210,6 +257,7 @@ def carrinho_adicionar(request, loja_id):
             produto=produto,
             quantidade=quantidade,
             atributos=atributos,
+            variante=variante,
         )
  
     return Response(
@@ -241,18 +289,23 @@ def carrinho_atualizar_item(request, loja_id, item_id):
         item.delete()
         return Response({'detail': 'Item removido do carrinho.'})
 
-    # valida stock
-    try:
-        stock = item.produto.inventario.quantidade
-        if quantidade > stock:
-            return Response(
-                {'detail': f'Stock insuficiente. Disponível: {stock}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    except Inventario.DoesNotExist:
-        pass
+    # valida stock (da variante, se o produto usar stock por variação)
+    variante = item.variante
+    if item.produto.stock_por_variante and not (variante and variante.ativo):
+        variante, erro_variante = resolver_variante(item.produto, item.atributos)
+        if erro_variante:
+            return Response({'detail': erro_variante}, status=status.HTTP_400_BAD_REQUEST)
+    # só valida ao AUMENTAR — reduzir tem de ser sempre possível, mesmo que o
+    # stock tenha descido abaixo do que já está no carrinho
+    disponivel = _stock_disponivel(item.produto, variante)
+    if disponivel is not None and quantidade > item.quantidade and quantidade > disponivel:
+        return Response(
+            {'detail': _msg_stock(item.produto, variante, disponivel)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     item.quantidade = quantidade
+    item.variante   = variante
     item.save()
 
     return Response(
@@ -289,8 +342,8 @@ def encomenda_criar(request, loja_id):
     # busca o carrinho activo
     carrinho = get_object_or_404(Carrinho, utilizador=utilizador, loja=loja)
 
-    itens = carrinho.itens.select_related('produto__inventario').all()
-    if not itens.exists():
+    itens = list(carrinho.itens.select_related('produto', 'variante').all())
+    if not itens:
         return Response(
             {'detail': 'O carrinho está vazio.'},
             status=status.HTTP_400_BAD_REQUEST
@@ -304,24 +357,50 @@ def encomenda_criar(request, loja_id):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # calcula o total — produtos + custo de entrega
-    valor_produtos = sum(
-        item.produto.preco * item.quantidade for item in itens
-    )
- 
+    # ── 1) Bloqueia e valida o stock de TODOS os itens antes de escrever ──
+    # select_for_update impede que duas compras simultâneas vendam a mesma unidade.
+    linhas = []                       # (item, variante|None, inventario|None)
+    pedido_por_stock = {}             # ('v'|'i', id) → quantidade pedida no total
+    for item in itens:
+        produto  = item.produto
+        variante = None
+        inv      = None
+        if produto.stock_por_variante:
+            variante, erro_variante = resolver_variante(produto, item.atributos, lock=True)
+            if erro_variante:
+                return Response({'detail': erro_variante}, status=status.HTTP_400_BAD_REQUEST)
+            chave = ('v', variante.id)
+        else:
+            inv = Inventario.objects.select_for_update().filter(produto=produto).first()
+            chave = ('i', inv.id) if inv else None
+        if chave:
+            pedido_por_stock[chave] = pedido_por_stock.get(chave, 0) + item.quantidade
+            disponivel = variante.quantidade if variante else inv.quantidade
+            if pedido_por_stock[chave] > disponivel:
+                return Response(
+                    {'detail': _msg_stock(produto, variante, disponivel)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        linhas.append((item, variante, inv))
+
+    # calcula o total — produtos (preço da variante, se tiver) + custo de entrega
+    def _preco(item, variante):
+        return variante.preco if variante and variante.preco is not None else item.produto.preco
+
+    valor_produtos = sum(_preco(item, v) * item.quantidade for item, v, _ in linhas)
+
     # adiciona custo da opcao de entrega se existir
     custo_entrega = 0
+    opcao = None
     opcao_entrega_id = serializer.validated_data.get('opcao_entrega_id')
     if opcao_entrega_id:
         from ..models import OpcaoEntrega
-        try:
-            opcao = OpcaoEntrega.objects.get(id=opcao_entrega_id, loja=loja, ativa=True)
+        opcao = OpcaoEntrega.objects.filter(id=opcao_entrega_id, loja=loja, ativa=True).first()
+        if opcao:
             custo_entrega = opcao.preco
-        except OpcaoEntrega.DoesNotExist:
-            pass
- 
+
     valor_total = valor_produtos + custo_entrega
- 
+
     encomenda = Encomenda.objects.create(
         comprador      = utilizador,
         loja           = loja,
@@ -330,26 +409,35 @@ def encomenda_criar(request, loja_id):
         morada_entrega = serializer.validated_data.get('morada_entrega', ''),
         notas          = serializer.validated_data.get('notas', ''),
         status         = 'pendente',
-        opcao_entrega  = opcao if opcao_entrega_id else None,  # ← guarda a FK
+        opcao_entrega  = opcao,
     )
 
-    # cria os itens da encomenda e desconta o stock
-    for item in itens:
+    # ── 2) Cria os itens e desconta o stock (variante ou inventário) ──
+    produtos_variante = set()
+    for item, variante, inv in linhas:
         ItemEncomenda.objects.create(
             encomenda  = encomenda,
             produto    = item.produto,
             quantidade = item.quantidade,
-            preco      = item.produto.preco,
+            preco      = _preco(item, variante),
             atributos  = item.atributos,   # ← copia os atributos
+            variante   = variante,
         )
-        # desconta stock se existir inventário
-        try:
-            inv = item.produto.inventario
+        if variante:
+            antes = variante.quantidade
+            variante.quantidade -= item.quantidade
+            variante.save(update_fields=['quantidade', 'data_atualizacao'])
+            produtos_variante.add(item.produto)
+            _alerta_stock_baixo(loja, item.produto, antes, variante.quantidade, variante)
+        elif inv:
+            antes = inv.quantidade
             inv.quantidade -= item.quantidade
             inv.save(update_fields=['quantidade', 'data_atualizacao'])
-        except Inventario.DoesNotExist:
-            pass
-        
+            _alerta_stock_baixo(loja, item.produto, antes, inv.quantidade)
+
+    for produto in produtos_variante:
+        atualizar_total_inventario(produto)
+
     notificar_staff(
         loja=loja,
         roles=['dono', 'gestor', 'staff'],
@@ -435,6 +523,7 @@ def encomenda_list_loja(request, loja_id):
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def encomenda_atualizar_status(request, loja_id, id):
     """
     PATCH /app/loja/<loja_id>/encomendas/<id>/status/
@@ -457,15 +546,23 @@ def encomenda_atualizar_status(request, loja_id, id):
     novo_status = serializer.validated_data.get('status')
     serializer.save()
  
-    # cancelado → repõe stock de todos os itens
+    # cancelado → repõe stock de todos os itens (na variante, se a compra foi de uma)
     if novo_status == 'cancelado':
-        for item in encomenda.itens.select_related('produto__inventario').all():
-            try:
-                inv = item.produto.inventario
-                inv.quantidade += item.quantidade
-                inv.save(update_fields=['quantidade', 'data_atualizacao'])
-            except Exception:
-                pass
+        produtos_variante = set()
+        for item in encomenda.itens.select_related('produto', 'variante').all():
+            if not item.produto:
+                continue
+            if item.variante_id:
+                VarianteProduto.objects.filter(id=item.variante_id).update(
+                    quantidade=F('quantidade') + item.quantidade
+                )
+                produtos_variante.add(item.produto)
+            else:
+                Inventario.objects.filter(produto=item.produto).update(
+                    quantidade=F('quantidade') + item.quantidade
+                )
+        for produto in produtos_variante:
+            atualizar_total_inventario(produto)
  
     # concluido + dinheiro → aprova pagamento e regista comissao
     if novo_status == 'concluido':
@@ -569,6 +666,11 @@ def inventario_ajustar_stock(request, loja_id, produto_id):
         return erro
 
     inventario = get_object_or_404(Inventario, loja=loja, produto_id=produto_id)
+    if inventario.produto.stock_por_variante:
+        return Response(
+            {'detail': 'Este produto usa stock por variação — ajusta a quantidade de cada variação.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
         ajuste = int(request.data.get('ajuste', 0))

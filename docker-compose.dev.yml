@@ -52,6 +52,25 @@ services:
       redis:
         condition: service_healthy
 
+  # Worker — otimiza vídeos em segundo plano (app/utils/video.py)
+  # Mesma imagem do backend; não corre migrações (o backend trata disso) e espera por elas.
+  worker:
+    build:
+      context: ./backend/clube
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    entrypoint: ["python", "manage.py", "processar_videos"]
+    volumes:
+      - ./backend/clube:/app
+      - ./backend/clube/media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
   # Frontend Vue
   frontend:
     image: node:20-alpine
@@ -64,6 +83,9 @@ services:
       - "8080:8080"
     environment:
       - VUE_APP_API_URL=http://localhost:8000
+      # bind mount do Windows não propaga eventos de ficheiros → o webpack verifica por polling
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
     command: sh -c "npm install && npm run serve -- --host 0.0.0.0"
     depends_on:
       - backend

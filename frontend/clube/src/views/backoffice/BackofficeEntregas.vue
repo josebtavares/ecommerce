@@ -7,7 +7,7 @@
         @click="activeTab = tab.key"
         :class="['px-4 py-2 rounded-lg text-sm font-semibold transition',
                  activeTab === tab.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
-        {{ tab.label }}
+        <font-awesome-icon :icon="['fas', tab.icon]" class="mr-1.5" />{{ tab.label }}
       </button>
     </div>
 
@@ -64,7 +64,7 @@
             </div>
             <div class="text-right flex-shrink-0">
               <p v-if="entrega.condutor_nome" class="text-xs font-semibold text-zinc-200">
-                🚗 {{ entrega.condutor_nome }}
+                <font-awesome-icon :icon="['fas', 'car']" class="mr-1 text-zinc-500" />{{ entrega.condutor_nome }}
               </p>
               <p v-if="entrega.condutor_veiculo" class="text-[10px] text-zinc-500">{{ entrega.condutor_veiculo }}</p>
               <p v-if="!entrega.condutor_nome" class="text-xs text-zinc-600 italic">Sem condutor</p>
@@ -94,7 +94,10 @@
             </div>
             <div v-if="entrega.tipo_entrega" class="flex gap-2">
               <span class="text-zinc-500 flex-shrink-0">Tipo:</span>
-              <span class="text-zinc-300">{{ entrega.tipo_entrega === 'entrega' ? '🚚 Domicílio' : '🏪 Levantamento' }}</span>
+              <span class="text-zinc-300">
+                <font-awesome-icon :icon="['fas', entrega.tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mr-1 text-zinc-500" />
+                {{ entrega.tipo_entrega === 'entrega' ? 'Domicílio' : 'Levantamento' }}
+              </span>
             </div>
             <div v-if="entrega.opcao_entrega_nome" class="flex gap-2 col-span-2">
               <span class="text-zinc-500 flex-shrink-0">Opção:</span>
@@ -107,16 +110,16 @@
             <div v-if="entrega.metodo_pagamento" class="flex gap-2">
               <span class="text-zinc-500">Pagamento:</span>
               <span class="text-zinc-300 capitalize">
-                {{ entrega.metodo_pagamento === 'dinheiro' ? '💵' : entrega.metodo_pagamento === 'mbway' ? '📱' : '💳' }}
+                <font-awesome-icon :icon="['fas', iconePagamento(entrega.metodo_pagamento)]" class="mr-1 text-zinc-500" />
                 {{ entrega.metodo_pagamento }}
               </span>
             </div>
             <div v-if="entrega.notas" class="col-span-2 flex gap-2">
-              <span class="text-zinc-500 flex-shrink-0">📝 Notas:</span>
+              <span class="text-zinc-500 flex-shrink-0"><font-awesome-icon :icon="['fas', 'note-sticky']" class="mr-1" />Notas:</span>
               <span class="text-zinc-300 italic">{{ entrega.notas }}</span>
             </div>
             <div v-if="entrega.data_entrega" class="col-span-2 text-green-400">
-              ✓ Entregue em {{ entrega.data_entrega }}
+              <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-1" />Entregue em {{ entrega.data_entrega }}
             </div>
           </div>
 
@@ -127,33 +130,33 @@
               <button v-if="entrega.status === 'atribuido'"
                 @click="atualizarEntrega(entrega, 'a_caminho')" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 text-xs font-semibold transition">
-                🚗 A caminho
+                <font-awesome-icon :icon="['fas', 'car']" class="mr-1" />A caminho
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
                 @click="atualizarEntrega(entrega, 'entregue')" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-semibold transition">
-                ✓ Marcar entregue
+                <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Marcar entregue
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
                 @click="confirmarFalha(entrega)" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold transition">
-                ✗ Não consegui entregar
+                <font-awesome-icon :icon="['fas', 'xmark']" class="mr-1" />Não consegui entregar
               </button>
             </template>
             <template v-else>
               <button @click="abrirReatribuir(entrega)"
                 class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition">
-                {{ entrega.condutor_nome ? '↺ Reatribuir' : '+ Atribuir condutor' }}
+                <font-awesome-icon :icon="['fas', entrega.condutor_nome ? 'rotate-left' : 'plus']" class="mr-1" />{{ entrega.condutor_nome ? 'Reatribuir' : 'Atribuir condutor' }}
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
                 @click="atualizarEntrega(entrega, 'entregue')" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-semibold transition">
-                ✓ Concluir entrega
+                <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Concluir entrega
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
                 @click="confirmarFalha(entrega)" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold transition">
-                ✗ Cancelar entrega
+                <font-awesome-icon :icon="['fas', 'xmark']" class="mr-1" />Cancelar entrega
               </button>
             </template>
             <svg v-if="loadingAcao === entrega.id" class="animate-spin h-4 w-4 text-zinc-500 ml-auto" viewBox="0 0 24 24" fill="none">
@@ -211,9 +214,9 @@
             <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo não especificado' }}</p>
             <div class="flex gap-3 mt-1">
               <a v-if="c.utilizador_email" :href="`mailto:${c.utilizador_email}`"
-                 class="text-xs text-red-400 hover:text-red-300 transition">✉️ {{ c.utilizador_email }}</a>
+                 class="text-xs text-red-400 hover:text-red-300 transition"><font-awesome-icon :icon="['fas', 'envelope']" class="mr-1" />{{ c.utilizador_email }}</a>
               <a v-if="c.utilizador_telefone" :href="`tel:${c.utilizador_telefone}`"
-                 class="text-xs text-red-400 hover:text-red-300 transition">📞 {{ c.utilizador_telefone }}</a>
+                 class="text-xs text-red-400 hover:text-red-300 transition"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1" />{{ c.utilizador_telefone }}</a>
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -249,18 +252,18 @@
         <div v-if="modalReatribuir.comprador_nome || modalReatribuir.comprador_email || modalReatribuir.comprador_telefone"
              class="bg-zinc-800/50 rounded-xl p-3 space-y-1 text-xs">
           <p class="text-zinc-500 font-semibold mb-1">Cliente</p>
-          <p v-if="modalReatribuir.comprador_nome" class="text-zinc-300 font-semibold">👤 {{ modalReatribuir.comprador_nome }}</p>
+          <p v-if="modalReatribuir.comprador_nome" class="text-zinc-300 font-semibold"><font-awesome-icon :icon="['fas', 'user']" class="mr-1 text-zinc-500" fixed-width />{{ modalReatribuir.comprador_nome }}</p>
           <a v-if="modalReatribuir.comprador_email" :href="`mailto:${modalReatribuir.comprador_email}`"
-             class="text-red-400 hover:text-red-300 flex items-center gap-1">✉️ {{ modalReatribuir.comprador_email }}</a>
+             class="text-red-400 hover:text-red-300 flex items-center gap-1"><font-awesome-icon :icon="['fas', 'envelope']" fixed-width />{{ modalReatribuir.comprador_email }}</a>
           <a v-if="modalReatribuir.comprador_telefone" :href="`tel:${modalReatribuir.comprador_telefone}`"
-             class="text-red-400 hover:text-red-300 flex items-center gap-1">📞 {{ modalReatribuir.comprador_telefone }}</a>
-          <p v-if="modalReatribuir.morada_entrega" class="text-zinc-400 mt-1">📍 {{ modalReatribuir.morada_entrega }}</p>
+             class="text-red-400 hover:text-red-300 flex items-center gap-1"><font-awesome-icon :icon="['fas', 'phone']" fixed-width />{{ modalReatribuir.comprador_telefone }}</a>
+          <p v-if="modalReatribuir.morada_entrega" class="text-zinc-400 mt-1"><font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1" fixed-width />{{ modalReatribuir.morada_entrega }}</p>
         </div>
 
         <div v-if="modalReatribuir.condutor_nome"
              class="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3 text-xs">
           <span class="text-zinc-500">Actual:</span>
-          <span class="text-zinc-300 font-semibold">🚗 {{ modalReatribuir.condutor_nome }}</span>
+          <span class="text-zinc-300 font-semibold"><font-awesome-icon :icon="['fas', 'car']" class="mr-1 text-zinc-500" />{{ modalReatribuir.condutor_nome }}</span>
           <span class="text-zinc-500 ml-auto">→ será substituído</span>
         </div>
 
@@ -280,7 +283,7 @@
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-zinc-200">{{ c.utilizador_nome || c.utilizador_username }}</p>
               <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo n/d' }}</p>
-              <p v-if="c.utilizador_telefone" class="text-xs text-zinc-600">📞 {{ c.utilizador_telefone }}</p>
+              <p v-if="c.utilizador_telefone" class="text-xs text-zinc-600"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1" />{{ c.utilizador_telefone }}</p>
             </div>
             <span v-if="c.id === modalReatribuir.condutor_id_field" class="text-[10px] text-zinc-500">actual</span>
             <div v-else-if="novoCondutorId === c.id" class="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
@@ -342,6 +345,7 @@
 
 <script>
 import api from '@/services/api'
+import { iconePagamento } from '@/utils/icones'
 
 export default {
   name: 'BackofficeEntregas',
@@ -354,8 +358,8 @@ export default {
     return {
       activeTab: 'entregas',
       tabs: [
-        { key: 'entregas',   label: '📦 Entregas'  },
-        { key: 'condutores', label: '🚗 Condutores' },
+        { key: 'entregas',   label: 'Entregas',   icon: 'box' },
+        { key: 'condutores', label: 'Condutores', icon: 'car' },
       ],
       entregas:      [],
       totalCount:    0,
@@ -395,6 +399,7 @@ export default {
   },
 
   methods: {
+    iconePagamento,
     labelStatus (s) {
       const map = { atribuido: 'Atribuído', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou' }
       return map[s] || s

@@ -47,6 +47,9 @@ class Utilizador(models.Model):
             'gerir_encomendas',
             'gerir_pagamentos',
             'gerir_tipos_globais',
+            'gerir_conteudo',
+            'ver_pos',
+            'gerir_pos',
         ],
         'moderador': [
             'ver_stats',
@@ -58,11 +61,15 @@ class Utilizador(models.Model):
             'gerir_utilizadores',
             'gerir_lojas',
             'gerir_encomendas',
+            'gerir_conteudo',
+            'ver_pos',
+            'gerir_pos',
         ],
         'contabilista': [
             'ver_stats',
             'gerir_pagamentos',
             'gerir_encomendas',
+            'ver_pos',
         ],
     }
  
@@ -126,6 +133,9 @@ class Galeria(models.Model):
                     )],
                     blank=True, null=True
                   )
+    # vídeo otimizado em segundo plano (app/utils/video.py)
+    ficheiro_poster = models.ImageField(upload_to='posters/%Y/%m/', blank=True, null=True)
+    ficheiro_estado = models.CharField(max_length=12, blank=True, default='')
     utilizador  = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='galeria')
     data        = models.DateTimeField(default=now)
     status      = models.CharField(max_length=20, default='ativo')
@@ -180,11 +190,29 @@ class Loja(models.Model):
         validators=[FileExtensionValidator(
             ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov']
         )]
-    )   
+    )
+    # vídeo otimizado em segundo plano (app/utils/video.py)
+    banner_poster   = models.ImageField(upload_to='posters/%Y/%m/', blank=True, null=True)
+    banner_estado   = models.CharField(max_length=12, blank=True, default='')
     layout_produtos = models.CharField(max_length=10, default='grid',
                                        choices=[('grid', 'Grelha'), ('list', 'Lista')])
 
-    ativa           = models.BooleanField(default=True)
+    # Estado da loja — fonte de verdade. `ativa` é derivado (= estado 'ativa') e mantido
+    # em sincronia em save(): todos os filtros existentes (ativa=True) continuam válidos.
+    #   pendente  → criada, à espera de aprovação da plataforma
+    #   ativa     → visível no site, recebe encomendas
+    #   fechada   → fechada pelo dono (pode reabrir); encomendas em curso continuam
+    #   suspensa  → suspensa pela plataforma (só o admin reactiva)
+    ESTADOS = [
+        ('pendente', 'Pendente de aprovação'),
+        ('ativa',    'Ativa'),
+        ('fechada',  'Fechada pelo dono'),
+        ('suspensa', 'Suspensa pela plataforma'),
+    ]
+    estado          = models.CharField(max_length=10, choices=ESTADOS, default='pendente', db_index=True)
+    estado_motivo   = models.CharField(max_length=300, blank=True, default='')
+    estado_alterado_em = models.DateTimeField(null=True, blank=True)
+    ativa           = models.BooleanField(default=False)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
     
@@ -220,6 +248,25 @@ class Loja(models.Model):
 
     def __str__(self):
         return self.nome
+
+    def save(self, *args, **kwargs):
+        # `ativa` acompanha sempre o estado
+        self.ativa = self.estado == 'ativa'
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and 'estado' in update_fields and 'ativa' not in update_fields:
+            kwargs['update_fields'] = [*update_fields, 'ativa']
+        super().save(*args, **kwargs)
+
+    def mudar_estado(self, novo, motivo=''):
+        """Muda o estado (valida-o) e grava. Devolve o estado anterior."""
+        if novo not in dict(self.ESTADOS):
+            raise ValueError(f'Estado inválido: {novo}')
+        anterior = self.estado
+        self.estado             = novo
+        self.estado_motivo      = motivo or ''
+        self.estado_alterado_em = now()
+        self.save(update_fields=['estado', 'estado_motivo', 'estado_alterado_em', 'ativa'])
+        return anterior
 
 
 # ══════════════════════════════════════════════════════════════
@@ -348,6 +395,13 @@ class TipoProduto(models.Model):
                          related_name='tipos_produto',
                          null=True, blank=True,
                        )
+    # tipo próprio de um POS (para os produtos próprios do POS). loja=None e pos=None → global.
+    pos              = models.ForeignKey(
+                         'pos.ConfiguracaoPOS',
+                         on_delete=models.CASCADE,
+                         related_name='tipos_produto',
+                         null=True, blank=True,
+                       )
     nome             = models.CharField(max_length=100)   # removido unique=True
     descricao        = models.CharField(max_length=255, blank=True, default='')
     atributos_schema = models.JSONField(default=list)
@@ -360,8 +414,14 @@ class TipoProduto(models.Model):
     def __str__(self):
         if self.loja:
             return f'{self.nome} ({self.loja.nome})'
+        if self.pos_id:
+            return f'{self.nome} [POS {self.pos_id}]'
         return f'{self.nome} [global]'
- 
+
+    @property
+    def is_global(self):
+        return self.loja_id is None and self.pos_id is None
+
     def validar_atributos(self, atributos: dict) -> list:
         """
         Verifica atributos obrigatórios em falta.
@@ -405,6 +465,9 @@ class Produto(models.Model):
                     )],
                     blank=True, null=True
                   )
+    # vídeo otimizado em segundo plano (app/utils/video.py)
+    ficheiro_poster = models.ImageField(upload_to='posters/%Y/%m/', blank=True, null=True)
+    ficheiro_estado = models.CharField(max_length=12, blank=True, default='')
     # Atributos dinâmicos de acordo com o TipoProduto
     # Exemplos:
     #   calcado:  {"tamanho": "42", "cor": "preto", "material": "couro"}
@@ -421,6 +484,10 @@ class Produto(models.Model):
         default=True,
         verbose_name='Disponível no POS'
     )
+
+    # True quando o dono configurou stock por variação (grelha de VarianteProduto).
+    # Enquanto False, o produto usa o stock total do Inventario (comportamento antigo).
+    stock_por_variante = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -481,6 +548,41 @@ class Inventario(models.Model):
         return f'Inventário: {self.produto.nome} — {self.quantidade} un.'
 
 
+class VarianteProduto(models.Model):
+    """
+    Uma combinação concreta das opções-variante de um produto, com stock próprio.
+      combinacao: {"cor": "preto", "tamanho": "M"}  (só atributos com "variante": true no tipo)
+      chave:      "cor=preto|tamanho=M"              (ordenada, única por produto)
+    Combinações que deixam de existir são desactivadas (nunca apagadas) para manter
+    o histórico das encomendas. Com produto.stock_por_variante, o Inventario do
+    produto guarda a soma das variantes activas.
+    """
+    produto    = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='variantes')
+    combinacao = models.JSONField(default=dict)
+    chave      = models.CharField(max_length=500)
+    quantidade = models.PositiveIntegerField(default=0)
+    preco      = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                     validators=[MinValueValidator(0)],
+                                     help_text='Vazio → usa o preço do produto')
+    sku        = models.CharField(max_length=100, blank=True, default='')
+    ativo      = models.BooleanField(default=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('produto', 'chave')]
+        ordering = ['chave']
+
+    @property
+    def preco_efetivo(self):
+        return self.preco if self.preco is not None else self.produto.preco
+
+    def descricao(self):
+        return ' · '.join(str(v) for v in self.combinacao.values())
+
+    def __str__(self):
+        return f'{self.produto.nome} [{self.descricao()}] — {self.quantidade} un.'
+
+
 # ══════════════════════════════════════════════════════════════
 # CARRINHO
 # ══════════════════════════════════════════════════════════════
@@ -503,8 +605,14 @@ class ItemCarrinho(models.Model):
     produto     = models.ForeignKey(Produto, on_delete=models.CASCADE)
     quantidade  = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
     atributos   = models.JSONField(default=dict, blank=True)
+    variante    = models.ForeignKey('VarianteProduto', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='+')
 
-    
+    @property
+    def preco_unitario(self):
+        if self.variante_id and self.variante.preco is not None:
+            return self.variante.preco
+        return self.produto.preco
 
     def __str__(self):
         return f'{self.quantidade}x {self.produto.nome}'
@@ -528,8 +636,9 @@ class Encomenda(models.Model):
         ('cancelado',   'Cancelado'),
     ]
 
-    comprador       = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='encomendas')
-    loja            = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='encomendas')
+    # PROTECT: encomendas são registos financeiros — apagar o comprador ou a loja nunca as apaga
+    comprador       = models.ForeignKey(Utilizador, on_delete=models.PROTECT, related_name='encomendas')
+    loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='encomendas')
     valor_total     = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     tipo_entrega    = models.CharField(max_length=15, choices=TIPO_ENTREGA, default='levantamento')
     status          = models.CharField(max_length=15, choices=STATUS, default='pendente')
@@ -557,6 +666,8 @@ class ItemEncomenda(models.Model):
     quantidade  = models.PositiveIntegerField(default=1)
     preco       = models.DecimalField(max_digits=10, decimal_places=2)  # snapshot do preço
     atributos   = models.JSONField(default=dict, blank=True)  # ← novo
+    variante    = models.ForeignKey('VarianteProduto', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='itens_encomenda')
 
 
     def __str__(self):
@@ -647,7 +758,7 @@ class Pagamento(models.Model):
         ('reembolsado','Reembolsado'),
     ]
 
-    encomenda           = models.OneToOneField(Encomenda, on_delete=models.CASCADE, related_name='pagamento')
+    encomenda           = models.OneToOneField(Encomenda, on_delete=models.PROTECT, related_name='pagamento')   # registo financeiro
     metodo              = models.ForeignKey(MetodoPagamento, on_delete=models.SET_NULL,
                                             null=True, blank=True)
     valor               = models.DecimalField(max_digits=10, decimal_places=2)
@@ -786,12 +897,13 @@ class Comissao(models.Model):
         ('liquidada',  'Liquidada'),   # paga ao administrador
     ]
  
+    # PROTECT: comissões são registos financeiros
     encomenda        = models.OneToOneField(
-                           Encomenda, on_delete=models.CASCADE,
+                           Encomenda, on_delete=models.PROTECT,
                            related_name='comissao'
                        )
     loja             = models.ForeignKey(
-                           Loja, on_delete=models.CASCADE,
+                           Loja, on_delete=models.PROTECT,
                            related_name='comissoes'
                        )
     valor_encomenda  = models.DecimalField(max_digits=10, decimal_places=2)
@@ -909,6 +1021,9 @@ class Notificacao(models.Model):
         # Dono/gestor da loja
         ('loja_aprovada',            'Loja aprovada'),
         ('loja_rejeitada',           'Loja rejeitada'),
+        ('loja_suspensa',            'Loja suspensa'),
+        ('loja_reativada',           'Loja reactivada'),
+        ('loja_fechada',             'Loja fechada pelo dono'),
         ('nova_encomenda',           'Nova encomenda'),
         ('pagamento_aprovado',       'Pagamento aprovado'),
         ('encomenda_concluida_loja', 'Encomenda concluída na loja'),
@@ -1079,3 +1194,105 @@ class PodeVerRelatorios(PermissaoLoja):
 
 class PodeGerirTemplate(PermissaoLoja):
     permissao_necessaria = 'gerir_template'
+
+# ══════════════════════════════════════════════════════════════
+# PÁGINAS INSTITUCIONAIS DA PLATAFORMA (rodapé da home)
+# ══════════════════════════════════════════════════════════════
+
+class PaginaInstitucional(models.Model):
+    """
+    Conteúdo editável no painel de admin e mostrado num popup na home.
+      conteudo → texto livre (parágrafos, "## Título", "- item")
+      dados    → campos estruturados conforme o tipo de página:
+                   faq:      {"perguntas": [{"pergunta": "...", "resposta": "..."}]}
+                   contacto: {"email", "telefone", "whatsapp", "morada", "horario"}
+    """
+    SLUGS = [
+        ('ajuda',       'Ajuda'),
+        ('contacto',    'Contacto'),
+        ('faq',         'FAQ'),
+        ('termos',      'Termos de Serviço'),
+        ('privacidade', 'Privacidade'),
+    ]
+    SECCOES = [
+        ('suporte', 'Suporte'),
+        ('legal',   'Legal'),
+    ]
+
+    slug             = models.SlugField(max_length=30, unique=True, choices=SLUGS)
+    seccao           = models.CharField(max_length=10, choices=SECCOES, default='suporte')
+    titulo           = models.CharField(max_length=120)
+    conteudo         = models.TextField(blank=True, default='')
+    dados            = models.JSONField(default=dict, blank=True)
+    ativo            = models.BooleanField(default=True)
+    ordem            = models.PositiveSmallIntegerField(default=0)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+    atualizado_por   = models.ForeignKey(
+        Utilizador, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+
+    class Meta:
+        ordering = ['seccao', 'ordem']
+
+    def __str__(self):
+        return self.titulo
+
+
+# ══════════════════════════════════════════════════════════════
+# CONVERSÃO DE VÍDEO (fila em segundo plano — app/utils/video.py)
+# ══════════════════════════════════════════════════════════════
+
+class ConversaoVideo(models.Model):
+    """
+    Uma tarefa de otimização de vídeo. A tabela é a própria fila: o worker
+    (manage.py processar_videos) apanha as pendentes com select_for_update(skip_locked),
+    por isso sobrevive a reinícios e funciona igual em dev e prod.
+    """
+    ESTADOS = [
+        ('pendente',    'Pendente'),
+        ('a_processar', 'A processar'),
+        ('pronto',      'Pronto'),
+        ('erro',        'Erro'),
+        ('substituido', 'Substituído'),   # o ficheiro mudou antes de acabar
+    ]
+
+    modelo        = models.CharField(max_length=20)          # 'loja' | 'produto' | 'galeria'
+    objeto_id     = models.PositiveBigIntegerField()
+    campo         = models.CharField(max_length=30)          # 'banner' | 'ficheiro'
+    ficheiro      = models.CharField(max_length=255)         # nome no storage quando foi agendado
+    estado        = models.CharField(max_length=12, choices=ESTADOS, default='pendente', db_index=True)
+    tentativas    = models.PositiveSmallIntegerField(default=0)
+    erro          = models.TextField(blank=True, default='')
+    bytes_origem  = models.PositiveBigIntegerField(null=True, blank=True)
+    bytes_final   = models.PositiveBigIntegerField(null=True, blank=True)
+    duracao_s     = models.FloatField(null=True, blank=True)  # tempo que a conversão demorou
+    criado_em     = models.DateTimeField(auto_now_add=True)
+    iniciado_em   = models.DateTimeField(null=True, blank=True)
+    terminado_em  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['criado_em']
+        indexes  = [models.Index(fields=['modelo', 'objeto_id', 'campo'])]
+
+    def __str__(self):
+        return f'{self.modelo}#{self.objeto_id}.{self.campo} ({self.estado})'
+
+
+class FicheiroParaApagar(models.Model):
+    """
+    Fila de limpeza do storage (app/utils/limpeza.py). Quando um ficheiro é substituído ou o
+    registo dono é apagado, o nome entra aqui e o worker (processar_videos) apaga-o em segundo
+    plano — o pedido do utilizador responde logo, mesmo que sejam centenas de ficheiros no R2.
+    Antes de apagar, o worker confirma que nenhum registo voltou a usar o ficheiro.
+    """
+    nome          = models.CharField(max_length=500, db_index=True)   # nome no storage por defeito
+    origem        = models.CharField(max_length=60, blank=True, default='')  # ex.: 'substituido:loja.banner'
+    tentativas    = models.PositiveSmallIntegerField(default=0)
+    erro          = models.TextField(blank=True, default='')
+    criado_em     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['criado_em']
+
+    def __str__(self):
+        return self.nome

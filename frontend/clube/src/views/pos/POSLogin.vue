@@ -354,9 +354,13 @@ export default {
       localStorage.setItem('pos_membro_pos', JSON.stringify(data.pos))
       localStorage.setItem('pos_membro_permissoes', JSON.stringify(data.permissoes))
 
-      // Limpar dados de sessão principal anterior
+      // Limpar dados de sessão principal anterior. O token activo passa a ser o do membro,
+      // por isso a identidade Bendi ("user") também sai — senão a loja/admin julgariam
+      // ter sessão Bendi com um token que não é de nenhuma conta Bendi.
       localStorage.removeItem('pos_user')
       localStorage.removeItem('pos_lojas')
+      localStorage.removeItem('pos_existentes')
+      localStorage.removeItem('user')
     },
 
     _redirecionar(data) {

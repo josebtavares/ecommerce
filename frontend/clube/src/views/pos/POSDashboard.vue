@@ -101,7 +101,7 @@
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-950'
             ]"
           >
-            <span>{{ tab.icon }}</span>
+            <font-awesome-icon :icon="['fas', tab.icon]" class="w-4 h-4" />
             <span>{{ tab.label }}</span>
           </button>
         </div>
@@ -164,9 +164,24 @@
         </div>
       </section>
 
+      <!-- POS suspenso pela plataforma -->
+      <section
+        v-if="posId && currentPOS?.suspenso"
+        class="rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center shadow-sm"
+      >
+        <font-awesome-icon :icon="['fas', 'ban']" class="text-3xl text-red-500" />
+        <h3 class="mt-2 text-lg font-black text-red-800">Este POS está suspenso</h3>
+        <p class="mt-1 text-sm font-semibold text-red-700">
+          {{ currentPOS.suspenso_motivo || 'Suspenso pela plataforma.' }}
+        </p>
+        <p class="mt-3 text-xs font-semibold text-red-600/80">
+          As vendas, mesas e produtos estão bloqueados até a suspensão ser levantada. Contacta o suporte da plataforma.
+        </p>
+      </section>
+
       <!-- Área principal -->
       <section
-        v-if="posId"
+        v-else-if="posId"
         class="rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm sm:p-5"
       >
         <component
@@ -192,8 +207,8 @@
         v-else
         class="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12"
       >
-        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl">
-          🧾
+        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl text-slate-500">
+          <font-awesome-icon :icon="['fas', 'receipt']" />
         </div>
 
         <h2 class="mt-5 text-2xl font-black text-slate-950">
@@ -419,11 +434,11 @@ export default {
 
       // Todas as tabs possíveis
       allTabs: [
-        { id: 'mesas',    label: 'Mesas',     icon: '🍽️', apenasNaoMembro: false },
-        { id: 'pedidos',  label: 'Pedidos',   icon: '🛒', apenasNaoMembro: false },
-        { id: 'produtos', label: 'Produtos',  icon: '📦', apenasNaoMembro: false },
-        { id: 'historico',label: 'Histórico', icon: '📜', apenasNaoMembro: false },
-        { id: 'equipa',   label: 'Equipa',    icon: '👥', apenasNaoMembro: true  },
+        { id: 'mesas',    label: 'Mesas',     icon: 'utensils',        apenasNaoMembro: false },
+        { id: 'pedidos',  label: 'Pedidos',   icon: 'cart-shopping',   apenasNaoMembro: false },
+        { id: 'produtos', label: 'Produtos',  icon: 'box',             apenasNaoMembro: false },
+        { id: 'historico',label: 'Histórico', icon: 'clock-rotate-left', apenasNaoMembro: false },
+        { id: 'equipa',   label: 'Equipa',    icon: 'users',           apenasNaoMembro: true  },
       ],
 
       modoOptions: [
@@ -518,8 +533,21 @@ export default {
 
   methods: {
     // ── SESSÃO ──────────────────────────────────────────────────────
+    // O tipo de sessão vem do TOKEN activo (claim tipo_sessao), não de chaves guardadas
+    // que podem ter ficado de outra sessão (ex.: entrou na Bendi depois de usar o POS).
+    tipoSessaoDoToken() {
+      try {
+        const token = localStorage.getItem('access_token') || ''
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+        return payload.tipo_sessao === 'membro' ? 'membro' : 'principal'
+      } catch {
+        return localStorage.getItem('tipo_sessao') || 'principal'
+      }
+    },
+
     loadSessao() {
-      this.tipoSessao = localStorage.getItem('tipo_sessao') || 'principal'
+      this.tipoSessao = this.tipoSessaoDoToken()
+      localStorage.setItem('tipo_sessao', this.tipoSessao)
 
       if (this.tipoSessao === 'membro') {
         // Sessão de membro de equipa
@@ -541,12 +569,16 @@ export default {
           this.posLoaded   = true
         }
       } else {
-        // Sessão de conta principal
-        const user = JSON.parse(localStorage.getItem('pos_user') || '{}')
-        this.userName    = user.nome || user.first_name || user.username || 'Utilizador'
-        this.userInitial = this.userName.charAt(0).toUpperCase()
+        // Sessão de conta principal (nome definitivo chega com /api/pos/meus/)
+        const user = JSON.parse(localStorage.getItem('pos_user') || localStorage.getItem('user') || '{}') || {}
+        this.setUtilizador(user)
         this.permissoes  = null
       }
+    },
+
+    setUtilizador(user) {
+      this.userName    = user?.nome || user?.first_name || user?.username || 'Utilizador'
+      this.userInitial = this.userName.charAt(0).toUpperCase()
     },
 
     // ── LOJAS / ONBOARDING ──────────────────────────────────────────
@@ -566,33 +598,37 @@ export default {
       }
     },
 
-    shouldShowOnboarding() {
-      if (this.isMembro) return false   // membros nunca precisam de onboarding
-      const precisaOnboarding = localStorage.getItem('pos_precisa_onboarding') === 'true'
-      const posId = localStorage.getItem('pos_id')
-      return precisaOnboarding && !posId
-    },
-
     // ── CARREGAR POS ────────────────────────────────────────────────
     async loadPOSData() {
       // Membro já tem POS carregado em loadSessao()
       if (this.isMembro) return
 
       try {
-        const posSelecionado = JSON.parse(localStorage.getItem('pos_selected') || 'null')
-        const posExistentes  = JSON.parse(localStorage.getItem('pos_existentes') || '[]')
-        const pos = posSelecionado || posExistentes[0] || null
+        // Fonte de verdade: o servidor. O localStorage só guarda a última escolha.
+        const { data } = await api.get('/api/pos/meus/')
+        const lista = data.pos || []
 
-        if (pos?.id) {
+        this.setUtilizador(data.user)
+        localStorage.setItem('pos_user', JSON.stringify(data.user))
+        this.lojas = data.lojas || []
+        localStorage.setItem('pos_lojas', JSON.stringify(this.lojas))
+        localStorage.setItem('pos_existentes', JSON.stringify(lista))
+        this.onboardingData = { tem_lojas: this.lojas.length > 0, lojas: this.lojas }
+
+        const anterior = JSON.parse(localStorage.getItem('pos_selected') || 'null')
+        const pos = lista.find(p => p.id === anterior?.id) || lista[0] || null
+
+        if (pos) {
           await this.carregarDetalhePOS(pos.id)
-        } else if (this.shouldShowOnboarding()) {
+        } else {
+          // a conta não tem POS → só aqui faz sentido propor criar um
+          localStorage.removeItem('pos_selected')
+          localStorage.removeItem('pos_id')
           this.showOnboardingModal = true
         }
       } catch (error) {
         console.error('Erro ao carregar POS:', error)
-        if (this.shouldShowOnboarding()) {
-          this.showOnboardingModal = true
-        }
+        // sem resposta do servidor NÃO se propõe criar um POS (evita duplicados)
       } finally {
         this.posLoaded = true
       }
@@ -673,8 +709,10 @@ export default {
       // Recarregar lojas do backend (URL correta)
       try {
         const { data } = await api.get('/app/loja/minhas/')
-        this.lojas = data
-        localStorage.setItem('pos_lojas', JSON.stringify(data))
+        // o POS só pode usar lojas aprovadas (activas ou fechadas pelo dono) — como o backend
+        const vinculaveis = (data.results || data).filter(l => ['ativa', 'fechada'].includes(l.estado))
+        this.lojas = vinculaveis
+        localStorage.setItem('pos_lojas', JSON.stringify(vinculaveis))
       } catch (error) {
         console.error('Erro ao recarregar lojas:', error)
         this.loadLojasFromStorage()

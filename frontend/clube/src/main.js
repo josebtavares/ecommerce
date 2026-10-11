@@ -1,9 +1,11 @@
 import { createApp } from 'vue';
+import videoVisivel from './directives/videoVisivel';
 import App from './App.vue';
 import router from './router'; // Import the router
 import '@/assets/toastify.css';
 import 'vue3-toastify/dist/index.css';
 import '@/assets/tailwind.css';
+import '@/assets/loja-acoes.css';
 import '@fortawesome/fontawesome-free/css/all.min.css'   // <-- aqui
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { fas } from '@fortawesome/free-solid-svg-icons';
@@ -20,6 +22,7 @@ library.add(faBars, fas, faCommentDots); // Add the icons to the library
 const app = createApp(App);
 
 app.component('font-awesome-icon', FontAwesomeIcon);
+app.directive('video-visivel', videoVisivel); // vídeos só tocam quando visíveis (directives/videoVisivel.js)
 
 app.use(router); // Use the router
 

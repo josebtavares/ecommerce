@@ -29,7 +29,7 @@
                            attr.tipo === 'choices' ? 'bg-blue-500/15 text-blue-400' :
                            attr.tipo === 'numero'  ? 'bg-green-500/15 text-green-400' :
                                                      'bg-zinc-800 text-zinc-400']">
-              {{ attr.nome }}
+              <font-awesome-icon v-if="attr.variante" :icon="['fas', 'boxes-stacked']" title="Stock por opção" class="mr-1" />{{ attr.nome }}
               <span v-if="attr.tipo === 'choices'" class="opacity-60 ml-1">({{ attr.opcoes?.join(', ') }})</span>
             </span>
           </div>
@@ -114,9 +114,21 @@
                   <input
                     v-model="novasOpcoes[idx]"
                     @keydown.enter.prevent="adicionarOpcao(idx)"
-                    @keydown.comma.prevent="adicionarOpcao(idx)"
+                    @keydown="e => { if (e.key === ',') { e.preventDefault(); adicionarOpcao(idx) } }"
                     type="text" placeholder="Escreve e pressiona Enter..."
                     class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-blue-500 transition" />
+
+                  <!-- Stock por opção (variante) -->
+                  <label class="mt-3 flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition"
+                         :class="attr.variante ? 'border-amber-500/40 bg-amber-500/5' : 'border-zinc-700/60 hover:border-zinc-600'">
+                    <input v-model="attr.variante" type="checkbox" class="mt-0.5 w-3.5 h-3.5 rounded border-zinc-600 accent-amber-500" />
+                    <span>
+                      <span class="block text-xs font-semibold" :class="attr.variante ? 'text-amber-300' : 'text-zinc-300'"><font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock por opção</span>
+                      <span class="block text-[10px] text-zinc-500 leading-relaxed">
+                        Cada opção tem stock próprio (ex.: tamanho, cor). Deixa desligado para preferências (ex.: picante).
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </div>
             </div>

@@ -62,7 +62,7 @@
                 }"
               >
                 <span class="multiselect__option-text">{{ option[label] }}</span>
-                <span v-if="isSelected(option)" class="multiselect__option-check">✓</span>
+                <span v-if="isSelected(option)" class="multiselect__option-check"><font-awesome-icon :icon="['fas', 'check']" /></span>
               </span>
             </li>
           </ul>

@@ -1,3 +1,5 @@
+import re
+
 from django.db import transaction
 from django.db.models import Q, Sum, Count, Avg
 from django.db.models.functions import TruncDate
@@ -8,7 +10,7 @@ from datetime import timedelta, datetime, date
 
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
@@ -21,6 +23,7 @@ from ..Serializers.LojaSerializer import (
     UtilizadorLojaSerializer,
 )
 from ..utils.pagination import paginar
+from ..utils.password import mensagem_password_fraca
 
 
 # ══════════════════════════════════════════════════════════════
@@ -92,14 +95,18 @@ def loja_list(request):
 def loja_get(request, id):
     loja = get_object_or_404(Loja, id=id)
     
-    # loja inactiva — só o dono/staff pode ver
+    # loja não activa (pendente/fechada/suspensa) — só o dono/staff pode ver
     if not loja.ativa:
-        if not request.user.is_authenticated:
-            return Response({'detail': 'Loja não encontrada.'}, status=404)
-        membro = UtilizadorLoja.objects.filter(
-            loja=loja, utilizador=request.user.utilizador, ativo=True
-        ).first()
-        if not membro and not request.user.is_staff:
+        membro = None
+        if request.user.is_authenticated:
+            membro = UtilizadorLoja.objects.filter(
+                loja=loja, utilizador=request.user.utilizador, ativo=True
+            ).first()
+        if not membro and not (request.user.is_authenticated and request.user.is_staff):
+            if loja.estado == 'fechada':
+                # o visitante percebe que a loja existe mas está fechada (não é um link partido)
+                return Response({'detail': 'Esta loja está temporariamente fechada.',
+                                 'estado': 'fechada', 'nome': loja.nome}, status=404)
             return Response({'detail': 'Loja não encontrada.'}, status=404)
     
     return Response(LojaPublicSerializer(loja, context={'request': request}).data)
@@ -129,7 +136,7 @@ def loja_create(request):
 
     loja = serializer.save(
         dono   = utilizador,
-        ativa  = False,
+        estado = 'pendente',       # aguarda aprovação da plataforma (ativa=False por consequência)
         logo   = request.FILES.get('logo'),
         banner = request.FILES.get('banner'),
     )
@@ -210,17 +217,50 @@ def loja_update(request, id):
     return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
-@api_view(['DELETE'])
+@api_view(['POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
-def loja_delete(request, id):
-    """DELETE /app/loja/<id>/eliminar/"""
+def loja_fechar(request, id):
+    """
+    POST /app/loja/<id>/fechar/        (DELETE /app/loja/<id>/eliminar/ — compatibilidade)
+    O dono fecha a loja: deixa de aparecer no site e de receber encomendas. Nada é apagado;
+    as encomendas em curso continuam a ser geridas no backoffice. Pode reabrir quando quiser.
+    """
     loja = get_object_or_404(Loja, id=id)
     _, erro = _exige_permissao(request, loja, 'apagar_loja')
     if erro:
         return erro
-    loja.ativa = False
-    loja.save(update_fields=['ativa'])
-    return Response({'detail': 'Loja desactivada.'})
+    if loja.estado != 'ativa':
+        return Response({'detail': f'Só uma loja activa pode ser fechada (estado actual: {loja.get_estado_display()}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    loja.mudar_estado('fechada', (request.data.get('motivo') or '')[:300])
+    notificar_admins(
+        tipo='loja_fechada',
+        titulo=f'Loja fechada pelo dono: {loja.nome}',
+        mensagem=loja.estado_motivo or 'O dono fechou a loja.',
+        loja=loja,
+        link='/admin',
+    )
+    return Response(LojaSerializer(loja, context={'request': request}).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def loja_reabrir(request, id):
+    """
+    POST /app/loja/<id>/reabrir/
+    Só reabre uma loja que o próprio dono fechou (uma loja suspensa só o admin reactiva).
+    """
+    loja = get_object_or_404(Loja, id=id)
+    _, erro = _exige_permissao(request, loja, 'apagar_loja')
+    if erro:
+        return erro
+    if loja.estado != 'fechada':
+        return Response({'detail': f'Só uma loja fechada pelo dono pode ser reaberta (estado actual: {loja.get_estado_display()}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    loja.mudar_estado('ativa')
+    return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -239,12 +279,28 @@ def loja_aparencia(request, loja_id):
     if erro:
         return erro
 
-    campos = ['template_id', 'cor_primaria', 'cor_secundaria', 'dark_mode']
-    alterados = []
-    for campo in campos:
+    dados = {}
+    for campo in ('cor_primaria', 'cor_secundaria'):
         if campo in request.data:
-            setattr(loja, campo, request.data[campo])
-            alterados.append(campo)
+            valor = str(request.data[campo] or '').strip()
+            if not re.fullmatch(r'#[0-9a-fA-F]{6}', valor):
+                return Response({'detail': f'{campo}: cor inválida (usa o formato #RRGGBB).'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            dados[campo] = valor.lower()
+
+    if 'template_id' in request.data:
+        valor = str(request.data['template_id'] or '').strip()
+        if not re.fullmatch(r'[a-z0-9_]{1,50}', valor):
+            return Response({'detail': 'template_id inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+        dados['template_id'] = valor
+
+    if 'dark_mode' in request.data:
+        valor = request.data['dark_mode']
+        dados['dark_mode'] = valor if isinstance(valor, bool) else str(valor).lower() in ('true', '1')
+
+    alterados = list(dados)
+    for campo, valor in dados.items():
+        setattr(loja, campo, valor)
 
     if alterados:
         loja.save(update_fields=alterados)
@@ -626,10 +682,13 @@ def loja_dashboard(request, loja_id):
     
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 @transaction.atomic
 def staff_criar_utilizador(request, loja_id):
     """
     POST /app/loja/<loja_id>/staff/criar-utilizador/
+    Body (multipart ou JSON): { username, email, password, role,
+                                first_name?, last_name?, telefone?, morada?, foto?, tipo_veiculo? }
     Cria utilizador novo + adiciona à loja com role especificado
     """
     loja = get_object_or_404(Loja, id=loja_id)
@@ -638,18 +697,33 @@ def staff_criar_utilizador(request, loja_id):
         return erro
 
     # Validar dados do utilizador
-    username = request.data.get('username', '').strip()
-    email = request.data.get('email', '').strip()
-    password = request.data.get('password', '')
+    username = str(request.data.get('username', '')).strip()
+    email = str(request.data.get('email', '')).strip()
+    password = str(request.data.get('password', ''))
     role = request.data.get('role', 'staff')
 
     if not username or not email or not password:
         return Response({'detail': 'Username, email e password são obrigatórios.'}, status=400)
 
+    roles_validos = [r for r, _ in UtilizadorLoja.ROLES if r != 'dono']
+    if role not in roles_validos:
+        return Response({'detail': 'Role inválido.'}, status=400)
+
+    msg_password = mensagem_password_fraca(password)
+    if msg_password:
+        return Response({'detail': msg_password}, status=400)
+
+    foto = request.FILES.get('foto')
+    if foto:
+        if foto.size > 5 * 1024 * 1024:
+            return Response({'detail': 'A foto não pode ter mais de 5 MB.'}, status=400)
+        if not (foto.content_type or '').startswith('image/'):
+            return Response({'detail': 'A foto tem de ser uma imagem.'}, status=400)
+
     if User.objects.filter(username=username).exists():
         return Response({'detail': 'Username já existe.'}, status=400)
-    
-    if User.objects.filter(email=email).exists():
+
+    if User.objects.filter(email__iexact=email).exists():
         return Response({'detail': 'Email já está registado.'}, status=400)
 
     # Criar User Django
@@ -668,6 +742,9 @@ def staff_criar_utilizador(request, loja_id):
         morada=request.data.get('morada', ''),
         verificado=False  # criado por gestor → não verificado
     )
+    if foto:
+        utilizador.foto = foto
+        utilizador.save(update_fields=['foto'])
 
     # Adicionar à loja com role
     membro = UtilizadorLoja.objects.create(

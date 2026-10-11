@@ -152,7 +152,10 @@
                             metodoPagamento === metodo.tipo ? 'border-red-500' : 'border-zinc-600']">
                 <div v-if="metodoPagamento === metodo.tipo" class="w-2 h-2 rounded-full bg-red-500"></div>
               </div>
-              <span class="text-xl">{{ metodo.icon }}</span>
+              <span :class="['w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0',
+                             metodoPagamento === metodo.tipo ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-400']">
+                <font-awesome-icon :icon="['fas', metodo.icon]" class="w-4 h-4" />
+              </span>
               <div class="flex-1">
                 <p class="text-sm font-semibold text-zinc-200">{{ metodo.label }}</p>
                 <p class="text-xs text-zinc-500">{{ metodo.descricao }}</p>
@@ -208,15 +211,21 @@
               <div class="flex-1 min-w-0">
                 <p class="text-xs font-medium text-zinc-200 truncate">{{ item.produto?.nome }}</p>
                 <p class="text-xs text-zinc-500">x{{ item.quantidade }}</p>
-                <div v-if="item.atributos && Object.keys(item.atributos).length > 0" class="flex flex-wrap gap-1 mt-1">
-                  <span v-for="(val, key) in item.atributos" :key="key"
+                <p v-if="item.variante && item.quantidade > (item.variante.ativo ? item.variante.quantidade_disponivel : 0)"
+                   class="text-[11px] text-amber-500 mt-0.5">
+                  <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-0.5" /> {{ (item.variante.ativo ? item.variante.quantidade_disponivel : 0) > 0
+                        ? `Só restam ${item.variante.quantidade_disponivel} desta combinação — ajusta no carrinho.`
+                        : 'Esta combinação esgotou — remove-a do carrinho.' }}
+                </p>
+                <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1">
+                  <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
                         class="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] rounded capitalize">
                     {{ key }}: <span class="text-zinc-300 font-medium">{{ val }}</span>
                   </span>
                 </div>
               </div>
               <span class="text-xs font-bold text-zinc-300 flex-shrink-0">
-                {{ formatPrice(parseFloat(item.produto?.preco || 0) * item.quantidade) }}
+                {{ formatPrice(parseFloat(item.preco_unitario ?? item.produto?.preco ?? 0) * item.quantidade) }}
               </span>
             </div>
           </div>
@@ -279,7 +288,7 @@
           </button>
 
           <p class="text-xs text-zinc-600 text-center mt-3">
-            <span v-if="metodoPagamento === 'flutterwave'">🔒 Pagamento seguro via Flutterwave</span>
+            <span v-if="metodoPagamento === 'flutterwave'"><font-awesome-icon :icon="['fas', 'lock']" class="mr-1" />Pagamento seguro via Flutterwave</span>
             <span v-else>Pagamento simulado para testes</span>
           </p>
         </div>
@@ -291,17 +300,19 @@
 <script>
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import { formatarAtributos, temAtributos } from '@/utils/atributos'
+import { iconePagamento } from '@/utils/icones'
 
-// mapa de ícones e descrições para cada tipo de método
+// mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
-  dinheiro:      { icon: '💵', label: 'Dinheiro',           descricao: 'Paga ao receber / na loja' },
-  mbway:         { icon: '📱', label: 'MBWay',              descricao: 'Pagamento via MBWay' },
-  cartao:        { icon: '💳', label: 'Cartão',             descricao: 'Cartão de débito/crédito' },
-  flutterwave:   { icon: '🌍', label: 'Flutterwave',        descricao: 'Visa, Mastercard, Mobile Money' },
-  transferencia: { icon: '🏦', label: 'Transferência',      descricao: 'Transferência bancária' },
-  mobile_money:  { icon: '📲', label: 'Mobile Money',       descricao: 'Pagamento via telemóvel' },
-  paypal:        { icon: '🅿️',  label: 'PayPal',            descricao: 'Pagamento via PayPal' },
-  stripe:        { icon: '💳', label: 'Stripe',             descricao: 'Cartão via Stripe' },
+  dinheiro:      { label: 'Dinheiro',           descricao: 'Paga ao receber / na loja' },
+  mbway:         { label: 'MBWay',              descricao: 'Pagamento via MBWay' },
+  cartao:        { label: 'Cartão',             descricao: 'Cartão de débito/crédito' },
+  flutterwave:   { label: 'Flutterwave',        descricao: 'Visa, Mastercard, Mobile Money' },
+  transferencia: { label: 'Transferência',      descricao: 'Transferência bancária' },
+  mobile_money:  { label: 'Mobile Money',       descricao: 'Pagamento via telemóvel' },
+  paypal:        { label: 'PayPal',             descricao: 'Pagamento via PayPal' },
+  stripe:        { label: 'Stripe',             descricao: 'Cartão via Stripe' },
 }
 
 // endpoints para métodos não-Flutterwave
@@ -314,7 +325,7 @@ const ENDPOINT_PAGAMENTO = {
 }
 
 export default {
-  name: 'Checkout',
+  name: 'CheckoutPage',
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()
@@ -345,7 +356,7 @@ export default {
     lojaId ()           { return this.$route.params.lojaId },
     opcaoSelecionada () { return this.opcoesEntrega.find(o => o.id === this.opcaoEntregaId) || null },
     subtotal () {
-      return this.itens.reduce((s, i) => s + parseFloat(i.produto?.preco || 0) * i.quantidade, 0)
+      return this.itens.reduce((s, i) => s + parseFloat(i.preco_unitario ?? i.produto?.preco ?? 0) * i.quantidade, 0)
     },
     custoEntrega () {
       if (this.tipoEntrega !== 'entrega' || !this.opcaoSelecionada) return 0
@@ -375,6 +386,7 @@ export default {
   },
 
   methods: {
+    formatarAtributos, temAtributos,
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
@@ -417,7 +429,8 @@ export default {
           .filter(m => m.ativo)
           .map(m => ({
             ...m,
-            ...(METODO_INFO[m.tipo] || { icon: '💳', label: m.tipo, descricao: '' }),
+            ...(METODO_INFO[m.tipo] || { label: m.tipo, descricao: '' }),
+            icon: iconePagamento(m.tipo),
           }))
         // pré-selecciona o primeiro método disponível
         if (this.metodosPagamento.length > 0) {
@@ -427,7 +440,7 @@ export default {
         console.error(e)
         // fallback para dinheiro se a API falhar
         this.metodosPagamento = [
-          { tipo: 'dinheiro', icon: '💵', label: 'Dinheiro', descricao: 'Paga ao receber', ativo: true },
+          { tipo: 'dinheiro', icon: iconePagamento('dinheiro'), label: 'Dinheiro', descricao: 'Paga ao receber', ativo: true },
         ]
         this.metodoPagamento = 'dinheiro'
       } finally {
@@ -447,9 +460,15 @@ export default {
         if (this.tipoEntrega === 'entrega' && this.opcaoEntregaId) {
           payload.opcao_entrega_id = this.opcaoEntregaId
         }
-        const { data: encomenda } = await api.post(
-          `/app/loja/${this.lojaId}/encomenda/criar/`, payload
-        )
+        let encomenda
+        try {
+          ({ data: encomenda } = await api.post(`/app/loja/${this.lojaId}/encomenda/criar/`, payload))
+        } catch (e) {
+          // ex.: "Stock insuficiente de 'Camisola (preto · S)'. Disponível: 1."
+          this.erro = e.response?.data?.detail || 'Erro ao criar a encomenda. Tenta novamente.'
+          await this.fetchCarrinho()   // mostra o stock actualizado em cada item
+          return
+        }
 
         // 2a — Flutterwave: redirecionar para página externa
         if (this.metodoPagamento === 'flutterwave') {
@@ -479,7 +498,7 @@ export default {
         this.$router.push({ name: 'EncomendaSucesso', params: { id: encomenda.id } })
       })
 
-      if (!this.loadingConfirmar && !this.redirectindoFlutterwave && this.$route.name !== 'EncomendaSucesso') {
+      if (!this.erro && !this.loadingConfirmar && !this.redirectindoFlutterwave && this.$route.name !== 'EncomendaSucesso') {
         this.erro = 'Erro ao processar a encomenda. Verifica os dados e tenta novamente.'
       }
     },

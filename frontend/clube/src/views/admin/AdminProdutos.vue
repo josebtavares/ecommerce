@@ -43,11 +43,11 @@
            class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden group">
         <div class="relative h-36 overflow-hidden">
           <img v-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" class="w-full h-full object-cover" />
-          <div v-else class="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600 text-2xl">📦</div>
+          <div v-else class="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600 text-2xl"><font-awesome-icon :icon="['fas', 'box']" /></div>
           <div v-if="!p.ativo" class="absolute inset-0 bg-black/60 flex items-center justify-center">
             <span class="text-xs font-bold text-zinc-300">Inactivo</span>
           </div>
-          <span v-if="p.destaque" class="absolute top-2 right-2 text-xs">⭐</span>
+          <span v-if="p.destaque" title="Em destaque" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-yellow-400 flex items-center justify-center text-[10px]"><font-awesome-icon :icon="['fas', 'star']" /></span>
         </div>
         <div class="p-3">
           <p class="text-xs font-semibold text-zinc-200 truncate">{{ p.nome }}</p>
@@ -62,8 +62,9 @@
               </button>
               <button @click="toggleDestaque(p)"
                 :class="['px-2 py-0.5 rounded text-[10px] font-bold transition',
-                         p.destaque ? 'bg-yellow-500/15 text-yellow-400' : 'bg-zinc-800 text-zinc-500']">
-                ⭐
+                         p.destaque ? 'bg-yellow-500/15 text-yellow-400' : 'bg-zinc-800 text-zinc-500']"
+                :title="p.destaque ? 'Remover destaque' : 'Destacar'">
+                <font-awesome-icon :icon="['fas', 'star']" />
               </button>
             </div>
           </div>

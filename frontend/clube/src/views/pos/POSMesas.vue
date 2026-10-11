@@ -73,8 +73,8 @@
       v-else-if="mesasFiltradas.length === 0"
       class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
     >
-      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">
-        🍽️
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl text-slate-400 shadow-sm">
+        <font-awesome-icon :icon="['fas', 'utensils']" />
       </div>
 
       <h3 class="mt-5 text-xl font-black text-slate-950">Nenhuma mesa encontrada</h3>
@@ -137,7 +137,7 @@
             @click="fecharModalMesa"
             class="rounded-2xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-950"
           >
-            ✕
+            <font-awesome-icon :icon="['fas', 'xmark']" class="w-4 h-4" />
           </button>
         </div>
 

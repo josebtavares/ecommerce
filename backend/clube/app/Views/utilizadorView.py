@@ -21,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ..models import Utilizador
+from ..utils.auth import autenticar
 from ..Serializers.UtilizadorSerializer import (
     UtilizadorSerializer,
     UtilizadorPublicSerializer,
@@ -104,22 +105,10 @@ def utilizador_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # tenta autenticar por username ou email
-    user = authenticate(request, username=username, password=password)
-
-    if not user:
-        # tenta por email
-        try:
-            django_user = User.objects.get(email__iexact=username)
-            user = authenticate(request, username=django_user.username, password=password)
-        except User.DoesNotExist:
-            user = None
-
-    if not user:
-        return Response(
-            {'detail': 'Credenciais inválidas.'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+    # username ou email, numa só tentativa (ver utils/auth.py)
+    user, erro, codigo = autenticar(request, username, password)
+    if erro:
+        return Response({'detail': erro}, status=codigo)
 
     try:
         utilizador = user.utilizador
@@ -304,8 +293,21 @@ def utilizador_delete(request, id):
     if not request.user.is_staff:
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
+    from django.db import transaction
+    from django.db.models import ProtectedError
+
     utilizador = get_object_or_404(Utilizador, id=id)
-    utilizador.user.delete()  # cascade apaga o Utilizador também
+    try:
+        with transaction.atomic():
+            utilizador.user.delete()  # cascade apaga o Utilizador também
+    except ProtectedError as e:
+        # encomendas, pagamentos, comissões, vendas e turnos POS (on_delete=PROTECT) nunca são
+        # apagados — um utilizador com esse histórico deve ser banido/suspenso, não eliminado
+        return Response({
+            'detail': 'Este utilizador tem registos financeiros (encomendas, vendas POS…) e não pode '
+                      'ser eliminado. Bane ou suspende a conta em vez disso.',
+            'razoes': sorted({str(o._meta.verbose_name) for o in e.protected_objects}),
+        }, status=status.HTTP_409_CONFLICT)
     return Response({'detail': 'Utilizador eliminado.'}, status=status.HTTP_200_OK)
 
 

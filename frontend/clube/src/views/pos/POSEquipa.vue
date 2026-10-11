@@ -130,7 +130,7 @@
             >
               <span class="font-semibold text-slate-600">{{ nomePermissao(chave) }}</span>
               <span :class="valor ? 'text-emerald-600' : 'text-slate-300'" class="font-black">
-                {{ valor ? '✓' : '✗' }}
+                <font-awesome-icon :icon="['fas', valor ? 'check' : 'xmark']" />
               </span>
             </div>
           </div>
@@ -141,7 +141,7 @@
           v-if="membros.length === 0"
           class="rounded-2xl border border-slate-200 bg-white p-12 text-center"
         >
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-3xl">👥</div>
+          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-3xl text-slate-400"><font-awesome-icon :icon="['fas', 'users']" /></div>
           <h3 class="mt-4 text-lg font-black text-slate-950">Sem membros ainda</h3>
           <p class="mt-2 text-sm text-slate-500">
             Cria o primeiro membro da equipa. Ele usará um username e password para entrar no POS.
@@ -190,7 +190,7 @@
 
             <!-- Password gerada -->
             <div v-if="addSuccess" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p class="text-sm font-black text-emerald-800">✓ Membro criado com sucesso!</p>
+              <p class="text-sm font-black text-emerald-800"><font-awesome-icon :icon="['fas', 'circle-check']" class="mr-1" />Membro criado com sucesso!</p>
               <div v-if="addSuccess.password_gerada" class="mt-3 rounded-xl bg-emerald-100 p-3">
                 <p class="text-xs font-bold text-emerald-700">Password gerada automaticamente:</p>
                 <p class="mt-1 font-mono text-lg font-black tracking-widest text-emerald-900">
@@ -204,7 +204,7 @@
                   @click="copiarPassword(addSuccess.password_gerada)"
                   class="mt-2 rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-black text-white"
                 >
-                  {{ copiado ? '✓ Copiado!' : 'Copiar' }}
+                  <font-awesome-icon :icon="['fas', copiado ? 'check' : 'copy']" class="mr-1" />{{ copiado ? 'Copiado!' : 'Copiar' }}
                 </button>
               </div>
               <button
@@ -256,8 +256,8 @@
                   <!-- Ícone de estado -->
                   <span class="absolute right-4 top-1/2 -translate-y-1/2">
                     <span v-if="verificandoUsername" class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600 inline-block"></span>
-                    <span v-else-if="usernameStatus === 'disponivel'" class="text-emerald-500 font-black text-sm">✓</span>
-                    <span v-else-if="usernameStatus === 'indisponivel'" class="text-red-500 font-black text-sm">✗</span>
+                    <span v-else-if="usernameStatus === 'disponivel'" class="text-emerald-500 font-black text-sm"><font-awesome-icon :icon="['fas', 'check']" /></span>
+                    <span v-else-if="usernameStatus === 'indisponivel'" class="text-red-500 font-black text-sm"><font-awesome-icon :icon="['fas', 'xmark']" /></span>
                   </span>
                 </div>
 
@@ -531,7 +531,7 @@ export default {
       verificandoUsername: false,
       usernameStatus: null,       // null | 'disponivel' | 'indisponivel'
       sugestoesUsername: [],
-      _usernameDebounce: null,
+      usernameDebounce: null,
 
       // Modal adicionar
       showAddModal: false,
@@ -680,8 +680,8 @@ export default {
       if (!/^[a-zA-Z0-9_.]+$/.test(username)) return
 
       // Debounce — esperar 400ms após o utilizador parar de escrever
-      clearTimeout(this._usernameDebounce)
-      this._usernameDebounce = setTimeout(() => {
+      clearTimeout(this.usernameDebounce)
+      this.usernameDebounce = setTimeout(() => {
         this.verificarUsername(username)
       }, 400)
     },
@@ -730,7 +730,7 @@ export default {
     },
 
     fecharModalAdicionar() {
-      clearTimeout(this._usernameDebounce)
+      clearTimeout(this.usernameDebounce)
       this.showAddModal = false
       if (this.addSuccess) this.carregarEquipa()
     },

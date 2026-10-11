@@ -8,7 +8,7 @@
 
     <!-- Sidebar -->
     <aside :class="[
-      'fixed lg:relative inset-y-0 left-0 z-40 bg-zinc-900 border-r border-zinc-800 flex flex-col',
+      'fixed lg:sticky lg:top-0 lg:h-screen lg:self-start inset-y-0 left-0 z-40 bg-zinc-900 border-r border-zinc-800 flex flex-col',
       'transition-all duration-300 ease-in-out',
       // mobile: slide in/out
       sidebarAberta ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0',
@@ -48,7 +48,7 @@
       </button>
 
       <!-- Nav -->
-      <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-2">
+      <nav class="flex-1 min-h-0 overflow-y-auto py-4 space-y-1 px-2">
         <button v-for="item in seccoes" :key="item.key"
           @click="navegarPara(item.key)"
           :title="!sidebarExpandida ? item.label : ''"
@@ -58,7 +58,7 @@
               ? 'bg-red-600/15 text-red-400'
               : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
           ]">
-          <span class="flex-shrink-0 text-base">{{ item.icon }}</span>
+          <font-awesome-icon :icon="['fas', item.icon]" class="flex-shrink-0 w-4 h-4" fixed-width />
           <span v-if="sidebarExpandida || sidebarAberta"
                 class="text-sm font-medium truncate">{{ item.label }}</span>
         </button>
@@ -69,7 +69,7 @@
         <button @click="$router.push('/Home')"
           :title="!sidebarExpandida ? 'Voltar ao site' : ''"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800">
-          <span class="flex-shrink-0">🏠</span>
+          <font-awesome-icon :icon="['fas', 'house']" class="flex-shrink-0 w-4 h-4" fixed-width />
           <span v-if="sidebarExpandida || sidebarAberta" class="text-sm font-medium">Voltar ao site</span>
         </button>
       </div>
@@ -119,6 +119,8 @@
         <AdminCategorias   v-else-if="activeSection === 'categorias'"   />
         <AdminRelatorios   v-else-if="activeSection === 'relatorios'"   />
         <AdminCategoriasDestaque v-else-if="activeSection === 'categorias_destaque'" />
+        <AdminPaginas      v-else-if="activeSection === 'paginas'"      />
+        <AdminPOS          v-else-if="activeSection === 'pos'"          />
       </div>
     </div>
 
@@ -150,29 +152,34 @@ import AdminComissoes    from './AdminComissoes.vue'
 import AdminCategorias   from './AdminCategorias.vue'
 import AdminRelatorios   from './AdminRelatorios.vue'
 import AdminCategoriasDestaque from './AdminCategoriasDestaque.vue'
+import AdminPaginas      from './AdminPaginas.vue'
+import AdminPOS          from './AdminPOS.vue'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 
 const SECCOES = [
-  { key: 'dashboard',    label: 'Dashboard',     icon: '📊', permissao: 'ver_stats'           },
-  { key: 'relatorios',   label: 'Relatórios',    icon: '📈', permissao: 'ver_relatorios'    },
-  { key: 'categorias',   label: 'Categorias',    icon: '🏷️', permissao: 'gerir_lojas'         },
-  { key: 'lojas',        label: 'Lojas',         icon: '🏪', permissao: 'gerir_lojas'         },
-  { key: 'utilizadores', label: 'Utilizadores',  icon: '👥', permissao: 'gerir_utilizadores'  },
-  { key: 'produtos',     label: 'Produtos',      icon: '📦', permissao: 'gerir_produtos'      },
-  { key: 'categorias_destaque', label: 'Categorias em Destaque', icon: '🔥', permissao: 'gerir_categorias_destaque' },
+  // icon: nome do ícone Font Awesome (solid)
+  { key: 'dashboard',    label: 'Dashboard',     icon: 'chart-pie',     permissao: 'ver_stats'           },
+  { key: 'relatorios',   label: 'Relatórios',    icon: 'chart-line',    permissao: 'ver_relatorios'    },
+  { key: 'categorias',   label: 'Categorias',    icon: 'tags',          permissao: 'gerir_lojas'         },
+  { key: 'lojas',        label: 'Lojas',         icon: 'store',         permissao: 'gerir_lojas'         },
+  { key: 'utilizadores', label: 'Utilizadores',  icon: 'users',         permissao: 'gerir_utilizadores'  },
+  { key: 'produtos',     label: 'Produtos',      icon: 'box',           permissao: 'gerir_produtos'      },
+  { key: 'categorias_destaque', label: 'Categorias em Destaque', icon: 'fire', permissao: 'gerir_categorias_destaque' },
 
-  { key: 'encomendas',   label: 'Encomendas',    icon: '🛍️', permissao: 'gerir_encomendas'   },
-  { key: 'pagamentos',   label: 'Pagamentos',    icon: '💳', permissao: 'gerir_pagamentos'    },
-  { key: 'tipos',        label: 'Tipos Globais', icon: '🏷️', permissao: 'gerir_tipos_globais' },
-  { key: 'comissoes',    label: 'Comissões',     icon: '💰', permissao: 'gerir_comissoes'     },
+  { key: 'encomendas',   label: 'Encomendas',    icon: 'bag-shopping',  permissao: 'gerir_encomendas'   },
+  { key: 'pagamentos',   label: 'Pagamentos',    icon: 'credit-card',   permissao: 'gerir_pagamentos'    },
+  { key: 'tipos',        label: 'Tipos Globais', icon: 'shapes',        permissao: 'gerir_tipos_globais' },
+  { key: 'comissoes',    label: 'Comissões',     icon: 'coins',         permissao: 'gerir_comissoes'     },
+  { key: 'paginas',      label: 'Páginas & Ajuda', icon: 'file-lines',  permissao: 'gerir_conteudo'    },
+  { key: 'pos',          label: 'POS',             icon: 'cash-register', permissao: 'ver_pos'           },
 
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos'],
   moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','ver_relatorios'],
-  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios'],
-  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios'],
+  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios','gerir_conteudo','ver_pos','gerir_pos'],
+  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos'],
 }
 
 export default {
@@ -180,7 +187,7 @@ export default {
   components: {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
-    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminCategoriasDestaque,
+    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminCategoriasDestaque, AdminPaginas, AdminPOS,
   },
 
   data () {

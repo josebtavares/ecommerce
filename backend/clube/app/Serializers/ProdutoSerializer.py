@@ -3,6 +3,7 @@ from rest_framework import serializers
 from ..models import Produto, TipoProduto, Inventario, CategoriaLoja, ProdutoImagem
 from .LojaSerializer import LojaMiniSerializer
 from ..Serializers.CategoriaLojaSerializer import CategoriaLojaMiniSerializer
+from ..utils.variantes import atributos_variante, tem_atributos_variante, serializar_variante
 
 
 # ══════════════════════════════════════════════════════════════
@@ -50,7 +51,7 @@ class TipoProdutoSerializer(serializers.ModelSerializer):
         read_only_fields = ['is_global']
 
     def get_is_global(self, obj):
-        return obj.loja is None
+        return obj.is_global
 
     def validate_atributos_schema(self, value):
         if not isinstance(value, list):
@@ -69,11 +70,14 @@ class TipoProdutoSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         f'Atributo "{item["nome"]}" do tipo choices precisa de ter opcoes.'
                     )
+                tipo_attr = item.get('tipo', 'texto')
                 normalizado.append({
                     'nome':        item['nome'].lower().strip(),
-                    'tipo':        item.get('tipo', 'texto'),
+                    'tipo':        tipo_attr,
                     'opcoes':      item.get('opcoes', []),
                     'obrigatorio': item.get('obrigatorio', False),
+                    # só atributos de escolha podem ter stock próprio por opção
+                    'variante':    bool(item.get('variante')) and tipo_attr == 'choices',
                 })
             else:
                 raise serializers.ValidationError(f'Item invalido: {item}')
@@ -113,12 +117,18 @@ class ProdutoSerializer(serializers.ModelSerializer):
     loja               = LojaMiniSerializer(read_only=True)
     tipo               = TipoProdutoSerializer(read_only=True)
     ficheiro_url       = serializers.SerializerMethodField()
+    ficheiro_poster_url = serializers.SerializerMethodField()
     atributos_em_falta = serializers.SerializerMethodField()
     stock              = serializers.SerializerMethodField()
 
     # ── NOVO: imagens adicionais + atributos normalizados ──────
     imagens                = ProdutoImagemSerializer(many=True, read_only=True)
     atributos_normalizados = serializers.SerializerMethodField()
+
+    # ── Stock por variação ────────────────────────────────────
+    atributos_variante  = serializers.SerializerMethodField()
+    variantes           = serializers.SerializerMethodField()
+    variantes_pendentes = serializers.SerializerMethodField()
 
     # ── Escrita ───────────────────────────────────────────────
     tipo_id = serializers.PrimaryKeyRelatedField(
@@ -146,15 +156,16 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'tipo', 'tipo_id',
             'nome', 'descricao', 'sku',
             'preco',
-            'ficheiro', 'ficheiro_url',
+            'ficheiro', 'ficheiro_url', 'ficheiro_poster_url', 'ficheiro_estado',
             'imagens',                    # ← NOVO
             'atributos', 'atributos_normalizados', 'atributos_em_falta',  # ← atributos_normalizados novo
             'stock',
+            'stock_por_variante', 'atributos_variante', 'variantes', 'variantes_pendentes',
             'destaque', 'ativo',
             'data_criacao',
             'categorias', 'categoria_ids',
         ]
-        read_only_fields = ['loja', 'data_criacao']
+        read_only_fields = ['loja', 'data_criacao', 'stock_por_variante', 'ficheiro_estado']
         extra_kwargs = {
             'ficheiro': {'write_only': True, 'required': False},
         }
@@ -163,6 +174,12 @@ class ProdutoSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if obj.ficheiro and request:
             return request.build_absolute_uri(obj.ficheiro.url)
+        return None
+
+    def get_ficheiro_poster_url(self, obj):
+        request = self.context.get('request')
+        if obj.ficheiro_poster and request:
+            return request.build_absolute_uri(obj.ficheiro_poster.url)
         return None
 
     def get_atributos_em_falta(self, obj):
@@ -178,6 +195,20 @@ class ProdutoSerializer(serializers.ModelSerializer):
             }
         except Inventario.DoesNotExist:
             return None
+
+    def get_atributos_variante(self, obj):
+        return atributos_variante(obj)
+
+    def get_variantes(self, obj):
+        """Variantes activas — só quando o produto usa stock por variação."""
+        if not obj.stock_por_variante:
+            return []
+        # .all() aproveita prefetch_related('variantes') das listagens
+        return [serializar_variante(v, obj) for v in obj.variantes.all() if v.ativo]
+
+    def get_variantes_pendentes(self, obj):
+        """O tipo tem atributos-variante mas o dono ainda não distribuiu o stock."""
+        return not obj.stock_por_variante and tem_atributos_variante(obj)
 
     def get_atributos_normalizados(self, obj):
         """
@@ -269,11 +300,18 @@ class ProdutoSerializer(serializers.ModelSerializer):
 
 class ProdutoMiniSerializer(serializers.ModelSerializer):
     ficheiro_url = serializers.SerializerMethodField()
+    ficheiro_poster_url = serializers.SerializerMethodField()
     tipo_nome    = serializers.CharField(source='tipo.nome', read_only=True)
 
     class Meta:
         model  = Produto
-        fields = ['id', 'nome', 'preco', 'ficheiro_url', 'tipo_nome', 'atributos']
+        fields = ['id', 'nome', 'preco', 'ficheiro_url', 'ficheiro_poster_url', 'tipo_nome', 'atributos']
+
+    def get_ficheiro_poster_url(self, obj):
+        request = self.context.get('request')
+        if obj.ficheiro_poster and request:
+            return request.build_absolute_uri(obj.ficheiro_poster.url)
+        return None
 
     def get_ficheiro_url(self, obj):
         request = self.context.get('request')

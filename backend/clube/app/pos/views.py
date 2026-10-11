@@ -47,6 +47,11 @@ try:
 except Exception:
     Inventario = None
     
+from .stock import reservar_stock, repor_stock_item, cancelar_conta
+from app.utils.auth import autenticar
+from app.Views.utilizadorView import _build_user_payload
+from app.utils.variantes import sincronizar_variantes, variantes_payload, aplicar_grelha_do_pedido
+from app.utils.tipos import tipos_para_loja, tipos_para_pos, tipo_permitido
 from .permissions import (
     POSAuthentication,
     IsPOSAuthenticated,
@@ -61,6 +66,11 @@ from rest_framework.decorators import authentication_classes
 from django_ratelimit.core import is_ratelimited
 from functools import wraps
 from django.http import Http404
+from rest_framework.exceptions import PermissionDenied
+
+# lojas que um POS pode usar: aprovadas pela plataforma (uma loja fechada pelo dono continua a
+# poder vender ao balcão; pendentes e suspensas não)
+LOJAS_VINCULAVEIS = ('ativa', 'fechada')
 
  
  
@@ -152,6 +162,7 @@ def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
         pos = get_object_or_404(query)
         if pos.id != membro.pos.id or require_owner:
             raise Http404()
+        _bloquear_se_suspenso(pos)
         return pos, membro, None
 
     utilizador = request.user.utilizador
@@ -159,7 +170,15 @@ def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
     if ativo:
         query = query.filter(ativo=True)
     pos = get_object_or_404(query)
+    _bloquear_se_suspenso(pos)
     return pos, None, utilizador
+
+
+def _bloquear_se_suspenso(pos):
+    """POS suspenso pela plataforma não opera — 403 com o motivo."""
+    if pos.suspenso:
+        motivo = f' Motivo: {pos.suspenso_motivo}' if pos.suspenso_motivo else ''
+        raise PermissionDenied(f'Este POS está suspenso pela plataforma.{motivo} Contacta o suporte.')
 
 
 def _get_pos_for_request(request, pos_id):
@@ -169,6 +188,9 @@ def _get_pos_for_request(request, pos_id):
 
 def _set_stock_loja(produto, stock):
     if Inventario is None:
+        return
+    # com stock por variação o total é a soma das variantes — gerido no backoffice
+    if getattr(produto, 'stock_por_variante', False):
         return
     try:
         inv, _ = Inventario.objects.get_or_create(
@@ -216,6 +238,41 @@ def _aplicar_categorias_loja(produto, request):
             produto.categorias.add(cat)
 
 
+def _opcoes_extra_texto(item):
+    variante = item.variante_pos or item.variante
+    ja_no_nome = set((variante.combinacao or {}).keys()) if variante else set()
+    partes = []
+    for k, v in (item.atributos or {}).items():
+        if k in ja_no_nome or v in (None, '', []):
+            continue
+        partes.append(f'{k}: {", ".join(map(str, v)) if isinstance(v, list) else v}')
+    return ' · '.join(partes)
+
+
+def _ler_atributos(request, chave='atributos'):
+    """Lê atributos (JSON em string no multipart, ou dict). Devolve (dict, None) ou (None, Response)."""
+    raw = request.data.get(chave)
+    if raw in (None, ''):
+        return {}, None
+    try:
+        valor = json.loads(raw) if isinstance(raw, str) else raw
+    except json.JSONDecodeError:
+        return None, Response({'atributos': 'JSON inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not isinstance(valor, dict):
+        return None, Response({'atributos': 'Os atributos devem ser um objecto.'}, status=status.HTTP_400_BAD_REQUEST)
+    return valor, None
+
+
+def _tipo_payload(tipo):
+    if not tipo:
+        return None
+    return {
+        'id': tipo.id, 'nome': tipo.nome,
+        'atributos_schema': tipo.atributos_schema or [],
+        'is_global': tipo.is_global,
+    }
+
+
 def _produto_pos_payload(produto, request=None):
     return {
         'uid': f'pos-{produto.id}',
@@ -226,8 +283,10 @@ def _produto_pos_payload(produto, request=None):
         'preco': str(produto.preco),
         'categoria': produto.categoria or 'Sem categoria',
         'categorias': [{'id': None, 'nome': produto.categoria or 'Sem categoria'}],
-        'tipo': None,
-        'tipo_id': None,
+        'tipo': _tipo_payload(produto.tipo),
+        'tipo_id': produto.tipo_id,
+        'atributos': produto.atributos or {},
+        **variantes_payload(produto),
         'imagem_url': _build_absolute_url(request, produto.imagem),
         'stock': produto.stock,
         'controlar_stock': produto.controlar_stock,
@@ -257,9 +316,10 @@ def _produto_loja_payload(produto, request=None):
         'sku': getattr(produto, 'sku', ''),
         'categoria': _categoria_loja_texto(produto),
         'categorias': _categorias_loja_payload(produto),
-        'tipo': {'id': produto.tipo.id, 'nome': produto.tipo.nome} if produto.tipo else None,
+        'tipo': _tipo_payload(produto.tipo),
         'tipo_id': produto.tipo_id,
         'atributos': produto.atributos or {},
+        **variantes_payload(produto),
         'imagem_url': _build_absolute_url(request, ficheiro),
         'stock': stock,
         'controlar_stock': stock is not None,
@@ -286,6 +346,8 @@ def _pos_response(pos):
             'logo_url': pos.loja_vinculada.logo.url if pos.loja_vinculada and pos.loja_vinculada.logo else None,
         } if pos.loja_vinculada else None,
         'efatura_ativo': pos.efatura_ativo,
+        'suspenso': pos.suspenso,
+        'suspenso_motivo': pos.suspenso_motivo,
         'criado_em': pos.criado_em,
     }
 
@@ -300,7 +362,7 @@ def _verificar_permissao_loja_produtos(loja, utilizador):
 
 
 def _conta_payload(conta, request=None):
-    items = ItemContaMesa.objects.filter(conta=conta).select_related('produto', 'produto_pos')
+    items = ItemContaMesa.objects.filter(conta=conta).select_related('produto', 'produto_pos', 'variante', 'variante_pos')
     return {
         'id': conta.id,
         'mesa': {'id': conta.mesa.id, 'numero': conta.mesa.numero},
@@ -326,6 +388,9 @@ def _conta_payload(conta, request=None):
                 'preco_total': str(item.preco_total),
                 'observacoes': item.observacoes,
                 'status': item.status,
+                'atributos': item.atributos or {},
+                # opções que não são a variação (já no nome), ex.: "gelo: não" — útil para a cozinha
+                'opcoes_texto': _opcoes_extra_texto(item),
             }
             for item in items
         ],
@@ -356,25 +421,9 @@ def pos_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    try:
-        django_user = User.objects.get(email__iexact=email)
-    except User.DoesNotExist:
-        django_user = None
-
-    if not django_user:
-        return Response(
-            {'detail': 'Credenciais inválidas'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-
-    user = authenticate(
-        request,
-        username=django_user.username,
-        password=password
-    )
-
-    if not user:
-        return Response({'detail': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
+    user, erro, codigo = autenticar(request, email, password)
+    if erro:
+        return Response({'detail': erro}, status=codigo)
 
     try:
         utilizador = user.utilizador
@@ -382,18 +431,16 @@ def pos_login(request):
         return Response({'detail': 'Perfil não encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
     pos_list = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-    lojas    = Loja.objects.filter(dono=utilizador, ativa=True)
+    lojas    = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
     refresh  = RefreshToken.for_user(user)
 
     return Response({
         'tipo_sessao': 'principal',
         'access_token': str(refresh.access_token),
         'refresh_token': str(refresh),
-        'user': {
-            'id': utilizador.id,
-            'nome': utilizador.nome,
-            'email': user.email,
-        },
+        # mesmo formato do login da Bendi — o frontend guarda isto em localStorage('user'),
+        # partilhado com a loja/admin (role_admin, is_staff…); um formato reduzido estragava a sessão Bendi
+        'user': {**_build_user_payload(utilizador, request), 'nome': utilizador.nome},
         'tem_lojas': lojas.exists(),
         'lojas': [
             {'id': l.id, 'nome': l.nome, 'logo_url': l.logo.url if l.logo else None}
@@ -477,6 +524,10 @@ def pos_membro_login(request):
 
     if not membro.check_password(password):
         return Response({'detail': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if membro.pos.suspenso:
+        return Response({'detail': 'Este POS está suspenso pela plataforma. Fala com o responsável do POS.'},
+                        status=status.HTTP_403_FORBIDDEN)
 
     # JWT com claims customizados (sem User Django)
     access  = AccessToken()
@@ -573,13 +624,13 @@ def pos_register(request):
         utilizador     = user.utilizador
         refresh        = RefreshToken.for_user(user)
         pos_existentes = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-        lojas          = Loja.objects.filter(dono=utilizador, ativa=True)
+        lojas          = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
 
         return Response({
             'tipo_sessao': 'principal',
             'access_token': str(refresh.access_token),
             'refresh_token': str(refresh),
-            'user': {'id': utilizador.id, 'nome': utilizador.nome, 'email': user.email},
+            'user': {**_build_user_payload(utilizador, request), 'nome': utilizador.nome},
             'tem_lojas': lojas.exists(),
             'lojas': [{'id': l.id, 'nome': l.nome} for l in lojas],
             'pos_existentes': [
@@ -614,7 +665,7 @@ def pos_register(request):
                 'tipo_sessao': 'principal',
                 'access_token': str(refresh.access_token),
                 'refresh_token': str(refresh),
-                'user': {'id': utilizador.id, 'nome': utilizador.nome, 'email': user.email},
+                'user': {**_build_user_payload(utilizador, request), 'nome': utilizador.nome},
                 'tem_lojas': False,
                 'lojas': [],
                 'pos_existentes': [],
@@ -633,6 +684,28 @@ def pos_register(request):
 # CONFIGURAÇÃO POS
 # ═══════════════════════════════════════════════════════════════════
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pos_meus(request):
+    """
+    GET /api/pos/meus/
+    POS da conta autenticada (fonte de verdade para o dashboard — não depende
+    do que o login do POS guardou no browser). Inclui as lojas para o onboarding.
+    """
+    try:
+        utilizador = request.user.utilizador
+    except Exception:
+        return Response({'detail': 'Sessão de membro não tem POS próprios.'}, status=status.HTTP_403_FORBIDDEN)
+    pos_list = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True).select_related('loja_vinculada').order_by('criado_em')
+    lojas = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
+    return Response({
+        'pos': [_pos_response(p) for p in pos_list],
+        'lojas': [{'id': l.id, 'nome': l.nome, 'categoria': l.categoria} for l in lojas],
+        'user': {'id': utilizador.id, 'nome': utilizador.nome, 'email': request.user.email,
+                 'username': request.user.username},
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def pos_criar(request):
@@ -647,7 +720,7 @@ def pos_criar(request):
     config = ConfiguracaoPOS.objects.create(nome=nome, dono=utilizador, modo='standalone')
 
     if loja_id:
-        loja = get_object_or_404(Loja, id=loja_id, dono=utilizador)
+        loja = get_object_or_404(Loja, id=loja_id, dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
         config.conectar_loja(loja, modo='hibrido' if modo == 'hibrido' else 'integrado')
     else:
         config.modo = 'standalone'
@@ -662,7 +735,9 @@ def pos_detalhe(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
 
+    # GET continua a funcionar num POS suspenso (o dashboard mostra o aviso); alterar não
     if request.method == 'PATCH':
+        _bloquear_se_suspenso(pos)
         if 'nome' in request.data:
             pos.nome = request.data['nome']
 
@@ -697,10 +772,11 @@ def pos_conectar_loja(request, pos_id):
         modo = 'integrado'
 
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    _bloquear_se_suspenso(pos)
 
 
     loja = Loja.objects.filter(
-        Q(id=loja_id) & (
+        Q(id=loja_id) & Q(estado__in=LOJAS_VINCULAVEIS) & (
             Q(dono=utilizador) |
             Q(staff__utilizador=utilizador, staff__ativo=True)
         )
@@ -723,6 +799,7 @@ def pos_conectar_loja(request, pos_id):
 def pos_desconectar_loja(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    _bloquear_se_suspenso(pos)
     pos.desconectar_loja()
     return Response({'detail': 'POS desconectado da loja', 'pos': _pos_response(pos)})
 
@@ -746,7 +823,7 @@ def pos_produtos(request, pos_id):
         origem = 'todos'
 
     if pos.modo in ['standalone', 'hibrido'] and origem in ['todos', 'pos']:
-        qs_pos = ProdutoPOS.objects.filter(pos=pos)
+        qs_pos = ProdutoPOS.objects.select_related('tipo').prefetch_related('variantes').filter(pos=pos)
         if not gestao:
             qs_pos = qs_pos.filter(ativo=True, disponivel_pos=True)
         if q:
@@ -756,7 +833,8 @@ def pos_produtos(request, pos_id):
         data.extend([_produto_pos_payload(p, request) for p in qs_pos])
 
     if pos.modo in ['integrado', 'hibrido'] and pos.loja_vinculada and origem in ['todos', 'loja']:
-        qs_loja = Produto.objects.filter(loja=pos.loja_vinculada)
+        qs_loja = (Produto.objects.select_related('tipo', 'loja', 'inventario')
+                   .prefetch_related('variantes', 'categorias').filter(loja=pos.loja_vinculada))
         if not gestao:
             qs_loja = qs_loja.filter(ativo=True, disponivel_pos=True)
         if q:
@@ -803,15 +881,35 @@ def produto_criar(request, pos_id):
     if not nome or preco is None:
         return Response({'detail': 'Nome e preço são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    atributos, erro_attr = _ler_atributos(request)
+    if erro_attr:
+        return erro_attr
+
     if origem == 'pos':
         if pos.modo not in ['standalone', 'hibrido']:
             return Response({'detail': 'Este POS não permite produtos próprios.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # produtos próprios do POS: tipos globais + tipos do POS
+        tipo = tipo_permitido(tipos_para_pos(pos), request.data.get('tipo_id'))
+        if tipo is False:
+            return Response({'tipo_id': 'Tipo inválido para este POS.'}, status=status.HTTP_400_BAD_REQUEST)
+        if tipo:
+            em_falta = tipo.validar_atributos(atributos)
+            if em_falta:
+                return Response({'atributos': f'Campos obrigatórios em falta: {em_falta}'}, status=status.HTTP_400_BAD_REQUEST)
+
         produto = ProdutoPOS.objects.create(
             pos=pos, nome=nome, descricao=descricao, categoria=categoria,
             preco=Decimal(str(preco)), imagem=imagem, controlar_stock=controlar_stock,
-            stock=stock, ativo=ativo, disponivel_pos=disponivel_pos
+            stock=stock, ativo=ativo, disponivel_pos=disponivel_pos,
+            tipo=tipo or None, atributos=atributos,
         )
+        # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
+        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        if erro_grelha:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
+        produto.refresh_from_db()
         return Response(_produto_pos_payload(produto, request), status=status.HTTP_201_CREATED)
 
     if origem == 'loja':
@@ -830,16 +928,11 @@ def produto_criar(request, pos_id):
         if not _verificar_permissao_loja_produtos(loja, utilizador):
             return Response({'detail': 'Sem permissão para gerir produtos desta loja.'}, status=status.HTTP_403_FORBIDDEN)
 
-        atributos_raw = request.data.get('atributos', '{}')
-        try:
-            atributos = json.loads(atributos_raw) if isinstance(atributos_raw, str) else atributos_raw
-        except json.JSONDecodeError:
-            return Response({'atributos': 'JSON inválido.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        tipo = None
-        tipo_id = request.data.get('tipo_id')
-        if tipo_id:
-            tipo = get_object_or_404(TipoProduto, id=tipo_id, ativo=True)
+        # produtos da loja: tipos globais + tipos da loja (os tipos do POS não entram no catálogo)
+        tipo = tipo_permitido(tipos_para_loja(loja), request.data.get('tipo_id'))
+        if tipo is False:
+            return Response({'tipo_id': 'Tipo inválido para esta loja.'}, status=status.HTTP_400_BAD_REQUEST)
+        if tipo:
             em_falta = tipo.validar_atributos(atributos)
             if em_falta:
                 return Response({'atributos': f'Campos obrigatórios em falta: {em_falta}'}, status=status.HTTP_400_BAD_REQUEST)
@@ -853,6 +946,12 @@ def produto_criar(request, pos_id):
         )
         _aplicar_categorias_loja(produto, request)
         _set_stock_loja(produto, stock)
+        # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
+        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        if erro_grelha:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
+        produto.refresh_from_db()
         return Response(_produto_loja_payload(produto, request), status=status.HTTP_201_CREATED)
 
     return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
@@ -891,14 +990,38 @@ def produto_atualizar(request, pos_id, produto_id):
             elif campo in ('controlar_stock', 'ativo', 'disponivel_pos'):
                 setattr(produto, campo, _str_to_bool(request.data.get(campo), getattr(produto, campo)))
             elif campo == 'stock':
-                produto.stock = int(request.data.get('stock') or 0)
+                # com stock por variação o total é a soma das variações
+                if not produto.stock_por_variante:
+                    produto.stock = int(request.data.get('stock') or 0)
             else:
                 setattr(produto, campo, request.data[campo])
+
+        variantes_mudaram = False
+        if 'tipo_id' in request.data:
+            tipo = tipo_permitido(tipos_para_pos(pos), request.data.get('tipo_id'))
+            if tipo is False:
+                return Response({'tipo_id': 'Tipo inválido para este POS.'}, status=status.HTTP_400_BAD_REQUEST)
+            variantes_mudaram = (tipo.id if tipo else None) != produto.tipo_id
+            produto.tipo = tipo or None
+        if 'atributos' in request.data:
+            atributos, erro_attr = _ler_atributos(request)
+            if erro_attr:
+                return erro_attr
+            variantes_mudaram = variantes_mudaram or atributos != (produto.atributos or {})
+            produto.atributos = atributos
 
         imagem = request.FILES.get('imagem') or request.FILES.get('ficheiro')
         if imagem:
             produto.imagem = imagem
         produto.save()
+        if produto.stock_por_variante and variantes_mudaram:
+            sincronizar_variantes(produto)
+        # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
+        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        if erro_grelha:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
+        produto.refresh_from_db()
         return Response(_produto_pos_payload(produto, request))
 
     if origem == 'loja':
@@ -926,22 +1049,35 @@ def produto_atualizar(request, pos_id, produto_id):
         for campo in ('ativo', 'disponivel_pos', 'destaque'):
             if campo in request.data:
                 setattr(produto, campo, _str_to_bool(request.data.get(campo), getattr(produto, campo)))
+        variantes_mudaram = False
         if 'tipo_id' in request.data:
-            tipo_id = request.data.get('tipo_id')
-            produto.tipo = get_object_or_404(TipoProduto, id=tipo_id, ativo=True) if tipo_id else None
+            tipo = tipo_permitido(tipos_para_loja(loja), request.data.get('tipo_id'))
+            if tipo is False:
+                return Response({'tipo_id': 'Tipo inválido para esta loja.'}, status=status.HTTP_400_BAD_REQUEST)
+            variantes_mudaram = (tipo.id if tipo else None) != produto.tipo_id
+            produto.tipo = tipo or None
         if 'atributos' in request.data:
-            try:
-                produto.atributos = json.loads(request.data['atributos']) if isinstance(request.data['atributos'], str) else request.data['atributos']
-            except json.JSONDecodeError:
-                return Response({'atributos': 'JSON inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+            atributos, erro_attr = _ler_atributos(request)
+            if erro_attr:
+                return erro_attr
+            variantes_mudaram = variantes_mudaram or atributos != (produto.atributos or {})
+            produto.atributos = atributos
 
         imagem = request.FILES.get('imagem') or request.FILES.get('ficheiro')
         if imagem:
             produto.ficheiro = imagem
         produto.save()
         _aplicar_categorias_loja(produto, request)
+        if produto.stock_por_variante and variantes_mudaram:
+            sincronizar_variantes(produto)
         if 'stock' in request.data:
             _set_stock_loja(produto, int(request.data.get('stock') or 0))
+        # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
+        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        if erro_grelha:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
+        produto.refresh_from_db()
         return Response(_produto_loja_payload(produto, request))
 
     return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1013,10 +1149,18 @@ def mesa_criar(request, pos_id):
 
     if not numero:
         return Response({'detail': 'Número da mesa é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
-    if Mesa.objects.filter(pos=pos, numero=numero).exists():
+    existente = Mesa.objects.filter(pos=pos, numero=numero).first()
+    if existente and existente.ativa:
         return Response({'detail': 'Já existe uma mesa com este número'}, status=status.HTTP_400_BAD_REQUEST)
 
-    mesa = Mesa.objects.create(pos=pos, numero=numero, capacidade=capacidade)
+    if existente:
+        # mesa removida antes (desactivada para manter o histórico de contas) → volta a usar-se
+        existente.ativa      = True
+        existente.capacidade = capacidade
+        existente.save(update_fields=['ativa', 'capacidade'])
+        mesa = existente
+    else:
+        mesa = Mesa.objects.create(pos=pos, numero=numero, capacidade=capacidade)
     return Response({'id': mesa.id, 'numero': mesa.numero, 'capacidade': mesa.capacidade, 'status': mesa.status}, status=status.HTTP_201_CREATED)
 
 
@@ -1028,7 +1172,7 @@ def mesa_abrir(request, pos_id, mesa_id):
     if membro and not membro.pode_abrir_mesas:
         return Response({'detail': 'Sem permissão para abrir mesas.'}, status=status.HTTP_403_FORBIDDEN)
 
-    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
+    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos, ativa=True)   # mesas removidas não abrem
 
     conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
     if conta_existente:
@@ -1068,6 +1212,12 @@ def mesa_apagar(request, pos_id, mesa_id):
 
     if ContaMesa.objects.filter(mesa=mesa, status='aberta').exists():
         return Response({'detail': 'Não é possível apagar mesa com conta aberta'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # mesa com histórico de contas (vendas) → só desactiva: as contas são registos financeiros
+    if ContaMesa.objects.filter(mesa=mesa).exists():
+        mesa.ativa = False
+        mesa.save(update_fields=['ativa'])
+        return Response({'detail': 'Mesa removida (o histórico de contas foi mantido)'})
 
     mesa.delete()
     return Response({'detail': 'Mesa apagada com sucesso'})
@@ -1113,6 +1263,7 @@ def conta_detalhe(request, pos_id, conta_id):
 @api_view(['POST'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
+@transaction.atomic
 def conta_adicionar_item(request, pos_id, conta_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
     conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
@@ -1122,42 +1273,53 @@ def conta_adicionar_item(request, pos_id, conta_id):
 
     produto_id  = request.data.get('produto_id')
     origem      = request.data.get('origem', 'loja')
-    quantidade  = int(request.data.get('quantidade', 1) or 1)
     observacoes = request.data.get('observacoes', '')
+    try:
+        quantidade = int(request.data.get('quantidade', 1) or 1)
+    except (TypeError, ValueError):
+        quantidade = 0
+    if quantidade < 1:
+        return Response({'detail': 'Quantidade inválida.'}, status=status.HTTP_400_BAD_REQUEST)
 
     if not produto_id:
         return Response({'detail': 'produto_id é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
 
+    atributos, erro_attr = _ler_atributos(request)
+    if erro_attr:
+        return erro_attr
+
     if origem == 'pos':
         produto = get_object_or_404(ProdutoPOS, id=produto_id, pos=pos, ativo=True)
-        if not produto.disponivel:
+        if not produto.ativo or not produto.disponivel_pos:
             return Response({'detail': 'Produto POS indisponível'}, status=status.HTTP_400_BAD_REQUEST)
-        if produto.controlar_stock and produto.stock < quantidade:
-            return Response({'detail': 'Stock insuficiente'}, status=status.HTTP_400_BAD_REQUEST)
-        item = ItemContaMesa.objects.create(
-            conta=conta, produto=None, produto_pos=produto,
-            nome=produto.nome, quantidade=quantidade, preco_unitario=produto.preco, observacoes=observacoes
-        )
-        if produto.controlar_stock:
-            produto.stock = max(produto.stock - quantidade, 0)
-            produto.save(update_fields=['stock'])
-
     elif origem == 'loja':
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'Este POS não está ligado a uma loja'}, status=status.HTTP_400_BAD_REQUEST)
         produto = get_object_or_404(Produto, id=produto_id, loja=pos.loja_vinculada, ativo=True, disponivel_pos=True)
-        item = ItemContaMesa.objects.create(
-            conta=conta, produto=produto, produto_pos=None,
-            nome=produto.nome, quantidade=quantidade, preco_unitario=produto.preco, observacoes=observacoes
-        )
     else:
         return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # reserva o stock (POS ou Bendi, com ou sem variação) — tudo-ou-nada
+    info, erro_stock = reservar_stock(produto, quantidade, atributos)
+    if erro_stock:
+        return Response({'detail': erro_stock}, status=status.HTTP_400_BAD_REQUEST)
+
+    item = ItemContaMesa.objects.create(
+        conta=conta,
+        produto=produto if origem == 'loja' else None,
+        produto_pos=produto if origem == 'pos' else None,
+        variante=info['variante'], variante_pos=info['variante_pos'],
+        atributos=atributos,
+        nome=info['nome'][:200], quantidade=quantidade,
+        preco_unitario=info['preco_unitario'], observacoes=observacoes,
+    )
 
     return Response({
         'detail': 'Item adicionado',
         'item': {
             'id': item.id, 'produto_id': item.produto_ref_id, 'origem': item.origem,
             'nome': item.nome, 'quantidade': item.quantidade, 'preco_total': str(item.preco_total),
+            'atributos': item.atributos,
         },
         'conta': {'subtotal': str(conta.subtotal), 'total': str(conta.total)},
     }, status=status.HTTP_201_CREATED)
@@ -1166,6 +1328,7 @@ def conta_adicionar_item(request, pos_id, conta_id):
 @api_view(['DELETE'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
+@transaction.atomic
 def conta_remover_item(request, pos_id, conta_id, item_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
     conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
@@ -1174,9 +1337,9 @@ def conta_remover_item(request, pos_id, conta_id, item_id):
     if conta.status != 'aberta':
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if item.produto_pos and item.produto_pos.controlar_stock:
-        item.produto_pos.stock += item.quantidade
-        item.produto_pos.save(update_fields=['stock'])
+    # devolve ao stock (POS ou Bendi) — itens já cancelados já foram repostos
+    if item.status != 'cancelado':
+        repor_stock_item(item)
 
     item.delete()
     conta.calcular_totais()
@@ -1208,6 +1371,28 @@ def conta_fechar(request, pos_id, conta_id):
         'detail': 'Conta fechada com sucesso',
         'conta': {'id': conta.id, 'total': str(conta.total), 'metodo_pagamento': conta.metodo_pagamento, 'fechada_em': conta.fechada_em}
     })
+
+
+@api_view(['POST'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+@transaction.atomic
+def conta_cancelar(request, pos_id, conta_id):
+    """
+    POST /api/pos/<pos_id>/contas/<conta_id>/cancelar/   Body: { motivo? }
+    Cancela a conta inteira: repõe o stock de todos os itens e liberta a mesa.
+    """
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    if membro and not membro.pode_cancelar_items:
+        return Response({'detail': 'Sem permissão para cancelar.'}, status=status.HTTP_403_FORBIDDEN)
+
+    conta = get_object_or_404(ContaMesa.objects.select_for_update(), id=conta_id, pos=pos)
+    if conta.status != 'aberta':
+        return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
+
+    motivo = str(request.data.get('motivo') or '').strip()[:300]
+    cancelar_conta(conta, motivo)   # repõe o stock, cancela os itens e liberta a mesa
+    return Response({'detail': 'Conta cancelada. Stock reposto.', 'conta': {'id': conta.id, 'status': conta.status}})
 
 
 @api_view(['GET'])
@@ -1251,6 +1436,7 @@ def pos_historico(request, pos_id):
 @api_view(['PATCH'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
+@transaction.atomic
 def item_status_atualizar(request, pos_id, conta_id, item_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
     conta       = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
@@ -1260,8 +1446,17 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
     if novo_status not in ['pendente', 'preparando', 'pronto', 'entregue', 'cancelado']:
         return Response({'detail': 'Status inválido'}, status=status.HTTP_400_BAD_REQUEST)
 
+    if item.status == 'cancelado' and novo_status != 'cancelado':
+        # o stock já foi devolvido; reactivar exigiria nova reserva → adicionar o item de novo
+        return Response({'detail': 'Item cancelado não pode ser reactivado. Adiciona-o de novo.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    if novo_status == 'cancelado' and item.status != 'cancelado':
+        repor_stock_item(item)
+
     item.status = novo_status
     item.save(update_fields=['status', 'atualizado_em'])
+    conta.calcular_totais()   # item cancelado deixa de contar no total
 
     return Response({
         'detail': 'Status atualizado',
@@ -1284,6 +1479,7 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
 def turno_abrir(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    _bloquear_se_suspenso(pos)
 
     if TurnoPOS.objects.filter(pos=pos, aberto=True).exists():
         return Response({'detail': 'Já existe um turno aberto'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1302,6 +1498,7 @@ def turno_abrir(request, pos_id):
 def turno_fechar(request, pos_id, turno_id):
     utilizador = request.user.utilizador
     pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
+    _bloquear_se_suspenso(pos)
     turno = get_object_or_404(TurnoPOS, id=turno_id, pos=pos)
 
     if not turno.aberto:
