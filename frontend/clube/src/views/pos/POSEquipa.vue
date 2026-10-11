@@ -531,7 +531,7 @@ export default {
       verificandoUsername: false,
       usernameStatus: null,       // null | 'disponivel' | 'indisponivel'
       sugestoesUsername: [],
-      _usernameDebounce: null,
+      usernameDebounce: null,
 
       // Modal adicionar
       showAddModal: false,
@@ -680,8 +680,8 @@ export default {
       if (!/^[a-zA-Z0-9_.]+$/.test(username)) return
 
       // Debounce — esperar 400ms após o utilizador parar de escrever
-      clearTimeout(this._usernameDebounce)
-      this._usernameDebounce = setTimeout(() => {
+      clearTimeout(this.usernameDebounce)
+      this.usernameDebounce = setTimeout(() => {
         this.verificarUsername(username)
       }, 400)
     },
@@ -730,7 +730,7 @@ export default {
     },
 
     fecharModalAdicionar() {
-      clearTimeout(this._usernameDebounce)
+      clearTimeout(this.usernameDebounce)
       this.showAddModal = false
       if (this.addSuccess) this.carregarEquipa()
     },

@@ -84,7 +84,7 @@ export function usePdfRelatorio() {
     })
   }
 
-  function drawLineChart(doc, x, y, w, h, dados, label = 'Vendas') {
+  function drawLineChart(doc, x, y, w, h, dados) {
     if (!dados?.length) return
     const max = Math.max(...dados.map(d => d.total), 1)
 

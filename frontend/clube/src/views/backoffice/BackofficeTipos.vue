@@ -253,7 +253,7 @@
                   <input
                     v-model="novasOpcoes[idx]"
                     @keydown.enter.prevent="adicionarOpcao(idx)"
-                    @keydown.comma.prevent="adicionarOpcao(idx)"
+                    @keydown="e => { if (e.key === ',') { e.preventDefault(); adicionarOpcao(idx) } }"
                     type="text"
                     placeholder="Escreve uma opção e pressiona Enter..."
                     class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100
