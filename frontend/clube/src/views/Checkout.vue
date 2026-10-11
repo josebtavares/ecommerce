@@ -325,7 +325,7 @@ const ENDPOINT_PAGAMENTO = {
 }
 
 export default {
-  name: 'Checkout',
+  name: 'CheckoutPage',
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()
