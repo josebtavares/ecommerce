@@ -16,7 +16,7 @@
     <!-- Sem atributos-variante -->
     <div v-else-if="!linhas.length" :class="['text-xs leading-relaxed px-3 py-3 border border-dashed rounded-xl', c.vazio]">
       Este produto não tem opções com stock próprio. Para gerir stock por tamanho, cor, etc.,
-      marca o atributo como <span :class="['font-semibold', c.amberTxt]">📦 Stock por opção</span> no tipo do produto
+      marca o atributo como <span :class="['font-semibold', c.amberTxt]"><font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-0.5" /> Stock por opção</span> no tipo do produto
       e selecciona as opções no produto.
     </div>
 
@@ -24,7 +24,7 @@
       <!-- Estado -->
       <div v-if="!grelha.stock_por_variante"
            :class="['flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-xs leading-relaxed', c.aviso]">
-        <span class="text-base leading-none">⚠️</span>
+        <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
         <span>
           Este produto ainda usa o <b>stock total</b> ({{ grelha.stock_total_antigo ?? 0 }} un.).
           Distribui as unidades pelas combinações e guarda para activar o stock por variação.

@@ -24,7 +24,7 @@
           <button v-for="p in paginasDaSeccao(sec.key)" :key="p.slug" @click="selecionar(p.slug)"
             :class="['flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm font-semibold text-left transition whitespace-nowrap flex-shrink-0',
                      slugActivo === p.slug ? 'bg-zinc-800 border-red-500/50 text-zinc-100' : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700']">
-            <span>{{ ICONES[p.slug] }}</span>
+            <font-awesome-icon :icon="['fas', ICONES[p.slug] || 'file-lines']" class="w-3.5 h-3.5 flex-shrink-0" fixed-width />
             <span class="flex-1 truncate">{{ p.titulo }}</span>
             <span v-if="sujas.has(p.slug)" class="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Alterações por guardar"></span>
             <span v-else-if="!p.ativo" class="px-1.5 py-0.5 bg-zinc-700/60 text-zinc-400 text-[9px] rounded font-bold">OFF</span>
@@ -37,7 +37,7 @@
         <!-- Cabeçalho do editor -->
         <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-zinc-800 flex-wrap">
           <div class="flex items-center gap-2 min-w-0">
-            <span class="text-lg">{{ ICONES[form.slug] }}</span>
+            <font-awesome-icon :icon="['fas', ICONES[form.slug] || 'file-lines']" class="w-4 h-4 text-red-400 flex-shrink-0" />
             <span class="text-sm font-bold text-zinc-100 truncate">{{ form.titulo || '—' }}</span>
             <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 uppercase font-bold">{{ form.seccao }}</span>
           </div>
@@ -61,7 +61,7 @@
           <!-- Contacto: campos estruturados -->
           <div v-if="form.slug === 'contacto'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="c in CAMPOS_CONTACTO" :key="c.key" :class="c.key === 'morada' && 'sm:col-span-2'">
-              <label class="text-xs text-zinc-400 font-medium mb-1.5 block">{{ c.icone }} {{ c.label }}</label>
+              <label class="text-xs text-zinc-400 font-medium mb-1.5 flex items-center gap-1.5"><font-awesome-icon :icon="['fas', c.icone]" class="text-zinc-500" fixed-width /> {{ c.label }}</label>
               <input v-model="form.dados[c.key]" :type="c.tipo || 'text'" :placeholder="c.placeholder" maxlength="300"
                 class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" />
             </div>
@@ -126,7 +126,7 @@
           </span>
           <button @click="preview = true"
             class="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-300 border border-zinc-700 hover:border-zinc-500 transition">
-            👁 Pré-visualizar
+            <font-awesome-icon :icon="['fas', 'eye']" class="mr-1" /> Pré-visualizar
           </button>
           <button v-if="temAlteracoes" @click="descartar" :disabled="saving"
             class="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-400 hover:text-zinc-200 transition">
@@ -151,14 +151,15 @@ import api from '@/services/api'
 import { toast } from 'vue3-toastify'
 import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 
-const ICONES = { ajuda: '🛟', contacto: '✉️', faq: '❓', termos: '📜', privacidade: '🔒' }
+// ícones Font Awesome (solid) por página
+const ICONES = { ajuda: 'life-ring', contacto: 'envelope', faq: 'circle-question', termos: 'file-contract', privacidade: 'lock' }
 
 const CAMPOS_CONTACTO = [
-  { key: 'email',    label: 'Email',    icone: '✉️', tipo: 'email', placeholder: 'suporte@exemplo.com' },
-  { key: 'telefone', label: 'Telefone', icone: '📞', placeholder: '+238 000 00 00' },
-  { key: 'whatsapp', label: 'WhatsApp', icone: '💬', placeholder: '+238 000 00 00' },
-  { key: 'horario',  label: 'Horário',  icone: '🕘', placeholder: 'Seg–Sex, 9h–18h' },
-  { key: 'morada',   label: 'Morada',   icone: '📍', placeholder: 'Rua, cidade' },
+  { key: 'email',    label: 'Email',    icone: 'envelope',       tipo: 'email', placeholder: 'suporte@exemplo.com' },
+  { key: 'telefone', label: 'Telefone', icone: 'phone',          placeholder: '+238 000 00 00' },
+  { key: 'whatsapp', label: 'WhatsApp', icone: 'comment-dots',   placeholder: '+238 000 00 00' },
+  { key: 'horario',  label: 'Horário',  icone: 'clock',          placeholder: 'Seg–Sex, 9h–18h' },
+  { key: 'morada',   label: 'Morada',   icone: 'location-dot',   placeholder: 'Rua, cidade' },
 ]
 
 let uid = 0

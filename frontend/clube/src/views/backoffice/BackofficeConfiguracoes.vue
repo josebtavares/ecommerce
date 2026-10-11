@@ -169,7 +169,10 @@
              class="flex items-center justify-between p-3 rounded-xl transition"
              :class="metodoActivo(m.tipo) ? 'bg-red-500/10 border border-red-500/30' : 'bg-zinc-800/50 border border-transparent'">
           <div class="flex items-center gap-3">
-            <span class="text-xl">{{ m.icon }}</span>
+            <span :class="['w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0',
+                           metodoActivo(m.tipo) ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-400']">
+              <font-awesome-icon :icon="['fas', m.icon]" class="w-4 h-4" />
+            </span>
             <div>
               <p class="text-sm font-medium text-zinc-200">{{ m.label }}</p>
               <p class="text-xs text-zinc-500">{{ m.descricao }}</p>
@@ -190,7 +193,7 @@
       <div v-if="metodoActivo('flutterwave')"
            class="mt-4 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 space-y-3">
         <div class="flex items-center gap-2 mb-2">
-          <span class="text-lg">🌍</span>
+          <font-awesome-icon :icon="['fas', 'earth-africa']" class="w-4 h-4 text-zinc-400" />
           <p class="text-sm font-semibold text-zinc-200">Configuração Flutterwave</p>
         </div>
         <p class="text-xs text-zinc-500">
@@ -207,7 +210,7 @@
             Encontras em Flutterwave Dashboard → Subaccounts → o teu Subaccount ID
           </p>
           <p class="text-xs text-zinc-500 mt-2">
-            ⚠️ Taxa de processamento Flutterwave (~1.4% a 3%) é descontada automaticamente 
+            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1 text-amber-500" />Taxa de processamento Flutterwave (~1.4% a 3%) é descontada automaticamente 
             de cada pagamento recebido.
           </p>
         </div>
@@ -218,7 +221,7 @@
                      : 'bg-red-600 hover:bg-red-500 text-white']">
           {{ loadingFlw ? 'A guardar…' : 'Guardar configuração Flutterwave' }}
         </button>
-        <p v-if="flwGuardado" class="text-xs text-green-400 text-center">✓ Configuração guardada</p>
+        <p v-if="flwGuardado" class="text-xs text-green-400 text-center"><font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Configuração guardada</p>
       </div>
     </div>
 
@@ -267,14 +270,15 @@
 <script>
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import { iconePagamento } from '@/utils/icones'
 
 const TODOS_METODOS = [
-  { tipo: 'dinheiro',      icon: '💵', label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
-  { tipo: 'flutterwave',   icon: '🌍', label: 'Flutterwave',        descricao: 'Cartão Visa/Mastercard, Mobile Money' },
-  { tipo: 'mbway',         icon: '📱', label: 'MBWay',              descricao: 'Pagamento via MBWay (Portugal)' },
-  { tipo: 'transferencia', icon: '🏦', label: 'Transferência',      descricao: 'Transferência bancária' },
-  { tipo: 'mobile_money',  icon: '📲', label: 'Mobile Money',       descricao: 'Pagamento móvel local' },
-  { tipo: 'cartao',        icon: '💳', label: 'Cartão (Stripe)',     descricao: 'Cartão via Stripe (Europa)' },
+  { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
+  { tipo: 'flutterwave',   icon: iconePagamento('flutterwave'),   label: 'Flutterwave',        descricao: 'Cartão Visa/Mastercard, Mobile Money' },
+  { tipo: 'mbway',         icon: iconePagamento('mbway'),         label: 'MBWay',              descricao: 'Pagamento via MBWay (Portugal)' },
+  { tipo: 'transferencia', icon: iconePagamento('transferencia'), label: 'Transferência',      descricao: 'Transferência bancária' },
+  { tipo: 'mobile_money',  icon: iconePagamento('mobile_money'),  label: 'Mobile Money',       descricao: 'Pagamento móvel local' },
+  { tipo: 'cartao',        icon: iconePagamento('cartao'),        label: 'Cartão (Stripe)',     descricao: 'Cartão via Stripe (Europa)' },
   { tipo: 'paypal',        icon: '🅿️',  label: 'PayPal',            descricao: 'Pagamento via PayPal' },
 ]
 function isVideo (url) {

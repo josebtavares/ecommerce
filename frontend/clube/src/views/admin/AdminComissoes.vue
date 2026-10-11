@@ -191,7 +191,7 @@
             </p>
             <p class="text-[10px] text-zinc-600 mt-0.5">{{ formatarData(c.data_criacao) }}</p>
             <p v-if="c.data_liquidacao" class="text-[10px] text-green-600 mt-0.5">
-              ✓ Liquidada em {{ formatarData(c.data_liquidacao) }}
+              <font-awesome-icon :icon="['fas', 'check']" /> Liquidada em {{ formatarData(c.data_liquidacao) }}
             </p>
           </div>
           <div class="flex flex-col items-end gap-2 flex-shrink-0">

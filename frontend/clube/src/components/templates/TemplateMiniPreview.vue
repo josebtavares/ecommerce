@@ -14,7 +14,7 @@
         <div>
           <div :style="{ fontSize:'4px', color:primary, fontWeight:'700', letterSpacing:'0.1em', textTransform:'uppercase' }">Moda</div>
           <div style="font-size:9px;font-weight:800;color:#fff;line-height:1.1">Armazém Geral</div>
-          <div style="font-size:4px;color:#a1a1aa;margin-top:1px">📍 Lisboa · ⭐ 4.8</div>
+          <div style="font-size:4px;color:#a1a1aa;margin-top:1px">Lisboa · 4.8</div>
         </div>
       </div>
       <div :style="abs({ bottom:'20%', left:'8px', right:'8px', inset:'auto', display:'grid', gridTemplateColumns:'2fr 1fr', gap:'3px' })">
@@ -24,7 +24,7 @@
         </div>
         <div style="background:#18181b;border:1px solid #27272a;border-radius:4px;padding:3px 5px">
           <div style="font-size:3px;color:#52525b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1px">Entrega</div>
-          <div style="font-size:5px;color:#4ade80;font-weight:600">✓ Grátis</div>
+          <div style="font-size:5px;color:#4ade80;font-weight:600">Grátis</div>
         </div>
       </div>
       <div :style="abs({ bottom:'4%', left:'8px', right:'8px', inset:'auto' })">

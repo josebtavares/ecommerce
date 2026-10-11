@@ -70,7 +70,7 @@
                 @click="form.categoria = cat.nome; autoSelecionarTemplate(cat.nome)"
                 :class="['px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5',
                          form.categoria === cat.nome ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-                {{ cat.icon }} {{ cat.nome }}
+                <font-awesome-icon :icon="['fas', iconeCategoria(cat.icon, cat.nome)]" class="w-3 h-3" /> {{ cat.nome }}
               </button>
             </div>
           </div>
@@ -236,13 +236,13 @@
           <div class="grid grid-cols-2 gap-3">
             <button @click="form.entrega_ativa = !form.entrega_ativa"
               :class="['p-4 rounded-xl border-2 transition-all text-left', form.entrega_ativa ? 'border-red-500 bg-red-500/10' : 'border-zinc-700']">
-              <p class="text-2xl mb-2">🚚</p>
+              <p class="text-2xl mb-2 text-zinc-300"><font-awesome-icon :icon="['fas', 'truck']" /></p>
               <p class="text-sm font-semibold text-zinc-200">Entrega ao domicílio</p>
               <p class="text-xs mt-1" :class="form.entrega_ativa ? 'text-red-400' : 'text-zinc-500'">{{ form.entrega_ativa ? 'Activado' : 'Desactivado' }}</p>
             </button>
             <button @click="form.levantamento_ativo = !form.levantamento_ativo"
               :class="['p-4 rounded-xl border-2 transition-all text-left', form.levantamento_ativo ? 'border-red-500 bg-red-500/10' : 'border-zinc-700']">
-              <p class="text-2xl mb-2">🏪</p>
+              <p class="text-2xl mb-2 text-zinc-300"><font-awesome-icon :icon="['fas', 'store']" /></p>
               <p class="text-sm font-semibold text-zinc-200">Levantamento em loja</p>
               <p class="text-xs mt-1" :class="form.levantamento_ativo ? 'text-red-400' : 'text-zinc-500'">{{ form.levantamento_ativo ? 'Activado' : 'Desactivado' }}</p>
             </button>
@@ -255,7 +255,7 @@
             <button v-for="m in metodosPagamento" :key="m.tipo"
               @click="toggleMetodo(m.tipo)"
               :class="['p-3 rounded-xl border-2 transition-all text-center', form.metodos_pagamento.includes(m.tipo) ? 'border-red-500 bg-red-500/10' : 'border-zinc-700']">
-              <p class="text-xl mb-1">{{ m.icon }}</p>
+              <p class="text-xl mb-1"><font-awesome-icon :icon="['fas', m.icon]" /></p>
               <p class="text-xs font-semibold text-zinc-300">{{ m.label }}</p>
             </button>
           </div>
@@ -296,7 +296,7 @@
             </div>
             <div v-if="form.opcoes_entrega.length === 0"
                  class="text-center py-4 text-xs rounded-xl border border-dashed border-red-500/50 text-red-400/70 bg-red-500/5">
-              ⚠️ Obrigatório — adiciona pelo menos uma opção de entrega
+              <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />Obrigatório — adiciona pelo menos uma opção de entrega
             </div>
           </div>
         </div>
@@ -387,62 +387,80 @@
     </div>
 
     <!-- ── MODAL PREVIEW FULLSCREEN ── -->
+    <!-- O template verdadeiro, com produtos de exemplo e os dados já preenchidos (utils/demoLoja.js) -->
     <Teleport to="body">
       <div v-if="previewModal"
-           class="fixed inset-0 z-[200] flex items-center justify-center p-4"
+           class="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4"
            style="background:rgba(0,0,0,0.9);backdrop-filter:blur(14px)"
            @click.self="previewModal = null">
-        <div class="w-full max-w-2xl max-h-[88vh] rounded-2xl overflow-hidden flex flex-col border border-zinc-800 shadow-2xl"
+        <div class="w-full max-w-7xl h-[94vh] sm:h-[92vh] rounded-2xl overflow-hidden flex flex-col border border-zinc-800 shadow-2xl"
              style="background:#0a0a0b;animation:scaleIn 0.25s ease">
 
           <!-- Header modal -->
-          <div class="flex items-center justify-between px-5 py-3 border-b border-zinc-800 flex-shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-2.5 h-2.5 rounded-full" :style="{ background: previewModal.primaryDefault }"></div>
-              <span class="text-sm font-bold text-zinc-100">{{ previewModal.nome }}</span>
-              <span class="text-xs text-zinc-500">{{ previewModal.tag }}</span>
+          <div class="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-zinc-800 flex-shrink-0 flex-wrap">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                   :style="{ background: previewCores.c1, boxShadow: '0 0 8px ' + previewCores.c1 + '60' }"></div>
+              <span class="text-sm font-bold text-zinc-100 truncate">{{ previewModal.nome }}</span>
+              <span class="text-xs text-zinc-500 hidden sm:inline">{{ previewModal.tag }}</span>
             </div>
+
+            <!-- Dispositivo + modo -->
             <div class="flex items-center gap-2">
-              <button @click="navPreview(-1)"
-                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition">←</button>
-              <span class="text-xs text-zinc-600 w-12 text-center">{{ idxPreview + 1 }} / {{ todosTemplates.length }}</span>
-              <button @click="navPreview(1)"
-                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition">→</button>
-              <button @click="previewModal = null"
-                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 flex items-center justify-center hover:text-zinc-200 transition ml-1">×</button>
+              <div class="flex rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
+                <button v-for="d in [['desktop','desktop','Desktop'],['mobile','mobile-screen','Mobile']]" :key="d[0]"
+                  @click="previewDevice = d[0]"
+                  :class="['px-2.5 py-1 rounded-md text-xs font-semibold transition',
+                           previewDevice === d[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+                  <font-awesome-icon :icon="['fas', d[1]]" class="sm:mr-1" /><span class="hidden sm:inline">{{ d[2] }}</span>
+                </button>
+              </div>
+              <div class="flex rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
+                <button v-for="m in [[true,'moon'],[false,'sun']]" :key="String(m[0])"
+                  @click="previewDark = m[0]" :title="m[0] ? 'Escuro' : 'Claro'"
+                  :class="['px-2.5 py-1 rounded-md text-xs transition',
+                           previewDark === m[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+                  <font-awesome-icon :icon="['fas', m[1]]" />
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button @click="navPreview(-1)" title="Template anterior"
+                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'chevron-left']" /></button>
+              <span class="text-xs text-zinc-600 w-10 text-center">{{ idxPreview + 1 }} / {{ todosTemplates.length }}</span>
+              <button @click="navPreview(1)" title="Template seguinte"
+                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'chevron-right']" /></button>
+              <button @click="previewModal = null" title="Fechar"
+                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition ml-1"><font-awesome-icon :icon="['fas', 'xmark']" /></button>
             </div>
           </div>
 
-          <!-- Preview -->
-          <div class="flex-1 overflow-y-auto scrollbar-hide">
-            <div class="relative w-full" style="aspect-ratio:16/9">
-              <TemplateMiniPreview :template="previewModal" style="position:absolute;inset:0;font-size:220%" />
-            </div>
-            <div class="p-5 space-y-3">
-              <div class="flex items-start justify-between">
-                <div>
-                  <h3 class="text-base font-bold text-zinc-100">{{ previewModal.nome }}</h3>
-                  <p class="text-xs text-zinc-500 mt-1">{{ previewModal.descricao }}</p>
-                </div>
-                <span class="px-2 py-0.5 rounded-full text-xs font-semibold ml-4 flex-shrink-0"
-                      :style="tagStyle(previewModal.tag)">{{ previewModal.tag }}</span>
-              </div>
-              <div class="flex flex-wrap gap-1.5">
-                <span v-for="cat in previewModal.categorias" :key="cat"
-                      class="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded-full capitalize">
-                  {{ cat === 'todos' ? 'Genérico' : cat }}
-                </span>
-              </div>
-            </div>
+          <!-- Preview real: o template a sério, com uma loja de exemplo -->
+          <div class="flex-1 min-h-0 p-2 sm:p-5 bg-zinc-950">
+            <TemplatePreviewFrame :src="previewSrc" :device="previewDevice" />
           </div>
 
           <!-- Footer modal -->
-          <div class="px-5 py-3 border-t border-zinc-800 flex items-center justify-end flex-shrink-0">
-            <button @click="selecionarDoModal"
-              class="px-5 py-2 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
-              :style="{ background: previewModal.primaryDefault || '#dc2626' }">
-              Selecionar este template
-            </button>
+          <div class="px-4 sm:px-5 py-3 border-t border-zinc-800 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
+            <div class="min-w-0">
+              <p class="text-xs text-zinc-300 truncate">{{ previewModal.descricao }}</p>
+              <p class="text-[11px] text-zinc-500 mt-0.5">
+                Produtos de exemplo{{ form.categoria ? ' para ' + form.categoria.toLowerCase() : '' }} ·
+                {{ previewModal.id === form.template_id ? 'as tuas cores' : 'cores padrão do template' }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <a :href="previewSrc" target="_blank"
+                 class="hidden sm:inline-flex items-center px-3 py-2 rounded-xl text-xs font-semibold text-zinc-400 border border-zinc-700 hover:text-zinc-200 hover:border-zinc-500 transition">
+                Abrir em nova aba <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
+              </a>
+              <button @click="selecionarDoModal"
+                class="px-5 py-2 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
+                :style="{ background: previewCores.c1, boxShadow: '0 4px 16px ' + previewCores.c1 + '40' }">
+                {{ previewModal.id === form.template_id ? 'Manter este template' : 'Selecionar este template' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -453,8 +471,11 @@
 
 <script>
 import api from '@/services/api'
+import { iconeCategoria, iconePagamento } from '@/utils/icones'
 import { TEMPLATES, CATEGORIAS_FILTRO, getTemplatesSugeridos } from '@/config/lojaTemplates'
 import TemplateMiniPreview from '@/components/templates/TemplateMiniPreview.vue'
+import TemplatePreviewFrame from '@/components/templates/TemplatePreviewFrame.vue'
+import { DEMO_ID } from '@/utils/demoLoja'
 
 const TAG_STYLES = {
   'Versátil':  { background:'rgba(220,38,38,0.12)',  color:'#f87171', border:'1px solid rgba(220,38,38,0.25)'   },
@@ -471,7 +492,7 @@ const TAG_STYLES = {
 
 export default {
   name: 'CriarLoja',
-  components: { TemplateMiniPreview },
+  components: { TemplateMiniPreview, TemplatePreviewFrame },
 
   data () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -483,6 +504,8 @@ export default {
       user,
       filtroTemplate: null,
       previewModal:   null,
+      previewDevice:  'desktop',
+      previewDark:    true,
 
       form: {
         nome:               '',
@@ -506,12 +529,12 @@ export default {
       categorias:    [],
 
       metodosPagamento: [
-        { tipo: 'dinheiro',      icon: '💵', label: 'Dinheiro'      },
-        { tipo: 'mbway',         icon: '📱', label: 'MBWay'         },
-        { tipo: 'cartao',        icon: '💳', label: 'Cartão'        },
-        { tipo: 'flutterwave',   icon: '🌍', label: 'Flutterwave'   },
-        { tipo: 'transferencia', icon: '🏦', label: 'Transferência' },
-        { tipo: 'mobile_money',  icon: '📲', label: 'Mobile Money'  },
+        { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro'      },
+        { tipo: 'mbway',         icon: iconePagamento('mbway'),         label: 'MBWay'         },
+        { tipo: 'cartao',        icon: iconePagamento('cartao'),        label: 'Cartão'        },
+        { tipo: 'flutterwave',   icon: iconePagamento('flutterwave'),   label: 'Flutterwave'   },
+        { tipo: 'transferencia', icon: iconePagamento('transferencia'), label: 'Transferência' },
+        { tipo: 'mobile_money',  icon: iconePagamento('mobile_money'),  label: 'Mobile Money'  },
       ],
 
       categoriasFiltroTemplate: CATEGORIAS_FILTRO,
@@ -539,6 +562,35 @@ export default {
     categoriaLabel () {
       const cat = this.categorias.find(c => c.nome === this.form.categoria)
       return cat ? `${cat.icon} ${cat.nome}` : ''
+    },
+
+    // Template seleccionado → cores do formulário; outro → cores padrão dele
+    previewCores () {
+      const t = this.previewModal
+      if (!t) return { c1: '#dc2626', c2: '#1c1c1e' }
+      if (t.id === this.form.template_id) return { c1: this.form.cor_primaria, c2: this.form.cor_secundaria }
+      return { c1: t.primaryDefault, c2: t.secundariaDefault }
+    },
+
+    // Loja de demonstração com o que já foi preenchido (nome, categoria, logo, banner…)
+    previewSrc () {
+      if (!this.previewModal) return ''
+      const f = this.form
+      const q = new URLSearchParams({
+        preview: '1',
+        tpl:  this.previewModal.id,
+        c1:   (this.previewCores.c1 || '').replace('#', ''),
+        c2:   (this.previewCores.c2 || '').replace('#', ''),
+        dark: this.previewDark ? '1' : '0',
+      })
+      if (f.nome.trim())        q.set('nome', f.nome.trim())
+      if (f.descricao.trim())   q.set('desc', f.descricao.trim())
+      if (f.localizacao.trim()) q.set('loc', f.localizacao.trim())
+      if (f.categoria)          q.set('cat', f.categoria)
+      if (this.logoPreview)     q.set('logo', this.logoPreview)
+      // o '#.mp4' deixa os templates reconhecerem o banner em vídeo (blob URLs não têm extensão)
+      if (this.bannerPreview)   q.set('banner', this.bannerPreview + (f.banner?.type?.startsWith('video') ? '#.mp4' : ''))
+      return `/loja/${DEMO_ID}?${q}`
     },
 
     idxPreview () {
@@ -573,22 +625,29 @@ export default {
   },
 
   methods: {
+    iconeCategoria,
     tagStyle (tag) {
       return TAG_STYLES[tag] || { background:'rgba(255,255,255,0.06)', color:'#a1a1aa', border:'1px solid rgba(255,255,255,0.1)' }
     },
 
-    abrirPreview (tpl) { this.previewModal = tpl },
+    abrirPreview (tpl) {
+      this.previewModal = tpl
+      this.previewDark  = tpl.darkDefault !== false
+    },
 
     navPreview (dir) {
       const idx = (this.idxPreview + dir + TEMPLATES.length) % TEMPLATES.length
-      this.previewModal = TEMPLATES[idx]
+      this.abrirPreview(TEMPLATES[idx])
     },
 
     selecionarDoModal () {
       if (!this.previewModal) return
-      this.form.template_id    = this.previewModal.id
-      this.form.cor_primaria   = this.previewModal.primaryDefault
-      this.form.cor_secundaria = this.previewModal.secundariaDefault
+      // o template que já estava escolhido mantém as cores que a pessoa definiu
+      if (this.previewModal.id !== this.form.template_id) {
+        this.form.template_id    = this.previewModal.id
+        this.form.cor_primaria   = this.previewModal.primaryDefault
+        this.form.cor_secundaria = this.previewModal.secundariaDefault
+      }
       this.previewModal = null
     },
 

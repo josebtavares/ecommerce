@@ -278,7 +278,7 @@ export default {
 
     // Badge
     showBadges: { type: Boolean, default: true },
-    badgeText: { type: String, default: '⭐' },
+    badgeText: { type: String, default: 'Destaque' },
     badgeClass: { type: String, default: 'bg-red-600 rounded' },
 
     // Display options

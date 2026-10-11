@@ -53,12 +53,12 @@
             <div class="flex items-center gap-2 flex-wrap">
               <p class="text-sm font-semibold text-zinc-200">{{ enc.loja_nome }}</p>
               <span v-if="enc.metodo_pagamento"
-                    class="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">
-                {{ enc.metodo_pagamento === 'dinheiro' ? '💵' : enc.metodo_pagamento === 'mbway' ? '📱' : '💳' }}
+                    class="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                <font-awesome-icon :icon="['fas', iconePagamento(enc.metodo_pagamento)]" />
                 {{ enc.metodo_pagamento }}
               </span>
-              <span class="text-[10px] text-zinc-500">
-                {{ enc.tipo_entrega === 'entrega' ? '🚚' : '🏪' }} {{ enc.tipo_entrega }}
+              <span class="text-[10px] text-zinc-500 inline-flex items-center gap-1">
+                <font-awesome-icon :icon="['fas', enc.tipo_entrega === 'entrega' ? 'truck' : 'store']" /> {{ enc.tipo_entrega }}
               </span>
             </div>
             <p class="text-xs text-zinc-500">{{ enc.data_criacao }} · {{ enc.comprador_username }}</p>
@@ -161,6 +161,7 @@
 
 <script>
 import api from '@/services/api'
+import { iconePagamento } from '@/utils/icones'
 export default {
   name: 'AdminEncomendas',
   data () {
@@ -183,6 +184,7 @@ export default {
     await Promise.all([this.fetchLojas(), this.fetchEncomendas()])
   },
   methods: {
+    iconePagamento,
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },

@@ -58,7 +58,7 @@
               ? 'bg-red-600/15 text-red-400'
               : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
           ]">
-          <span class="flex-shrink-0 text-base">{{ item.icon }}</span>
+          <font-awesome-icon :icon="['fas', item.icon]" class="flex-shrink-0 w-4 h-4" fixed-width />
           <span v-if="sidebarExpandida || sidebarAberta"
                 class="text-sm font-medium truncate">{{ item.label }}</span>
         </button>
@@ -69,7 +69,7 @@
         <button @click="$router.push('/Home')"
           :title="!sidebarExpandida ? 'Voltar ao site' : ''"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800">
-          <span class="flex-shrink-0">🏠</span>
+          <font-awesome-icon :icon="['fas', 'house']" class="flex-shrink-0 w-4 h-4" fixed-width />
           <span v-if="sidebarExpandida || sidebarAberta" class="text-sm font-medium">Voltar ao site</span>
         </button>
       </div>
@@ -157,20 +157,21 @@ import AdminPOS          from './AdminPOS.vue'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 
 const SECCOES = [
-  { key: 'dashboard',    label: 'Dashboard',     icon: '📊', permissao: 'ver_stats'           },
-  { key: 'relatorios',   label: 'Relatórios',    icon: '📈', permissao: 'ver_relatorios'    },
-  { key: 'categorias',   label: 'Categorias',    icon: '🏷️', permissao: 'gerir_lojas'         },
-  { key: 'lojas',        label: 'Lojas',         icon: '🏪', permissao: 'gerir_lojas'         },
-  { key: 'utilizadores', label: 'Utilizadores',  icon: '👥', permissao: 'gerir_utilizadores'  },
-  { key: 'produtos',     label: 'Produtos',      icon: '📦', permissao: 'gerir_produtos'      },
-  { key: 'categorias_destaque', label: 'Categorias em Destaque', icon: '🔥', permissao: 'gerir_categorias_destaque' },
+  // icon: nome do ícone Font Awesome (solid)
+  { key: 'dashboard',    label: 'Dashboard',     icon: 'chart-pie',     permissao: 'ver_stats'           },
+  { key: 'relatorios',   label: 'Relatórios',    icon: 'chart-line',    permissao: 'ver_relatorios'    },
+  { key: 'categorias',   label: 'Categorias',    icon: 'tags',          permissao: 'gerir_lojas'         },
+  { key: 'lojas',        label: 'Lojas',         icon: 'store',         permissao: 'gerir_lojas'         },
+  { key: 'utilizadores', label: 'Utilizadores',  icon: 'users',         permissao: 'gerir_utilizadores'  },
+  { key: 'produtos',     label: 'Produtos',      icon: 'box',           permissao: 'gerir_produtos'      },
+  { key: 'categorias_destaque', label: 'Categorias em Destaque', icon: 'fire', permissao: 'gerir_categorias_destaque' },
 
-  { key: 'encomendas',   label: 'Encomendas',    icon: '🛍️', permissao: 'gerir_encomendas'   },
-  { key: 'pagamentos',   label: 'Pagamentos',    icon: '💳', permissao: 'gerir_pagamentos'    },
-  { key: 'tipos',        label: 'Tipos Globais', icon: '🏷️', permissao: 'gerir_tipos_globais' },
-  { key: 'comissoes',    label: 'Comissões',     icon: '💰', permissao: 'gerir_comissoes'     },
-  { key: 'paginas',      label: 'Páginas & Ajuda', icon: '📄', permissao: 'gerir_conteudo'    },
-  { key: 'pos',          label: 'POS',             icon: '🧾', permissao: 'ver_pos'           },
+  { key: 'encomendas',   label: 'Encomendas',    icon: 'bag-shopping',  permissao: 'gerir_encomendas'   },
+  { key: 'pagamentos',   label: 'Pagamentos',    icon: 'credit-card',   permissao: 'gerir_pagamentos'    },
+  { key: 'tipos',        label: 'Tipos Globais', icon: 'shapes',        permissao: 'gerir_tipos_globais' },
+  { key: 'comissoes',    label: 'Comissões',     icon: 'coins',         permissao: 'gerir_comissoes'     },
+  { key: 'paginas',      label: 'Páginas & Ajuda', icon: 'file-lines',  permissao: 'gerir_conteudo'    },
+  { key: 'pos',          label: 'POS',             icon: 'cash-register', permissao: 'ver_pos'           },
 
 ]
 

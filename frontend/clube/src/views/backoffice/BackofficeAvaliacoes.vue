@@ -17,7 +17,7 @@
           @click="filtroEstrelas = n; fetchAvaliacoes()"
           :class="['px-2.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1',
                    filtroEstrelas === n ? 'bg-yellow-500/20 text-yellow-400' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-          {{ n }}⭐
+          {{ n }}<font-awesome-icon :icon="['fas', 'star']" class="text-yellow-400" />
         </button>
       </div>
     </div>
@@ -95,7 +95,7 @@
                        av.oculta
                          ? 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
                          : 'bg-red-500/10 hover:bg-red-500/20 text-red-400']">
-              {{ av.oculta ? '👁 Mostrar' : '🚫 Ocultar' }}
+              <font-awesome-icon :icon="['fas', av.oculta ? 'eye' : 'eye-slash']" class="mr-1" />{{ av.oculta ? 'Mostrar' : 'Ocultar' }}
             </button>
           </div>
         </div>

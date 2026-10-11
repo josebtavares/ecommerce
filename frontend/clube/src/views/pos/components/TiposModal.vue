@@ -39,7 +39,7 @@
                     <span v-for="a in t.atributos_schema" :key="a.nome"
                           :class="['rounded-lg px-2 py-0.5 text-[11px] font-bold',
                                    a.variante ? 'bg-amber-100 text-amber-800' : a.tipo === 'choices' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600']">
-                      <span v-if="a.variante" title="Stock por opção">📦 </span>{{ a.nome }}
+                      <font-awesome-icon v-if="a.variante" :icon="['fas', 'boxes-stacked']" title="Stock por opção" class="mr-1" />{{ a.nome }}
                       <span v-if="a.tipo === 'choices'" class="opacity-60">({{ (a.opcoes || []).join(', ') }})</span>
                     </span>
                     <span v-if="!t.atributos_schema.length" class="text-[11px] text-slate-400">Sem atributos</span>
@@ -107,7 +107,7 @@
                               a.variante ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white']">
                 <input v-model="a.variante" type="checkbox" class="mt-0.5 h-4 w-4 accent-amber-500" />
                 <span>
-                  <span class="block text-xs font-black text-slate-800">📦 Stock por opção</span>
+                  <span class="block text-xs font-black text-slate-800"><font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1 text-amber-600" />Stock por opção</span>
                   <span class="block text-[11px] font-semibold text-slate-500">
                     Cada opção tem stock próprio (ex.: tamanho). Desliga para preferências (ex.: com/sem gelo).
                   </span>

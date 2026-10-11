@@ -26,7 +26,7 @@
                  filtroStockBaixo
                    ? 'bg-red-600/20 border-red-500/50 text-red-400'
                    : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200']">
-        ⚠️ Stock baixo
+        <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />Stock baixo
       </button>
     </div>
 
@@ -62,14 +62,14 @@
               <!-- resumo das variações -->
               <button v-if="inv.stock_por_variante" type="button" @click="toggleVariantes(inv)"
                 class="mt-1 inline-flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 transition">
-                📦 {{ inv.variantes.length }} variações
+                <font-awesome-icon :icon="['fas', 'boxes-stacked']" /> {{ inv.variantes.length }} variações
                 <span v-if="esgotadas(inv)" class="text-red-400">· {{ esgotadas(inv) }} esgotada{{ esgotadas(inv) > 1 ? 's' : '' }}</span>
                 <span v-else-if="emBaixo(inv)" class="text-amber-400">· {{ emBaixo(inv) }} em baixo</span>
-                <span class="transition-transform" :class="aberto === inv.id && 'rotate-180'">▾</span>
+                <font-awesome-icon :icon="['fas', 'chevron-down']" class="w-2.5 h-2.5 transition-transform" :class="aberto === inv.id && 'rotate-180'" />
               </button>
               <button v-else-if="inv.variantes_pendentes" type="button" @click="toggleVariantes(inv)"
                 class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20 transition">
-                ⚠️ Definir stock por variação
+                <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> Definir stock por variação
               </button>
             </td>
             <td class="px-4 py-3 text-center">
