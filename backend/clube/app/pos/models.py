@@ -351,14 +351,14 @@ class ContaMesa(models.Model):
     """
     pos = models.ForeignKey(
         ConfiguracaoPOS,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,      # vendas do POS são registos financeiros
         related_name='contas',
         verbose_name='POS'
     )
 
     mesa = models.ForeignKey(
         Mesa,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,      # apagar uma mesa nunca apaga as contas dela
         related_name='contas',
         verbose_name='Mesa'
     )
@@ -646,7 +646,7 @@ class TurnoPOS(models.Model):
     """
     pos = models.ForeignKey(
         ConfiguracaoPOS,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,      # turnos de caixa são registos financeiros
         related_name='turnos',
         verbose_name='POS'
     )

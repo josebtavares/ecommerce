@@ -59,8 +59,9 @@ def admin_stats(request):
 
     total_utilizadores = Utilizador.objects.count()
     total_lojas        = Loja.objects.count()
-    lojas_ativas       = Loja.objects.filter(ativa=True).count()
-    lojas_pendentes    = Loja.objects.filter(ativa=False).count()
+    lojas_por_estado   = dict(Loja.objects.values('estado').annotate(n=Count('id')).values_list('estado', 'n'))
+    lojas_ativas       = lojas_por_estado.get('ativa', 0)
+    lojas_pendentes    = lojas_por_estado.get('pendente', 0)
     total_produtos     = Produto.objects.filter(ativo=True).count()
     total_encomendas   = Encomenda.objects.count()
     total_vendas       = Pagamento.objects.filter(status='aprovado').aggregate(
@@ -84,6 +85,8 @@ def admin_stats(request):
             'total':    total_lojas,
             'ativas':   lojas_ativas,
             'pendentes': lojas_pendentes,
+            'fechadas':  lojas_por_estado.get('fechada', 0),
+            'suspensas': lojas_por_estado.get('suspensa', 0),
         },
         'produtos':   total_produtos,
         'encomendas': {
@@ -102,7 +105,8 @@ def admin_stats(request):
 @permission_classes([IsAuthenticated])
 def admin_loja_list(request):
     """
-    GET /app/admin/lojas/?q=&ativa=&offset=0&limit=20
+    GET /app/admin/lojas/?q=&estado=pendente|ativa|fechada|suspensa&offset=0&limit=20
+    (?ativa=true|false continua a funcionar)
     """
     erro = _exige_admin(request, 'gerir_lojas')
     if erro: return erro
@@ -112,6 +116,10 @@ def admin_loja_list(request):
     q = request.GET.get('q', '').strip()
     if q:
         qs = qs.filter(Q(nome__icontains=q) | Q(categoria__icontains=q))
+
+    estado = request.GET.get('estado')
+    if estado in dict(Loja.ESTADOS):
+        qs = qs.filter(estado=estado)
 
     ativa = request.GET.get('ativa')
     if ativa == 'true':
@@ -136,6 +144,8 @@ def admin_loja_list(request):
             'categoria':   loja.categoria,
             'localizacao': loja.localizacao,
             'ativa':       loja.ativa,
+            'estado':      loja.estado,
+            'estado_motivo': loja.estado_motivo,
             'dono': {
                 'id':       loja.dono.id,
                 'username': loja.dono.user.username,
@@ -160,43 +170,133 @@ def admin_loja_list(request):
 def admin_loja_gerir(request, loja_id):
     """
     PATCH /app/admin/lojas/<loja_id>/
-    Body: { ativa: true/false }
-    Activa ou desactiva uma loja.
+    Body: { acao: 'aprovar' | 'rejeitar' | 'suspender' | 'reativar', motivo?: '...' }
+    (compatibilidade: { ativa: true } = aprovar/reativar, { ativa: false } = suspender)
+
+    Uma loja FECHADA pelo dono só o dono reabre — o admin pode suspendê-la, não abri-la.
     """
     erro = _exige_admin(request, 'gerir_lojas')
     if erro: return erro
 
     loja = get_object_or_404(Loja, id=loja_id)
 
-    if 'ativa' in request.data:
-        loja.ativa = request.data['ativa']
-        loja.save(update_fields=['ativa'])
-        
-    if 'ativa' in request.data:
-        if request.data['ativa']:
-            notificar(
-                utilizador=loja.dono,
-                tipo='loja_aprovada',
-                titulo=f'A tua loja "{loja.nome}" foi aprovada!',
-                mensagem='A tua loja já está visível no site. Podes começar a receber encomendas.',
-                loja=loja,
-                link=f'/loja/{loja.id}/backoffice',
-            )
+    acao = request.data.get('acao')
+    if not acao and 'ativa' in request.data:
+        ativar = request.data['ativa'] in (True, 'true', '1', 1)
+        acao = ('aprovar' if loja.estado == 'pendente' else 'reativar') if ativar else 'suspender'
+
+    if acao not in _ACOES_LOJA:
+        return Response({'detail': 'Acção inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    origens, destino = _ACOES_LOJA[acao]
+    if loja.estado not in origens:
+        if loja.estado == 'fechada' and destino == 'ativa':
+            msg = 'Esta loja foi fechada pelo dono — só o dono a pode reabrir.'
         else:
-            notificar(
-                utilizador=loja.dono,
-                tipo='loja_rejeitada',
-                titulo=f'A tua loja "{loja.nome}" foi desactivada.',
-                mensagem='A tua loja foi desactivada pelo administrador. Contacta o suporte para mais informações.',
-                loja=loja,
-                link=f'/loja/{loja.id}/backoffice',
-            )
+            msg = f'Não é possível "{acao}" uma loja no estado "{loja.get_estado_display()}".'
+        return Response({'detail': msg, 'estado': loja.estado}, status=status.HTTP_400_BAD_REQUEST)
+
+    motivo = (request.data.get('motivo') or '')[:300] if destino == 'suspensa' else ''
+    loja.mudar_estado(destino, motivo)
+    _notificar_estado_loja(loja, acao)
 
     return Response({
-        'id':    loja.id,
-        'nome':  loja.nome,
-        'ativa': loja.ativa,
+        'id':     loja.id,
+        'nome':   loja.nome,
+        'ativa':  loja.ativa,
+        'estado': loja.estado,
+        'estado_motivo': loja.estado_motivo,
     })
+
+
+# acção → (estados de origem permitidos, estado final)
+_ACOES_LOJA = {
+    'aprovar':   (('pendente',),          'ativa'),
+    'rejeitar':  (('pendente',),          'suspensa'),
+    'suspender': (('ativa', 'fechada'),   'suspensa'),
+    'reativar':  (('suspensa',),          'ativa'),
+}
+
+
+def _notificar_estado_loja(loja, acao):
+    link   = f'/loja/{loja.id}/backoffice'
+    motivo = f' Motivo: {loja.estado_motivo}' if loja.estado_motivo else ''
+    textos = {
+        'aprovar':   ('loja_aprovada',  f'A tua loja "{loja.nome}" foi aprovada!',
+                      'A tua loja já está visível no site. Podes começar a receber encomendas.'),
+        'rejeitar':  ('loja_rejeitada', f'A tua loja "{loja.nome}" não foi aprovada.',
+                      'Contacta o suporte para mais informações.' + motivo),
+        'suspender': ('loja_suspensa',  f'A tua loja "{loja.nome}" foi suspensa.',
+                      'A loja deixou de aparecer no site e de receber encomendas. As encomendas em curso '
+                      'continuam no backoffice. Contacta o suporte para mais informações.' + motivo),
+        'reativar':  ('loja_reativada', f'A tua loja "{loja.nome}" foi reactivada!',
+                      'A tua loja voltou a estar visível no site.'),
+    }
+    tipo, titulo, mensagem = textos[acao]
+    notificar(utilizador=loja.dono, tipo=tipo, titulo=titulo, mensagem=mensagem, loja=loja, link=link)
+
+
+def _bloqueios_eliminar_loja(loja):
+    """Razões para NÃO eliminar definitivamente (registos financeiros/operacionais)."""
+    from ..pos.models import ConfiguracaoPOS, ItemContaMesa
+    razoes = []
+    n = loja.encomendas.count()
+    if n:
+        razoes.append(f'{n} encomenda(s) — registos financeiros nunca são apagados')
+    n = loja.comissoes.count()
+    if n:
+        razoes.append(f'{n} comissão(ões)')
+    n = ItemContaMesa.objects.filter(produto__loja=loja).count()
+    if n:
+        razoes.append(f'{n} venda(s) no POS com produtos desta loja')
+    pos = list(ConfiguracaoPOS.objects.filter(loja_vinculada=loja).values_list('nome', flat=True))
+    if pos:
+        razoes.append(f'POS vinculado(s): {", ".join(pos)} — desvincula primeiro')
+    return razoes
+
+
+@api_view(['GET', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_loja_eliminar(request, loja_id):
+    """
+    GET    /app/admin/lojas/<loja_id>/eliminar/   → pode ser eliminada? { pode, razoes }
+    DELETE /app/admin/lojas/<loja_id>/eliminar/   Body: { confirmacao: '<nome da loja>' }
+
+    Eliminação DEFINITIVA — só lojas sem encomendas, comissões, vendas POS nem POS vinculado,
+    e que já não estejam activas (suspende primeiro). Apaga produtos, categorias, staff, etc.;
+    os ficheiros (logo, banner, imagens, vídeos) vão para a fila de limpeza em segundo plano.
+    """
+    from django.db import transaction
+    from django.db.models import ProtectedError
+
+    erro = _exige_admin(request, 'gerir_lojas')
+    if erro: return erro
+
+    loja   = get_object_or_404(Loja, id=loja_id)
+    razoes = _bloqueios_eliminar_loja(loja)
+    if loja.estado == 'ativa':
+        razoes.insert(0, 'a loja está activa — suspende-a primeiro')
+
+    if request.method == 'GET':
+        return Response({'pode': not razoes, 'razoes': razoes})
+
+    if razoes:
+        return Response({'detail': 'Esta loja não pode ser eliminada.', 'razoes': razoes},
+                        status=status.HTTP_409_CONFLICT)
+    if (request.data.get('confirmacao') or '').strip() != loja.nome:
+        return Response({'detail': 'Escreve o nome exacto da loja para confirmar.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    nome = loja.nome
+    try:
+        with transaction.atomic():
+            loja.delete()
+    except ProtectedError as e:
+        # rede de segurança: on_delete=PROTECT nos registos financeiros
+        return Response({'detail': 'Esta loja tem registos que não podem ser apagados.',
+                         'razoes': sorted({str(o._meta.verbose_name) for o in e.protected_objects})},
+                        status=status.HTTP_409_CONFLICT)
+    return Response({'detail': f'Loja "{nome}" eliminada definitivamente.'})
 
 
 # ══════════════════════════════════════════════════════════════
@@ -851,7 +951,7 @@ def admin_dashboard(request):
     ]
  
     # ── Lojas pendentes de aprovação ─────────────────────────
-    lojas_pendentes = Loja.objects.filter(ativa=False).count()
+    lojas_pendentes = Loja.objects.filter(estado='pendente').count()
  
     return Response({
         'periodo':              periodo,
@@ -984,8 +1084,9 @@ def admin_relatorios(request):
     ]
  
     # ── Lista de lojas para o filtro ──────────────────────────
+    # inclui lojas fechadas/suspensas: o histórico financeiro delas continua a contar
     lojas_lista = list(
-        Loja.objects.filter(ativa=True).values('id', 'nome').order_by('nome')
+        Loja.objects.exclude(estado='pendente').values('id', 'nome').order_by('nome')
     )
  
     return Response({

@@ -97,10 +97,11 @@ def agendar(instancia, campo):
         _conversao().objects.create(modelo=chave, objeto_id=instancia.pk, campo=campo, ficheiro=nome)
         estado = 'pendente'
 
-    # o poster antigo era do ficheiro anterior
+    # o poster antigo era do ficheiro anterior → fila de limpeza (app/utils/limpeza.py)
     poster = getattr(instancia, f'{campo}_poster')
     if poster:
-        _apagar_do_storage(poster.storage, poster.name)
+        from .limpeza import agendar_apagar
+        agendar_apagar([poster.name], f'poster:{chave}.{campo}')
 
     # update() em vez de save(): não volta a disparar os signals
     type(instancia).objects.filter(pk=instancia.pk).update(**{

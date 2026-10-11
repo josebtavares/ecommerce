@@ -6,4 +6,6 @@ class AppConfig(AppConfig):
     name = 'app'
 
     def ready(self):
-        from . import signals  # noqa: F401  — otimização de vídeos (app/signals.py)
+        # ficheiros substituídos/apagados vão para a fila de limpeza; vídeos são otimizados
+        from . import signals
+        signals.ligar_limpeza_ao_apagar()

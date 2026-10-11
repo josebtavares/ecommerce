@@ -197,7 +197,22 @@ class Loja(models.Model):
     layout_produtos = models.CharField(max_length=10, default='grid',
                                        choices=[('grid', 'Grelha'), ('list', 'Lista')])
 
-    ativa           = models.BooleanField(default=True)
+    # Estado da loja — fonte de verdade. `ativa` é derivado (= estado 'ativa') e mantido
+    # em sincronia em save(): todos os filtros existentes (ativa=True) continuam válidos.
+    #   pendente  → criada, à espera de aprovação da plataforma
+    #   ativa     → visível no site, recebe encomendas
+    #   fechada   → fechada pelo dono (pode reabrir); encomendas em curso continuam
+    #   suspensa  → suspensa pela plataforma (só o admin reactiva)
+    ESTADOS = [
+        ('pendente', 'Pendente de aprovação'),
+        ('ativa',    'Ativa'),
+        ('fechada',  'Fechada pelo dono'),
+        ('suspensa', 'Suspensa pela plataforma'),
+    ]
+    estado          = models.CharField(max_length=10, choices=ESTADOS, default='pendente', db_index=True)
+    estado_motivo   = models.CharField(max_length=300, blank=True, default='')
+    estado_alterado_em = models.DateTimeField(null=True, blank=True)
+    ativa           = models.BooleanField(default=False)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
     
@@ -233,6 +248,25 @@ class Loja(models.Model):
 
     def __str__(self):
         return self.nome
+
+    def save(self, *args, **kwargs):
+        # `ativa` acompanha sempre o estado
+        self.ativa = self.estado == 'ativa'
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and 'estado' in update_fields and 'ativa' not in update_fields:
+            kwargs['update_fields'] = [*update_fields, 'ativa']
+        super().save(*args, **kwargs)
+
+    def mudar_estado(self, novo, motivo=''):
+        """Muda o estado (valida-o) e grava. Devolve o estado anterior."""
+        if novo not in dict(self.ESTADOS):
+            raise ValueError(f'Estado inválido: {novo}')
+        anterior = self.estado
+        self.estado             = novo
+        self.estado_motivo      = motivo or ''
+        self.estado_alterado_em = now()
+        self.save(update_fields=['estado', 'estado_motivo', 'estado_alterado_em', 'ativa'])
+        return anterior
 
 
 # ══════════════════════════════════════════════════════════════
@@ -602,8 +636,9 @@ class Encomenda(models.Model):
         ('cancelado',   'Cancelado'),
     ]
 
-    comprador       = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='encomendas')
-    loja            = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='encomendas')
+    # PROTECT: encomendas são registos financeiros — apagar o comprador ou a loja nunca as apaga
+    comprador       = models.ForeignKey(Utilizador, on_delete=models.PROTECT, related_name='encomendas')
+    loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='encomendas')
     valor_total     = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     tipo_entrega    = models.CharField(max_length=15, choices=TIPO_ENTREGA, default='levantamento')
     status          = models.CharField(max_length=15, choices=STATUS, default='pendente')
@@ -723,7 +758,7 @@ class Pagamento(models.Model):
         ('reembolsado','Reembolsado'),
     ]
 
-    encomenda           = models.OneToOneField(Encomenda, on_delete=models.CASCADE, related_name='pagamento')
+    encomenda           = models.OneToOneField(Encomenda, on_delete=models.PROTECT, related_name='pagamento')   # registo financeiro
     metodo              = models.ForeignKey(MetodoPagamento, on_delete=models.SET_NULL,
                                             null=True, blank=True)
     valor               = models.DecimalField(max_digits=10, decimal_places=2)
@@ -862,12 +897,13 @@ class Comissao(models.Model):
         ('liquidada',  'Liquidada'),   # paga ao administrador
     ]
  
+    # PROTECT: comissões são registos financeiros
     encomenda        = models.OneToOneField(
-                           Encomenda, on_delete=models.CASCADE,
+                           Encomenda, on_delete=models.PROTECT,
                            related_name='comissao'
                        )
     loja             = models.ForeignKey(
-                           Loja, on_delete=models.CASCADE,
+                           Loja, on_delete=models.PROTECT,
                            related_name='comissoes'
                        )
     valor_encomenda  = models.DecimalField(max_digits=10, decimal_places=2)
@@ -985,6 +1021,9 @@ class Notificacao(models.Model):
         # Dono/gestor da loja
         ('loja_aprovada',            'Loja aprovada'),
         ('loja_rejeitada',           'Loja rejeitada'),
+        ('loja_suspensa',            'Loja suspensa'),
+        ('loja_reativada',           'Loja reactivada'),
+        ('loja_fechada',             'Loja fechada pelo dono'),
         ('nova_encomenda',           'Nova encomenda'),
         ('pagamento_aprovado',       'Pagamento aprovado'),
         ('encomenda_concluida_loja', 'Encomenda concluída na loja'),
@@ -1237,3 +1276,23 @@ class ConversaoVideo(models.Model):
 
     def __str__(self):
         return f'{self.modelo}#{self.objeto_id}.{self.campo} ({self.estado})'
+
+
+class FicheiroParaApagar(models.Model):
+    """
+    Fila de limpeza do storage (app/utils/limpeza.py). Quando um ficheiro é substituído ou o
+    registo dono é apagado, o nome entra aqui e o worker (processar_videos) apaga-o em segundo
+    plano — o pedido do utilizador responde logo, mesmo que sejam centenas de ficheiros no R2.
+    Antes de apagar, o worker confirma que nenhum registo voltou a usar o ficheiro.
+    """
+    nome          = models.CharField(max_length=500, db_index=True)   # nome no storage por defeito
+    origem        = models.CharField(max_length=60, blank=True, default='')  # ex.: 'substituido:loja.banner'
+    tentativas    = models.PositiveSmallIntegerField(default=0)
+    erro          = models.TextField(blank=True, default='')
+    criado_em     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['criado_em']
+
+    def __str__(self):
+        return self.nome

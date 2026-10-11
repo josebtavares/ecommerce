@@ -10,6 +10,7 @@ urlpatterns = [
     # ── Lojas ─────────────────────────────────────────────────
     path('admin/lojas/',                        adminView.admin_loja_list,           name='admin-loja-list'),
     path('admin/lojas/<int:loja_id>/',          adminView.admin_loja_gerir,          name='admin-loja-gerir'),
+    path('admin/lojas/<int:loja_id>/eliminar/', adminView.admin_loja_eliminar,       name='admin-loja-eliminar'),
 
     # ── Utilizadores ──────────────────────────────────────────
     path('admin/utilizadores/',                 adminView.admin_utilizador_list,     name='admin-utilizador-list'),

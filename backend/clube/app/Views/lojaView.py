@@ -95,14 +95,18 @@ def loja_list(request):
 def loja_get(request, id):
     loja = get_object_or_404(Loja, id=id)
     
-    # loja inactiva — só o dono/staff pode ver
+    # loja não activa (pendente/fechada/suspensa) — só o dono/staff pode ver
     if not loja.ativa:
-        if not request.user.is_authenticated:
-            return Response({'detail': 'Loja não encontrada.'}, status=404)
-        membro = UtilizadorLoja.objects.filter(
-            loja=loja, utilizador=request.user.utilizador, ativo=True
-        ).first()
-        if not membro and not request.user.is_staff:
+        membro = None
+        if request.user.is_authenticated:
+            membro = UtilizadorLoja.objects.filter(
+                loja=loja, utilizador=request.user.utilizador, ativo=True
+            ).first()
+        if not membro and not (request.user.is_authenticated and request.user.is_staff):
+            if loja.estado == 'fechada':
+                # o visitante percebe que a loja existe mas está fechada (não é um link partido)
+                return Response({'detail': 'Esta loja está temporariamente fechada.',
+                                 'estado': 'fechada', 'nome': loja.nome}, status=404)
             return Response({'detail': 'Loja não encontrada.'}, status=404)
     
     return Response(LojaPublicSerializer(loja, context={'request': request}).data)
@@ -132,7 +136,7 @@ def loja_create(request):
 
     loja = serializer.save(
         dono   = utilizador,
-        ativa  = False,
+        estado = 'pendente',       # aguarda aprovação da plataforma (ativa=False por consequência)
         logo   = request.FILES.get('logo'),
         banner = request.FILES.get('banner'),
     )
@@ -213,17 +217,50 @@ def loja_update(request, id):
     return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
-@api_view(['DELETE'])
+@api_view(['POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
-def loja_delete(request, id):
-    """DELETE /app/loja/<id>/eliminar/"""
+def loja_fechar(request, id):
+    """
+    POST /app/loja/<id>/fechar/        (DELETE /app/loja/<id>/eliminar/ — compatibilidade)
+    O dono fecha a loja: deixa de aparecer no site e de receber encomendas. Nada é apagado;
+    as encomendas em curso continuam a ser geridas no backoffice. Pode reabrir quando quiser.
+    """
     loja = get_object_or_404(Loja, id=id)
     _, erro = _exige_permissao(request, loja, 'apagar_loja')
     if erro:
         return erro
-    loja.ativa = False
-    loja.save(update_fields=['ativa'])
-    return Response({'detail': 'Loja desactivada.'})
+    if loja.estado != 'ativa':
+        return Response({'detail': f'Só uma loja activa pode ser fechada (estado actual: {loja.get_estado_display()}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    loja.mudar_estado('fechada', (request.data.get('motivo') or '')[:300])
+    notificar_admins(
+        tipo='loja_fechada',
+        titulo=f'Loja fechada pelo dono: {loja.nome}',
+        mensagem=loja.estado_motivo or 'O dono fechou a loja.',
+        loja=loja,
+        link='/admin',
+    )
+    return Response(LojaSerializer(loja, context={'request': request}).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def loja_reabrir(request, id):
+    """
+    POST /app/loja/<id>/reabrir/
+    Só reabre uma loja que o próprio dono fechou (uma loja suspensa só o admin reactiva).
+    """
+    loja = get_object_or_404(Loja, id=id)
+    _, erro = _exige_permissao(request, loja, 'apagar_loja')
+    if erro:
+        return erro
+    if loja.estado != 'fechada':
+        return Response({'detail': f'Só uma loja fechada pelo dono pode ser reaberta (estado actual: {loja.get_estado_display()}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    loja.mudar_estado('ativa')
+    return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
 # ══════════════════════════════════════════════════════════════

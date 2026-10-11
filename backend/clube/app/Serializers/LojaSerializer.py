@@ -61,12 +61,14 @@ class LojaSerializer(serializers.ModelSerializer):
             'layout_produtos',
             'total_produtos',
             'minha_role',
-            'ativa',
+            'ativa', 'estado', 'estado_motivo', 'estado_alterado_em',
             'data_criacao', 'data_atualizacao',
             'politica_devolucao', 'termos_servico', 'politica_privacidade',
             'flutterwave_subaccount_id', 'aceita_flutterwave',
         ]
-        read_only_fields = ['dono', 'data_criacao', 'data_atualizacao', 'banner_estado']
+        # estado/ativa só mudam pelos endpoints próprios (fechar/reabrir, admin) — nunca por PATCH
+        read_only_fields = ['dono', 'data_criacao', 'data_atualizacao', 'banner_estado',
+                            'ativa', 'estado', 'estado_motivo', 'estado_alterado_em']
         extra_kwargs = {
             'logo'  : {'write_only': True, 'required': False},
             'banner': {'write_only': True, 'required': False},

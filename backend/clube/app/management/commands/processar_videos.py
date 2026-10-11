@@ -1,5 +1,6 @@
 """
-Worker de otimização de vídeos (app/utils/video.py).
+Worker em segundo plano: otimização de vídeos (app/utils/video.py) e limpeza de ficheiros
+apagados/substituídos do storage (app/utils/limpeza.py).
 
   python manage.py processar_videos                 # fica a correr e processa a fila
   python manage.py processar_videos --uma-vez       # processa o que houver e sai
@@ -16,7 +17,7 @@ from django.db import close_old_connections
 from django.db.utils import OperationalError, ProgrammingError
 
 from app.models import ConversaoVideo, Galeria, Loja, Produto
-from app.utils import video
+from app.utils import limpeza, video
 
 
 class Command(BaseCommand):
@@ -47,17 +48,22 @@ class Command(BaseCommand):
         if n:
             self.stdout.write(f'{n} tarefa(s) interrompida(s) de volta à fila.')
 
-        self.stdout.write(self.style.SUCCESS('Worker de vídeo a correr.'))
+        self.stdout.write(self.style.SUCCESS('Worker de vídeo e limpeza a correr.'))
         while not self.parar:
             close_old_connections()
             try:
+                apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
             except (OperationalError, ProgrammingError) as e:
                 self.stderr.write(f'BD indisponível: {e}')
                 time.sleep(5)
                 continue
 
+            if apagados:
+                self.stdout.write(f'  limpeza: {apagados} ficheiro(s) tratados')
             if t is None:
+                if apagados:
+                    continue            # ainda pode haver mais na fila de limpeza
                 if opts['uma_vez']:
                     break
                 time.sleep(opts['intervalo'])

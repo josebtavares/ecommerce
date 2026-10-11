@@ -283,6 +283,36 @@
       </svg>
       {{ loadingSave ? 'A guardar…' : 'Guardar configurações' }}
     </button>
+
+    <!-- Fechar loja (só o dono) — reabre-se no aviso do topo do backoffice -->
+    <div v-if="podeFechar && loja?.estado === 'ativa'"
+         class="bg-zinc-900 rounded-2xl border border-red-500/20 p-6">
+      <h2 class="text-sm font-bold text-red-400 uppercase tracking-wider mb-2">
+        <font-awesome-icon :icon="['fas', 'door-closed']" class="mr-1.5" />Fechar loja
+      </h2>
+      <p class="text-xs text-zinc-400 leading-relaxed">
+        A loja deixa de aparecer no site e de receber encomendas novas. Nada é apagado: produtos,
+        histórico e encomendas em curso continuam aqui, e podes reabrir quando quiseres.
+      </p>
+      <template v-if="confirmarFecho">
+        <label class="text-xs text-zinc-500 mt-4 mb-1 block">Motivo (opcional, fica visível para ti e para a plataforma)</label>
+        <input v-model="motivoFecho" maxlength="300" placeholder="ex.: férias até dia 20"
+          class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
+        <div class="flex gap-2 mt-3">
+          <button @click="confirmarFecho = false" class="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
+            Cancelar
+          </button>
+          <button @click="fecharLoja" :disabled="aFechar"
+            class="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold transition">
+            {{ aFechar ? 'A fechar…' : 'Confirmar fecho' }}
+          </button>
+        </div>
+      </template>
+      <button v-else @click="confirmarFecho = true"
+        class="mt-4 px-4 py-2 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition">
+        Fechar loja
+      </button>
+    </div>
   </div>
 </template>
 
@@ -310,6 +340,7 @@ export default {
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },
+    podeFechar: { type: Boolean, default: false },   // permissão apagar_loja (dono)
   },
   emits: ['updated'],
 
@@ -329,6 +360,9 @@ export default {
       bannerFicheiro: null,
       logoPreview:    '',
       bannerPreview:  '',
+      confirmarFecho: false,
+      motivoFecho:    '',
+      aFechar:        false,
       bannerEstado:   '',   // otimização do vídeo: '' | pendente | a_processar | pronto | erro
       bannerPoster:   '',
       opcoesEntrega:  [],
@@ -406,6 +440,18 @@ export default {
     },
 
     emCurso,
+
+    async fecharLoja () {
+      this.aFechar = true
+      try {
+        await api.post(`/app/loja/${this.lojaId}/fechar/`, { motivo: this.motivoFecho.trim() })
+        this.confirmarFecho = false
+        this.motivoFecho    = ''
+        this.$emit('updated')       // o layout recarrega a loja e mostra o aviso "Loja fechada"
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível fechar a loja.')
+      } finally { this.aFechar = false }
+    },
 
     async tentarBannerDeNovo () {
       try {

@@ -103,6 +103,21 @@
         </div>
       </header>
 
+      <!-- Estado da loja (pendente / fechada / suspensa) -->
+      <div v-if="loja && loja.estado && loja.estado !== 'ativa'"
+           :class="['mx-4 lg:mx-6 mt-4 px-4 py-3 rounded-xl border text-sm flex flex-col sm:flex-row sm:items-center gap-3', avisoEstado.classe]">
+        <font-awesome-icon :icon="['fas', avisoEstado.icone]" class="w-4 h-4 flex-shrink-0 hidden sm:block" />
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold">{{ avisoEstado.titulo }}</p>
+          <p class="text-xs opacity-80 mt-0.5">{{ avisoEstado.texto }}</p>
+          <p v-if="loja.estado_motivo" class="text-xs opacity-80 mt-0.5">Motivo: {{ loja.estado_motivo }}</p>
+        </div>
+        <button v-if="loja.estado === 'fechada' && podeFecharLoja" @click="reabrirLoja" :disabled="aMudarEstado"
+          class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-bold transition flex-shrink-0">
+          <font-awesome-icon :icon="['fas', 'store']" class="mr-1.5" />Reabrir loja
+        </button>
+      </div>
+
       <!-- Sem permissão -->
       <div v-if="!loadingLoja && !temPermissao(activeSection)"
            class="flex-1 flex items-center justify-center text-center p-6">
@@ -121,7 +136,8 @@
         <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" />
         <BackofficeProdutos      v-else-if="activeSection === 'produtos'"      :loja-id="lojaId" />
         <BackofficeInventario    v-else-if="activeSection === 'inventario'"    :loja-id="lojaId" />
-        <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja" @updated="fetchLoja" />
+        <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
+                                 :pode-fechar="podeFecharLoja" @updated="fetchLoja" />
         <BackofficeStaff         v-else-if="activeSection === 'staff'"         :loja-id="lojaId" />
         <BackofficeTipos         v-else-if="activeSection === 'tipos'"         :loja-id="lojaId" />
         <BackofficeAvaliacoes    v-else-if="activeSection === 'avaliacoes'"    :loja-id="lojaId" />
@@ -216,6 +232,8 @@ export default {
   data () {
     return {
       loja:          null,
+      seccaoEscolhida: false,
+      aMudarEstado:  false,
       loadingLoja:   true,
       activeSection: 'dashboard',
       sidebarAberta: false,
@@ -229,6 +247,26 @@ export default {
     role ()        { return this.loja?.minha_role || '' },
     permissoes ()  { return PERMISSOES[this.role] || [] },
     navItems ()    { return SECCOES.filter(s => this.permissoes.includes(s.permissao)) },
+    podeFecharLoja () { return this.permissoes.includes('apagar_loja') },
+    avisoEstado () {
+      return ({
+        pendente: {
+          icone: 'hourglass-half', classe: 'bg-amber-500/10 border-amber-500/30 text-amber-300',
+          titulo: 'Loja à espera de aprovação',
+          texto:  'Podes configurá-la e adicionar produtos. Ainda não aparece no site nem recebe encomendas.',
+        },
+        fechada: {
+          icone: 'door-closed', classe: 'bg-zinc-800 border-zinc-700 text-zinc-300',
+          titulo: 'Loja fechada',
+          texto:  'Não aparece no site nem recebe encomendas novas. As encomendas em curso continuam a ser geridas aqui.',
+        },
+        suspensa: {
+          icone: 'ban', classe: 'bg-red-500/10 border-red-500/30 text-red-300',
+          titulo: 'Loja suspensa pela plataforma',
+          texto:  'Não aparece no site nem recebe encomendas novas. As encomendas em curso continuam aqui. Contacta o suporte para a reactivar.',
+        },
+      })[this.loja?.estado] || {}
+    },
     currentNavItem () { return SECCOES.find(n => n.key === this.activeSection) },
     roleColor () {
       const map = {
@@ -260,15 +298,31 @@ export default {
       this.sidebarAberta = false
     },
 
+    async reabrirLoja () {
+      if (!confirm('Reabrir a loja? Volta a aparecer no site e a receber encomendas.')) return
+      this.aMudarEstado = true
+      try {
+        await api.post(`/app/loja/${this.lojaId}/reabrir/`)
+        await this.fetchLoja()
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível reabrir a loja.')
+      } finally { this.aMudarEstado = false }
+    },
+
     async fetchLoja () {
       this.loadingLoja = true
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/backoffice/`)
         this.loja = data
-        const primeira = SECCOES.find(s =>
-          (PERMISSOES[data.minha_role] || []).includes(s.permissao)
-        )
-        if (primeira) this.activeSection = primeira.key
+        // só escolhe a secção inicial na 1.ª carga (ou se a actual deixou de ser permitida) —
+        // recarregar a loja depois de guardar não deve mudar de secção
+        const permitidas = PERMISSOES[data.minha_role] || []
+        const atual = SECCOES.find(s => s.key === this.activeSection)
+        if (!this.seccaoEscolhida || !atual || !permitidas.includes(atual.permissao)) {
+          const primeira = SECCOES.find(s => permitidas.includes(s.permissao))
+          if (primeira) this.activeSection = primeira.key
+          this.seccaoEscolhida = true
+        }
       } catch (e) {
         console.error(e)
         this.$router.push('/Home')

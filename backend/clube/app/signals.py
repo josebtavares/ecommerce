@@ -1,32 +1,30 @@
 """
-Ficheiros de media substituídos e vídeos novos.
+Ficheiros de media: substituídos, apagados e vídeos novos.
 
-  • Quando um ficheiro é SUBSTITUÍDO (novo banner, logo, vídeo/imagem do produto…), o anterior
-    é apagado do storage — sem isto ficavam órfãos para sempre (disco na dev, R2 na prod).
-  • Quando o ficheiro novo é um vídeo, agenda a otimização (app/utils/video.py). O poster do
-    ficheiro anterior é apagado em video.agendar().
+  • Ficheiro SUBSTITUÍDO (novo banner, logo, vídeo/imagem do produto…) → o anterior vai para a
+    fila de limpeza (app/utils/limpeza.py) e o worker apaga-o em segundo plano.
+  • Registo APAGADO (imagem adicional, item da galeria, produto/loja eliminados…) → os ficheiros
+    dele vão para a mesma fila. Funciona também para apagamentos em cascata.
+  • Ficheiro novo que é vídeo → agenda a otimização (app/utils/video.py).
 
-Funciona com qualquer view/admin/shell que grave o modelo, sem ter de chamar nada à mão.
-  post_init — guarda os nomes tal como vieram da BD (para detectar trocas sem queries);
+Tudo depois do commit: se a transacção falhar, nada é apagado nem agendado.
+
+Detecção da troca:
+  post_init — guarda os nomes tal como vieram da BD (detecta trocas sem queries);
   pre_save  — se o campo parece ter mudado, lê o nome que está na BD (fonte de verdade:
               o worker grava com update() e o objeto em memória pode estar desactualizado);
-  post_save — apaga o anterior e agenda o vídeo depois do commit (rollback = nada apagado).
+  post_save — agenda a limpeza do anterior e a otimização do vídeo.
 
-O worker de vídeo grava com QuerySet.update() — não passa por aqui — e apaga ele próprio o
-original que converteu.
+Os receivers estão ligados só aos modelos com ficheiros (com sender explícito), para não
+desligar o "fast delete" do Django nos restantes modelos.
 """
-import logging
-
 from django.core.files import File
 from django.db import transaction
 from django.db.models.fields.files import FieldFile
-from django.db.models.signals import post_init, post_save, pre_save
-from django.dispatch import receiver
+from django.db.models.signals import post_delete, post_init, post_save, pre_save
 
 from .models import Galeria, Loja, Produto
-from .utils import video
-
-log = logging.getLogger(__name__)
+from .utils import limpeza, video
 
 # campos cujo ficheiro anterior é apagado quando é substituído
 CAMPOS_FICHEIRO = {
@@ -37,32 +35,9 @@ CAMPOS_FICHEIRO = {
 # campos com vídeo a otimizar
 CAMPOS_VIDEO = {Loja: 'banner', Produto: 'ficheiro', Galeria: 'ficheiro'}
 
-# onde procurar antes de apagar (nenhum outro registo pode estar a usar o ficheiro)
-_REFERENCIAS = (
-    (Loja,    ('logo', 'banner', 'banner_poster')),
-    (Produto, ('ficheiro', 'ficheiro_poster')),
-    (Galeria, ('ficheiro', 'ficheiro_poster')),
-)
-
 
 def _nome(valor):
     return getattr(valor, 'name', valor) or ''
-
-
-def _em_uso(nome):
-    return any(
-        Modelo.objects.filter(**{campo: nome}).exists()
-        for Modelo, campos in _REFERENCIAS for campo in campos
-    )
-
-
-def _apagar_anterior(storage, nome):
-    if not nome or _em_uso(nome):
-        return
-    try:
-        storage.delete(nome)
-    except Exception as e:   # um órfão não deve estragar o pedido
-        log.warning('[media] não consegui apagar %s: %s', nome, e)
 
 
 def _campos_tocados(sender, instance, update_fields):
@@ -74,21 +49,16 @@ def _campos_tocados(sender, instance, update_fields):
         yield campo
 
 
-@receiver(post_init)
+# ── Substituição ─────────────────────────────────────────────────────────────
+
 def _guardar_ficheiros_iniciais(sender, instance, **kwargs):
-    campos = CAMPOS_FICHEIRO.get(sender)
-    if not campos:
-        return
     # lê o valor "cru" — não força a carga de campos adiados (.only()/.defer())
-    instance._ficheiros_iniciais = {c: _nome(instance.__dict__.get(c)) for c in campos}
+    instance._ficheiros_iniciais = {c: _nome(instance.__dict__.get(c)) for c in CAMPOS_FICHEIRO[sender]}
 
 
-@receiver(pre_save)
 def _ler_ficheiros_anteriores(sender, instance, update_fields=None, raw=False, **kwargs):
-    if sender not in CAMPOS_FICHEIRO or raw:
-        return
     instance._ficheiros_anteriores = {}
-    if instance._state.adding or instance.pk is None:
+    if raw or instance._state.adding or instance.pk is None:
         return
     iniciais = getattr(instance, '_ficheiros_iniciais', {})
     for campo in _campos_tocados(sender, instance, update_fields):
@@ -103,9 +73,8 @@ def _ler_ficheiros_anteriores(sender, instance, update_fields=None, raw=False, *
             )
 
 
-@receiver(post_save)
 def _ficheiro_substituido(sender, instance, created, update_fields=None, raw=False, **kwargs):
-    if sender not in CAMPOS_FICHEIRO or raw:
+    if raw:
         return
     anteriores = getattr(instance, '_ficheiros_anteriores', {})
     iniciais   = getattr(instance, '_ficheiros_iniciais', {})
@@ -124,10 +93,33 @@ def _ficheiro_substituido(sender, instance, created, update_fields=None, raw=Fal
         if not mudou:
             continue
         if anterior:
-            storage = sender._meta.get_field(campo).storage
-            transaction.on_commit(lambda s=storage, n=anterior: _apagar_anterior(s, n))
+            limpeza.agendar_apagar_depois_do_commit(
+                [anterior], f'substituido:{sender._meta.model_name}.{campo}')
         if CAMPOS_VIDEO.get(sender) == campo:
             transaction.on_commit(lambda c=campo: video.agendar(instance, c))
 
     instance._ficheiros_iniciais  = iniciais
     instance._ficheiros_anteriores = {}
+
+
+for _modelo in CAMPOS_FICHEIRO:
+    post_init.connect(_guardar_ficheiros_iniciais, sender=_modelo, weak=False)
+    pre_save.connect(_ler_ficheiros_anteriores, sender=_modelo, weak=False)
+    post_save.connect(_ficheiro_substituido, sender=_modelo, weak=False)
+
+
+# ── Registo apagado ──────────────────────────────────────────────────────────
+
+def _registo_apagado(sender, instance, **kwargs):
+    nomes = [
+        _nome(instance.__dict__.get(campo))
+        for Modelo, campo in limpeza.campos_ficheiro() if Modelo is sender
+    ]
+    limpeza.agendar_apagar_depois_do_commit(nomes, f'apagado:{sender._meta.model_name}')
+
+
+def ligar_limpeza_ao_apagar():
+    """Chamado em AppConfig.ready(): todos os modelos com FileField/ImageField."""
+    for Modelo in {m for m, _ in limpeza.campos_ficheiro()}:
+        post_delete.connect(_registo_apagado, sender=Modelo, weak=False,
+                            dispatch_uid=f'limpeza_apagado_{Modelo._meta.label}')

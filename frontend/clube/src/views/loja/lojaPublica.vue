@@ -8,6 +8,22 @@
       </svg>
     </div>
 
+    <!-- loja fechada pelo dono (ou indisponível) -->
+    <div v-else-if="indisponivel" class="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-center px-6">
+      <div class="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-5">
+        <font-awesome-icon :icon="['fas', indisponivel.fechada ? 'door-closed' : 'store']" class="w-6 h-6 text-zinc-500" />
+      </div>
+      <p class="text-xl font-bold text-zinc-100">
+        {{ indisponivel.fechada ? `${indisponivel.nome || 'Esta loja'} está temporariamente fechada` : 'Loja não encontrada' }}
+      </p>
+      <p class="text-sm text-zinc-500 mt-2 max-w-sm">
+        {{ indisponivel.fechada ? 'Volta mais tarde — a loja não está a receber encomendas de momento.' : 'O link pode estar errado ou a loja já não existe.' }}
+      </p>
+      <router-link to="/Home" class="mt-6 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition">
+        Explorar outras lojas
+      </router-link>
+    </div>
+
     <component
       v-else-if="templateComponent"
       :is="templateComponent"
@@ -40,6 +56,7 @@ export default {
     const loadingTemplate   = ref(true)
     const templateComponent = ref(null)
     const temaActivo        = ref(null)
+    const indisponivel      = ref(null)   // { fechada, nome } quando a API devolve 404
     let darkModeBase        = true   // modo por defeito da loja (BD)
 
     // /loja/demo — loja fictícia para o preview do "Criar loja" (utils/demoLoja.js)
@@ -48,6 +65,7 @@ export default {
     async function resolveTemplate (lojaId) {
       loadingTemplate.value   = true
       templateComponent.value = null
+      indisponivel.value      = null
 
       try {
         // ── 1. Cache local (resposta imediata enquanto a API carrega) ──────────
@@ -106,6 +124,11 @@ export default {
         templateComponent.value = mod.default
 
       } catch (e) {
+        // 404: loja inexistente, ou não activa (fechada/pendente/suspensa) para este visitante
+        if (e.response?.status === 404) {
+          indisponivel.value = { fechada: e.response.data?.estado === 'fechada', nome: e.response.data?.nome || '' }
+          return
+        }
         console.error('Erro ao carregar template da loja:', e)
 
         // Fallback: carrega o clássico directamente
@@ -166,7 +189,7 @@ export default {
     onUnmounted(() => window.removeEventListener('message', onPreviewMessage))
     watch(() => route.params.id, id => { if (id) resolveTemplate(id) })
 
-    return { loadingTemplate, templateComponent, temaActivo, onToggleDark }
+    return { loadingTemplate, templateComponent, temaActivo, onToggleDark, indisponivel }
   },
 }
 </script>

@@ -289,7 +289,8 @@ def categoria_destaque_list_publica(request):
     Devolve categorias em destaque para o home.
     """
     destaques = CategoriaDestaque.objects.filter(
-        ativo=True
+        ativo=True,
+        categoria__loja__ativa=True,     # lojas pendentes/fechadas/suspensas não aparecem no home
     ).select_related('categoria__loja')
     return Response([
         {
