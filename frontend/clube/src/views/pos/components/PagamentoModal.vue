@@ -32,7 +32,7 @@
               <p class="text-sm font-bold text-slate-300">Total a pagar</p>
               <p class="mt-1 text-3xl font-black tracking-tight">{{ money(conta.total) }}</p>
             </div>
-            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-3xl">💳</div>
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-2xl"><font-awesome-icon :icon="['fas', 'credit-card']" /></div>
           </div>
         </div>
 
@@ -63,7 +63,7 @@
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
-                  <div class="text-2xl">{{ metodo.icon }}</div>
+                  <font-awesome-icon :icon="['fas', metodo.icon]" class="text-xl" />
                   <p class="mt-2 text-sm font-black">{{ metodo.label }}</p>
                   <p
                     :class="[
@@ -79,7 +79,7 @@
                   v-if="metodoSelecionado === metodo.value"
                   class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xs font-black text-white"
                 >
-                  ✓
+                  <font-awesome-icon :icon="['fas', 'check']" />
                 </div>
               </div>
             </button>
@@ -158,10 +158,10 @@ export default {
       error:             '',
 
       metodosPagamento: [
-        { value: 'dinheiro',      label: 'Dinheiro',      descricao: 'Pagamento em numerário',     icon: '💵' },
-        { value: 'cartao',        label: 'Cartão',         descricao: 'Débito ou crédito',          icon: '💳' },
-        { value: 'mbway',         label: 'MBWay',          descricao: 'Pagamento via MBWay',        icon: '📱' },
-        { value: 'transferencia', label: 'Transferência',  descricao: 'Transferência bancária',     icon: '🏦' },
+        { value: 'dinheiro',      label: 'Dinheiro',      descricao: 'Pagamento em numerário',     icon: 'money-bill-wave' },
+        { value: 'cartao',        label: 'Cartão',         descricao: 'Débito ou crédito',          icon: 'credit-card' },
+        { value: 'mbway',         label: 'MBWay',          descricao: 'Pagamento via MBWay',        icon: 'mobile-screen-button' },
+        { value: 'transferencia', label: 'Transferência',  descricao: 'Transferência bancária',     icon: 'building-columns' },
       ]
     }
   },

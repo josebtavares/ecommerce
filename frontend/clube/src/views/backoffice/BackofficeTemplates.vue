@@ -14,7 +14,7 @@
                  abaAtiva === tab.id
                    ? 'border-red-500 text-zinc-100'
                    : 'border-transparent text-zinc-500 hover:text-zinc-300']">
-        {{ tab.label }}
+        <font-awesome-icon :icon="['fas', tab.icon]" class="mr-1.5" />{{ tab.label }}
       </button>
     </div>
 
@@ -123,9 +123,9 @@
         <!-- Cores -->
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-4">
           <div class="flex items-center justify-between">
-            <h3 class="text-sm font-bold text-zinc-200">🎨 Cores</h3>
+            <h3 class="text-sm font-bold text-zinc-200"><font-awesome-icon :icon="['fas', 'palette']" class="mr-1.5 text-zinc-500" />Cores</h3>
             <button @click="reporPadrao"
-              class="text-[11px] text-zinc-500 hover:text-zinc-200 transition">↺ Repor padrão do template</button>
+              class="text-[11px] text-zinc-500 hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'rotate-left']" class="mr-1" />Repor padrão do template</button>
           </div>
 
           <div v-for="(campo, key) in camposCorVisiveis" :key="key">
@@ -146,7 +146,7 @@
             </p>
             <p v-if="key === 'cor_primaria' && contrasteFraco"
                class="text-[10px] mt-1 text-amber-400">
-              ⚠ Pouco contraste com o fundo {{ form.dark_mode ? 'escuro' : 'claro' }} — textos e botões podem ficar difíceis de ler.
+              <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />Pouco contraste com o fundo {{ form.dark_mode ? 'escuro' : 'claro' }} — textos e botões podem ficar difíceis de ler.
             </p>
           </div>
 
@@ -174,13 +174,13 @@
 
         <!-- Modo por defeito -->
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-          <h3 class="text-sm font-bold text-zinc-200 mb-3">🌗 Modo por defeito</h3>
+          <h3 class="text-sm font-bold text-zinc-200 mb-3"><font-awesome-icon :icon="['fas', 'circle-half-stroke']" class="mr-1.5 text-zinc-500" />Modo por defeito</h3>
           <div class="grid grid-cols-2 gap-2">
-            <button v-for="m in [[true, '🌙', 'Escuro'], [false, '☀️', 'Claro']]" :key="String(m[0])"
+            <button v-for="m in [[true, 'moon', 'Escuro'], [false, 'sun', 'Claro']]" :key="String(m[0])"
               @click="form.dark_mode = m[0]"
               :class="['py-3 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2',
                        form.dark_mode === m[0] ? 'bg-zinc-800 border-red-500/60 text-zinc-100' : 'border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300']">
-              {{ m[1] }} {{ m[2] }}
+              <font-awesome-icon :icon="['fas', m[1]]" /> {{ m[2] }}
             </button>
           </div>
           <p class="text-[10px] text-zinc-600 mt-2 leading-relaxed">
@@ -197,11 +197,11 @@
             <span class="text-xs font-semibold text-zinc-300">Pré-visualização ao vivo</span>
           </div>
           <div class="flex rounded-lg bg-zinc-950 border border-zinc-800 p-0.5">
-            <button v-for="d in [['desktop','🖥'],['mobile','📱']]" :key="d[0]"
-              @click="coresDevice = d[0]"
+            <button v-for="d in [['desktop','desktop'],['mobile','mobile-screen']]" :key="d[0]"
+              @click="coresDevice = d[0]" :title="d[0] === 'desktop' ? 'Desktop' : 'Mobile'"
               :class="['px-2.5 py-1 rounded-md text-xs transition',
                        coresDevice === d[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
-              {{ d[1] }}
+              <font-awesome-icon :icon="['fas', d[1]]" />
             </button>
           </div>
         </div>
@@ -225,7 +225,7 @@
       <span v-if="temAlteracoes" class="text-xs text-amber-400 flex items-center gap-1.5 mr-auto">
         <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Alterações por guardar
       </span>
-      <span v-else-if="guardadoEm" class="text-xs text-green-500 mr-auto">✓ Guardado</span>
+      <span v-else-if="guardadoEm" class="text-xs text-green-500 mr-auto"><font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Guardado</span>
       <button v-if="temAlteracoes" @click="descartar" :disabled="loading"
         class="px-4 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 hover:text-zinc-200 border border-zinc-700 hover:border-zinc-500 transition">
         Descartar
@@ -262,19 +262,19 @@
             <!-- Dispositivo + modo -->
             <div class="flex items-center gap-2">
               <div class="flex rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
-                <button v-for="d in [['desktop','🖥 Desktop'],['mobile','📱 Mobile']]" :key="d[0]"
+                <button v-for="d in [['desktop','desktop','Desktop'],['mobile','mobile-screen','Mobile']]" :key="d[0]"
                   @click="previewDevice = d[0]"
                   :class="['px-2.5 py-1 rounded-md text-xs font-semibold transition',
                            previewDevice === d[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
-                  {{ d[1] }}
+                  <font-awesome-icon :icon="['fas', d[1]]" class="mr-1" />{{ d[2] }}
                 </button>
               </div>
               <div class="flex rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
-                <button v-for="m in [[true,'🌙'],[false,'☀️']]" :key="String(m[0])"
-                  @click="previewDark = m[0]"
+                <button v-for="m in [[true,'moon'],[false,'sun']]" :key="String(m[0])"
+                  @click="previewDark = m[0]" :title="m[0] ? 'Escuro' : 'Claro'"
                   :class="['px-2.5 py-1 rounded-md text-xs transition',
-                           previewDark === m[0] ? 'bg-zinc-700' : 'opacity-50 hover:opacity-80']">
-                  {{ m[1] }}
+                           previewDark === m[0] ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+                  <font-awesome-icon :icon="['fas', m[1]]" />
                 </button>
               </div>
             </div>
@@ -282,10 +282,10 @@
             <div class="flex items-center gap-2">
               <!-- nav prev/next -->
               <button @click="navPreview(-1)"
-                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition">←</button>
+                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'chevron-left']" /></button>
               <span class="text-xs text-zinc-600 w-10 text-center">{{ idxPreview + 1 }} / {{ TEMPLATES.length }}</span>
               <button @click="navPreview(1)"
-                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition">→</button>
+                class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs flex items-center justify-center hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'chevron-right']" /></button>
               <button @click="previewModal = null"
                 class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-sm flex items-center justify-center hover:text-zinc-200 transition ml-1">×</button>
             </div>
@@ -308,7 +308,7 @@
             <div class="flex items-center gap-2">
               <a :href="previewSrc" target="_blank"
                  class="px-3 py-2 rounded-xl text-xs font-semibold text-zinc-400 border border-zinc-700 hover:text-zinc-200 hover:border-zinc-500 transition">
-                Abrir em nova aba ↗
+                Abrir em nova aba <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
               </a>
               <button @click="selecionarDoModal"
                 class="px-5 py-2 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
@@ -354,8 +354,8 @@ export default {
       TEMPLATES,
       abaAtiva: 'template',
       tabs: [
-        { id: 'template', label: '📐 Template' },
-        { id: 'cores',    label: '🎨 Cores & Modo' },
+        { id: 'template', label: 'Template',     icon: 'pen-ruler' },
+        { id: 'cores',    label: 'Cores & Modo', icon: 'palette' },
       ],
       filtroCategoria: null,
       categoriasFiltro: CATEGORIAS_FILTRO,

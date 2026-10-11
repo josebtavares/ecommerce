@@ -45,9 +45,10 @@
             <p class="text-sm font-semibold text-zinc-200">{{ enc.comprador_username }}</p>
             <p class="text-xs text-zinc-500">
               {{ formatDate(enc.data_criacao) }} ·
-              {{ enc.tipo_entrega === 'entrega' ? '🚚 Entrega' : '🏪 Takeaway' }}
+              <font-awesome-icon :icon="['fas', enc.tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mx-0.5" />
+              {{ enc.tipo_entrega === 'entrega' ? 'Entrega' : 'Takeaway' }}
               <span v-if="enc.metodo_pagamento" class="ml-1">·
-                {{ enc.metodo_pagamento === 'dinheiro' ? '💵' : enc.metodo_pagamento === 'mbway' ? '📱' : '💳' }}
+                <font-awesome-icon :icon="['fas', iconePagamento(enc.metodo_pagamento)]" class="mx-0.5" />
                 {{ enc.metodo_pagamento }}
               </span>
             </p>
@@ -80,18 +81,18 @@
             <div class="bg-zinc-800/50 rounded-xl p-3 space-y-1.5">
               <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Contacto do cliente</p>
               <div class="flex items-center gap-2 text-xs">
-                <span class="text-zinc-500 w-16 flex-shrink-0">👤 Nome:</span>
+                <span class="text-zinc-500 w-16 flex-shrink-0"><font-awesome-icon :icon="['fas', 'user']" class="mr-1" fixed-width />Nome:</span>
                 <span class="text-zinc-200 font-semibold">{{ detalhes[enc.id].comprador_nome || detalhes[enc.id].comprador_username }}</span>
               </div>
               <div v-if="detalhes[enc.id].comprador_email" class="flex items-center gap-2 text-xs">
-                <span class="text-zinc-500 w-16 flex-shrink-0">✉️ Email:</span>
+                <span class="text-zinc-500 w-16 flex-shrink-0"><font-awesome-icon :icon="['fas', 'envelope']" class="mr-1" fixed-width />Email:</span>
                 <a :href="`mailto:${detalhes[enc.id].comprador_email}`"
                    class="text-red-400 hover:text-red-300 transition underline">
                   {{ detalhes[enc.id].comprador_email }}
                 </a>
               </div>
               <div v-if="detalhes[enc.id].comprador_telefone" class="flex items-center gap-2 text-xs">
-                <span class="text-zinc-500 w-16 flex-shrink-0">📞 Tel:</span>
+                <span class="text-zinc-500 w-16 flex-shrink-0"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1" fixed-width />Tel:</span>
                 <a :href="`tel:${detalhes[enc.id].comprador_telefone}`"
                    class="text-red-400 hover:text-red-300 transition underline">
                   {{ detalhes[enc.id].comprador_telefone }}
@@ -129,11 +130,11 @@
             <div v-if="detalhes[enc.id].morada_entrega || detalhes[enc.id].notas"
                  class="border-t border-zinc-800 pt-3 space-y-1 text-xs">
               <div v-if="detalhes[enc.id].morada_entrega" class="flex gap-2">
-                <span class="text-zinc-500 flex-shrink-0">📍 Morada:</span>
+                <span class="text-zinc-500 flex-shrink-0"><font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1" fixed-width />Morada:</span>
                 <span class="text-zinc-300">{{ detalhes[enc.id].morada_entrega }}</span>
               </div>
               <div v-if="detalhes[enc.id].notas" class="flex gap-2">
-                <span class="text-zinc-500 flex-shrink-0">📝 Notas:</span>
+                <span class="text-zinc-500 flex-shrink-0"><font-awesome-icon :icon="['fas', 'note-sticky']" class="mr-1" fixed-width />Notas:</span>
                 <span class="text-zinc-300 italic">{{ detalhes[enc.id].notas }}</span>
               </div>
             </div>
@@ -142,7 +143,7 @@
             <div v-if="detalhes[enc.id].entrega_condutor"
                  class="border-t border-zinc-800 pt-3 flex items-center gap-2 text-xs">
               <span class="text-zinc-500">Condutor:</span>
-              <span class="text-zinc-300 font-semibold">🚗 {{ detalhes[enc.id].entrega_condutor }}</span>
+              <span class="text-zinc-300 font-semibold"><font-awesome-icon :icon="['fas', 'car']" class="mr-1 text-zinc-500" />{{ detalhes[enc.id].entrega_condutor }}</span>
               <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', entregaStatusColor(detalhes[enc.id].entrega_status)]">
                 {{ detalhes[enc.id].entrega_status }}
               </span>
@@ -181,7 +182,7 @@
                         ? 'opacity-30 cursor-not-allowed bg-zinc-800 text-zinc-500'
                         : s.class + ' cursor-pointer'
                   ]">
-                  {{ s.value === enc.status ? '✓ ' : '' }}{{ s.label }}
+                  <font-awesome-icon v-if="s.value === enc.status" :icon="['fas', 'check']" class="mr-1" />{{ s.label }}
                   <span v-if="s.value === 'enviado' && enc.tipo_entrega === 'entrega' && enc.status === 'preparando'"
                         class="ml-1 text-[9px] opacity-70">+ condutor</span>
                 </button>
@@ -245,11 +246,11 @@
              class="bg-zinc-800/50 rounded-xl p-3 space-y-1 text-xs">
           <p class="text-zinc-500 font-semibold mb-1">Cliente</p>
           <div v-if="modalCondutor.comprador_email" class="flex items-center gap-2">
-            <span class="text-zinc-500">✉️</span>
+            <font-awesome-icon :icon="['fas', 'envelope']" class="text-zinc-500" fixed-width />
             <span class="text-zinc-300">{{ modalCondutor.comprador_email }}</span>
           </div>
           <div v-if="modalCondutor.comprador_telefone" class="flex items-center gap-2">
-            <span class="text-zinc-500">📞</span>
+            <font-awesome-icon :icon="['fas', 'phone']" class="text-zinc-500" fixed-width />
             <span class="text-zinc-300">{{ modalCondutor.comprador_telefone }}</span>
           </div>
         </div>
@@ -321,6 +322,7 @@
 <script>
 import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
+import { iconePagamento } from '@/utils/icones'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -383,6 +385,7 @@ export default {
   },
 
   methods: {
+    iconePagamento,
     formatarAtributos, temAtributos,
     formatPrice (val) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0) },
     formatDate (d)    { return new Date(d).toLocaleDateString('pt-PT') },

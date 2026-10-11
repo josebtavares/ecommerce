@@ -27,6 +27,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/services/api'
 import { getTemplate, TEMPLATE_COMPONENTS } from '@/config/lojaTemplates'
+import { DEMO_ID, ativarLojaDemo } from '@/utils/demoLoja'
 
 const FALLBACK_ID   = 'classico'
 const FALLBACK_TEMA = { id: FALLBACK_ID, corPrimaria: '#dc2626', corSecundaria: '#1c1c1e', darkMode: true }
@@ -40,6 +41,9 @@ export default {
     const templateComponent = ref(null)
     const temaActivo        = ref(null)
     let darkModeBase        = true   // modo por defeito da loja (BD)
+
+    // /loja/demo — loja fictícia para o preview do "Criar loja" (utils/demoLoja.js)
+    if (route.params.id === DEMO_ID) ativarLojaDemo()
 
     async function resolveTemplate (lojaId) {
       loadingTemplate.value   = true

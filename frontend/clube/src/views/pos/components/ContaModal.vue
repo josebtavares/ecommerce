@@ -142,7 +142,7 @@
                   v-else-if="produtosFiltrados.length === 0"
                   class="flex min-h-[240px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center"
                 >
-                  <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">📦</div>
+                  <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl text-slate-400 shadow-sm"><font-awesome-icon :icon="['fas', 'box']" /></div>
                   <h4 class="mt-4 text-lg font-black text-slate-950">Sem produtos</h4>
                   <p class="mt-2 text-sm leading-6 text-slate-500">{{ categoriaAtiva ? 'Nesta categoria' : 'Disponíveis' }}</p>
                 </div>
@@ -158,7 +158,7 @@
                   >
                     <div class="relative aspect-square bg-slate-100">
                       <img v-if="produto.imagem_url" :src="produto.imagem_url" :alt="produto.nome" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
-                      <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300">📦</div>
+                      <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300"><font-awesome-icon :icon="['fas', 'box']" /></div>
                       <span :class="['absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white', produto.origem === 'pos' ? 'bg-purple-600' : 'bg-blue-600']">
                         {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}
                       </span>
@@ -190,7 +190,7 @@
                 v-else-if="items.length === 0"
                 class="flex min-h-[220px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center"
               >
-                <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl">🛒</div>
+                <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl text-slate-400"><font-awesome-icon :icon="['fas', 'cart-shopping']" /></div>
                 <h4 class="mt-4 text-lg font-black text-slate-950">Pedido vazio</h4>
                 <p class="mt-2 text-sm leading-6 text-slate-500">Adiciona produtos para começar</p>
               </div>
@@ -398,7 +398,7 @@
                 v-else-if="produtosFiltrados.length === 0"
                 class="flex min-h-[280px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center"
               >
-                <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">📦</div>
+                <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl text-slate-400 shadow-sm"><font-awesome-icon :icon="['fas', 'box']" /></div>
                 <h4 class="mt-4 text-lg font-black text-slate-950">Sem produtos</h4>
                 <p class="mt-2 text-sm leading-6 text-slate-500">{{ categoriaAtiva ? 'Nesta categoria' : 'Disponíveis' }}</p>
               </div>
@@ -414,7 +414,7 @@
                 >
                   <div class="relative aspect-square bg-slate-100">
                     <img v-if="produto.imagem_url" :src="produto.imagem_url" :alt="produto.nome" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
-                    <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300">📦</div>
+                    <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300"><font-awesome-icon :icon="['fas', 'box']" /></div>
                     <span :class="['absolute left-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-white', produto.origem === 'pos' ? 'bg-purple-600' : 'bg-blue-600']">
                       {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}
                     </span>
@@ -456,7 +456,7 @@
               v-else-if="items.length === 0"
               class="flex min-h-[220px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center"
             >
-              <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl">🛒</div>
+              <div class="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl text-slate-400"><font-awesome-icon :icon="['fas', 'cart-shopping']" /></div>
               <h4 class="mt-4 text-lg font-black text-slate-950">Pedido vazio</h4>
               <p class="mt-2 text-sm leading-6 text-slate-500">Adiciona produtos</p>
             </div>

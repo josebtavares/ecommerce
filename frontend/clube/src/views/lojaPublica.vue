@@ -94,7 +94,7 @@
                 @click="scrollToId('tipo-' + tipo.id); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-zinc-400
                        hover:bg-zinc-800 hover:text-zinc-100 transition text-left">
-                <span>{{ tipoIcon(tipo.nome) }}</span>
+                <font-awesome-icon :icon="['fas', tipoIcon(tipo.nome)]" class="w-3.5 h-3.5" fixed-width />
                 <span class="capitalize">{{ tipo.nome }}</span>
               </button>
             </div>
@@ -104,7 +104,7 @@
                 @click="scrollToId('cat-' + cat.id); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-zinc-400
                        hover:bg-zinc-800 hover:text-zinc-100 transition text-left">
-                <span>{{ cat.icone }}</span>
+                <font-awesome-icon :icon="['fas', iconeCategoriaProduto(cat.icone, cat.nome)]" class="w-3.5 h-3.5" fixed-width />
                 <span class="capitalize">{{ cat.nome }}</span>
               </button>
             </div>
@@ -112,12 +112,12 @@
               <button @click="scrollToId('catalogo'); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-zinc-400
                        hover:bg-zinc-800 hover:text-zinc-100 transition text-left">
-                🔍 Catálogo completo
+                <font-awesome-icon :icon="['fas', 'magnifying-glass']" class="w-3.5 h-3.5" fixed-width /> Catálogo completo
               </button>
               <button @click="scrollToId('avaliacoes'); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-zinc-400
                        hover:bg-zinc-800 hover:text-zinc-100 transition text-left">
-                ⭐ Avaliações
+                <font-awesome-icon :icon="['fas', 'star']" class="w-3.5 h-3.5" fixed-width /> Avaliações
               </button>
             </div>
           </aside>
@@ -148,7 +148,7 @@
                   <div class="flex flex-wrap gap-2">
                     <span v-for="m in metodosPagamento" :key="m.id"
                           class="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-800 rounded-lg text-xs text-zinc-300">
-                      <span>{{ metodoPagamentoIcon(m.tipo) }}</span>
+                      <font-awesome-icon :icon="['fas', metodoPagamentoIcon(m.tipo)]" />
                       <span class="capitalize">{{ m.tipo }}</span>
                     </span>
                   </div>
@@ -177,7 +177,7 @@
             </div>
 
             <!-- Em Destaque -->
-            <ProductSlider title="Em Destaque" icon="⭐"
+            <ProductSlider title="Em Destaque"
               :params="{ loja_id: $route.params.id, destaque: true }"
               @product-click="selectedProduct = $event" />
 
@@ -189,7 +189,7 @@
                 <div class="h-px flex-1 bg-zinc-800"></div>
               </div>
               <div v-for="tipo in tiposExistentes" :key="'tipo-' + tipo.id" :id="'tipo-' + tipo.id">
-                <ProductSlider :title="tipo.nome" :icon="tipoIcon(tipo.nome)"
+                <ProductSlider :title="tipo.nome"
                   :params="{ loja_id: $route.params.id, tipo: tipo.nome }"
                   @product-click="selectedProduct = $event" />
               </div>
@@ -203,7 +203,7 @@
                 <div class="h-px flex-1 bg-zinc-800"></div>
               </div>
               <div v-for="cat in categoriasExistentes" :key="'cat-' + cat.id" :id="'cat-' + cat.id">
-                <ProductSlider :title="cat.nome" :icon="cat.icone || '📂'"
+                <ProductSlider :title="cat.nome"
                   :params="{ loja_id: $route.params.id, categoria_id: cat.id }"
                   @product-click="selectedProduct = $event" />
               </div>
@@ -231,7 +231,7 @@
                     <p class="font-bold text-zinc-200">{{ loja.nome }}</p>
                   </div>
                   <p class="text-xs text-zinc-500 leading-relaxed">{{ loja.descricao }}</p>
-                  <p v-if="loja.localizacao" class="text-xs text-zinc-600 mt-2">📍 {{ loja.localizacao }}</p>
+                  <p v-if="loja.localizacao" class="text-xs text-zinc-600 mt-2"><font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1" />{{ loja.localizacao }}</p>
                 </div>
                 <div v-if="loja.politica_devolucao" class="space-y-2">
                   <button @click="modalPolitica = 'devolucao'"
@@ -255,7 +255,7 @@
                   <div class="flex flex-wrap gap-2">
                     <span v-for="m in metodosPagamento" :key="m.id"
                           class="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-800 rounded-lg text-xs text-zinc-400">
-                      {{ metodoPagamentoIcon(m.tipo) }} {{ m.tipo }}
+                      <font-awesome-icon :icon="['fas', metodoPagamentoIcon(m.tipo)]" /> {{ m.tipo }}
                     </span>
                   </div>
                 </div>
@@ -306,6 +306,7 @@ import ProductSlider from '@/components/sliders/ProductSlider.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
+import { iconeCategoriaProduto, iconeTipoProduto, iconePagamento } from '@/utils/icones'
 
 export default {
   name: 'LojaPublica',
@@ -353,19 +354,12 @@ export default {
   },
 
   methods: {
+    iconeCategoriaProduto,
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
-    tipoIcon (tipo) {
-      const icons = { prato: '🍽️', comida: '🍔', bebida: '🥤', sobremesa: '🍰', roupa: '👗',
-        calcado: '👟', acessorio: '👜', eletronico: '📱', telemovel: '📱', tablet: '💻',
-        fruta: '🍎', legume: '🥦', carne: '🥩', livro: '📚', manga: '📖', revista: '📰' }
-      return icons[tipo?.toLowerCase()] || '📦'
-    },
-    metodoPagamentoIcon (tipo) {
-      const map = { cartao: '💳', dinheiro: '💵', mbway: '📱', paypal: '🅿️', stripe: '💳' }
-      return map[tipo] || '💰'
-    },
+    tipoIcon: iconeTipoProduto,
+    metodoPagamentoIcon: iconePagamento,
     scrollToId (id) {
       const el = document.getElementById(id)
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })

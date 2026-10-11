@@ -85,7 +85,7 @@
                            selectedCategoria === cat.value
                              ? 'bg-red-600 text-white'
                              : isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-stone-100 hover:text-zinc-900']">
-                <span>{{ cat.icon }}</span>
+                <font-awesome-icon :icon="['fas', cat.icon]" class="w-4 h-4 flex-shrink-0" fixed-width />
                 {{ cat.label }}
               </li>
 
@@ -105,12 +105,14 @@
               <li @click="scrollToSection('produtos')"
                   class="px-4 py-3 rounded-xl cursor-pointer transition-all flex items-center gap-3 text-sm"
                   :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-stone-100 hover:text-zinc-900'">
-                📦 Produtos
+                <font-awesome-icon :icon="['fas', 'box']" class="w-4 h-4 flex-shrink-0" fixed-width />
+                Produtos
               </li>
               <li @click="scrollToSection('catalogo')"
                   class="px-4 py-3 rounded-xl cursor-pointer transition-all flex items-center gap-3 text-sm"
                   :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-stone-100 hover:text-zinc-900'">
-                🏪 Explorar Lojas
+                <font-awesome-icon :icon="['fas', 'store']" class="w-4 h-4 flex-shrink-0" fixed-width />
+                Explorar Lojas
               </li>
             </ul>
           </div>
@@ -173,8 +175,12 @@
                   <h1 class="text-4xl md:text-6xl font-bold text-white mb-3 leading-tight">{{ store.nome }}</h1>
                   <p class="text-base text-zinc-300 mb-4 line-clamp-2">{{ store.descricao }}</p>
                   <div class="flex items-center gap-4 text-zinc-400 text-sm flex-wrap mb-5">
-                    <span v-if="store.localizacao">📍 {{ store.localizacao }}</span>
-                    <span>🏷 {{ store.categoria }}</span>
+                    <span v-if="store.localizacao" class="flex items-center gap-1.5">
+                      <font-awesome-icon :icon="['fas', 'location-dot']" /> {{ store.localizacao }}
+                    </span>
+                    <span class="flex items-center gap-1.5 capitalize">
+                      <font-awesome-icon :icon="['fas', iconeCategoria(null, store.categoria)]" /> {{ store.categoria }}
+                    </span>
                     <span v-if="store.rating_medio" class="flex items-center gap-1">
                       <svg class="h-4 w-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -226,12 +232,12 @@
             <p class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Descobre produtos de todas as lojas</p>
           </div>
 
-          <ProductSlider title="Em Destaque" icon="⭐"
+          <ProductSlider title="Em Destaque"
             :params="{ destaque: true }" :isDark="isDark"
             @product-click="openProduct($event)" />
 
           <ProductSlider v-for="tipo in tiposExistentes" :key="tipo.id"
-            :title="tipo.nome" :icon="tipoIcon(tipo.nome)"
+            :title="tipo.nome"
             :params="{ tipo: tipo.nome }" :isDark="isDark"
             @product-click="openProduct($event)" />
         </section>
@@ -248,7 +254,7 @@
           </section>
           <section v-for="cat in categoriasPlataforma" :key="'cat-' + cat.categoria_id"
                    class="py-4 px-6 md:px-12">
-            <ProductSlider :title="cat.nome" :icon="cat.icone || '📂'"
+            <ProductSlider :title="cat.nome"
               :params="{ categoria_id: cat.categoria_id }" :isDark="isDark"
               @product-click="openProduct($event)" />
           </section>
@@ -321,26 +327,20 @@ import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 import api from '@/services/api'
+import { iconeCategoria } from '@/utils/icones'
 
+// rótulos das categorias de loja (o ícone vem de utils/icones.js)
 const CATEGORIAS_MAP = {
-  restaurante:  { label: 'Restaurantes',  icon: '🍔' },
-  moda:         { label: 'Moda',          icon: '👗' },
-  tecnologia:   { label: 'Tecnologia',    icon: '📱' },
-  supermercado: { label: 'Supermercado',  icon: '🛒' },
-  farmacia:     { label: 'Farmácia',      icon: '💊' },
-  desporto:     { label: 'Desporto',      icon: '⚽' },
-  beleza:       { label: 'Beleza',        icon: '💄' },
-  livraria:     { label: 'Livraria',      icon: '📚' },
-  casa:         { label: 'Casa e Jardim', icon: '🏠' },
-  outros:       { label: 'Outros',        icon: '🏪' },
-}
-
-const TIPO_ICONS = {
-  prato: '🍽️', comida: '🍔', bebida: '🥤', sobremesa: '🍰',
-  roupa: '👗', calcado: '👟', acessorio: '👜',
-  eletronico: '📱', computador: '💻',
-  fruta: '🍎', legume: '🥦', carne: '🥩', alimento: '🛒',
-  livro: '📚', medicamento: '💊',
+  restaurante:  { label: 'Restaurantes' },
+  moda:         { label: 'Moda' },
+  tecnologia:   { label: 'Tecnologia' },
+  supermercado: { label: 'Supermercado' },
+  farmacia:     { label: 'Farmácia' },
+  desporto:     { label: 'Desporto' },
+  beleza:       { label: 'Beleza' },
+  livraria:     { label: 'Livraria' },
+  casa:         { label: 'Casa e Jardim' },
+  outros:       { label: 'Outros' },
 }
 
 export default {
@@ -417,7 +417,7 @@ export default {
       } catch (e) { this.paginasRodape = [] }
     },
     openProduct (produto) { this.selectedProduct = produto; this.selectedLoja = produto.loja },
-    tipoIcon (nome) { return TIPO_ICONS[nome?.toLowerCase()] || '📦' },
+    iconeCategoria,
 
     scrollToSection (key) {
       const el = this.sectionRefs[key]
@@ -457,7 +457,7 @@ export default {
         this.categoriasExistentes = unicas.map(val => ({
           value: val,
           label: CATEGORIAS_MAP[val]?.label || (val.charAt(0).toUpperCase() + val.slice(1)),
-          icon:  CATEGORIAS_MAP[val]?.icon  || '🏪',
+          icon:  iconeCategoria(null, val),
         }))
       } catch (e) { console.error(e) }
       finally { this.loadingCategorias = false }

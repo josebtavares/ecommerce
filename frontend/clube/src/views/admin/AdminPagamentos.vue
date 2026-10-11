@@ -44,8 +44,8 @@
 
         <button @click="toggleExpand(pag.id)"
           class="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-zinc-800/40 transition">
-          <div class="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-lg flex-shrink-0">
-            {{ metodIcon(pag.metodo_tipo) }}
+          <div class="w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center flex-shrink-0">
+            <font-awesome-icon :icon="['fas', metodIcon(pag.metodo_tipo)]" class="w-4 h-4" />
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
@@ -154,6 +154,7 @@
 
 <script>
 import api from '@/services/api'
+import { iconePagamento } from '@/utils/icones'
 export default {
   name: 'AdminPagamentos',
   data () {
@@ -183,10 +184,7 @@ export default {
       const map = { pendente: 'bg-yellow-500/15 text-yellow-400', aprovado: 'bg-green-500/15 text-green-400', falhado: 'bg-red-500/15 text-red-400', reembolsado: 'bg-blue-500/15 text-blue-400' }
       return map[s] || 'bg-zinc-500/15 text-zinc-400'
     },
-    metodIcon (tipo) {
-      const map = { dinheiro: '💵', mbway: '📱', cartao: '💳', paypal: '🅿️', stripe: '💳' }
-      return map[tipo] || '💰'
-    },
+    metodIcon: iconePagamento,
     toggleExpand (id) { this.expandedId = this.expandedId === id ? null : id },
     async fetchLojas () {
       try {

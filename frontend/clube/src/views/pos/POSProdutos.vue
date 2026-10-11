@@ -16,7 +16,7 @@
           @click="showTiposModal = true"
           class="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
         >
-          🏷️ Tipos
+          <font-awesome-icon :icon="['fas', 'tags']" class="mr-1.5" />Tipos
         </button>
         <button
           type="button"
@@ -124,7 +124,7 @@
       v-else-if="produtosFiltrados.length === 0"
       class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-10 text-center"
     >
-      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl shadow-sm">📦</div>
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-3xl text-slate-400 shadow-sm"><font-awesome-icon :icon="['fas', 'box']" /></div>
       <h3 class="mt-5 text-xl font-black text-slate-950">Nenhum produto encontrado</h3>
       <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
         <span v-if="podeGerirProdutos">
@@ -162,7 +162,7 @@
             :alt="produto.nome"
             class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
-          <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300">📦</div>
+          <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300"><font-awesome-icon :icon="['fas', 'box']" /></div>
 
           <div class="absolute left-2 top-2 flex flex-wrap gap-1">
             <span
@@ -210,14 +210,14 @@
 
           <!-- stock por variação -->
           <p v-if="produto.stock_por_variante" class="mt-2 text-[11px] font-bold text-slate-500">
-            📦 {{ produto.variantes.length }} variações
+            <font-awesome-icon :icon="['fas', 'boxes-stacked']" /> {{ produto.variantes.length }} variações
             <span v-if="produto.variantes.some(v => v.quantidade === 0)" class="text-red-600">
               · {{ produto.variantes.filter(v => v.quantidade === 0).length }} esgotada(s)
             </span>
           </p>
           <button v-else-if="produto.variantes_pendentes && podeGerirProdutos" type="button" @click="editarProduto(produto)"
             class="mt-2 w-full rounded-lg bg-amber-50 px-2 py-1 text-left text-[11px] font-black text-amber-700 hover:bg-amber-100">
-            ⚠️ Definir stock por variação
+            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> Definir stock por variação
           </button>
 
           <!-- Ações só visíveis se tiver permissão -->
@@ -355,7 +355,7 @@
             <p class="mt-2 text-xs font-semibold text-slate-400">
               {{ formProduto.origem === 'loja'
                   ? 'Produtos da loja usam os tipos globais e os da loja Bendi.'
-                  : 'Produtos do POS usam os tipos globais e os tipos deste POS (botão 🏷️ Tipos).' }}
+                  : 'Produtos do POS usam os tipos globais e os tipos deste POS (botão Tipos).' }}
             </p>
           </div>
 
@@ -363,7 +363,7 @@
             <p class="text-xs font-black uppercase tracking-wider text-slate-500 capitalize">Atributos · {{ tipoSelecionado.nome }}</p>
             <div v-for="a in schemaTipo" :key="a.nome">
               <label class="mb-2 flex items-center gap-1 text-xs font-black capitalize text-slate-600">
-                <span v-if="a.variante" title="Stock por opção">📦</span> {{ a.nome }}
+                <font-awesome-icon v-if="a.variante" :icon="['fas', 'boxes-stacked']" title="Stock por opção" class="text-amber-600" /> {{ a.nome }}
                 <span v-if="a.obrigatorio" class="text-red-500">*</span>
                 <span v-if="a.tipo === 'choices'" class="font-semibold normal-case text-slate-400">· escolhe uma ou mais</span>
               </label>
@@ -380,7 +380,7 @@
           </div>
 
           <div v-if="grelhaAtiva" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
-            📦 Stock gerido por variação — define as quantidades em <b>Stock por variação</b> abaixo.
+            <font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock gerido por variação — define as quantidades em <b>Stock por variação</b> abaixo.
           </div>
           <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label class="flex h-12 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4">
@@ -406,7 +406,7 @@
 
           <!-- Stock por variação (vai no mesmo pedido do produto) -->
           <div v-if="atributosVarianteForm.length" class="space-y-3">
-            <p class="text-sm font-black text-slate-700">📦 Stock por variação
+            <p class="text-sm font-black text-slate-700"><font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock por variação
               <span class="ml-1 rounded-lg bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800">{{ atributosVarianteForm.join(' × ') }}</span>
             </p>
             <p v-if="!combinacoesForm.length" class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500">

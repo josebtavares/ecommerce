@@ -48,7 +48,7 @@
             <!-- Badge destaque -->
             <span v-if="produto.destaque"
                   class="absolute top-3 left-3 px-2 py-1 bg-red-600 text-white text-xs font-bold rounded">
-              ⭐ Destaque
+              <font-awesome-icon :icon="['fas', 'star']" class="mr-1" />Destaque
             </span>
 
             <!-- Botão fechar (mobile) -->

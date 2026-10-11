@@ -101,7 +101,7 @@
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-950'
             ]"
           >
-            <span>{{ tab.icon }}</span>
+            <font-awesome-icon :icon="['fas', tab.icon]" class="w-4 h-4" />
             <span>{{ tab.label }}</span>
           </button>
         </div>
@@ -169,7 +169,7 @@
         v-if="posId && currentPOS?.suspenso"
         class="rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center shadow-sm"
       >
-        <p class="text-3xl">⛔</p>
+        <font-awesome-icon :icon="['fas', 'ban']" class="text-3xl text-red-500" />
         <h3 class="mt-2 text-lg font-black text-red-800">Este POS está suspenso</h3>
         <p class="mt-1 text-sm font-semibold text-red-700">
           {{ currentPOS.suspenso_motivo || 'Suspenso pela plataforma.' }}
@@ -207,8 +207,8 @@
         v-else
         class="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12"
       >
-        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl">
-          🧾
+        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl text-slate-500">
+          <font-awesome-icon :icon="['fas', 'receipt']" />
         </div>
 
         <h2 class="mt-5 text-2xl font-black text-slate-950">
@@ -434,11 +434,11 @@ export default {
 
       // Todas as tabs possíveis
       allTabs: [
-        { id: 'mesas',    label: 'Mesas',     icon: '🍽️', apenasNaoMembro: false },
-        { id: 'pedidos',  label: 'Pedidos',   icon: '🛒', apenasNaoMembro: false },
-        { id: 'produtos', label: 'Produtos',  icon: '📦', apenasNaoMembro: false },
-        { id: 'historico',label: 'Histórico', icon: '📜', apenasNaoMembro: false },
-        { id: 'equipa',   label: 'Equipa',    icon: '👥', apenasNaoMembro: true  },
+        { id: 'mesas',    label: 'Mesas',     icon: 'utensils',        apenasNaoMembro: false },
+        { id: 'pedidos',  label: 'Pedidos',   icon: 'cart-shopping',   apenasNaoMembro: false },
+        { id: 'produtos', label: 'Produtos',  icon: 'box',             apenasNaoMembro: false },
+        { id: 'historico',label: 'Histórico', icon: 'clock-rotate-left', apenasNaoMembro: false },
+        { id: 'equipa',   label: 'Equipa',    icon: 'users',           apenasNaoMembro: true  },
       ],
 
       modoOptions: [

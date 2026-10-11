@@ -178,7 +178,7 @@
 
                 <!-- stock da combinação mudou desde que foi adicionada -->
                 <p v-if="avisoVariante(item)" class="mt-1.5 text-[11px] text-amber-500 leading-snug">
-                  ⚠️ {{ avisoVariante(item) }}
+                  <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />{{ avisoVariante(item) }}
                 </p>
               </div>
 

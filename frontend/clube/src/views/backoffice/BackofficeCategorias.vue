@@ -26,7 +26,9 @@
     <div v-else-if="categorias.length > 0" class="space-y-2">
       <div v-for="cat in categorias" :key="cat.id"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 flex items-center gap-4 group">
-        <span class="text-2xl flex-shrink-0">{{ cat.icone }}</span>
+        <span class="w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center flex-shrink-0">
+          <font-awesome-icon :icon="['fas', iconeCategoriaProduto(cat.icone, cat.nome)]" class="w-4 h-4" />
+        </span>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <p class="text-sm font-bold text-zinc-200 capitalize">{{ cat.nome }}</p>
@@ -93,14 +95,22 @@
                      focus:outline-none focus:border-red-500 transition" />
           </div>
           <div>
-            <label class="text-xs text-zinc-500 mb-1 block">Ícone (emoji)</label>
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-xl flex-shrink-0">
-                {{ form.icone || '📂' }}
+            <label class="text-xs text-zinc-500 mb-1 block">Ícone</label>
+            <div class="flex items-center gap-3 mb-2">
+              <div class="w-10 h-10 rounded-xl bg-red-600/15 text-red-400 flex items-center justify-center flex-shrink-0">
+                <font-awesome-icon :icon="['fas', iconeCategoriaProduto(form.icone, form.nome)]" class="w-4 h-4" />
               </div>
-              <input v-model="form.icone" type="text" maxlength="4" placeholder="📂"
-                class="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
-                       focus:outline-none focus:border-red-500 transition" />
+              <p class="text-sm text-zinc-300">{{ iconeSelecionado?.label || 'Geral' }}</p>
+            </div>
+            <div class="grid grid-cols-6 gap-1.5 max-h-40 overflow-y-auto pr-1">
+              <button v-for="i in ICONES_CATEGORIA_PRODUTO" :key="i.chave" type="button" :title="i.label"
+                @click="form.icone = i.chave; iconeManual = true"
+                :class="['h-9 rounded-lg flex items-center justify-center transition',
+                         form.icone === i.chave
+                           ? 'bg-red-600 text-white'
+                           : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200']">
+                <font-awesome-icon :icon="['fas', i.icone]" class="w-4 h-4" />
+              </button>
             </div>
           </div>
           <div v-if="erroModal" class="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">
@@ -133,7 +143,7 @@
         <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-800 flex-shrink-0">
           <div>
             <h3 class="text-base font-bold text-zinc-100 capitalize">
-              {{ categoriaGerindo.icone }} {{ categoriaGerindo.nome }}
+              <font-awesome-icon :icon="['fas', iconeCategoriaProduto(categoriaGerindo.icone, categoriaGerindo.nome)]" class="w-4 h-4 text-zinc-400 mr-1" /> {{ categoriaGerindo.nome }}
             </h3>
             <p class="text-xs text-zinc-500 mt-0.5">
               {{ produtosSeleccionados.size }} seleccionado{{ produtosSeleccionados.size !== 1 ? 's' : '' }}
@@ -180,7 +190,8 @@
                        apenasSeleccionados
                          ? 'bg-red-600/20 border border-red-500/50 text-red-400'
                          : 'bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200']">
-              {{ apenasSeleccionados ? `✓ ${produtosSeleccionados.size} sel.` : 'Ver seleccionados' }}
+              <template v-if="apenasSeleccionados"><font-awesome-icon :icon="['fas', 'check']" class="mr-1" />{{ produtosSeleccionados.size }} sel.</template>
+              <template v-else>Ver seleccionados</template>
             </button>
           </div>
         </div>
@@ -203,7 +214,7 @@
               <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-700">
                 <img v-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome"
                      class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full flex items-center justify-center text-zinc-500 text-xs">📦</div>
+                <div v-else class="w-full h-full flex items-center justify-center text-zinc-500 text-xs"><font-awesome-icon :icon="['fas', 'box']" /></div>
               </div>
               <!-- Info -->
               <div class="flex-1 min-w-0">
@@ -273,6 +284,7 @@
 
 <script>
 import api from '@/services/api'
+import { ICONES_CATEGORIA_PRODUTO, iconeCategoriaProduto, chaveCategoriaProduto } from '@/utils/icones'
 
 const LIMIT = 20
 
@@ -289,7 +301,9 @@ export default {
       showModal: false,
       editando: null,
       erroModal: '',
-      form: { nome: '', icone: '📂' },
+      form: { nome: '', icone: 'pasta' },
+      iconeManual: false,   // enquanto não escolher, o ícone acompanha o nome
+      ICONES_CATEGORIA_PRODUTO,
 
       // Modal gerir produtos
       categoriaGerindo: null,
@@ -310,6 +324,7 @@ export default {
   },
 
   computed: {
+    iconeSelecionado () { return ICONES_CATEGORIA_PRODUTO.find(i => i.chave === this.form.icone) },
     produtosParaMostrar () {
       if (this.apenasSeleccionados) {
         return this.produtosModal.filter(p => this.produtosSeleccionados.has(p.id))
@@ -325,11 +340,19 @@ export default {
     },
   },
 
+  watch: {
+    'form.nome' (nome) {
+      if (!this.iconeManual) this.form.icone = chaveCategoriaProduto('', nome)
+    },
+  },
+
   async created () {
     await this.fetchCategorias()
   },
 
   methods: {
+    iconeCategoriaProduto,
+
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
@@ -346,11 +369,13 @@ export default {
 
     abrirCriar () {
       this.editando = null; this.erroModal = ''
-      this.form = { nome: '', icone: '📂' }; this.showModal = true
+      this.iconeManual = false
+      this.form = { nome: '', icone: 'pasta' }; this.showModal = true
     },
     abrirEditar (cat) {
       this.editando = cat; this.erroModal = ''
-      this.form = { nome: cat.nome, icone: cat.icone }; this.showModal = true
+      this.iconeManual = true
+      this.form = { nome: cat.nome, icone: chaveCategoriaProduto(cat.icone, cat.nome) }; this.showModal = true
     },
     fecharModal () { this.showModal = false; this.editando = null; this.erroModal = '' },
 

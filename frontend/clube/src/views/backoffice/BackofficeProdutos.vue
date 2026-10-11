@@ -60,7 +60,7 @@
             </svg>
           </div>
           <div class="absolute top-2 left-2 flex gap-1">
-            <span v-if="p.destaque" class="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded">⭐</span>
+            <span v-if="p.destaque" class="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded" title="Destaque"><font-awesome-icon :icon="['fas', 'star']" /></span>
             <span v-if="!p.ativo" class="px-1.5 py-0.5 bg-zinc-900/80 text-zinc-400 text-[10px] font-bold rounded">Inactivo</span>
           </div>
           <!-- tipo badge -->
@@ -98,14 +98,14 @@
           </div>
           <!-- stock por variação -->
           <p v-if="p.stock_por_variante" class="mt-1.5 text-[10px] text-zinc-500">
-            📦 {{ p.variantes.length }} variações
+            <font-awesome-icon :icon="['fas', 'boxes-stacked']" /> {{ p.variantes.length }} variações
             <span v-if="p.variantes.some(v => v.quantidade === 0)" class="text-red-400">
               · {{ p.variantes.filter(v => v.quantidade === 0).length }} esgotada(s)
             </span>
           </p>
           <button v-else-if="p.variantes_pendentes" type="button" @click.stop="abrirEditar(p)"
             class="mt-1.5 w-full text-left px-2 py-1 rounded-md bg-amber-500/10 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20 transition">
-            ⚠️ Definir stock por variação
+            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> Definir stock por variação
           </button>
         </div>
       </div>

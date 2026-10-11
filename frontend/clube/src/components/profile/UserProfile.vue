@@ -45,7 +45,7 @@
             <div>
               <div class="flex items-center gap-2">
                 <p class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ data.username }}</p>
-                <span v-if="data.verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold">✓</span>
+                <span v-if="data.verificado" title="Verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold"><font-awesome-icon :icon="['fas', 'circle-check']" /></span>
               </div>
               <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ data.email }}</p>
             </div>
@@ -223,7 +223,8 @@
                       <div class="flex items-center justify-between text-xs">
                         <span :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Tipo de entrega</span>
                         <span :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
-                          {{ detalhesEncomenda[enc.id].tipo_entrega === 'entrega' ? '🚚 Entrega ao domicílio' : '🏪 Takeaway' }}
+                          <font-awesome-icon :icon="['fas', detalhesEncomenda[enc.id].tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mr-1" />
+                          {{ detalhesEncomenda[enc.id].tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}
                         </span>
                       </div>
                       <div v-if="detalhesEncomenda[enc.id].morada_entrega" class="flex items-start justify-between text-xs gap-2">
@@ -322,7 +323,7 @@
              :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
           <button v-if="data.is_staff" @click="$router.push('/admin'); isOpen = false"
             class="w-full py-2 text-xs text-purple-400 hover:text-purple-300 transition">
-            ⚙️ Painel de Admin
+            <font-awesome-icon :icon="['fas', 'gear']" class="mr-1" /> Painel de Admin
           </button>
           <button @click="$emit('log_out')"
             class="w-full py-2.5 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2"

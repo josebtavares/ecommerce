@@ -9,7 +9,6 @@ export const TEMPLATES = [
     id: 'classico',
     nome: 'Clássico',
     descricao: 'Layout versátil com sidebar flutuante. Para qualquer tipo de negócio.',
-    preview: '🏪',
     categorias: ['todos'],
     tag: 'Versátil',
     primaryDefault:    '#dc2626',
@@ -21,7 +20,6 @@ export const TEMPLATES = [
     nome: 'Minimalista',
     usaCorSecundaria: true,   // fundo do modo escuro
     descricao: 'Galeria: muito espaço, tipografia leve, peças com legenda. Sem ruído visual.',
-    preview: '◻️',
     categorias: ['todos', 'moda'],
     tag: 'Luxury',
     primaryDefault:    '#a0522d',
@@ -33,7 +31,6 @@ export const TEMPLATES = [
     usaCorSecundaria: true,   // fundo do modo escuro
     nome: 'Vibrante',
     descricao: 'Pop: blocos de cor arredondados, tipografia expressiva, cartões coloridos. Energia sem ruído.',
-    preview: '🎨',
     categorias: ['todos', 'moda'],
     tag: 'Bold',
     primaryDefault:    '#ff4d2e',
@@ -47,7 +44,6 @@ export const TEMPLATES = [
     usaCorSecundaria: true,   // fundo do modo escuro
     nome: 'Restaurante Moderno',
     descricao: 'Hero com cartão de serviço, sugestões do chef em bento e carta com índice e pesquisa.',
-    preview: '🍽️',
     categorias: ['restaurante'],
     tag: 'Food',
     primaryDefault:    '#e4572e',
@@ -59,7 +55,6 @@ export const TEMPLATES = [
     nome: 'Restaurante Bistro',
     usaCorSecundaria: true,   // ardósia e fundo do modo escuro
     descricao: 'Carta de bistrô: capa emoldurada, ardósia com sugestões do chef, pratos com linhas pontilhadas.',
-    preview: '🥂',
     categorias: ['restaurante'],
     tag: 'Food',
     primaryDefault:    '#8c2f2b',
@@ -72,7 +67,6 @@ export const TEMPLATES = [
     id: 'moda_editorial',
     nome: 'Moda Editorial',
     descricao: 'Hero full-bleed, grid com números editoriais. Estética de revista.',
-    preview: '👗',
     categorias: ['moda'],
     tag: 'Editorial',
     primaryDefault:    '#e4e4e7',
@@ -84,7 +78,6 @@ export const TEMPLATES = [
     nome: 'Moda Boutique',
     usaCorSecundaria: true,   // faixa, rodapé e fundo do modo escuro
     descricao: 'Boutique de ateliê: montra, etiquetas penduradas, provador por tipo e categoria.',
-    preview: '🛍️',
     categorias: ['moda'],
     tag: 'Fashion',
     primaryDefault:    '#b4637a',
@@ -98,7 +91,6 @@ export const TEMPLATES = [
     nome: 'Tech Store',
     usaCorSecundaria: true,   // fundo do modo escuro
     descricao: 'Ficha técnica: specs em tabela, cartões com especificações, vista em grelha ou lista.',
-    preview: '💻',
     categorias: ['tecnologia', 'eletronicos'],
     tag: 'Tech',
     primaryDefault:    '#3d7bff',
@@ -112,7 +104,6 @@ export const TEMPLATES = [
     nome: 'Natureza',
     usaCorSecundaria: true,   // fundo do modo escuro
     descricao: 'Mercado da horta: formas orgânicas, bancas com etiquetas kraft, selo da época.',
-    preview: '🌿',
     categorias: ['todos', 'natureza'],
     tag: 'Nature',
     primaryDefault:    '#4f7d3a',
@@ -124,7 +115,6 @@ export const TEMPLATES = [
     nome: 'Luxo Premium',
     usaCorSecundaria: true,   // fundo do modo escuro
     descricao: 'Maison: hero com moldura e monograma, vitrine de uma peça sob foco de luz, coleções.',
-    preview: '✦',
     categorias: ['moda', 'luxo'],
     tag: 'Premium',
     primaryDefault:    '#b8975a',
@@ -136,7 +126,6 @@ export const TEMPLATES = [
     nome: 'Desporto',
     usaCorSecundaria: true,   // fundo do modo escuro
     descricao: 'Pista: itálico expandido, placar, top com números de camisola, modalidades em pistas.',
-    preview: '⚡',
     categorias: ['desporto', 'todos'],
     tag: 'Sport',
     primaryDefault:    '#c6f432',
