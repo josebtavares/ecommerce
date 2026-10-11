@@ -33,12 +33,11 @@ class Command(BaseCommand):
             usados.update(n for n in Modelo.objects.exclude(**{campo: ''})
                           .exclude(**{f'{campo}__isnull': True})
                           .values_list(campo, flat=True).iterator() if n)
-        protegidos = limpeza.protegidos()
         limite = timezone.now() - timedelta(days=opts['dias'])
 
         orfaos, total_bytes = [], 0
         for nome in self._listar(''):
-            if nome in usados or nome in protegidos:
+            if nome in usados or limpeza.protegido(nome):
                 continue
             try:
                 if default_storage.get_modified_time(nome) > limite:

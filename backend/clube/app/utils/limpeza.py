@@ -25,6 +25,10 @@ PROTEGIDOS_EXTRA = {
     'lojas/default_banner.jpg',
 }
 
+# pastas com recursos do site carregados à mão no storage e referidos pelo frontend
+# por URL directo (ex.: videos/background.mp4 do login) — nunca apagar
+PASTAS_PROTEGIDAS = ('videos/',)
+
 _cache = {}
 
 
@@ -53,13 +57,17 @@ def protegidos():
     return _cache['protegidos']
 
 
+def protegido(nome):
+    return nome in protegidos() or nome.startswith(PASTAS_PROTEGIDAS)
+
+
 def em_uso(nome):
     return any(Modelo.objects.filter(**{campo: nome}).exists() for Modelo, campo in campos_ficheiro())
 
 
 def agendar_apagar(nomes, origem=''):
     """Põe ficheiros na fila de limpeza (ignora vazios e protegidos)."""
-    nomes = {n for n in nomes if n and n not in protegidos()}
+    nomes = {n for n in nomes if n and not protegido(n)}
     if not nomes:
         return
     FicheiroParaApagar = apps.get_model('app', 'FicheiroParaApagar')
@@ -88,7 +96,7 @@ def processar_lote(tamanho=50):
             .filter(tentativas__lt=MAX_TENTATIVAS).order_by('criado_em')[:tamanho]
         )
         for item in itens:
-            if item.nome in protegidos() or em_uso(item.nome):
+            if protegido(item.nome) or em_uso(item.nome):
                 item.delete()               # voltou a ser usado — não se apaga
                 tratados += 1
                 continue
