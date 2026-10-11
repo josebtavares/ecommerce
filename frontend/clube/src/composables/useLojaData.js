@@ -3,6 +3,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
+import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
 
 export function useLojaData () {
   const route  = useRoute()
@@ -122,21 +123,9 @@ export function useLojaData () {
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
   }
 
-  function tipoIcon (tipo) {
-    const icons = {
-      prato: '🍽️', comida: '🍔', bebida: '🥤', sobremesa: '🍰',
-      roupa: '👗', calcado: '👟', acessorio: '👜',
-      eletronico: '📱', telemovel: '📱', tablet: '💻',
-      fruta: '🍎', legume: '🥦', carne: '🥩',
-      livro: '📚', manga: '📖', revista: '📰',
-    }
-    return icons[tipo?.toLowerCase()] || '📦'
-  }
+  const tipoIcon = iconeTipoProduto
 
-  function metodoPagamentoIcon (tipo) {
-    const map = { cartao: '💳', dinheiro: '💵', mbway: '📱', paypal: '🅿️', stripe: '💳' }
-    return map[tipo] || '💰'
-  }
+  const metodoPagamentoIcon = iconePagamento
 
   function scrollToId (id) {
     const el = document.getElementById(id)

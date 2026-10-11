@@ -117,7 +117,7 @@
                      : isDark ? 'bg-red-500/5 hover:bg-red-500/10' : 'bg-red-50/50 hover:bg-red-50'
                  ]">
               <div :class="['w-9 h-9 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-0.5', iconeBg(notif.tipo)]">
-                {{ icone(notif.tipo) }}
+                <font-awesome-icon :icon="['fas', icone(notif.tipo)]" class="w-3.5 h-3.5" />
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-start justify-between gap-2">
@@ -160,26 +160,26 @@
 
 <script>
 import api from '@/services/api'
-
+// ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
-  loja_pendente:            { icon: '🏪', bg: 'bg-yellow-500/20' },
-  comissao_recebida:        { icon: '💰', bg: 'bg-green-500/20'  },
-  loja_aprovada:            { icon: '✅', bg: 'bg-green-500/20'  },
-  loja_rejeitada:           { icon: '❌', bg: 'bg-red-500/20'    },
-  nova_encomenda:           { icon: '🛍️', bg: 'bg-blue-500/20'  },
-  pagamento_aprovado:       { icon: '💳', bg: 'bg-green-500/20'  },
-  encomenda_concluida_loja: { icon: '🎉', bg: 'bg-green-500/20'  },
-  encomenda_cancelada_loja: { icon: '🚫', bg: 'bg-red-500/20'    },
-  stock_baixo:              { icon: '⚠️', bg: 'bg-yellow-500/20' },
-  novo_staff:               { icon: '👥', bg: 'bg-purple-500/20' },
-  avaliacao_recebida:       { icon: '⭐', bg: 'bg-yellow-500/20' },
-  entrega_atribuida:        { icon: '🚗', bg: 'bg-blue-500/20'   },
-  entrega_cancelada:        { icon: '🚨', bg: 'bg-red-500/20'    },
-  encomenda_paga:           { icon: '💳', bg: 'bg-green-500/20'  },
-  encomenda_atualizada:     { icon: '📦', bg: 'bg-blue-500/20'   },
-  encomenda_enviada:        { icon: '🚚', bg: 'bg-indigo-500/20' },
-  encomenda_concluida:      { icon: '🎉', bg: 'bg-green-500/20'  },
-  encomenda_cancelada:      { icon: '🚫', bg: 'bg-red-500/20'    },
+  loja_pendente:            { icon: 'store',               bg: 'bg-yellow-500/20 text-yellow-500' },
+  comissao_recebida:        { icon: 'coins',               bg: 'bg-green-500/20 text-green-500'   },
+  loja_aprovada:            { icon: 'circle-check',        bg: 'bg-green-500/20 text-green-500'   },
+  loja_rejeitada:           { icon: 'circle-xmark',        bg: 'bg-red-500/20 text-red-500'       },
+  nova_encomenda:           { icon: 'bag-shopping',        bg: 'bg-blue-500/20 text-blue-500'     },
+  pagamento_aprovado:       { icon: 'credit-card',         bg: 'bg-green-500/20 text-green-500'   },
+  encomenda_concluida_loja: { icon: 'circle-check',        bg: 'bg-green-500/20 text-green-500'   },
+  encomenda_cancelada_loja: { icon: 'ban',                 bg: 'bg-red-500/20 text-red-500'       },
+  stock_baixo:              { icon: 'triangle-exclamation', bg: 'bg-yellow-500/20 text-yellow-500' },
+  novo_staff:               { icon: 'user-plus',           bg: 'bg-purple-500/20 text-purple-500' },
+  avaliacao_recebida:       { icon: 'star',                bg: 'bg-yellow-500/20 text-yellow-500' },
+  entrega_atribuida:        { icon: 'car-side',            bg: 'bg-blue-500/20 text-blue-500'     },
+  entrega_cancelada:        { icon: 'circle-exclamation',  bg: 'bg-red-500/20 text-red-500'       },
+  encomenda_paga:           { icon: 'credit-card',         bg: 'bg-green-500/20 text-green-500'   },
+  encomenda_atualizada:     { icon: 'box',                 bg: 'bg-blue-500/20 text-blue-500'     },
+  encomenda_enviada:        { icon: 'truck',               bg: 'bg-indigo-500/20 text-indigo-500' },
+  encomenda_concluida:      { icon: 'circle-check',        bg: 'bg-green-500/20 text-green-500'   },
+  encomenda_cancelada:      { icon: 'ban',                 bg: 'bg-red-500/20 text-red-500'       },
 }
 
 export default {
@@ -238,8 +238,8 @@ export default {
   },
 
   methods: {
-    icone (tipo)   { return ICONES[tipo]?.icon || '🔔' },
-    iconeBg (tipo) { return ICONES[tipo]?.bg   || 'bg-zinc-700' },
+    icone (tipo)   { return ICONES[tipo]?.icon || 'bell' },
+    iconeBg (tipo) { return ICONES[tipo]?.bg   || 'bg-zinc-700 text-zinc-300' },
 
     clickFora (e) {
       const dentroSino     = this.$refs.sinoRef?.contains(e.target)

@@ -29,7 +29,7 @@
                            attr.tipo === 'choices' ? 'bg-blue-500/15 text-blue-400' :
                            attr.tipo === 'numero'  ? 'bg-green-500/15 text-green-400' :
                                                      'bg-zinc-800 text-zinc-400']">
-              <span v-if="attr.variante" title="Stock por opção">📦 </span>{{ attr.nome }}
+              <font-awesome-icon v-if="attr.variante" :icon="['fas', 'boxes-stacked']" title="Stock por opção" class="mr-1" />{{ attr.nome }}
               <span v-if="attr.tipo === 'choices'" class="opacity-60 ml-1">({{ attr.opcoes?.join(', ') }})</span>
             </span>
           </div>
@@ -123,7 +123,7 @@
                          :class="attr.variante ? 'border-amber-500/40 bg-amber-500/5' : 'border-zinc-700/60 hover:border-zinc-600'">
                     <input v-model="attr.variante" type="checkbox" class="mt-0.5 w-3.5 h-3.5 rounded border-zinc-600 accent-amber-500" />
                     <span>
-                      <span class="block text-xs font-semibold" :class="attr.variante ? 'text-amber-300' : 'text-zinc-300'">📦 Stock por opção</span>
+                      <span class="block text-xs font-semibold" :class="attr.variante ? 'text-amber-300' : 'text-zinc-300'"><font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock por opção</span>
                       <span class="block text-[10px] text-zinc-500 leading-relaxed">
                         Cada opção tem stock próprio (ex.: tamanho, cor). Deixa desligado para preferências (ex.: picante).
                       </span>

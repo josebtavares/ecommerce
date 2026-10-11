@@ -90,7 +90,7 @@
     <div class="modal-container grid-mode">
       <!-- <div class="modal-header">
         <h2 class="modal-title">
-          <span class="title-icon">🏪</span>
+          <span class="title-icon"><font-awesome-icon :icon="['fas', 'store']" /></span>
           Catálogo de Produtos
         </h2>
         <button class="close-btn" @click="close">

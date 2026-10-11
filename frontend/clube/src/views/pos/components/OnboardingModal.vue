@@ -51,7 +51,7 @@
         <!-- Tem lojas -->
         <div v-if="temLojas" class="mb-5 rounded-[1.5rem] border border-blue-200 bg-blue-50 p-4">
           <div class="flex items-start gap-3">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg text-white">🏪</div>
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg text-white"><font-awesome-icon :icon="['fas', 'store']" /></div>
             <div>
               <p class="text-sm font-black text-blue-950">
                 Encontrámos {{ lojasDisponiveis.length }} loja{{ lojasDisponiveis.length !== 1 ? 's' : '' }} Bendi na tua conta.
@@ -66,7 +66,7 @@
         <!-- Sem lojas -->
         <div v-else class="mb-5 rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4">
           <div class="flex items-start gap-3">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-lg text-white">✨</div>
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-lg text-white"><font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" /></div>
             <div>
               <p class="text-sm font-black text-amber-950">Ainda não tens lojas Bendi associadas.</p>
               <p class="mt-1 text-sm leading-6 text-amber-700">
@@ -93,12 +93,12 @@
           <!-- Standalone -->
           <button type="button" @click="selecionarModo('standalone')" :class="cardClass('standalone')">
             <div class="flex items-start justify-between gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100 text-2xl">🧾</div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100 text-2xl text-purple-600"><font-awesome-icon :icon="['fas', 'receipt']" /></div>
               <div
                 v-if="form.modo === 'standalone'"
                 class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white"
               >
-                ✓
+                <font-awesome-icon :icon="['fas', 'check']" />
               </div>
             </div>
             <h3 class="mt-4 text-left text-lg font-black text-slate-950">POS Standalone</h3>
@@ -106,21 +106,21 @@
               Começa sem loja Bendi. Vais criar produtos próprios dentro do POS.
             </p>
             <ul class="mt-4 space-y-2 text-left text-xs font-bold text-slate-500">
-              <li>✓ Produtos próprios do POS</li>
-              <li>✓ Ideal para começar rápido</li>
-              <li>✓ Pode conectar loja depois</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Produtos próprios do POS</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Ideal para começar rápido</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Pode conectar loja depois</li>
             </ul>
           </button>
 
           <!-- Integrado -->
           <button type="button" :disabled="!temLojas" @click="selecionarModo('integrado')" :class="cardClass('integrado')">
             <div class="flex items-start justify-between gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-2xl">🏪</div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-2xl text-blue-600"><font-awesome-icon :icon="['fas', 'store']" /></div>
               <div
                 v-if="form.modo === 'integrado'"
                 class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white"
               >
-                ✓
+                <font-awesome-icon :icon="['fas', 'check']" />
               </div>
             </div>
             <h3 class="mt-4 text-left text-lg font-black text-slate-950">Integrado com loja</h3>
@@ -128,21 +128,21 @@
               Usa os produtos da tua loja Bendi diretamente no POS.
             </p>
             <ul class="mt-4 space-y-2 text-left text-xs font-bold text-slate-500">
-              <li>✓ Catálogo da loja</li>
-              <li>✓ Produtos sincronizados</li>
-              <li>✓ Melhor para lojas existentes</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Catálogo da loja</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Produtos sincronizados</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Melhor para lojas existentes</li>
             </ul>
           </button>
 
           <!-- Híbrido -->
           <button type="button" :disabled="!temLojas" @click="selecionarModo('hibrido')" :class="cardClass('hibrido')">
             <div class="flex items-start justify-between gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-2xl">🔀</div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-2xl text-emerald-600"><font-awesome-icon :icon="['fas', 'shuffle']" /></div>
               <div
                 v-if="form.modo === 'hibrido'"
                 class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white"
               >
-                ✓
+                <font-awesome-icon :icon="['fas', 'check']" />
               </div>
             </div>
             <h3 class="mt-4 text-left text-lg font-black text-slate-950">Modo híbrido</h3>
@@ -150,9 +150,9 @@
               Usa produtos da loja Bendi e também produtos próprios do POS.
             </p>
             <ul class="mt-4 space-y-2 text-left text-xs font-bold text-slate-500">
-              <li>✓ Catálogo da loja</li>
-              <li>✓ Produtos extras no POS</li>
-              <li>✓ Mais flexibilidade</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Catálogo da loja</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Produtos extras no POS</li>
+              <li><font-awesome-icon :icon="['fas', 'check']" class="mr-1.5 text-emerald-500" /> Mais flexibilidade</li>
             </ul>
           </button>
         </div>

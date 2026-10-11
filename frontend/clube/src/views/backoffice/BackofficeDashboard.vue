@@ -88,7 +88,7 @@
           <div v-if="kpi.variacao !== null && kpi.variacao !== undefined"
                :class="['flex items-center gap-1 mt-1 text-xs font-semibold',
                         kpi.variacao >= 0 ? 'text-green-400' : 'text-red-400']">
-            <span>{{ kpi.variacao >= 0 ? '↑' : '↓' }}</span>
+            <font-awesome-icon :icon="['fas', kpi.variacao >= 0 ? 'arrow-trend-up' : 'arrow-trend-down']" />
             <span>{{ Math.abs(kpi.variacao) }}% vs período anterior</span>
           </div>
           <p v-else class="text-xs text-zinc-600 mt-1">{{ kpi.sub || '' }}</p>
@@ -227,7 +227,7 @@
           </h3>
           <div v-if="!dados.stock_baixo.length"
                class="flex flex-col items-center justify-center py-6 text-zinc-600 text-sm">
-            <span class="text-2xl mb-2">✓</span>
+            <font-awesome-icon :icon="['fas', 'circle-check']" class="text-2xl mb-2 text-green-500/70" />
             Todo o stock está OK
           </div>
           <div v-else class="space-y-2">
@@ -294,7 +294,7 @@
             <p class="text-xl font-extrabold text-yellow-400">
               {{ dados.rating_medio ? dados.rating_medio.toFixed(1) : '—' }}
             </p>
-            <span class="text-yellow-400">★</span>
+            <font-awesome-icon :icon="['fas', 'star']" class="text-yellow-400 w-3.5 h-3.5" />
           </div>
           <p class="text-xs text-zinc-600 mt-1">
             {{ dados.total_avaliacoes }} total · {{ dados.avaliacoes_recentes }} novas

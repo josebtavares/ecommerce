@@ -64,7 +64,7 @@
       <div v-for="p in lista" :key="p.id" @click="abrir(p)"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 hover:border-zinc-700 transition cursor-pointer group">
         <div class="flex items-center gap-3 flex-wrap">
-          <div class="w-11 h-11 rounded-xl bg-zinc-800 flex items-center justify-center text-lg flex-shrink-0">🧾</div>
+          <div class="w-11 h-11 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400 flex-shrink-0"><font-awesome-icon :icon="['fas', 'cash-register']" class="w-4 h-4" /></div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
               <p class="text-sm font-bold text-zinc-200 group-hover:text-red-400 transition">{{ p.nome }}</p>
@@ -74,7 +74,7 @@
             </div>
             <p class="text-xs text-zinc-500 truncate mt-0.5">
               {{ p.dono?.nome }} ({{ p.dono?.username }})
-              <template v-if="p.loja"> · 🏪 {{ p.loja.nome }}</template>
+              <template v-if="p.loja"> · <font-awesome-icon :icon="['fas', 'store']" class="text-zinc-600" /> {{ p.loja.nome }}</template>
               · {{ p.membros }} membros
               · última actividade {{ quando(p.ultima_atividade) }}
             </p>

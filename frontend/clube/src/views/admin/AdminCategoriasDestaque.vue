@@ -43,7 +43,7 @@
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold
                  bg-zinc-800 text-zinc-300 hover:bg-red-600/20 hover:text-red-400
                  border border-zinc-700 hover:border-red-500/50 transition capitalize">
-          {{ cat.icone }} {{ cat.nome }}
+          {{ cat.nome }}
           <span class="text-zinc-600">· {{ cat.total_produtos }} prod.</span>
         </button>
       </div>
@@ -62,7 +62,9 @@
       <div v-for="d in destaques" :key="d.id"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 flex items-center gap-4 group">
 
-        <span class="text-2xl flex-shrink-0">{{ d.icone_final }}</span>
+        <span class="w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center flex-shrink-0">
+          <font-awesome-icon :icon="['fas', iconeCategoriaProduto(d.icone_final, d.nome)]" class="w-4 h-4" />
+        </span>
 
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
@@ -115,9 +117,19 @@
         <h3 class="text-base font-bold text-zinc-100 capitalize">{{ editando.nome }}</h3>
         <div>
           <label class="text-xs text-zinc-500 mb-1 block">Ícone personalizado (opcional)</label>
-          <input v-model="formEditar.icone" type="text" maxlength="4" placeholder="deixa vazio para usar o da categoria"
-            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
-                   focus:outline-none focus:border-red-500 transition" />
+          <div class="grid grid-cols-6 gap-1.5 max-h-40 overflow-y-auto pr-1">
+            <button type="button" title="Usar o da categoria" @click="formEditar.icone = ''"
+              :class="['h-9 rounded-lg flex items-center justify-center text-[10px] font-semibold transition',
+                       !formEditar.icone ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200']">
+              Auto
+            </button>
+            <button v-for="i in ICONES_CATEGORIA_PRODUTO" :key="i.chave" type="button" :title="i.label"
+              @click="formEditar.icone = i.chave"
+              :class="['h-9 rounded-lg flex items-center justify-center transition',
+                       formEditar.icone === i.chave ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200']">
+              <font-awesome-icon :icon="['fas', i.icone]" class="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div>
           <label class="text-xs text-zinc-500 mb-1 block">Ordem no home</label>
@@ -143,6 +155,7 @@
 
 <script>
 import api from '@/services/api'
+import { ICONES_CATEGORIA_PRODUTO, iconeCategoriaProduto, chaveCategoriaProduto } from '@/utils/icones'
 
 export default {
   name: 'AdminCategoriasDestaque',
@@ -157,6 +170,7 @@ export default {
       disponiveis: [],
       editando: null,
       formEditar: { icone: '', ordem: 0 },
+      ICONES_CATEGORIA_PRODUTO,
     }
   },
 
@@ -165,6 +179,7 @@ export default {
   },
 
   methods: {
+    iconeCategoriaProduto,
     async fetchLojas () {
       try {
         const { data } = await api.get('/app/admin/categorias-destaque/lojas/')
@@ -225,7 +240,7 @@ export default {
 
     abrirEditar (d) {
       this.editando = d
-      this.formEditar = { icone: d.icone || '', ordem: d.ordem }
+      this.formEditar = { icone: d.icone ? chaveCategoriaProduto(d.icone, d.nome) : '', ordem: d.ordem }
     },
 
     async guardarEditar () {

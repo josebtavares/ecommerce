@@ -267,7 +267,10 @@
           <p class="text-4xl font-extrabold text-yellow-400">
             {{ dados.rating_medio ? dados.rating_medio.toFixed(1) : '—' }}
           </p>
-          <p class="text-yellow-400 text-lg">★★★★★</p>
+          <p class="flex justify-center gap-0.5 mt-1 text-sm">
+            <font-awesome-icon v-for="n in 5" :key="n" :icon="['fas', 'star']"
+              :class="n <= Math.round(dados.rating_medio || 0) ? 'text-yellow-400' : 'text-zinc-700'" />
+          </p>
           <p class="text-xs text-zinc-500 mt-1">rating médio</p>
         </div>
         <div class="h-12 w-px bg-zinc-800 flex-shrink-0"></div>

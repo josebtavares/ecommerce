@@ -73,7 +73,7 @@
                      isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-stone-50 border-stone-200',
                      c.href && (isDark ? 'hover:border-red-500/50' : 'hover:border-red-300'),
                    ]">
-                  <span class="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-red-500/10">{{ c.icone }}</span>
+                  <span class="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-red-500/10 text-red-500"><font-awesome-icon :icon="['fas', c.icone]" class="w-4 h-4" /></span>
                   <span class="min-w-0">
                     <span class="block text-[11px] uppercase tracking-wider font-semibold"
                           :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ c.label }}</span>
@@ -181,11 +181,11 @@ export default {
       const d = this.dados?.dados || {}
       const so = v => String(v || '').replace(/[^\d+]/g, '')
       return [
-        d.email    && { chave: 'email',    icone: '✉️', label: 'Email',    valor: d.email,    href: `mailto:${d.email}` },
-        d.telefone && { chave: 'telefone', icone: '📞', label: 'Telefone', valor: d.telefone, href: `tel:${so(d.telefone)}` },
-        d.whatsapp && { chave: 'whatsapp', icone: '💬', label: 'WhatsApp', valor: d.whatsapp, href: `https://wa.me/${so(d.whatsapp).replace('+', '')}`, externo: true },
-        d.morada   && { chave: 'morada',   icone: '📍', label: 'Morada',   valor: d.morada,   href: `https://maps.google.com/?q=${encodeURIComponent(d.morada)}`, externo: true },
-        d.horario  && { chave: 'horario',  icone: '🕘', label: 'Horário',  valor: d.horario },
+        d.email    && { chave: 'email',    icone: 'envelope', label: 'Email',    valor: d.email,    href: `mailto:${d.email}` },
+        d.telefone && { chave: 'telefone', icone: 'phone', label: 'Telefone', valor: d.telefone, href: `tel:${so(d.telefone)}` },
+        d.whatsapp && { chave: 'whatsapp', icone: 'comment-dots', label: 'WhatsApp', valor: d.whatsapp, href: `https://wa.me/${so(d.whatsapp).replace('+', '')}`, externo: true },
+        d.morada   && { chave: 'morada',   icone: 'location-dot', label: 'Morada',   valor: d.morada,   href: `https://maps.google.com/?q=${encodeURIComponent(d.morada)}`, externo: true },
+        d.horario  && { chave: 'horario',  icone: 'clock', label: 'Horário',  valor: d.horario },
       ].filter(Boolean)
     },
   },
