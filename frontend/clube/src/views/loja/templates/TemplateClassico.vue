@@ -21,9 +21,9 @@
       <!-- ── HERO ── -->
       <section class="relative h-[55vh] min-h-[360px] overflow-hidden">
         <video v-if="isVideo(loja.banner_url)"
-          :src="loja.banner_url"
+          :src="loja.banner_url" :poster="loja.banner_poster_url"
           class="w-full h-full object-cover"
-          autoplay muted loop playsinline></video>
+          v-video-visivel muted loop playsinline></video>
         <img v-else
           :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
           :alt="loja.nome" class="w-full h-full object-cover" />

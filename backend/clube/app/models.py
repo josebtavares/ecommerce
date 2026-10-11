@@ -133,6 +133,9 @@ class Galeria(models.Model):
                     )],
                     blank=True, null=True
                   )
+    # vídeo otimizado em segundo plano (app/utils/video.py)
+    ficheiro_poster = models.ImageField(upload_to='posters/%Y/%m/', blank=True, null=True)
+    ficheiro_estado = models.CharField(max_length=12, blank=True, default='')
     utilizador  = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='galeria')
     data        = models.DateTimeField(default=now)
     status      = models.CharField(max_length=20, default='ativo')
@@ -187,7 +190,10 @@ class Loja(models.Model):
         validators=[FileExtensionValidator(
             ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov']
         )]
-    )   
+    )
+    # vídeo otimizado em segundo plano (app/utils/video.py)
+    banner_poster   = models.ImageField(upload_to='posters/%Y/%m/', blank=True, null=True)
+    banner_estado   = models.CharField(max_length=12, blank=True, default='')
     layout_produtos = models.CharField(max_length=10, default='grid',
                                        choices=[('grid', 'Grelha'), ('list', 'Lista')])
 
@@ -425,6 +431,9 @@ class Produto(models.Model):
                     )],
                     blank=True, null=True
                   )
+    # vídeo otimizado em segundo plano (app/utils/video.py)
+    ficheiro_poster = models.ImageField(upload_to='posters/%Y/%m/', blank=True, null=True)
+    ficheiro_estado = models.CharField(max_length=12, blank=True, default='')
     # Atributos dinâmicos de acordo com o TipoProduto
     # Exemplos:
     #   calcado:  {"tamanho": "42", "cor": "preto", "material": "couro"}
@@ -1188,3 +1197,43 @@ class PaginaInstitucional(models.Model):
 
     def __str__(self):
         return self.titulo
+
+
+# ══════════════════════════════════════════════════════════════
+# CONVERSÃO DE VÍDEO (fila em segundo plano — app/utils/video.py)
+# ══════════════════════════════════════════════════════════════
+
+class ConversaoVideo(models.Model):
+    """
+    Uma tarefa de otimização de vídeo. A tabela é a própria fila: o worker
+    (manage.py processar_videos) apanha as pendentes com select_for_update(skip_locked),
+    por isso sobrevive a reinícios e funciona igual em dev e prod.
+    """
+    ESTADOS = [
+        ('pendente',    'Pendente'),
+        ('a_processar', 'A processar'),
+        ('pronto',      'Pronto'),
+        ('erro',        'Erro'),
+        ('substituido', 'Substituído'),   # o ficheiro mudou antes de acabar
+    ]
+
+    modelo        = models.CharField(max_length=20)          # 'loja' | 'produto' | 'galeria'
+    objeto_id     = models.PositiveBigIntegerField()
+    campo         = models.CharField(max_length=30)          # 'banner' | 'ficheiro'
+    ficheiro      = models.CharField(max_length=255)         # nome no storage quando foi agendado
+    estado        = models.CharField(max_length=12, choices=ESTADOS, default='pendente', db_index=True)
+    tentativas    = models.PositiveSmallIntegerField(default=0)
+    erro          = models.TextField(blank=True, default='')
+    bytes_origem  = models.PositiveBigIntegerField(null=True, blank=True)
+    bytes_final   = models.PositiveBigIntegerField(null=True, blank=True)
+    duracao_s     = models.FloatField(null=True, blank=True)  # tempo que a conversão demorou
+    criado_em     = models.DateTimeField(auto_now_add=True)
+    iniciado_em   = models.DateTimeField(null=True, blank=True)
+    terminado_em  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['criado_em']
+        indexes  = [models.Index(fields=['modelo', 'objeto_id', 'campo'])]
+
+    def __str__(self):
+        return f'{self.modelo}#{self.objeto_id}.{self.campo} ({self.estado})'

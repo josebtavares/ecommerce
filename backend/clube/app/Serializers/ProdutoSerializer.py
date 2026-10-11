@@ -117,6 +117,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
     loja               = LojaMiniSerializer(read_only=True)
     tipo               = TipoProdutoSerializer(read_only=True)
     ficheiro_url       = serializers.SerializerMethodField()
+    ficheiro_poster_url = serializers.SerializerMethodField()
     atributos_em_falta = serializers.SerializerMethodField()
     stock              = serializers.SerializerMethodField()
 
@@ -155,7 +156,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'tipo', 'tipo_id',
             'nome', 'descricao', 'sku',
             'preco',
-            'ficheiro', 'ficheiro_url',
+            'ficheiro', 'ficheiro_url', 'ficheiro_poster_url', 'ficheiro_estado',
             'imagens',                    # ← NOVO
             'atributos', 'atributos_normalizados', 'atributos_em_falta',  # ← atributos_normalizados novo
             'stock',
@@ -164,7 +165,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'data_criacao',
             'categorias', 'categoria_ids',
         ]
-        read_only_fields = ['loja', 'data_criacao', 'stock_por_variante']
+        read_only_fields = ['loja', 'data_criacao', 'stock_por_variante', 'ficheiro_estado']
         extra_kwargs = {
             'ficheiro': {'write_only': True, 'required': False},
         }
@@ -173,6 +174,12 @@ class ProdutoSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if obj.ficheiro and request:
             return request.build_absolute_uri(obj.ficheiro.url)
+        return None
+
+    def get_ficheiro_poster_url(self, obj):
+        request = self.context.get('request')
+        if obj.ficheiro_poster and request:
+            return request.build_absolute_uri(obj.ficheiro_poster.url)
         return None
 
     def get_atributos_em_falta(self, obj):
@@ -293,11 +300,18 @@ class ProdutoSerializer(serializers.ModelSerializer):
 
 class ProdutoMiniSerializer(serializers.ModelSerializer):
     ficheiro_url = serializers.SerializerMethodField()
+    ficheiro_poster_url = serializers.SerializerMethodField()
     tipo_nome    = serializers.CharField(source='tipo.nome', read_only=True)
 
     class Meta:
         model  = Produto
-        fields = ['id', 'nome', 'preco', 'ficheiro_url', 'tipo_nome', 'atributos']
+        fields = ['id', 'nome', 'preco', 'ficheiro_url', 'ficheiro_poster_url', 'tipo_nome', 'atributos']
+
+    def get_ficheiro_poster_url(self, obj):
+        request = self.context.get('request')
+        if obj.ficheiro_poster and request:
+            return request.build_absolute_uri(obj.ficheiro_poster.url)
+        return None
 
     def get_ficheiro_url(self, obj):
         request = self.context.get('request')

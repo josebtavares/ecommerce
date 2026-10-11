@@ -10,7 +10,7 @@
         <div class="h-56 rounded-xl overflow-hidden bg-zinc-800 cursor-pointer group relative"
             @click="$refs.bannerInput.click()">
           <video v-if="bannerPreview && isBannerVideo"
-            :src="bannerPreview" class="w-full h-full object-cover"
+            :src="bannerPreview" :poster="bannerPoster || null" class="w-full h-full object-cover"
             autoplay muted loop playsinline></video>
           <img v-else-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
           <div v-else class="w-full h-full flex items-center justify-center text-zinc-600 text-xs">
@@ -19,7 +19,26 @@
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
             <span class="text-white text-xs font-medium">Alterar banner</span>
           </div>
+          <!-- estado da otimização do vídeo (app/utils/video.py) -->
+          <span v-if="!bannerFicheiro && emCurso(bannerEstado)"
+                class="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/75 text-zinc-200 text-[11px] font-semibold flex items-center gap-1.5"
+                title="O vídeo está a ser convertido para uma versão mais leve. Até lá a loja mostra o original.">
+            <font-awesome-icon :icon="['fas', 'spinner']" spin /> A otimizar vídeo…
+          </span>
+          <button v-else-if="!bannerFicheiro && bannerEstado === 'erro'" type="button" @click.stop="tentarBannerDeNovo"
+                  class="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-red-600/90 hover:bg-red-500 text-white text-[11px] font-semibold flex items-center gap-1.5 transition"
+                  title="Não foi possível otimizar o vídeo. A loja continua a mostrar o original.">
+            <font-awesome-icon :icon="['fas', 'rotate-right']" /> Otimização falhou · tentar de novo
+          </button>
+          <span v-else-if="!bannerFicheiro && bannerEstado === 'pronto'"
+                class="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/60 text-green-400 text-[11px] font-semibold flex items-center gap-1.5">
+            <font-awesome-icon :icon="['fas', 'film']" /> Vídeo otimizado
+          </span>
         </div>
+        <p v-if="bannerFicheiro && isBannerVideo" class="text-[11px] text-zinc-500 mt-2">
+          <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />
+          Depois de guardares, o vídeo é otimizado em segundo plano para carregar mais depressa. Podes continuar a usar o backoffice.
+        </p>
         <input ref="bannerInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" class="hidden" @change="onBanner" />
 
         <div class="absolute -bottom-4 left-4 cursor-pointer group" @click="$refs.logoInput.click()">
@@ -271,6 +290,7 @@
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconePagamento } from '@/utils/icones'
+import { criarVigia, emCurso, reprocessarVideo } from '@/utils/videoEstado'
 
 const TODOS_METODOS = [
   { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
@@ -309,6 +329,8 @@ export default {
       bannerFicheiro: null,
       logoPreview:    '',
       bannerPreview:  '',
+      bannerEstado:   '',   // otimização do vídeo: '' | pendente | a_processar | pronto | erro
+      bannerPoster:   '',
       opcoesEntrega:  [],
       novaOpcao:      false,
       formOpcao:      { nome: '', preco: 0, tempo_estimado: '', area_cobertura: '' },
@@ -338,7 +360,20 @@ export default {
     },
   },
 
+  beforeUnmount () {
+    this.vigia?.parar()
+  },
+
   async created () {
+    this.vigia = criarVigia(this.lojaId, data => {
+      if (!data.banner || this.bannerFicheiro) return
+      this.bannerEstado  = data.banner.estado
+      this.bannerPoster  = data.banner.poster_url || ''
+      this.bannerPreview = data.banner.url || this.bannerPreview
+      this.isBannerVideo = isVideo(this.bannerPreview)
+    })
+    // o watcher `immediate` corre antes do created: se já vinha em curso, começa a vigiar agora
+    if (emCurso(this.bannerEstado)) this.vigia.vigiar([], true)
     await Promise.all([
       this.fetchOpcoes(),
       this.fetchMetodos(),
@@ -365,6 +400,21 @@ export default {
       this.logoPreview   = l.logo_url   || ''
       this.bannerPreview = l.banner_url || ''
       this.isBannerVideo  = isVideo(l.banner_url || '') 
+      this.bannerEstado  = l.banner_estado     || ''
+      this.bannerPoster  = l.banner_poster_url || ''
+      if (emCurso(this.bannerEstado)) this.vigia?.vigiar([], true)
+    },
+
+    emCurso,
+
+    async tentarBannerDeNovo () {
+      try {
+        const v = await reprocessarVideo(this.lojaId, 'loja', this.lojaId)
+        this.bannerEstado = v.estado
+        this.vigia?.vigiar([], true)
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível voltar a otimizar o vídeo.')
+      }
     },
 
     onLogo (e)   { const f = e.target.files[0]; if (f) { this.logoFicheiro   = f; this.logoPreview   = URL.createObjectURL(f) } },
@@ -434,9 +484,16 @@ export default {
         })
         if (this.logoFicheiro)   fd.append('logo',   this.logoFicheiro)
         if (this.bannerFicheiro) fd.append('banner', this.bannerFicheiro)
-        await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
+        const { data } = await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
         })
+        if (this.bannerFicheiro) {
+          // o vídeo novo entra na fila de otimização; o estado aparece no banner
+          this.bannerFicheiro = null
+          this.bannerEstado   = data?.banner_estado || ''
+          this.bannerPoster   = ''
+          if (emCurso(this.bannerEstado)) this.vigia?.vigiar([], true)
+        }
         this.$emit('updated')
       })
     },

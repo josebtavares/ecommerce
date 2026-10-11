@@ -42,6 +42,7 @@ class LojaSerializer(serializers.ModelSerializer):
     dono           = UtilizadorMiniSerializer(read_only=True)
     logo_url       = serializers.SerializerMethodField()
     banner_url     = serializers.SerializerMethodField()
+    banner_poster_url = serializers.SerializerMethodField()
     total_produtos = serializers.SerializerMethodField()
     minha_role     = serializers.SerializerMethodField()
 
@@ -54,7 +55,7 @@ class LojaSerializer(serializers.ModelSerializer):
             'percentagem_iva',
             'entrega_ativa', 'levantamento_ativo',
             'logo', 'logo_url',
-            'banner', 'banner_url',
+            'banner', 'banner_url', 'banner_poster_url', 'banner_estado',
             'cor_primaria', 'cor_secundaria',
             'template_id', 'dark_mode',
             'layout_produtos',
@@ -65,7 +66,7 @@ class LojaSerializer(serializers.ModelSerializer):
             'politica_devolucao', 'termos_servico', 'politica_privacidade',
             'flutterwave_subaccount_id', 'aceita_flutterwave',
         ]
-        read_only_fields = ['dono', 'data_criacao', 'data_atualizacao']
+        read_only_fields = ['dono', 'data_criacao', 'data_atualizacao', 'banner_estado']
         extra_kwargs = {
             'logo'  : {'write_only': True, 'required': False},
             'banner': {'write_only': True, 'required': False},
@@ -81,6 +82,12 @@ class LojaSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if obj.banner and request:
             return request.build_absolute_uri(obj.banner.url)
+        return None
+
+    def get_banner_poster_url(self, obj):
+        request = self.context.get('request')
+        if obj.banner_poster and request:
+            return request.build_absolute_uri(obj.banner_poster.url)
         return None
 
     def get_total_produtos(self, obj):
@@ -117,6 +124,7 @@ class LojaSerializer(serializers.ModelSerializer):
 class LojaPublicSerializer(serializers.ModelSerializer):
     logo_url       = serializers.SerializerMethodField()
     banner_url     = serializers.SerializerMethodField()
+    banner_poster_url = serializers.SerializerMethodField()
     rating_medio   = serializers.SerializerMethodField()
     total_avaliacoes = serializers.SerializerMethodField()
 
@@ -124,7 +132,7 @@ class LojaPublicSerializer(serializers.ModelSerializer):
         model  = Loja
         fields = [
             'id', 'nome', 'descricao', 'categoria', 'localizacao',
-            'logo_url', 'banner_url',
+            'logo_url', 'banner_url', 'banner_poster_url', 'banner_estado',
             'cor_primaria', 'cor_secundaria',
             'template_id', 'dark_mode',
             'layout_produtos',
@@ -143,6 +151,12 @@ class LojaPublicSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if obj.banner and request:
             return request.build_absolute_uri(obj.banner.url)
+        return None
+
+    def get_banner_poster_url(self, obj):
+        request = self.context.get('request')
+        if obj.banner_poster and request:
+            return request.build_absolute_uri(obj.banner_poster.url)
         return None
 
     def get_rating_medio(self, obj):

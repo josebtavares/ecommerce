@@ -1,5 +1,5 @@
 from django.urls import path
-from ..Views import lojaView
+from ..Views import lojaView, videoView
 
 urlpatterns = [
 
@@ -20,6 +20,8 @@ urlpatterns = [
     path('loja/<int:id>/editar/',                       lojaView.loja_update,           name='loja-update'),
     path('loja/<int:id>/eliminar/',                     lojaView.loja_delete,           name='loja-delete'),
     path('loja/<int:loja_id>/dashboard/',               lojaView.loja_dashboard,        name='loja-dashboard'),
+    path('loja/<int:loja_id>/videos/',                  videoView.videos_estado,        name='loja-videos'),
+    path('loja/<int:loja_id>/videos/reprocessar/',      videoView.videos_reprocessar,   name='loja-videos-reprocessar'),
 
     # ── Staff ─────────────────────────────────────────────────
     path('loja/<int:loja_id>/staff/',                   lojaView.staff_list,            name='staff-list'),

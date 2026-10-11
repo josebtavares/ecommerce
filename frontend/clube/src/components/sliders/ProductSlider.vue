@@ -143,7 +143,7 @@
             :style="{ height: imageHeight }"
           >
             <img
-              :src="produto.ficheiro_url || defaultImg"
+              :src="produto.ficheiro_poster_url || produto.ficheiro_url || defaultImg"
               :alt="produto.nome"
               :class="[
                 'w-full h-full object-cover transition-transform duration-300',

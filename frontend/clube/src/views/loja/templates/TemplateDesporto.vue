@@ -58,7 +58,7 @@
 
           <div class="dp-hero__media">
             <div class="dp-paralelo">
-              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" autoplay muted loop playsinline></video>
+              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel muted loop playsinline></video>
               <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" />
               <div v-else class="dp-paralelo__vazio">{{ loja.nome.charAt(0) }}</div>
             </div>
@@ -111,7 +111,7 @@
               <button v-for="(p, i) in l.itens" :key="p.id" class="dp-cartao dp-cartao--top" @click="selectedProduct = p">
                 <span class="dp-camisola" aria-hidden="true">{{ String(i + 1).padStart(2, '0') }}</span>
                 <span class="dp-cartao__img">
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted loop autoplay playsinline></video>
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="dp-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                   <span v-if="esgotado(p)" class="dp-cartao__esgotado">Esgotado</span>
@@ -162,7 +162,7 @@
                   </template>
                   <button v-for="p in l.itens" :key="p.id" class="dp-cartao" @click="selectedProduct = p">
                     <span class="dp-cartao__img">
-                      <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
+                      <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                       <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                       <span v-else class="dp-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                       <span v-if="esgotado(p)" class="dp-cartao__esgotado">Esgotado</span>

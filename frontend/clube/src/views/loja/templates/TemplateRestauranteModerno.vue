@@ -72,9 +72,9 @@
       <section class="rm-hero">
         <video
           v-if="isVideo(loja.banner_url)"
-          :src="loja.banner_url"
+          :src="loja.banner_url" :poster="loja.banner_poster_url"
           class="rm-hero__media"
-          autoplay muted loop playsinline
+          v-video-visivel muted loop playsinline
         ></video>
         <img
           v-else-if="loja.banner_url"
@@ -172,7 +172,7 @@
                 :class="{ 'rm-dish--hero': i === 0 }"
                 @click="selectedProduct = p"
               >
-                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" class="rm-dish__img" muted loop autoplay playsinline></video>
+                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" class="rm-dish__img" muted loop v-video-visivel playsinline></video>
                 <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" class="rm-dish__img" loading="lazy" />
                 <div v-else class="rm-dish__img rm-dish__img--empty">{{ p.nome.charAt(0) }}</div>
                 <div class="rm-dish__shade"></div>
@@ -260,7 +260,7 @@
                       @click="selectedProduct = p"
                     >
                       <div class="rm-item__thumb">
-                        <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
+                        <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                         <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                         <span v-else>{{ p.nome.charAt(0) }}</span>
                       </div>

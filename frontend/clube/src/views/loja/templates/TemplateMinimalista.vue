@@ -67,7 +67,7 @@
 
           <figure class="mn-hero__fig">
             <div class="mn-hero__moldura">
-              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" autoplay muted loop playsinline></video>
+              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel muted loop playsinline></video>
               <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" />
               <div v-else class="mn-hero__vazio"><span>{{ iniciais }}</span></div>
             </div>
@@ -105,7 +105,7 @@
               <button v-for="(p, i) in l.itens" :key="p.id" class="mn-peca" :class="{ 'mn-peca--grande': i === 0 }"
                       @click="selectedProduct = p">
                 <div class="mn-peca__img">
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted loop autoplay playsinline></video>
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="mn-peca__inicial">{{ p.nome.charAt(0) }}</span>
                   <span v-if="esgotado(p)" class="mn-etiqueta">Esgotado</span>
@@ -139,7 +139,7 @@
               </template>
               <button v-for="p in l.itens" :key="p.id" class="mn-peca mn-peca--fila" @click="selectedProduct = p">
                 <div class="mn-peca__img">
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="mn-peca__inicial">{{ p.nome.charAt(0) }}</span>
                   <span v-if="esgotado(p)" class="mn-etiqueta">Esgotado</span>
