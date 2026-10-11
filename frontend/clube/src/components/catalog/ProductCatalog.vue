@@ -201,7 +201,7 @@
              cardClass
            ]">
         <div :class="['relative overflow-hidden', imageContainerClass]" :style="{ height: imageHeight }">
-          <img :src="produto.ficheiro_url || defaultImg" :alt="produto.nome"
+          <img :src="produto.ficheiro_poster_url || produto.ficheiro_url || defaultImg" :alt="produto.nome"
                :class="['w-full h-full object-cover transition-transform duration-300', imageHoverEffect]" />
           <span v-if="produto.destaque && showBadges"
                 :class="['absolute top-2 right-2 px-1.5 py-0.5 text-white text-[10px] font-bold', badgeClass]">

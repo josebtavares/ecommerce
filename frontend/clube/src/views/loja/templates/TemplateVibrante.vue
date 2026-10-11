@@ -74,7 +74,7 @@
 
           <div class="vb-hero__media">
             <div class="vb-autocolante">
-              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" autoplay muted loop playsinline></video>
+              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel muted loop playsinline></video>
               <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" />
               <div v-else class="vb-autocolante__vazio">{{ loja.nome.charAt(0) }}</div>
             </div>
@@ -112,7 +112,7 @@
             <button v-for="(p, i) in l.itens" :key="p.id" class="vb-cartao" :class="'vb-cartao--t' + (i % 4)"
                     @click="selectedProduct = p">
               <div class="vb-cartao__img">
-                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted loop autoplay playsinline></video>
+                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                 <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                 <span v-else class="vb-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                 <span v-if="esgotado(p)" class="vb-cartao__esgotado">Esgotado</span>
@@ -152,7 +152,7 @@
               <button v-for="(p, i) in l.itens" :key="p.id" class="vb-cartao vb-cartao--simples"
                       :style="{ animationDelay: (i % 12) * 0.03 + 's' }" @click="selectedProduct = p">
                 <div class="vb-cartao__img">
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" muted playsinline preload="metadata"></video>
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="vb-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                   <span v-if="esgotado(p)" class="vb-cartao__esgotado">Esgotado</span>

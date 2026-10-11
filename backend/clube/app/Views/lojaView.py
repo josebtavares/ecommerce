@@ -25,63 +25,6 @@ from ..Serializers.LojaSerializer import (
 from ..utils.pagination import paginar
 from ..utils.password import mensagem_password_fraca
 
-import os, subprocess, threading, tempfile, requests as http_req
-from django.core.files.base import ContentFile
-
-def _ffmpeg_converter_remoto(url_original, loja_pk, nome_original):
-    try:
-        # 1. Descarregar ficheiro para temp
-        r = http_req.get(url_original, timeout=60)
-        ext = os.path.splitext(nome_original)[1].lower()
-        
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_in:
-            tmp_in.write(r.content)
-            caminho_in = tmp_in.name
-
-        caminho_out = caminho_in.replace(ext, '.mp4')
-
-        # 2. Converter com FFmpeg
-        subprocess.run([
-            'ffmpeg', '-i', caminho_in,
-            '-vcodec', 'libx264', '-crf', '28',
-            '-preset', 'fast', '-movflags', '+faststart',
-            '-vf', 'scale=1280:-2', '-an',
-            caminho_out, '-y'
-        ], check=True, timeout=180)
-
-        # 3. Re-upload para o storage
-        loja = Loja.objects.get(pk=loja_pk)
-        novo_nome = os.path.splitext(loja.banner.name)[0] + '.mp4'
-        with open(caminho_out, 'rb') as f:
-            loja.banner.save(os.path.basename(novo_nome), ContentFile(f.read()), save=True)
-
-        print(f'[FFmpeg] Banner da loja {loja_pk} convertido com sucesso')
-
-    except Exception as e:
-        print(f'[FFmpeg] Erro: {e}')
-    finally:
-        # 4. Limpar ficheiros temporários
-        for p in [caminho_in, caminho_out]:
-            try: os.remove(p)
-            except: pass
-
-
-def _converter_banner_se_video(loja):
-    if not loja.banner:
-        return
-    nome = loja.banner.name.lower()
-    if not any(nome.endswith(ext) for ext in ['.webm', '.mov', '.mkv']):
-        return
-    try:
-        url = loja.banner.url
-        threading.Thread(
-            target=_ffmpeg_converter_remoto,
-            args=(url, loja.pk, nome),
-            daemon=True
-        ).start()
-    except Exception as e:
-        print(f'[FFmpeg] Erro ao iniciar: {e}')
-
 
 # ══════════════════════════════════════════════════════════════
 # HELPERS
@@ -152,14 +95,18 @@ def loja_list(request):
 def loja_get(request, id):
     loja = get_object_or_404(Loja, id=id)
     
-    # loja inactiva — só o dono/staff pode ver
+    # loja não activa (pendente/fechada/suspensa) — só o dono/staff pode ver
     if not loja.ativa:
-        if not request.user.is_authenticated:
-            return Response({'detail': 'Loja não encontrada.'}, status=404)
-        membro = UtilizadorLoja.objects.filter(
-            loja=loja, utilizador=request.user.utilizador, ativo=True
-        ).first()
-        if not membro and not request.user.is_staff:
+        membro = None
+        if request.user.is_authenticated:
+            membro = UtilizadorLoja.objects.filter(
+                loja=loja, utilizador=request.user.utilizador, ativo=True
+            ).first()
+        if not membro and not (request.user.is_authenticated and request.user.is_staff):
+            if loja.estado == 'fechada':
+                # o visitante percebe que a loja existe mas está fechada (não é um link partido)
+                return Response({'detail': 'Esta loja está temporariamente fechada.',
+                                 'estado': 'fechada', 'nome': loja.nome}, status=404)
             return Response({'detail': 'Loja não encontrada.'}, status=404)
     
     return Response(LojaPublicSerializer(loja, context={'request': request}).data)
@@ -189,12 +136,10 @@ def loja_create(request):
 
     loja = serializer.save(
         dono   = utilizador,
-        ativa  = False,
+        estado = 'pendente',       # aguarda aprovação da plataforma (ativa=False por consequência)
         logo   = request.FILES.get('logo'),
         banner = request.FILES.get('banner'),
     )
-    if request.FILES.get('banner'):          
-        _converter_banner_se_video(loja)
 
     notificar_admins(
         tipo='loja_pendente',
@@ -269,23 +214,53 @@ def loja_update(request, id):
         logo  =request.FILES.get('logo',   loja.logo),
         banner=request.FILES.get('banner', loja.banner),
     )
-    if request.FILES.get('banner'):         
-        _converter_banner_se_video(loja)
-        
     return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
-@api_view(['DELETE'])
+@api_view(['POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
-def loja_delete(request, id):
-    """DELETE /app/loja/<id>/eliminar/"""
+def loja_fechar(request, id):
+    """
+    POST /app/loja/<id>/fechar/        (DELETE /app/loja/<id>/eliminar/ — compatibilidade)
+    O dono fecha a loja: deixa de aparecer no site e de receber encomendas. Nada é apagado;
+    as encomendas em curso continuam a ser geridas no backoffice. Pode reabrir quando quiser.
+    """
     loja = get_object_or_404(Loja, id=id)
     _, erro = _exige_permissao(request, loja, 'apagar_loja')
     if erro:
         return erro
-    loja.ativa = False
-    loja.save(update_fields=['ativa'])
-    return Response({'detail': 'Loja desactivada.'})
+    if loja.estado != 'ativa':
+        return Response({'detail': f'Só uma loja activa pode ser fechada (estado actual: {loja.get_estado_display()}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    loja.mudar_estado('fechada', (request.data.get('motivo') or '')[:300])
+    notificar_admins(
+        tipo='loja_fechada',
+        titulo=f'Loja fechada pelo dono: {loja.nome}',
+        mensagem=loja.estado_motivo or 'O dono fechou a loja.',
+        loja=loja,
+        link='/admin',
+    )
+    return Response(LojaSerializer(loja, context={'request': request}).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def loja_reabrir(request, id):
+    """
+    POST /app/loja/<id>/reabrir/
+    Só reabre uma loja que o próprio dono fechou (uma loja suspensa só o admin reactiva).
+    """
+    loja = get_object_or_404(Loja, id=id)
+    _, erro = _exige_permissao(request, loja, 'apagar_loja')
+    if erro:
+        return erro
+    if loja.estado != 'fechada':
+        return Response({'detail': f'Só uma loja fechada pelo dono pode ser reaberta (estado actual: {loja.get_estado_display()}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    loja.mudar_estado('ativa')
+    return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
 # ══════════════════════════════════════════════════════════════

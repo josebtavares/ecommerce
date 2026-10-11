@@ -15,12 +15,16 @@
 
           <!-- Imagem actual -->
           <div class="relative w-full h-full cursor-pointer group"
-               @click="todasImagens[imagemActiva]?.url && (imagemFullscreen = true)">
-            <img :src="todasImagens[imagemActiva]?.url || defaultImg" :alt="produto.nome"
+               @click="todasImagens[imagemActiva]?.url && !todasImagens[imagemActiva]?.video && (imagemFullscreen = true)">
+            <!-- vídeo do produto: toca com controlos (é o único vídeo no ecrã) -->
+            <video v-if="todasImagens[imagemActiva]?.video" :key="todasImagens[imagemActiva].url"
+                   :src="todasImagens[imagemActiva].url" :poster="todasImagens[imagemActiva].poster"
+                   class="w-full h-full object-cover" autoplay muted loop playsinline controls></video>
+            <img v-else :src="todasImagens[imagemActiva]?.url || defaultImg" :alt="produto.nome"
                  class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
 
             <!-- Overlay hover -->
-            <div v-if="todasImagens[imagemActiva]?.url"
+            <div v-if="todasImagens[imagemActiva]?.url && !todasImagens[imagemActiva]?.video"
                  class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity
                         flex flex-col items-center justify-center gap-2">
               <div class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center">
@@ -86,7 +90,7 @@
               @click.stop="imagemActiva = idx"
               class="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden border-2 transition"
               :class="imagemActiva === idx ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'">
-              <img :src="img.url || defaultImg" :alt="'Imagem ' + (idx+1)" class="w-full h-full object-cover" />
+              <img :src="img.poster || (img.video ? defaultImg : img.url) || defaultImg" :alt="'Imagem ' + (idx+1)" class="w-full h-full object-cover" />
             </button>
           </div>
 
@@ -368,7 +372,11 @@ export default {
       const imgs = []
       // 1. imagem principal
       if (this.produto?.ficheiro_url) {
-        imgs.push({ url: this.produto.ficheiro_url, legenda: '' })
+        imgs.push({
+          url: this.produto.ficheiro_url, legenda: '',
+          video: /\.(mp4|webm|mov|mkv|m4v)$/i.test(this.produto.ficheiro_url),
+          poster: this.produto.ficheiro_poster_url || null,
+        })
       }
       // 2. imagens adicionais (do novo endpoint)
       const adicionais = this.produto?.imagens || []

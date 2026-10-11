@@ -52,8 +52,12 @@
       <div v-for="p in produtos" :key="p.id"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden group">
         <div class="relative h-40 overflow-hidden">
-          <img v-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome"
+          <img v-if="p.ficheiro_poster_url || (p.ficheiro_url && !eVideo(p.ficheiro_url))"
+               :src="p.ficheiro_poster_url || p.ficheiro_url" :alt="p.nome"
                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <div v-else-if="p.ficheiro_url" class="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <font-awesome-icon :icon="['fas', 'film']" class="h-8 w-8 text-zinc-600" />
+          </div>
           <div v-else class="w-full h-full bg-zinc-800 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -63,6 +67,21 @@
             <span v-if="p.destaque" class="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded" title="Destaque"><font-awesome-icon :icon="['fas', 'star']" /></span>
             <span v-if="!p.ativo" class="px-1.5 py-0.5 bg-zinc-900/80 text-zinc-400 text-[10px] font-bold rounded">Inactivo</span>
           </div>
+          <!-- estado da otimização do vídeo (app/utils/video.py) -->
+          <span v-if="emCurso(p.ficheiro_estado)"
+                class="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-black/75 text-zinc-200 text-[10px] font-semibold flex items-center gap-1.5"
+                title="O vídeo está a ser convertido para uma versão mais leve. Até lá a loja mostra o original.">
+            <font-awesome-icon :icon="['fas', 'spinner']" spin /> A otimizar vídeo…
+          </span>
+          <button v-else-if="p.ficheiro_estado === 'erro'" type="button" @click.stop="tentarDeNovo(p)"
+                  class="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-red-600/90 hover:bg-red-500 text-white text-[10px] font-semibold flex items-center gap-1.5 transition"
+                  title="Não foi possível otimizar o vídeo. A loja continua a mostrar o original.">
+            <font-awesome-icon :icon="['fas', 'rotate-right']" /> Otimização falhou · tentar de novo
+          </button>
+          <span v-else-if="p.ficheiro_estado === 'pronto'"
+                class="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-black/60 text-green-400 text-[10px] font-semibold flex items-center gap-1.5">
+            <font-awesome-icon :icon="['fas', 'film']" /> Vídeo otimizado
+          </span>
           <!-- tipo badge -->
           <span v-if="p.tipo?.nome"
                 class="absolute top-2 right-2 px-1.5 py-0.5 bg-black/60 text-zinc-300 text-[10px] rounded">
@@ -162,6 +181,7 @@
 import api from '@/services/api'
 import BackofficeProdutoModal from './BackofficeProdutoModal.vue'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
+import { criarVigia, emCurso, eVideo, reprocessarVideo } from '@/utils/videoEstado'
 
 export default {
   name: 'BackofficeProdutos',
@@ -197,11 +217,40 @@ export default {
   },
 
   async created () {
+    // acompanha os vídeos em otimização e actualiza os cartões quando ficam prontos
+    this.vigia = criarVigia(this.lojaId, data => {
+      for (const v of data.produtos || []) {
+        const p = this.produtos.find(x => x.id === v.id)
+        if (!p) continue
+        p.ficheiro_estado     = v.estado
+        p.ficheiro_url        = v.url
+        p.ficheiro_poster_url = v.poster_url
+      }
+      this.vigiarVideos()
+    })
     await Promise.all([this.fetchTipos(), this.fetchProdutos()])
   },
 
+  beforeUnmount () {
+    this.vigia?.parar()
+  },
+
   methods: {
-    formatarAtributos, temAtributos,
+    formatarAtributos, temAtributos, emCurso, eVideo,
+
+    vigiarVideos () {
+      this.vigia?.vigiar(this.produtos.filter(p => emCurso(p.ficheiro_estado)).map(p => p.id))
+    },
+
+    async tentarDeNovo (p) {
+      try {
+        const v = await reprocessarVideo(this.lojaId, 'produto', p.id)
+        p.ficheiro_estado = v.estado
+        this.vigiarVideos()
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível voltar a otimizar o vídeo.')
+      }
+    },
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
@@ -253,6 +302,7 @@ export default {
         const { data } = await api.get(`/app/loja/${this.lojaId}/produtos/`, { params })
         this.produtos   = data.results || data
         this.totalCount = data.count   ?? this.produtos.length
+        this.vigiarVideos()
       } catch (e) { console.error(e) }
       finally { this.loading = false }
     },

@@ -103,9 +103,9 @@
            style="height:240px">
                   <!-- DEPOIS -->
           <video v-if="isVideo(loja.banner_url)"
-            :src="loja.banner_url"
+            :src="loja.banner_url" :poster="loja.banner_poster_url"
             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            autoplay muted loop playsinline></video>
+            v-video-visivel muted loop playsinline></video>
           <img v-else
             :src="loja.banner_url || loja.logo_url || defaultImg"
             :alt="loja.nome"

@@ -184,6 +184,29 @@ def produto_categorias_plataforma(request):
         for c in categorias
     ])
     
+def _gere_loja(request, loja_id):
+    """O utilizador é staff da plataforma ou membro activo desta loja (backoffice)?"""
+    u = request.user
+    if not u.is_authenticated:
+        return False
+    if u.is_staff:
+        return True
+    return UtilizadorLoja.objects.filter(
+        loja_id=loja_id, utilizador__user=u, ativo=True
+    ).exists()
+
+
+def _so_lojas_visiveis(request, qs, loja_id=None):
+    """
+    Listagens públicas: só produtos de lojas activas (pendentes, fechadas e suspensas não
+    aparecem na home nem nas pesquisas). Quem gere a loja pedida continua a ver os produtos
+    dela — o backoffice usa estes endpoints mesmo com a loja fechada.
+    """
+    if loja_id and str(loja_id).isdigit() and _gere_loja(request, loja_id):
+        return qs
+    return qs.filter(loja__ativa=True)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def produto_list_pagination(request):
@@ -206,6 +229,7 @@ def produto_list_pagination(request):
     loja_id = request.GET.get('loja_id')
     if loja_id:
         qs = qs.filter(loja_id=loja_id)
+    qs = _so_lojas_visiveis(request, qs, loja_id)
 
     # ── 2) filtro por tipo de produto ─────────────────────────
     tipo = request.GET.get('tipo')
@@ -281,6 +305,8 @@ def produto_get(request, id):
     GET /app/produto/<id>/
     """
     produto = get_object_or_404(Produto, id=id, ativo=True)
+    if not produto.loja.ativa and not _gere_loja(request, produto.loja_id):
+        return Response({'detail': 'Produto não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
     serializer = ProdutoSerializer(produto, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -541,7 +567,7 @@ def produto_tipos_loja(request, loja_id):
     e o total de produtos activos. Usado pelas templates da página pública
     para montar as secções "Por tipo" sem descarregar os produtos.
     """
-    qs = Produto.objects.filter(loja_id=loja_id, ativo=True)
+    qs = _so_lojas_visiveis(request, Produto.objects.filter(loja_id=loja_id, ativo=True), loja_id)
     tipos = (
         qs.filter(tipo__isnull=False)
         .values('tipo_id', 'tipo__nome')

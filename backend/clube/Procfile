@@ -1,1 +1,1 @@
-web: python -m daphne -b 0.0.0.0 -p $PORT clube.asgi:application
+web: sh start_prod.sh
