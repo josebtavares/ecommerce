@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
 from django.utils.timezone import now
@@ -258,15 +258,24 @@ class Loja(models.Model):
         super().save(*args, **kwargs)
 
     def mudar_estado(self, novo, motivo=''):
-        """Muda o estado (valida-o) e grava. Devolve o estado anterior."""
+        """
+        Muda o estado (valida-o) e grava. Se a loja deixa de estar activa, cancela as
+        encomendas ainda por pagar (já não podem ser pagas). Devolve quantas cancelou.
+
+        A linha da loja fica bloqueada até ao fim da transacção — encomenda_criar bloqueia-a
+        também, por isso nenhuma encomenda nova escapa entre a mudança e o cancelamento.
+        """
+        from .utils.encomendas import cancelar_pendentes_da_loja
+
         if novo not in dict(self.ESTADOS):
             raise ValueError(f'Estado inválido: {novo}')
-        anterior = self.estado
-        self.estado             = novo
-        self.estado_motivo      = motivo or ''
-        self.estado_alterado_em = now()
-        self.save(update_fields=['estado', 'estado_motivo', 'estado_alterado_em', 'ativa'])
-        return anterior
+        with transaction.atomic():
+            Loja.objects.select_for_update().filter(pk=self.pk).first()
+            self.estado             = novo
+            self.estado_motivo      = motivo or ''
+            self.estado_alterado_em = now()
+            self.save(update_fields=['estado', 'estado_motivo', 'estado_alterado_em', 'ativa'])
+            return cancelar_pendentes_da_loja(self) if novo != 'ativa' else 0
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1026,6 +1035,7 @@ class Notificacao(models.Model):
         ('loja_fechada',             'Loja fechada pelo dono'),
         ('nova_encomenda',           'Nova encomenda'),
         ('pagamento_aprovado',       'Pagamento aprovado'),
+        ('pagamento_reembolsar',     'Pagamento a reembolsar'),
         ('encomenda_concluida_loja', 'Encomenda concluída na loja'),
         ('encomenda_cancelada_loja', 'Encomenda cancelada na loja'),
         ('stock_baixo',              'Stock baixo'),

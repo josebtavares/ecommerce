@@ -14,7 +14,7 @@ import requests as http_requests
 import requests as google_requests
 
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes, authentication_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -89,6 +89,7 @@ def _build_auth_response(utilizador: Utilizador, request=None) -> dict:
 # ══════════════════════════════════════════════════════════════
 
 @api_view(['POST'])
+@authentication_classes([])   # um token antigo/inválido no browser não pode impedir o login
 @permission_classes([AllowAny])
 def utilizador_login(request):
     """
@@ -423,6 +424,7 @@ def utilizador_search(request):
 
 
 @api_view(['GET'])
+@authentication_classes([])   # um token antigo/inválido no browser não pode impedir o login
 @permission_classes([AllowAny])
 def google_login_url(request):
     """
@@ -443,6 +445,7 @@ def google_login_url(request):
  
  
 @api_view(['POST'])
+@authentication_classes([])   # um token antigo/inválido no browser não pode impedir o login
 @permission_classes([AllowAny])
 def google_callback(request):
     """

@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Count, Sum, Q
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
@@ -156,6 +157,9 @@ def admin_loja_list(request):
             'data_criacao': loja.data_criacao.strftime('%d-%m-%Y %H:%M'),
             'total_produtos': loja.produtos.filter(ativo=True).count(),
             'total_encomendas': loja.encomendas.count(),
+            'encomendas_pendentes': loja.encomendas.filter(status='pendente').count(),
+            'pos_vinculados': [{'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso}
+                               for p in loja.pos_vinculados.all()],
         })
 
     return Response({
@@ -167,13 +171,16 @@ def admin_loja_list(request):
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def admin_loja_gerir(request, loja_id):
     """
     PATCH /app/admin/lojas/<loja_id>/
-    Body: { acao: 'aprovar' | 'rejeitar' | 'suspender' | 'reativar', motivo?: '...' }
+    Body: { acao: 'aprovar' | 'rejeitar' | 'suspender' | 'reativar', motivo?: '...', incluir_pos?: bool }
     (compatibilidade: { ativa: true } = aprovar/reativar, { ativa: false } = suspender)
 
     Uma loja FECHADA pelo dono só o dono reabre — o admin pode suspendê-la, não abri-la.
+    Suspender a loja tira os produtos dela da venda no POS vinculado (o POS continua com os
+    próprios). incluir_pos=true suspende/reactiva também o(s) POS vinculado(s) — exige gerir_pos.
     """
     erro = _exige_admin(request, 'gerir_lojas')
     if erro: return erro
@@ -196,9 +203,26 @@ def admin_loja_gerir(request, loja_id):
             msg = f'Não é possível "{acao}" uma loja no estado "{loja.get_estado_display()}".'
         return Response({'detail': msg, 'estado': loja.estado}, status=status.HTTP_400_BAD_REQUEST)
 
+    incluir_pos = request.data.get('incluir_pos') in (True, 'true', '1', 1) and acao in ('suspender', 'reativar')
+    if incluir_pos:
+        erro = _exige_admin(request, 'gerir_pos')
+        if erro: return erro
+
     motivo = (request.data.get('motivo') or '')[:300] if destino == 'suspensa' else ''
-    loja.mudar_estado(destino, motivo)
-    _notificar_estado_loja(loja, acao)
+    canceladas = loja.mudar_estado(destino, motivo)
+    _notificar_estado_loja(loja, acao, canceladas)
+
+    pos_alterados = []
+    if incluir_pos:
+        from ..pos.models import ConfiguracaoPOS
+        from ..pos.views_admin import suspender_pos, reativar_pos
+        for pos in ConfiguracaoPOS.objects.select_for_update().filter(loja_vinculada=loja,
+                                                                       suspenso=(acao == 'reativar')):
+            if acao == 'suspender':
+                suspender_pos(pos, motivo or f'A loja vinculada "{loja.nome}" foi suspensa.')
+            else:
+                reativar_pos(pos)
+            pos_alterados.append(pos.nome)
 
     return Response({
         'id':     loja.id,
@@ -206,6 +230,8 @@ def admin_loja_gerir(request, loja_id):
         'ativa':  loja.ativa,
         'estado': loja.estado,
         'estado_motivo': loja.estado_motivo,
+        'encomendas_canceladas': canceladas,
+        'pos_alterados': pos_alterados,
     })
 
 
@@ -218,9 +244,13 @@ _ACOES_LOJA = {
 }
 
 
-def _notificar_estado_loja(loja, acao):
+def _notificar_estado_loja(loja, acao, canceladas=0):
     link   = f'/loja/{loja.id}/backoffice'
     motivo = f' Motivo: {loja.estado_motivo}' if loja.estado_motivo else ''
+    if canceladas:
+        motivo = f' {canceladas} encomenda(s) ainda por pagar foram canceladas e o stock foi reposto.' + motivo
+    if acao == 'suspender' and loja.pos_vinculados.exists():
+        motivo = ' No POS, os produtos desta loja ficam indisponíveis até a loja ser reactivada.' + motivo
     textos = {
         'aprovar':   ('loja_aprovada',  f'A tua loja "{loja.nome}" foi aprovada!',
                       'A tua loja já está visível no site. Podes começar a receber encomendas.'),

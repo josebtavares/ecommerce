@@ -223,6 +223,20 @@ def _notificar_dono(pos, tipo, titulo, mensagem):
         notificar(utilizador=pos.dono, tipo=tipo, titulo=titulo, mensagem=mensagem, link='/pos/dashboard')
 
 
+def suspender_pos(pos, motivo):
+    """Suspende o POS e avisa o dono (também usado ao suspender a loja vinculada)."""
+    pos.suspenso, pos.suspenso_motivo, pos.suspenso_em = True, motivo, timezone.now()
+    pos.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em', 'atualizado_em'])
+    _notificar_dono(pos, 'pos_suspenso', f'POS "{pos.nome}" suspenso',
+                    f'O teu POS foi suspenso pela plataforma. Motivo: {motivo}')
+
+
+def reativar_pos(pos):
+    pos.suspenso, pos.suspenso_motivo, pos.suspenso_em = False, '', None
+    pos.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em', 'atualizado_em'])
+    _notificar_dono(pos, 'pos_reativado', f'POS "{pos.nome}" reactivado', 'O teu POS voltou a estar operacional.')
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
@@ -238,10 +252,7 @@ def admin_pos_suspender(request, pos_id):
     if pos.suspenso:
         return Response({'detail': 'O POS já está suspenso.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    pos.suspenso, pos.suspenso_motivo, pos.suspenso_em = True, motivo, timezone.now()
-    pos.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em', 'atualizado_em'])
-    _notificar_dono(pos, 'pos_suspenso', f'POS "{pos.nome}" suspenso',
-                    f'O teu POS foi suspenso pela plataforma. Motivo: {motivo}')
+    suspender_pos(pos, motivo)
     return Response({'detail': 'POS suspenso.', 'estado': _estado(pos)})
 
 
@@ -257,9 +268,7 @@ def admin_pos_reativar(request, pos_id):
     if not pos.suspenso:
         return Response({'detail': 'O POS não está suspenso.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    pos.suspenso, pos.suspenso_motivo, pos.suspenso_em = False, '', None
-    pos.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em', 'atualizado_em'])
-    _notificar_dono(pos, 'pos_reativado', f'POS "{pos.nome}" reactivado', 'O teu POS voltou a estar operacional.')
+    reativar_pos(pos)
     return Response({'detail': 'POS reactivado.', 'estado': _estado(pos)})
 
 

@@ -174,6 +174,15 @@ def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
     return pos, None, utilizador
 
 
+def _loja_suspensa(pos):
+    """
+    Loja vinculada suspensa pela plataforma → os produtos dela não se vendem no POS (os
+    próprios do POS sim). A ligação mantém-se: ao reactivar a loja, voltam sozinhos.
+    Uma loja FECHADA pelo dono não conta — fechar a loja online não fecha o balcão.
+    """
+    return bool(pos.loja_vinculada_id) and pos.loja_vinculada.estado == 'suspensa'
+
+
 def _bloquear_se_suspenso(pos):
     """POS suspenso pela plataforma não opera — 403 com o motivo."""
     if pos.suspenso:
@@ -344,7 +353,9 @@ def _pos_response(pos):
             'id': pos.loja_vinculada.id,
             'nome': pos.loja_vinculada.nome,
             'logo_url': pos.loja_vinculada.logo.url if pos.loja_vinculada and pos.loja_vinculada.logo else None,
+            'estado': pos.loja_vinculada.estado,
         } if pos.loja_vinculada else None,
+        'loja_suspensa': _loja_suspensa(pos),
         'efatura_ativo': pos.efatura_ativo,
         'suspenso': pos.suspenso,
         'suspenso_motivo': pos.suspenso_motivo,
@@ -832,7 +843,10 @@ def pos_produtos(request, pos_id):
             )
         data.extend([_produto_pos_payload(p, request) for p in qs_pos])
 
-    if pos.modo in ['integrado', 'hibrido'] and pos.loja_vinculada and origem in ['todos', 'loja']:
+    # loja suspensa: os produtos dela saem da venda (na gestão continuam, como no backoffice)
+    loja_suspensa = _loja_suspensa(pos)
+    if (pos.modo in ['integrado', 'hibrido'] and pos.loja_vinculada and origem in ['todos', 'loja']
+            and (gestao or not loja_suspensa)):
         qs_loja = (Produto.objects.select_related('tipo', 'loja', 'inventario')
                    .prefetch_related('variantes', 'categorias').filter(loja=pos.loja_vinculada))
         if not gestao:
@@ -848,7 +862,8 @@ def pos_produtos(request, pos_id):
         'origem': origem,
         'loja_vinculada': {
             'id': pos.loja_vinculada.id, 'nome': pos.loja_vinculada.nome
-        } if pos.loja_vinculada else None
+        } if pos.loja_vinculada else None,
+        'loja_suspensa': loja_suspensa,
     })
 
 
@@ -1295,6 +1310,10 @@ def conta_adicionar_item(request, pos_id, conta_id):
     elif origem == 'loja':
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'Este POS não está ligado a uma loja'}, status=status.HTTP_400_BAD_REQUEST)
+        if _loja_suspensa(pos):
+            return Response({'detail': f'Os produtos da loja "{pos.loja_vinculada.nome}" estão indisponíveis: '
+                                       f'a loja foi suspensa pela plataforma.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         produto = get_object_or_404(Produto, id=produto_id, loja=pos.loja_vinculada, ativo=True, disponivel_pos=True)
     else:
         return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)

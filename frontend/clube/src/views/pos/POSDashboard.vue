@@ -164,6 +164,26 @@
         </div>
       </section>
 
+      <!-- loja vinculada suspensa: o POS funciona, mas sem os produtos da loja -->
+      <section
+        v-if="posId && !currentPOS?.suspenso && currentPOS?.loja_suspensa"
+        class="rounded-[2rem] border border-amber-200 bg-amber-50 p-4 shadow-sm flex items-start gap-3"
+      >
+        <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mt-0.5 text-amber-500" />
+        <div>
+          <p class="text-sm font-black text-amber-800">
+            A loja "{{ currentPOS.loja_vinculada?.nome }}" foi suspensa pela plataforma
+          </p>
+          <p class="mt-0.5 text-xs font-semibold text-amber-700">
+            Os produtos da loja estão indisponíveis para venda até a loja ser reactivada.
+            {{ currentPOS.modo === 'integrado'
+              ? 'Este POS só vende produtos da loja — muda para o modo híbrido para vender produtos próprios.'
+              : 'Os produtos próprios do POS continuam disponíveis.' }}
+            As contas já abertas podem ser fechadas normalmente.
+          </p>
+        </div>
+      </section>
+
       <!-- POS suspenso pela plataforma -->
       <section
         v-if="posId && currentPOS?.suspenso"
@@ -373,7 +393,7 @@
 </template>
 
 <script>
-import api from '@/services/api'
+import api, { MEMBRO_ACCESS, MEMBRO_REFRESH } from '@/services/api'
 
 import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
@@ -536,6 +556,8 @@ export default {
     // O tipo de sessão vem do TOKEN activo (claim tipo_sessao), não de chaves guardadas
     // que podem ter ficado de outra sessão (ex.: entrou na Bendi depois de usar o POS).
     tipoSessaoDoToken() {
+      // a sessão de membro tem chaves próprias (services/api.js) — se existir, é ela que o POS usa
+      if (localStorage.getItem(MEMBRO_ACCESS)) return 'membro'
       try {
         const token = localStorage.getItem('access_token') || ''
         const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
@@ -791,13 +813,16 @@ export default {
     logout() {
       if (!confirm('Tem a certeza que quer sair?')) return
 
-      // Limpar tudo
-      const keys = [
-        'access_token', 'refresh_token', 'tipo_sessao',
+      // membro: sai só do POS — a sessão Bendi que exista no browser não é tocada
+      const membro = ['tipo_sessao', MEMBRO_ACCESS, MEMBRO_REFRESH,
+                      'pos_membro', 'pos_membro_pos', 'pos_membro_permissoes']
+      // dono: a sessão do POS é a própria conta Bendi, por isso sai das duas
+      const principal = [
+        'access_token', 'refresh_token',
         'pos_user', 'pos_lojas', 'pos_existentes', 'pos_selected',
         'pos_id', 'pos_tem_lojas', 'pos_precisa_onboarding', 'pos_onboarding_data',
-        'pos_membro', 'pos_membro_pos', 'pos_membro_permissoes',
       ]
+      const keys = this.tipoSessao === 'membro' ? membro : [...membro, ...principal]
       keys.forEach(k => localStorage.removeItem(k))
 
       this.$router.push('/pos/login')
