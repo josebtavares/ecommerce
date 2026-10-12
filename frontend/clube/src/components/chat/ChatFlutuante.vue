@@ -45,7 +45,7 @@ export default {
   computed: {
     visivel () {
       const r = this.$route
-      if (!ROTAS.includes(r.name)) return false
+      if (!ROTAS.includes(r.name) || chat.painelEmbutido) return false
       return !(r.name === 'Loja' && (r.params.id === 'demo' || r.query.preview))
     },
     naoLidas () { return totalNaoLidas() },

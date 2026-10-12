@@ -217,8 +217,13 @@ def conversas(request):
         caixa = _caixa_do_pedido(request, request.query_params.get('caixa'))
         qs = regras.conversas_visiveis(u, caixa)
         tipo = request.query_params.get('tipo')
-        if tipo:
+        if tipo == 'equipa':           # grupo + conversas directas da equipa
+            qs = qs.filter(tipo__in=(Conversa.EQUIPA_GRUPO, Conversa.EQUIPA_DIRETA))
+        elif tipo:
             qs = qs.filter(tipo=tipo)
+        loja_f = request.query_params.get('loja')
+        if loja_f and str(loja_f).isdigit():
+            qs = qs.filter(loja_id=int(loja_f))
         arquivadas = request.query_params.get('arquivadas') == '1'
         qs = qs.filter(**({'participantes__caixa': caixa, 'participantes__arquivada': True} if arquivadas else {})) \
             if arquivadas else qs.exclude(participantes__caixa=caixa, participantes__arquivada=True)

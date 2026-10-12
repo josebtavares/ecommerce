@@ -20,7 +20,7 @@
       </div>
 
       <!-- Caixas: Pessoal · Loja X · Suporte -->
-      <div v-if="chat.caixas.length > 1" class="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+      <div v-if="chat.caixas.length > 1 && !semCaixas" class="mt-2 flex gap-1.5 overflow-x-auto pb-1">
         <button v-for="c in chat.caixas" :key="c.caixa_id" type="button" @click="escolher(c.caixa_id)"
                 class="flex-shrink-0 flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs font-semibold border transition-colors"
                 :class="c.caixa_id === chat.caixaId
@@ -54,7 +54,7 @@
       </div>
 
       <!-- Filtros -->
-      <div v-if="filtros.length" class="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+      <div v-if="filtros.length && !semFiltros" class="mt-2 flex gap-1.5 overflow-x-auto pb-1">
         <button v-for="f in filtros" :key="f.valor" type="button" @click="filtrar(f.valor)"
                 class="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
                 :class="filtroActivo === f.valor
@@ -128,7 +128,7 @@ import ChatAvatar from './ChatAvatar.vue'
 import { chat, carregarConversas, escolherCaixa, pesquisarContactos, iniciarConversaCom } from '@/services/chat'
 
 const FILTROS = {
-  pessoal: [{ valor: '', nome: 'Todas' }, { valor: 'cliente_loja', nome: 'Lojas' }, { valor: 'suporte', nome: 'Suporte' }, { valor: 'equipa_grupo', nome: 'Equipa' }],
+  pessoal: [{ valor: '', nome: 'Todas' }, { valor: 'cliente_loja', nome: 'Lojas' }, { valor: 'suporte', nome: 'Suporte' }, { valor: 'equipa', nome: 'Equipa' }],
   loja: [{ valor: '', nome: 'Todas' }, { valor: 'cliente_loja', nome: 'Clientes' }, { valor: 'suporte', nome: 'Suporte' }],
   suporte: [],
 }
@@ -148,6 +148,8 @@ export default {
     podeExpandir: { type: Boolean, default: false },
     podeFechar:   { type: Boolean, default: false },
     lojaContexto: { type: [String, Number], default: null },
+    semCaixas:    { type: Boolean, default: false },    // caixa fixa (backoffice/admin) — sem os botões de caixas
+    semFiltros:   { type: Boolean, default: false },
   },
   emits: ['abrir', 'expandir', 'fechar', 'suporte', 'falar-loja'],
 

@@ -23,6 +23,8 @@ export const chat = reactive({
   aEscrever: {},               // conversa_id → { nome, ate }
   pesquisa: '',
   filtroTipo: '',
+  filtroLoja: null,            // conversas de uma loja (ex.: equipa no backoffice)
+  painelEmbutido: false,       // o backoffice/admin mostra o painel — o balão esconde-se
 })
 
 export const totalNaoLidas = () => chat.caixas.reduce((s, c) => s + (c.nao_lidas || 0), 0)
@@ -42,6 +44,7 @@ export async function carregarConversas () {
   const params = { caixa: chat.caixaId, limit: 50 }
   if (chat.pesquisa.trim()) params.q = chat.pesquisa.trim()
   if (chat.filtroTipo) params.tipo = chat.filtroTipo
+  if (chat.filtroLoja) params.loja = chat.filtroLoja
   const { data } = await api.get('/api/chat/conversas/', { params })
   chat.conversas = data.results
   chat.totalConversas = data.count

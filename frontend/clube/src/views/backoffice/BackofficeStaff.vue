@@ -45,6 +45,19 @@
         <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', roleColor(membro.role)]">
           {{ membro.role }}
         </span>
+        <!-- chat: quem atende a caixa de mensagens da loja (os clientes falam com "a loja") -->
+        <button v-if="['staff', 'contabilista'].includes(membro.role)" type="button" @click="alternarChat(membro)"
+          :title="membro.pode_chat ? 'Atende o chat dos clientes — clica para retirar' : 'Não atende o chat dos clientes — clica para dar acesso'"
+          :class="['px-2 py-1 rounded-lg text-[11px] font-semibold border transition flex items-center gap-1',
+                   membro.pode_chat ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-zinc-700 text-zinc-500 hover:text-zinc-300']">
+          <font-awesome-icon :icon="['fas', 'comment-dots']" /> {{ membro.pode_chat ? 'Atende chat' : 'Sem chat' }}
+        </button>
+        <span v-else-if="membro.role === 'condutor'" class="px-2 py-1 text-[11px] text-zinc-500" title="Só vê as conversas das entregas que lhe estão atribuídas">
+          <font-awesome-icon :icon="['fas', 'comment-dots']" /> Só entregas
+        </span>
+        <span v-else class="px-2 py-1 text-[11px] text-emerald-400" title="Dono e gestor atendem sempre o chat da loja">
+          <font-awesome-icon :icon="['fas', 'comment-dots']" /> Atende chat
+        </span>
         <div v-if="membro.role !== 'dono'" class="flex items-center gap-2">
           <select :value="membro.role" @change="mudarRole(membro, $event.target.value)"
             class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300
@@ -501,6 +514,17 @@ export default {
         this.staff = data
       } catch (e) { console.error(e) }
       finally { this.loading = false }
+    },
+
+    async alternarChat (membro) {
+      const novo = !membro.pode_chat
+      try {
+        const { data } = await api.patch(`/app/loja/${this.lojaId}/staff/${membro.id}/`, { pode_chat: novo })
+        membro.pode_chat = data.pode_chat
+        membro.atende_chat = data.atende_chat
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível alterar o acesso ao chat.')
+      }
     },
 
     async mudarRole (membro, novoRole) {

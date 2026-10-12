@@ -10,12 +10,14 @@ from .UtilizadorSerializer import UtilizadorMiniSerializer
 class UtilizadorLojaSerializer(serializers.ModelSerializer):
     utilizador    = UtilizadorMiniSerializer(read_only=True)
     utilizador_id = serializers.IntegerField(write_only=True)
+    # chat: pode_chat só conta para staff/contabilista — dono e gestor atendem sempre
+    atende_chat   = serializers.BooleanField(read_only=True)
 
     class Meta:
         model  = UtilizadorLoja
         fields = [
             'id', 'utilizador', 'utilizador_id',
-            'role', 'ativo', 'data_entrada',
+            'role', 'ativo', 'data_entrada', 'pode_chat', 'atende_chat',
         ]
         read_only_fields = ['data_entrada']
 
@@ -45,6 +47,7 @@ class LojaSerializer(serializers.ModelSerializer):
     banner_poster_url = serializers.SerializerMethodField()
     total_produtos = serializers.SerializerMethodField()
     minha_role     = serializers.SerializerMethodField()
+    meu_chat       = serializers.SerializerMethodField()   # 'total' | 'condutor' | None (caixa da loja)
 
     class Meta:
         model  = Loja
@@ -60,7 +63,7 @@ class LojaSerializer(serializers.ModelSerializer):
             'template_id', 'dark_mode',
             'layout_produtos',
             'total_produtos',
-            'minha_role',
+            'minha_role', 'meu_chat',
             'ativa', 'estado', 'estado_motivo', 'estado_alterado_em',
             'data_criacao', 'data_atualizacao',
             'politica_devolucao', 'termos_servico', 'politica_privacidade',
@@ -107,6 +110,19 @@ class LojaSerializer(serializers.ModelSerializer):
             )
             return membro.role
         except UtilizadorLoja.DoesNotExist:
+            return None
+
+    def get_meu_chat(self, obj):
+        """Acesso à caixa de mensagens da loja (o backoffice mostra os "Clientes" no chat)."""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        from ..chat.regras import acesso_caixa
+        from ..chat.models import Caixa
+        caixa = Caixa.objects.filter(tipo=Caixa.LOJA, loja=obj).first() or Caixa(tipo=Caixa.LOJA, loja=obj)
+        try:
+            return acesso_caixa(request.user.utilizador, caixa)
+        except Exception:
             return None
 
     def create(self, validated_data):

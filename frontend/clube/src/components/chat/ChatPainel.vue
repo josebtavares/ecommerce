@@ -4,6 +4,7 @@
     <div v-show="!compacto || !chat.conversa" class="h-full min-h-0 border-r flex-shrink-0"
          :class="[compacto ? 'w-full' : 'w-[340px]', isDark ? 'border-zinc-800' : 'border-gray-200']">
       <ChatLista :isDark="isDark" :podeExpandir="janela" :podeFechar="janela" :lojaContexto="lojaContexto"
+                 :semCaixas="semCaixas" :semFiltros="semFiltros"
                  @abrir="abrir" @expandir="$emit('expandir')" @fechar="$emit('fechar')"
                  @suporte="suporte" @falar-loja="falarLoja" />
     </div>
@@ -32,6 +33,8 @@ export default {
     compacto:     { type: Boolean, default: false },
     janela:       { type: Boolean, default: false },   // dentro da janela flutuante (mostra ⤢ e ✕)
     lojaContexto: { type: [String, Number], default: null },
+    semCaixas:    { type: Boolean, default: false },
+    semFiltros:   { type: Boolean, default: false },
   },
   emits: ['expandir', 'fechar'],
 

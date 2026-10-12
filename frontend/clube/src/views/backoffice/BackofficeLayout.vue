@@ -51,6 +51,7 @@
           v-for="item in navItems" :key="item.key"
           :icon="item.icon" :label="item.label"
           :active="activeSection === item.key"
+          :badge="item.key === 'mensagens' ? naoLidasChat : 0"
           @click="navegarPara(item.key)"
         />
         <div v-if="navItems.length === 0 && !loadingLoja"
@@ -144,6 +145,7 @@
         <BackofficeEntregas      v-else-if="activeSection === 'entregas'"      :loja-id="lojaId" :minha-role="role" />
         <BackofficeCategorias    v-else-if="activeSection === 'categorias'"    :loja-id="lojaId" />
         <BackofficeTemplates     v-else-if="activeSection === 'templates'"     :loja-id="lojaId" />
+        <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
       </main>
     </div>
 
@@ -185,6 +187,8 @@ import BackofficeAvaliacoes     from './BackofficeAvaliacoes.vue'
 import BackofficeEntregas       from './BackofficeEntregas.vue'
 import BackofficeCategorias     from './BackofficeCategorias.vue'
 import BackofficeTemplates       from './BackofficeTemplates.vue'
+import BackofficeMensagens      from './BackofficeMensagens.vue'
+import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 
 const PERMISSOES = {
@@ -209,6 +213,7 @@ const SECCOES = [
   { key: 'dashboard',     label: 'Dashboard',        icon: 'chart',     permissao: 'ver_loja'         },
   { key: 'encomendas',    label: 'Encomendas',        icon: 'order',     permissao: 'gerir_encomendas' },
   { key: 'entregas',      label: 'Entregas',          icon: 'delivery',  permissao: 'gerir_entregas'   },
+  { key: 'mensagens',     label: 'Mensagens',         icon: 'chat',      permissao: null               },   // todos os membros (equipa); clientes só quem atende
   { key: 'avaliacoes',    label: 'Avaliações',        icon: 'star',      permissao: 'ver_loja'         },
   { key: 'tipos',         label: 'Tipos de Produto',  icon: 'tag',       permissao: 'gerir_produtos'   },
   { key: 'categorias',    label: 'Categorias',        icon: 'category',  permissao: 'gerir_produtos'   },
@@ -226,7 +231,7 @@ export default {
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
-    BackofficeTemplates,
+    BackofficeTemplates, BackofficeMensagens,
   },
 
   data () {
@@ -246,7 +251,11 @@ export default {
     lojaId ()      { return this.$route.params.id },
     role ()        { return this.loja?.minha_role || '' },
     permissoes ()  { return PERMISSOES[this.role] || [] },
-    navItems ()    { return SECCOES.filter(s => this.permissoes.includes(s.permissao)) },
+    navItems ()    { return SECCOES.filter(s => s.permissao === null ? !!this.role : this.permissoes.includes(s.permissao)) },
+    naoLidasChat () {
+      const c = chat.caixas.find(x => x.tipo === 'loja' && String(x.loja_id) === String(this.lojaId))
+      return c ? c.nao_lidas : 0
+    },
     podeFecharLoja () { return this.permissoes.includes('apagar_loja') },
     avisoEstado () {
       return ({
@@ -289,6 +298,7 @@ export default {
     temPermissao (seccaoKey) {
       const seccao = SECCOES.find(s => s.key === seccaoKey)
       if (!seccao) return false
+      if (seccao.permissao === null) return !!this.role      // qualquer membro (ex.: mensagens)
       return this.permissoes.includes(seccao.permissao)
     },
 
