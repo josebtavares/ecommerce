@@ -19,6 +19,7 @@ daphne==4.1.0
 
 # Redis cache
 django-redis==5.4.0
+redis==8.1.0          # fixo: o channels_redis depende do socket_timeout (ver CHANNEL_LAYERS no settings)
 
 # Stripe
 stripe==9.5.0
