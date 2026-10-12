@@ -106,7 +106,7 @@
             
             <!-- Barra de pesquisa -->
             <div class="relative">
-              <input v-model="pesquisaUtilizador" @input="debouncedPesquisa" type="text" placeholder="Pesquisar por username, email ou nome..." class="w-full px-3 py-2.5 pl-10 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 pr-8" />
+              <input v-model="pesquisaUtilizador" @input="debouncedPesquisa" type="text" placeholder="Username, nome ou email completo..." class="w-full px-3 py-2.5 pl-10 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 pr-8" />
               <svg class="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -142,8 +142,8 @@
               <svg class="w-12 h-12 mx-auto text-zinc-700 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <p class="text-sm text-zinc-500">{{ pesquisaUtilizador ? 'Nenhum utilizador encontrado' : 'Nenhum utilizador disponível' }}</p>
-              <p v-if="pesquisaUtilizador" class="text-xs text-zinc-600 mt-1">Tenta pesquisar por outro termo</p>
+              <p class="text-sm text-zinc-500">{{ pesquisaUtilizador.trim().length >= 3 ? 'Nenhum utilizador encontrado' : 'Escreve pelo menos 3 letras do username ou do nome, ou o email completo' }}</p>
+              <p v-if="pesquisaUtilizador.trim().length >= 3" class="text-xs text-zinc-600 mt-1">Tenta pesquisar por outro termo</p>
             </div>
 
             <!-- Load more -->
@@ -427,22 +427,12 @@ export default {
       }
     },
 
+    // a pesquisa só procura com 3+ letras (o servidor não lista utilizadores sem pesquisa)
     async carregarUtilizadoresIniciais () {
-      this.loadingInicial = true
       this.offset = 0
-      try {
-        const { data } = await api.get('/app/utilizador/search/?q=&offset=0&limit=20')
-        const idsStaff = this.staff.map(m => m.utilizador?.id)
-        this.resultadosPesquisa = data.results.filter(u => !idsStaff.includes(u.id))
-        this.totalCount = data.count
-        this.offset = 20
-        this.hasMoreResults = data.next_offset !== null
-      } catch (e) {
-        console.error(e)
-        this.resultadosPesquisa = []
-      } finally {
-        this.loadingInicial = false
-      }
+      this.resultadosPesquisa = []
+      this.totalCount = 0
+      this.hasMoreResults = false
     },
 
     selecionarUtilizador (u) {
@@ -463,7 +453,10 @@ export default {
         return
       }
       
-      if (this.pesquisaUtilizador.length < 2) return
+      if (this.pesquisaUtilizador.trim().length < 3) {
+        this.carregarUtilizadoresIniciais()
+        return
+      }
       
       this.debounceTimer = setTimeout(() => this.pesquisarUtilizadores(), 400)
     },

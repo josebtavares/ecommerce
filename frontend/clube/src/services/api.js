@@ -88,16 +88,20 @@ api.interceptors.response.use(
   async error => {
     const originalRequest = error.config;
 
-    // Não tenta refresh em URLs públicas ou se já tentou
+    const pos = naPaginaPOS();
+    const [chaveAccess, chaveRefresh] = pos ? [POS_ACCESS, POS_REFRESH] : ['access_token', 'refresh_token'];
+
+    // Não tenta refresh em URLs públicas ou se já tentou.
+    // Visitante sem sessão (site sem login obrigatório): o 401 é só a resposta normal de um
+    // endpoint privado — não há sessão para renovar nem razão para o mandar para o login.
     if (
       error.response &&
       error.response.status === 401 &&
       !originalRequest._retry &&
-      !isPublic(originalRequest.url)
+      !isPublic(originalRequest.url) &&
+      (localStorage.getItem(chaveAccess) || localStorage.getItem(chaveRefresh))
     ) {
       originalRequest._retry = true;
-      const pos = naPaginaPOS();
-      const [chaveAccess, chaveRefresh] = pos ? [POS_ACCESS, POS_REFRESH] : ['access_token', 'refresh_token'];
 
       try {
         const refreshToken = localStorage.getItem(chaveRefresh);
@@ -122,7 +126,9 @@ api.interceptors.response.use(
           window.location.href = '/pos/login';
         } else {
           localStorage.removeItem('user');
-          window.location.href = '/Login';
+          // volta à mesma página depois de entrar outra vez
+          const aqui = window.location.pathname + window.location.search;
+          window.location.href = '/Login?seguinte=' + encodeURIComponent(aqui);
         }
         return Promise.reject(refreshError);
       }

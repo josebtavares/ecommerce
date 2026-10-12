@@ -242,6 +242,7 @@
 import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { toast } from 'vue3-toastify'
+import { estaAutenticado, pedirLogin } from '@/services/sessao'
 
 export default {
   name: 'multiCart',
@@ -261,15 +262,14 @@ export default {
   },
 
   async mounted () {
-    const user = localStorage.getItem('user')
-    if (user) await this.restoreCarrinhos()
-    window.addEventListener('carrinho-limpo', (e) => {
-      this.limparLojaAposCheckout(e.detail.lojaId)
-    })
+    // visitante sem conta não tem carrinho no servidor — não se pede nada
+    if (estaAutenticado()) await this.restoreCarrinhos()
+    window.addEventListener('carrinho-limpo', this.onCarrinhoLimpo)
   },
 
   beforeUnmount () {
-    window.removeEventListener('carrinho-limpo', () => {})
+    // tem de ser a mesma função para o listener sair mesmo
+    window.removeEventListener('carrinho-limpo', this.onCarrinhoLimpo)
   },
 
   computed: {
@@ -289,8 +289,7 @@ export default {
     '$route' (to) {
       const rotasCheckout = ['EncomendaSucesso', 'Checkout']
       if (!rotasCheckout.includes(to.name)) {
-        const user = localStorage.getItem('user')
-        if (user) this.restoreCarrinhos()
+        if (estaAutenticado()) this.restoreCarrinhos()
       }
     }
   },
@@ -317,7 +316,17 @@ export default {
     getLojaItemCount (lojaId) {
       return (this.carrinhos[lojaId]?.itens || []).reduce((s, i) => s + i.quantidade, 0)
     },
-    toggleCart () { this.isOpen = !this.isOpen },
+    toggleCart () {
+      if (!this.isOpen && !estaAutenticado()) {
+        pedirLogin('Entra ou cria conta para usares o carrinho e encomendar.')
+        return
+      }
+      this.isOpen = !this.isOpen
+    },
+
+    onCarrinhoLimpo (e) {
+      this.limparLojaAposCheckout(e.detail.lojaId)
+    },
 
     async openForLoja (loja) {
       if (!this.lojas.find(l => l.id === loja.id)) this.lojas.push(loja)

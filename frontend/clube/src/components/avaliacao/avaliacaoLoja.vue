@@ -221,6 +221,7 @@
 
 <script>
 import api from '@/services/api'
+import { estaAutenticado } from '@/services/sessao'
 
 export default {
   name: 'AvaliacaoLoja',
@@ -301,7 +302,8 @@ export default {
   },
 
   computed: {
-    isLoggedIn () { return !!this.user?.id },
+    // visitante sem conta vê as avaliações mas não o formulário (o servidor exige conta e encomenda)
+    isLoggedIn () { return estaAutenticado() && !!this.user?.id },
 
     media () {
       if (!this.avaliacoes.length) return 0
