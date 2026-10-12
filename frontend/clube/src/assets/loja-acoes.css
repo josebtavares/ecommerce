@@ -39,9 +39,11 @@
   right: var(--acoes-direita, 2.5vw);
 }
 
-/* carrinho: logo à esquerda do sino + perfil */
+/* carrinho: logo à esquerda do sino + perfil.
+   --acoes-n-perfil = nº de botões no grupo do perfil (2 com sessão; 1 sem — o visitante não tem sino),
+   definido pelo UserProfile, para não ficar um buraco entre o carrinho e o perfil */
 .loja-acoes-slot--carrinho {
-  right: calc(var(--acoes-direita, 2.5vw) + 2 * var(--acoes-botao) + 2 * var(--acoes-gap));
+  right: calc(var(--acoes-direita, 2.5vw) + var(--acoes-n-perfil, 2) * (var(--acoes-botao) + var(--acoes-gap)));
 }
 
 .loja-acao-btn {

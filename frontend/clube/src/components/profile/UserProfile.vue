@@ -265,6 +265,12 @@
                       <span class="text-sm font-bold" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Total</span>
                       <span class="text-base font-bold text-red-500">{{ formatPrice(detalhesEncomenda[enc.id].valor_total) }}</span>
                     </div>
+                    <!-- chat: conversa própria desta encomenda (o condutor da entrega também a vê) -->
+                    <button type="button" @click="falarSobreEncomenda(enc)"
+                      class="w-full py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-2"
+                      :class="isDark ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'border-gray-300 text-zinc-600 hover:border-gray-400'">
+                      <font-awesome-icon :icon="['fas', 'comment-dots']" /> Falar com a loja sobre esta encomenda
+                    </button>
                   </template>
                 </div>
               </div>
@@ -345,6 +351,18 @@
         <!-- Footer — logout -->
         <div class="border-t p-4 flex-shrink-0"
              :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <button type="button" @click="isOpen = false; $router.push('/mensagens')"
+              class="py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              :class="isDark ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'border-gray-300 text-zinc-600 hover:border-gray-400'">
+              <font-awesome-icon :icon="['fas', 'comments']" /> Mensagens
+            </button>
+            <button type="button" @click="isOpen = false; contactarSuporte()"
+              class="py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              :class="isDark ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'border-gray-300 text-zinc-600 hover:border-gray-400'">
+              <font-awesome-icon :icon="['fas', 'headset']" /> Suporte
+            </button>
+          </div>
           <button v-if="data.is_staff" @click="$router.push('/admin'); isOpen = false"
             class="w-full py-2 text-xs text-purple-400 hover:text-purple-300 transition">
             <font-awesome-icon :icon="['fas', 'gear']" class="mr-1" /> Painel de Admin
@@ -379,6 +397,7 @@ import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
+import { contactarLoja, contactarSuporte } from '@/services/chat'
 import { passwordValida } from '@/utils/password'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 
@@ -464,6 +483,11 @@ async function toggleEncomenda(id) {
 // visitante sem conta: o botão do perfil convida a entrar (o perfil e as encomendas pedem conta)
 const autenticado = ref(estaAutenticado())
 
+function falarSobreEncomenda(enc) {
+  isOpen.value = false
+  contactarLoja(enc.loja, { encomendaId: enc.id })
+}
+
 function toggle() {
   if (!autenticado.value) {
     pedirLogin('Entra ou cria conta para veres o teu perfil e as tuas encomendas.')
@@ -501,6 +525,8 @@ function initForm() {
 }
 
 onMounted(() => {
+  // o carrinho encosta-se ao grupo do perfil: sem sessão não há sino (ver assets/loja-acoes.css)
+  document.documentElement.style.setProperty('--acoes-n-perfil', autenticado.value ? '2' : '1')
   previewUrl.value = props.data.foto || DEFAULT_UTILIZADOR
   initForm()
 })
