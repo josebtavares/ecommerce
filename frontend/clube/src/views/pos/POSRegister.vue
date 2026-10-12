@@ -274,6 +274,8 @@ export default {
       // ── Sessão principal (conta principal, NÃO membro) ──────────
       localStorage.setItem('tipo_sessao', 'principal')
       localStorage.setItem('pos_user',   JSON.stringify(data.user || null))
+      localStorage.removeItem('pos_membro_access')     // sessão de membro anterior deixa de valer
+      localStorage.removeItem('pos_membro_refresh')
 
       // ── Contexto POS ────────────────────────────────────────────
       localStorage.setItem('pos_lojas',            JSON.stringify(lojas))

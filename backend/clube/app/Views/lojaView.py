@@ -217,23 +217,27 @@ def loja_update(request, id):
     return Response(LojaSerializer(loja, context={'request': request}).data)
 
 
-@api_view(['POST', 'DELETE'])
+@api_view(['GET', 'POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def loja_fechar(request, id):
     """
+    GET  /app/loja/<id>/fechar/        → { encomendas_pendentes } (aviso antes de fechar)
     POST /app/loja/<id>/fechar/        (DELETE /app/loja/<id>/eliminar/ — compatibilidade)
     O dono fecha a loja: deixa de aparecer no site e de receber encomendas. Nada é apagado;
-    as encomendas em curso continuam a ser geridas no backoffice. Pode reabrir quando quiser.
+    as encomendas pagas continuam a ser geridas no backoffice e as ainda por pagar são
+    canceladas (já não podem ser pagas). Pode reabrir quando quiser.
     """
     loja = get_object_or_404(Loja, id=id)
     _, erro = _exige_permissao(request, loja, 'apagar_loja')
     if erro:
         return erro
+    if request.method == 'GET':
+        return Response({'encomendas_pendentes': loja.encomendas.filter(status='pendente').count()})
     if loja.estado != 'ativa':
         return Response({'detail': f'Só uma loja activa pode ser fechada (estado actual: {loja.get_estado_display()}).'},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    loja.mudar_estado('fechada', (request.data.get('motivo') or '')[:300])
+    canceladas = loja.mudar_estado('fechada', (request.data.get('motivo') or '')[:300])
     notificar_admins(
         tipo='loja_fechada',
         titulo=f'Loja fechada pelo dono: {loja.nome}',
@@ -241,7 +245,8 @@ def loja_fechar(request, id):
         loja=loja,
         link='/admin',
     )
-    return Response(LojaSerializer(loja, context={'request': request}).data)
+    return Response({**LojaSerializer(loja, context={'request': request}).data,
+                     'encomendas_canceladas': canceladas})
 
 
 @api_view(['POST'])

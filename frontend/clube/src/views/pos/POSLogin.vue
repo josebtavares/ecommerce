@@ -177,7 +177,7 @@
 </template>
 
 <script>
-import api from '@/services/api'
+import api, { MEMBRO_ACCESS, MEMBRO_REFRESH } from '@/services/api'
 
 export default {
   name: 'POSLogin',
@@ -341,26 +341,27 @@ export default {
   }
 
   // Limpar dados de sessão de membro anterior
+  localStorage.removeItem(MEMBRO_ACCESS)
+  localStorage.removeItem(MEMBRO_REFRESH)
   localStorage.removeItem('pos_membro')
   localStorage.removeItem('pos_membro_pos')
   localStorage.removeItem('pos_membro_permissoes')
 },
 
     _guardarSessaoMembro(data) {
-      localStorage.setItem('access_token', data.access_token)
-      localStorage.setItem('refresh_token', data.refresh_token)
+      // chaves próprias do membro: a sessão Bendi (access_token/user) fica intacta e a
+      // loja/admin continuam a funcionar no mesmo browser — ver services/api.js
+      localStorage.setItem(MEMBRO_ACCESS, data.access_token)
+      localStorage.setItem(MEMBRO_REFRESH, data.refresh_token)
       localStorage.setItem('tipo_sessao', 'membro')
       localStorage.setItem('pos_membro', JSON.stringify(data.membro))
       localStorage.setItem('pos_membro_pos', JSON.stringify(data.pos))
       localStorage.setItem('pos_membro_permissoes', JSON.stringify(data.permissoes))
 
-      // Limpar dados de sessão principal anterior. O token activo passa a ser o do membro,
-      // por isso a identidade Bendi ("user") também sai — senão a loja/admin julgariam
-      // ter sessão Bendi com um token que não é de nenhuma conta Bendi.
+      // dados do POS da sessão principal anterior (o dono) já não se aplicam
       localStorage.removeItem('pos_user')
       localStorage.removeItem('pos_lojas')
       localStorage.removeItem('pos_existentes')
-      localStorage.removeItem('user')
     },
 
     _redirecionar(data) {

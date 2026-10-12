@@ -26,6 +26,7 @@ from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
 )
 from ..utils.pagination import paginar
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
+from ..utils.encomendas import repor_stock
 
 
 # ══════════════════════════════════════════════════════════════
@@ -336,7 +337,9 @@ def encomenda_criar(request, loja_id):
     Body: { tipo_entrega, morada_entrega?, notas? }
     Converte o carrinho activo numa encomenda.
     """
-    loja       = get_object_or_404(Loja, id=loja_id, ativa=True)
+    # bloqueia a loja: se o dono/admin a fechar ao mesmo tempo, ou a encomenda é criada antes
+    # (e cancelada com as outras pendentes) ou já não é criada — ver Loja.mudar_estado
+    loja       = get_object_or_404(Loja.objects.select_for_update(), id=loja_id, ativa=True)
     utilizador = request.user.utilizador
 
     # busca o carrinho activo
@@ -548,21 +551,7 @@ def encomenda_atualizar_status(request, loja_id, id):
  
     # cancelado → repõe stock de todos os itens (na variante, se a compra foi de uma)
     if novo_status == 'cancelado':
-        produtos_variante = set()
-        for item in encomenda.itens.select_related('produto', 'variante').all():
-            if not item.produto:
-                continue
-            if item.variante_id:
-                VarianteProduto.objects.filter(id=item.variante_id).update(
-                    quantidade=F('quantidade') + item.quantidade
-                )
-                produtos_variante.add(item.produto)
-            else:
-                Inventario.objects.filter(produto=item.produto).update(
-                    quantidade=F('quantidade') + item.quantidade
-                )
-        for produto in produtos_variante:
-            atualizar_total_inventario(produto)
+        repor_stock(encomenda)
  
     # concluido + dinheiro → aprova pagamento e regista comissao
     if novo_status == 'concluido':

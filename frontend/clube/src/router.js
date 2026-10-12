@@ -122,7 +122,8 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
     // Dashboard do POS: precisa de uma sessão (dono via Bendi/POS ou membro do POS)
     if (to.matched.some(record => record.meta.requiresPOSAuth)) {
-        return localStorage.getItem('access_token') ? next() : next({ name: 'POSLogin' })
+        const sessao = localStorage.getItem('access_token') || localStorage.getItem('pos_membro_access')
+        return sessao ? next() : next({ name: 'POSLogin' })
     }
     if (to.matched.some(record => record.meta.requiresAuth)) {
         // This line checks if the user is authenticated

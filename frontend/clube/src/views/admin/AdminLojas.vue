@@ -344,14 +344,28 @@ export default {
       const cfg = ACOES[acao]
       let motivo = ''
       if (cfg.motivo) {
-        motivo = window.prompt(`${cfg.label} "${loja.nome}" — motivo (o dono vai vê-lo):`, '')
+        const aviso = acao === 'suspender' && loja.encomendas_pendentes
+          ? `\n\nAtenção: ${loja.encomendas_pendentes} encomenda(s) ainda por pagar vão ser canceladas (stock reposto, clientes avisados).`
+          : ''
+        motivo = window.prompt(`${cfg.label} "${loja.nome}" — motivo (o dono vai vê-lo):${aviso}`, '')
         if (motivo === null) return          // cancelou
       } else if (!confirm(`${cfg.label} a loja "${loja.nome}"?`)) {
         return
       }
+      // POS vinculado: suspender/reactivar também é uma escolha explícita (por defeito não)
+      const posAlvo = (loja.pos_vinculados || []).filter(p => acao === 'suspender' ? !p.suspenso : acao === 'reativar' && p.suspenso)
+      let incluirPos = false
+      if (posAlvo.length) {
+        const nomes = posAlvo.map(p => p.nome).join(', ')
+        incluirPos = confirm(acao === 'suspender'
+          ? `Suspender também o POS vinculado (${nomes})?\n\nOK = suspende o POS por inteiro.\nCancelar = o POS continua a funcionar só com os produtos próprios (os da loja ficam indisponíveis).`
+          : `Reactivar também o POS vinculado (${nomes}), que está suspenso?`)
+      }
       try {
-        const { data } = await api.patch(`/app/admin/lojas/${loja.id}/`, { acao, motivo })
+        const { data } = await api.patch(`/app/admin/lojas/${loja.id}/`, { acao, motivo, incluir_pos: incluirPos })
         Object.assign(loja, { ativa: data.ativa, estado: data.estado, estado_motivo: data.estado_motivo })
+        if (data.encomendas_canceladas) loja.encomendas_pendentes = 0
+        if (data.pos_alterados?.length) posAlvo.forEach(p => { p.suspenso = acao === 'suspender' })
         if (this.lojaDetalhe?.id === loja.id) this.verificarEliminacao(loja)
       } catch (e) {
         alert(e.response?.data?.detail || 'Não foi possível alterar o estado da loja.')
