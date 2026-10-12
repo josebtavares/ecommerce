@@ -228,6 +228,7 @@ import { Swiper, SwiperSlide } from 'swiper/vue'
 import { FreeMode } from 'swiper/modules'
 import 'swiper/css'
 import api from '@/services/api'
+import { DEFAULT_PRODUTO } from '@/services/media'
 
 export default {
   name: 'ProductSlider',
@@ -308,7 +309,7 @@ export default {
       canSlidePrev: false,
       canSlideNext: false,
 
-      defaultImg: (process.env.VUE_APP_URL_BASE || 'http://localhost:8000') + '/media/produtos/default.jpg',
+      defaultImg: DEFAULT_PRODUTO,
     }
   },
 

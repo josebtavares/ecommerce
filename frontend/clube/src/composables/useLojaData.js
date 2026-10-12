@@ -4,6 +4,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
 import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
+import { DEFAULT_BANNER } from '@/services/media'
 
 export function useLojaData () {
   const route  = useRoute()
@@ -153,7 +154,7 @@ export function useLojaData () {
     // computed
     temSidebar, temFooter, cssVars, lojaId, gruposProdutos,
     // helpers
-    backendUrl, formatPrice, tipoIcon, metodoPagamentoIcon,
+    backendUrl, defaultBanner: DEFAULT_BANNER, formatPrice, tipoIcon, metodoPagamentoIcon,
     scrollToId, onRatingUpdated, logOut,
     // reload
     loadAll,
