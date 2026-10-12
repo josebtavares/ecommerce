@@ -153,7 +153,7 @@
 
             <span
               v-if="produto.destaque && showBadges"
-              :class="['absolute top-2 right-2 px-1.5 py-0.5 text-white text-[10px] font-bold', badgeClass]"
+              :class="['absolute top-2 left-2 px-1.5 py-0.5 text-white text-[10px] font-bold', badgeClass]"
             >
               {{ badgeText }}
             </span>
@@ -164,6 +164,8 @@
             >
               Sem stock
             </div>
+
+            <BotaoFavorito tipo="produto" :id="produto.id" :tamanho="32" class="absolute top-2 right-2 z-20" />
           </div>
 
           <!-- Info -->
@@ -229,6 +231,7 @@ import { FreeMode } from 'swiper/modules'
 import 'swiper/css'
 import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 
 export default {
   name: 'ProductSlider',
@@ -236,6 +239,7 @@ export default {
   components: {
     Swiper,
     SwiperSlide,
+    BotaoFavorito,
   },
 
   props: {

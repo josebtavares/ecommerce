@@ -54,6 +54,7 @@
                  : 'bg-gradient-to-t from-black/80 via-black/30 to-transparent'">
           </div>
 
+          <BotaoFavorito tipo="loja" :id="loja.id" :tamanho="34" class="absolute top-3 right-3 z-10" />
           <!-- Logo -->
           <div class="absolute top-3 left-3">
             <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
@@ -73,7 +74,7 @@
 
           <!-- Rating -->
           <div v-if="loja.rating_medio"
-               class="absolute top-3 right-3 px-2 py-0.5 backdrop-blur rounded-lg flex items-center gap-1 transition-colors"
+               class="absolute top-3 right-14 px-2 py-0.5 backdrop-blur rounded-lg flex items-center gap-1 transition-colors"
                :class="isDark ? 'bg-zinc-900/80' : 'bg-black/50'">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -124,10 +125,11 @@ import { FreeMode } from 'swiper/modules'
 import 'swiper/css'
 import api from '@/services/api'
 import { DEFAULT_BANNER } from '@/services/media'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 
 export default {
   name: 'StoreSlider',
-  components: { Swiper, SwiperSlide },
+  components: { Swiper, SwiperSlide, BotaoFavorito },
 
   props: {
     title:    { type: String,  required: true },

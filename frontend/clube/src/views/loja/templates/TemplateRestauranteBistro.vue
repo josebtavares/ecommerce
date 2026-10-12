@@ -45,6 +45,7 @@
           <div class="bs-capa__texto">
             <p class="bs-versal">{{ loja.categoria || 'Bistrô' }}<template v-if="loja.localizacao"> · {{ loja.localizacao }}</template></p>
             <h1 class="bs-capa__nome">{{ loja.nome }}</h1>
+            <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <div class="bs-orn" aria-hidden="true"><span></span><i></i><span></span></div>
             <p v-if="loja.descricao" class="bs-capa__desc">{{ truncate(loja.descricao, 220) }}</p>
 
@@ -136,6 +137,7 @@
                       <span class="bs-prato__nome">{{ p.nome }}</span>
                       <span class="bs-pontos"></span>
                       <span class="bs-prato__preco">{{ precoDe(p) }}</span>
+                      <BotaoFavorito tipo="produto" :id="p.id" elemento="span" variante="simples" :tamanho="30" :isDark="isDark" class="bs-prato__fav" />
                     </span>
                     <span v-if="p.descricao || esgotado(p)" class="bs-prato__desc">
                       <em v-if="esgotado(p)" class="bs-prato__tag">Esgotado</em>
@@ -295,6 +297,7 @@ import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 const LIMITE = 8
@@ -302,7 +305,7 @@ const LIMITE = 8
 export default {
   name: 'TemplateRestauranteBistro',
 
-  components: { ProductInfoCard, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
+  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 
@@ -625,6 +628,7 @@ export default {
 .bs-prato__nome { font-family: var(--serif); font-weight: 700; font-size: 22px; line-height: 1.15; transition: color .2s; }
 .bs-prato:hover .bs-prato__nome { color: var(--acento); }
 .bs-prato__preco { flex-shrink: 0; font-weight: 700; font-size: 15px; color: var(--acento); }
+.bs-prato__fav { align-self: center; margin: -6px -6px -6px 0; }
 .bs-prato__desc { display: block; margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--tinta2); }
 .bs-prato__tag { font-style: normal; font-weight: 700; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--acento); margin-right: 6px; }
 .bs-prato--esgotado .bs-prato__foto, .bs-prato--esgotado .bs-prato__nome { opacity: .5; }

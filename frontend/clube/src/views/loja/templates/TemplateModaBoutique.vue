@@ -54,6 +54,7 @@
           <div class="bt-montra__texto">
             <p class="bt-montra__cat">{{ loja.categoria || 'Boutique' }}<template v-if="loja.localizacao"> · {{ loja.localizacao }}</template></p>
             <h1 class="bt-montra__nome">{{ loja.nome }}</h1>
+            <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <div class="bt-montra__ctas">
               <button class="bt-btn bt-btn--claro" @click="scrollToId(totalDestaques ? 'bt-novidades' : 'bt-provador')">
                 {{ totalDestaques ? 'Ver novidades' : 'Ver coleção' }}
@@ -113,6 +114,7 @@
               </template>
               <button v-for="p in l.itens" :key="p.id" class="bt-peca bt-peca--carrossel" @click="selectedProduct = p">
                 <span class="bt-peca__foto">
+                  <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card fav-card--esq" />
                   <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="bt-peca__inicial">{{ p.nome.charAt(0) }}</span>
@@ -166,6 +168,7 @@
                   <button v-for="(p, i) in l.itens" :key="p.id" class="bt-peca"
                           :style="{ animationDelay: (i % LIMITE) * 0.035 + 's' }" @click="selectedProduct = p">
                     <span class="bt-peca__foto">
+                      <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card fav-card--esq" />
                       <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                       <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                       <span v-else class="bt-peca__inicial">{{ p.nome.charAt(0) }}</span>
@@ -335,6 +338,7 @@ import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 const LIMITE = 9
@@ -342,7 +346,7 @@ const LIMITE = 9
 export default {
   name: 'TemplateModaBoutique',
 
-  components: { ProductInfoCard, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 
