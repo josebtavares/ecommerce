@@ -26,4 +26,5 @@ urlpatterns = [
     #---─ Google OAuth2 ─────────────────────────────────────────────
     path('utilizador/google/',          utilizadorView.google_login_url, name='google-login-url'),
     path('utilizador/google/callback/', utilizadorView.google_callback,  name='google-callback'),
+    path('utilizador/disponivel/',      utilizadorView.utilizador_disponivel, name='utilizador-disponivel'),
 ]

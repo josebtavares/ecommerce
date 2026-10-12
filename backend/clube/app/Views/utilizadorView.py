@@ -23,6 +23,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from ..models import Utilizador
 from ..utils.auth import autenticar
 from ..utils.google_auth import GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, google_obter_utilizador
+from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso, sugerir_usernames
+from django_ratelimit.core import is_ratelimited
 from ..Serializers.UtilizadorSerializer import (
     UtilizadorSerializer,
     UtilizadorPublicSerializer,
@@ -471,3 +473,49 @@ def google_callback(request):
         **_build_auth_response(utilizador, request),
         'criado': criado,
     })
+
+
+@api_view(['GET'])
+@authentication_classes([])   # público (registo); no perfil o frontend não verifica o próprio valor
+@permission_classes([AllowAny])
+def utilizador_disponivel(request):
+    """
+    GET /app/utilizador/disponivel/?username=…&email=…  (os dois são opcionais)
+    Verificação ao vivo nos formulários (registo, staff, perfil, POS):
+    { username: {disponivel, motivo?, sugestoes?}, email: {disponivel, motivo?} }
+    O servidor volta a validar tudo ao gravar — isto é só para avisar mais cedo.
+    """
+    # o registo já diz se um email existe; o limite trava a enumeração em massa
+    if is_ratelimited(request=request, group='utilizador_disponivel', key='ip',
+                      rate='60/m', method='GET', increment=True):
+        return Response({'detail': 'Demasiados pedidos. Aguarda um momento.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    resposta = {}
+
+    username = (request.query_params.get('username') or '').strip()
+    if username:
+        if not USERNAME_RE.match(username):
+            resposta['username'] = {
+                'disponivel': False,
+                'motivo': 'Só letras, números e @ . + - _ (3 a 150 caracteres).',
+            }
+        elif username_em_uso(username):
+            resposta['username'] = {
+                'disponivel': False,
+                'motivo': 'Este username já está em uso.',
+                'sugestoes': sugerir_usernames(username),
+            }
+        else:
+            resposta['username'] = {'disponivel': True}
+
+    email = (request.query_params.get('email') or '').strip()
+    if email:
+        if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
+            resposta['email'] = {'disponivel': False, 'motivo': 'Email inválido.'}
+        elif email_em_uso(email):
+            resposta['email'] = {'disponivel': False, 'motivo': 'Este email já está registado.'}
+        else:
+            resposta['email'] = {'disponivel': True}
+
+    return Response(resposta)

@@ -51,6 +51,7 @@ from .stock import reservar_stock, repor_stock_item, cancelar_conta
 from app.utils.auth import autenticar
 from app.utils.google_auth import google_obter_utilizador
 from app.utils.password import mensagem_password_fraca
+from app.utils.contas import username_livre
 from app.Views.utilizadorView import _build_user_payload
 from app.utils.variantes import sincronizar_variantes, variantes_payload, aplicar_grelha_do_pedido
 from app.utils.tipos import tipos_para_loja, tipos_para_pos, tipo_permitido
@@ -662,12 +663,7 @@ def pos_register(request):
         return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
     # Criar nova conta
-    base = email.split('@')[0]
-    username = base
-    i = 1
-    while User.objects.filter(username=username).exists():
-        username = f"{base}{i}"
-        i += 1
+    username = username_livre(email.split('@')[0])
 
     try:
         with transaction.atomic():

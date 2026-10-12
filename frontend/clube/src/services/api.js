@@ -11,6 +11,7 @@ const PUBLIC_URLS = [
   '/app/utilizador/recuperar_senha/',
   '/app/utilizador/recuperar_senha/confirmar/',
   '/app/utilizador/google/',          // URL do Google e callback
+  '/app/utilizador/disponivel/',      // verificação de username/email nos formulários
   '/api/token/refresh/',
 
    // POS

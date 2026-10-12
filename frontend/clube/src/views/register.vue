@@ -110,19 +110,21 @@
           <!-- Username -->
           <div>
             <label class="text-xs font-medium mb-1.5 block transition-colors" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Username *</label>
-            <input v-model="username" required autocomplete="username"
+            <input v-model="username" required autocomplete="username" @input="verUsername.verificar(username)"
               class="w-full px-3 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
               :class="isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500 placeholder-zinc-600' : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400 placeholder-zinc-400'"
               placeholder="ana_silva" />
+            <EstadoDisponibilidade :verificador="verUsername" :isDark="isDark" @usar="u => { username = u; verUsername.verificar(u) }" />
           </div>
 
           <!-- Email -->
           <div>
             <label class="text-xs font-medium mb-1.5 block transition-colors" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Email *</label>
-            <input v-model="email" type="email" required autocomplete="email"
+            <input v-model="email" type="email" required autocomplete="email" @input="verEmail.verificar(email)"
               class="w-full px-3 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
               :class="isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500 placeholder-zinc-600' : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400 placeholder-zinc-400'"
               placeholder="ana@exemplo.pt" />
+            <EstadoDisponibilidade :verificador="verEmail" :isDark="isDark" />
           </div>
 
           <!-- Telemóvel + Cidade -->
@@ -245,13 +247,15 @@ import { DEFAULT_UTILIZADOR } from '@/services/media'
 import { iniciarLoginGoogle } from '@/services/google'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
+import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
+import { criarVerificador } from '@/services/disponibilidade'
 import { passwordValida } from '@/utils/password'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 
 export default {
   name: 'RegisterView',
-  components: { PasswordForca, BotaoVerPassword },
+  components: { PasswordForca, BotaoVerPassword, EstadoDisponibilidade },
 
   setup () {
     const { loading, wrap } = useAsyncAction()
@@ -270,6 +274,8 @@ export default {
       password:      '',
       passwordConfirm: '',
       verPassword:   false,
+      verUsername:   criarVerificador('username'),
+      verEmail:      criarVerificador('email'),
       file:          null,
       previewUrl:    DEFAULT_UTILIZADOR,
       errors:        [],
@@ -318,6 +324,10 @@ export default {
         }
         if (this.password !== this.passwordConfirm) {
           this.errors = ['As passwords não coincidem.']
+          return
+        }
+        if (this.verUsername.bloqueia || this.verEmail.bloqueia) {
+          this.errors = [this.verUsername.motivo, this.verEmail.motivo].filter(Boolean)
           return
         }
 

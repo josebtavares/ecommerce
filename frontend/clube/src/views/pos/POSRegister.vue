@@ -91,10 +91,17 @@
                 <input
                   v-model.trim="form.email"
                   type="email"
+                  @input="verEmail.verificar(form.email)"
                   autocomplete="email"
                   placeholder="joao@exemplo.com"
                   required
                   class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+                />
+                <EstadoDisponibilidade
+                  :verificador="verEmail"
+                  :is-dark="false"
+                  so-aviso
+                  texto-indisponivel="Já existe uma conta com este email. Entra pelo login do POS (ou com o Google)."
                 />
               </div>
 
@@ -191,10 +198,12 @@ import BotaoGoogle from './components/BotaoGoogle.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import { passwordValida } from '@/utils/password'
+import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
+import { criarVerificador } from '@/services/disponibilidade'
 
 export default {
   name: 'POSRegister',
-  components: { BotaoGoogle, BotaoVerPassword, PasswordForca },
+  components: { BotaoGoogle, BotaoVerPassword, PasswordForca, EstadoDisponibilidade },
 
   data() {
     return {
@@ -207,6 +216,7 @@ export default {
       },
       loading:        false,
       loadingGoogle:  false,
+      verEmail:       criarVerificador('email'),
       error:          null,
       successMessage: null,
       showPassword:   false
