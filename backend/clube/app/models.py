@@ -1276,3 +1276,32 @@ class FicheiroParaApagar(models.Model):
 
     def __str__(self):
         return self.nome
+
+
+# ══════════════════════════════════════════════════════════════
+# FAVORITOS — produtos e lojas guardados pelo utilizador (coração nos cards)
+# ══════════════════════════════════════════════════════════════
+
+class Favorito(models.Model):
+    utilizador = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='favoritos')
+    # um dos dois (a base de dados garante)
+    produto    = models.ForeignKey(Produto, null=True, blank=True, on_delete=models.CASCADE, related_name='favoritado_por')
+    loja       = models.ForeignKey(Loja, null=True, blank=True, on_delete=models.CASCADE, related_name='favoritada_por')
+    criado_em  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-id']
+        constraints = [
+            models.CheckConstraint(
+                name='favorito_produto_ou_loja',
+                check=(models.Q(produto__isnull=False, loja__isnull=True)
+                       | models.Q(produto__isnull=True, loja__isnull=False)),
+            ),
+            models.UniqueConstraint(fields=['utilizador', 'produto'], condition=models.Q(produto__isnull=False),
+                                    name='favorito_produto_unico'),
+            models.UniqueConstraint(fields=['utilizador', 'loja'], condition=models.Q(loja__isnull=False),
+                                    name='favorito_loja_unico'),
+        ]
+
+    def __str__(self):
+        return f'{self.utilizador} ♥ {self.produto or self.loja}'
