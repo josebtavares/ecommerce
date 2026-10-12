@@ -146,13 +146,33 @@
           <!-- Password -->
           <div>
             <label class="text-xs font-medium mb-1.5 block transition-colors" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Password *</label>
-            <input v-model="password" type="password" required autocomplete="new-password"
-              class="w-full px-3 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
-              :class="isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500 placeholder-zinc-600' : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400 placeholder-zinc-400'"
-              placeholder="Mínimo 8 caracteres" />
+            <div class="relative">
+              <input v-model="password" :type="verPassword ? 'text' : 'password'" required autocomplete="new-password"
+                class="w-full px-3 pr-10 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
+                :class="isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500 placeholder-zinc-600' : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400 placeholder-zinc-400'"
+                placeholder="Mínimo 8 caracteres" />
+              <BotaoVerPassword :visivel="verPassword" :isDark="isDark" @toggle="verPassword = !verPassword" />
+            </div>
 
             <!-- Barra de força + checklist -->
             <PasswordForca :password="password" :isDark="isDark" />
+          </div>
+
+          <!-- Confirmar password -->
+          <div>
+            <label class="text-xs font-medium mb-1.5 block transition-colors" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Confirmar password *</label>
+            <div class="relative">
+              <input v-model="passwordConfirm" :type="verPassword ? 'text' : 'password'" required autocomplete="new-password"
+                class="w-full px-3 pr-10 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
+                :class="[
+                  isDark ? 'bg-zinc-900 text-zinc-100 placeholder-zinc-600' : 'bg-gray-50 text-zinc-900 placeholder-zinc-400',
+                  passwordsDiferentes ? 'border-red-500'
+                    : (isDark ? 'border-zinc-800 focus:border-red-500' : 'border-gray-200 focus:border-orange-400')
+                ]"
+                placeholder="Repete a password" />
+              <BotaoVerPassword :visivel="verPassword" :isDark="isDark" @toggle="verPassword = !verPassword" />
+            </div>
+            <p v-if="passwordsDiferentes" class="mt-1 text-[11px] text-red-400">As passwords não coincidem.</p>
           </div>
 
           <!-- Erros -->
@@ -224,13 +244,14 @@ import api from '@/services/api.js'
 import { DEFAULT_UTILIZADOR } from '@/services/media'
 import { iniciarLoginGoogle } from '@/services/google'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
+import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import { passwordValida } from '@/utils/password'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 
 export default {
   name: 'RegisterView',
-  components: { PasswordForca },
+  components: { PasswordForca, BotaoVerPassword },
 
   setup () {
     const { loading, wrap } = useAsyncAction()
@@ -247,6 +268,8 @@ export default {
       telefone:      '',
       morada:        '',
       password:      '',
+      passwordConfirm: '',
+      verPassword:   false,
       file:          null,
       previewUrl:    DEFAULT_UTILIZADOR,
       errors:        [],
@@ -260,6 +283,10 @@ export default {
   computed: {
     isPasswordValid () {
       return passwordValida(this.password)
+    },
+    // só avisa depois de começar a escrever a confirmação
+    passwordsDiferentes () {
+      return this.passwordConfirm.length > 0 && this.passwordConfirm !== this.password
     },
   },
 
@@ -287,6 +314,10 @@ export default {
 
         if (!this.isPasswordValid) {
           this.errors = ['A password não cumpre todos os requisitos de segurança.']
+          return
+        }
+        if (this.password !== this.passwordConfirm) {
+          this.errors = ['As passwords não coincidem.']
           return
         }
 

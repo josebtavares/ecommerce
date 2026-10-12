@@ -110,18 +110,37 @@
             <h3 class="text-sm font-bold uppercase tracking-wider mb-4"
                 :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Alterar password</h3>
             <div class="space-y-3">
+              <!-- contas criadas com Google ainda não têm password: definem uma sem pedir a actual -->
+              <p v-if="!temPassword" class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
+                Entras com o Google. Define uma password para poderes entrar também com email.
+              </p>
+              <div v-else>
+                <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Password actual</label>
+                <div class="relative">
+                  <input v-model="formPassword.atual" :type="verPassword ? 'text' : 'password'" autocomplete="current-password"
+                    class="w-full px-3 pr-10 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
+                    :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+                  <BotaoVerPassword :visivel="verPassword" :isDark="isDark" @toggle="verPassword = !verPassword" />
+                </div>
+              </div>
               <div>
                 <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Nova password</label>
-                <input v-model="formPassword.password" type="password" autocomplete="new-password"
-                  class="w-full px-3 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
-                  :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+                <div class="relative">
+                  <input v-model="formPassword.password" :type="verPassword ? 'text' : 'password'" autocomplete="new-password"
+                    class="w-full px-3 pr-10 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
+                    :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+                  <BotaoVerPassword :visivel="verPassword" :isDark="isDark" @toggle="verPassword = !verPassword" />
+                </div>
                 <PasswordForca :password="formPassword.password" :isDark="isDark" />
               </div>
               <div>
                 <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Confirmar password</label>
-                <input v-model="formPassword.confirm" type="password"
-                  class="w-full px-3 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
-                  :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+                <div class="relative">
+                  <input v-model="formPassword.confirm" :type="verPassword ? 'text' : 'password'" autocomplete="new-password"
+                    class="w-full px-3 pr-10 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
+                    :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+                  <BotaoVerPassword :visivel="verPassword" :isDark="isDark" @toggle="verPassword = !verPassword" />
+                </div>
               </div>
               <p v-if="passwordError" class="text-xs text-red-400">{{ passwordError }}</p>
             </div>
@@ -351,6 +370,7 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
+import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import { passwordValida } from '@/utils/password'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 
@@ -383,7 +403,10 @@ const profileFields = [
 ]
 
 const form         = ref({ first_name: '', last_name: '', username: '', email: '', telefone: '', morada: '' })
-const formPassword = ref({ password: '', confirm: '' })
+const formPassword = ref({ atual: '', password: '', confirm: '' })
+const verPassword  = ref(false)
+// contas Google sem password não têm "password actual" — o servidor diz (tem_password)
+const temPassword  = ref(props.data?.tem_password !== false)
 const passwordError = ref('')
 
 const { loading: loadingProfile,  wrap: wrapProfile  } = useAsyncAction()
@@ -439,7 +462,16 @@ function toggle() {
 watch(activeTab, (tab) => {
   if (tab === 'encomendas' && encomendas.value.length === 0) fetchEncomendas()
   if (tab === 'lojas'      && lojas.value.length === 0)      fetchLojas()
+  if (tab === 'password') fetchTemPassword()
 })
+
+// o user guardado no browser pode ser de antes do tem_password — confirma no servidor
+async function fetchTemPassword() {
+  try {
+    const { data } = await api.get('/app/utilizador/me/')
+    temPassword.value = data.tem_password !== false
+  } catch { /* fica o valor que já havia */ }
+}
 
 function initForm() {
   form.value = {
@@ -491,20 +523,24 @@ async function saveProfile() {
 
 async function savePassword() {
   passwordError.value = ''
+  if (temPassword.value && !formPassword.value.atual) { passwordError.value = 'Introduz a password actual.'; return }
   if (!formPassword.value.password) { passwordError.value = 'Introduz a nova password.'; return }
   if (!passwordValida(formPassword.value.password)) { passwordError.value = 'A password não cumpre todos os requisitos de segurança.'; return }
   if (formPassword.value.password !== formPassword.value.confirm) { passwordError.value = 'As passwords não coincidem.'; return }
   await wrapPassword(async () => {
     const fd = new FormData()
     fd.append('password', formPassword.value.password)
+    if (temPassword.value) fd.append('password_atual', formPassword.value.atual)
     try {
       await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     } catch (e) {
       const d = e.response?.data
-      passwordError.value = (d && (d.password?.[0] || d.detail)) || 'Não foi possível alterar a password.'
+      passwordError.value = (d && (d.password_atual?.[0] || d.password?.[0] || d.detail)) || 'Não foi possível alterar a password.'
       return
     }
-    formPassword.value = { password: '', confirm: '' }
+    formPassword.value = { atual: '', password: '', confirm: '' }
+    verPassword.value = false
+    temPassword.value = true   // a partir de agora já tem password
     toast.success('Password alterada!', { autoClose: 1500 })
   })
 }

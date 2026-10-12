@@ -59,7 +59,9 @@ def _build_user_payload(utilizador: Utilizador, request=None) -> dict:
         'verificado'     : utilizador.verificado,
         'rating'         : str(utilizador.rating),
         'status'         : utilizador.status,
-        'is_staff'       : utilizador.user.is_staff,        
+        # contas criadas com Google não têm password — o perfil não pede a actual para a definir
+        'tem_password'   : utilizador.user.has_usable_password(),
+        'is_staff'       : utilizador.user.is_staff,
         'role_admin'     : utilizador.role_admin,           
         'data_criacao'   : utilizador.data_criacao.strftime('%d-%m-%Y %H:%M:%S'),
     }
@@ -183,6 +185,15 @@ def utilizador_update_me(request):
     Edita o perfil do utilizador autenticado.
     """
     utilizador = get_object_or_404(Utilizador, user=request.user)
+
+    # mudar a password exige a actual (um token roubado não chega para tomar a conta);
+    # quem entrou só com Google ainda não tem password e pode defini-la directamente
+    if request.data.get('password') and request.user.has_usable_password():
+        if not request.user.check_password(request.data.get('password_atual') or ''):
+            return Response(
+                {'password_atual': ['A password actual está incorrecta.']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     data = {
         'new_username'  : request.data.get('username'),
