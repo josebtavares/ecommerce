@@ -9,6 +9,8 @@ import Backoffice from './views/backoffice/Index.vue'
 import AdminLayout from '@/views/admin/AdminLayout.vue'
 import criarLoja from './views/criarLoja.vue';
 import GoogleCallback from './views/google/GoogleCallback.vue';
+import CompletarPerfil from './views/google/CompletarPerfil.vue';
+import { POS_ACCESS } from './services/api';
 import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 
 
@@ -73,6 +75,12 @@ const routes = [
         meta: { requiresAuth: true } 
     },
     {
+        path: '/completar-perfil',
+        name: 'CompletarPerfil',
+        component: CompletarPerfil,
+        meta: { requiresAuth: true }
+    },
+    {
         path: '/auth/google/callback',
         name: 'GoogleCallback',
         component: GoogleCallback,
@@ -93,6 +101,12 @@ const routes = [
         name: 'POSLogin',
         component: POSLogin,
         meta: { title: 'Login POS' }
+    },
+    {
+        path: '/pos/completar-perfil',
+        name: 'POSCompletarPerfil',
+        component: CompletarPerfil,
+        meta: { title: 'Completar perfil', requiresPOSAuth: true }
     },
     {
         path: '/pos/dashboard',
@@ -120,9 +134,9 @@ const router = createRouter({
 });
 
 router.beforeEach((to, from, next) => {
-    // Dashboard do POS: precisa de uma sessão (dono via Bendi/POS ou membro do POS)
+    // Páginas do POS: precisam da sessão do POS (dono ou membro) — independente da Bendi
     if (to.matched.some(record => record.meta.requiresPOSAuth)) {
-        const sessao = localStorage.getItem('access_token') || localStorage.getItem('pos_membro_access')
+        const sessao = localStorage.getItem(POS_ACCESS)
         return sessao ? next() : next({ name: 'POSLogin' })
     }
     if (to.matched.some(record => record.meta.requiresAuth)) {
