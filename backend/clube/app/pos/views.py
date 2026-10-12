@@ -50,6 +50,7 @@ except Exception:
 from .stock import reservar_stock, repor_stock_item, cancelar_conta
 from app.utils.auth import autenticar
 from app.utils.google_auth import google_obter_utilizador
+from app.utils.password import mensagem_password_fraca
 from app.Views.utilizadorView import _build_user_payload
 from app.utils.variantes import sincronizar_variantes, variantes_payload, aplicar_grelha_do_pedido
 from app.utils.tipos import tipos_para_loja, tipos_para_pos, tipo_permitido
@@ -636,12 +637,6 @@ def pos_register(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    if len(password) < 6:
-        return Response(
-            {'detail': 'Password deve ter no mínimo 6 caracteres'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
     # Email já existe → tentar login
     try:
         existing_user = User.objects.get(email__iexact=email)
@@ -660,6 +655,11 @@ def pos_register(request):
 
     except User.DoesNotExist:
         pass
+
+    # conta nova: as mesmas regras de password do registo da Bendi (utils/password.py)
+    msg = mensagem_password_fraca(password)
+    if msg:
+        return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
     # Criar nova conta
     base = email.split('@')[0]

@@ -105,31 +105,32 @@
                     v-model="form.password"
                     :type="showPassword ? 'text' : 'password'"
                     autocomplete="new-password"
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 caracteres"
                     required
-                    minlength="6"
-                    class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-16 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+                    class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-11 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
                   />
-                  <button
-                    type="button"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-                    @click="showPassword = !showPassword"
-                  >
-                    {{ showPassword ? 'Ocultar' : 'Ver' }}
-                  </button>
+                  <BotaoVerPassword :visivel="showPassword" :is-dark="false" @toggle="showPassword = !showPassword" />
                 </div>
+
+                <!-- mesma barra de força + checklist do registo da Bendi -->
+                <PasswordForca :password="form.password" :is-dark="false" />
               </div>
 
               <div>
                 <label class="mb-2 block text-sm font-bold text-slate-700">Confirmar password</label>
-                <input
-                  v-model="form.passwordConfirm"
-                  :type="showPassword ? 'text' : 'password'"
-                  autocomplete="new-password"
-                  placeholder="Repete a password"
-                  required
-                  class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
-                />
+                <div class="relative">
+                  <input
+                    v-model="form.passwordConfirm"
+                    :type="showPassword ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    placeholder="Repete a password"
+                    required
+                    class="h-12 w-full rounded-2xl border bg-slate-50 px-4 pr-11 text-sm outline-none transition focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+                    :class="passwordsDiferentes ? 'border-red-400' : 'border-slate-200 focus:border-slate-950'"
+                  />
+                  <BotaoVerPassword :visivel="showPassword" :is-dark="false" @toggle="showPassword = !showPassword" />
+                </div>
+                <p v-if="passwordsDiferentes" class="mt-1 text-xs font-semibold text-red-600">As passwords não coincidem.</p>
               </div>
 
               <div
@@ -187,10 +188,13 @@ import api from '@/services/api'
 import { iniciarLoginGoogle } from '@/services/google'
 import { guardarSessaoPrincipalPOS } from '@/services/posSessao'
 import BotaoGoogle from './components/BotaoGoogle.vue'
+import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
+import PasswordForca from '@/components/forms/PasswordForca.vue'
+import { passwordValida } from '@/utils/password'
 
 export default {
   name: 'POSRegister',
-  components: { BotaoGoogle },
+  components: { BotaoGoogle, BotaoVerPassword, PasswordForca },
 
   data() {
     return {
@@ -215,9 +219,13 @@ export default {
         this.form.firstName.trim().length > 0 &&
         this.form.lastName.trim().length > 0 &&
         this.form.email.trim().length > 0 &&
-        this.form.password.length >= 6 &&
+        passwordValida(this.form.password) &&
         this.form.passwordConfirm.length > 0
       )
+    },
+    // só avisa depois de começar a escrever a confirmação
+    passwordsDiferentes() {
+      return this.form.passwordConfirm.length > 0 && this.form.passwordConfirm !== this.form.password
     }
   },
 
@@ -271,7 +279,7 @@ export default {
       if (!this.form.lastName.trim())    return 'O último nome é obrigatório.'
       if (!this.form.email.trim())       return 'O email é obrigatório.'
       if (!this.isValidEmail(this.form.email)) return 'Insere um email válido.'
-      if (this.form.password.length < 6) return 'A password deve ter no mínimo 6 caracteres.'
+      if (!passwordValida(this.form.password)) return 'A password não cumpre todos os requisitos de segurança.'
       if (this.form.password !== this.form.passwordConfirm) return 'As passwords não coincidem.'
       return null
     },
