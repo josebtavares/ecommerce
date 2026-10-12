@@ -198,7 +198,7 @@ export default {
       await this.wrap(async () => {
         this.warning = false
         try {
-          const res = await api.post('app/utilizador/login/', {
+          const res = await api.post('/app/utilizador/login/', {
             username: this.username,
             password: this.password,
           })

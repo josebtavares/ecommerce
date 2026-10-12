@@ -6,8 +6,8 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from ..Views.notificacaoView import notificar_staff, notificar_admins
@@ -69,6 +69,9 @@ def _verificar_encomenda(request, encomenda_id):
         return None, Response({'detail': 'Sem permissao.'}, status=status.HTTP_403_FORBIDDEN)
     if encomenda.status != 'pendente':
         return None, Response({'detail': f'Encomenda ja esta: {encomenda.status}'}, status=status.HTTP_400_BAD_REQUEST)
+    if not encomenda.loja.ativa:
+        return None, Response({'detail': 'Esta loja não está a aceitar pagamentos de momento.'},
+                              status=status.HTTP_400_BAD_REQUEST)
     return encomenda, None
 
 
@@ -323,7 +326,10 @@ def pagar_dinheiro(request):
 # STRIPE WEBHOOK
 # ══════════════════════════════════════════════════════════════
 
+# chamado pelo Stripe (sem utilizador): a autenticidade vem da assinatura
 @api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def stripe_webhook(request):
     payload    = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
@@ -506,7 +512,10 @@ def verificar_pagamento_flutterwave(request):
     return Response(PagamentoSerializer(pagamento).data, status=status.HTTP_200_OK)
  
  
+# chamado pelo Flutterwave (sem utilizador): a autenticidade vem do verif-hash
 @api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def flutterwave_webhook(request):
     """
     POST /app/pagamento/flutterwave/webhook/
@@ -514,7 +523,8 @@ def flutterwave_webhook(request):
     """
     # verificar assinatura
     signature = request.META.get('HTTP_VERIF_HASH', '')
-    if signature != FLW_SECRET_HASH:
+    # sem hash configurado não há forma de validar → recusa (antes aceitava pedidos sem assinatura)
+    if not FLW_SECRET_HASH or not hmac.compare_digest(signature, FLW_SECRET_HASH):
         return Response({'detail': 'Assinatura inválida.'}, status=status.HTTP_400_BAD_REQUEST)
  
     data       = request.data
@@ -531,6 +541,19 @@ def flutterwave_webhook(request):
     except (IndexError, ValueError, Encomenda.DoesNotExist):
         return Response({'detail': 'Encomenda não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
  
+    # cobrança confirmada para uma encomenda já cancelada (ex.: a loja fechou enquanto o
+    # cliente estava na página do Flutterwave) → o dinheiro entrou, é preciso reembolsar à mão
+    if encomenda.status == 'cancelado':
+        notificar_admins(
+            tipo='pagamento_reembolsar',
+            titulo=f'Reembolso necessário — Encomenda #{encomenda.id}',
+            mensagem=f'O Flutterwave confirmou €{encomenda.valor_total} (tx flw_{data.get("data", {}).get("id", "")}) '
+                     f'para uma encomenda cancelada da loja {encomenda.loja.nome}. Reembolsa o cliente.',
+            loja=encomenda.loja,
+            link='/admin',
+        )
+        return Response({'detail': 'ok'})
+
     # evitar duplicados
     if encomenda.status != 'pendente':
         return Response({'detail': 'ok'})

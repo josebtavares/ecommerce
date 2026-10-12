@@ -292,9 +292,14 @@
       </h2>
       <p class="text-xs text-zinc-400 leading-relaxed">
         A loja deixa de aparecer no site e de receber encomendas novas. Nada é apagado: produtos,
-        histórico e encomendas em curso continuam aqui, e podes reabrir quando quiseres.
+        histórico e encomendas pagas continuam aqui, e podes reabrir quando quiseres.
       </p>
       <template v-if="confirmarFecho">
+        <p v-if="pendentesFecho" class="mt-4 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 leading-relaxed">
+          <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />
+          {{ pendentesFecho }} encomenda(s) ainda por pagar vão ser canceladas — o stock é reposto e os
+          clientes são avisados. As encomendas já pagas não mudam.
+        </p>
         <label class="text-xs text-zinc-500 mt-4 mb-1 block">Motivo (opcional, fica visível para ti e para a plataforma)</label>
         <input v-model="motivoFecho" maxlength="300" placeholder="ex.: férias até dia 20"
           class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
@@ -308,7 +313,7 @@
           </button>
         </div>
       </template>
-      <button v-else @click="confirmarFecho = true"
+      <button v-else @click="pedirFecho"
         class="mt-4 px-4 py-2 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition">
         Fechar loja
       </button>
@@ -361,6 +366,7 @@ export default {
       logoPreview:    '',
       bannerPreview:  '',
       confirmarFecho: false,
+      pendentesFecho: 0,      // encomendas por pagar que o fecho vai cancelar
       motivoFecho:    '',
       aFechar:        false,
       bannerEstado:   '',   // otimização do vídeo: '' | pendente | a_processar | pronto | erro
@@ -440,6 +446,14 @@ export default {
     },
 
     emCurso,
+
+    async pedirFecho () {
+      try {
+        const { data } = await api.get(`/app/loja/${this.lojaId}/fechar/`)
+        this.pendentesFecho = data.encomendas_pendentes || 0
+      } catch { this.pendentesFecho = 0 }
+      this.confirmarFecho = true
+    },
 
     async fecharLoja () {
       this.aFechar = true
