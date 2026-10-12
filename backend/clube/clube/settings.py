@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     # local
     'app',
     'app.pos', 
+    'app.chat',
 ]
 
 MIDDLEWARE = [

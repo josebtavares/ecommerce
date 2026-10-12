@@ -160,7 +160,7 @@
 </template>
 
 <script>
-import api from '@/services/api'
+import api, { urlWebSocket } from '@/services/api'
 import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
@@ -309,9 +309,8 @@ export default {
     },
 
     wsUrl () {
-      const base  = process.env.VUE_APP_WS_URL || 'ws://localhost:8000/ws'
       const token = localStorage.getItem('access_token') || ''
-      return `${base}/notificacoes/?token=${token}`
+      return urlWebSocket(`notificacoes/?token=${token}`)
     },
 
     wsLigar () {

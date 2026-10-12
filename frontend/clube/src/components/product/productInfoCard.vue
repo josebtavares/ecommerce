@@ -277,6 +277,13 @@
                 Adicionar ao carrinho
               </span>
             </button>
+
+            <!-- chat: abre a conversa com a loja já com este produto (visitante → convite a entrar) -->
+            <button type="button" @click="perguntarLoja"
+              class="mt-2 w-full py-2.5 rounded-xl text-sm font-semibold border transition-colors flex items-center justify-center gap-2"
+              :class="isDark ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'border-gray-300 text-zinc-700 hover:border-gray-400'">
+              <font-awesome-icon :icon="['fas', 'comment-dots']" /> Perguntar à loja
+            </button>
           </div>
         </div>
 
@@ -333,6 +340,7 @@ import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
 import { toast } from 'vue3-toastify'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
+import { contactarLoja } from '@/services/chat'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
   variantesPorEscolher, stockCompativel, intervaloPreco,
@@ -615,6 +623,20 @@ export default {
         this.$emit('added-to-cart', { loja: this.loja })
         this.$emit('close')
       })
+    },
+
+    async perguntarLoja () {
+      if (!this.loja || !this.produto) return
+      const produto = {
+        id: this.produto.id,
+        nome: this.produto.nome,
+        preco: this.produto.preco,
+        imagem: this.todasImagens?.[0]?.url || null,
+      }
+      // a pré-visualização de templates não tem loja real — não abre conversa
+      if (!/^\d+$/.test(String(this.loja.id))) return
+      const ok = await contactarLoja(this.loja.id, { produto })
+      if (ok) this.$emit('close')
     },
 
     visitarLoja () {

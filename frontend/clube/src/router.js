@@ -10,6 +10,7 @@ import AdminLayout from '@/views/admin/AdminLayout.vue'
 import criarLoja from './views/criarLoja.vue';
 import GoogleCallback from './views/google/GoogleCallback.vue';
 import CompletarPerfil from './views/google/CompletarPerfil.vue';
+import MensagensPagina from './views/Mensagens.vue';
 import { POS_ACCESS } from './services/api';
 import { estaAutenticado } from './services/sessao';
 import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
@@ -79,6 +80,13 @@ const routes = [
         path: '/completar-perfil',
         name: 'CompletarPerfil',
         component: CompletarPerfil,
+        meta: { requiresAuth: true }
+    },
+    {
+        // chat em ecrã inteiro (o balão flutuante abre o mesmo painel)
+        path: '/mensagens',
+        name: 'Mensagens',
+        component: MensagensPagina,
         meta: { requiresAuth: true }
     },
     {

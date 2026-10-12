@@ -30,6 +30,13 @@ const isPublic = (url) => PUBLIC_URLS.some(pub => comBarra(url).includes(pub));
 // Quem decide qual usar é a PÁGINA onde se está: em /pos/... todos os pedidos levam o
 // token do POS (incluindo /app/loja/minhas/); no resto do site, o da Bendi
 // (incluindo o admin da plataforma a chamar /api/pos/admin/...).
+// WebSockets no mesmo servidor da API (http→ws, https→wss): evita o VUE_APP_WS_URL
+// ficar a apontar para outro sítio (aconteceu na dev — o tempo real caía para polling).
+export function urlWebSocket (caminho) {
+  const base = process.env.VUE_APP_URL_BASE || 'http://localhost:8000';
+  return base.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws/' + caminho.replace(/^\/+/, '');
+}
+
 export const POS_ACCESS  = 'pos_access';
 export const POS_REFRESH = 'pos_refresh';
 
