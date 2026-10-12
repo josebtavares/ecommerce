@@ -103,7 +103,13 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [(os.environ.get('REDIS_HOST', 'redis'), 6379)],
+            # o channels_redis espera mensagens com BZPOPMIN de 5s; o redis-py 8 corta a leitura
+            # aos 5s por defeito (socket_timeout) e o WebSocket caía com "Timeout reading from redis".
+            # O timeout do socket tem de ser maior do que essa espera.
+            'hosts': [{
+                'address': f"redis://{os.environ.get('REDIS_HOST', 'redis')}:6379",
+                'socket_timeout': 30,
+            }],
         },
     }
 }
