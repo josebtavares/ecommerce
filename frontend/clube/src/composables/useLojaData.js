@@ -1,6 +1,6 @@
 // composables/useLojaData.js
 // Toda a lógica de fetch da loja — partilhada por todos os templates
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
 import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
@@ -144,7 +144,22 @@ export function useLojaData () {
     router.push({ name: 'Login' })
   }
 
-  onMounted(() => loadAll())
+  // /loja/<id>?produto=<id> abre logo o produto (vindo dos favoritos do perfil)
+  async function abrirProdutoDoLink () {
+    const pid = route.query.produto
+    if (!/^\d+$/.test(String(pid ?? ''))) return
+    const resto = { ...route.query }
+    delete resto.produto
+    router.replace({ query: resto })
+    try {
+      const { data } = await api.get(`/app/produto/${pid}/`)
+      if (String(data.loja?.id) === String(lojaId.value)) selectedProduct.value = data
+    } catch { /* produto indisponível — fica a página da loja */ }
+  }
+
+  watch(() => route.query.produto, abrirProdutoDoLink)
+
+  onMounted(() => { loadAll(); abrirProdutoDoLink() })
 
   return {
     // state

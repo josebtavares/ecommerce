@@ -21,7 +21,7 @@
     <transition enter-active-class="transition duration-300" enter-from-class="translate-x-full"
                 leave-active-class="transition duration-200" leave-to-class="translate-x-full">
       <div v-if="isOpen"
-           class="fixed top-0 right-0 w-full max-w-sm h-screen flex flex-col z-50 shadow-2xl overflow-hidden"
+           class="fixed top-0 right-0 w-full max-w-sm md:max-w-lg h-screen flex flex-col z-50 shadow-2xl overflow-hidden"
            :class="isDark
              ? 'bg-zinc-950 border-l border-zinc-800'
              : 'bg-white border-l border-gray-200'">
@@ -63,11 +63,11 @@
         </div>
 
         <!-- Tabs -->
-        <div class="flex border-b flex-shrink-0"
+        <div class="flex border-b flex-shrink-0 overflow-x-auto perfil-tabs"
              :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
           <button v-for="tab in tabs" :key="tab.key" @click="activeTab = tab.key"
             :class="[
-              'flex-1 py-3 text-xs font-semibold transition border-b-2',
+              'flex-1 px-3 py-3 text-xs font-semibold whitespace-nowrap transition border-b-2',
               activeTab === tab.key
                 ? 'border-red-500 text-red-500'
                 : isDark
@@ -290,6 +290,9 @@
             </div>
           </div>
 
+          <!-- ═══ TAB: FAVORITOS ═══ -->
+          <FavoritosPerfil v-if="activeTab === 'favoritos'" :isDark="isDark" @fechar="isOpen = false" />
+
           <!-- ═══ TAB: LOJAS ═══ -->
           <div v-if="activeTab === 'lojas'">
             <div class="flex items-center justify-between mb-4">
@@ -392,6 +395,7 @@ import { DEFAULT_UTILIZADOR } from '@/services/media'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
+import FavoritosPerfil from '@/components/favoritos/FavoritosPerfil.vue'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
@@ -417,6 +421,7 @@ const tabs = [
   { key: 'dados',      label: 'Perfil'     },
   { key: 'password',   label: 'Password'   },
   { key: 'encomendas', label: 'Encomendas' },
+  { key: 'favoritos',  label: 'Favoritos'  },
   { key: 'lojas',      label: 'Lojas'      },
 ]
 
@@ -645,3 +650,8 @@ async function fetchLojas() {
 function goToBackoffice(id) { router.push(`/loja/${id}/backoffice`); isOpen.value = false }
 function goToCreateStore()  { router.push('/loja/criar');            isOpen.value = false }
 </script>
+<style scoped>
+/* 5 separadores: em ecrãs estreitos deslizam na horizontal, sem barra visível */
+.perfil-tabs { scrollbar-width: none; }
+.perfil-tabs::-webkit-scrollbar { display: none; }
+</style>
