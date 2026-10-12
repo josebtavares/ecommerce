@@ -780,12 +780,11 @@ def pos_conectar_loja(request, pos_id):
     _bloquear_se_suspenso(pos)
 
 
+    # só o dono, como ao criar o POS com loja — um membro do staff (até condutor ou
+    # contabilista) não pode ligar o POS dele à loja e vender/mexer no stock dela
     loja = Loja.objects.filter(
-        Q(id=loja_id) & Q(estado__in=LOJAS_VINCULAVEIS) & (
-            Q(dono=utilizador) |
-            Q(staff__utilizador=utilizador, staff__ativo=True)
-        )
-    ).distinct().first()
+        id=loja_id, estado__in=LOJAS_VINCULAVEIS, dono=utilizador
+    ).first()
 
     if not loja:
         return Response(

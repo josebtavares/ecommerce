@@ -2,7 +2,8 @@
   <!-- Posição partilhada com o carrinho — ver assets/loja-acoes.css -->
   <div :class="['loja-acoes-slot loja-acoes-slot--perfil z-20 text-white', !isDark && 'text-zinc-800']">
     <NotificacaoSino :isDark="isDark" />
-    <button @click="toggle" aria-label="Perfil"
+    <button @click="toggle" :aria-label="autenticado ? 'Perfil' : 'Entrar ou criar conta'"
+      :title="autenticado ? 'Perfil' : 'Entrar ou criar conta'"
       class="loja-acao-btn"
       :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
       <font-awesome-icon :icon="['fas', 'user']"
@@ -377,6 +378,7 @@ import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
 import { criarVerificador } from '@/services/disponibilidade'
+import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { passwordValida } from '@/utils/password'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 
@@ -459,7 +461,14 @@ async function toggleEncomenda(id) {
   finally { loadingDetalhe.value = null }
 }
 
+// visitante sem conta: o botão do perfil convida a entrar (o perfil e as encomendas pedem conta)
+const autenticado = ref(estaAutenticado())
+
 function toggle() {
+  if (!autenticado.value) {
+    pedirLogin('Entra ou cria conta para veres o teu perfil e as tuas encomendas.')
+    return
+  }
   isOpen.value = !isOpen.value
   if (isOpen.value && activeTab.value === 'encomendas') fetchEncomendas()
   if (isOpen.value && activeTab.value === 'lojas') fetchLojas()
