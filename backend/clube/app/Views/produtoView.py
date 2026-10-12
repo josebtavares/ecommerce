@@ -165,22 +165,21 @@ def produto_categorias_plataforma(request):
  
     from django.db.models import Count
  
+    # o produto passou a ter várias categorias (M2M) — o campo antigo `categoria` dava erro 500
     categorias = (
         Produto.objects
-        .filter(ativo=True)
-        .exclude(categoria='')
-        .exclude(categoria__isnull=True)
-        .values('categoria')
-        .annotate(total=Count('id'))
+        .filter(ativo=True, loja__ativa=True, categorias__isnull=False)
+        .values('categorias__nome')
+        .annotate(total=Count('id', distinct=True))
         .filter(total__gte=min_produtos)
         .order_by('-total')  # mais populares primeiro
     )
     # limita o número de categorias devolvidas (default 20, max 50)
     limit = min(int(request.GET.get('limit', 20)), 50)
     categorias = categorias[:limit]
- 
+
     return Response([
-        {'categoria': c['categoria'], 'total': c['total']}
+        {'categoria': c['categorias__nome'], 'total': c['total']}
         for c in categorias
     ])
     
@@ -592,13 +591,11 @@ def produto_categorias_loja(request, loja_id):
     Devolve as categorias distintas dos produtos activos desta loja.
     Usado na página pública da loja para construir os sliders e abas.
     """
+    qs = _so_lojas_visiveis(request, Produto.objects.filter(loja_id=loja_id, ativo=True), loja_id)
     categorias = (
-        Produto.objects
-        .filter(loja_id=loja_id, ativo=True)
-        .exclude(categoria='')
-        .exclude(categoria__isnull=True)
-        .values_list('categoria', flat=True)
+        qs.filter(categorias__isnull=False)
+        .values_list('categorias__nome', flat=True)
         .distinct()
-        .order_by('categoria')
+        .order_by('categorias__nome')
     )
     return Response(list(categorias))

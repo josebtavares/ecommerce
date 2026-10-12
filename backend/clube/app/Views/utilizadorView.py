@@ -20,7 +20,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from ..models import Utilizador
+from ..models import Utilizador, UtilizadorLoja
 from ..utils.auth import autenticar
 from ..utils.google_auth import GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, google_obter_utilizador
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso, sugerir_usernames
@@ -392,26 +392,35 @@ def utilizador_search(request):
     """
     GET /app/utilizador/search/?q=joao&offset=0&limit=20
     """
+    # serve para adicionar staff: só quem gere uma loja (dono/gestor) ou o admin da plataforma.
+    # Antes qualquer conta listava todos os utilizadores com o email completo.
+    if not (request.user.is_staff or UtilizadorLoja.objects.filter(
+            utilizador__user=request.user, role__in=('dono', 'gestor'), ativo=True).exists()):
+        return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
     q = request.query_params.get('q', '').strip()
-    
+
     try:
         offset = max(int(request.query_params.get('offset', 0)), 0)
         limit = min(int(request.query_params.get('limit', 20)), 50)
     except ValueError:
         return Response({'detail': 'offset/limit inválidos.'}, status=400)
 
+    # sem pesquisa não se lista ninguém (não dá para percorrer a base de utilizadores)
+    if len(q) < 3:
+        return Response({'count': 0, 'next_offset': None, 'results': []})
+
     qs = Utilizador.objects.select_related('user').filter(status='ativo')
-    
-    if q:
-        qs = qs.filter(
-            Q(user__username__icontains=q) |
-            Q(user__email__icontains=q) |
-            Q(user__first_name__icontains=q) |
-            Q(user__last_name__icontains=q)
-        )
+    # o email só encontra alguém se for escrito completo — não se adivinham emails por partes
+    qs = qs.filter(
+        Q(user__username__icontains=q) |
+        Q(user__email__iexact=q) |
+        Q(user__first_name__icontains=q) |
+        Q(user__last_name__icontains=q)
+    )
 
     qs = qs.exclude(user=request.user)
-    
+
     total = qs.count()
     results = qs[offset:offset + limit]
 
@@ -423,11 +432,20 @@ def utilizador_search(request):
                 'id': u.id,
                 'username': u.user.username,
                 'nome': u.nome,
-                'email': u.user.email,
+                # mascarado, a não ser que tenha sido pesquisado pelo email completo
+                'email': u.user.email if u.user.email.lower() == q.lower() else _mascarar_email(u.user.email),
             }
             for u in results
         ]
     })
+
+
+def _mascarar_email(email):
+    """ana.silva@gmail.com → an•••@gmail.com"""
+    if not email or '@' not in email:
+        return ''
+    nome, dominio = email.split('@', 1)
+    return f'{nome[:2]}•••@{dominio}'
 
 
 @api_view(['GET'])

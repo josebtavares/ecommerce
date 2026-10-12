@@ -11,6 +11,7 @@ import criarLoja from './views/criarLoja.vue';
 import GoogleCallback from './views/google/GoogleCallback.vue';
 import CompletarPerfil from './views/google/CompletarPerfil.vue';
 import { POS_ACCESS } from './services/api';
+import { estaAutenticado } from './services/sessao';
 import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 
 
@@ -36,7 +37,7 @@ const routes = [
         path: '/Home',
         name: 'Home',
         component: App,
-        meta: { requiresAuth: true },
+        // pública: ver lojas e produtos não exige conta (encomendar sim — checkout tem requiresAuth)
     },
     {
         path: '/loja/:id',
@@ -45,7 +46,7 @@ const routes = [
     },
         {   
         path: '/',
-        redirect: '/Login'
+        redirect: '/Home'
     },
     {   path: '/checkout/:lojaId',  
         name: 'Checkout',        
@@ -140,12 +141,11 @@ router.beforeEach((to, from, next) => {
         return sessao ? next() : next({ name: 'POSLogin' })
     }
     if (to.matched.some(record => record.meta.requiresAuth)) {
-        // This line checks if the user is authenticated
-        // Replace `false` with your authentication check
-        if (localStorage.getItem('user')) {
+        // páginas privadas (checkout, backoffice, admin…): sem sessão vai ao login e volta cá depois
+        if (estaAutenticado()) {
             next();
         } else {
-            next({ name: 'Login' });
+            next({ name: 'Login', query: { seguinte: to.fullPath } });
         }
     } else {
         next();

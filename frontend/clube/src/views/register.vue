@@ -228,7 +228,7 @@
         <p class="mt-5 text-center text-xs transition-colors"
            :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
           Já tens conta?
-          <router-link to="/Login"
+          <router-link :to="{ name: 'Login', query: $route.query }"
             class="font-semibold transition-colors"
             :class="isDark ? 'text-red-400 hover:text-red-300' : 'text-orange-500 hover:text-orange-400'">
             Entrar
@@ -245,6 +245,7 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api.js'
 import { DEFAULT_UTILIZADOR } from '@/services/media'
 import { iniciarLoginGoogle } from '@/services/google'
+import { caminhoSeguro } from '@/services/sessao'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
@@ -287,6 +288,10 @@ export default {
   },
 
   computed: {
+    // página para onde voltar depois de criar a conta (só caminhos internos)
+    seguinte () {
+      return caminhoSeguro(this.$route.query.seguinte)
+    },
     isPasswordValid () {
       return passwordValida(this.password)
     },
@@ -350,7 +355,7 @@ export default {
           localStorage.setItem('refresh_token', refresh_token)
           localStorage.setItem('user',          JSON.stringify(user))
           toast.success('Conta criada com sucesso!', { autoClose: 2000 })
-          this.$router.push({ name: 'Home' })
+          this.$router.replace(this.seguinte)
         } catch (err) {
           const data = err.response?.data
           if (data && typeof data === 'object') {
@@ -366,7 +371,7 @@ export default {
     async loginComGoogle () {
       this.loadingGoogle = true
       try {
-        await iniciarLoginGoogle('bendi')
+        await iniciarLoginGoogle('bendi', this.seguinte)
       } catch (e) {
         console.error(e)
         toast.error('Erro ao iniciar registo com Google.', { autoClose: 3000 })

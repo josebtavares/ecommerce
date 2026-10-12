@@ -332,6 +332,7 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
 import { toast } from 'vue3-toastify'
+import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
   variantesPorEscolher, stockCompativel, intervaloPreco,
@@ -594,6 +595,11 @@ export default {
 
     async addToCart () {
       if (!this.loja || !this.produto || this.stock === 0 || !this.podeAdicionar) return
+      // visitante: encomendar pede conta — convida a entrar e volta depois à loja do produto
+      if (!estaAutenticado()) {
+        pedirLogin('Entra ou cria conta para adicionares produtos ao carrinho e encomendares.', `/loja/${this.loja.id}`)
+        return
+      }
       await this.wrap(async () => {
         try {
           await api.post(`/app/loja/${this.loja.id}/carrinho/adicionar/`, {

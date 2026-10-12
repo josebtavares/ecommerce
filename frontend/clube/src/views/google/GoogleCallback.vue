@@ -18,7 +18,8 @@
 <script>
 import api from '@/services/api.js'
 import { toast } from 'vue3-toastify'
-import { validarStateGoogle } from '@/services/google'
+import { validarStateGoogle, seguinteGoogle } from '@/services/google'
+import { caminhoSeguro } from '@/services/sessao'
 import { guardarSessaoPrincipalPOS, destinoPOS } from '@/services/posSessao'
 
 export default {
@@ -62,7 +63,8 @@ export default {
         localStorage.setItem('access_token',  data.access_token)
         localStorage.setItem('refresh_token', data.refresh_token)
         localStorage.setItem('user',          JSON.stringify(data.user))
-        seguinte = '/Home'
+        // volta à página de onde veio (ex.: a loja), se for um caminho interno
+        seguinte = caminhoSeguro(seguinteGoogle())
       }
 
       toast.success(

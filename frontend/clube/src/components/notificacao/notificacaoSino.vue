@@ -1,5 +1,6 @@
 <template>
-  <div class="relative" ref="sinoRef">
+  <!-- visitante sem conta: não há notificações — o sino não aparece -->
+  <div v-if="autenticado" class="relative" ref="sinoRef">
 
     <!-- Botão sino -->
     <button @click="toggle"
@@ -160,6 +161,7 @@
 
 <script>
 import api from '@/services/api'
+import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
   loja_pendente:            { icon: 'store',               bg: 'bg-yellow-500/20 text-yellow-500' },
@@ -190,6 +192,7 @@ export default {
 
   data () {
     return {
+      autenticado: estaAutenticado(),
       aberto: false, loading: false,
       notificacoes: [], naoLidas: 0,
       lojas: [], lojaFiltro: null,
@@ -219,8 +222,8 @@ export default {
 
   async mounted () {
     document.addEventListener('click', this.clickFora)
+    if (!this.autenticado) return
     this.fetchLojas()
-    if (!localStorage.getItem('access_token')) return
     // 1) contador por HTTP — o interceptor renova o token se tiver expirado
     await this.fetchContador()
     // 2) só depois liga o WebSocket, já com um token válido
