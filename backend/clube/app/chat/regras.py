@@ -318,3 +318,11 @@ def registar_envio(conversa, caixa, mensagem):
         campos.append('estado')
     conversa.save(update_fields=campos)
     Participante.objects.update_or_create(conversa=conversa, caixa=caixa, defaults={'ultima_lida': mensagem.id})
+
+
+def utilizador_ve_conversa(utilizador, conversa):
+    """Por alguma das suas caixas (ou como membro, no grupo da equipa) o utilizador lê esta conversa?"""
+    if conversa.tipo == Conversa.EQUIPA_GRUPO:
+        return membro_ativo(utilizador, conversa.loja_id) is not None
+    return any(pode_usar(utilizador, conversa, p.caixa)
+               for p in conversa.participantes.select_related('caixa__loja', 'caixa__utilizador'))

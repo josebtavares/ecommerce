@@ -12,6 +12,7 @@ from django.db import models
 from django.db.models import Q
 
 from app.models import Utilizador, Loja, Encomenda, Produto
+from .imagens import armazenamento_privado
 
 
 class Caixa(models.Model):
@@ -123,7 +124,7 @@ class Participante(models.Model):
 
 
 def anexo_chat_upload(instance, filename):
-    # pasta própria: as imagens do chat são privadas (servidas só a participantes — fase 2)
+    # pasta dentro do armazenamento privado (o nome do ficheiro já vem aleatório)
     from django.utils.timezone import now
     return f'chat_privado/{now():%Y/%m}/{filename}'
 
@@ -140,7 +141,8 @@ class Mensagem(models.Model):
                                   related_name='mensagens_chat')
     tipo      = models.CharField(max_length=8, choices=TIPOS, default=TEXTO)
     texto     = models.TextField(blank=True, default='')
-    anexo     = models.FileField(upload_to=anexo_chat_upload, null=True, blank=True)
+    # privado: bucket/pasta própria, servido só por link assinado (ver imagens.py)
+    anexo     = models.FileField(upload_to=anexo_chat_upload, storage=armazenamento_privado, null=True, blank=True)
     anexo_largura = models.PositiveIntegerField(null=True, blank=True)
     anexo_altura  = models.PositiveIntegerField(null=True, blank=True)
     # "cartão" de contexto dentro da conversa geral (ex.: dúvida sobre um produto)

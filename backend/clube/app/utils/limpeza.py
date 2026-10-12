@@ -27,7 +27,7 @@ PROTEGIDOS_EXTRA = {
 
 # pastas com recursos do site carregados à mão no storage e referidos pelo frontend
 # por URL directo (ex.: videos/background.mp4 do login) — nunca apagar
-PASTAS_PROTEGIDAS = ('videos/',)
+PASTAS_PROTEGIDAS = ('videos/', 'chat_privado/')   # chat_privado: imagens do chat (armazenamento privado)
 
 _cache = {}
 

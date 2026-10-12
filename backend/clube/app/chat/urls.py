@@ -12,6 +12,7 @@ urlpatterns = [
     path('conversas/<int:conversa_id>/estado/',      views.estado_conversa,   name='chat_estado'),
     path('conversas/<int:conversa_id>/bloquear/',    views.bloquear,          name='chat_bloquear'),
     path('mensagens/<int:mensagem_id>/apagar/',      views.apagar_mensagem,   name='chat_apagar'),
+    path('anexos/<int:mensagem_id>/',                views.anexo,             name='chat_anexo'),
     path('contactos/',                               views.contactos,         name='chat_contactos'),
     path('denuncias/',                               views.denuncias,         name='chat_denuncias'),
     path('denuncias/<int:denuncia_id>/resolver/',    views.resolver_denuncia, name='chat_resolver'),

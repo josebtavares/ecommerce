@@ -14,9 +14,14 @@ from rest_framework.response import Response
 
 from app.models import Loja, Produto, Utilizador, UtilizadorLoja, Encomenda
 
-from . import regras
+from django.http import FileResponse, HttpResponseRedirect
+from rest_framework.decorators import authentication_classes
+from rest_framework.permissions import AllowAny
+
+from . import regras, imagens
 from .models import Caixa, Conversa, Participante, Mensagem, Bloqueio, Denuncia
 from .regras import ErroChat
+from .tempo_real import emitir
 
 TEXTO_MAX = 4000
 
@@ -85,6 +90,18 @@ def _produto_cartao(request, p):
             'imagem': url_ficheiro(request, img) if img else None}
 
 
+def _anexo_payload(request, m):
+    """Imagem privada: link assinado para quem está a pedir (válido 1h — ver imagens.py)."""
+    if m.apagada or m.tipo != Mensagem.IMAGEM or not m.anexo:
+        return None
+    token = imagens.assinar(m.id, request.user.utilizador.id)
+    return {
+        'url': request.build_absolute_uri(f'/api/chat/anexos/{m.id}/?t={token}'),
+        'largura': m.anexo_largura,
+        'altura': m.anexo_altura,
+    }
+
+
 def mensagem_payload(request, m, caixa_vista, leitura_outros=0):
     """`caixa_vista`: a caixa de quem está a ver. `leitura_outros`: maior ultima_lida das outras caixas."""
     minha = m.remetente_id == caixa_vista.id
@@ -98,7 +115,7 @@ def mensagem_payload(request, m, caixa_vista, leitura_outros=0):
         'minha': minha,
         'remetente': perfil_caixa(request, m.remetente),
         'produto': None if m.apagada else _produto_cartao(request, m.produto),
-        'anexo': None,   # imagens privadas — fase 2
+        'anexo': _anexo_payload(request, m),
         'lida': minha and leitura_outros >= m.id,
     }
     # quem escreveu de facto: só para quem partilha a caixa (a equipa vê "respondido por João")
@@ -272,10 +289,22 @@ def mensagens(request, conversa_id):
                 return _demasiados()
             regras.verificar_envio(u, conversa, caixa)
             texto = (request.data.get('texto') or '').strip()
-            if not texto:
+            ficheiro = request.FILES.get('imagem')
+            if not texto and not ficheiro:
                 return Response({'detail': 'A mensagem está vazia.'}, status=400)
             if len(texto) > TEXTO_MAX:
                 return Response({'detail': f'Máximo de {TEXTO_MAX} caracteres.'}, status=400)
+
+            imagem = None
+            if ficheiro:
+                if not imagens.imagens_disponiveis():
+                    return Response({'detail': 'O envio de imagens ainda não está disponível.'}, status=503)
+                if _limitado(request, 'imagens', '40/h'):
+                    return _demasiados()
+                try:
+                    imagem = imagens.processar(ficheiro)     # (ContentFile webp, largura, altura)
+                except imagens.ImagemInvalida as e:
+                    return Response({'detail': str(e)}, status=400)
             produto = None
             if request.data.get('produto_id'):
                 # o cartão de produto só pode ser da loja desta conversa, e de uma loja visível
@@ -283,22 +312,34 @@ def mensagens(request, conversa_id):
                                                  loja_id=conversa.loja_id, loja__ativa=True).first()
                 if not produto:
                     return Response({'detail': 'Produto inválido para esta conversa.'}, status=400)
-            m = Mensagem.objects.create(conversa=conversa, remetente=caixa, autor=u, texto=texto, produto=produto)
+            m = Mensagem(conversa=conversa, remetente=caixa, autor=u, texto=texto, produto=produto)
+            if imagem:
+                conteudo, m.anexo_largura, m.anexo_altura = imagem
+                m.tipo = Mensagem.IMAGEM
+                m.anexo.save(conteudo.name, conteudo, save=False)
+            m.save()
             regras.registar_envio(conversa, caixa, m)
+            emitir(conversa, {'tipo': 'mensagem_nova', 'conversa_id': conversa.id, 'mensagem_id': m.id})
             return Response(mensagem_payload(request, m, caixa), status=status.HTTP_201_CREATED)
 
         try:
             limit = min(max(int(request.query_params.get('limit', 40)), 1), 100)
             antes = int(request.query_params.get('antes') or 0)
+            depois = int(request.query_params.get('depois') or 0)
         except ValueError:
             return Response({'detail': 'Parâmetros inválidos.'}, status=400)
         qs = conversa.mensagens.select_related('remetente__loja', 'remetente__utilizador__user',
                                                'produto', 'autor__user')
-        if antes:
-            qs = qs.filter(id__lt=antes)
-        pagina = list(qs.order_by('-id')[:limit + 1])
-        mais = len(pagina) > limit
-        pagina = list(reversed(pagina[:limit]))
+        if depois:
+            # só as novas (o WebSocket avisa e o browser vem buscar as que faltam)
+            pagina = list(qs.filter(id__gt=depois).order_by('id')[:limit])
+            mais = False
+        else:
+            if antes:
+                qs = qs.filter(id__lt=antes)
+            pagina = list(qs.order_by('-id')[:limit + 1])
+            mais = len(pagina) > limit
+            pagina = list(reversed(pagina[:limit]))
         leitura_outros = conversa.participantes.exclude(caixa=caixa).aggregate(m=Max('ultima_lida'))['m'] or 0
         return Response({
             'results': [mensagem_payload(request, m, caixa, leitura_outros) for m in pagina],
@@ -323,6 +364,9 @@ def marcar_lida(request, conversa_id):
         if ate > p.ultima_lida:
             p.ultima_lida = ate
             p.save(update_fields=['ultima_lida'])
+            # ✓✓ para quem enviou (e o contador desce noutros separadores de quem leu)
+            emitir(conversa, {'tipo': 'lida', 'conversa_id': conversa.id, 'caixa_id': caixa.id,
+                              'ultima_lida': p.ultima_lida})
         return Response({'ultima_lida': p.ultima_lida})
     except ErroChat as e:
         return _erro(e)
@@ -357,6 +401,7 @@ def estado_conversa(request, conversa_id):
             return Response({'detail': 'Estado inválido.'}, status=400)
         conversa.estado = novo
         conversa.save(update_fields=['estado'])
+        emitir(conversa, {'tipo': 'conversa_atualizada', 'conversa_id': conversa.id})
         return Response({'estado': conversa.estado})
     except ErroChat as e:
         return _erro(e)
@@ -370,10 +415,45 @@ def apagar_mensagem(request, mensagem_id):
     if m.autor_id != request.user.utilizador.id or m.tipo == Mensagem.SISTEMA:
         return Response({'detail': 'Só podes apagar as tuas mensagens.'}, status=403)
     if not m.apagada:
+        if m.anexo:
+            m.anexo.delete(save=False)      # a imagem sai mesmo do armazenamento
         m.apagada = True
         m.texto = ''
-        m.save(update_fields=['apagada', 'texto'])
+        m.save(update_fields=['apagada', 'texto', 'anexo'])
+        emitir(m.conversa, {'tipo': 'mensagem_apagada', 'conversa_id': m.conversa_id, 'mensagem_id': m.id})
     return Response({'id': m.id, 'apagada': True})
+
+
+@api_view(['GET'])
+@authentication_classes([])          # <img src> não envia o token — a autorização vem na assinatura
+@permission_classes([AllowAny])
+def anexo(request, mensagem_id):
+    """
+    GET /api/chat/anexos/<id>/?t=<assinatura>
+    O link é gerado para um utilizador e dura 1h; o acesso à conversa volta a ser verificado aqui
+    (quem saiu da loja ou da conversa deixa de abrir a imagem, mesmo com o link).
+    """
+    lido = imagens.ler_assinatura(request.query_params.get('t', ''))
+    if not lido or lido[0] != mensagem_id:
+        return Response({'detail': 'Link inválido ou expirado.'}, status=403)
+    m = Mensagem.objects.select_related('conversa').filter(id=mensagem_id, apagada=False,
+                                                           tipo=Mensagem.IMAGEM).first()
+    utilizador = Utilizador.objects.filter(id=lido[1]).select_related('user').first()
+    if not m or not m.anexo or not utilizador or not utilizador.is_active:
+        return Response({'detail': 'Imagem não encontrada.'}, status=404)
+    if not regras.utilizador_ve_conversa(utilizador, m.conversa):
+        return Response({'detail': 'Imagem não encontrada.'}, status=404)
+
+    armazenamento = m.anexo.storage
+    if hasattr(armazenamento, 'bucket_name'):
+        # R2 privado: link temporário (5 min) assinado pelo próprio R2
+        resp = HttpResponseRedirect(armazenamento.url(m.anexo.name))
+    else:
+        resp = FileResponse(armazenamento.open(m.anexo.name, 'rb'), content_type='image/webp')
+    resp['Cache-Control'] = 'private, max-age=3600'
+    resp['X-Content-Type-Options'] = 'nosniff'
+    resp['Content-Disposition'] = 'inline'
+    return resp
 
 
 # ══════════════════════════════════════════════════════════════
