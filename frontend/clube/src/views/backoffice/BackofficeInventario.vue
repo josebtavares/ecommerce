@@ -104,8 +104,12 @@
           </tr>
           <!-- grelha de variações (expandida) -->
           <tr v-if="aberto === inv.id" class="bg-zinc-950/40">
-            <td colspan="5" class="px-4 py-4">
-              <VariantesStockEditor :lojaId="lojaId" :produtoId="inv.produto" @guardado="onVariantesGuardadas" />
+            <td colspan="5" class="px-2 sm:px-4 py-4">
+              <!-- w-0 + min-w-full: a grelha não estica a tabela (que tem overflow-hidden e cortava
+                   preço/SKU no telemóvel) — fica com a largura da célula e o scroll horizontal dela funciona -->
+              <div class="w-0 min-w-full">
+                <VariantesStockEditor :lojaId="lojaId" :produtoId="inv.produto" @guardado="onVariantesGuardadas" />
+              </div>
             </td>
           </tr>
           </template>
