@@ -50,11 +50,14 @@ class Utilizador(models.Model):
             'gerir_conteudo',
             'ver_pos',
             'gerir_pos',
+            'atender_suporte',   # chat: caixa "Suporte Bendi" (superchat)
+            'moderar_chat',      # chat: denúncias e bloqueios
         ],
         'moderador': [
             'ver_stats',
             'gerir_lojas',
             'gerir_produtos',
+            'moderar_chat',
         ],
         'suporte': [
             'ver_stats',
@@ -64,6 +67,7 @@ class Utilizador(models.Model):
             'gerir_conteudo',
             'ver_pos',
             'gerir_pos',
+            'atender_suporte',
         ],
         'contabilista': [
             'ver_stats',
@@ -348,6 +352,8 @@ class UtilizadorLoja(models.Model):
     role        = models.CharField(max_length=20, choices=ROLES, default='staff')
     ativo       = models.BooleanField(default=True)
     data_entrada= models.DateTimeField(auto_now_add=True)
+    # chat: staff/contabilista só atendem a caixa da loja se o dono ativar (dono e gestor sempre)
+    pode_chat   = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('loja', 'utilizador')
@@ -360,6 +366,11 @@ class UtilizadorLoja(models.Model):
         if not self.ativo:
             return False
         return permissao in self.PERMISSOES.get(self.role, [])
+
+    @property
+    def atende_chat(self) -> bool:
+        """Pode ler e responder na caixa de mensagens da loja (app.chat)."""
+        return self.ativo and (self.role in ('dono', 'gestor') or self.pode_chat)
 
     @classmethod
     def obter_membro(cls, loja, utilizador):
@@ -851,55 +862,14 @@ class CartaoGuardado(models.Model):
 
 
 # ══════════════════════════════════════════════════════════════
-# CHAT  (mantido, será activado numa fase posterior)
+# CHAT antigo — substituído pela app app.chat (caixas de mensagens).
+# Só fica esta função: a migração 0001 importa-a (upload_to=app.models.chat_upload).
 # ══════════════════════════════════════════════════════════════
-
-class ChatThread(models.Model):
-    PRIVATE = 'private'
-    GROUP   = 'group'
-    TYPES   = [(PRIVATE, 'Private'), (GROUP, 'Group')]
-
-    thread_type = models.CharField(max_length=7, choices=TYPES, default=PRIVATE)
-    title       = models.CharField(max_length=120, blank=True)
-    created_at  = models.DateTimeField(default=now)
-    last_msg_at = models.DateTimeField(default=now)
-
-    class Meta:
-        ordering = ['-last_msg_at']
-
-    def __str__(self):
-        return f'Chat #{self.pk}' if self.thread_type == self.PRIVATE else (self.title or f'Grupo #{self.pk}')
-
-
-class ChatParticipant(models.Model):
-    thread      = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='participants')
-    user        = models.ForeignKey(Utilizador, on_delete=models.CASCADE)
-    joined_at   = models.DateTimeField(default=now)
-    last_read   = models.DateTimeField(default=now)
-
-    class Meta:
-        unique_together = ('thread', 'user')
-
-    def __str__(self):
-        return f'{self.user} em {self.thread}'
-
 
 def chat_upload(instance, filename):
     return f'chat/{now():%Y/%m}/{filename}'
 
 
-class ChatMessage(models.Model):
-    thread      = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='messages')
-    sender      = models.ForeignKey(Utilizador, on_delete=models.CASCADE)
-    text        = models.TextField(blank=True)
-    attachment  = models.FileField(upload_to=chat_upload, blank=True, null=True)
-    created_at  = models.DateTimeField(default=now)
-    edited_at   = models.DateTimeField(blank=True, null=True)
-    deleted     = models.BooleanField(default=False)
-
-    class Meta:
-        ordering = ['created_at']
-        
 class Comissao(models.Model):
     STATUS = [
         ('pendente',   'Pendente'),    # registada, aguarda liquidacao
