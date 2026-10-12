@@ -88,11 +88,15 @@
               <div v-for="field in profileFields" :key="field.key">
                 <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ field.label }}</label>
                 <input v-model="form[field.key]" :type="field.type || 'text'"
+                  @input="verificarCampo(field.key)"
                   class="w-full px-3 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
                   :class="isDark
                     ? 'bg-zinc-900 border-zinc-700 text-zinc-100'
                     : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+                <EstadoDisponibilidade v-if="verificadores[field.key]" :verificador="verificadores[field.key]" :isDark="isDark"
+                  @usar="v => { form[field.key] = v; verificarCampo(field.key) }" />
               </div>
+              <p v-if="profileError" class="text-xs text-red-400">{{ profileError }}</p>
             </div>
             <button @click="saveProfile" :disabled="loadingProfile"
               class="w-full mt-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all flex items-center justify-center gap-2"
@@ -371,6 +375,8 @@ import { toast } from 'vue3-toastify'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
+import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
+import { criarVerificador } from '@/services/disponibilidade'
 import { passwordValida } from '@/utils/password'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 
@@ -482,6 +488,7 @@ function initForm() {
     telefone:   props.data.telefone   || '',
     morada:     props.data.morada     || '',
   }
+  valoresAtuais.value = { username: form.value.username, email: form.value.email }
 }
 
 onMounted(() => {
@@ -509,14 +516,36 @@ function onFileChange(e) {
   })
 }
 
+// username e email verificados ao vivo — o valor que a conta já tem não conta como ocupado
+const verificadores = { username: criarVerificador('username'), email: criarVerificador('email') }
+const valoresAtuais = ref({ username: '', email: '' })
+const profileError  = ref('')
+
+function verificarCampo(key) {
+  verificadores[key]?.verificar(form.value[key], valoresAtuais.value[key])
+}
+
 async function saveProfile() {
+  profileError.value = ''
+  const ocupado = Object.values(verificadores).find(v => v.bloqueia)
+  if (ocupado) { profileError.value = ocupado.motivo; return }
+
   await wrapProfile(async () => {
     const fd = new FormData()
     Object.entries(form.value).forEach(([k, v]) => { if (v) fd.append(k, v) })
-    await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    try {
+      await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    } catch (e) {
+      const d = e.response?.data
+      const msg = d && typeof d === 'object' && Object.values(d).flat()[0]
+      profileError.value = (typeof msg === 'string' && msg) || 'Não foi possível guardar o perfil.'
+      return
+    }
     const user = JSON.parse(localStorage.getItem('user') || '{}')
     Object.assign(user, form.value)
     localStorage.setItem('user', JSON.stringify(user))
+    valoresAtuais.value = { username: form.value.username, email: form.value.email }
+    Object.values(verificadores).forEach(v => v.verificar(''))
     toast.success('Perfil actualizado!', { autoClose: 1500 })
   })
 }
