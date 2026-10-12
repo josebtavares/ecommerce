@@ -118,6 +118,7 @@
             <span>{{ firstWord }}</span>
             <span class="editorial-hero__title--outline">{{ restWords }}</span>
           </h1>
+          <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
 
           <div class="editorial-hero__bottom">
             <div>
@@ -586,6 +587,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import ProductSlider from '@/components/sliders/ProductSlider.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
@@ -593,6 +595,7 @@ export default {
 
   components: {
     ProductInfoCard,
+    BotaoFavorito,
     MultiCart,
     ProductSlider,
     Profile,

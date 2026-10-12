@@ -135,7 +135,11 @@
           <div class="px-6 pb-6 flex-1 overflow-y-auto">
 
             <!-- Nome e preço -->
-            <h2 class="text-2xl font-bold mb-1" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ produto.nome }}</h2>
+            <div class="flex items-start gap-3 mb-1">
+              <h2 class="flex-1 text-2xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ produto.nome }}</h2>
+              <BotaoFavorito tipo="produto" :id="produto.id" variante="simples" :tamanho="38" :isDark="isDark"
+                             :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'" />
+            </div>
             <p class="text-2xl font-bold text-red-500 mb-4">
               <span v-if="precoDesde" class="text-sm font-semibold opacity-70 mr-1">desde</span>{{ formatPrice(precoUnitario) }}
             </p>
@@ -341,6 +345,7 @@ import { DEFAULT_PRODUTO } from '@/services/media'
 import { toast } from 'vue3-toastify'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { contactarLoja } from '@/services/chat'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
   variantesPorEscolher, stockCompativel, intervaloPreco,
@@ -348,6 +353,7 @@ import {
 
 export default {
   name: 'ProductInfoCard',
+  components: { BotaoFavorito },
 
   props: {
     produto: { type: Object,  default: null },

@@ -46,6 +46,7 @@
           <div class="dp-hero__texto">
             <p class="dp-tag">{{ loja.categoria || 'Desporto' }}</p>
             <h1 class="dp-hero__nome">{{ loja.nome }}</h1>
+            <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <p v-if="loja.descricao" class="dp-hero__desc">{{ truncate(loja.descricao, 170) }}</p>
             <div class="dp-hero__ctas">
               <button class="dp-btn dp-btn--cor" @click="scrollToId(totalDestaques ? 'dp-top' : 'dp-pistas')">
@@ -111,6 +112,7 @@
               <button v-for="(p, i) in l.itens" :key="p.id" class="dp-cartao dp-cartao--top" @click="selectedProduct = p">
                 <span class="dp-camisola" aria-hidden="true">{{ String(i + 1).padStart(2, '0') }}</span>
                 <span class="dp-cartao__img">
+                  <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
                   <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="dp-cartao__inicial">{{ p.nome.charAt(0) }}</span>
@@ -162,6 +164,7 @@
                   </template>
                   <button v-for="p in l.itens" :key="p.id" class="dp-cartao" @click="selectedProduct = p">
                     <span class="dp-cartao__img">
+                      <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
                       <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                       <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                       <span v-else class="dp-cartao__inicial">{{ p.nome.charAt(0) }}</span>
@@ -325,6 +328,7 @@ import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import FimDaLista from '@/components/produtos/FimDaLista.vue'
@@ -344,7 +348,7 @@ function textoSobre (hex) {
 export default {
   name: 'TemplateDesporto',
 
-  components: { ProductInfoCard, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

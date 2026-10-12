@@ -42,6 +42,7 @@
               {{ loja.categoria || 'Loja' }}<template v-if="loja.localizacao"> · {{ loja.localizacao }}</template>
             </p>
             <h1 class="mn-hero__nome">{{ loja.nome }}</h1>
+            <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <p v-if="loja.descricao" class="mn-hero__desc">{{ truncate(loja.descricao, 220) }}</p>
 
             <dl class="mn-meta">
@@ -105,6 +106,7 @@
               <button v-for="(p, i) in l.itens" :key="p.id" class="mn-peca" :class="{ 'mn-peca--grande': i === 0 }"
                       @click="selectedProduct = p">
                 <div class="mn-peca__img">
+                  <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
                   <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="mn-peca__inicial">{{ p.nome.charAt(0) }}</span>
@@ -139,6 +141,7 @@
               </template>
               <button v-for="p in l.itens" :key="p.id" class="mn-peca mn-peca--fila" @click="selectedProduct = p">
                 <div class="mn-peca__img">
+                  <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
                   <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
                   <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
                   <span v-else class="mn-peca__inicial">{{ p.nome.charAt(0) }}</span>
@@ -309,6 +312,7 @@ import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Peças' }
@@ -316,7 +320,7 @@ const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Peças' 
 export default {
   name: 'TemplateMinimalista',
 
-  components: { ProductInfoCard, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

@@ -96,6 +96,7 @@
             </div>
 
             <h1 class="rm-hero__title">{{ loja.nome }}</h1>
+            <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
 
             <p v-if="loja.descricao" class="rm-hero__desc">
               {{ truncate(loja.descricao, 170) }}
@@ -172,6 +173,7 @@
                 :class="{ 'rm-dish--hero': i === 0 }"
                 @click="selectedProduct = p"
               >
+                <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
                 <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" class="rm-dish__img" muted loop v-video-visivel playsinline></video>
                 <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" class="rm-dish__img" loading="lazy" />
                 <div v-else class="rm-dish__img rm-dish__img--empty">{{ p.nome.charAt(0) }}</div>
@@ -270,6 +272,7 @@
                           <span class="rm-item__name">{{ p.nome }}</span>
                           <span class="rm-item__dots"></span>
                           <span class="rm-item__price">{{ formatPrice(p.preco) }}</span>
+                          <BotaoFavorito tipo="produto" :id="p.id" elemento="span" variante="simples" :tamanho="30" :isDark="isDark" class="rm-item__fav" />
                         </div>
                         <p v-if="p.descricao" class="rm-item__desc">{{ p.descricao }}</p>
                         <div class="rm-item__tags">
@@ -458,6 +461,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 
 // atributos que fazem sentido mostrar como etiqueta numa carta
 const TAGS_ATRIBUTOS = ['calorias', 'picante', 'alergenos', 'volume', 'porcao', 'dose', 'vegetariano', 'vegan']
@@ -469,7 +473,7 @@ const LIMITE = 6   // pratos por página em cada grupo
 export default {
   name: 'TemplateRestauranteModerno',
 
-  components: { ProductInfoCard, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
+  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 
@@ -967,6 +971,7 @@ export default {
 .rm-item__name { font-weight: 700; font-size: 16px; line-height: 1.3; }
 .rm-item__dots { flex: 1; min-width: 20px; border-bottom: 2px dotted var(--line); transform: translateY(-4px); }
 .rm-item__price { font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--accent); white-space: nowrap; }
+.rm-item__fav { align-self: center; margin: -6px -6px -6px 0; }
 .rm-item__desc {
   margin: 6px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--fg2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;

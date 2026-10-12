@@ -58,3 +58,20 @@
   cursor: pointer;
   transition: background-color .2s, box-shadow .2s;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Coração dos favoritos nos cards de produto dos templates
+   (BotaoFavorito class="fav-card" — o bloco da imagem do card é o
+   elemento posicionado; ver .fav-pos nos templates que precisam)
+   ══════════════════════════════════════════════════════════════ */
+.fav-card {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+}
+
+/* "Guardar loja" — logo abaixo do nome da loja no cabeçalho de cada template */
+.loja-fav { margin: 14px 0 6px; width: max-content; max-width: 100%; }
+/* templates com etiqueta/preço no canto direito da foto */
+.fav-card--esq { right: auto; left: 8px; }
