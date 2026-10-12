@@ -59,6 +59,8 @@
               : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
           ]">
           <font-awesome-icon :icon="['fas', item.icon]" class="flex-shrink-0 w-4 h-4" fixed-width />
+          <span v-if="(sidebarExpandida || sidebarAberta) && contador(item.key)"
+                class="order-last ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">{{ contador(item.key) }}</span>
           <span v-if="sidebarExpandida || sidebarAberta"
                 class="text-sm font-medium truncate">{{ item.label }}</span>
         </button>
@@ -121,6 +123,8 @@
         <AdminCategoriasDestaque v-else-if="activeSection === 'categorias_destaque'" />
         <AdminPaginas      v-else-if="activeSection === 'paginas'"      />
         <AdminPOS          v-else-if="activeSection === 'pos'"          />
+        <AdminSuporte      v-else-if="activeSection === 'suporte_chat'" />
+        <AdminDenuncias    v-else-if="activeSection === 'denuncias'"    @pendentes="n => denunciasPendentes = n" />
       </div>
     </div>
 
@@ -154,6 +158,10 @@ import AdminRelatorios   from './AdminRelatorios.vue'
 import AdminCategoriasDestaque from './AdminCategoriasDestaque.vue'
 import AdminPaginas      from './AdminPaginas.vue'
 import AdminPOS          from './AdminPOS.vue'
+import AdminSuporte      from './AdminSuporte.vue'
+import AdminDenuncias    from './AdminDenuncias.vue'
+import api from '@/services/api'
+import { chat } from '@/services/chat'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 
 const SECCOES = [
@@ -172,13 +180,15 @@ const SECCOES = [
   { key: 'comissoes',    label: 'Comissões',     icon: 'coins',         permissao: 'gerir_comissoes'     },
   { key: 'paginas',      label: 'Páginas & Ajuda', icon: 'file-lines',  permissao: 'gerir_conteudo'    },
   { key: 'pos',          label: 'POS',             icon: 'cash-register', permissao: 'ver_pos'           },
+  { key: 'suporte_chat', label: 'Suporte (chat)',  icon: 'headset',       permissao: 'atender_suporte'   },
+  { key: 'denuncias',    label: 'Denúncias',       icon: 'flag',          permissao: 'moderar_chat'      },
 
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos'],
-  moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','ver_relatorios'],
-  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios','gerir_conteudo','ver_pos','gerir_pos'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat'],
+  moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','ver_relatorios','moderar_chat'],
+  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios','gerir_conteudo','ver_pos','gerir_pos','atender_suporte'],
   contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos'],
 }
 
@@ -187,7 +197,7 @@ export default {
   components: {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
-    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminCategoriasDestaque, AdminPaginas, AdminPOS,
+    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminCategoriasDestaque, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias,
   },
 
   data () {
@@ -200,6 +210,7 @@ export default {
       user,
       seccoes,
       activeSection: seccoes[0]?.key || 'dashboard',
+      denunciasPendentes: 0,
     }
   },
 
@@ -219,12 +230,33 @@ export default {
   created () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
     if (!user.is_staff || !user.role_admin) this.$router.push('/')
+    // denúncias por analisar no menu (só para quem modera)
+    if (this.seccoes.some(s => s.key === 'denuncias')) {
+      this.carregarPendentes()
+      this.temporizadorDenuncias = setInterval(this.carregarPendentes, 60000)
+    }
+  },
+
+  beforeUnmount () {
+    clearInterval(this.temporizadorDenuncias)
   },
 
   methods: {
     navegarPara (key) {
       this.activeSection = key
       this.sidebarAberta = false
+    },
+    // contadores no menu: mensagens do suporte por ler e denúncias por analisar
+    contador (key) {
+      if (key === 'suporte_chat') return chat.caixas.find(c => c.tipo === 'suporte')?.nao_lidas || 0
+      if (key === 'denuncias') return this.denunciasPendentes
+      return 0
+    },
+    async carregarPendentes () {
+      try {
+        const { data } = await api.get('/api/chat/denuncias/', { params: { estado: 'pendente' } })
+        this.denunciasPendentes = data.pendentes
+      } catch { /* sem permissão ou sem rede — o contador fica como está */ }
     },
   },
 }

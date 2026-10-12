@@ -24,6 +24,7 @@ export const chat = reactive({
   pesquisa: '',
   filtroTipo: '',
   filtroLoja: null,            // conversas de uma loja (ex.: equipa no backoffice)
+  filtroEstado: '',            // suporte: aberta | fechada
   painelEmbutido: false,       // o backoffice/admin mostra o painel — o balão esconde-se
 })
 
@@ -45,6 +46,7 @@ export async function carregarConversas () {
   if (chat.pesquisa.trim()) params.q = chat.pesquisa.trim()
   if (chat.filtroTipo) params.tipo = chat.filtroTipo
   if (chat.filtroLoja) params.loja = chat.filtroLoja
+  if (chat.filtroEstado) params.estado = chat.filtroEstado
   const { data } = await api.get('/api/chat/conversas/', { params })
   chat.conversas = data.results
   chat.totalConversas = data.count

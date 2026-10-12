@@ -54,7 +54,7 @@
       </div>
 
       <!-- Filtros -->
-      <div v-if="filtros.length && !semFiltros" class="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+      <div v-if="filtros.length && (aNovar || !semFiltros)" class="mt-2 flex gap-1.5 overflow-x-auto pb-1">
         <button v-for="f in filtros" :key="f.valor" type="button" @click="filtrar(f.valor)"
                 class="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
                 :class="filtroActivo === f.valor

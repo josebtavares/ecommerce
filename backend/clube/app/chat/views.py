@@ -224,6 +224,9 @@ def conversas(request):
         loja_f = request.query_params.get('loja')
         if loja_f and str(loja_f).isdigit():
             qs = qs.filter(loja_id=int(loja_f))
+        estado_f = request.query_params.get('estado')        # suporte: aberta | fechada
+        if estado_f in (Conversa.ABERTA, Conversa.FECHADA):
+            qs = qs.filter(estado=estado_f)
         arquivadas = request.query_params.get('arquivadas') == '1'
         qs = qs.filter(**({'participantes__caixa': caixa, 'participantes__arquivada': True} if arquivadas else {})) \
             if arquivadas else qs.exclude(participantes__caixa=caixa, participantes__arquivada=True)
@@ -446,7 +449,10 @@ def anexo(request, mensagem_id):
     utilizador = Utilizador.objects.filter(id=lido[1]).select_related('user').first()
     if not m or not m.anexo or not utilizador or not utilizador.is_active:
         return Response({'detail': 'Imagem não encontrada.'}, status=404)
-    if not regras.utilizador_ve_conversa(utilizador, m.conversa):
+    # quem participa — ou um moderador, mas só em conversas denunciadas
+    moderador_com_denuncia = (utilizador.user.is_staff and utilizador.pode_admin('moderar_chat')
+                              and Denuncia.objects.filter(conversa=m.conversa).exists())
+    if not (regras.utilizador_ve_conversa(utilizador, m.conversa) or moderador_com_denuncia):
         return Response({'detail': 'Imagem não encontrada.'}, status=404)
 
     armazenamento = m.anexo.storage
@@ -581,16 +587,84 @@ def denuncias(request):
         d = Denuncia.objects.create(conversa=conversa, mensagem=mensagem, denunciante=u, motivo=motivo)
         return Response({'id': d.id, 'estado': d.estado}, status=status.HTTP_201_CREATED)
 
-    if not (request.user.is_staff and u.pode_admin('moderar_chat')):
+    if not _moderador(request):
         return Response({'detail': 'Sem permissão.'}, status=403)
-    qs = Denuncia.objects.select_related('denunciante__user', 'mensagem').filter(
-        estado=request.query_params.get('estado', Denuncia.PENDENTE))[:100]
-    return Response({'results': [{
-        'id': d.id, 'conversa_id': d.conversa_id, 'mensagem_id': d.mensagem_id,
-        'mensagem_texto': d.mensagem.texto if d.mensagem else None,
-        'denunciante': d.denunciante.nome if d.denunciante else None,
-        'motivo': d.motivo, 'estado': d.estado, 'criada_em': d.criada_em.isoformat(),
-    } for d in qs]})
+    estado = request.query_params.get('estado', Denuncia.PENDENTE)
+    qs = Denuncia.objects.select_related(
+        'denunciante__user', 'resolvida_por__user', 'mensagem__remetente__loja',
+        'mensagem__remetente__utilizador__user', 'mensagem__autor__user', 'conversa__loja',
+    ).prefetch_related('conversa__participantes__caixa__loja', 'conversa__participantes__caixa__utilizador__user') \
+        .filter(estado=estado)[:100]
+    out = []
+    for d in qs:
+        m = d.mensagem
+        out.append({
+            'id': d.id, 'estado': d.estado, 'motivo': d.motivo, 'nota': d.nota,
+            'criada_em': d.criada_em.isoformat(),
+            'resolvida_em': d.resolvida_em.isoformat() if d.resolvida_em else None,
+            'resolvida_por': d.resolvida_por.nome if d.resolvida_por else None,
+            'denunciante': d.denunciante.nome if d.denunciante else None,
+            'conversa': {
+                'id': d.conversa_id, 'tipo': d.conversa.tipo,
+                'participantes': [perfil_caixa(request, p.caixa) for p in d.conversa.participantes.all()],
+            },
+            'mensagem': None if not m else {
+                'id': m.id, 'texto': m.texto, 'apagada': m.apagada, 'tipo': m.tipo,
+                'remetente': perfil_caixa(request, m.remetente),
+                'autor': m.autor.nome if m.autor else None,
+                'criada_em': m.criada_em.isoformat(),
+            },
+        })
+    return Response({'results': out, 'pendentes': Denuncia.objects.filter(estado=Denuncia.PENDENTE).count()})
+
+
+def _moderador(request):
+    return request.user.is_staff and request.user.utilizador.pode_admin('moderar_chat')
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def denuncia_conversa(request, denuncia_id):
+    """
+    GET /api/chat/denuncias/<id>/conversa/ — as últimas mensagens da conversa DENUNCIADA (só moderar_chat).
+    Os moderadores só lêem conversas com denúncia — nunca as outras.
+    """
+    if not _moderador(request):
+        return Response({'detail': 'Sem permissão.'}, status=403)
+    d = get_object_or_404(Denuncia.objects.select_related('conversa'), id=denuncia_id)
+    msgs = d.conversa.mensagens.select_related('remetente__loja', 'remetente__utilizador__user', 'autor__user', 'produto') \
+        .order_by('-id')[:100]
+    out = []
+    for m in reversed(list(msgs)):
+        out.append({
+            'id': m.id, 'tipo': m.tipo, 'texto': m.texto, 'apagada': m.apagada,
+            'criada_em': m.criada_em.isoformat(),
+            'remetente': perfil_caixa(request, m.remetente),
+            'autor': m.autor.nome if m.autor else None,
+            'anexo': _anexo_payload(request, m),
+            'denunciada': m.id == d.mensagem_id,
+        })
+    return Response({'conversa_id': d.conversa_id, 'tipo': d.conversa.tipo, 'mensagens': out})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def denuncia_apagar_mensagem(request, denuncia_id):
+    """POST /api/chat/denuncias/<id>/apagar-mensagem/ — o moderador apaga a mensagem denunciada (e o ficheiro)."""
+    if not _moderador(request):
+        return Response({'detail': 'Sem permissão.'}, status=403)
+    d = get_object_or_404(Denuncia.objects.select_related('mensagem__conversa'), id=denuncia_id)
+    m = d.mensagem
+    if not m:
+        return Response({'detail': 'Esta denúncia é sobre a conversa, não sobre uma mensagem.'}, status=400)
+    if not m.apagada:
+        if m.anexo:
+            m.anexo.delete(save=False)
+        m.apagada = True
+        m.texto = ''
+        m.save(update_fields=['apagada', 'texto', 'anexo'])
+        emitir(m.conversa, {'tipo': 'mensagem_apagada', 'conversa_id': m.conversa_id, 'mensagem_id': m.id})
+    return Response({'id': m.id, 'apagada': True})
 
 
 @api_view(['POST'])
@@ -598,7 +672,7 @@ def denuncias(request):
 def resolver_denuncia(request, denuncia_id):
     """POST /api/chat/denuncias/<id>/resolver/ { nota? } — só moderar_chat."""
     u = request.user.utilizador
-    if not (request.user.is_staff and u.pode_admin('moderar_chat')):
+    if not _moderador(request):
         return Response({'detail': 'Sem permissão.'}, status=403)
     d = get_object_or_404(Denuncia, id=denuncia_id)
     d.estado = Denuncia.RESOLVIDA

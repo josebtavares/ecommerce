@@ -16,4 +16,6 @@ urlpatterns = [
     path('contactos/',                               views.contactos,         name='chat_contactos'),
     path('denuncias/',                               views.denuncias,         name='chat_denuncias'),
     path('denuncias/<int:denuncia_id>/resolver/',    views.resolver_denuncia, name='chat_resolver'),
+    path('denuncias/<int:denuncia_id>/conversa/',    views.denuncia_conversa, name='chat_denuncia_conversa'),
+    path('denuncias/<int:denuncia_id>/apagar-mensagem/', views.denuncia_apagar_mensagem, name='chat_denuncia_apagar'),
 ]
