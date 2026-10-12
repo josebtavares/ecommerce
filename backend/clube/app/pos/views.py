@@ -49,6 +49,7 @@ except Exception:
     
 from .stock import reservar_stock, repor_stock_item, cancelar_conta
 from app.utils.auth import autenticar
+from app.utils.google_auth import google_obter_utilizador
 from app.Views.utilizadorView import _build_user_payload
 from app.utils.variantes import sincronizar_variantes, variantes_payload, aplicar_grelha_do_pedido
 from app.utils.tipos import tipos_para_loja, tipos_para_pos, tipo_permitido
@@ -414,6 +415,41 @@ def _conta_payload(conta, request=None):
 # AUTENTICAÇÃO — CONTA PRINCIPAL
 # ═══════════════════════════════════════════════════════════════════
 
+def _sessao_principal(utilizador, request):
+    """Resposta de sessão da conta principal (dono) — login, registo e Google."""
+    pos_list = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True).select_related('loja_vinculada')
+    lojas    = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
+    refresh  = RefreshToken.for_user(utilizador.user)
+
+    return {
+        'tipo_sessao': 'principal',
+        'access_token': str(refresh.access_token),
+        'refresh_token': str(refresh),
+        # mesmo formato do login da Bendi — o frontend guarda isto em localStorage('user'),
+        # partilhado com a loja/admin (role_admin, is_staff…); um formato reduzido estragava a sessão Bendi
+        'user': {**_build_user_payload(utilizador, request), 'nome': utilizador.nome},
+        'tem_lojas': lojas.exists(),
+        'lojas': [
+            {'id': l.id, 'nome': l.nome, 'logo_url': l.logo.url if l.logo else None}
+            for l in lojas
+        ],
+        'pos_existentes': [
+            {
+                'id': p.id,
+                'codigo_pos': p.codigo_pos,
+                'nome': p.nome,
+                'modo': p.modo,
+                'loja_vinculada': {
+                    'id': p.loja_vinculada.id,
+                    'nome': p.loja_vinculada.nome,
+                } if p.loja_vinculada else None,
+            }
+            for p in pos_list
+        ],
+        'precisa_onboarding': not pos_list.exists(),
+    }
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @pos_ratelimit(key='ip', rate='10/m')
@@ -441,37 +477,22 @@ def pos_login(request):
     except Exception:
         return Response({'detail': 'Perfil não encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
-    pos_list = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-    lojas    = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
-    refresh  = RefreshToken.for_user(user)
+    return Response(_sessao_principal(utilizador, request))
 
-    return Response({
-        'tipo_sessao': 'principal',
-        'access_token': str(refresh.access_token),
-        'refresh_token': str(refresh),
-        # mesmo formato do login da Bendi — o frontend guarda isto em localStorage('user'),
-        # partilhado com a loja/admin (role_admin, is_staff…); um formato reduzido estragava a sessão Bendi
-        'user': {**_build_user_payload(utilizador, request), 'nome': utilizador.nome},
-        'tem_lojas': lojas.exists(),
-        'lojas': [
-            {'id': l.id, 'nome': l.nome, 'logo_url': l.logo.url if l.logo else None}
-            for l in lojas
-        ],
-        'pos_existentes': [
-            {
-                'id': p.id,
-                'codigo_pos': p.codigo_pos,
-                'nome': p.nome,
-                'modo': p.modo,
-                'loja_vinculada': {
-                    'id': p.loja_vinculada.id,
-                    'nome': p.loja_vinculada.nome,
-                } if p.loja_vinculada else None,
-            }
-            for p in pos_list
-        ],
-        'precisa_onboarding': not pos_list.exists(),
-    })
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@pos_ratelimit(key='ip', rate='10/m')
+def pos_login_google(request):
+    """
+    Login/registo da conta principal com Google — o mesmo fluxo da Bendi
+    (utils/google_auth), mas devolve a sessão do POS. Body: { code }
+    """
+    utilizador, criado, erro = google_obter_utilizador(request.data.get('code'))
+    if erro:
+        return erro
+    return Response({**_sessao_principal(utilizador, request), 'criado': criado})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -632,23 +653,8 @@ def pos_register(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        utilizador     = user.utilizador
-        refresh        = RefreshToken.for_user(user)
-        pos_existentes = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True)
-        lojas          = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
-
         return Response({
-            'tipo_sessao': 'principal',
-            'access_token': str(refresh.access_token),
-            'refresh_token': str(refresh),
-            'user': {**_build_user_payload(utilizador, request), 'nome': utilizador.nome},
-            'tem_lojas': lojas.exists(),
-            'lojas': [{'id': l.id, 'nome': l.nome} for l in lojas],
-            'pos_existentes': [
-                {'id': p.id, 'codigo_pos': p.codigo_pos, 'nome': p.nome, 'modo': p.modo}
-                for p in pos_existentes
-            ],
-            'precisa_onboarding': not pos_existentes.exists(),
+            **_sessao_principal(user.utilizador, request),
             'mensagem': 'Login com conta existente',
         }, status=status.HTTP_200_OK)
 
@@ -670,17 +676,9 @@ def pos_register(request):
                 first_name=first_name, last_name=last_name,
             )
             utilizador = Utilizador.objects.create(user=user, status='ativo', verificado=False)
-            refresh    = RefreshToken.for_user(user)
 
             return Response({
-                'tipo_sessao': 'principal',
-                'access_token': str(refresh.access_token),
-                'refresh_token': str(refresh),
-                'user': {**_build_user_payload(utilizador, request), 'nome': utilizador.nome},
-                'tem_lojas': False,
-                'lojas': [],
-                'pos_existentes': [],
-                'precisa_onboarding': True,
+                **_sessao_principal(utilizador, request),
                 'mensagem': 'Conta criada com sucesso',
             }, status=status.HTTP_201_CREATED)
 

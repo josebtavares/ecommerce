@@ -159,6 +159,8 @@
               </button>
             </form>
 
+            <BotaoGoogle class="mt-4" :loading="loadingGoogle" @click="registarComGoogle" />
+
             <div class="mt-7 rounded-2xl bg-slate-50 p-4 text-center text-sm text-slate-600">
               Já tens conta?
               <router-link to="/pos/login" class="font-black text-slate-950 hover:underline">
@@ -182,9 +184,13 @@
 
 <script>
 import api from '@/services/api'
+import { iniciarLoginGoogle } from '@/services/google'
+import { guardarSessaoPrincipalPOS } from '@/services/posSessao'
+import BotaoGoogle from './components/BotaoGoogle.vue'
 
 export default {
   name: 'POSRegister',
+  components: { BotaoGoogle },
 
   data() {
     return {
@@ -196,6 +202,7 @@ export default {
         passwordConfirm: ''
       },
       loading:        false,
+      loadingGoogle:  false,
       error:          null,
       successMessage: null,
       showPassword:   false
@@ -247,6 +254,18 @@ export default {
       }
     },
 
+    // conta nova com Google → o callback pede para completar o perfil e depois abre o POS
+    async registarComGoogle() {
+      this.loadingGoogle = true
+      this.error = null
+      try {
+        await iniciarLoginGoogle('pos')
+      } catch (err) {
+        this.error = 'Erro ao iniciar registo com Google.'
+        this.loadingGoogle = false
+      }
+    },
+
     validateForm() {
       if (!this.form.firstName.trim())   return 'O primeiro nome é obrigatório.'
       if (!this.form.lastName.trim())    return 'O último nome é obrigatório.'
@@ -262,53 +281,8 @@ export default {
     },
 
     persistSession(data) {
-      const lojas         = Array.isArray(data.lojas) ? data.lojas : []
-      const posExistentes = this.resolvePOSList(data)
-      const selectedPOS   = posExistentes.length > 0 ? posExistentes[0] : null
-      const precisaOnboarding = Boolean(data.precisa_onboarding || posExistentes.length === 0)
-
-      // ── Tokens ──────────────────────────────────────────────────
-      localStorage.setItem('access_token',  data.access_token)
-      localStorage.setItem('refresh_token', data.refresh_token)
-
-      // ── Sessão principal (conta principal, NÃO membro) ──────────
-      localStorage.setItem('tipo_sessao', 'principal')
-      localStorage.setItem('pos_user',   JSON.stringify(data.user || null))
-      localStorage.removeItem('pos_membro_access')     // sessão de membro anterior deixa de valer
-      localStorage.removeItem('pos_membro_refresh')
-
-      // ── Contexto POS ────────────────────────────────────────────
-      localStorage.setItem('pos_lojas',            JSON.stringify(lojas))
-      localStorage.setItem('pos_existentes',       JSON.stringify(posExistentes))
-      localStorage.setItem('pos_tem_lojas',        data.tem_lojas ? 'true' : 'false')
-      localStorage.setItem('pos_precisa_onboarding', precisaOnboarding ? 'true' : 'false')
-      localStorage.setItem('pos_onboarding_data', JSON.stringify({
-        tem_lojas:          Boolean(data.tem_lojas),
-        lojas,
-        pos_existentes:     posExistentes,
-        precisa_onboarding: precisaOnboarding,
-        mensagem:           data.mensagem || ''
-      }))
-
-      // ── POS selecionado ─────────────────────────────────────────
-      if (selectedPOS) {
-        localStorage.setItem('pos_selected', JSON.stringify(selectedPOS))
-        localStorage.setItem('pos_id',       String(selectedPOS.id))
-      } else {
-        localStorage.removeItem('pos_selected')
-        localStorage.removeItem('pos_id')
-      }
-
-      // ── Limpar dados de sessão de membro (se existia) ───────────
-      localStorage.removeItem('pos_membro')
-      localStorage.removeItem('pos_membro_pos')
-      localStorage.removeItem('pos_membro_permissoes')
-    },
-
-    resolvePOSList(data) {
-      if (Array.isArray(data.pos_existentes)) return data.pos_existentes
-      if (data.pos) return [data.pos]
-      return []
+      // mesma sessão do login do POS — chaves próprias, a sessão Bendi não é tocada
+      guardarSessaoPrincipalPOS(data)
     },
 
     getErrorMessage(err) {

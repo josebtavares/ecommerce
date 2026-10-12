@@ -157,6 +157,7 @@ import { toast } from 'vue3-toastify'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api.js'
 import { mediaUrl } from '@/services/media'
+import { iniciarLoginGoogle } from '@/services/google'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 
@@ -222,8 +223,7 @@ export default {
     async loginComGoogle () {
       this.loadingGoogle = true
       try {
-        const { data } = await api.get('/app/utilizador/google/')
-        window.location.href = data.url
+        await iniciarLoginGoogle('bendi')
       } catch (e) {
         console.error(e)
         toast.error('Erro ao iniciar login com Google.', { autoClose: 3000 })

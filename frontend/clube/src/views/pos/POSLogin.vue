@@ -91,6 +91,8 @@
             </span>
           </button>
 
+          <BotaoGoogle :loading="loadingGoogle" @click="entrarComGoogle" />
+
           <p class="text-center text-sm font-semibold text-slate-500">
             Não tens conta?
             <router-link
@@ -177,15 +179,20 @@
 </template>
 
 <script>
-import api, { MEMBRO_ACCESS, MEMBRO_REFRESH } from '@/services/api'
+import api, { POS_ACCESS, POS_REFRESH } from '@/services/api'
+import { iniciarLoginGoogle } from '@/services/google'
+import { guardarSessaoPrincipalPOS, destinoPOS } from '@/services/posSessao'
+import BotaoGoogle from './components/BotaoGoogle.vue'
 
 export default {
   name: 'POSLogin',
+  components: { BotaoGoogle },
 
   data() {
     return {
       modo: 'principal',   // 'principal' | 'membro'
       loading: false,
+      loadingGoogle: false,
       error: null,
 
       // Conta principal
@@ -231,6 +238,18 @@ export default {
         this.error = err.response?.data?.detail || 'Erro ao entrar'
       } finally {
         this.loading = false
+      }
+    },
+
+    // ── LOGIN COM GOOGLE (conta principal) ───────────────────────
+    async entrarComGoogle() {
+      this.loadingGoogle = true
+      this.error = null
+      try {
+        await iniciarLoginGoogle('pos')
+      } catch (err) {
+        this.error = 'Erro ao iniciar login com Google'
+        this.loadingGoogle = false
       }
     },
 
@@ -288,71 +307,14 @@ export default {
 
     // ── HELPERS ───────────────────────────────────────────────────
     _guardarSessaoPrincipal(data) {
-  const lojas = Array.isArray(data.lojas) ? data.lojas : []
-  const posExistentes = Array.isArray(data.pos_existentes) ? data.pos_existentes : []
-  const selectedPOS = posExistentes.length > 0 ? posExistentes[0] : null
-
-  const precisaOnboarding = Boolean(
-    data.precisa_onboarding || posExistentes.length === 0
-  )
-
-  // Sessão principal
-  localStorage.setItem('access_token', data.access_token)
-  localStorage.setItem('refresh_token', data.refresh_token)
-  localStorage.setItem('tipo_sessao', 'principal')
-
-  // User POS
-  localStorage.setItem('pos_user', JSON.stringify(data.user || null))
-
-  // Compatibilidade com outros ficheiros antigos que usam "user"
-  localStorage.setItem('user', JSON.stringify(data.user || null))
-
-  // Dados do POS
-  localStorage.setItem('pos_lojas', JSON.stringify(lojas))
-  localStorage.setItem('pos_existentes', JSON.stringify(posExistentes))
-  localStorage.setItem('pos_tem_lojas', data.tem_lojas ? 'true' : 'false')
-  localStorage.setItem('pos_precisa_onboarding', precisaOnboarding ? 'true' : 'false')
-
-  localStorage.setItem(
-    'pos_onboarding_data',
-    JSON.stringify({
-      tem_lojas: Boolean(data.tem_lojas),
-      lojas,
-      pos_existentes: posExistentes,
-      precisa_onboarding: precisaOnboarding,
-      mensagem: data.mensagem || ''
-    })
-  )
-
-  if (data.permissoes) {
-    localStorage.setItem('pos_permissoes', JSON.stringify(data.permissoes))
-  } else {
-    localStorage.removeItem('pos_permissoes')
-  }
-
-  // Se já existe POS, selecionar o primeiro automaticamente
-  if (selectedPOS) {
-    localStorage.setItem('pos_selected', JSON.stringify(selectedPOS))
-    localStorage.setItem('pos_id', String(selectedPOS.id))
-    localStorage.setItem('pos_precisa_onboarding', 'false')
-  } else {
-    localStorage.removeItem('pos_selected')
-    localStorage.removeItem('pos_id')
-  }
-
-  // Limpar dados de sessão de membro anterior
-  localStorage.removeItem(MEMBRO_ACCESS)
-  localStorage.removeItem(MEMBRO_REFRESH)
-  localStorage.removeItem('pos_membro')
-  localStorage.removeItem('pos_membro_pos')
-  localStorage.removeItem('pos_membro_permissoes')
-},
+      guardarSessaoPrincipalPOS(data)
+    },
 
     _guardarSessaoMembro(data) {
-      // chaves próprias do membro: a sessão Bendi (access_token/user) fica intacta e a
+      // sessão do POS (chaves próprias): a sessão Bendi (access_token/user) fica intacta e a
       // loja/admin continuam a funcionar no mesmo browser — ver services/api.js
-      localStorage.setItem(MEMBRO_ACCESS, data.access_token)
-      localStorage.setItem(MEMBRO_REFRESH, data.refresh_token)
+      localStorage.setItem(POS_ACCESS, data.access_token)
+      localStorage.setItem(POS_REFRESH, data.refresh_token)
       localStorage.setItem('tipo_sessao', 'membro')
       localStorage.setItem('pos_membro', JSON.stringify(data.membro))
       localStorage.setItem('pos_membro_pos', JSON.stringify(data.pos))
@@ -365,15 +327,8 @@ export default {
     },
 
     _redirecionar(data) {
-  const posExistentes = Array.isArray(data.pos_existentes) ? data.pos_existentes : []
-
-  if (data.precisa_onboarding && posExistentes.length === 0) {
-    this.$router.push('/pos/dashboard?onboarding=1')
-    return
-  }
-
-  this.$router.push('/pos/dashboard')
-},
+      this.$router.push(destinoPOS(data))
+    },
   },
 }
 </script>
