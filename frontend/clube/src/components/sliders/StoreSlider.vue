@@ -123,6 +123,7 @@ import { Swiper, SwiperSlide } from 'swiper/vue'
 import { FreeMode } from 'swiper/modules'
 import 'swiper/css'
 import api from '@/services/api'
+import { DEFAULT_BANNER } from '@/services/media'
 
 export default {
   name: 'StoreSlider',
@@ -148,7 +149,7 @@ export default {
       loading: false,
       loadingMore: false,
       reachedEnd: false,
-      defaultImg: (process.env.VUE_APP_URL_BASE || 'http://localhost:8000') + '/media/lojas/default_banner.jpg',
+      defaultImg: DEFAULT_BANNER,
     }
   },
 

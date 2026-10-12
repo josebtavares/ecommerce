@@ -330,6 +330,7 @@
 <script>
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api'
+import { DEFAULT_PRODUTO } from '@/services/media'
 import { toast } from 'vue3-toastify'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
@@ -358,7 +359,7 @@ export default {
       seleccoes: {},
       imagemFullscreen: false,
       imagemActiva: 0,
-      defaultImg: (process.env.VUE_APP_URL_BASE || 'http://localhost:8000') + '/media/produtos/default.jpg',
+      defaultImg: DEFAULT_PRODUTO,
     }
   },
 

@@ -221,6 +221,7 @@
 import { toast } from 'vue3-toastify'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api.js'
+import { DEFAULT_UTILIZADOR } from '@/services/media'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import { passwordValida } from '@/utils/password'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
@@ -246,7 +247,7 @@ export default {
       morada:        '',
       password:      '',
       file:          null,
-      previewUrl:    `${process.env.VUE_APP_URL_BASE}/media/utilizadores/default.png`,
+      previewUrl:    DEFAULT_UTILIZADOR,
       errors:        [],
       loadingGoogle: false,
       isDark: savedTheme ? savedTheme === 'dark' : true,
@@ -275,7 +276,7 @@ export default {
         this.previewUrl = URL.createObjectURL(f)
       } else {
         this.file = null
-        this.previewUrl = `${process.env.VUE_APP_URL_BASE}/media/utilizadores/default.png`
+        this.previewUrl = DEFAULT_UTILIZADOR
       }
     },
 

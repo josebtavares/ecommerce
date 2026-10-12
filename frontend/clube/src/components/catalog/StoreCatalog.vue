@@ -174,6 +174,7 @@
 
 <script>
 import api from '@/services/api'
+import { DEFAULT_BANNER } from '@/services/media'
 import { iconeCategoria } from '@/utils/icones'
 
 export default {
@@ -186,7 +187,7 @@ export default {
   emits: ['store-click'],
   data () {
     return {
-      defaultImg: (process.env.VUE_APP_URL_BASE || 'http://localhost:8000') + '/media/lojas/default_banner.jpg',
+      defaultImg: DEFAULT_BANNER,
       categorias: [
         { value: 'restaurante',  label: 'Restaurante',  icon: iconeCategoria(null, 'restaurante') },
         { value: 'moda',         label: 'Moda',         icon: iconeCategoria(null, 'moda') },

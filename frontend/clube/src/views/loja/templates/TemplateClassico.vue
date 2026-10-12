@@ -25,7 +25,7 @@
           class="w-full h-full object-cover"
           v-video-visivel muted loop playsinline></video>
         <img v-else
-          :src="loja.banner_url || `${backendUrl}/media/lojas/default_banner.jpg`"
+          :src="loja.banner_url || defaultBanner"
           :alt="loja.nome" class="w-full h-full object-cover" />
 
             
