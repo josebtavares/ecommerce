@@ -84,7 +84,8 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [REDIS_URL],
+            # socket_timeout > 5s do BZPOPMIN do channels_redis (ver CHANNEL_LAYERS no settings.py)
+            'hosts': [{'address': REDIS_URL, 'socket_timeout': 30}],
         },
     },
 }
