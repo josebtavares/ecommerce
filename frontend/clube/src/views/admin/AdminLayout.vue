@@ -109,7 +109,8 @@
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-auto p-4 lg:p-6">
+      <!-- pb-24: espaço para o balão do chat (canto inferior direito) não tapar o fim do conteúdo -->
+      <div class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
         <AdminDashboard    v-if="activeSection === 'dashboard'"    />
         <AdminLojas        v-else-if="activeSection === 'lojas'"        />
         <AdminUtilizadores v-else-if="activeSection === 'utilizadores'" />
@@ -127,19 +128,6 @@
         <AdminDenuncias    v-else-if="activeSection === 'denuncias'"    @pendentes="n => denunciasPendentes = n" />
       </div>
     </div>
-
-    <!-- Botão flutuante mobile -->
-    <button @click="sidebarAberta = !sidebarAberta"
-      class="fixed bottom-5 left-5 z-50 lg:hidden w-14 h-14 bg-red-600 hover:bg-red-500
-             rounded-2xl shadow-2xl shadow-red-600/40 flex items-center justify-center
-             transition-all duration-200 active:scale-95">
-      <svg v-if="!sidebarAberta" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-      <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-      </svg>
-    </button>
 
   </div>
 </template>

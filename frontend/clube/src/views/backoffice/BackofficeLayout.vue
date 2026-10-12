@@ -132,7 +132,8 @@
       </div>
 
       <!-- Content -->
-      <main v-else class="flex-1 overflow-auto p-4 lg:p-6">
+      <!-- pb-24: espaço para o balão do chat (canto inferior direito) não tapar o fim do conteúdo -->
+      <main v-else class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
         <BackofficeDashboard     v-if="activeSection === 'dashboard'"      :loja-id="lojaId" />
         <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" />
         <BackofficeProdutos      v-else-if="activeSection === 'produtos'"      :loja-id="lojaId" />
@@ -148,27 +149,6 @@
         <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
       </main>
     </div>
-
-    <!-- ═══ BOTÃO FLUTUANTE MOBILE (canto inferior esquerdo) ═══ -->
-    <button @click="sidebarAberta = !sidebarAberta"
-      class="fixed bottom-5 left-5 z-50 lg:hidden w-14 h-14 bg-red-600 hover:bg-red-500
-             rounded-2xl shadow-2xl shadow-red-600/40 flex items-center justify-center
-             transition-all duration-200 active:scale-95">
-      <!-- Menu icon quando fechado -->
-      <svg v-if="!sidebarAberta" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-      <!-- X icon quando aberto -->
-      <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-      </svg>
-      <!-- Badge notificações no botão flutuante -->
-      <span v-if="naoLidasCount > 0"
-        class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-yellow-400 text-zinc-900
-               text-[10px] font-bold rounded-full flex items-center justify-center">
-        {{ naoLidasCount > 9 ? '9+' : naoLidasCount }}
-      </span>
-    </button>
 
   </div>
 </template>
@@ -242,7 +222,6 @@ export default {
       loadingLoja:   true,
       activeSection: 'dashboard',
       sidebarAberta: false,
-      naoLidasCount: 0,
       user:          JSON.parse(localStorage.getItem('user') || '{}'),
     }
   },
@@ -291,7 +270,6 @@ export default {
 
   async created () {
     await this.fetchLoja()
-    this.fetchNaoLidas()
   },
 
   methods: {
@@ -339,13 +317,6 @@ export default {
       } finally {
         this.loadingLoja = false
       }
-    },
-
-    async fetchNaoLidas () {
-      try {
-        const { data } = await api.get('/app/notificacoes/contador/')
-        this.naoLidasCount = data.nao_lidas || 0
-      } catch (e) { /* silencioso */ }
     },
   },
 }
