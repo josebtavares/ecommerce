@@ -79,12 +79,15 @@
                 Esqueceste?
               </a>
             </div>
-            <input v-model="password" type="password" required autocomplete="current-password"
-              class="w-full px-4 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
-              :class="isDark
-                ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500'
-                : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400'"
-              placeholder="••••••••" />
+            <div class="relative">
+              <input v-model="password" :type="verPassword ? 'text' : 'password'" required autocomplete="current-password"
+                class="w-full px-4 pr-10 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
+                :class="isDark
+                  ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500'
+                  : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400'"
+                placeholder="••••••••" />
+              <BotaoVerPassword :visivel="verPassword" :isDark="isDark" @toggle="verPassword = !verPassword" />
+            </div>
           </div>
 
           <div v-if="warning"
@@ -158,11 +161,13 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api.js'
 import { mediaUrl } from '@/services/media'
 import { iniciarLoginGoogle } from '@/services/google'
+import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 
 export default {
   name: 'AppLogin',
+  components: { BotaoVerPassword },
 
   setup () {
     const { loading, wrap } = useAsyncAction()
@@ -175,6 +180,7 @@ export default {
       videoFundo:   mediaUrl('videos/background.mp4'),
       username:     '',
       password:     '',
+      verPassword:  false,
       warning:      false,
       warningMsg:   'Credenciais inválidas.',
       loadingGoogle: false,

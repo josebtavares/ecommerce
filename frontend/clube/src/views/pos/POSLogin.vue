@@ -69,14 +69,17 @@
 
           <div>
             <label class="mb-2 block text-sm font-black text-slate-700">Password</label>
-            <input
-              v-model="form.password"
-              type="password"
-              placeholder="••••••••"
-              required
-              autocomplete="current-password"
-              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
-            />
+            <div class="relative">
+              <input
+                v-model="form.password"
+                :type="verPassword ? 'text' : 'password'"
+                placeholder="••••••••"
+                required
+                autocomplete="current-password"
+                class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-11 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+              />
+              <BotaoVerPassword :visivel="verPassword" :is-dark="false" @toggle="verPassword = !verPassword" />
+            </div>
           </div>
 
           <button
@@ -131,14 +134,17 @@
 
           <div>
             <label class="mb-2 block text-sm font-black text-slate-700">Password</label>
-            <input
-              v-model="formMembro.password"
-              type="password"
-              placeholder="••••••••"
-              required
-              autocomplete="current-password"
-              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
-            />
+            <div class="relative">
+              <input
+                v-model="formMembro.password"
+                :type="verPassword ? 'text' : 'password'"
+                placeholder="••••••••"
+                required
+                autocomplete="current-password"
+                class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-11 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+              />
+              <BotaoVerPassword :visivel="verPassword" :is-dark="false" @toggle="verPassword = !verPassword" />
+            </div>
           </div>
 
           <button
@@ -183,16 +189,18 @@ import api, { POS_ACCESS, POS_REFRESH } from '@/services/api'
 import { iniciarLoginGoogle } from '@/services/google'
 import { guardarSessaoPrincipalPOS, destinoPOS } from '@/services/posSessao'
 import BotaoGoogle from './components/BotaoGoogle.vue'
+import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 
 export default {
   name: 'POSLogin',
-  components: { BotaoGoogle },
+  components: { BotaoGoogle, BotaoVerPassword },
 
   data() {
     return {
       modo: 'principal',   // 'principal' | 'membro'
       loading: false,
       loadingGoogle: false,
+      verPassword: false,
       error: null,
 
       // Conta principal
