@@ -346,6 +346,7 @@
 import { ref, watch, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/services/api'
+import { DEFAULT_UTILIZADOR } from '@/services/media'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
@@ -360,7 +361,6 @@ const props = defineProps({
 defineEmits(['log_out'])
 
 const router     = useRouter()
-const backend    = process.env.VUE_APP_URL_BASE
 const isOpen     = ref(false)
 const fileInput  = ref(null)
 const previewUrl = ref('')
@@ -453,12 +453,12 @@ function initForm() {
 }
 
 onMounted(() => {
-  previewUrl.value = props.data.foto || `${backend}/media/utilizadores/default.png`
+  previewUrl.value = props.data.foto || DEFAULT_UTILIZADOR
   initForm()
 })
 
 watch(() => props.data, () => {
-  previewUrl.value = props.data.foto || `${backend}/media/utilizadores/default.png`
+  previewUrl.value = props.data.foto || DEFAULT_UTILIZADOR
   initForm()
 }, { deep: true })
 

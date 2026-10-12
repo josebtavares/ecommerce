@@ -266,6 +266,7 @@
 
 <script>
 import api from '@/services/api'
+import { DEFAULT_PRODUTO } from '@/services/media'
 import { formatarAtributos } from '@/utils/atributos'
 
 export default {
@@ -353,7 +354,7 @@ export default {
 
   data () {
     return {
-      defaultImg: (process.env.VUE_APP_URL_BASE || 'http://localhost:8000') + '/media/produtos/default.jpg',
+      defaultImg: DEFAULT_PRODUTO,
       tipos: [], activeTipo: null,
       todasCategorias: [], categoriasDoTipo: [], activeCategoria: null,
       produtos: [], total: 0, offset: 0,

@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.core.files.storage import default_storage
 from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
@@ -46,14 +47,10 @@ def _build_user_payload(utilizador: Utilizador, request=None) -> dict:
     Payload do utilizador devolvido no login e no registo.
     Alinhado com o que o frontend guarda em localStorage('user').
     """
-    foto_url = None
-    if utilizador.foto:
-        foto_url = (
-            request.build_absolute_uri(utilizador.foto.url)
-            if request else utilizador.foto.url
-        )
-    else:
-        foto_url = f"https://pub-803c78caa4b242b8b54656a45db9fb42.r2.dev/utilizadores/default.png"
+    # sem foto → avatar por defeito do storage configurado (media/ na dev, R2 na prod)
+    foto_url = utilizador.foto.url if utilizador.foto else default_storage.url('utilizadores/default.png')
+    if request:
+        foto_url = request.build_absolute_uri(foto_url)
 
     return {
         'id'             : utilizador.id,

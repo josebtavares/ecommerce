@@ -3,7 +3,7 @@
 
     <video autoplay muted loop playsinline
       class="absolute inset-0 w-full h-full object-cover">
-      <source src="https://pub-803c78caa4b242b8b54656a45db9fb42.r2.dev/videos/background.mp4" type="video/mp4">
+      <source :src="videoFundo" type="video/mp4">
     </video>
     <div class="absolute inset-0" :class="isDark ? 'bg-black/55' : 'bg-black/30'"></div>
 
@@ -156,6 +156,7 @@
 import { toast } from 'vue3-toastify'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api.js'
+import { mediaUrl } from '@/services/media'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 
@@ -170,6 +171,7 @@ export default {
   data () {
     const savedTheme = localStorage.getItem('theme_preference')
     return {
+      videoFundo:   mediaUrl('videos/background.mp4'),
       username:     '',
       password:     '',
       warning:      false,
