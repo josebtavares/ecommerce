@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from ..models import Utilizador
+from .contas import username_livre
 
 GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
@@ -26,13 +27,6 @@ def _erro(msg, codigo=status.HTTP_400_BAD_REQUEST):
     return Response({'detail': msg}, status=codigo)
 
 
-def _username_livre(email):
-    base = re.sub(r'[^\w.@+-]', '', email.split('@')[0])[:140] or 'utilizador'
-    username, i = base, 1
-    while User.objects.filter(username=username).exists():
-        username = f'{base}{i}'
-        i += 1
-    return username
 
 
 def _guardar_foto(utilizador, foto_url, google_id):
@@ -94,7 +88,7 @@ def google_obter_utilizador(code):
             user = User.objects.filter(email__iexact=email).order_by('id').first()
             if user is None:
                 user = User(
-                    username=_username_livre(email),
+                    username=username_livre(email.split('@')[0]),
                     email=email,
                     first_name=(dados.get('given_name') or '')[:150],
                     last_name=(dados.get('family_name') or '')[:150],

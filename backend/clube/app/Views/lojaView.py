@@ -24,6 +24,7 @@ from ..Serializers.LojaSerializer import (
 )
 from ..utils.pagination import paginar
 from ..utils.password import mensagem_password_fraca
+from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso
 
 
 # ══════════════════════════════════════════════════════════════
@@ -725,10 +726,13 @@ def staff_criar_utilizador(request, loja_id):
         if not (foto.content_type or '').startswith('image/'):
             return Response({'detail': 'A foto tem de ser uma imagem.'}, status=400)
 
-    if User.objects.filter(username=username).exists():
+    if not USERNAME_RE.match(username):
+        return Response({'detail': 'O username só pode ter letras, números e @ . + - _ (3 a 150 caracteres).'}, status=400)
+
+    if username_em_uso(username):
         return Response({'detail': 'Username já existe.'}, status=400)
 
-    if User.objects.filter(email__iexact=email).exists():
+    if email_em_uso(email):
         return Response({'detail': 'Email já está registado.'}, status=400)
 
     # Criar User Django

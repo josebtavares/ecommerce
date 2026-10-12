@@ -45,8 +45,11 @@
         <div>
           <label :class="labelClass">Username *</label>
           <input v-model.trim="form.username" required autocomplete="username"
+                 @input="erros.username = ''; verUsername.verificar(form.username, usernameInicial)"
                  :class="inputClass" placeholder="o_teu_username" />
           <p v-if="erros.username" class="mt-1 text-xs text-red-400">{{ erros.username }}</p>
+          <EstadoDisponibilidade v-else-if="verUsername.estado" :verificador="verUsername" :isDark="isDark"
+                                 @usar="u => { form.username = u; verUsername.verificar(u, usernameInicial) }" />
           <p v-else class="mt-1 text-xs" :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">
             Gerado a partir do email — podes mudá-lo.
           </p>
@@ -105,9 +108,12 @@
 <script>
 import api from '@/services/api'
 import { toast } from 'vue3-toastify'
+import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
+import { criarVerificador } from '@/services/disponibilidade'
 
 export default {
   name: 'CompletarPerfil',
+  components: { EstadoDisponibilidade },
 
   data () {
     const savedTheme = localStorage.getItem('theme_preference')
@@ -119,6 +125,8 @@ export default {
       form: { first_name: '', last_name: '', username: '', telefone: '', morada: '' },
       erros: {},
       erroGeral: '',
+      verUsername: criarVerificador('username'),
+      usernameInicial: '',
     }
   },
 
@@ -146,6 +154,7 @@ export default {
       const { data } = await api.get('/app/utilizador/me/')
       this.foto = data.foto
       for (const k of Object.keys(this.form)) this.form[k] = data[k] || ''
+      this.usernameInicial = this.form.username
     } catch (e) {
       // sem perfil não há nada a completar
       this.continuar()
@@ -160,6 +169,7 @@ export default {
       this.erroGeral = ''
       if (!this.form.first_name) { this.erros.first_name = 'O primeiro nome é obrigatório.'; return }
       if (!this.form.username)   { this.erros.username   = 'O username é obrigatório.'; return }
+      if (this.verUsername.bloqueia) { this.erros.username = this.verUsername.motivo; return }
 
       this.aGuardar = true
       try {

@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from ..models import Utilizador
 from ..utils.password import mensagem_password_fraca
+from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso
 
 
 # ══════════════════════════════════════════════════════════════
@@ -23,7 +24,7 @@ class UtilizadorSerializer(serializers.ModelSerializer):
     new_username    = serializers.CharField(write_only=True, required=False)
     new_email       = serializers.EmailField(write_only=True, required=False)
     new_first_name  = serializers.CharField(write_only=True, required=False)
-    new_last_name   = serializers.CharField(write_only=True, required=False)
+    new_last_name   = serializers.CharField(write_only=True, required=False, allow_blank=True)  # o apelido é opcional no registo
 
     class Meta:
         model  = Utilizador
@@ -48,6 +49,20 @@ class UtilizadorSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.foto.url)
         return None
 
+    def validate_new_username(self, value):
+        value = value.strip()
+        # um username antigo que não mudou passa sempre (contas criadas antes desta regra)
+        if self.instance is not None and value == self.instance.user.username:
+            return value
+        if not USERNAME_RE.match(value):
+            raise serializers.ValidationError(
+                'O username só pode ter letras, números e @ . + - _ (3 a 150 caracteres).'
+            )
+        return value
+
+    def validate_new_email(self, value):
+        return value.strip()
+
     # registo e alteração de password no perfil usam as mesmas regras do staff
     def validate_password(self, value):
         msg = mensagem_password_fraca(value)
@@ -65,9 +80,9 @@ class UtilizadorSerializer(serializers.ModelSerializer):
         last_name  = validated_data.pop('new_last_name', '')
 
         # validações de unicidade
-        if User.objects.filter(username=username).exists():
+        if username_em_uso(username):
             raise serializers.ValidationError({'username': 'Este username já está em uso.'})
-        if User.objects.filter(email=email).exists():
+        if email_em_uso(email):
             raise serializers.ValidationError({'email': 'Este email já está em uso.'})
 
         django_user = User.objects.create_user(
@@ -88,13 +103,13 @@ class UtilizadorSerializer(serializers.ModelSerializer):
         # campos do User do Django
         if 'new_username' in validated_data:
             new_username = validated_data.pop('new_username')
-            if User.objects.exclude(pk=django_user.pk).filter(username=new_username).exists():
+            if username_em_uso(new_username, excluir=django_user):
                 raise serializers.ValidationError({'username': 'Este username já está em uso.'})
             django_user.username = new_username
 
         if 'new_email' in validated_data:
             new_email = validated_data.pop('new_email')
-            if User.objects.exclude(pk=django_user.pk).filter(email=new_email).exists():
+            if email_em_uso(new_email, excluir=django_user):
                 raise serializers.ValidationError({'email': 'Este email já está em uso.'})
             django_user.email = new_email
 

@@ -209,12 +209,14 @@
 
             <div>
               <label class="text-xs text-zinc-500 mb-1 block">Username *</label>
-              <input v-model="novoUtilizador.username" required class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="ana_silva" />
+              <input v-model="novoUtilizador.username" required @input="verUsername.verificar(novoUtilizador.username)" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="ana_silva" />
+              <EstadoDisponibilidade :verificador="verUsername" @usar="u => { novoUtilizador.username = u; verUsername.verificar(u) }" />
             </div>
 
             <div>
               <label class="text-xs text-zinc-500 mb-1 block">Email *</label>
-              <input v-model="novoUtilizador.email" type="email" required class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="ana@exemplo.pt" />
+              <input v-model="novoUtilizador.email" type="email" required @input="verEmail.verificar(novoUtilizador.email)" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="ana@exemplo.pt" />
+              <EstadoDisponibilidade :verificador="verEmail" />
             </div>
 
             <div class="grid grid-cols-2 gap-3">
@@ -268,10 +270,12 @@
 import api from '@/services/api'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import { passwordValida } from '@/utils/password'
+import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
+import { criarVerificador } from '@/services/disponibilidade'
 
 export default {
   name: 'BackofficeStaff',
-  components: { PasswordForca },
+  components: { PasswordForca, EstadoDisponibilidade },
   props: { lojaId: [String, Number] },
 
   data () {
@@ -297,6 +301,8 @@ export default {
       loadingMore: false,
 
       // criar
+      verUsername: criarVerificador('username'),
+      verEmail:    criarVerificador('email'),
       novoUtilizador: {
         username: '',
         email: '',
@@ -333,7 +339,8 @@ export default {
         return !!this.utilizadorSelecionado
       } else {
         return !!(this.novoUtilizador.username && this.novoUtilizador.email &&
-                  passwordValida(this.novoUtilizador.password))
+                  passwordValida(this.novoUtilizador.password) &&
+                  !this.verUsername.bloqueia && !this.verEmail.bloqueia)
       }
     }
   },
@@ -407,6 +414,8 @@ export default {
         telefone: '',
         morada: ''
       }
+      this.verUsername.verificar('')
+      this.verEmail.verificar('')
       this.removerFoto()
       this.novoRole = 'staff'
     },
