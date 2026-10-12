@@ -393,7 +393,7 @@
 </template>
 
 <script>
-import api, { MEMBRO_ACCESS, MEMBRO_REFRESH } from '@/services/api'
+import api, { POS_ACCESS, POS_REFRESH } from '@/services/api'
 
 import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
@@ -556,10 +556,9 @@ export default {
     // O tipo de sessão vem do TOKEN activo (claim tipo_sessao), não de chaves guardadas
     // que podem ter ficado de outra sessão (ex.: entrou na Bendi depois de usar o POS).
     tipoSessaoDoToken() {
-      // a sessão de membro tem chaves próprias (services/api.js) — se existir, é ela que o POS usa
-      if (localStorage.getItem(MEMBRO_ACCESS)) return 'membro'
+      // o POS tem sessão própria (services/api.js) — dono ou membro, quem diz é o token
       try {
-        const token = localStorage.getItem('access_token') || ''
+        const token = localStorage.getItem(POS_ACCESS) || ''
         const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
         return payload.tipo_sessao === 'membro' ? 'membro' : 'principal'
       } catch {
@@ -592,7 +591,7 @@ export default {
         }
       } else {
         // Sessão de conta principal (nome definitivo chega com /api/pos/meus/)
-        const user = JSON.parse(localStorage.getItem('pos_user') || localStorage.getItem('user') || '{}') || {}
+        const user = JSON.parse(localStorage.getItem('pos_user') || '{}') || {}
         this.setUtilizador(user)
         this.permissoes  = null
       }
@@ -813,16 +812,13 @@ export default {
     logout() {
       if (!confirm('Tem a certeza que quer sair?')) return
 
-      // membro: sai só do POS — a sessão Bendi que exista no browser não é tocada
-      const membro = ['tipo_sessao', MEMBRO_ACCESS, MEMBRO_REFRESH,
-                      'pos_membro', 'pos_membro_pos', 'pos_membro_permissoes']
-      // dono: a sessão do POS é a própria conta Bendi, por isso sai das duas
-      const principal = [
-        'access_token', 'refresh_token',
+      // sai só do POS (dono ou membro) — a sessão Bendi que exista no browser não é tocada
+      const keys = [
+        'tipo_sessao', POS_ACCESS, POS_REFRESH,
+        'pos_membro', 'pos_membro_pos', 'pos_membro_permissoes',
         'pos_user', 'pos_lojas', 'pos_existentes', 'pos_selected',
         'pos_id', 'pos_tem_lojas', 'pos_precisa_onboarding', 'pos_onboarding_data',
       ]
-      const keys = this.tipoSessao === 'membro' ? membro : [...membro, ...principal]
       keys.forEach(k => localStorage.removeItem(k))
 
       this.$router.push('/pos/login')

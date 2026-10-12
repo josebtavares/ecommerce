@@ -10,6 +10,7 @@ const PUBLIC_URLS = [
   '/app/utilizador/login/',
   '/app/utilizador/recuperar_senha/',
   '/app/utilizador/recuperar_senha/confirmar/',
+  '/app/utilizador/google/',          // URL do Google e callback
   '/api/token/refresh/',
 
    // POS
@@ -22,33 +23,57 @@ const comBarra = (url) => '/' + String(url || '').replace(/^\/+/, '');
 const isPublic = (url) => PUBLIC_URLS.some(pub => comBarra(url).includes(pub));
 
 // ── Duas sessões independentes no mesmo browser ──────────────────────
-// access_token/refresh_token → conta Bendi (loja, admin, e o POS quando entra o dono)
-// pos_membro_access/refresh   → membro da equipa do POS (só serve para /api/pos/)
-// Antes o membro gravava por cima do access_token e a loja deixava de funcionar.
-export const MEMBRO_ACCESS  = 'pos_membro_access';
-export const MEMBRO_REFRESH = 'pos_membro_refresh';
+// access_token/refresh_token/user → Bendi (loja, backoffice, admin)
+// pos_access/pos_refresh/pos_user → POS (dono ou membro da equipa — o token diz qual)
+// Entrar ou sair de uma nunca mexe na outra; podem até ser contas diferentes.
+// Quem decide qual usar é a PÁGINA onde se está: em /pos/... todos os pedidos levam o
+// token do POS (incluindo /app/loja/minhas/); no resto do site, o da Bendi
+// (incluindo o admin da plataforma a chamar /api/pos/admin/...).
+export const POS_ACCESS  = 'pos_access';
+export const POS_REFRESH = 'pos_refresh';
 
-const ePOS = (url) => comBarra(url).startsWith('/api/pos/');
-const usaSessaoMembro = (url) => ePOS(url) && !!localStorage.getItem(MEMBRO_ACCESS);
+const naPaginaPOS = () => window.location.pathname.toLowerCase().startsWith('/pos');
 
-// browsers que ficaram com o token de membro no lugar do da Bendi (versão antiga):
-// muda-o para as chaves do membro, para a loja voltar a funcionar sem limpar nada à mão
+const payloadDe = (t) => JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+// ── Migração de sessões de versões anteriores (corre uma vez por carregamento) ──
 try {
+  // 1) membro do POS com as chaves antigas
+  const membroAntigo = localStorage.getItem('pos_membro_access');
+  if (membroAntigo && !localStorage.getItem(POS_ACCESS)) {
+    localStorage.setItem(POS_ACCESS, membroAntigo);
+    const r = localStorage.getItem('pos_membro_refresh');
+    if (r) localStorage.setItem(POS_REFRESH, r);
+  }
+  localStorage.removeItem('pos_membro_access');
+  localStorage.removeItem('pos_membro_refresh');
+
+  // 2) token de membro gravado no lugar do da Bendi (versão ainda mais antiga)
   const t = localStorage.getItem('access_token');
-  const payload = t && JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-  if (payload?.tipo_sessao === 'membro') {
-    localStorage.setItem(MEMBRO_ACCESS, t);
-    const r = localStorage.getItem('refresh_token');
-    if (r) localStorage.setItem(MEMBRO_REFRESH, r);
+  if (t && payloadDe(t)?.tipo_sessao === 'membro') {
+    if (!localStorage.getItem(POS_ACCESS)) {
+      localStorage.setItem(POS_ACCESS, t);
+      const r = localStorage.getItem('refresh_token');
+      if (r) localStorage.setItem(POS_REFRESH, r);
+    }
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+  }
+
+  // 3) dono com o POS aberto quando a sessão era partilhada com a Bendi:
+  //    o POS fica com uma cópia própria, para não ter de entrar outra vez
+  if (naPaginaPOS() && !localStorage.getItem(POS_ACCESS)
+      && localStorage.getItem('tipo_sessao') === 'principal' && localStorage.getItem('access_token')) {
+    localStorage.setItem(POS_ACCESS, localStorage.getItem('access_token'));
+    const r = localStorage.getItem('refresh_token');
+    if (r) localStorage.setItem(POS_REFRESH, r);
   }
 } catch { /* token ilegível — fica como está */ }
 
 // Aplica token JWT no cabeçalho Authorization (só em URLs privadas)
 api.interceptors.request.use((config) => {
   if (!isPublic(config.url)) {
-    const access = localStorage.getItem(usaSessaoMembro(config.url) ? MEMBRO_ACCESS : 'access_token');
+    const access = localStorage.getItem(naPaginaPOS() ? POS_ACCESS : 'access_token');
     if (access) {
       config.headers.Authorization = `Bearer ${access}`;
     }
@@ -70,8 +95,8 @@ api.interceptors.response.use(
       !isPublic(originalRequest.url)
     ) {
       originalRequest._retry = true;
-      const membro = usaSessaoMembro(originalRequest.url);
-      const [chaveAccess, chaveRefresh] = membro ? [MEMBRO_ACCESS, MEMBRO_REFRESH] : ['access_token', 'refresh_token'];
+      const pos = naPaginaPOS();
+      const [chaveAccess, chaveRefresh] = pos ? [POS_ACCESS, POS_REFRESH] : ['access_token', 'refresh_token'];
 
       try {
         const refreshToken = localStorage.getItem(chaveRefresh);
@@ -90,8 +115,9 @@ api.interceptors.response.use(
         console.error('Erro ao renovar token', refreshError);
         localStorage.removeItem(chaveAccess);
         localStorage.removeItem(chaveRefresh);
-        // a sessão expirada é só a que falhou — a outra (Bendi ou membro do POS) fica intacta
-        if (membro) {
+        // só a sessão que expirou sai — a outra (Bendi ou POS) fica intacta
+        if (pos) {
+          localStorage.removeItem('pos_user');
           window.location.href = '/pos/login';
         } else {
           localStorage.removeItem('user');
