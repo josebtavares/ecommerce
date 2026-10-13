@@ -45,6 +45,7 @@ def _resumo_loja(loja, membro):
     pendentes = [f for f in faturas if f.estado == 'pendente']
     return {
         'modelo': loja.modelo_cobranca,
+        'aviso': subs.aviso_loja(sub, pendentes),
         'percentagem_comissao': str(loja.percentagem_comissao),
         'subscricao': subs.subscricao_payload(sub),
         'faturas': [subs.fatura_payload(f) for f in faturas],

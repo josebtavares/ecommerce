@@ -1596,6 +1596,8 @@ class FaturaSubscricao(models.Model):
     metodo         = models.CharField(max_length=15, choices=METODOS, blank=True, default='')
     referencia     = models.CharField(max_length=100, blank=True, default='')
     notas          = models.CharField(max_length=300, blank=True, default='')
+    # avisos já enviados ('d3', 'd0', 'atraso', 'a7'…, 'suspensa') — o worker não os repete
+    avisos         = models.JSONField(default=list, blank=True)
     data_criacao   = models.DateTimeField(auto_now_add=True)
 
     class Meta:
