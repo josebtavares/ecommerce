@@ -25,7 +25,7 @@ def _msg(nome, variante, disponivel):
     return f'Stock insuficiente de "{nome}". Disponível: {disponivel}.'
 
 
-def reservar_stock(produto, quantidade, atributos, pos=None):
+def reservar_stock(produto, quantidade, atributos, pos=None, escolhas=None):
     """
     Valida e desconta o stock para um item novo da conta.
     Conjunto (menu): desconta cada componente; info['componentes'] guarda o que levava.
@@ -42,10 +42,11 @@ def reservar_stock(produto, quantidade, atributos, pos=None):
             'preco_unitario': produto.preco, 'nome': produto.nome}
 
     if produto.e_conjunto:
-        componentes, erro = conj.reservar(produto, quantidade, pos)
+        componentes, erro = conj.reservar(produto, quantidade, pos, escolhas)
         if erro:
             return None, erro
         info['componentes'] = componentes
+        info['preco_unitario'] = conj.preco_com_escolhas(produto, escolhas or {})   # base + extras
         return info, None
 
     variante, erro = resolver_variante(produto, atributos, lock=True)

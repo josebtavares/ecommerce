@@ -15,7 +15,7 @@ desligada do POS — o conjunto deixa de se vender até o dono substituir esse c
 """
 from django.db.models import F
 
-from ..models import Produto, Inventario, VarianteProduto, ComponenteConjunto
+from ..models import Produto, Inventario, VarianteProduto, ComponenteConjunto, GrupoEscolha, OpcaoEscolha
 from .variantes import atualizar_total_inventario
 
 MAX_COMPONENTES = 20
@@ -29,12 +29,16 @@ def _e_pos(produto):
 
 
 class Comp:
-    """Componente normalizado (loja ou POS) — o resto do módulo só lida com isto."""
-    __slots__ = ('id', 'origem', 'produto', 'variante', 'quantidade')
+    """
+    Componente normalizado (loja ou POS) — o resto do módulo só lida com isto.
+    Fixo (sempre vem no conjunto) ou opção escolhida pelo cliente (grupo, extra, opcao_id).
+    """
+    __slots__ = ('id', 'origem', 'produto', 'variante', 'quantidade', 'grupo', 'extra', 'opcao_id')
 
-    def __init__(self, id, origem, produto, variante, quantidade):
+    def __init__(self, id, origem, produto, variante, quantidade, grupo=None, extra=0, opcao_id=None):
         self.id, self.origem, self.produto = id, origem, produto
         self.variante, self.quantidade = variante, quantidade
+        self.grupo, self.extra, self.opcao_id = grupo, extra, opcao_id
 
     @property
     def nome(self):
@@ -42,7 +46,7 @@ class Comp:
 
 
 def componentes_de(conjunto):
-    """Lista de Comp, pela ordem definida pelo dono (usa o prefetch se existir)."""
+    """Componentes fixos (Comp), pela ordem definida pelo dono (usa o prefetch se existir)."""
     out = []
     for c in conjunto.componentes.all():
         if _e_pos(conjunto) and c.produto_pos_id:
@@ -50,6 +54,84 @@ def componentes_de(conjunto):
         else:
             out.append(Comp(c.id, 'loja', c.produto, c.variante, c.quantidade))
     return out
+
+
+def _comp_opcao(o, grupo, pos_conjunto):
+    if pos_conjunto and o.produto_pos_id:
+        return Comp(o.id, 'pos', o.produto_pos, o.variante_pos, o.quantidade, grupo.nome, o.preco_extra, o.id)
+    return Comp(o.id, 'loja', o.produto, o.variante, o.quantidade, grupo.nome, o.preco_extra, o.id)
+
+
+def grupos_de(conjunto):
+    """[(grupo, [Comp de cada opção])] — escolhas do cliente, pela ordem do dono."""
+    pos_conjunto = _e_pos(conjunto)
+    return [(g, [_comp_opcao(o, g, pos_conjunto) for o in g.opcoes.all()]) for g in conjunto.grupos.all()]
+
+
+def normalizar_escolhas(escolhas):
+    """{"<grupo_id>": [opcao_id, ...]} com chaves texto e listas ordenadas sem repetidos."""
+    if not isinstance(escolhas, dict):
+        return {}
+    out = {}
+    for k, v in escolhas.items():
+        ids = v if isinstance(v, list) else [v]
+        ids = sorted({i for i in (_int(x) for x in ids) if i})
+        if ids and _int(k):
+            out[str(_int(k))] = ids
+    return out
+
+
+def validar_escolhas(conjunto, escolhas, pos=None):
+    """
+    Confere as escolhas do cliente com os grupos do conjunto.
+    Devolve ([Comp das opções escolhidas], erro).
+    """
+    escolhas = normalizar_escolhas(escolhas)
+    grupos = grupos_de(conjunto)
+    ids_grupos = {str(g.id) for g, _ in grupos}
+    if set(escolhas) - ids_grupos:
+        return None, 'As opções escolhidas já não existem neste menu — volta a escolher.'
+    out = []
+    for g, opcoes in grupos:
+        pedidas = escolhas.get(str(g.id), [])
+        if len(pedidas) < g.minimo:
+            falta = 'uma opção' if g.minimo == 1 else f'{g.minimo} opções'
+            return None, f'Escolhe {falta} em "{g.nome}".'
+        if len(pedidas) > g.maximo:
+            return None, f'Em "{g.nome}" só podes escolher {g.maximo}.'
+        por_id = {c.opcao_id: c for c in opcoes}
+        for oid in pedidas:
+            c = por_id.get(oid)
+            if c is None:
+                return None, f'Uma opção de "{g.nome}" já não existe — volta a escolher.'
+            motivo = _problema(c, pos)
+            if motivo:
+                return None, f'"{c.nome}" não está disponível em "{g.nome}": {motivo}.'
+            out.append(c)
+    return out, None
+
+
+def preco_com_escolhas(conjunto, escolhas):
+    """Preço do conjunto + extras das opções escolhidas (opções inválidas não contam)."""
+    escolhas = normalizar_escolhas(escolhas)
+    total = conjunto.preco
+    for g, opcoes in grupos_de(conjunto):
+        pedidas = set(escolhas.get(str(g.id), []))
+        total += sum((c.extra for c in opcoes if c.opcao_id in pedidas), 0)
+    return total
+
+
+def texto_escolhas(conjunto, escolhas):
+    """"Bebida: Fanta (33cl) +0,50 € · Extras: Queijo" — para o carrinho."""
+    escolhas = normalizar_escolhas(escolhas)
+    partes = []
+    for g, opcoes in grupos_de(conjunto):
+        pedidas = set(escolhas.get(str(g.id), []))
+        nomes = [c.nome + (f' +{c.extra:.2f} €'.replace('.', ',') if c.extra else '')
+                 for c in opcoes if c.opcao_id in pedidas]
+        if nomes:
+            partes.append(f'{g.nome}: {", ".join(nomes)}')
+    return ' · '.join(partes)
 
 
 def _loja_indisponivel_no_pos(produto_loja, pos):
@@ -100,7 +182,8 @@ def disponibilidade(conjunto, pos=None):
     pos: o POS onde se vende (para os componentes da loja num conjunto do POS).
     """
     comps = componentes_de(conjunto)
-    if not comps:
+    grupos = grupos_de(conjunto)
+    if not comps and not grupos:
         return {'disponivel': False, 'quantidade': 0, 'motivo': 'o conjunto não tem produtos', 'componente_id': None}
     maximo = None
     for c in comps:
@@ -111,15 +194,47 @@ def disponibilidade(conjunto, pos=None):
         if s is not None:
             cabe = max(s, 0) // c.quantidade
             maximo = cabe if maximo is None else min(maximo, cabe)
+    # escolhas obrigatórias: tem de haver opções vendáveis suficientes. A quantidade é uma
+    # estimativa (cada cliente escolhe opções diferentes); a venda valida o stock exacto.
+    for g, opcoes in grupos:
+        if g.minimo == 0:
+            continue
+        boas = [c for c in opcoes if _problema(c, pos) is None]
+        stocks = [_stock_comp(c) for c in boas]
+        com_stock = [s for s, c in zip(stocks, boas) if s is None or s >= c.quantidade]
+        if len(com_stock) < g.minimo:
+            motivo = (f'não há opções disponíveis em "{g.nome}"' if not boas
+                      else f'as opções de "{g.nome}" estão esgotadas')
+            return {'disponivel': False, 'quantidade': 0, 'motivo': motivo if not boas else None,
+                    'componente_id': None}
+        if any(s is None for s in com_stock):
+            continue
+        cabe = sum(max(s, 0) // c.quantidade for s, c in zip(stocks, boas) if s is not None) // g.minimo
+        maximo = cabe if maximo is None else min(maximo, cabe)
     return {'disponivel': maximo is None or maximo > 0, 'quantidade': maximo, 'motivo': None, 'componente_id': None}
 
 
+def opcao_disponivel(comp, pos=None):
+    """Para mostrar ao cliente: a opção pode ser escolhida agora?"""
+    if _problema(comp, pos):
+        return False
+    s = _stock_comp(comp)
+    return s is None or s >= comp.quantidade
+
+
+def _preco_separado(c):
+    return (c.variante.preco_efetivo if c.variante is not None else c.produto.preco) * c.quantidade
+
+
 def preco_componentes(conjunto):
-    """Soma dos preços dos componentes vendidos em separado (para mostrar a poupança)."""
-    total = 0
-    for c in componentes_de(conjunto):
-        preco = c.variante.preco_efetivo if c.variante is not None else c.produto.preco
-        total += preco * c.quantidade
+    """
+    Quanto custaria em separado (para mostrar a poupança): componentes fixos + as opções mais
+    baratas de cada escolha obrigatória — comparável com o preço base do conjunto.
+    """
+    total = sum((_preco_separado(c) for c in componentes_de(conjunto)), 0)
+    for g, opcoes in grupos_de(conjunto):
+        if g.minimo:
+            total += sum(sorted(_preco_separado(c) for c in opcoes)[:g.minimo])
     return total
 
 
@@ -150,12 +265,17 @@ def stock_da_linha(linha):
     return linha.stock if hasattr(linha, 'controlar_stock') else linha.quantidade
 
 
-def bloquear(conjunto, pos=None):
+def bloquear(conjunto, pos=None, escolhas=None):
     """
-    Valida e bloqueia o stock dos componentes de um conjunto que se vai vender.
-    Devolve (linhas, erro). linhas: [{'comp', 'chave', 'linha', 'por_unidade'}]
+    Valida e bloqueia o stock dos componentes de um conjunto que se vai vender — os fixos e
+    as opções que o cliente escolheu. Devolve (linhas, erro).
+    linhas: [{'comp', 'chave', 'linha', 'por_unidade'}]
     """
     comps = componentes_de(conjunto)
+    escolhidas, erro = validar_escolhas(conjunto, escolhas or {}, pos)
+    if erro:
+        return None, erro
+    comps += escolhidas
     if not comps:
         return None, f'"{conjunto.nome}" não tem produtos — não pode ser vendido.'
     linhas = []
@@ -191,34 +311,44 @@ def descontar_chave(chave, quantidade):
 
 
 def snapshot(linhas):
-    """O que o conjunto levava — guardado no item da encomenda/conta."""
-    return [{
-        'origem': l['comp'].origem,
-        'produto_id': l['comp'].produto.id,
-        'variante_id': l['comp'].variante.id if l['comp'].variante is not None else None,
-        'nome': l['comp'].nome,
-        'quantidade': l['por_unidade'],
-    } for l in linhas]
+    """O que o conjunto levava — guardado no item da encomenda/conta (com as escolhas)."""
+    out = []
+    for l in linhas:
+        c = l['comp']
+        s = {
+            'origem': c.origem,
+            'produto_id': c.produto.id,
+            'variante_id': c.variante.id if c.variante is not None else None,
+            'nome': c.nome,
+            'quantidade': l['por_unidade'],
+        }
+        if c.grupo:
+            s['grupo'] = c.grupo
+            s['extra'] = str(c.extra)
+        out.append(s)
+    return out
 
 
-def reservar(conjunto, quantidade, pos=None):
+def reservar(conjunto, quantidade, pos=None, escolhas=None):
     """
     Venda isolada de um conjunto (POS): valida, desconta e devolve (snapshot, erro).
+    O mesmo stock pode vir duas vezes (fixo e escolhido) — soma-se antes de comparar.
     Tudo-ou-nada: chamar dentro de transaction.atomic.
     """
-    linhas, erro = bloquear(conjunto, pos)
+    linhas, erro = bloquear(conjunto, pos, escolhas)
     if erro:
         return None, erro
+    pedido = {}
     for l in linhas:
         if l['chave'] is None:
             continue
-        precisa = l['por_unidade'] * quantidade
+        ja = pedido.get(l['chave'], 0)
+        pedido[l['chave']] = ja + l['por_unidade'] * quantidade
         disponivel = stock_da_linha(l['linha'])
-        if precisa > disponivel:
-            return None, msg_sem_stock(conjunto, l['comp'], disponivel // l['por_unidade'])
-    for l in linhas:
-        if l['chave'] is not None:
-            descontar_chave(l['chave'], l['por_unidade'] * quantidade)
+        if pedido[l['chave']] > disponivel:
+            return None, msg_sem_stock(conjunto, l['comp'], max(disponivel - ja, 0) // l['por_unidade'])
+    for chave, total in pedido.items():
+        descontar_chave(chave, total)
     return snapshot(linhas), None
 
 
@@ -272,14 +402,15 @@ def _int(v):
         return None
 
 
-def validar_linhas(linhas, conjunto, resolver):
+def validar_linhas(linhas, conjunto, resolver, vazio_ok=False):
     """
     Valida a lista enviada pelo dono e devolve ([(produto, variante, quantidade, origem)], erro).
     resolver(origem, produto_id, variante_id) → (produto, variante, erro) — define que produtos
     são permitidos (mesma loja / mesmo POS / loja ligada ao POS).
     """
     if not linhas:
-        return None, 'Um conjunto precisa de pelo menos um produto.'
+        # sem produtos fixos só se o conjunto tiver escolhas (ex.: "escolhe 2 bebidas")
+        return ([], None) if vazio_ok else (None, 'Um conjunto precisa de pelo menos um produto.')
     if len(linhas) > MAX_COMPONENTES:
         return None, f'Um conjunto pode ter no máximo {MAX_COMPONENTES} produtos.'
     vistos, out = set(), []
@@ -340,12 +471,16 @@ def guardar_componentes_loja(conjunto, linhas_validas):
 
 def conjuntos_que_usam(produto):
     """Nomes dos conjuntos (loja e POS) que têm este produto — para avisar antes de o retirar."""
-    from ..pos.models import ComponenteConjuntoPOS
+    from ..pos.models import ComponenteConjuntoPOS, OpcaoEscolhaPOS
     if _e_pos(produto):
         qs = ComponenteConjuntoPOS.objects.filter(produto_pos=produto)
-        return sorted({c.conjunto.nome for c in qs.select_related('conjunto')})
+        nomes = {c.conjunto.nome for c in qs.select_related('conjunto')}
+        nomes |= {o.grupo.conjunto.nome for o in OpcaoEscolhaPOS.objects.filter(produto_pos=produto).select_related('grupo__conjunto')}
+        return sorted(nomes)
     nomes = {c.conjunto.nome for c in ComponenteConjunto.objects.filter(produto=produto).select_related('conjunto')}
     nomes |= {c.conjunto.nome for c in ComponenteConjuntoPOS.objects.filter(produto=produto).select_related('conjunto')}
+    nomes |= {o.grupo.conjunto.nome for o in OpcaoEscolha.objects.filter(produto=produto).select_related('grupo__conjunto')}
+    nomes |= {o.grupo.conjunto.nome for o in OpcaoEscolhaPOS.objects.filter(produto=produto).select_related('grupo__conjunto')}
     return sorted(nomes)
 
 
@@ -438,3 +573,199 @@ def aviso_desactivar(produto, dados, query):
         'conjuntos': usado,
         'precisa_confirmar': True,
     }
+
+
+# ── Escolhas do cliente (grupos de opções) ────────────────────────
+
+MAX_GRUPOS = 10
+MAX_OPCOES = 30
+
+
+def ler_grupos(dados):
+    """Campo 'grupos' (JSON) do formulário — lista de dicts; None se não veio."""
+    import json
+    bruto = dados.get('grupos') if hasattr(dados, 'get') else None
+    if bruto is None:
+        return None, None
+    if isinstance(bruto, str):
+        try:
+            bruto = json.loads(bruto or '[]')
+        except (TypeError, ValueError):
+            return None, 'Lista de escolhas inválida.'
+    if not isinstance(bruto, list):
+        return None, 'Lista de escolhas inválida.'
+    return bruto, None
+
+
+def _decimal(v):
+    from decimal import Decimal, InvalidOperation
+    try:
+        d = Decimal(str(v if v not in (None, '') else 0)).quantize(Decimal('0.01'))
+    except (InvalidOperation, ValueError):
+        return None
+    return d if d >= 0 else None
+
+
+def validar_grupos(grupos, conjunto, resolver):
+    """
+    Valida as escolhas enviadas pelo dono. Devolve ([{id, nome, minimo, maximo, opcoes}], erro),
+    opcoes = [{id, produto, variante, quantidade, extra, origem}].
+    """
+    if len(grupos) > MAX_GRUPOS:
+        return None, f'Um conjunto pode ter no máximo {MAX_GRUPOS} escolhas.'
+    out = []
+    for g in grupos:
+        if not isinstance(g, dict):
+            return None, 'Lista de escolhas inválida.'
+        nome = str(g.get('nome') or '').strip()[:60]
+        if not nome:
+            return None, 'Dá um nome a cada escolha (ex.: "Bebida").'
+        minimo, maximo = _int(g.get('minimo')), _int(g.get('maximo'))
+        if minimo is None or maximo is None or minimo < 0 or maximo < 1 or minimo > maximo:
+            return None, f'Em "{nome}", o mínimo e o máximo de opções não fazem sentido.'
+        opcoes = g.get('opcoes') or []
+        if not isinstance(opcoes, list) or not opcoes:
+            return None, f'Adiciona opções a "{nome}".'
+        if len(opcoes) > MAX_OPCOES:
+            return None, f'"{nome}" pode ter no máximo {MAX_OPCOES} opções.'
+        if maximo > len(opcoes):
+            return None, f'Em "{nome}" o cliente não pode escolher {maximo} — só há {len(opcoes)} opções.'
+        linhas, erro = validar_linhas(opcoes, conjunto, resolver)
+        if erro:
+            return None, f'{nome}: {erro}'
+        extras = []
+        for o in opcoes:
+            e = _decimal(o.get('preco_extra'))
+            if e is None or e > 9999:
+                return None, f'Em "{nome}", o custo extra de cada opção tem de ser 0 ou mais.'
+            extras.append(e)
+        out.append({
+            'id': _int(g.get('id')), 'nome': nome, 'minimo': minimo, 'maximo': maximo,
+            'opcoes': [{'id': _int(o.get('id')), 'produto': p, 'variante': v, 'quantidade': q,
+                        'extra': e, 'origem': origem}
+                       for o, (p, v, q, origem), e in zip(opcoes, linhas, extras)],
+        })
+    return out, None
+
+
+def guardar_grupos(conjunto, grupos_validos):
+    """
+    Grava as escolhas mantendo os ids das que já existiam (o carrinho guarda escolhas por id:
+    editar o preço de uma opção não estraga os carrinhos). O que sai da lista é apagado.
+    """
+    from ..pos.models import GrupoEscolhaPOS, OpcaoEscolhaPOS
+    e_pos = _e_pos(conjunto)
+    MG, MO = (GrupoEscolhaPOS, OpcaoEscolhaPOS) if e_pos else (GrupoEscolha, OpcaoEscolha)
+    existentes = {g.id: g for g in MG.objects.filter(conjunto=conjunto)}
+    manter = set()
+    for i, g in enumerate(grupos_validos):
+        grupo = existentes.get(g['id']) or MG(conjunto=conjunto)
+        grupo.nome, grupo.minimo, grupo.maximo, grupo.ordem = g['nome'], g['minimo'], g['maximo'], i
+        grupo.save()
+        manter.add(grupo.id)
+        opc_exist = {o.id: o for o in MO.objects.filter(grupo=grupo)}
+        manter_o = set()
+        for j, o in enumerate(g['opcoes']):
+            op = opc_exist.get(o['id']) or MO(grupo=grupo)
+            op.quantidade, op.preco_extra, op.ordem = o['quantidade'], o['extra'], j
+            if e_pos and o['origem'] == 'pos':
+                op.produto_pos, op.variante_pos, op.produto, op.variante = o['produto'], o['variante'], None, None
+            elif e_pos:
+                op.produto, op.variante, op.produto_pos, op.variante_pos = o['produto'], o['variante'], None, None
+            else:
+                op.produto, op.variante = o['produto'], o['variante']
+            op.save()
+            manter_o.add(op.id)
+        MO.objects.filter(grupo=grupo).exclude(id__in=manter_o).delete()
+    MG.objects.filter(conjunto=conjunto).exclude(id__in=manter).delete()
+
+
+def _imagem(c, request=None):
+    p = c.produto
+    if c.origem == 'pos':
+        imagem = p.imagem.url if p.imagem else None
+    else:
+        f = getattr(p, 'ficheiro_poster', None) or None
+        imagem = f.url if f else (p.ficheiro.url if p.ficheiro and not str(p.ficheiro.name).lower().endswith(
+            ('.mp4', '.webm', '.mov', '.mkv')) else None)
+    if imagem and request is not None and imagem.startswith('/'):
+        imagem = request.build_absolute_uri(imagem)
+    return imagem
+
+
+def grupos_payload(conjunto, request=None, pos=None):
+    out = []
+    for g, opcoes in grupos_de(conjunto):
+        out.append({
+            'id': g.id, 'nome': g.nome, 'minimo': g.minimo, 'maximo': g.maximo,
+            'opcoes': [{
+                'id': c.opcao_id,
+                'origem': c.origem,
+                'produto_id': c.produto.id,
+                'variante_id': c.variante.id if c.variante is not None else None,
+                'nome': c.produto.nome,
+                'variante': c.variante.descricao() if c.variante is not None else '',
+                'quantidade': c.quantidade,
+                'preco': str(c.variante.preco_efetivo if c.variante is not None else c.produto.preco),
+                'preco_extra': str(c.extra),
+                'imagem': _imagem(c, request),
+                'disponivel': opcao_disponivel(c, pos),
+                'problema': _problema(c, pos),
+            } for c in opcoes],
+        })
+    return out
+
+
+def aplicar_formulario(conjunto, dados, resolver):
+    """
+    Grava os produtos fixos ('componentes') e as escolhas ('grupos') enviados no formulário de
+    um conjunto já marcado como tal. Devolve a mensagem de erro ou None (quem chama faz rollback).
+    Um conjunto precisa de produtos fixos, de escolhas, ou dos dois.
+    """
+    linhas, erro = ler_componentes(dados)
+    if erro:
+        return erro
+    grupos, erro = ler_grupos(dados)
+    if erro:
+        return erro
+    vai_ter_grupos = bool(grupos) if grupos is not None else conjunto.grupos.exists()
+    vai_ter_fixos = bool(linhas) if linhas is not None else conjunto.componentes.exists()
+    if not vai_ter_grupos and not vai_ter_fixos:
+        return 'Adiciona produtos ou escolhas ao conjunto.'
+    if linhas is not None:
+        validas, erro = validar_linhas(linhas, conjunto, resolver, vazio_ok=vai_ter_grupos)
+        if erro:
+            return erro
+        (guardar_componentes_pos if _e_pos(conjunto) else guardar_componentes_loja)(conjunto, validas)
+    if grupos is not None:
+        validos, erro = validar_grupos(grupos, conjunto, resolver)
+        if erro:
+            return erro
+        guardar_grupos(conjunto, validos)
+    return None
+
+
+def maximo_com_escolhas(conjunto, escolhas, pos=None):
+    """
+    Quantos conjuntos com ESTAS escolhas cabem no stock (o mesmo produto fixo e escolhido soma).
+    Devolve (quantidade|None, erro) — None = sem limite.
+    """
+    escolhidas, erro = validar_escolhas(conjunto, escolhas, pos)
+    if erro:
+        return 0, erro
+    comps = componentes_de(conjunto) + escolhidas
+    for c in comps:
+        motivo = _problema(c, pos)
+        if motivo:
+            return 0, f'"{conjunto.nome}" está indisponível: {motivo}.'
+    pedido = {}
+    for c in comps:
+        s = _stock_comp(c)
+        if s is None:
+            continue
+        k = (c.origem, c.produto.id, c.variante.id if c.variante is not None else None)
+        stock, qtd = pedido.get(k, (s, 0))
+        pedido[k] = (stock, qtd + c.quantidade)
+    if not pedido:
+        return None, None
+    return min(max(s, 0) // q for s, q in pedido.values()), None

@@ -18,7 +18,8 @@ from ..utils.tipos import tipos_para_loja, tipo_permitido
 from ..utils import conjuntos as conj
 
 # prefetch dos componentes dos conjuntos (evita uma query por componente nas listagens)
-PREFETCH_CONJUNTO = ('componentes__produto__inventario', 'componentes__variante')
+PREFETCH_CONJUNTO = ('componentes__produto__inventario', 'componentes__variante',
+                     'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante')
 
 
 def _quer_conjunto(dados, atual=False):
@@ -42,6 +43,7 @@ def _aplicar_conjunto(produto, dados):
         if produto.e_conjunto:
             from ..models import Inventario
             produto.componentes.all().delete()
+            produto.grupos.all().delete()
             produto.e_conjunto = False
             produto.save(update_fields=['e_conjunto'])
             # volta a ser um produto normal → passa a ter stock próprio (começa a 0)
@@ -57,17 +59,12 @@ def _aplicar_conjunto(produto, dados):
                     f'um produto dentro de um conjunto não pode ser ele próprio um conjunto.')
         if produto.stock_por_variante:
             return 'Este produto tem stock por variação — um conjunto não tem stock próprio. Cria um produto novo para o conjunto.'
-        if linhas is None:
+        if linhas is None and 'grupos' not in dados:
             return 'Escolhe os produtos que fazem parte do conjunto.'
         produto.e_conjunto = True
         produto.save(update_fields=['e_conjunto'])
 
-    if linhas is not None:
-        validas, erro = conj.validar_linhas(linhas, produto, conj.resolver_loja(produto.loja))
-        if erro:
-            return erro
-        conj.guardar_componentes_loja(produto, validas)
-    return None
+    return conj.aplicar_formulario(produto, dados, conj.resolver_loja(produto.loja))
 
 
 # ══════════════════════════════════════════════════════════════

@@ -232,28 +232,38 @@ def carrinho_adicionar(request, loja_id):
         utilizador=utilizador, loja=loja
     )
 
-    # conjunto: sem opções próprias; tem de estar vendável (componentes activos, com variação)
+    # conjunto: sem opções próprias; as escolhas do cliente (ex.: bebida) têm de ser válidas e
+    # o stock é o desta combinação (fixos + escolhidos)
+    escolhas = {}
+    maximo_conjunto = None
     if produto.e_conjunto:
         atributos = {}
-        d = conj.disponibilidade(produto)
-        if not d['disponivel'] and d['motivo']:
-            return Response({'detail': f'"{produto.nome}" está indisponível: {d["motivo"]}.'},
-                            status=status.HTTP_400_BAD_REQUEST)
+        bruto = request.data.get('escolhas') or {}
+        if isinstance(bruto, str):
+            import json
+            try:
+                bruto = json.loads(bruto)
+            except (TypeError, ValueError):
+                bruto = {}
+        escolhas = conj.normalizar_escolhas(bruto)
+        maximo_conjunto, erro_conj = conj.maximo_com_escolhas(produto, escolhas)
+        if erro_conj:
+            return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
 
     # produto com stock por variação → a combinação escolhida tem de existir
     variante, erro_variante = resolver_variante(produto, atributos)
     if erro_variante:
         return Response({'detail': erro_variante}, status=status.HTTP_400_BAD_REQUEST)
 
-    # procurar item com o mesmo produto E os mesmos atributos
+    # procurar item com o mesmo produto E os mesmos atributos (e as mesmas escolhas, num menu)
     item_existente = None
     for item in ItemCarrinho.objects.filter(carrinho=carrinho, produto=produto):
-        if _atributos_iguais(item.atributos or {}, atributos):
+        if _atributos_iguais(item.atributos or {}, atributos) and (item.escolhas or {}) == escolhas:
             item_existente = item
             break
 
     nova_qty = quantidade + (item_existente.quantidade if item_existente else 0)
-    disponivel = _stock_disponivel(produto, variante)
+    disponivel = maximo_conjunto if produto.e_conjunto else _stock_disponivel(produto, variante)
     if disponivel is not None and nova_qty > disponivel:
         return Response(
             {'detail': _msg_stock(produto, variante, disponivel)},
@@ -273,8 +283,9 @@ def carrinho_adicionar(request, loja_id):
             quantidade=quantidade,
             atributos=atributos,
             variante=variante,
+            escolhas=escolhas,
         )
- 
+
     return Response(
         CarrinhoSerializer(carrinho, context={'request': request}).data,
         status=status.HTTP_200_OK
@@ -312,7 +323,12 @@ def carrinho_atualizar_item(request, loja_id, item_id):
             return Response({'detail': erro_variante}, status=status.HTTP_400_BAD_REQUEST)
     # só valida ao AUMENTAR — reduzir tem de ser sempre possível, mesmo que o
     # stock tenha descido abaixo do que já está no carrinho
-    disponivel = _stock_disponivel(item.produto, variante)
+    if item.produto.e_conjunto:
+        disponivel, erro_conj = conj.maximo_com_escolhas(item.produto, item.escolhas or {})
+        if erro_conj and quantidade > item.quantidade:
+            return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        disponivel = _stock_disponivel(item.produto, variante)
     if disponivel is not None and quantidade > item.quantidade and quantidade > disponivel:
         return Response(
             {'detail': _msg_stock(item.produto, variante, disponivel)},
@@ -392,7 +408,7 @@ def encomenda_criar(request, loja_id):
         variante = None
         snap     = []
         if produto.e_conjunto:
-            comps, erro_conj = conj.bloquear(produto)
+            comps, erro_conj = conj.bloquear(produto, escolhas=item.escolhas or {})
             if erro_conj:
                 return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
             for l in comps:
@@ -422,6 +438,8 @@ def encomenda_criar(request, loja_id):
 
     # calcula o total — produtos (preço da variante, se tiver) + custo de entrega
     def _preco(item, variante):
+        if item.produto.e_conjunto:
+            return conj.preco_com_escolhas(item.produto, item.escolhas or {})   # base + extras das escolhas
         return variante.preco if variante and variante.preco is not None else item.produto.preco
 
     valor_produtos = sum(_preco(item, v) * item.quantidade for item, v, _ in linhas)

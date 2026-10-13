@@ -134,6 +134,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
     # ── Conjunto (menu, pack) ─────────────────────────────────
     componentes = serializers.SerializerMethodField()
     conjunto    = serializers.SerializerMethodField()
+    grupos      = serializers.SerializerMethodField()   # escolhas do cliente (ex.: bebida)
 
     # ── Escrita ───────────────────────────────────────────────
     tipo_id = serializers.PrimaryKeyRelatedField(
@@ -166,7 +167,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'atributos', 'atributos_normalizados', 'atributos_em_falta',  # ← atributos_normalizados novo
             'stock',
             'stock_por_variante', 'atributos_variante', 'variantes', 'variantes_pendentes',
-            'e_conjunto', 'componentes', 'conjunto',
+            'e_conjunto', 'componentes', 'grupos', 'conjunto',
             'destaque', 'ativo',
             'data_criacao',
             'categorias', 'categoria_ids',
@@ -215,6 +216,11 @@ class ProdutoSerializer(serializers.ModelSerializer):
         if not obj.e_conjunto:
             return []
         return conj.componentes_payload(obj, self.context.get('request'))
+
+    def get_grupos(self, obj):
+        if not obj.e_conjunto:
+            return []
+        return conj.grupos_payload(obj, self.context.get('request'))
 
     def get_conjunto(self, obj):
         if not obj.e_conjunto:

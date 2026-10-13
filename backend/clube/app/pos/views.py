@@ -52,8 +52,11 @@ from ..utils import conjuntos as conj
 
 # prefetch dos componentes dos conjuntos (menus) nas listagens do POS
 PREFETCH_CONJUNTO_POS = ('componentes__produto_pos', 'componentes__variante_pos', 'componentes__produto__inventario',
-                         'componentes__produto__loja', 'componentes__variante')
-PREFETCH_CONJUNTO_LOJA = ('componentes__produto__inventario', 'componentes__variante')
+                         'componentes__produto__loja', 'componentes__variante',
+                         'grupos__opcoes__produto_pos', 'grupos__opcoes__variante_pos', 'grupos__opcoes__produto__inventario',
+                         'grupos__opcoes__produto__loja', 'grupos__opcoes__variante')
+PREFETCH_CONJUNTO_LOJA = ('componentes__produto__inventario', 'componentes__variante',
+                          'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante')
 from app.utils.auth import autenticar
 from app.utils.google_auth import google_obter_utilizador
 from app.utils.password import mensagem_password_fraca
@@ -294,7 +297,7 @@ def _tipo_payload(tipo):
 def _conjunto_payload(produto, request, pos):
     """Campos de conjunto (menu) para o POS — disponibilidade vista a partir deste POS."""
     if not produto.e_conjunto:
-        return {'e_conjunto': False, 'componentes': [], 'conjunto': None}
+        return {'e_conjunto': False, 'componentes': [], 'conjunto': None, 'grupos': []}
     d = conj.disponibilidade(produto, pos)
     return {
         'e_conjunto': True,
@@ -303,6 +306,7 @@ def _conjunto_payload(produto, request, pos):
         'controlar_stock': d['quantidade'] is not None,
         'disponivel': bool(produto.ativo and produto.disponivel_pos and d['disponivel']),
         'componentes': conj.componentes_payload(produto, request, pos),
+        'grupos': conj.grupos_payload(produto, request, pos),
         'conjunto': {'disponivel': d['disponivel'], 'quantidade': d['quantidade'], 'motivo': d['motivo'],
                      'componente_id': d['componente_id'],
                      'preco_componentes': str(conj.preco_componentes(produto))},
@@ -901,6 +905,7 @@ def _aplicar_conjunto_pos(produto, dados, pos):
     if not quer:
         if produto.e_conjunto:
             produto.componentes.all().delete()
+            produto.grupos.all().delete()
             produto.e_conjunto = False
             produto.save(update_fields=['e_conjunto'])
         return None
@@ -911,16 +916,14 @@ def _aplicar_conjunto_pos(produto, dados, pos):
                     f'um produto dentro de um conjunto não pode ser ele próprio um conjunto.')
         if produto.stock_por_variante:
             return 'Este produto tem stock por variação — um conjunto não tem stock próprio. Cria um produto novo para o menu.'
-        if linhas is None:
+        if linhas is None and 'grupos' not in dados:
             return 'Escolhe os produtos que fazem parte do menu.'
         # sem stock próprio: o stock é o dos componentes
         produto.e_conjunto, produto.controlar_stock, produto.stock = True, False, 0
         produto.save(update_fields=['e_conjunto', 'controlar_stock', 'stock'])
-    if linhas is not None:
-        validas, erro = conj.validar_linhas(linhas, produto, conj.resolver_pos(pos))
-        if erro:
-            return erro
-        conj.guardar_componentes_pos(produto, validas)
+    erro = conj.aplicar_formulario(produto, dados, conj.resolver_pos(pos))
+    if erro:
+        return erro
     if produto.controlar_stock or produto.stock:
         # um formulário antigo pode ter mandado stock — o menu continua sem stock próprio
         produto.controlar_stock, produto.stock = False, 0
@@ -1401,6 +1404,14 @@ def conta_adicionar_item(request, pos_id, conta_id):
     if not produto_id:
         return Response({'detail': 'produto_id é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # menu: opções escolhidas {grupo_id: [opcao_id]} (JSON ou objecto)
+    escolhas = request.data.get('escolhas') or {}
+    if isinstance(escolhas, str):
+        try:
+            escolhas = json.loads(escolhas)
+        except (TypeError, ValueError):
+            escolhas = {}
+
     atributos, erro_attr = _ler_atributos(request)
     if erro_attr:
         return erro_attr
@@ -1421,7 +1432,7 @@ def conta_adicionar_item(request, pos_id, conta_id):
         return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
 
     # reserva o stock (POS ou Bendi, com ou sem variação) — tudo-ou-nada
-    info, erro_stock = reservar_stock(produto, quantidade, atributos, pos=pos)
+    info, erro_stock = reservar_stock(produto, quantidade, atributos, pos=pos, escolhas=escolhas)
     if erro_stock:
         return Response({'detail': erro_stock}, status=status.HTTP_400_BAD_REQUEST)
 

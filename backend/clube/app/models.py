@@ -637,6 +637,46 @@ class ComponenteConjunto(models.Model):
         return f'{self.quantidade}× {self.produto.nome} em {self.conjunto.nome}'
 
 
+class GrupoEscolha(models.Model):
+    """
+    Escolha do cliente dentro de um conjunto (ex.: "Bebida — escolhe 1", "Extras — até 3").
+    O cliente escolhe entre `minimo` e `maximo` opções diferentes; cada opção é um produto
+    da loja (na variação definida) e pode ter um custo extra.
+    """
+    conjunto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='grupos')
+    nome     = models.CharField(max_length=60)
+    minimo   = models.PositiveSmallIntegerField(default=1)
+    maximo   = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    ordem    = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['ordem', 'id']
+        constraints = [
+            models.CheckConstraint(check=models.Q(minimo__lte=models.F('maximo')), name='grupo_minimo_ate_maximo'),
+        ]
+
+    def __str__(self):
+        return f'{self.nome} ({self.minimo}–{self.maximo}) em {self.conjunto.nome}'
+
+
+class OpcaoEscolha(models.Model):
+    """Uma opção de um grupo (ex.: "Fanta 33cl", +0,50 €). Desconta o stock do produto se escolhida."""
+    grupo       = models.ForeignKey(GrupoEscolha, on_delete=models.CASCADE, related_name='opcoes')
+    produto     = models.ForeignKey(Produto, on_delete=models.RESTRICT, related_name='em_opcoes')
+    variante    = models.ForeignKey(VarianteProduto, on_delete=models.RESTRICT, null=True, blank=True,
+                                    related_name='em_opcoes')
+    quantidade  = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    preco_extra = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                                      validators=[MinValueValidator(0)])
+    ordem       = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['ordem', 'id']
+
+    def __str__(self):
+        return f'{self.produto.nome} em {self.grupo}'
+
+
 # ══════════════════════════════════════════════════════════════
 # CARRINHO
 # ══════════════════════════════════════════════════════════════
@@ -661,11 +701,16 @@ class ItemCarrinho(models.Model):
     atributos   = models.JSONField(default=dict, blank=True)
     variante    = models.ForeignKey('VarianteProduto', on_delete=models.SET_NULL,
                                     null=True, blank=True, related_name='+')
+    # conjunto: opções escolhidas pelo cliente {"<grupo_id>": [<opcao_id>, ...]}
+    escolhas    = models.JSONField(default=dict, blank=True)
 
     @property
     def preco_unitario(self):
         if self.variante_id and self.variante.preco is not None:
             return self.variante.preco
+        if self.escolhas and self.produto.e_conjunto:
+            from .utils.conjuntos import preco_com_escolhas
+            return preco_com_escolhas(self.produto, self.escolhas)
         return self.produto.preco
 
     def __str__(self):

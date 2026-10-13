@@ -71,11 +71,18 @@ class ItemCarrinhoSerializer(serializers.ModelSerializer):
     subtotal       = serializers.SerializerMethodField()
     preco_unitario = serializers.SerializerMethodField()
     variante       = serializers.SerializerMethodField()
+    escolhas_texto = serializers.SerializerMethodField()   # menu: "Bebida: Fanta (33cl) +0,50 €"
 
     class Meta:
         model  = ItemCarrinho
         fields = ['id', 'produto', 'produto_id', 'quantidade', 'atributos',
-                  'variante', 'preco_unitario', 'subtotal']
+                  'variante', 'preco_unitario', 'subtotal', 'escolhas', 'escolhas_texto']
+
+    def get_escolhas_texto(self, obj):
+        if not (obj.escolhas and obj.produto.e_conjunto):
+            return ''
+        from ..utils.conjuntos import texto_escolhas
+        return texto_escolhas(obj.produto, obj.escolhas)
 
     def get_preco_unitario(self, obj):
         return str(obj.preco_unitario)
