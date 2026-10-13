@@ -143,6 +143,8 @@
 
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold truncate" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ item.produto?.nome }}</p>
+                <!-- conjunto: o que inclui -->
+                <p v-if="item.produto?.inclui" class="text-[11px] leading-snug line-clamp-2" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ item.produto.inclui }}</p>
                 <p class="text-sm font-bold text-red-500 mt-0.5">{{ formatPrice(item.preco_unitario ?? item.produto?.preco) }}</p>
 
                 <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1.5">

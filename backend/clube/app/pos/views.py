@@ -1065,6 +1065,9 @@ def produto_atualizar(request, pos_id, produto_id):
         produto = get_object_or_404(ProdutoPOS, id=produto_id, pos=pos)
         if pos.modo not in ['standalone', 'hibrido']:
             return Response({'detail': 'Este POS não permite produtos próprios.'}, status=status.HTTP_400_BAD_REQUEST)
+        aviso = conj.aviso_desactivar(produto, request.data, request.GET)
+        if aviso:
+            return Response(aviso, status=status.HTTP_409_CONFLICT)
 
         for campo, attr in [('nome','nome'),('descricao','descricao'),('categoria','categoria'),('preco',None),
                              ('controlar_stock',None),('stock',None),('ativo',None),('disponivel_pos',None)]:
@@ -1131,6 +1134,9 @@ def produto_atualizar(request, pos_id, produto_id):
             return Response({'detail': 'Sem permissão para gerir produtos desta loja.'}, status=status.HTTP_403_FORBIDDEN)
 
         produto = get_object_or_404(Produto, id=produto_id, loja=loja)
+        aviso = conj.aviso_desactivar(produto, request.data, request.GET)
+        if aviso:
+            return Response(aviso, status=status.HTTP_409_CONFLICT)
 
         for campo in ('nome', 'descricao', 'sku'):
             if campo in request.data:

@@ -529,6 +529,9 @@ def produto_update(request, loja_id, id):
         return erro
  
     produto = get_object_or_404(Produto, id=id, loja_id=loja_id)
+    aviso = conj.aviso_desactivar(produto, request.data, request.GET)
+    if aviso:
+        return Response(aviso, status=status.HTTP_409_CONFLICT)
  
     # DEPOIS — sem copy(), sem erro:
     atributos_raw = request.data.get('atributos')

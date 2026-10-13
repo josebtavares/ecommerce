@@ -416,3 +416,25 @@ def guardar_componentes_pos(conjunto, linhas_validas):
         else:
             objs.append(ComponenteConjuntoPOS(conjunto=conjunto, produto=p, variante=v, quantidade=q, ordem=i))
     ComponenteConjuntoPOS.objects.bulk_create(objs)
+
+
+def aviso_desactivar(produto, dados, query):
+    """
+    O pedido desactiva (ativo=false) um produto que está dentro de conjuntos, sem confirmar?
+    Devolve o corpo da resposta 409 (o frontend pergunta e repete com ?confirmar=1) ou None.
+    """
+    if 'ativo' not in dados or not produto.ativo:
+        return None
+    if str(dados.get('ativo')).lower() not in ('false', '0', 'off', 'nao', 'não'):
+        return None
+    if query.get('confirmar') == '1':
+        return None
+    usado = conjuntos_que_usam(produto)
+    if not usado:
+        return None
+    return {
+        'detail': f'"{produto.nome}" faz parte de {", ".join(usado)}. '
+                  f'Se o desactivares, esses conjuntos ficam indisponíveis até o retirares deles.',
+        'conjuntos': usado,
+        'precisa_confirmar': True,
+    }

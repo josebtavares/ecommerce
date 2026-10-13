@@ -66,6 +66,9 @@
           <div class="absolute top-2 left-2 flex gap-1">
             <span v-if="p.destaque" class="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded" title="Destaque"><font-awesome-icon :icon="['fas', 'star']" /></span>
             <span v-if="!p.ativo" class="px-1.5 py-0.5 bg-zinc-900/80 text-zinc-400 text-[10px] font-bold rounded">Inactivo</span>
+            <span v-if="p.e_conjunto" class="px-1.5 py-0.5 bg-sky-600 text-white text-[10px] font-bold rounded" title="Conjunto (menu, pack)">
+              <font-awesome-icon :icon="['fas', 'layer-group']" class="mr-0.5" /> Conjunto
+            </span>
           </div>
           <!-- estado da otimização do vídeo (app/utils/video.py) -->
           <span v-if="emCurso(p.ficheiro_estado)"
@@ -104,6 +107,14 @@
         </div>
         <div class="p-3">
           <p class="text-sm font-semibold text-zinc-100 truncate">{{ p.nome }}</p>
+          <!-- conjunto: o que leva e se está vendável -->
+          <p v-if="p.e_conjunto" class="text-[11px] text-zinc-500 truncate mt-0.5"
+             :title="p.componentes.map(c => c.quantidade + '× ' + c.nome + (c.variante ? ' (' + c.variante + ')' : '')).join(', ')">
+            {{ p.componentes.map(c => c.quantidade + '× ' + c.nome).join(', ') }}
+          </p>
+          <p v-if="p.e_conjunto && p.conjunto && !p.conjunto.disponivel" class="text-[11px] text-amber-400 mt-0.5 leading-snug">
+            Indisponível: {{ p.conjunto.motivo || 'sem stock nos produtos' }}
+          </p>
           <!-- atributos badge -->
           <div v-if="temAtributos(p.atributos)" class="flex flex-wrap gap-1 mt-1">
             <span v-for="(val, key) in slicedAtributos(p.atributos)" :key="key"
@@ -312,10 +323,16 @@ export default {
 
     async eliminarProduto (p) {
       if (!confirm(`Eliminar "${p.nome}"?`)) return
+      const url = `/app/loja/${this.lojaId}/produtos/${p.id}/eliminar/`
       try {
-        await api.delete(`/app/loja/${this.lojaId}/produtos/${p.id}/eliminar/`)
-        await this.fetchProdutos()
-      } catch (e) { console.error(e) }
+        await api.delete(url)
+      } catch (e) {
+        // faz parte de conjuntos → o servidor pede confirmação (esses conjuntos ficam indisponíveis)
+        if (e.response?.status !== 409 || !e.response.data?.precisa_confirmar) { console.error(e); return }
+        if (!confirm(e.response.data.detail + '\n\nDesactivar mesmo assim?')) return
+        try { await api.delete(url, { params: { confirmar: 1 } }) } catch (e2) { console.error(e2); return }
+      }
+      await this.fetchProdutos()
     },
 
     onSaved () {
