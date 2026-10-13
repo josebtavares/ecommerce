@@ -26,6 +26,10 @@
           <span class="text-zinc-500">Tipo</span>
           <span class="text-zinc-200 capitalize">{{ encomenda.tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}</span>
         </div>
+        <!-- feita com a loja fechada -->
+        <div v-if="encomenda.agendada_texto" class="text-sm rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-amber-200">
+          A loja estava fechada — a tua encomenda vai ser preparada a partir de <b>{{ encomenda.agendada_texto }}</b>.
+        </div>
         <div class="flex justify-between text-sm border-t border-zinc-800 pt-3">
           <span class="text-zinc-400 font-semibold">Total</span>
           <span class="text-red-400 font-bold">{{ formatPrice(encomenda.valor_total) }}</span>

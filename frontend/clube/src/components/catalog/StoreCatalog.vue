@@ -133,6 +133,10 @@
           <span class="inline-block px-2 py-0.5 bg-red-600/90 text-white text-[10px] font-bold rounded mb-1.5">
             {{ categoriaLabel(loja.categoria) }}
           </span>
+          <span v-if="loja.horario?.ativo && !loja.horario.aberta" :title="loja.horario.texto"
+                class="inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-zinc-950/85 text-amber-300 text-[10px] font-bold rounded mb-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Fechada
+          </span>
           <h3 class="text-base font-bold text-white truncate group-hover:text-red-400 transition-colors">
             {{ loja.nome }}
           </h3>

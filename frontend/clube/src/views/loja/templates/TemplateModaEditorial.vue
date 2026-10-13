@@ -121,6 +121,7 @@
             <span class="editorial-hero__title--outline">{{ restWords }}</span>
           </h1>
           <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+          <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
 
           <div class="editorial-hero__bottom">
             <div>
@@ -590,6 +591,7 @@ import ProductSlider from '@/components/sliders/ProductSlider.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
@@ -597,7 +599,7 @@ export default {
 
   components: {
     ProductInfoCard,
-    BotaoFavorito,
+    BotaoFavorito, EstadoLoja,
     MultiCart,
     ProductSlider,
     Profile,
@@ -863,7 +865,8 @@ export default {
 }
 
 /* o "Guardar loja" está sempre sobre o banner escuro → texto claro nos dois temas */
-.editorial-hero__content .loja-fav {
+.editorial-hero__content .loja-fav,
+.editorial-hero__content .loja-estado {
   color: #fff;
 }
 

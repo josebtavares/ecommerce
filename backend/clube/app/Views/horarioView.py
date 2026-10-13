@@ -26,6 +26,7 @@ def _horario_loja(loja):
         'estado':        horarios.payload_publico(loja),
         'fuso':          ConfiguracaoPlataforma.atual().fuso_horario,
         'agora':         horarios.agora().strftime('%H:%M'),
+        'hoje':          horarios.agora().weekday(),
     }
 
 

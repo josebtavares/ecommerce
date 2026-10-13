@@ -46,6 +46,7 @@
             <p class="bs-versal">{{ loja.categoria || 'Bistrô' }}<template v-if="loja.localizacao"> · {{ loja.localizacao }}</template></p>
             <h1 class="bs-capa__nome">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+            <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
             <div class="bs-orn" aria-hidden="true"><span></span><i></i><span></span></div>
             <p v-if="loja.descricao" class="bs-capa__desc">{{ truncate(loja.descricao, 220) }}</p>
 
@@ -298,6 +299,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 const LIMITE = 8
@@ -305,7 +307,7 @@ const LIMITE = 8
 export default {
   name: 'TemplateRestauranteBistro',
 
-  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
+  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 
