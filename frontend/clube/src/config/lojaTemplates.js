@@ -7,6 +7,7 @@ export const TEMPLATES = [
   // ── GENÉRICOS ─────────────────────────────────────────────────────────────
   {
     id: 'classico',
+    usaCorSecundaria: true,   // fundo do modo escuro
     nome: 'Clássico',
     descricao: 'Layout versátil com sidebar flutuante. Para qualquer tipo de negócio.',
     categorias: ['todos'],
@@ -65,6 +66,7 @@ export const TEMPLATES = [
   // ── MODA ──────────────────────────────────────────────────────────────────
   {
     id: 'moda_editorial',
+    usaCorSecundaria: true,   // fundo do modo escuro
     nome: 'Moda Editorial',
     descricao: 'Hero full-bleed, grid com números editoriais. Estética de revista.',
     categorias: ['moda'],

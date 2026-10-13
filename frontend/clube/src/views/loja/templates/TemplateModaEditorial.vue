@@ -42,6 +42,52 @@
       <!-- ══════════════════════════════════════════
            HERO
       ══════════════════════════════════════════ -->
+      <!-- Barra fixa — transparente sobre o banner, sólida ao descer (ícones da direita: assets/loja-acoes.css) -->
+      <header class="editorial-bar" :class="{ 'editorial-bar--solida': scrolled }">
+        <div class="editorial-hero__left-controls">
+          <button @click="$router.back()" class="editorial-hero__back">
+            ← Voltar
+          </button>
+
+          <button @click="toggleDark" class="editorial-btn-icon">
+            <svg
+              v-if="isDark"
+              xmlns="http://www.w3.org/2000/svg"
+              width="13"
+              height="13"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+              />
+            </svg>
+
+            <svg
+              v-else
+              xmlns="http://www.w3.org/2000/svg"
+              width="13"
+              height="13"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z"
+              />
+            </svg>
+          </button>
+        </div>
+        <span class="editorial-bar__nome" :class="{ 'editorial-bar__nome--on': scrolled }">{{ loja.nome }}</span>
+      </header>
+
       <section class="editorial-hero" ref="heroRef">
         <video
           v-if="isVideo(loja.banner_url)"
@@ -60,50 +106,6 @@
         />
         <div class="editorial-hero__overlay"></div>
 
-        <!-- Nav -->
-        <nav class="editorial-hero__nav">
-          <div class="editorial-hero__left-controls">
-            <button @click="$router.back()" class="editorial-hero__back">
-              ← Voltar
-            </button>
-
-            <button @click="toggleDark" class="editorial-btn-icon">
-              <svg
-                v-if="isDark"
-                xmlns="http://www.w3.org/2000/svg"
-                width="13"
-                height="13"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-
-              <svg
-                v-else
-                xmlns="http://www.w3.org/2000/svg"
-                width="13"
-                height="13"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z"
-                />
-              </svg>
-            </button>
-          </div>
-        </nav>
 
         <!-- Content -->
         <div class="editorial-hero__content">
@@ -668,16 +670,24 @@ export default {
       sections.forEach(s => sectionObserver.observe(s))
     }
 
+    // barra fixa: fica sólida (e mostra o nome) depois de descer um pouco
+    const scrolled = ref(false)
+    function onScroll() { scrolled.value = window.scrollY > 80 }
+
     onMounted(() => {
       setupSectionObserver()
+      window.addEventListener('scroll', onScroll, { passive: true })
+      onScroll()
     })
 
     onUnmounted(() => {
       sectionObserver?.disconnect()
+      window.removeEventListener('scroll', onScroll)
     })
 
     return {
       isDark,
+      scrolled,
       activeSection,
       cssVars,
       user,
@@ -702,8 +712,9 @@ export default {
 /* ── Root tokens ─────────────────────────────────────────── */
 .editorial-root {
   --accent: var(--cor-primaria, #c8ff00);
-  --bg: #0a0a0a;
-  --bg2: #111;
+  /* cor secundária = fundo do modo escuro */
+  --bg: var(--cor-secundaria, #0a0a0a);
+  --bg2: color-mix(in srgb, var(--bg) 94%, #fff 6%);
   --fg: #f5f5f5;
   --fg2: #888;
   --fg3: #2a2a2a;
@@ -720,7 +731,7 @@ export default {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
-  overflow-x: hidden;
+  overflow-x: clip; /* "hidden" criaria um contentor de scroll e o índice sticky deixava de colar */
 }
 
 .editorial-root.light {
@@ -793,15 +804,72 @@ export default {
   pointer-events: none;
 }
 
-.editorial-hero__nav {
-  position: relative;
-  z-index: 10;
+/* modo escuro: o banner funde-se com o fundo (cor secundária) */
+.editorial-root.dark .editorial-hero__overlay {
+  background: linear-gradient(to bottom, rgba(10,10,10,0.2) 0%, color-mix(in srgb, var(--bg) 90%, transparent) 100%);
+}
+
+/* ── Barra fixa ──
+   abaixo do carrinho (z-30) e do perfil (z-40); altura e margens iguais à "barra" dos
+   ícones da direita → mesma linha; reserva à direita o espaço desses ícones */
+.editorial-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  /* altura e margens iguais à "barra" dos ícones da direita → mesma linha */
+  gap: 18px;
   height: var(--acoes-altura);
-  padding: 0 var(--acoes-direita);
+  padding: 0 calc(var(--acoes-direita) + var(--acoes-espaco) + 16px) 0 var(--acoes-direita);
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.editorial-bar--solida {
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+/* sobre o fundo da página (já não sobre o banner) os controlos seguem o tema */
+.editorial-bar--solida .editorial-hero__back { color: var(--fg2); }
+.editorial-bar--solida .editorial-hero__back:hover { color: var(--fg); }
+.editorial-bar--solida .editorial-btn-icon { color: var(--fg2); border-color: var(--border); background: transparent; }
+.editorial-bar--solida .editorial-btn-icon:hover { color: var(--fg); border-color: var(--fg2); }
+
+.editorial-bar__nome {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--fg);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.editorial-bar__nome--on {
+  opacity: 1;
+  transform: none;
+}
+
+/* o "Guardar loja" está sempre sobre o banner escuro → texto claro nos dois temas */
+.editorial-hero__content .loja-fav {
+  color: #fff;
+}
+
+/* saltos do índice não ficam escondidos atrás da barra + índice */
+.editorial-root [id^="edit-"] {
+  scroll-margin-top: calc(var(--acoes-altura) + 52px);
 }
 
 .editorial-hero__left-controls {
@@ -811,6 +879,7 @@ export default {
 }
 
 .editorial-hero__back {
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.4em;
@@ -1009,8 +1078,8 @@ export default {
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   position: sticky;
-  top: 0;
-  z-index: 25; /* abaixo do carrinho (z-30) e perfil (z-40) */
+  top: var(--acoes-altura); /* cola logo abaixo da barra fixa */
+  z-index: 24; /* abaixo da barra (25), do carrinho (z-30) e do perfil (z-40) */
   overflow-x: auto;
 }
 
