@@ -1,13 +1,13 @@
 <template>
   <div class="classico-root min-h-screen transition-colors duration-300"
-       :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-gray-50 text-zinc-900'"
+       :class="isDark ? 'classico-fundo text-zinc-100' : 'bg-gray-50 text-zinc-900'"
        :style="cssVars">
 
     <ProductInfoCard :produto="selectedProduct" :loja="loja" :isDark="isDark"
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
     <MultiCart ref="cart" :isDark="isDark" />
-    <Profile :data="user" :isDark="isDark" class="z-10" @log_out="logOut()" />
+    <Profile :data="user" :isDark="isDark" class="z-40" @log_out="logOut()" />
 
     <div v-if="loading" class="flex items-center justify-center h-screen">
       <svg class="animate-spin h-10 w-10" style="color: var(--cor-primaria)"
@@ -18,6 +18,39 @@
     </div>
 
     <template v-else-if="loja">
+      <!-- ── BARRA FIXA — transparente sobre o banner, sólida ao descer (ícones da direita: assets/loja-acoes.css) ── -->
+      <header class="classico-bar" :class="{ 'classico-bar--solida': scrolled, 'classico-bar--clara': !isDark }">
+        <button @click="$router.back()" aria-label="Voltar"
+          class="w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-sm flex-shrink-0"
+          :class="scrolled && !isDark ? 'bg-gray-100 hover:bg-gray-200' : 'bg-black/50 hover:bg-black/70'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="scrolled && !isDark ? 'text-zinc-700' : 'text-white'"
+               fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        <!-- Toggle dark/light — ao lado do botão voltar -->
+        <button @click="toggleDark" :aria-label="isDark ? 'Modo claro' : 'Modo escuro'"
+          class="w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-sm flex-shrink-0"
+          :class="isDark ? 'bg-black/50 hover:bg-black/70' : (scrolled ? 'bg-gray-100 hover:bg-gray-200' : 'bg-white/70 hover:bg-white/90')">
+          <!-- Ícone sol (modo dark → carrega para light) -->
+          <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <!-- Ícone lua (modo light → carrega para dark) -->
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-700" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z" />
+          </svg>
+        </button>
+
+        <!-- nome da loja: aparece quando o banner sai do ecrã -->
+        <span class="classico-bar__nome" :class="{ 'classico-bar__nome--on': scrolled }">
+          <img v-if="loja.logo_url" :src="loja.logo_url" alt="" class="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+          <span class="truncate">{{ loja.nome }}</span>
+        </span>
+      </header>
+
       <!-- ── HERO ── -->
       <section class="relative h-[55vh] min-h-[360px] overflow-hidden">
         <video v-if="isVideo(loja.banner_url)"
@@ -30,31 +63,7 @@
 
             
         <div class="absolute inset-0 bg-gradient-to-t"
-             :class="isDark ? 'from-zinc-950 via-zinc-950/50 to-transparent' : 'from-gray-900/80 via-gray-900/30 to-transparent'"/>
-
-        <!-- Botão voltar -->
-        <button @click="$router.back()"
-          class="classico-topo classico-topo--voltar w-9 h-9 rounded-full bg-black/50 hover:bg-black/70
-                 flex items-center justify-center transition backdrop-blur-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <!-- Toggle dark/light — ao lado do botão voltar -->
-        <button @click="toggleDark"
-          class="classico-topo classico-topo--tema w-9 h-9 rounded-full flex items-center justify-center transition backdrop-blur-sm"
-          :class="isDark ? 'bg-black/50 hover:bg-black/70' : 'bg-white/70 hover:bg-white/90'">
-          <!-- Ícone sol (modo dark → carrega para light) -->
-          <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <!-- Ícone lua (modo light → carrega para dark) -->
-          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-700" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M21.64 13.02A9 9 0 1 1 10.98 2.36 7 7 0 0 0 21.64 13.02Z" />
-          </svg>
-        </button>
+             :class="isDark ? 'classico-degrade' : 'from-gray-900/80 via-gray-900/30 to-transparent'"/>
 
         <div class="absolute bottom-0 left-0 p-8 flex items-end gap-5">
           <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
@@ -63,7 +72,7 @@
                :style="{ backgroundColor: 'var(--cor-primaria)' }">
             <span class="text-3xl font-bold text-white">{{ loja.nome.charAt(0) }}</span>
           </div>
-          <div>
+          <div class="text-white">
             <span class="inline-block px-2 py-0.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider mb-2"
                   :style="{ backgroundColor: 'var(--cor-primaria)' }">
               {{ loja.categoria }}
@@ -102,7 +111,7 @@
                     leave-active-class="transition duration-200" leave-to-class="-translate-x-full">
           <aside v-if="sidebarAberta"
                  class="fixed left-0 top-0 h-screen w-64 overflow-y-auto z-30 pt-6"
-                 :class="isDark ? 'bg-zinc-900 border-r border-zinc-800' : 'bg-white border-r border-gray-200 shadow-xl'">
+                 :class="isDark ? 'classico-painel border-r border-zinc-800' : 'bg-white border-r border-gray-200 shadow-xl'">
             <div class="flex items-center justify-between px-5 mb-5">
               <h3 class="text-sm font-bold" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">Navegar</h3>
               <button @click="sidebarAberta = false"
@@ -153,7 +162,7 @@
              @click="sidebarAberta = false" />
         <button v-if="temSidebar" @click="sidebarAberta = !sidebarAberta"
           class="fixed bottom-6 left-6 z-30 w-12 h-12 rounded-xl flex items-center justify-center shadow-lg transition border"
-          :class="isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-md'">
+          :class="isDark ? 'classico-painel classico-painel--hover border-zinc-700' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-md'">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5"
                :class="isDark ? 'text-zinc-300' : 'text-zinc-600'"
                fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -166,7 +175,7 @@
             <!-- Info cards -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
               <div class="md:col-span-2 rounded-2xl p-5 border"
-                   :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200 shadow-sm'">
+                   :class="isDark ? 'classico-painel border-zinc-800' : 'bg-white border-gray-200 shadow-sm'">
                 <h2 class="text-sm font-bold uppercase tracking-wider mb-3"
                     :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Sobre a loja</h2>
                 <p class="text-sm leading-relaxed" :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">
@@ -186,7 +195,7 @@
                 </div>
               </div>
               <div class="rounded-2xl p-5 border"
-                   :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200 shadow-sm'">
+                   :class="isDark ? 'classico-painel border-zinc-800' : 'bg-white border-gray-200 shadow-sm'">
                 <h2 class="text-sm font-bold uppercase tracking-wider mb-3"
                     :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Entrega</h2>
                 <div v-if="opcoesEntrega.length === 0" class="text-sm"
@@ -292,9 +301,9 @@
       <div v-if="modalPolitica" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
            @click.self="modalPolitica = null">
         <div class="rounded-2xl border w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl"
-             :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'">
+             :class="isDark ? 'classico-painel border-zinc-800' : 'bg-white border-gray-200'">
           <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0"
-               :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'">
+               :class="isDark ? 'classico-painel border-zinc-800' : 'bg-white border-gray-200'">
             <h3 class="text-base font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">
               {{ modalPolitica === 'devolucao' ? 'Política de devoluções'
                : modalPolitica === 'termos'    ? 'Termos de serviço'
@@ -321,7 +330,7 @@
     </template>
 
     <div v-else-if="!loading" class="min-h-screen flex flex-col items-center justify-center text-center"
-         :class="isDark ? 'bg-zinc-950' : 'bg-gray-50'">
+         :class="isDark ? 'classico-fundo' : 'bg-gray-50'">
       <p class="text-2xl font-bold" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Loja não encontrada</p>
       <button @click="$router.back()" class="mt-2 text-sm" :style="{ color: 'var(--cor-primaria)' }">← Voltar</button>
     </div>
@@ -329,7 +338,7 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData }   from '@/composables/useLojaData'
 import ProductInfoCard   from '@/components/product/productInfoCard.vue'
 import MultiCart         from '@/components/cart/multiCart.vue'
@@ -367,7 +376,13 @@ export default {
       return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
     }
 
-    return { isDark, cssVars, user, toggleDark, isVideo, ...lojaData }
+    // barra fixa: fica sólida (e mostra o nome) depois de descer um pouco
+    const scrolled = ref(false)
+    function onScroll () { scrolled.value = window.scrollY > 80 }
+    onMounted(() => { window.addEventListener('scroll', onScroll, { passive: true }); onScroll() })
+    onUnmounted(() => window.removeEventListener('scroll', onScroll))
+
+    return { isDark, cssVars, user, toggleDark, isVideo, scrolled, ...lojaData }
   }
 }
 </script>
@@ -387,10 +402,43 @@ export default {
   }
 }
 
-.classico-topo {
-  position: absolute;
-  top: calc((var(--acoes-altura) - 36px) / 2);
+/* ── Cor secundária = fundo do modo escuro (painéis um pouco mais claros) ── */
+.classico-fundo { background: var(--cor-secundaria, #1c1c1e); }
+.classico-painel { background: color-mix(in srgb, var(--cor-secundaria, #1c1c1e) 92%, #fff 8%); }
+.classico-painel--hover:hover { background: color-mix(in srgb, var(--cor-secundaria, #1c1c1e) 86%, #fff 14%); }
+.classico-degrade {
+  background-image: linear-gradient(to top, var(--cor-secundaria, #1c1c1e),
+    color-mix(in srgb, var(--cor-secundaria, #1c1c1e) 50%, transparent), transparent) !important;
 }
-.classico-topo--voltar { left: var(--acoes-direita); }
-.classico-topo--tema   { left: calc(var(--acoes-direita) + 36px + 10px); }
+
+/* ── Barra fixa ──
+   abaixo do carrinho (z-30) e do perfil (z-40); reserva à direita o espaço dos ícones */
+.classico-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 25;
+  height: var(--acoes-altura);
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 calc(var(--acoes-direita) + var(--acoes-espaco) + 16px) 0 var(--acoes-direita);
+  color: #fff;
+  transition: background-color .3s, box-shadow .3s;
+}
+.classico-bar--solida {
+  background: color-mix(in srgb, var(--cor-secundaria, #1c1c1e) 90%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .08);
+}
+.classico-bar--clara.classico-bar--solida {
+  background: rgba(249, 250, 251, .92);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .08);
+  color: #18181b;
+}
+.classico-bar__nome {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  margin-left: 6px; font-weight: 700; font-size: 15px;
+  opacity: 0; transform: translateY(4px); pointer-events: none;
+  transition: opacity .3s, transform .3s;
+}
+.classico-bar__nome--on { opacity: 1; transform: none; }
+
+/* os saltos do menu lateral não ficam escondidos atrás da barra */
+.classico-root [id] { scroll-margin-top: calc(var(--acoes-altura) + 12px); }
 </style>
