@@ -11,7 +11,7 @@ Horário das lojas.
 """
 import math
 import re
-from datetime import datetime, timedelta, time
+from datetime import date, datetime, timedelta, time
 from zoneinfo import ZoneInfo, available_timezones
 
 from django.utils import timezone
@@ -49,21 +49,49 @@ def _intervalos(loja):
     return [(h.dia_semana, h.abre, h.fecha) for h in loja.horarios.all()]
 
 
-def janelas(loja, desde, dias=8, tz=None):
+def _excecoes(loja):
+    # .all() aproveita o prefetch_related('excecoes')
+    return list(loja.excecoes.all())
+
+
+def excecao_do_dia(excecoes, dia):
+    return next((e for e in excecoes if e.inicio <= dia <= e.fim), None)
+
+
+def _intervalos_do_dia(loja, dia, semanal, excecoes):
+    """[(abre, fecha)] de um dia: a exceção (feriado/férias) manda; sem horário = dia inteiro."""
+    ex = excecao_do_dia(excecoes, dia)
+    if ex is not None:
+        return [(time.fromisoformat(i['abre']), time.fromisoformat(i['fecha'])) for i in ex.intervalos or []]
+    if not loja.horario_ativo:
+        return [(time(0), time(0))]
+    return semanal.get(dia.weekday(), [])
+
+
+def pausa_ativa(loja, ref=None):
+    ref = ref or timezone.now()
+    return bool(loja.pausa_ate and loja.pausa_ate > ref)
+
+
+def janelas(loja, desde, dias=8, tz=None, encomendas=True):
     """
     Janelas de abertura concretas [(abre, fecha)] (datetimes no fuso da plataforma) do dia
     anterior a `desde` até `dias` dias depois — o dia anterior apanha os intervalos que passam
     da meia-noite. Janelas que se tocam/sobrepõem são juntas (ex.: 18:00–00:00 + 00:00–02:00).
+    Conta com os dias especiais (ExcecaoHorario). Loja sem horário = aberta o dia todo.
+    encomendas=True → as janelas em que se aceitam encomendas: menos a última meia hora (ou o
+    que a loja definir em ultima_encomenda_min) e sem o tempo da pausa ("Fechar agora").
     """
     tz = tz or desde.tzinfo
     base = desde.date()
+    semanal = {}
+    for dia_semana, abre, fecha in _intervalos(loja):
+        semanal.setdefault(dia_semana, []).append((abre, fecha))
+    excecoes = _excecoes(loja)
     lista = []
-    ints = _intervalos(loja)
     for d in range(-1, dias + 1):
         dia = base + timedelta(days=d)
-        for dia_semana, abre, fecha in ints:
-            if dia_semana != dia.weekday():
-                continue
+        for abre, fecha in _intervalos_do_dia(loja, dia, semanal, excecoes):
             a = datetime.combine(dia, abre, tzinfo=tz)
             f = datetime.combine(dia, fecha, tzinfo=tz)
             if fecha <= abre:
@@ -76,6 +104,14 @@ def janelas(loja, desde, dias=8, tz=None):
             juntas[-1] = (juntas[-1][0], max(juntas[-1][1], f))
         else:
             juntas.append((a, f))
+    if not encomendas:
+        return juntas
+    corte = timedelta(minutes=loja.ultima_encomenda_min or 0)
+    if corte:
+        juntas = [(a, f - corte) for a, f in juntas if f - corte > a]
+    if pausa_ativa(loja, desde):
+        p = loja.pausa_ate.astimezone(tz)
+        juntas = [(max(a, p), f) for a, f in juntas if f > p]
     return juntas
 
 
@@ -94,22 +130,32 @@ def _quando(dt, ref):
 
 def estado(loja, quando=None):
     """
-    {'ativo', 'aberta', 'fecha_em', 'abre_em', 'texto'} — datetimes no fuso da plataforma.
-    Loja sem horário → sempre aberta.
+    {'ativo', 'aberta', 'fecha_em', 'abre_em', 'texto', 'pausa'} — datetimes no fuso da plataforma.
+    'aberta' = aceita encomendas agora (conta com a pausa e a hora da última encomenda).
+    'ativo'  = mostrar o selo: loja com horário, ou fechada agora (pausa / dia especial).
+    Loja sem horário e sem pausa nem dia especial → sempre aberta, sem selo (como antes).
     """
-    if not loja.horario_ativo:
-        return {'ativo': False, 'aberta': True, 'fecha_em': None, 'abre_em': None, 'texto': ''}
     tz = fuso()
     ref = (quando or timezone.now()).astimezone(tz)
+    pausa = pausa_ativa(loja, ref)
+    if not loja.horario_ativo and not pausa and not _excecoes(loja):
+        return {'ativo': False, 'aberta': True, 'fecha_em': None, 'abre_em': None, 'texto': '', 'pausa': False}
     js = janelas(loja, ref, tz=tz)
+    corte = bool(loja.ultima_encomenda_min)
     for a, f in js:
         if a <= ref < f:
-            return {'ativo': True, 'aberta': True, 'fecha_em': f, 'abre_em': None,
-                    'texto': f'Aberta · fecha {_quando(f, ref)}' if f.date() != ref.date()
-                             else f'Aberta · fecha às {f:%H:%M}'}
+            if not loja.horario_ativo:      # 24h com um dia especial noutra altura → sem selo
+                return {'ativo': False, 'aberta': True, 'fecha_em': None, 'abre_em': None, 'texto': '', 'pausa': False}
+            verbo = 'encomendas até' if corte else 'fecha'
+            texto = (f'Aberta · {verbo} {_quando(f, ref)}' if f.date() != ref.date()
+                     else f'Aberta · {verbo} às {f:%H:%M}')
+            return {'ativo': True, 'aberta': True, 'fecha_em': f, 'abre_em': None, 'texto': texto, 'pausa': False}
     prox = next((a for a, _ in js if a > ref), None)
-    return {'ativo': True, 'aberta': False, 'fecha_em': None, 'abre_em': prox,
-            'texto': f'Fechada · abre {_quando(prox, ref)}' if prox else 'Fechada'}
+    if pausa and prox and prox == loja.pausa_ate.astimezone(tz):
+        texto = f'Fechada · reabre às {prox:%H:%M}' if prox.date() == ref.date() else f'Fechada · reabre {_quando(prox, ref)}'
+    else:
+        texto = f'Fechada · abre {_quando(prox, ref)}' if prox else 'Fechada'
+    return {'ativo': True, 'aberta': False, 'fecha_em': None, 'abre_em': prox, 'texto': texto, 'pausa': pausa}
 
 
 def quando_texto(dt, quando=None):
@@ -128,11 +174,28 @@ def semana(loja):
     return dias
 
 
+def _texto_excecao(e):
+    datas = f'{e.inicio:%d/%m}' if e.inicio == e.fim else f'{e.inicio:%d/%m} a {e.fim:%d/%m}'
+    horas = ' · '.join(f'{i["abre"]}–{i["fecha"]}' for i in e.intervalos) if e.intervalos else 'Fechado'
+    return f'{datas}: {horas}'
+
+
+def excecoes_proximas(loja, quando=None, dias=30, maximo=5):
+    """Dias especiais de hoje a `dias` dias — para o cliente ver no horário da loja."""
+    hoje = (quando or timezone.now()).astimezone(fuso()).date()
+    ate = hoje + timedelta(days=dias)
+    lista = [e for e in _excecoes(loja) if e.fim >= hoje and e.inicio <= ate][:maximo]
+    return [{'inicio': e.inicio.isoformat(), 'fim': e.fim.isoformat(), 'texto': _texto_excecao(e),
+             'mensagem': e.mensagem, 'fechado': not e.intervalos} for e in lista]
+
+
 def payload_publico(loja, quando=None):
     """O que a loja pública, os cards e o checkout precisam."""
     e = estado(loja, quando)
     if not e['ativo']:
         return {'ativo': False, 'aberta': True}
+    ref = (quando or timezone.now()).astimezone(fuso())
+    ex_hoje = excecao_do_dia(_excecoes(loja), ref.date())
     return {
         'ativo':        True,
         'aberta':       e['aberta'],
@@ -140,8 +203,12 @@ def payload_publico(loja, quando=None):
         'abre_em':      e['abre_em'].isoformat() if e['abre_em'] else None,
         'fecha_em':     e['fecha_em'].isoformat() if e['fecha_em'] else None,
         'fora_horario': loja.fora_horario,
-        'hoje':         (quando or timezone.now()).astimezone(fuso()).weekday(),
-        'semana':       semana(loja),
+        'hoje':         ref.weekday(),
+        'semana':       semana(loja) if loja.horario_ativo else [],
+        'pausa':        e['pausa'],
+        'ultima_encomenda': loja.ultima_encomenda_min,
+        'aviso':        ex_hoje.mensagem if ex_hoje and ex_hoje.mensagem else '',   # ex.: "Férias — voltamos dia 16"
+        'excecoes':     excecoes_proximas(loja, quando),
     }
 
 
@@ -167,11 +234,8 @@ def vagas(loja, quando=None):
     inicio = ref + timedelta(minutes=min(loja.agendamento_antecedencia or 0, MAX_ANTECEDENCIA))
     ultimo_dia = ref.date() + timedelta(days=dias - 1)
 
-    if loja.horario_ativo:
-        js = janelas(loja, ref, dias=dias + 1, tz=tz)
-    else:
-        js = [(datetime.combine(ref.date() + timedelta(days=d), time(0), tzinfo=tz),
-               datetime.combine(ref.date() + timedelta(days=d + 1), time(0), tzinfo=tz)) for d in range(dias)]
+    # horário (ou o dia todo), dias especiais, pausa e hora da última encomenda
+    js = janelas(loja, ref, dias=dias + 1, tz=tz)
 
     por_dia = {}
     for a, f in js:
@@ -297,3 +361,164 @@ def guardar(loja, linhas):
     from ..models import HorarioLoja
     loja.horarios.all().delete()
     HorarioLoja.objects.bulk_create([HorarioLoja(loja=loja, dia_semana=d, abre=a, fecha=f) for d, a, f in linhas])
+
+
+# ── Dias especiais (feriados, férias, horário diferente) ─────────
+
+MAX_EXCECOES = 30
+MAX_DIAS_EXCECAO = 92
+
+
+def validar_excecoes(lista, quando=None):
+    """
+    [{inicio: 'AAAA-MM-DD', fim, intervalos: [{abre, fecha}] (vazio = fechado), mensagem}]
+    Devolve ([dict limpo], None) ou (None, mensagem). As que já acabaram são ignoradas.
+    """
+    if not isinstance(lista, list):
+        return None, 'Formato dos dias especiais inválido.'
+    if len(lista) > MAX_EXCECOES:
+        return None, f'No máximo {MAX_EXCECOES} dias especiais.'
+    hoje = (quando or timezone.now()).astimezone(fuso()).date()
+    limpas = []
+    for e in lista:
+        if not isinstance(e, dict):
+            return None, 'Formato dos dias especiais inválido.'
+        try:
+            inicio = date.fromisoformat(str(e.get('inicio')))
+            fim = date.fromisoformat(str(e.get('fim') or e.get('inicio')))
+        except ValueError:
+            return None, 'Dia especial: data inválida.'
+        if fim < inicio:
+            return None, f'Dia especial {inicio:%d/%m}: a data de fim é antes da de início.'
+        if (fim - inicio).days >= MAX_DIAS_EXCECAO:
+            return None, f'Dia especial {inicio:%d/%m}: no máximo {MAX_DIAS_EXCECAO} dias seguidos.'
+        if fim < hoje:
+            continue
+        ints = e.get('intervalos') or []
+        linhas, msg = validar_dias([{'dia': 0, 'intervalos': ints}])
+        if msg:
+            return None, f'Dia especial {inicio:%d/%m}: ' + msg.split(': ', 1)[-1]
+        mensagem = str(e.get('mensagem') or '').strip()
+        if len(mensagem) > 120:
+            return None, f'Dia especial {inicio:%d/%m}: mensagem com mais de 120 caracteres.'
+        limpas.append({'inicio': inicio, 'fim': fim, 'mensagem': mensagem,
+                       'intervalos': [{'abre': f'{a:%H:%M}', 'fecha': f'{f:%H:%M}'} for _, a, f in linhas]})
+    limpas.sort(key=lambda x: x['inicio'])
+    for x, y in zip(limpas, limpas[1:]):
+        if y['inicio'] <= x['fim']:
+            return None, f'Os dias especiais {x["inicio"]:%d/%m} e {y["inicio"]:%d/%m} sobrepõem-se.'
+    return limpas, None
+
+
+def guardar_excecoes(loja, limpas):
+    from ..models import ExcecaoHorario
+    loja.excecoes.all().delete()
+    ExcecaoHorario.objects.bulk_create([ExcecaoHorario(loja=loja, **x) for x in limpas])
+
+
+def excecoes_backoffice(loja, quando=None):
+    hoje = (quando or timezone.now()).astimezone(fuso()).date()
+    return [{'inicio': e.inicio.isoformat(), 'fim': e.fim.isoformat(), 'intervalos': e.intervalos,
+             'mensagem': e.mensagem} for e in loja.excecoes.all() if e.fim >= hoje]
+
+
+# ── "Fechar agora" (pausa) ───────────────────────────────────────
+
+PAUSAS_MINUTOS = (15, 30, 60, 120, 240)
+
+
+def pausar(loja, minutos=None, ate_fechar=False, quando=None):
+    """Fecha a loja para encomendas por `minutos` ou até ao fim do horário de agora. → (ok, msg)."""
+    ref = (quando or timezone.now()).astimezone(fuso())
+    e = estado(loja, ref)
+    if not e['aberta']:
+        return False, 'A loja já está fechada.'
+    if ate_fechar:
+        if not loja.horario_ativo or not e['fecha_em']:
+            return False, 'Esta loja não tem horário — escolhe por quanto tempo fecha.'
+        ate = e['fecha_em']
+    else:
+        if minutos not in PAUSAS_MINUTOS:
+            return False, 'Escolhe 15 min, 30 min, 1 hora, 2 horas ou 4 horas.'
+        ate = ref + timedelta(minutes=minutos)
+    loja.pausa_ate = ate
+    loja.save(update_fields=['pausa_ate', 'data_atualizacao'])
+    limpar_cache_fechadas()
+    return True, ''
+
+
+def reabrir(loja):
+    loja.pausa_ate = None
+    loja.save(update_fields=['pausa_ate', 'data_atualizacao'])
+    limpar_cache_fechadas()
+
+
+# ── Lojas abertas primeiro (listagens) ────────────────────────────
+
+CACHE_FECHADAS = 'lojas_fechadas_ids'
+
+
+def limpar_cache_fechadas():
+    from django.core.cache import cache
+    cache.delete(CACHE_FECHADAS)
+
+
+def ids_fechadas():
+    """Ids das lojas activas fechadas agora (cache de 1 minuto — o horário muda à hora certa)."""
+    from django.core.cache import cache
+    from django.db.models import Q
+    from ..models import Loja
+    ids = cache.get(CACHE_FECHADAS)
+    if ids is None:
+        hoje = agora().date()
+        candidatas = (Loja.objects.filter(ativa=True)
+                      .filter(Q(horario_ativo=True) | Q(pausa_ate__gt=timezone.now()) | Q(excecoes__fim__gte=hoje))
+                      .distinct().prefetch_related('horarios', 'excecoes'))
+        ids = [l.id for l in candidatas if not estado(l)['aberta']]
+        cache.set(CACHE_FECHADAS, ids, 60)
+    return ids
+
+
+# ── Aviso das encomendas agendadas para hoje (worker) ─────────────
+
+def avisar_agendadas(quando=None):
+    """
+    Uma vez por dia e por loja, à hora de abrir (08:00 nas lojas sem horário), avisa a equipa
+    (dono/gestor/staff) de quantas encomendas estão agendadas para hoje, e cada condutor das
+    entregas que tem atribuídas. Chamado pelo worker (processar_videos) a cada minuto.
+    Devolve o número de lojas avisadas.
+    """
+    from ..models import Loja, Encomenda, Entrega
+    from ..Views.notificacaoView import notificar, notificar_staff
+    tz = fuso()
+    ref = (quando or timezone.now()).astimezone(tz)
+    hoje = ref.date()
+    de = datetime.combine(hoje, time(0), tzinfo=tz)
+    ate = de + timedelta(days=1)
+    hoje_qs = (Encomenda.objects.filter(agendada_para__gte=de, agendada_para__lt=ate)
+               .exclude(status__in=['cancelado', 'concluido']))
+    lojas = (Loja.objects.filter(id__in=hoje_qs.values('loja'), ativa=True)
+             .exclude(aviso_agendadas_data=hoje).prefetch_related('horarios', 'excecoes'))
+    avisadas = 0
+    for loja in lojas:
+        js = [a for a, _ in janelas(loja, ref, dias=0, tz=tz, encomendas=False) if a.date() == hoje]
+        abre = min(js) if (js and loja.horario_ativo) else datetime.combine(hoje, time(8), tzinfo=tz)
+        if ref < abre:
+            continue
+        do_dia = hoje_qs.filter(loja=loja)
+        n = do_dia.count()
+        link = f'/loja/{loja.id}/backoffice'
+        notificar_staff(loja=loja, roles=['dono', 'gestor', 'staff'], tipo='agendadas_hoje',
+                        titulo=f'{n} encomenda{"s" if n != 1 else ""} agendada{"s" if n != 1 else ""} para hoje',
+                        mensagem='Vê-as em Entregas → Calendário.', link=link)
+        por_condutor = {}
+        for en in Entrega.objects.filter(encomenda__in=do_dia, condutor__isnull=False).select_related('condutor__utilizador'):
+            por_condutor.setdefault(en.condutor.utilizador, 0)
+            por_condutor[en.condutor.utilizador] += 1
+        for ut, k in por_condutor.items():
+            notificar(utilizador=ut, tipo='agendadas_hoje', titulo=f'Tens {k} entrega{"s" if k != 1 else ""} para hoje',
+                      mensagem=f'{loja.nome} · vê-as em Entregas → Calendário.', loja=loja, link=link)
+        loja.aviso_agendadas_data = hoje
+        loja.save(update_fields=['aviso_agendadas_data'])
+        avisadas += 1
+    return avisadas

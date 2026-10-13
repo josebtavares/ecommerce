@@ -263,6 +263,12 @@ class Loja(models.Model):
     agendamento_intervalo    = models.PositiveSmallIntegerField(default=30, db_default=30)   # minutos entre horas
     agendamento_dias         = models.PositiveSmallIntegerField(default=7, db_default=7)     # dias que se podem escolher (hoje incluído)
     agendamento_antecedencia = models.PositiveSmallIntegerField(default=30, db_default=30)   # minutos mínimos a partir de agora
+    # aceitar encomendas só até X minutos antes de fechar (0 = até fechar)
+    ultima_encomenda_min = models.PositiveSmallIntegerField(default=0, db_default=0)
+    # "Fechar agora": fechada para encomendas até esta hora (vazio/passado = sem pausa)
+    pausa_ate            = models.DateTimeField(null=True, blank=True)
+    # último dia em que se avisou a equipa das encomendas agendadas (worker)
+    aviso_agendadas_data = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -841,6 +847,26 @@ class HorarioLoja(models.Model):
         return f'{self.loja} · {self.get_dia_semana_display()} {self.abre:%H:%M}–{self.fecha:%H:%M}'
 
 
+class ExcecaoHorario(models.Model):
+    """
+    Dias especiais (feriados, férias, horário diferente) de `inicio` a `fim` (inclusive).
+    intervalos vazio = fechado; senão substitui o horário da semana nesses dias
+    ([{"abre": "08:00", "fecha": "16:00"}], como HorarioLoja).
+    """
+    loja       = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='excecoes')
+    inicio     = models.DateField()
+    fim        = models.DateField()
+    intervalos = models.JSONField(default=list, blank=True)
+    mensagem   = models.CharField(max_length=120, blank=True, default='')
+
+    class Meta:
+        ordering = ['inicio']
+        indexes  = [models.Index(fields=['loja', 'fim'])]
+
+    def __str__(self):
+        return f'{self.loja} · {self.inicio}–{self.fim} {"fechado" if not self.intervalos else "horário especial"}'
+
+
 class ConfiguracaoPlataforma(models.Model):
     """Definições globais do site (uma só linha — ConfiguracaoPlataforma.atual())."""
     fuso_horario     = models.CharField(max_length=64, default='Atlantic/Cape_Verde')
@@ -1172,6 +1198,7 @@ class Notificacao(models.Model):
         # Condutor
         ('entrega_atribuida',        'Entrega atribuída'),
         ('entrega_cancelada',        'Entrega cancelada'),
+        ('agendadas_hoje',           'Encomendas agendadas para hoje'),
         # Comprador
         ('encomenda_paga',           'Encomenda paga'),
         ('encomenda_enviada',        'Encomenda enviada'),

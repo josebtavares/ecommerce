@@ -18,6 +18,9 @@ from .lojaView import _exige_permissao
 from .adminView import _exige_admin
 
 
+ULTIMA_ENCOMENDA = (0, 15, 30, 45, 60, 90, 120)
+
+
 def _horario_loja(loja):
     return {
         'horario_ativo': loja.horario_ativo,
@@ -33,6 +36,9 @@ def _horario_loja(loja):
             'dias':         loja.agendamento_dias,
             'antecedencia': loja.agendamento_antecedencia,
         },
+        'ultima_encomenda': loja.ultima_encomenda_min,
+        'excecoes':      horarios.excecoes_backoffice(loja),
+        'pausa_ate':     loja.pausa_ate.isoformat() if horarios.pausa_ativa(loja) else None,
     }
 
 
@@ -98,6 +104,22 @@ def loja_horario(request, loja_id):
     if msg:
         return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
+    ultima = None
+    if 'ultima_encomenda' in dados:
+        try:
+            ultima = int(dados['ultima_encomenda'])
+        except (TypeError, ValueError):
+            ultima = -1
+        if ultima not in ULTIMA_ENCOMENDA:
+            return Response({'detail': 'Última encomenda: escolhe até ao fecho ou 15, 30, 45, 60, 90 ou 120 minutos antes.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+    excecoes = None
+    if 'excecoes' in dados:
+        excecoes, msg = horarios.validar_excecoes(dados.get('excecoes'))
+        if msg:
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+
     linhas = None
     if 'dias' in dados:
         linhas, msg = horarios.validar_dias(dados.get('dias'))
@@ -110,10 +132,16 @@ def loja_horario(request, loja_id):
 
     if linhas is not None:
         horarios.guardar(loja, linhas)
+    if excecoes is not None:
+        horarios.guardar_excecoes(loja, excecoes)
+    if ultima is not None:
+        loja.ultima_encomenda_min = ultima
+        agendamento['ultima_encomenda_min'] = ultima
     loja.horario_ativo, loja.fora_horario = ativo, fora
     for campo, valor in agendamento.items():
         setattr(loja, campo, valor)
     loja.save(update_fields=['horario_ativo', 'fora_horario', 'data_atualizacao', *agendamento])
+    horarios.limpar_cache_fechadas()
     return Response(_horario_loja(loja))
 
 
@@ -124,7 +152,7 @@ def loja_vagas(request, loja_id):
     GET /app/loja/<loja_id>/agendamento/vagas/
     Dias e horas que o cliente pode escolher para receber/levantar a encomenda.
     """
-    loja = get_object_or_404(Loja.objects.prefetch_related('horarios'), id=loja_id, ativa=True)
+    loja = get_object_or_404(Loja.objects.prefetch_related('horarios', 'excecoes'), id=loja_id, ativa=True)
     if not loja.agendamento_ativo:
         return Response({'ativo': False, 'dias': []})
     return Response({'ativo': True, 'intervalo': loja.agendamento_intervalo, 'dias': horarios.vagas_payload(loja)})
@@ -155,3 +183,47 @@ def admin_plataforma(request):
         'utc_offset':   hora.strftime('%z'),
         'fusos':        sorted(available_timezones()),
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def loja_pausa(request, loja_id):
+    """
+    POST /app/loja/<loja_id>/pausa/   "Fechar agora" — quem trata das encomendas (também o staff)
+        { minutos: 15|30|60|120|240 }  → fecha por esse tempo
+        { ate_fechar: true }           → fecha até ao fim do horário de agora
+        { reabrir: true }              → acaba com a pausa
+    As encomendas feitas durante a pausa seguem a regra da loja fechada (para a abertura / não aceitar).
+    """
+    loja = get_object_or_404(Loja.objects.select_for_update(), id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_encomendas')
+    if erro:
+        return erro
+    dados = request.data
+    if dados.get('reabrir') in (True, 'true', '1', 1):
+        horarios.reabrir(loja)
+    else:
+        try:
+            minutos = int(dados['minutos']) if dados.get('minutos') is not None else None
+        except (TypeError, ValueError):
+            minutos = None
+        ok, msg = horarios.pausar(loja, minutos=minutos, ate_fechar=dados.get('ate_fechar') in (True, 'true', '1', 1))
+        if not ok:
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'pausa_ate': loja.pausa_ate.isoformat() if horarios.pausa_ativa(loja) else None,
+                     'estado': horarios.payload_publico(loja)})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_estado(request, loja_id):
+    """GET /app/loja/<loja_id>/estado/ — aberta/fechada e pausa, para o backoffice (quem trata das encomendas)."""
+    loja = get_object_or_404(Loja.objects.prefetch_related('horarios', 'excecoes'), id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_encomendas')
+    if erro:
+        return erro
+    e = horarios.estado(loja)
+    return Response({'aberta': e['aberta'], 'texto': e['texto'] or 'Aberta', 'horario_ativo': loja.horario_ativo,
+                     'pausa_ate': loja.pausa_ate.isoformat() if horarios.pausa_ativa(loja) else None,
+                     'pausa_hora': loja.pausa_ate.astimezone(horarios.fuso()).strftime('%H:%M') if horarios.pausa_ativa(loja) else ''})
