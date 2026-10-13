@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -260,6 +261,24 @@ def entrega_criar(request, loja_id, encomenda_id):
         opcao_entrega = opcao,
         status        = 'atribuido',
     )
+
+    # entrega criada → a encomenda passa a "enviado" (venha das Encomendas ou do calendário)
+    if encomenda.tipo_entrega == 'entrega' and encomenda.status in ('pago', 'preparando'):
+        encomenda.status = 'enviado'
+        encomenda.save(update_fields=['status'])
+        from ..Views.notificacaoView import notificar   # import local como no resto da função
+        from ..utils import horarios
+        futura = encomenda.agendada_para and encomenda.agendada_para > timezone.now()
+        notificar(
+            utilizador=encomenda.comprador,
+            tipo='encomenda_enviada',
+            titulo=f'Encomenda enviada #{encomenda.id}',
+            # agendada para mais tarde: não dizer "a caminho" dias antes
+            mensagem=(f'A tua encomenda já tem condutor e será entregue {horarios.texto_agendada(encomenda.agendada_para)}.'
+                      if futura else 'A tua encomenda está a caminho!'),
+            loja=loja,
+            link='/perfil',
+        )
  
     if condutor:
         from ..Views.notificacaoView import notificar

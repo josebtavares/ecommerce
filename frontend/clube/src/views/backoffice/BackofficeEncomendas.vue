@@ -525,8 +525,8 @@ export default {
       try {
         const payload = {}
         if (this.condutorSelecionado) payload.condutor_id = this.condutorSelecionado
+        // criar a entrega já passa a encomenda a "enviado" e avisa o cliente (no servidor)
         await api.post(`/app/loja/${this.lojaId}/encomendas/${encId}/entrega/criar/`, payload)
-        await api.patch(`/app/loja/${this.lojaId}/encomendas/${encId}/status/`, { status: 'enviado' })
         const encReal = this.encomendas.find(e => e.id === encId)
         if (encReal) {
           this.contagem = {
