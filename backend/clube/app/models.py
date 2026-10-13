@@ -258,6 +258,11 @@ class Loja(models.Model):
     horario_ativo = models.BooleanField(default=False, db_default=False)
     fora_horario  = models.CharField(max_length=10, choices=FORA_HORARIO,
                                      default='agendar', db_default='agendar')
+    # o cliente escolhe dia e hora para receber/levantar (só dentro do horário)
+    agendamento_ativo        = models.BooleanField(default=False, db_default=False)
+    agendamento_intervalo    = models.PositiveSmallIntegerField(default=30, db_default=30)   # minutos entre horas
+    agendamento_dias         = models.PositiveSmallIntegerField(default=7, db_default=7)     # dias que se podem escolher (hoje incluído)
+    agendamento_antecedencia = models.PositiveSmallIntegerField(default=30, db_default=30)   # minutos mínimos a partir de agora
 
     class Meta:
         ordering = ['-data_criacao']
@@ -766,8 +771,13 @@ class Encomenda(models.Model):
         null=True, blank=True,
         related_name='encomendas',
     )
-    # feita com a loja fechada → preparar a partir desta hora (vazio = o mais cedo possível)
+    # vazio = o mais cedo possível. agendamento_origem diz porquê:
+    #   'abertura' → feita com a loja fechada, preparar a partir da abertura
+    #   'cliente'  → o cliente escolheu dia e hora para receber/levantar
+    AGENDAMENTO_ORIGEM = [('abertura', 'Loja fechada — para a abertura'), ('cliente', 'Escolhida pelo cliente')]
     agendada_para   = models.DateTimeField(null=True, blank=True, db_index=True)
+    agendamento_origem = models.CharField(max_length=10, choices=AGENDAMENTO_ORIGEM, blank=True,
+                                          default='', db_default='')
 
     class Meta:
         ordering = ['-data_criacao']

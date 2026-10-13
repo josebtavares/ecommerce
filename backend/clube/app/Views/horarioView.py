@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from ..models import Loja, ConfiguracaoPlataforma
@@ -27,7 +27,46 @@ def _horario_loja(loja):
         'fuso':          ConfiguracaoPlataforma.atual().fuso_horario,
         'agora':         horarios.agora().strftime('%H:%M'),
         'hoje':          horarios.agora().weekday(),
+        'agendamento': {
+            'ativo':        loja.agendamento_ativo,
+            'intervalo':    loja.agendamento_intervalo,
+            'dias':         loja.agendamento_dias,
+            'antecedencia': loja.agendamento_antecedencia,
+        },
     }
+
+
+def _ler_agendamento(dados, loja):
+    """Valida o bloco 'agendamento' do PUT. Devolve (campos, None) ou (None, mensagem)."""
+    a = dados.get('agendamento')
+    if a is None:
+        return {}, None
+    if not isinstance(a, dict):
+        return None, 'Formato do agendamento inválido.'
+    campos = {}
+    if 'ativo' in a:
+        if not isinstance(a['ativo'], bool):
+            return None, 'Agendamento: ativo inválido.'
+        campos['agendamento_ativo'] = a['ativo']
+    try:
+        if 'intervalo' in a:
+            v = int(a['intervalo'])
+            if v not in horarios.INTERVALOS_AGENDAMENTO:
+                return None, 'Agendamento: escolhe de 15 em 15, 30 em 30, de hora a hora ou de 2 em 2 horas.'
+            campos['agendamento_intervalo'] = v
+        if 'dias' in a:
+            v = int(a['dias'])
+            if not 1 <= v <= horarios.MAX_DIAS_AGENDAMENTO:
+                return None, f'Agendamento: entre 1 e {horarios.MAX_DIAS_AGENDAMENTO} dias.'
+            campos['agendamento_dias'] = v
+        if 'antecedencia' in a:
+            v = int(a['antecedencia'])
+            if not 0 <= v <= horarios.MAX_ANTECEDENCIA:
+                return None, 'Agendamento: antecedência entre 0 minutos e 24 horas.'
+            campos['agendamento_antecedencia'] = v
+    except (TypeError, ValueError):
+        return None, 'Agendamento: valor inválido.'
+    return campos, None
 
 
 @api_view(['GET', 'PUT'])
@@ -55,6 +94,10 @@ def loja_horario(request, loja_id):
     if fora not in dict(Loja.FORA_HORARIO):
         return Response({'detail': 'Escolhe o que acontece com a loja fechada.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    agendamento, msg = _ler_agendamento(dados, loja)
+    if msg:
+        return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+
     linhas = None
     if 'dias' in dados:
         linhas, msg = horarios.validar_dias(dados.get('dias'))
@@ -68,8 +111,23 @@ def loja_horario(request, loja_id):
     if linhas is not None:
         horarios.guardar(loja, linhas)
     loja.horario_ativo, loja.fora_horario = ativo, fora
-    loja.save(update_fields=['horario_ativo', 'fora_horario', 'data_atualizacao'])
+    for campo, valor in agendamento.items():
+        setattr(loja, campo, valor)
+    loja.save(update_fields=['horario_ativo', 'fora_horario', 'data_atualizacao', *agendamento])
     return Response(_horario_loja(loja))
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def loja_vagas(request, loja_id):
+    """
+    GET /app/loja/<loja_id>/agendamento/vagas/
+    Dias e horas que o cliente pode escolher para receber/levantar a encomenda.
+    """
+    loja = get_object_or_404(Loja.objects.prefetch_related('horarios'), id=loja_id, ativa=True)
+    if not loja.agendamento_ativo:
+        return Response({'ativo': False, 'dias': []})
+    return Response({'ativo': True, 'intervalo': loja.agendamento_intervalo, 'dias': horarios.vagas_payload(loja)})
 
 
 @api_view(['GET', 'PATCH'])

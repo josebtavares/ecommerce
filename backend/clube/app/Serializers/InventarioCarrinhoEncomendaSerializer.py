@@ -198,11 +198,11 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'opcao_entrega_id',
             'entrega_condutor', 
             'entrega_status',
-            'agendada_para', 'agendada_texto',
+            'agendada_para', 'agendada_texto', 'agendamento_origem',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
         ]
         read_only_fields = [
-            'comprador', 'loja', 'valor_total', 'agendada_para',
+            'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem',
             'data_criacao', 'data_atualizacao',
         ]
  
@@ -310,7 +310,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             'receita_liquida',
             'data_criacao',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
-            'agendada_para', 'agendada_texto',
+            'agendada_para', 'agendada_texto', 'agendamento_origem',
         ]
  
     def get_agendada_texto(self, obj):

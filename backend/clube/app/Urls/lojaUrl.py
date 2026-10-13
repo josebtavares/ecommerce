@@ -1,5 +1,5 @@
 from django.urls import path
-from ..Views import lojaView, videoView, horarioView
+from ..Views import lojaView, videoView, horarioView, calendarioView
 
 urlpatterns = [
 
@@ -41,6 +41,8 @@ urlpatterns = [
     path('loja/<int:loja_id>/aparencia/', lojaView.loja_aparencia, name='loja-aparencia'),
     path("loja/<int:loja_id>/horario/", horarioView.loja_horario, name="loja-horario"),
     path("admin/plataforma/", horarioView.admin_plataforma, name="admin-plataforma"),
+    path("loja/<int:loja_id>/agendamento/vagas/", horarioView.loja_vagas, name="loja-vagas"),
+    path("loja/<int:loja_id>/entrega/calendario/", calendarioView.entrega_calendario, name="entrega-calendario"),
     
     # ── Criar Utilizador da loja ─────────────────────────────────────────────────
 

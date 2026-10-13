@@ -9,6 +9,7 @@ Horário das lojas.
 - Loja fechada no checkout: fora_horario 'agendar' → a encomenda fica para a próxima abertura
   (Encomenda.agendada_para); 'bloquear' → não aceita.
 """
+import math
 import re
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo, available_timezones
@@ -142,6 +143,93 @@ def payload_publico(loja, quando=None):
         'hoje':         (quando or timezone.now()).astimezone(fuso()).weekday(),
         'semana':       semana(loja),
     }
+
+
+# ── Agendamento pelo cliente (dia e hora para receber/levantar) ──
+
+INTERVALOS_AGENDAMENTO = (15, 30, 60, 120)
+MAX_DIAS_AGENDAMENTO = 60
+MAX_ANTECEDENCIA = 24 * 60
+DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+
+
+def vagas(loja, quando=None):
+    """
+    Horas que o cliente pode escolher: dentro do horário (ou o dia todo, se a loja não tem
+    horário), a partir de agora + antecedência, até `agendamento_dias` dias (hoje incluído),
+    de `agendamento_intervalo` em `agendamento_intervalo` minutos (08:00, 08:30, …).
+    Devolve [(date, [datetime, …])] por dia, só os dias com horas livres.
+    """
+    tz = fuso()
+    ref = (quando or timezone.now()).astimezone(tz)
+    passo = loja.agendamento_intervalo if loja.agendamento_intervalo in INTERVALOS_AGENDAMENTO else 30
+    dias = max(1, min(loja.agendamento_dias or 1, MAX_DIAS_AGENDAMENTO))
+    inicio = ref + timedelta(minutes=min(loja.agendamento_antecedencia or 0, MAX_ANTECEDENCIA))
+    ultimo_dia = ref.date() + timedelta(days=dias - 1)
+
+    if loja.horario_ativo:
+        js = janelas(loja, ref, dias=dias + 1, tz=tz)
+    else:
+        js = [(datetime.combine(ref.date() + timedelta(days=d), time(0), tzinfo=tz),
+               datetime.combine(ref.date() + timedelta(days=d + 1), time(0), tzinfo=tz)) for d in range(dias)]
+
+    por_dia = {}
+    for a, f in js:
+        t = max(a, inicio)
+        # alinha ao relógio do dia (08:00, 08:30…), nunca antes da abertura
+        meia_noite = datetime.combine(t.date(), time(0), tzinfo=tz)
+        segundos = (t - meia_noite).total_seconds()
+        t = meia_noite + timedelta(minutes=math.ceil(segundos / 60 / passo) * passo)
+        while t < f and t.date() <= ultimo_dia:
+            por_dia.setdefault(t.date(), set()).add(t)
+            t += timedelta(minutes=passo)
+    return [(d, sorted(por_dia[d])) for d in sorted(por_dia)]
+
+
+def _rotulo_dia(d, ref):
+    dias = (d - ref.date()).days
+    if dias == 0:
+        return 'Hoje'
+    if dias == 1:
+        return 'Amanhã'
+    return f'{DIAS_CURTOS[d.weekday()]} {d:%d/%m}'
+
+
+def vagas_payload(loja, quando=None):
+    ref = (quando or timezone.now()).astimezone(fuso())
+    return [{'data': d.isoformat(), 'nome': DIAS[d.weekday()], 'rotulo': _rotulo_dia(d, ref),
+             'horas': [t.strftime('%H:%M') for t in ts]} for d, ts in vagas(loja, quando)]
+
+
+def validar_vaga(loja, texto, quando=None):
+    """'2026-10-14T13:30' (hora local da plataforma) → (datetime, None) ou (None, mensagem)."""
+    try:
+        dt = datetime.fromisoformat(str(texto).strip())
+    except (TypeError, ValueError):
+        return None, 'Data/hora de agendamento inválida.'
+    tz = fuso()
+    dt = dt.astimezone(tz) if dt.tzinfo else dt.replace(tzinfo=tz)
+    for d, ts in vagas(loja, quando):
+        if d == dt.date():
+            if any(t == dt for t in ts):
+                return next(t for t in ts if t == dt), None
+            break
+    return None, 'Essa hora já não está disponível — escolhe outra.'
+
+
+def agendamento_publico(loja):
+    if not loja.agendamento_ativo:
+        return {'ativo': False}
+    return {'ativo': True, 'intervalo': loja.agendamento_intervalo, 'dias': loja.agendamento_dias,
+            'antecedencia': loja.agendamento_antecedencia}
+
+
+def texto_agendada(dt):
+    """'Quarta 14/10 às 13:30' (no fuso da plataforma)."""
+    if not dt:
+        return ''
+    d = dt.astimezone(fuso())
+    return f'{DIAS[d.weekday()]} {d:%d/%m} às {d:%H:%M}'
 
 
 # ── Gravar (backoffice) ───────────────────────────────────────
