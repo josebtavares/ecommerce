@@ -43,9 +43,17 @@ def _resumo_loja(loja, membro):
     sub = Subscricao.objects.select_related('plano').filter(loja=loja).first()
     faturas = list(loja.faturas_subscricao.select_related('plano')[:24]) if sub else []
     pendentes = [f for f in faturas if f.estado == 'pendente']
+    livre = subs.proxima_troca(loja)
+    pedido = None
+    if sub and sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao':
+        f = next((x for x in pendentes), None)
+        pedido = {'plano': subs.plano_payload(sub.plano), 'fatura': subs.fatura_payload(f) if f else None}
     return {
         'modelo': loja.modelo_cobranca,
-        'aviso': subs.aviso_loja(sub, pendentes),
+        'aviso': subs.aviso_loja(sub, pendentes) if loja.modelo_cobranca == 'subscricao' else None,
+        # trocas: só uma a cada 3 meses; pedido = mudança para subscrição à espera da 1.ª fatura
+        'troca_livre_em': livre.isoformat() if livre else None,
+        'pedido': pedido,
         'percentagem_comissao': str(loja.percentagem_comissao),
         'subscricao': subs.subscricao_payload(sub),
         'faturas': [subs.fatura_payload(f) for f in faturas],
@@ -93,6 +101,7 @@ def loja_fatura_pagar(request, loja_id, fatura_id):
         subs.pagar(fatura, 'simulado', referencia=f'SIM-{fatura.id}')
     except subs.ErroFatura as e:
         return _erro(str(e))
+    loja.refresh_from_db()          # pagar pode ter mudado o modelo (pedido de mudança) ou reactivado a loja
     return Response(_resumo_loja(loja, membro))
 
 
@@ -257,3 +266,123 @@ def admin_loja_cobranca(request, loja_id):
     loja.refresh_from_db()
     sub = Subscricao.objects.filter(loja=loja).first()
     return Response({'loja_id': loja.id, 'modelo': loja.modelo_cobranca, 'subscricao': subs.subscricao_payload(sub)})
+
+
+# ── Fase 3: trocas pedidas pelo dono, acções do admin, resumo ──
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def loja_subscricao_mudar(request, loja_id):
+    """
+    POST /app/loja/<loja_id>/subscricao/mudar/   (só o dono)
+      { acao: 'subscricao', plano_id }  → pede a mudança de comissão para subscrição (1.ª fatura vence hoje)
+      { acao: 'cancelar_pedido' }       → desiste desse pedido
+      { acao: 'comissao' }              → passa para comissão no fim do período pago
+      { acao: 'cancelar_comissao' }     → desiste dessa mudança
+      { acao: 'plano', plano_id }       → muda de plano a partir da renovação
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    membro, erro = _exige_permissao(request, loja, 'pagar_subscricao')
+    if erro:
+        return erro
+    acao = request.data.get('acao')
+    plano = None
+    if acao in ('subscricao', 'plano'):
+        plano = PlanoSubscricao.objects.filter(id=request.data.get('plano_id'), ativo=True).first()
+        if not plano:
+            return _erro('Escolhe um dos planos disponíveis.')
+    try:
+        if acao == 'subscricao':
+            subs.pedir_subscricao(loja, plano)
+        elif acao == 'cancelar_pedido':
+            subs.cancelar_pedido(loja)
+        elif acao == 'comissao':
+            subs.agendar_comissao(loja)
+        elif acao == 'cancelar_comissao':
+            subs.cancelar_agendamento(loja)
+        elif acao == 'plano':
+            subs.mudar_plano(loja, plano)
+        else:
+            return _erro('Acção inválida.')
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    loja.refresh_from_db()
+    return Response(_resumo_loja(loja, membro))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_oferecer(request, loja_id):
+    """POST /app/admin/lojas/<id>/subscricao/oferecer/ { meses: 1-12, motivo? }"""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    sub = get_object_or_404(Subscricao, loja_id=loja_id)
+    try:
+        meses = int(request.data.get('meses'))
+    except (TypeError, ValueError):
+        meses = 0
+    if not 1 <= meses <= 12:
+        return _erro('Oferece entre 1 e 12 meses.')
+    try:
+        f = subs.oferecer(sub, meses, str(request.data.get('motivo') or '').strip())
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    return Response(subs.fatura_payload(f), status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_fatura_adiar(request, fatura_id):
+    """POST /app/admin/faturas/<id>/adiar/ { dias: 1-60 }"""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    fatura = get_object_or_404(FaturaSubscricao, id=fatura_id)
+    try:
+        dias = int(request.data.get('dias'))
+    except (TypeError, ValueError):
+        dias = 0
+    if not 1 <= dias <= 60:
+        return _erro('Adia entre 1 e 60 dias.')
+    try:
+        f = subs.adiar(fatura, dias)
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    return Response(subs.fatura_payload(f))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_fatura_anular(request, fatura_id):
+    """POST /app/admin/faturas/<id>/anular/ { motivo }"""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    fatura = get_object_or_404(FaturaSubscricao, id=fatura_id)
+    motivo = str(request.data.get('motivo') or '').strip()
+    if not motivo:
+        return _erro('Escreve o motivo (fica registado na fatura).')
+    try:
+        f = subs.anular(fatura, motivo)
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    return Response(subs.fatura_payload(f))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_resumo(request):
+    """GET /app/admin/subscricoes/resumo/?inicio=AAAA-MM-DD&fim=AAAA-MM-DD — receita do período."""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    from datetime import date
+    try:
+        inicio = date.fromisoformat(request.GET.get('inicio', ''))
+        fim = date.fromisoformat(request.GET.get('fim', ''))
+    except ValueError:
+        return _erro('Indica inicio e fim (AAAA-MM-DD).')
+    if fim < inicio or (fim - inicio).days > 3660:
+        return _erro('Período inválido.')
+    return Response(subs.resumo_periodo(inicio, fim))

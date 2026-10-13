@@ -95,45 +95,79 @@ DIAS_CARENCIA = 30      # depois do vencimento a loja continua a funcionar 30 di
 
 @transaction.atomic
 def pagar(fatura, metodo, referencia='', notas='', quando=None):
-    """Marca a fatura como paga e estende o serviço até ao fim do período (reactiva se estava suspensa)."""
+    """
+    Marca a fatura como paga e estende o serviço até ao fim do período. Reactiva a loja se estava
+    suspensa por falta de pagamento. Se for a 1.ª fatura de um pedido de mudança para subscrição
+    (subscrição 'aguarda' numa loja activa em comissão), a subscrição começa agora.
+    """
     d = quando or hoje()
     fatura = FaturaSubscricao.objects.select_for_update().get(pk=fatura.pk)
     if fatura.estado != 'pendente':
         raise ErroFatura('Esta fatura já não está por pagar.')
     if metodo not in dict(FaturaSubscricao.METODOS):
         raise ErroFatura('Método de pagamento inválido.')
+    sub = Subscricao.objects.select_for_update().get(pk=fatura.subscricao_id)
+    loja = Loja.objects.select_for_update().get(pk=fatura.loja_id)
+
+    ativacao = sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao'
+    if ativacao:
+        # o período conta a partir do dia em que paga (não do dia em que pediu)
+        fatura.periodo_inicio, fatura.periodo_fim = d, mais_meses(d, sub.meses)
+        fatura.descricao = _descricao(sub.plano, fatura.periodo_inicio, fatura.periodo_fim)
+        sub.inicio = d
     fatura.estado, fatura.paga_em, fatura.metodo = 'paga', timezone.now(), metodo
     fatura.referencia, fatura.notas = referencia[:100], (notas or fatura.notas)[:300]
-    fatura.save(update_fields=['estado', 'paga_em', 'metodo', 'referencia', 'notas'])
+    fatura.save(update_fields=['estado', 'paga_em', 'metodo', 'referencia', 'notas', 'periodo_inicio', 'periodo_fim', 'descricao'])
 
-    sub = Subscricao.objects.select_for_update().get(pk=fatura.subscricao_id)
     if fatura.periodo_fim > sub.pago_ate:
         sub.pago_ate = fatura.periodo_fim
-    em_divida = sub.faturas.filter(estado='pendente', vencimento__lt=d).exists()
-    reativou = False
-    if sub.estado in ('em_atraso', 'suspensa') and not em_divida:
-        reativou = sub.estado == 'suspensa'
+    if ativacao:
         sub.estado = 'ativa'
+        loja.modelo_cobranca, loja.modelo_alterado_em = 'subscricao', timezone.now()
+        loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
     # pagar durante o teste não o encurta: continua 'teste' até o período pago começar
     elif sub.estado == 'teste' and d >= fatura.periodo_inicio:
         sub.estado = 'ativa'
-    sub.save(update_fields=['pago_ate', 'estado', 'data_atualizacao'])
-
-    # a loja só volta se foi suspensa por causa da subscrição (não mexe numa suspensão do admin)
-    loja = Loja.objects.get(pk=fatura.loja_id)
-    if reativou and loja.estado == 'suspensa' and loja.estado_motivo.startswith(MOTIVO_SUSPENSAO):
-        loja.mudar_estado('ativa')
+    sub.save()
+    reativou = _reavaliar(sub, d)
 
     from ..Views.notificacaoView import notificar_staff, notificar_admins
-    notificar_staff(loja=fatura.loja, roles=['dono'], tipo='subscricao_paga',
+    notificar_staff(loja=loja, roles=['dono'], tipo='subscricao_paga',
                     titulo=f'Subscrição paga — {fatura.descricao}',
-                    mensagem=f'{_eur(fatura.valor)} recebidos. Pago até {sub.pago_ate - timedelta(days=1):%d/%m/%Y}.'
-                             + (' A loja foi reactivada.' if reativou else ''),
-                    link=f'/loja/{fatura.loja_id}/backoffice')
-    notificar_admins(tipo='subscricao_paga', titulo=f'Subscrição paga — {fatura.loja.nome}',
-                     mensagem=f'Fatura #{fatura.id} · {_eur(fatura.valor)} · {fatura.get_metodo_display()}.',
-                     loja=fatura.loja, link='/admin')
+                    mensagem=(f'{_eur(fatura.valor)} recebidos. Pago até {sub.pago_ate - timedelta(days=1):%d/%m/%Y}.'
+                              + (' A loja passou para subscrição — as vendas deixam de pagar comissão.' if ativacao else '')
+                              + (' A loja foi reactivada.' if reativou else '')),
+                    link=f'/loja/{loja.id}/backoffice')
+    notificar_admins(tipo='subscricao_paga', titulo=f'Subscrição paga — {loja.nome}',
+                     mensagem=f'Fatura #{fatura.id} · {_eur(fatura.valor)} · {fatura.get_metodo_display()}.'
+                              + (' Passou de comissão para subscrição.' if ativacao else ''),
+                     loja=loja, link='/admin')
     return fatura
+
+
+def _reavaliar(sub, d=None):
+    """
+    Depois de pagar / oferecer / adiar / anular: se já não há faturas vencidas, a subscrição
+    volta a 'ativa' e, se a loja estava suspensa por falta de pagamento, a loja volta.
+    Se passou a haver uma vencida, fica 'em_atraso'. Devolve True se reactivou a loja.
+    """
+    d = d or hoje()
+    if sub.estado in ('aguarda', 'cancelada'):
+        return False
+    vencidas = sub.faturas.filter(estado='pendente', vencimento__lt=d).exists()
+    reativou = False
+    if not vencidas and sub.estado in ('em_atraso', 'suspensa'):
+        era_suspensa = sub.estado == 'suspensa'
+        sub.estado = 'teste' if (sub.teste_ate and d < sub.teste_ate) else 'ativa'
+        sub.save(update_fields=['estado', 'data_atualizacao'])
+        loja = Loja.objects.get(pk=sub.loja_id)
+        if era_suspensa and loja.estado == 'suspensa' and loja.estado_motivo.startswith(MOTIVO_SUSPENSAO):
+            loja.mudar_estado('ativa')
+            reativou = True
+    elif vencidas and sub.estado in ('teste', 'ativa'):
+        sub.estado = 'em_atraso'
+        sub.save(update_fields=['estado', 'data_atualizacao'])
+    return reativou
 
 
 def _avisar_fatura(fatura, nova=False):
@@ -162,25 +196,27 @@ def mudar_modelo(loja, modelo, plano=None):
             raise ErroFatura('A loja já está em subscrição.')
         d = hoje()
         if sub:
+            sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: a plataforma mudou o modelo da loja.')
             sub.plano, sub.preco, sub.meses = plano, plano.preco, plano.meses
             sub.estado, sub.inicio, sub.pago_ate, sub.teste_ate = 'aguarda', d, d, None
+            sub.fim_agendado, sub.plano_seguinte = None, None
             sub.save()
         else:
             sub = Subscricao.objects.create(loja=loja, plano=plano, preco=plano.preco, meses=plano.meses,
                                             estado='aguarda', inicio=d, pago_ate=d)
-        loja.modelo_cobranca = 'subscricao'
-        loja.save(update_fields=['modelo_cobranca', 'data_atualizacao'])
+        loja.modelo_cobranca, loja.modelo_alterado_em = 'subscricao', timezone.now()
+        loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
         if loja.estado == 'ativa':
             arrancar(loja, com_teste=False)
     elif modelo == 'comissao':
         if loja.modelo_cobranca == 'comissao':
             raise ErroFatura('A loja já está em comissão.')
         if sub:
-            sub.estado = 'cancelada'
-            sub.save(update_fields=['estado', 'data_atualizacao'])
+            sub.estado, sub.fim_agendado, sub.plano_seguinte = 'cancelada', None, None
+            sub.save(update_fields=['estado', 'fim_agendado', 'plano_seguinte', 'data_atualizacao'])
             sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: a loja passou para comissão.')
-        loja.modelo_cobranca = 'comissao'
-        loja.save(update_fields=['modelo_cobranca', 'data_atualizacao'])
+        loja.modelo_cobranca, loja.modelo_alterado_em = 'comissao', timezone.now()
+        loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
     else:
         raise ErroFatura('Modelo inválido.')
     return loja
@@ -211,6 +247,9 @@ def subscricao_payload(sub):
             # último dia pago (pago_ate é o dia em que deixa de estar)
             'pago_ate': (sub.pago_ate - timedelta(days=1)).isoformat() if sub.pago_ate > sub.inicio else None,
             'teste_ate': (sub.teste_ate - timedelta(days=1)).isoformat() if sub.teste_ate else None,
+            # passa para comissão neste dia (o 1.º já sem subscrição)
+            'fim_agendado': sub.fim_agendado.isoformat() if sub.fim_agendado else None,
+            'plano_seguinte': plano_payload(sub.plano_seguinte) if sub.plano_seguinte_id else None,
             'auto_renovar': sub.auto_renovar}
 
 
@@ -276,6 +315,17 @@ def _processar_uma(sub, d, resumo):
     if loja.estado not in ('ativa', 'fechada'):
         return
 
+    # 0. o dono pediu para passar a comissão e o período pago acabou
+    if sub.fim_agendado and d >= sub.fim_agendado:
+        sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: a loja passou para comissão.')
+        sub.estado, sub.fim_agendado = 'cancelada', None
+        sub.save(update_fields=['estado', 'fim_agendado', 'data_atualizacao'])
+        loja.modelo_cobranca, loja.modelo_alterado_em = 'comissao', timezone.now()
+        loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
+        _avisar_dono(loja, 'A loja passou para comissão',
+                     f'A partir de hoje pagas {loja.percentagem_comissao}% por venda e deixas de ter mensalidade.')
+        return
+
     # 1. fim do teste
     if sub.estado == 'teste' and sub.teste_ate and d >= sub.teste_ate:
         sub.estado = 'ativa'
@@ -283,7 +333,10 @@ def _processar_uma(sub, d, resumo):
 
     # 2. fatura do período seguinte, 7 dias antes de o período pago acabar
     tem_seguinte = sub.faturas.filter(periodo_inicio=sub.pago_ate).exclude(estado='anulada').exists()
-    if not tem_seguinte and d >= sub.pago_ate - timedelta(days=DIAS_AVISO):
+    if not tem_seguinte and not sub.fim_agendado and d >= sub.pago_ate - timedelta(days=DIAS_AVISO):
+        if sub.plano_seguinte_id:                                             # o dono mudou de plano
+            sub.plano, sub.plano_seguinte = sub.plano_seguinte, None
+            sub.save(update_fields=['plano', 'plano_seguinte', 'data_atualizacao'])
         if sub.preco != sub.plano.preco or sub.meses != sub.plano.meses:      # renova ao preço actual do plano
             sub.preco, sub.meses = sub.plano.preco, sub.plano.meses
             sub.save(update_fields=['preco', 'meses', 'data_atualizacao'])
@@ -366,3 +419,219 @@ def aviso_loja(sub, pendentes, quando=None):
         quando_txt = 'hoje' if f.vencimento == d else f'a {f.vencimento:%d/%m/%Y}'
         return {'tipo': 'vence', 'suspensao_em': None, 'texto': f'A fatura da subscrição ({_eur(f.valor)}) vence {quando_txt}.'}
     return None
+
+
+# ── Trocas pedidas pelo dono ──────────────────────────────────
+
+DIAS_ENTRE_TROCAS = 90
+
+
+def proxima_troca(loja):
+    """Data a partir da qual o dono pode voltar a mudar de modelo (None = já pode)."""
+    if not loja.modelo_alterado_em:
+        return None
+    livre = (loja.modelo_alterado_em + timedelta(days=DIAS_ENTRE_TROCAS)).date()
+    return livre if livre > timezone.now().date() else None
+
+
+def _exige_troca_livre(loja):
+    livre = proxima_troca(loja)
+    if livre:
+        raise ErroFatura(f'Só podes mudar de modelo uma vez a cada 3 meses — a partir de {livre:%d/%m/%Y}.')
+
+
+@transaction.atomic
+def pedir_subscricao(loja, plano):
+    """
+    Loja em comissão pede para passar a subscrição: emite a 1.ª fatura (vence hoje). A loja
+    continua em comissão até a pagar — aí a subscrição começa (ver pagar()). Sem período de teste.
+    """
+    loja = Loja.objects.select_for_update().get(pk=loja.pk)
+    if loja.modelo_cobranca != 'comissao':
+        raise ErroFatura('A loja já está em subscrição.')
+    if loja.estado != 'ativa':
+        raise ErroFatura('A loja tem de estar activa.')
+    _exige_troca_livre(loja)
+    d = hoje()
+    sub = Subscricao.objects.select_for_update().filter(loja=loja).first()
+    if sub and sub.estado == 'aguarda':
+        raise ErroFatura('Já tens um pedido de mudança — paga a fatura ou cancela o pedido.')
+    if sub:
+        sub.plano, sub.preco, sub.meses, sub.estado = plano, plano.preco, plano.meses, 'aguarda'
+        sub.inicio, sub.pago_ate, sub.teste_ate, sub.fim_agendado, sub.plano_seguinte = d, d, None, None, None
+        sub.save()
+    else:
+        sub = Subscricao.objects.create(loja=loja, plano=plano, preco=plano.preco, meses=plano.meses,
+                                        estado='aguarda', inicio=d, pago_ate=d)
+    f = emitir_fatura(sub, d)
+    _marcar(f, 'emitida')
+    return sub, f
+
+
+@transaction.atomic
+def cancelar_pedido(loja):
+    sub = Subscricao.objects.select_for_update().filter(loja=loja, estado='aguarda').first()
+    if not sub or loja.modelo_cobranca != 'comissao':
+        raise ErroFatura('Não há nenhum pedido de mudança para cancelar.')
+    sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: pedido de mudança cancelado.')
+    sub.estado = 'cancelada'
+    sub.save(update_fields=['estado', 'data_atualizacao'])
+
+
+@transaction.atomic
+def agendar_comissao(loja):
+    """Subscrição → comissão no fim do período pago (sem reembolso). Não com faturas em atraso."""
+    loja = Loja.objects.select_for_update().get(pk=loja.pk)
+    sub = Subscricao.objects.select_for_update().filter(loja=loja).first()
+    if loja.modelo_cobranca != 'subscricao' or not sub or sub.estado not in ('teste', 'ativa', 'em_atraso'):
+        raise ErroFatura('A loja não está numa subscrição activa.')
+    if sub.fim_agendado:
+        raise ErroFatura(f'Já está agendado: passa para comissão a {sub.fim_agendado:%d/%m/%Y}.')
+    if sub.faturas.filter(estado='pendente', vencimento__lt=hoje()).exists():
+        raise ErroFatura('Tens faturas em atraso — paga-as primeiro.')
+    _exige_troca_livre(loja)
+    sub.fim_agendado, sub.plano_seguinte = sub.pago_ate, None
+    sub.save(update_fields=['fim_agendado', 'plano_seguinte', 'data_atualizacao'])
+    # a renovação já emitida (ainda por pagar) deixa de fazer sentido
+    sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate).update(
+        estado='anulada', notas='Anulada: a loja vai passar para comissão.')
+    return sub
+
+
+@transaction.atomic
+def cancelar_agendamento(loja):
+    sub = Subscricao.objects.select_for_update().filter(loja=loja).exclude(fim_agendado=None).first()
+    if not sub:
+        raise ErroFatura('Não há nenhuma mudança para comissão agendada.')
+    sub.fim_agendado = None
+    sub.save(update_fields=['fim_agendado', 'data_atualizacao'])   # o ciclo volta a emitir a renovação
+
+
+@transaction.atomic
+def mudar_plano(loja, plano):
+    """
+    Muda de plano a partir da renovação. Se a renovação já foi emitida e ainda está por pagar,
+    é substituída já pelo plano novo (mantém o vencimento — não dá mais prazo).
+    """
+    sub = Subscricao.objects.select_for_update().filter(loja=loja, estado__in=['teste', 'ativa', 'em_atraso']).first()
+    if not sub or loja.modelo_cobranca != 'subscricao':
+        raise ErroFatura('A loja não está numa subscrição activa.')
+    if sub.fim_agendado:
+        raise ErroFatura('A loja vai passar para comissão — cancela isso primeiro.')
+    if plano.id == sub.plano_id and not sub.plano_seguinte_id:
+        raise ErroFatura('Já estás neste plano.')
+    renovacao = sub.faturas.filter(estado='pendente', periodo_inicio=sub.pago_ate).first()
+    if renovacao:
+        renovacao.estado, renovacao.notas = 'anulada', f'Substituída: mudança para o plano {plano.nome}.'
+        renovacao.save(update_fields=['estado', 'notas'])
+        sub.plano, sub.preco, sub.meses, sub.plano_seguinte = plano, plano.preco, plano.meses, None
+        sub.save()
+        nova = emitir_fatura(sub, sub.pago_ate, vencimento=renovacao.vencimento)
+        nova.avisos = list(renovacao.avisos or [])
+        nova.save(update_fields=['avisos'])
+        return sub, nova
+    sub.plano_seguinte = None if plano.id == sub.plano_id else plano
+    sub.save(update_fields=['plano_seguinte', 'data_atualizacao'])
+    return sub, None
+
+
+# ── Acções do admin ───────────────────────────────────────────
+
+@transaction.atomic
+def oferecer(sub, meses, motivo=''):
+    """
+    Oferece `meses` de serviço: as faturas por pagar do período actual/seguinte são anuladas e
+    fica uma fatura de 0 € (paga, "Oferta da plataforma") a cobrir esses meses.
+    """
+    sub = Subscricao.objects.select_for_update().get(pk=sub.pk)
+    if sub.estado in ('aguarda', 'cancelada'):
+        raise ErroFatura('Esta subscrição não está activa.')
+    sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate).update(
+        estado='anulada', notas='Anulada: meses oferecidos pela plataforma.')
+    inicio, fim = sub.pago_ate, mais_meses(sub.pago_ate, meses)
+    f = FaturaSubscricao.objects.create(
+        loja=sub.loja, subscricao=sub, plano=sub.plano, descricao=f'Oferta — {_descricao(sub.plano, inicio, fim)}',
+        periodo_inicio=inicio, periodo_fim=fim, valor=0, estado='paga', vencimento=inicio, paga_em=timezone.now(),
+        metodo='oferta', notas=(motivo or 'Oferta da plataforma')[:300], avisos=['emitida'])
+    sub.pago_ate = fim
+    if sub.fim_agendado:
+        sub.fim_agendado = fim
+    sub.save()
+    _reavaliar(sub)
+    _avisar_dono(sub.loja, f'A plataforma ofereceu-te {meses} mês(es) de subscrição',
+                 f'Não pagas nada até {fim - timedelta(days=1):%d/%m/%Y}.' + (f' {motivo}' if motivo else ''))
+    return f
+
+
+@transaction.atomic
+def adiar(fatura, dias):
+    """Dá mais prazo a uma fatura por pagar (os avisos de atraso recomeçam a contar)."""
+    fatura = FaturaSubscricao.objects.select_for_update().get(pk=fatura.pk)
+    if fatura.estado != 'pendente':
+        raise ErroFatura('Só se adiam faturas por pagar.')
+    fatura.vencimento = max(fatura.vencimento, hoje()) + timedelta(days=dias)
+    fatura.avisos = [a for a in (fatura.avisos or []) if a in ('emitida',)]
+    fatura.save(update_fields=['vencimento', 'avisos'])
+    _reavaliar(fatura.subscricao)
+    _avisar_dono(fatura.loja, 'Tens mais prazo para pagar a subscrição',
+                 f'{fatura.descricao}: vence agora a {fatura.vencimento:%d/%m/%Y}.')
+    return fatura
+
+
+@transaction.atomic
+def anular(fatura, motivo):
+    """Anula uma fatura por pagar (nunca se apaga). O ciclo volta a emitir a do período, se for preciso."""
+    fatura = FaturaSubscricao.objects.select_for_update().get(pk=fatura.pk)
+    if fatura.estado != 'pendente':
+        raise ErroFatura('Só se anulam faturas por pagar.')
+    fatura.estado, fatura.notas = 'anulada', (f'Anulada: {motivo}' if motivo else 'Anulada pela plataforma.')[:300]
+    fatura.save(update_fields=['estado', 'notas'])
+    _reavaliar(fatura.subscricao)
+    return fatura
+
+
+# ── Resumo por período (admin) ────────────────────────────────
+
+def resumo_periodo(inicio, fim):
+    """Receita de subscrições (faturas pagas) e de comissões (registadas) entre duas datas (inclusive)."""
+    from datetime import datetime, time
+    from django.db.models import Count, Q, Sum
+    from ..models import Comissao
+    from .horarios import fuso
+    tz = fuso()
+    de = datetime.combine(inicio, time(0), tzinfo=tz)
+    ate = datetime.combine(fim + timedelta(days=1), time(0), tzinfo=tz)
+    pagas = FaturaSubscricao.objects.filter(estado='paga', paga_em__gte=de, paga_em__lt=ate)
+    receita_sub = pagas.exclude(metodo='oferta').aggregate(v=Sum('valor'), n=Count('id'))
+    por_plano = list(pagas.exclude(metodo='oferta').values('plano__nome').annotate(v=Sum('valor'), n=Count('id')).order_by('-v'))
+    por_metodo = list(pagas.values('metodo').annotate(v=Sum('valor'), n=Count('id')).order_by('-n'))
+    com = Comissao.objects.filter(data_criacao__gte=de, data_criacao__lt=ate).aggregate(
+        v=Sum('valor_comissao'), n=Count('id'),
+        liquidada=Sum('valor_comissao', filter=Q(status='liquidada')),
+        pendente=Sum('valor_comissao', filter=Q(status='pendente')))
+    d = hoje()
+    pend = FaturaSubscricao.objects.filter(estado='pendente')
+    atraso = pend.filter(vencimento__lt=d).aggregate(v=Sum('valor'), n=Count('id'))
+    a_receber = pend.filter(vencimento__gte=max(inicio, d), vencimento__lte=fim).aggregate(v=Sum('valor'), n=Count('id'))
+    lojas = Loja.objects.exclude(estado='pendente')
+    zero = Decimal('0')
+    metodos = dict(FaturaSubscricao.METODOS)
+    return {
+        'inicio': inicio.isoformat(), 'fim': fim.isoformat(),
+        'subscricoes': {
+            'valor': str(receita_sub['v'] or zero), 'faturas': receita_sub['n'],
+            'ofertas': pagas.filter(metodo='oferta').count(),
+            'por_plano': [{'plano': x['plano__nome'], 'valor': str(x['v']), 'faturas': x['n']} for x in por_plano],
+            'por_metodo': [{'metodo': x['metodo'], 'nome': metodos.get(x['metodo'], x['metodo']),
+                            'valor': str(x['v']), 'faturas': x['n']} for x in por_metodo],
+        },
+        'comissoes': {'valor': str(com['v'] or zero), 'encomendas': com['n'],
+                      'liquidada': str(com['liquidada'] or zero), 'pendente': str(com['pendente'] or zero)},
+        'total': str((receita_sub['v'] or zero) + (com['v'] or zero)),
+        'em_atraso': {'valor': str(atraso['v'] or zero), 'faturas': atraso['n']},
+        'a_receber': {'valor': str(a_receber['v'] or zero), 'faturas': a_receber['n']},
+        'lojas': {'comissao': lojas.filter(modelo_cobranca='comissao').count(),
+                  'subscricao': lojas.filter(modelo_cobranca='subscricao').count()},
+        'por_estado': dict(Subscricao.objects.filter(loja__modelo_cobranca='subscricao')
+                           .values_list('estado').annotate(n=Count('id'))),
+    }

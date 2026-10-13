@@ -189,6 +189,8 @@ class Loja(models.Model):
     # como a plataforma ganha com a loja: % por venda (comissão) ou mensalidade (subscrição — ver Subscricao)
     MODELOS_COBRANCA = [('comissao', 'Comissão por venda'), ('subscricao', 'Subscrição')]
     modelo_cobranca = models.CharField(max_length=10, choices=MODELOS_COBRANCA, default='comissao', db_default='comissao')
+    # última troca de modelo (o dono só pode trocar uma vez a cada 3 meses)
+    modelo_alterado_em = models.DateTimeField(null=True, blank=True)
 
     # Opções de entrega/levantamento
     entrega_ativa   = models.BooleanField(default=False)
@@ -1570,6 +1572,10 @@ class Subscricao(models.Model):
     pago_ate     = models.DateField()               # exclusivo: o primeiro dia já não pago
     teste_ate    = models.DateField(null=True, blank=True)   # exclusivo: fim do período grátis (vazio = sem teste)
     auto_renovar = models.BooleanField(default=True)
+    # o dono pediu para passar a comissão: acontece neste dia (o fim do período pago)
+    fim_agendado = models.DateField(null=True, blank=True)
+    # o dono mudou de plano: vale a partir da renovação seguinte
+    plano_seguinte = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, null=True, blank=True, related_name='+')
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
