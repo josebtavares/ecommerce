@@ -61,7 +61,7 @@ def loja_list(request):
     GET /app/loja/?q=pizza&categoria=comida&offset=0&limit=20
                   &entrega=true&localizacao=lisboa
     """
-    qs = Loja.objects.filter(ativa=True)
+    qs = Loja.objects.filter(ativa=True).prefetch_related('horarios')   # estado aberta/fechada nos cards
 
     q = request.GET.get('q')
     if q:
