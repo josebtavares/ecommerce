@@ -509,6 +509,10 @@ class Produto(models.Model):
     # Enquanto False, o produto usa o stock total do Inventario (comportamento antigo).
     stock_por_variante = models.BooleanField(default=False)
 
+    # Conjunto (menu, pack, cabaz): feito de outros produtos da loja (ComponenteConjunto).
+    # Não tem stock próprio — vender um conjunto desconta o stock de cada componente.
+    e_conjunto = models.BooleanField(default=False)
+
     class Meta:
         ordering = ['-data_criacao']
 
@@ -603,6 +607,36 @@ class VarianteProduto(models.Model):
         return f'{self.produto.nome} [{self.descricao()}] — {self.quantidade} un.'
 
 
+class ComponenteConjunto(models.Model):
+    """
+    Um produto dentro de um conjunto (ex.: "1× Batata média" no "Menu Hambúrguer").
+    O componente é um produto normal da mesma loja, que continua à venda sozinho; vender o
+    conjunto desconta o stock dele (na variação escolhida, se o produto usa stock por variação).
+    RESTRICT: um produto/variação dentro de um conjunto não pode ser apagado da BD — excepto
+    quando o próprio conjunto é apagado na mesma operação (ex.: eliminar a loja inteira).
+    """
+    conjunto   = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='componentes')
+    produto    = models.ForeignKey(Produto, on_delete=models.RESTRICT, related_name='em_conjuntos')
+    variante   = models.ForeignKey(VarianteProduto, on_delete=models.RESTRICT, null=True, blank=True,
+                                   related_name='em_conjuntos')
+    quantidade = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    ordem      = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['ordem', 'id']
+        constraints = [
+            models.CheckConstraint(check=~models.Q(conjunto=models.F('produto')),
+                                   name='conjunto_nao_se_contem'),
+            models.UniqueConstraint(fields=['conjunto', 'produto', 'variante'],
+                                    name='componente_unico_por_variante'),
+            models.UniqueConstraint(fields=['conjunto', 'produto'], condition=models.Q(variante__isnull=True),
+                                    name='componente_unico_sem_variante'),
+        ]
+
+    def __str__(self):
+        return f'{self.quantidade}× {self.produto.nome} em {self.conjunto.nome}'
+
+
 # ══════════════════════════════════════════════════════════════
 # CARRINHO
 # ══════════════════════════════════════════════════════════════
@@ -688,6 +722,9 @@ class ItemEncomenda(models.Model):
     atributos   = models.JSONField(default=dict, blank=True)  # ← novo
     variante    = models.ForeignKey('VarianteProduto', on_delete=models.SET_NULL,
                                     null=True, blank=True, related_name='itens_encomenda')
+    # conjunto: o que levava no momento da compra (para o histórico e para repor o stock)
+    # [{"origem": "loja", "produto_id", "variante_id", "nome", "quantidade" (por unidade)}]
+    componentes = models.JSONField(default=list, blank=True)
 
 
     def __str__(self):

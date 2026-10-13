@@ -147,7 +147,7 @@ class ItemEncomendaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ItemEncomenda
-        fields = ['id', 'produto', 'quantidade', 'preco', 'atributos', 'variante', 'subtotal']
+        fields = ['id', 'produto', 'quantidade', 'preco', 'atributos', 'variante', 'componentes', 'subtotal']
 
     def get_subtotal(self, obj):
         return round(float(obj.preco) * obj.quantidade, 2)

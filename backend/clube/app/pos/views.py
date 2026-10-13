@@ -48,6 +48,12 @@ except Exception:
     Inventario = None
     
 from .stock import reservar_stock, repor_stock_item, cancelar_conta
+from ..utils import conjuntos as conj
+
+# prefetch dos componentes dos conjuntos (menus) nas listagens do POS
+PREFETCH_CONJUNTO_POS = ('componentes__produto_pos', 'componentes__variante_pos', 'componentes__produto__inventario',
+                         'componentes__produto__loja', 'componentes__variante')
+PREFETCH_CONJUNTO_LOJA = ('componentes__produto__inventario', 'componentes__variante')
 from app.utils.auth import autenticar
 from app.utils.google_auth import google_obter_utilizador
 from app.utils.password import mensagem_password_fraca
@@ -285,7 +291,25 @@ def _tipo_payload(tipo):
     }
 
 
-def _produto_pos_payload(produto, request=None):
+def _conjunto_payload(produto, request, pos):
+    """Campos de conjunto (menu) para o POS — disponibilidade vista a partir deste POS."""
+    if not produto.e_conjunto:
+        return {'e_conjunto': False, 'componentes': [], 'conjunto': None}
+    d = conj.disponibilidade(produto, pos)
+    return {
+        'e_conjunto': True,
+        # sem stock próprio: quantos menus se podem vender com o stock dos componentes
+        'stock': d['quantidade'],
+        'controlar_stock': d['quantidade'] is not None,
+        'disponivel': bool(produto.ativo and produto.disponivel_pos and d['disponivel']),
+        'componentes': conj.componentes_payload(produto, request, pos),
+        'conjunto': {'disponivel': d['disponivel'], 'quantidade': d['quantidade'], 'motivo': d['motivo'],
+                     'componente_id': d['componente_id'],
+                     'preco_componentes': str(conj.preco_componentes(produto))},
+    }
+
+
+def _produto_pos_payload(produto, request=None, pos=None):
     return {
         'uid': f'pos-{produto.id}',
         'id': produto.id,
@@ -307,12 +331,13 @@ def _produto_pos_payload(produto, request=None):
         'disponivel': produto.disponivel,
         'loja': None,
         'pos_id': produto.pos_id,
+        **_conjunto_payload(produto, request, pos or produto.pos),
         'criado_em': produto.criado_em,
         'atualizado_em': produto.atualizado_em,
     }
 
 
-def _produto_loja_payload(produto, request=None):
+def _produto_loja_payload(produto, request=None, pos=None):
     ficheiro = getattr(produto, 'ficheiro', None)
     stock = _get_stock_loja(produto)
     ativo = getattr(produto, 'ativo', True)
@@ -341,6 +366,7 @@ def _produto_loja_payload(produto, request=None):
         'loja': {'id': produto.loja.id, 'nome': produto.loja.nome},
         'loja_id': produto.loja_id,
         'data_criacao': produto.data_criacao,
+        **_conjunto_payload(produto, request, pos),
     }
 
 
@@ -405,6 +431,8 @@ def _conta_payload(conta, request=None):
                 'atributos': item.atributos or {},
                 # opções que não são a variação (já no nome), ex.: "gelo: não" — útil para a cozinha
                 'opcoes_texto': _opcoes_extra_texto(item),
+                # menu: o que leva (para a cozinha e para a conta)
+                'componentes': item.componentes or [],
             }
             for item in items
         ],
@@ -827,26 +855,26 @@ def pos_produtos(request, pos_id):
         origem = 'todos'
 
     if pos.modo in ['standalone', 'hibrido'] and origem in ['todos', 'pos']:
-        qs_pos = ProdutoPOS.objects.select_related('tipo').prefetch_related('variantes').filter(pos=pos)
+        qs_pos = ProdutoPOS.objects.select_related('tipo').prefetch_related('variantes', *PREFETCH_CONJUNTO_POS).filter(pos=pos)
         if not gestao:
             qs_pos = qs_pos.filter(ativo=True, disponivel_pos=True)
         if q:
             qs_pos = qs_pos.filter(
                 Q(nome__icontains=q) | Q(descricao__icontains=q) | Q(categoria__icontains=q)
             )
-        data.extend([_produto_pos_payload(p, request) for p in qs_pos])
+        data.extend([_produto_pos_payload(p, request, pos) for p in qs_pos])
 
     # loja suspensa: os produtos dela saem da venda (na gestão continuam, como no backoffice)
     loja_suspensa = _loja_suspensa(pos)
     if (pos.modo in ['integrado', 'hibrido'] and pos.loja_vinculada and origem in ['todos', 'loja']
             and (gestao or not loja_suspensa)):
         qs_loja = (Produto.objects.select_related('tipo', 'loja', 'inventario')
-                   .prefetch_related('variantes', 'categorias').filter(loja=pos.loja_vinculada))
+                   .prefetch_related('variantes', 'categorias', *PREFETCH_CONJUNTO_LOJA).filter(loja=pos.loja_vinculada))
         if not gestao:
             qs_loja = qs_loja.filter(ativo=True, disponivel_pos=True)
         if q:
             qs_loja = qs_loja.filter(Q(nome__icontains=q) | Q(descricao__icontains=q))
-        data.extend([_produto_loja_payload(p, request) for p in qs_loja])
+        data.extend([_produto_loja_payload(p, request, pos) for p in qs_loja])
 
     return Response({
         'results': data,
@@ -858,6 +886,46 @@ def pos_produtos(request, pos_id):
         } if pos.loja_vinculada else None,
         'loja_suspensa': loja_suspensa,
     })
+
+
+def _aplicar_conjunto_pos(produto, dados, pos):
+    """
+    Conjunto (menu) do POS: liga/desliga e guarda os componentes (produtos do POS e, num POS
+    híbrido, da loja Bendi). Devolve a mensagem de erro ou None (quem chama faz o rollback).
+    """
+    from ..Views.produtoView import _quer_conjunto
+    quer = _quer_conjunto(dados, produto.e_conjunto)
+    linhas, erro = conj.ler_componentes(dados)
+    if erro:
+        return erro
+    if not quer:
+        if produto.e_conjunto:
+            produto.componentes.all().delete()
+            produto.e_conjunto = False
+            produto.save(update_fields=['e_conjunto'])
+        return None
+    if not produto.e_conjunto:
+        usado = conj.conjuntos_que_usam(produto)
+        if usado:
+            return (f'"{produto.nome}" faz parte de {", ".join(usado)} — '
+                    f'um produto dentro de um conjunto não pode ser ele próprio um conjunto.')
+        if produto.stock_por_variante:
+            return 'Este produto tem stock por variação — um conjunto não tem stock próprio. Cria um produto novo para o menu.'
+        if linhas is None:
+            return 'Escolhe os produtos que fazem parte do menu.'
+        # sem stock próprio: o stock é o dos componentes
+        produto.e_conjunto, produto.controlar_stock, produto.stock = True, False, 0
+        produto.save(update_fields=['e_conjunto', 'controlar_stock', 'stock'])
+    if linhas is not None:
+        validas, erro = conj.validar_linhas(linhas, produto, conj.resolver_pos(pos))
+        if erro:
+            return erro
+        conj.guardar_componentes_pos(produto, validas)
+    if produto.controlar_stock or produto.stock:
+        # um formulário antigo pode ter mandado stock — o menu continua sem stock próprio
+        produto.controlar_stock, produto.stock = False, 0
+        produto.save(update_fields=['controlar_stock', 'stock'])
+    return None
 
 
 @api_view(['POST'])
@@ -912,8 +980,12 @@ def produto_criar(request, pos_id):
             stock=stock, ativo=ativo, disponivel_pos=disponivel_pos,
             tipo=tipo or None, atributos=atributos,
         )
+        erro_conj = _aplicar_conjunto_pos(produto, request.data, pos)
+        if erro_conj:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
         # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
-        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        erro_grelha = None if produto.e_conjunto else aplicar_grelha_do_pedido(produto, request.data)
         if erro_grelha:
             transaction.set_rollback(True)
             return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
@@ -953,9 +1025,16 @@ def produto_criar(request, pos_id):
             ativo=ativo, disponivel_pos=disponivel_pos,
         )
         _aplicar_categorias_loja(produto, request)
-        _set_stock_loja(produto, stock)
+        from ..Views.produtoView import _aplicar_conjunto, _quer_conjunto
+        if _quer_conjunto(request.data):
+            erro_conj = _aplicar_conjunto(produto, request.data)
+            if erro_conj:
+                transaction.set_rollback(True)
+                return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            _set_stock_loja(produto, stock)
         # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
-        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        erro_grelha = None if produto.e_conjunto else aplicar_grelha_do_pedido(produto, request.data)
         if erro_grelha:
             transaction.set_rollback(True)
             return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
@@ -1024,13 +1103,17 @@ def produto_atualizar(request, pos_id, produto_id):
         produto.save()
         if produto.stock_por_variante and variantes_mudaram:
             sincronizar_variantes(produto)
+        erro_conj = _aplicar_conjunto_pos(produto, request.data, pos)
+        if erro_conj:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
         # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
-        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        erro_grelha = None if produto.e_conjunto else aplicar_grelha_do_pedido(produto, request.data)
         if erro_grelha:
             transaction.set_rollback(True)
             return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
         produto.refresh_from_db()
-        return Response(_produto_pos_payload(produto, request))
+        return Response(_produto_pos_payload(produto, request, pos))
 
     if origem == 'loja':
         # Membros não gerem produtos da loja Bendi directamente
@@ -1078,10 +1161,15 @@ def produto_atualizar(request, pos_id, produto_id):
         _aplicar_categorias_loja(produto, request)
         if produto.stock_por_variante and variantes_mudaram:
             sincronizar_variantes(produto)
-        if 'stock' in request.data:
+        from ..Views.produtoView import _aplicar_conjunto
+        erro_conj = _aplicar_conjunto(produto, request.data)
+        if erro_conj:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
+        if 'stock' in request.data and not produto.e_conjunto:
             _set_stock_loja(produto, int(request.data.get('stock') or 0))
         # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
-        erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+        erro_grelha = None if produto.e_conjunto else aplicar_grelha_do_pedido(produto, request.data)
         if erro_grelha:
             transaction.set_rollback(True)
             return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
@@ -1101,9 +1189,17 @@ def produto_apagar(request, pos_id, produto_id):
 
     if origem == 'pos':
         produto = get_object_or_404(ProdutoPOS, id=produto_id, pos=pos)
+        # faz parte de menus → avisa primeiro; o POS repete com ?confirmar=1
+        usado = conj.conjuntos_que_usam(produto)
+        if usado and request.GET.get('confirmar') != '1':
+            return Response({
+                'detail': f'"{produto.nome}" faz parte de {", ".join(usado)}. '
+                          f'Se o desactivares, esses menus ficam indisponíveis até o retirares deles.',
+                'conjuntos': usado, 'precisa_confirmar': True,
+            }, status=status.HTTP_409_CONFLICT)
         produto.ativo = False
         produto.save(update_fields=['ativo'])
-        return Response({'detail': 'Produto POS desativado.', 'produto': _produto_pos_payload(produto, request)})
+        return Response({'detail': 'Produto POS desativado.', 'produto': _produto_pos_payload(produto, request, pos)})
 
     if origem == 'loja':
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
@@ -1112,9 +1208,16 @@ def produto_apagar(request, pos_id, produto_id):
         if not _verificar_permissao_loja_produtos(loja, utilizador):
             return Response({'detail': 'Sem permissão para gerir produtos desta loja.'}, status=status.HTTP_403_FORBIDDEN)
         produto = get_object_or_404(Produto, id=produto_id, loja=loja)
+        usado = conj.conjuntos_que_usam(produto)
+        if usado and request.GET.get('confirmar') != '1':
+            return Response({
+                'detail': f'"{produto.nome}" faz parte de {", ".join(usado)}. '
+                          f'Se o desactivares, esses conjuntos ficam indisponíveis até o retirares deles.',
+                'conjuntos': usado, 'precisa_confirmar': True,
+            }, status=status.HTTP_409_CONFLICT)
         produto.ativo = False
         produto.save(update_fields=['ativo'])
-        return Response({'detail': 'Produto da loja desativado.', 'produto': _produto_loja_payload(produto, request)})
+        return Response({'detail': 'Produto da loja desativado.', 'produto': _produto_loja_payload(produto, request, pos)})
 
     return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1312,7 +1415,7 @@ def conta_adicionar_item(request, pos_id, conta_id):
         return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
 
     # reserva o stock (POS ou Bendi, com ou sem variação) — tudo-ou-nada
-    info, erro_stock = reservar_stock(produto, quantidade, atributos)
+    info, erro_stock = reservar_stock(produto, quantidade, atributos, pos=pos)
     if erro_stock:
         return Response({'detail': erro_stock}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1322,6 +1425,7 @@ def conta_adicionar_item(request, pos_id, conta_id):
         produto_pos=produto if origem == 'pos' else None,
         variante=info['variante'], variante_pos=info['variante_pos'],
         atributos=atributos,
+        componentes=info.get('componentes') or [],
         nome=info['nome'][:200], quantidade=quantidade,
         preco_unitario=info['preco_unitario'], observacoes=observacoes,
     )

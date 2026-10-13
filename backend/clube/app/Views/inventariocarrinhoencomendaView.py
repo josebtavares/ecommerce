@@ -27,6 +27,7 @@ from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
 from ..utils.pagination import paginar
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
 from ..utils.encomendas import repor_stock
+from ..utils import conjuntos as conj
 
 
 # ══════════════════════════════════════════════════════════════
@@ -72,7 +73,7 @@ def inventario_list_ou_criar(request, loja_id):
         qs = (Inventario.objects
               .select_related('produto__tipo')
               .prefetch_related('produto__variantes')
-              .filter(loja=loja)
+              .filter(loja=loja, produto__e_conjunto=False)  # conjuntos não têm stock próprio
               .order_by('produto__nome'))
 
         q = request.GET.get('q')
@@ -96,6 +97,9 @@ def inventario_list_ou_criar(request, loja_id):
  
     # POST — cria ou actualiza
     produto = get_object_or_404(Produto, id=request.data.get('produto_id'), loja=loja)
+    if produto.e_conjunto:
+        return Response({'detail': 'Um conjunto não tem stock próprio — o stock é o dos produtos que o compõem.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     if produto.stock_por_variante and 'quantidade' in request.data:
         return Response(
             {'detail': 'Este produto usa stock por variação — ajusta a quantidade de cada variação.'},
@@ -140,6 +144,8 @@ def carrinho_get(request, loja_id):
 
 def _stock_disponivel(produto, variante=None):
     """Stock da variante (se houver) ou do inventário do produto; None = sem controlo de stock."""
+    if produto.e_conjunto:
+        return conj.disponibilidade(produto)['quantidade']
     if variante is not None:
         return variante.quantidade
     try:
@@ -225,6 +231,14 @@ def carrinho_adicionar(request, loja_id):
     carrinho, _ = Carrinho.objects.get_or_create(
         utilizador=utilizador, loja=loja
     )
+
+    # conjunto: sem opções próprias; tem de estar vendável (componentes activos, com variação)
+    if produto.e_conjunto:
+        atributos = {}
+        d = conj.disponibilidade(produto)
+        if not d['disponivel'] and d['motivo']:
+            return Response({'detail': f'"{produto.nome}" está indisponível: {d["motivo"]}.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     # produto com stock por variação → a combinação escolhida tem de existir
     variante, erro_variante = resolver_variante(produto, atributos)
@@ -362,29 +376,49 @@ def encomenda_criar(request, loja_id):
 
     # ── 1) Bloqueia e valida o stock de TODOS os itens antes de escrever ──
     # select_for_update impede que duas compras simultâneas vendam a mesma unidade.
-    linhas = []                       # (item, variante|None, inventario|None)
-    pedido_por_stock = {}             # ('v'|'i', id) → quantidade pedida no total
+    # O mesmo stock pode ser pedido por várias linhas (a batata sozinha e dentro de um menu):
+    # soma-se tudo por linha de stock antes de comparar.
+    linhas = []                       # (item, variante|None, componentes do conjunto)
+    stock  = {}                       # chave → {'disp', 'pedido', 'alerta': (produto, variante)}
+
+    def _pedir(chave, disp, qtd, alerta):
+        e = stock.setdefault(chave, {'disp': disp, 'pedido': 0, 'alerta': alerta})
+        ja = e['pedido']
+        e['pedido'] += qtd
+        return None if e['pedido'] <= e['disp'] else max(e['disp'] - ja, 0)   # sobra antes deste item
+
     for item in itens:
         produto  = item.produto
         variante = None
-        inv      = None
-        if produto.stock_por_variante:
-            variante, erro_variante = resolver_variante(produto, item.atributos, lock=True)
-            if erro_variante:
-                return Response({'detail': erro_variante}, status=status.HTTP_400_BAD_REQUEST)
-            chave = ('v', variante.id)
+        snap     = []
+        if produto.e_conjunto:
+            comps, erro_conj = conj.bloquear(produto)
+            if erro_conj:
+                return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
+            for l in comps:
+                if l['chave'] is None:
+                    continue
+                sobra = _pedir(l['chave'], conj.stock_da_linha(l['linha']), l['por_unidade'] * item.quantidade,
+                               (l['comp'].produto, l['comp'].variante))
+                if sobra is not None:
+                    return Response({'detail': conj.msg_sem_stock(produto, l['comp'], sobra // l['por_unidade'])},
+                                    status=status.HTTP_400_BAD_REQUEST)
+            snap = conj.snapshot(comps)
         else:
-            inv = Inventario.objects.select_for_update().filter(produto=produto).first()
-            chave = ('i', inv.id) if inv else None
-        if chave:
-            pedido_por_stock[chave] = pedido_por_stock.get(chave, 0) + item.quantidade
-            disponivel = variante.quantidade if variante else inv.quantidade
-            if pedido_por_stock[chave] > disponivel:
-                return Response(
-                    {'detail': _msg_stock(produto, variante, disponivel)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        linhas.append((item, variante, inv))
+            if produto.stock_por_variante:
+                variante, erro_variante = resolver_variante(produto, item.atributos, lock=True)
+                if erro_variante:
+                    return Response({'detail': erro_variante}, status=status.HTTP_400_BAD_REQUEST)
+                chave, linha_stock = ('v', variante.id), variante
+            else:
+                inv = Inventario.objects.select_for_update().filter(produto=produto).first()
+                chave, linha_stock = (('i', inv.id), inv) if inv else (None, None)
+            if chave:
+                sobra = _pedir(chave, linha_stock.quantidade, item.quantidade, (produto, variante))
+                if sobra is not None:
+                    return Response({'detail': _msg_stock(produto, variante, sobra)},
+                                    status=status.HTTP_400_BAD_REQUEST)
+        linhas.append((item, variante, snap))
 
     # calcula o total — produtos (preço da variante, se tiver) + custo de entrega
     def _preco(item, variante):
@@ -415,31 +449,22 @@ def encomenda_criar(request, loja_id):
         opcao_entrega  = opcao,
     )
 
-    # ── 2) Cria os itens e desconta o stock (variante ou inventário) ──
-    produtos_variante = set()
-    for item, variante, inv in linhas:
+    # ── 2) Cria os itens e desconta o stock (uma vez por linha de stock, com F()) ──
+    for item, variante, snap in linhas:
         ItemEncomenda.objects.create(
-            encomenda  = encomenda,
-            produto    = item.produto,
-            quantidade = item.quantidade,
-            preco      = _preco(item, variante),
-            atributos  = item.atributos,   # ← copia os atributos
-            variante   = variante,
+            encomenda   = encomenda,
+            produto     = item.produto,
+            quantidade  = item.quantidade,
+            preco       = _preco(item, variante),
+            atributos   = item.atributos,   # ← copia os atributos
+            variante    = variante,
+            componentes = snap,             # conjunto: o que levava (histórico + repor stock)
         )
-        if variante:
-            antes = variante.quantidade
-            variante.quantidade -= item.quantidade
-            variante.save(update_fields=['quantidade', 'data_atualizacao'])
-            produtos_variante.add(item.produto)
-            _alerta_stock_baixo(loja, item.produto, antes, variante.quantidade, variante)
-        elif inv:
-            antes = inv.quantidade
-            inv.quantidade -= item.quantidade
-            inv.save(update_fields=['quantidade', 'data_atualizacao'])
-            _alerta_stock_baixo(loja, item.produto, antes, inv.quantidade)
 
-    for produto in produtos_variante:
-        atualizar_total_inventario(produto)
+    for chave, e in stock.items():
+        conj.descontar_chave(chave, e['pedido'])
+        produto_alerta, variante_alerta = e['alerta']
+        _alerta_stock_baixo(loja, produto_alerta, e['disp'], e['disp'] - e['pedido'], variante_alerta)
 
     notificar_staff(
         loja=loja,
@@ -655,6 +680,9 @@ def inventario_ajustar_stock(request, loja_id, produto_id):
         return erro
 
     inventario = get_object_or_404(Inventario, loja=loja, produto_id=produto_id)
+    if inventario.produto.e_conjunto:
+        return Response({'detail': 'Um conjunto não tem stock próprio — o stock é o dos produtos que o compõem.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     if inventario.produto.stock_por_variante:
         return Response(
             {'detail': 'Este produto usa stock por variação — ajusta a quantidade de cada variação.'},

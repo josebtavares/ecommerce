@@ -14,8 +14,14 @@ def repor_stock(encomenda):
     from ..models import Inventario, VarianteProduto
     from .variantes import atualizar_total_inventario
 
+    from .conjuntos import repor as repor_conjunto
+
     produtos_variante = set()
     for item in encomenda.itens.select_related('produto', 'variante').all():
+        if item.componentes:
+            # conjunto: devolve o que se descontou de cada componente (snapshot da compra)
+            repor_conjunto(item.componentes, item.quantidade)
+            continue
         if not item.produto:
             continue
         if item.variante_id:

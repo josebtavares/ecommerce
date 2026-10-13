@@ -636,7 +636,7 @@ def loja_dashboard(request, loja_id):
     rating_med = av_qs.aggregate(m=Avg('pontuacao'))['m']
 
     stock_alerta = (
-        Inventario.objects.filter(loja=loja, quantidade__lte=5)
+        Inventario.objects.filter(loja=loja, quantidade__lte=5, produto__e_conjunto=False)
         .select_related('produto')
         .values('produto__id', 'produto__nome', 'quantidade')[:10]
     )

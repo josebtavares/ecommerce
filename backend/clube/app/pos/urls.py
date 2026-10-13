@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, views_variantes
+from . import views, views_variantes, views_conjuntos
 
 urlpatterns = [
     # ── AUTENTICAÇÃO ─────────────────────────────────────────────────
@@ -21,6 +21,8 @@ urlpatterns = [
     path('<int:pos_id>/produtos/<int:produto_id>/',         views.produto_atualizar, name='produto_atualizar'),
     path('<int:pos_id>/produtos/<int:produto_id>/apagar/',  views.produto_apagar,    name='produto_apagar'),
     path('<int:pos_id>/produtos/<int:produto_id>/variantes/', views_variantes.pos_produto_variantes, name='pos_produto_variantes'),
+    path('<int:pos_id>/produtos/<int:produto_id>/componentes/<int:componente_id>/substituir/',
+         views_conjuntos.conjunto_substituir_componente, name='pos_conjunto_substituir'),
 
     # ── TIPOS DE PRODUTO ──────────────────────────────────────────────
     path('<int:pos_id>/tipos/',                    views_variantes.pos_tipos,      name='pos_tipos'),

@@ -302,19 +302,20 @@ def utilizador_delete(request, id):
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
     from django.db import transaction
-    from django.db.models import ProtectedError
+    from django.db.models import ProtectedError, RestrictedError
 
     utilizador = get_object_or_404(Utilizador, id=id)
     try:
         with transaction.atomic():
             utilizador.user.delete()  # cascade apaga o Utilizador também
-    except ProtectedError as e:
+    except (ProtectedError, RestrictedError) as e:
+        # RestrictedError: produto usado num menu de outro POS (ComponenteConjuntoPOS)
         # encomendas, pagamentos, comissões, vendas e turnos POS (on_delete=PROTECT) nunca são
         # apagados — um utilizador com esse histórico deve ser banido/suspenso, não eliminado
         return Response({
             'detail': 'Este utilizador tem registos financeiros (encomendas, vendas POS…) e não pode '
                       'ser eliminado. Bane ou suspende a conta em vez disso.',
-            'razoes': sorted({str(o._meta.verbose_name) for o in e.protected_objects}),
+            'razoes': sorted({str(o._meta.verbose_name) for o in getattr(e, 'protected_objects', None) or e.restricted_objects}),
         }, status=status.HTTP_409_CONFLICT)
     return Response({'detail': 'Utilizador eliminado.'}, status=status.HTTP_200_OK)
 

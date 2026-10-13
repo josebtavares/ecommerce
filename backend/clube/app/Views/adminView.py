@@ -297,7 +297,7 @@ def admin_loja_eliminar(request, loja_id):
     os ficheiros (logo, banner, imagens, vídeos) vão para a fila de limpeza em segundo plano.
     """
     from django.db import transaction
-    from django.db.models import ProtectedError
+    from django.db.models import ProtectedError, RestrictedError
 
     erro = _exige_admin(request, 'gerir_lojas')
     if erro: return erro
@@ -321,10 +321,11 @@ def admin_loja_eliminar(request, loja_id):
     try:
         with transaction.atomic():
             loja.delete()
-    except ProtectedError as e:
+    except (ProtectedError, RestrictedError) as e:
+        # RestrictedError: produto usado num menu de outro POS (ComponenteConjuntoPOS)
         # rede de segurança: on_delete=PROTECT nos registos financeiros
         return Response({'detail': 'Esta loja tem registos que não podem ser apagados.',
-                         'razoes': sorted({str(o._meta.verbose_name) for o in e.protected_objects})},
+                         'razoes': sorted({str(o._meta.verbose_name) for o in getattr(e, 'protected_objects', None) or e.restricted_objects})},
                         status=status.HTTP_409_CONFLICT)
     return Response({'detail': f'Loja "{nome}" eliminada definitivamente.'})
 
