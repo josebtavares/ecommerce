@@ -175,6 +175,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
     comprador_nome     = serializers.CharField(source='comprador.user.get_full_name', read_only=True)
     comprador_email    = serializers.CharField(source='comprador.user.email', read_only=True)
     comprador_telefone = serializers.CharField(source='comprador.telefone', read_only=True)
+    agendada_texto     = serializers.SerializerMethodField()
  
     class Meta:
         model  = Encomenda
@@ -197,13 +198,21 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'opcao_entrega_id',
             'entrega_condutor', 
             'entrega_status',
+            'agendada_para', 'agendada_texto', 'agendamento_origem',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
         ]
         read_only_fields = [
-            'comprador', 'loja', 'valor_total',
+            'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem',
             'data_criacao', 'data_atualizacao',
         ]
  
+    def get_agendada_texto(self, obj):
+        if not obj.agendada_para:
+            return ""
+        from ..utils.horarios import fuso, DIAS
+        d = obj.agendada_para.astimezone(fuso())
+        return f"{DIAS[d.weekday()]} {d:%d/%m} às {d:%H:%M}"
+
     def get_metodo_pagamento(self, obj):
         try:
             return obj.pagamento.metodo.tipo if obj.pagamento and obj.pagamento.metodo else None
@@ -285,6 +294,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
     comprador_nome     = serializers.CharField(source='comprador.user.get_full_name', read_only=True)
     comprador_email    = serializers.CharField(source='comprador.user.email', read_only=True)
     comprador_telefone = serializers.CharField(source='comprador.telefone', read_only=True)
+    agendada_texto     = serializers.SerializerMethodField()
  
     class Meta:
         model  = Encomenda
@@ -300,8 +310,16 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             'receita_liquida',
             'data_criacao',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
+            'agendada_para', 'agendada_texto', 'agendamento_origem',
         ]
  
+    def get_agendada_texto(self, obj):
+        if not obj.agendada_para:
+            return ""
+        from ..utils.horarios import fuso, DIAS
+        d = obj.agendada_para.astimezone(fuso())
+        return f"{DIAS[d.weekday()]} {d:%d/%m} às {d:%H:%M}"
+
     def get_metodo_pagamento(self, obj):
         try:
             return obj.pagamento.metodo.tipo if obj.pagamento and obj.pagamento.metodo else None

@@ -28,6 +28,7 @@ from ..utils.pagination import paginar
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
 from ..utils.encomendas import repor_stock
 from ..utils import conjuntos as conj
+from ..utils import horarios
 
 
 # ══════════════════════════════════════════════════════════════
@@ -390,6 +391,35 @@ def encomenda_criar(request, loja_id):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # ── Agendamento escolhido pelo cliente (dia e hora dentro do horário) ──
+    agendada_para, origem = None, ''
+    pedido = request.data.get('agendar_para')
+    if pedido:
+        if not loja.agendamento_ativo:
+            return Response({'detail': 'Esta loja não aceita agendamentos.', 'codigo': 'vaga_invalida'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        agendada_para, msg = horarios.validar_vaga(loja, pedido)
+        if msg:
+            return Response({'detail': msg, 'codigo': 'vaga_invalida'}, status=status.HTTP_400_BAD_REQUEST)
+        origem = 'cliente'
+
+    # ── Horário: loja fechada → fica para a abertura ('agendar') ou não aceita ('bloquear') ──
+    hor = horarios.estado(loja)
+    if not hor['aberta']:
+        if loja.fora_horario == 'bloquear' or not hor['abre_em']:
+            return Response({'detail': f'A loja está fechada. Abre {horarios.quando_texto(hor["abre_em"])}.'
+                                       if hor['abre_em'] else 'A loja está fechada de momento.',
+                             'codigo': 'loja_fechada', 'horario': horarios.payload_publico(loja)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if agendada_para is None:
+            # o cliente tem de ter visto o aviso — a loja pode ter fechado enquanto estava no checkout
+            if request.data.get('aceita_agendamento') not in (True, 'true', '1', 1):
+                return Response({'detail': f'A loja fechou entretanto. A encomenda fica para '
+                                           f'{horarios.quando_texto(hor["abre_em"])} — confirma para continuar.',
+                                 'codigo': 'confirmar_agendamento', 'horario': horarios.payload_publico(loja)},
+                                status=status.HTTP_409_CONFLICT)
+            agendada_para, origem = hor['abre_em'], 'abertura'
+
     # ── 1) Bloqueia e valida o stock de TODOS os itens antes de escrever ──
     # select_for_update impede que duas compras simultâneas vendam a mesma unidade.
     # O mesmo stock pode ser pedido por várias linhas (a batata sozinha e dentro de um menu):
@@ -465,6 +495,8 @@ def encomenda_criar(request, loja_id):
         notas          = serializer.validated_data.get('notas', ''),
         status         = 'pendente',
         opcao_entrega  = opcao,
+        agendada_para  = agendada_para,
+        agendamento_origem = origem,
     )
 
     # ── 2) Cria os itens e desconta o stock (uma vez por linha de stock, com F()) ──
@@ -489,7 +521,10 @@ def encomenda_criar(request, loja_id):
         roles=['dono', 'gestor', 'staff'],
         tipo='nova_encomenda',
         titulo=f'Nova encomenda #{encomenda.id}',
-        mensagem=f'Encomenda de {utilizador.nome} no valor de €{encomenda.valor_total}.',
+        mensagem=f'Encomenda de {utilizador.nome} no valor de €{encomenda.valor_total}.'
+                 + (f' Agendada pelo cliente para {horarios.texto_agendada(agendada_para)}.' if origem == 'cliente'
+                    else f' Agendada para {horarios.quando_texto(agendada_para)} (feita com a loja fechada).'
+                    if agendada_para else ''),
         link=f'/loja/{loja.id}/backoffice',
     )
 
@@ -560,6 +595,12 @@ def encomenda_list_loja(request, loja_id):
     s = request.GET.get('status')
     if s:
         qs = qs.filter(status=s)
+
+    # ?agendadas=1 → só as feitas com a loja fechada, ainda por preparar, da mais próxima à mais distante
+    if request.GET.get('agendadas') in ('1', 'true'):
+        qs = (qs.filter(agendada_para__isnull=False)
+                .exclude(status__in=['enviado', 'concluido', 'cancelado'])
+                .order_by('agendada_para'))
 
     response, erro = paginar(request, qs, EncomendaMiniSerializer)
     if erro:

@@ -60,6 +60,7 @@
             </p>
             <h1 class="ts-hero__nome">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+            <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
             <p v-if="loja.descricao" class="ts-hero__desc">{{ truncate(loja.descricao, 190) }}</p>
 
             <dl class="ts-specs">
@@ -395,6 +396,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import FimDaLista from '@/components/produtos/FimDaLista.vue'
@@ -404,7 +406,7 @@ const LIMITE = 12
 export default {
   name: 'TemplateTechStore',
 
-  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

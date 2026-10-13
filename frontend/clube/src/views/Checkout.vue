@@ -116,6 +116,11 @@
           </p>
         </div>
 
+        <!-- QUANDO (o cliente escolhe dia e hora, se a loja deixar) -->
+        <EscolherHora v-if="loja?.agendamento?.ativo && tipoEntrega && !(lojaFechada && !aceitaAgendar)"
+          ref="escolherHora" v-model="agendarPara" :loja-id="lojaId" :tipo-entrega="tipoEntrega"
+          :texto-asap="lojaFechada ? `Quando a loja abrir — ${quandoAbre(loja.horario)}` : 'Assim que a loja preparar'" />
+
         <!-- NOTAS -->
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">
@@ -270,6 +275,23 @@
             </p>
           </div>
 
+          <!-- Loja fechada (horário) -->
+          <div v-if="lojaFechada" role="status"
+            :class="['mt-4 rounded-xl px-3 py-2.5 text-xs leading-relaxed border',
+                     aceitaAgendar ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-red-500/10 border-red-500/30 text-red-300']">
+            <p class="font-bold mb-0.5">A loja está fechada</p>
+            <p v-if="aceitaAgendar && agendarPara">
+              Não faz mal: a tua encomenda fica agendada para <b>{{ textoAgendada }}</b>.
+            </p>
+            <p v-else-if="aceitaAgendar">
+              Podes encomendar já: a loja prepara a tua encomenda a partir de <b>{{ quandoAbre(loja.horario) }}</b>.
+            </p>
+            <p v-else>
+              Só aceita encomendas dentro do horário<template v-if="quandoAbre(loja.horario)"> — abre {{ quandoAbre(loja.horario) }}</template>.
+              O carrinho fica guardado.
+            </p>
+          </div>
+
           <!-- Erro -->
           <p v-if="erro" class="text-xs text-red-400 mt-3 bg-red-500/10 rounded-lg px-3 py-2">{{ erro }}</p>
 
@@ -286,6 +308,8 @@
             </svg>
             <span v-if="loadingConfirmar && metodoPagamento === 'flutterwave'">A redirecionar…</span>
             <span v-else-if="loadingConfirmar">A processar…</span>
+            <span v-else-if="agendarPara">Encomendar para {{ textoAgendada }} · {{ formatPrice(total) }}</span>
+            <span v-else-if="lojaFechada && aceitaAgendar">Encomendar para {{ quandoAbre(loja.horario) }} · {{ formatPrice(total) }}</span>
             <span v-else>Confirmar Encomenda · {{ formatPrice(total) }}</span>
           </button>
 
@@ -304,6 +328,8 @@ import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
+import { quandoAbre } from '@/components/horario/horario'
+import EscolherHora from '@/components/horario/EscolherHora.vue'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
@@ -328,6 +354,7 @@ const ENDPOINT_PAGAMENTO = {
 
 export default {
   name: 'CheckoutPage',
+  components: { EscolherHora },
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()
@@ -350,6 +377,7 @@ export default {
       notas:          '',
       metodoPagamento: '',
       erro: '',
+      agendarPara: null,   // null = o mais cedo possível · '' = a escolher · 'AAAA-MM-DDTHH:MM'
       redirectindoFlutterwave: false,
     }
   },
@@ -365,7 +393,19 @@ export default {
       return parseFloat(this.opcaoSelecionada.preco || 0)
     },
     total () { return this.subtotal + this.custoEntrega },
+    // horário da loja (utils/horarios.py no servidor) — fechada: agendar para a abertura ou não aceitar
+    lojaFechada ()   { return !!(this.loja?.horario?.ativo && !this.loja.horario.aberta) },
+    aceitaAgendar () { return this.loja?.horario?.fora_horario === 'agendar' && !!this.loja.horario.abre_em },
+    // "14/10 às 13:30" a partir de '2026-10-14T13:30'
+    textoAgendada () {
+      if (!this.agendarPara) return ''
+      const [d, h] = this.agendarPara.split('T')
+      const [, m, dia] = d.split('-')
+      return `${dia}/${m} às ${h}`
+    },
     podeConfirmar () {
+      if (this.lojaFechada && !this.aceitaAgendar) return false
+      if (this.agendarPara === '') return false            // escolheu "dia e hora" mas ainda não a hora
       if (!this.tipoEntrega || this.itens.length === 0 || !this.metodoPagamento) return false
       if (this.tipoEntrega === 'entrega') {
         if (!this.opcaoEntregaId) return false
@@ -388,7 +428,7 @@ export default {
   },
 
   methods: {
-    formatarAtributos, temAtributos,
+    formatarAtributos, temAtributos, quandoAbre,
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },
@@ -462,10 +502,25 @@ export default {
         if (this.tipoEntrega === 'entrega' && this.opcaoEntregaId) {
           payload.opcao_entrega_id = this.opcaoEntregaId
         }
+        if (this.agendarPara) payload.agendar_para = this.agendarPara
+        // o cliente viu o aviso "a loja está fechada — fica para a abertura"
+        else if (this.lojaFechada && this.aceitaAgendar) payload.aceita_agendamento = true
         let encomenda
         try {
           ({ data: encomenda } = await api.post(`/app/loja/${this.lojaId}/encomenda/criar/`, payload))
         } catch (e) {
+          // a loja fechou enquanto o cliente estava no checkout → mostra o aviso e pede para confirmar
+          const d = e.response?.data
+          if (d?.codigo === 'vaga_invalida') {          // a hora escolhida deixou de estar livre
+            this.erro = d.detail
+            this.$refs.escolherHora?.carregar()
+            return
+          }
+          if (d?.horario && ['loja_fechada', 'confirmar_agendamento'].includes(d.codigo)) {
+            this.loja = { ...this.loja, horario: d.horario }
+            this.erro = d.detail
+            return
+          }
           // ex.: "Stock insuficiente de 'Camisola (preto · S)'. Disponível: 1."
           this.erro = e.response?.data?.detail || 'Erro ao criar a encomenda. Tenta novamente.'
           await this.fetchCarrinho()   // mostra o stock actualizado em cada item

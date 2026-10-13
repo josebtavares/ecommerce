@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -260,6 +261,24 @@ def entrega_criar(request, loja_id, encomenda_id):
         opcao_entrega = opcao,
         status        = 'atribuido',
     )
+
+    # entrega criada → a encomenda passa a "enviado" (venha das Encomendas ou do calendário)
+    if encomenda.tipo_entrega == 'entrega' and encomenda.status in ('pago', 'preparando'):
+        encomenda.status = 'enviado'
+        encomenda.save(update_fields=['status'])
+        from ..Views.notificacaoView import notificar   # import local como no resto da função
+        from ..utils import horarios
+        futura = encomenda.agendada_para and encomenda.agendada_para > timezone.now()
+        notificar(
+            utilizador=encomenda.comprador,
+            tipo='encomenda_enviada',
+            titulo=f'Encomenda enviada #{encomenda.id}',
+            # agendada para mais tarde: não dizer "a caminho" dias antes
+            mensagem=(f'A tua encomenda já tem condutor e será entregue {horarios.texto_agendada(encomenda.agendada_para)}.'
+                      if futura else 'A tua encomenda está a caminho!'),
+            loja=loja,
+            link='/perfil',
+        )
  
     if condutor:
         from ..Views.notificacaoView import notificar
@@ -283,14 +302,23 @@ def entrega_criar(request, loja_id, encomenda_id):
 def entrega_get(request, loja_id, encomenda_id):
     """GET /app/loja/<loja_id>/encomendas/<encomenda_id>/entrega/"""
     loja = get_object_or_404(Loja, id=loja_id)
-    _, erro = _exige_permissao(request, loja, 'gerir_entregas')
+    membro, erro = _exige_permissao(request, loja, 'gerir_entregas')
     if erro:
         return erro
 
     encomenda = get_object_or_404(Encomenda, id=encomenda_id, loja=loja)
     entrega   = get_object_or_404(Entrega, encomenda=encomenda)
+    if not _entrega_do_membro(membro, entrega):
+        return Response({'detail': 'Esta entrega não é tua.'}, status=status.HTTP_403_FORBIDDEN)
     serializer = EntregaSerializer(entrega, context={'request': request})
     return Response(serializer.data)
+
+
+def _entrega_do_membro(membro, entrega):
+    """O condutor só mexe nas entregas atribuídas a ele; dono/gestor em todas."""
+    if membro.role != 'condutor':
+        return True
+    return bool(entrega.condutor_id and entrega.condutor.utilizador_id == membro.utilizador_id)
 
 
 @api_view(['PATCH'])
@@ -306,15 +334,19 @@ def entrega_atualizar(request, loja_id, encomenda_id):
     condutor_id      → reatribui condutor sem mudar status
     """
     loja = get_object_or_404(Loja, id=loja_id)
-    _, erro = _exige_permissao(request, loja, 'gerir_entregas')
+    membro, erro = _exige_permissao(request, loja, 'gerir_entregas')
     if erro:
         return erro
- 
+
     encomenda = get_object_or_404(Encomenda, id=encomenda_id, loja=loja)
     entrega   = get_object_or_404(Entrega, encomenda=encomenda)
- 
-    # reatribuir condutor
+    if not _entrega_do_membro(membro, entrega):
+        return Response({'detail': 'Esta entrega não é tua.'}, status=status.HTTP_403_FORBIDDEN)
+
+    # reatribuir condutor (só quem pode atribuir — o condutor não passa entregas a outros)
     if 'condutor_id' in request.data:
+        if not membro.pode('atribuir_condutor'):
+            return Response({'detail': 'Sem permissão: atribuir_condutor'}, status=status.HTTP_403_FORBIDDEN)
         condutor = get_object_or_404(Condutor, id=request.data['condutor_id'], loja=loja, ativo=True)
         entrega.condutor = condutor
         if entrega.status == 'falhou':
@@ -565,13 +597,12 @@ def entrega_list_loja(request, loja_id):
     if status_filtro:
         qs = qs.filter(status=status_filtro)
 
-    # condutor só vê as suas
+    # condutor só vê as suas (sem ficha de condutor → nenhuma; antes via todas as da loja)
     try:
         membro = UtilizadorLoja.objects.get(loja=loja, utilizador=request.user.utilizador, ativo=True)
         if membro.role == 'condutor':
             condutor = Condutor.objects.filter(loja=loja, utilizador=request.user.utilizador).first()
-            if condutor:
-                qs = qs.filter(condutor=condutor)
+            qs = qs.filter(condutor=condutor) if condutor else qs.none()
     except UtilizadorLoja.DoesNotExist:
         pass
 

@@ -97,6 +97,7 @@
 
             <h1 class="rm-hero__title">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+            <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
 
             <p v-if="loja.descricao" class="rm-hero__desc">
               {{ truncate(loja.descricao, 170) }}
@@ -462,6 +463,7 @@ import Profile from '@/components/profile/UserProfile.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 
 // atributos que fazem sentido mostrar como etiqueta numa carta
 const TAGS_ATRIBUTOS = ['calorias', 'picante', 'alergenos', 'volume', 'porcao', 'dose', 'vegetariano', 'vegan']
@@ -473,7 +475,7 @@ const LIMITE = 6   // pratos por página em cada grupo
 export default {
   name: 'TemplateRestauranteModerno',
 
-  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
+  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

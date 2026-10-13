@@ -17,7 +17,7 @@ from django.db import close_old_connections
 from django.db.utils import OperationalError, ProgrammingError
 
 from app.models import ConversaoVideo, Galeria, Loja, Produto
-from app.utils import limpeza, video
+from app.utils import horarios, limpeza, video
 
 
 class Command(BaseCommand):
@@ -51,6 +51,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Worker de vídeo e limpeza a correr.'))
         while not self.parar:
             close_old_connections()
+            self._avisos_horario()
             try:
                 apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
@@ -79,6 +80,18 @@ class Command(BaseCommand):
                 self.stdout.write(f'  {t.estado}: {t.erro[-300:] if t.erro else ""}')
 
         self.stdout.write('Worker de vídeo parado.')
+
+    def _avisos_horario(self):
+        """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py)."""
+        if time.monotonic() - getattr(self, '_ultimo_aviso', -1e9) < 60:
+            return
+        self._ultimo_aviso = time.monotonic()
+        try:
+            n = horarios.avisar_agendadas()
+            if n:
+                self.stdout.write(f'  horários: {n} loja(s) avisada(s) das encomendas agendadas para hoje')
+        except Exception as e:          # um erro aqui não pode parar os vídeos
+            self.stderr.write(f'  horários: aviso falhou: {e}')
 
     def _sinal(self, *_):
         # termina a conversão em curso e sai

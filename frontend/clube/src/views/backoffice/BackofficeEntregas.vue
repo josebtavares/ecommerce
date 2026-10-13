@@ -2,8 +2,8 @@
   <div class="space-y-5">
 
     <!-- Tabs -->
-    <div v-if="!isCondutor" class="flex gap-1 bg-zinc-900 rounded-xl p-1 w-fit">
-      <button v-for="tab in tabs" :key="tab.key"
+    <div class="flex gap-1 bg-zinc-900 rounded-xl p-1 w-fit">
+      <button v-for="tab in tabsVisiveis" :key="tab.key"
         @click="activeTab = tab.key"
         :class="['px-4 py-2 rounded-lg text-sm font-semibold transition',
                  activeTab === tab.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
@@ -194,6 +194,10 @@
       </div>
     </div>
 
+    <!-- ═══ TAB: CALENDÁRIO ═══ -->
+    <CalendarioEntregas v-if="activeTab === 'calendario'" :loja-id="lojaId" :is-condutor="isCondutor"
+      :condutores="condutores" @alterado="entregas = []" />
+
     <!-- ═══ TAB: CONDUTORES ═══ -->
     <div v-if="activeTab === 'condutores' && !isCondutor">
       <div v-if="loadingCondutores" class="space-y-3">
@@ -346,9 +350,11 @@
 <script>
 import api from '@/services/api'
 import { iconePagamento } from '@/utils/icones'
+import CalendarioEntregas from '@/components/calendario/CalendarioEntregas.vue'
 
 export default {
   name: 'BackofficeEntregas',
+  components: { CalendarioEntregas },
   props: {
     lojaId:    [String, Number],
     minhaRole: { type: String, default: '' },
@@ -359,6 +365,7 @@ export default {
       activeTab: 'entregas',
       tabs: [
         { key: 'entregas',   label: 'Entregas',   icon: 'box' },
+        { key: 'calendario', label: 'Calendário', icon: 'calendar-days' },
         { key: 'condutores', label: 'Condutores', icon: 'car' },
       ],
       entregas:      [],
@@ -386,6 +393,8 @@ export default {
 
   computed: {
     isCondutor ()  { return this.minhaRole === 'condutor' },
+    // o condutor não gere condutores
+    tabsVisiveis () { return this.isCondutor ? this.tabs.filter(t => t.key !== 'condutores') : this.tabs },
     totalPages ()  { return Math.ceil(this.totalCount / this.limit) },
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)

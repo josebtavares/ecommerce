@@ -55,6 +55,7 @@
             <p class="bt-montra__cat">{{ loja.categoria || 'Boutique' }}<template v-if="loja.localizacao"> · {{ loja.localizacao }}</template></p>
             <h1 class="bt-montra__nome">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+            <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
             <div class="bt-montra__ctas">
               <button class="bt-btn bt-btn--claro" @click="scrollToId(totalDestaques ? 'bt-novidades' : 'bt-provador')">
                 {{ totalDestaques ? 'Ver novidades' : 'Ver coleção' }}
@@ -339,6 +340,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 const LIMITE = 9
@@ -346,7 +348,7 @@ const LIMITE = 9
 export default {
   name: 'TemplateModaBoutique',
 
-  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

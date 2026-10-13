@@ -45,6 +45,7 @@
           <p class="nt-etiqueta">{{ loja.categoria || 'Produtos naturais' }}</p>
           <h1 class="nt-hero__nome">{{ loja.nome }}</h1>
           <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+          <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
           <p v-if="loja.descricao" class="nt-hero__desc">{{ truncate(loja.descricao, 200) }}</p>
 
           <ul class="nt-hero__dados">
@@ -344,6 +345,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import FimDaLista from '@/components/produtos/FimDaLista.vue'
@@ -353,7 +355,7 @@ const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Tudo' }
 export default {
   name: 'TemplateNatureza',
 
-  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

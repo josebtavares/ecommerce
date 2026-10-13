@@ -1,7 +1,7 @@
 import re
 
 from django.db import transaction
-from django.db.models import Q, Sum, Count, Avg
+from django.db.models import Q, Sum, Count, Avg, Case, When, IntegerField
 from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils.timezone import now, make_aware
@@ -61,7 +61,8 @@ def loja_list(request):
     GET /app/loja/?q=pizza&categoria=comida&offset=0&limit=20
                   &entrega=true&localizacao=lisboa
     """
-    qs = Loja.objects.filter(ativa=True)
+    # estado aberta/fechada nos cards
+    qs = Loja.objects.filter(ativa=True).prefetch_related('horarios', 'excecoes')
 
     q = request.GET.get('q')
     if q:
@@ -81,9 +82,11 @@ def loja_list(request):
     if request.GET.get('levantamento') == 'true':
         qs = qs.filter(levantamento_ativo=True)
 
+    # as abertas primeiro (o estado vem de utils/horarios.py, com cache de 1 minuto), depois a ordem pedida
+    from ..utils.horarios import ids_fechadas
+    qs = qs.annotate(fechada_agora=Case(When(id__in=ids_fechadas(), then=1), default=0, output_field=IntegerField()))
     ordering = request.GET.get('ordering')
-    if ordering in ['nome', '-nome', '-data_criacao']:
-        qs = qs.order_by(ordering)
+    qs = qs.order_by("fechada_agora", ordering if ordering in ['nome', '-nome', '-data_criacao'] else '-data_criacao')
 
     response, erro = paginar(request, qs, LojaPublicSerializer, limit_default=5)
     if erro:

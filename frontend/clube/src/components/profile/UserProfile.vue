@@ -196,6 +196,10 @@
                         {{ enc.status }}
                       </span>
                     </div>
+                    <p v-if="enc.agendada_texto && !['concluido', 'cancelado'].includes(enc.status)"
+                       class="text-[11px] font-semibold mt-1" :class="isDark ? 'text-amber-300' : 'text-amber-700'">
+                      {{ enc.agendamento_origem === 'cliente' ? 'Agendada para' : 'Preparada a partir de' }} {{ enc.agendada_texto }}
+                    </p>
                   </div>
                   <div class="flex items-center gap-3 flex-shrink-0 ml-2">
                     <span class="text-sm font-bold text-red-500">{{ formatPrice(enc.valor_total) }}</span>

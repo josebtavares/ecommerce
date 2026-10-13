@@ -108,6 +108,9 @@
       </div>
     </div>
 
+    <!-- Horário (abre/fecha) -->
+    <HorarioEditor v-if="lojaId" :loja-id="lojaId" />
+
     <!-- Opções de entrega -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <div class="flex items-center justify-between mb-4">
@@ -326,6 +329,7 @@ import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconePagamento } from '@/utils/icones'
 import { criarVigia, emCurso, reprocessarVideo } from '@/utils/videoEstado'
+import HorarioEditor from '@/components/horario/HorarioEditor.vue'
 
 const TODOS_METODOS = [
   { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
@@ -342,6 +346,7 @@ function isVideo (url) {
 
 export default {
   name: 'BackofficeConfiguracoes',
+  components: { HorarioEditor },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },

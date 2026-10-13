@@ -1,6 +1,9 @@
 <template>
   <div class="space-y-5">
 
+    <!-- aberta/fechada + "Fechar agora" (cozinha cheia, imprevisto…) -->
+    <PausaLoja :loja-id="lojaId" />
+
     <!-- Filtros -->
     <div class="flex flex-wrap gap-2 items-center">
       <button v-for="s in statusFiltros" :key="s.value"
@@ -42,7 +45,18 @@
             #{{ enc.id }}
           </div>
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-zinc-200">{{ enc.comprador_username }}</p>
+            <p class="text-sm font-semibold text-zinc-200">
+              {{ enc.comprador_username }}
+              <span v-if="enc.agendada_texto && enc.agendamento_origem === 'cliente'"
+                    title="O cliente escolheu esta hora para receber/levantar"
+                    class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 text-[10px] font-bold align-middle">
+                <font-awesome-icon :icon="['fas', 'calendar-day']" /> Agendada pelo cliente · {{ enc.agendada_texto }}
+              </span>
+              <span v-else-if="enc.agendada_texto" title="Feita com a loja fechada — preparar a partir desta hora"
+                    class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold align-middle">
+                <font-awesome-icon :icon="['fas', 'clock']" /> Agendada · {{ enc.agendada_texto }}
+              </span>
+            </p>
             <p class="text-xs text-zinc-500">
               {{ formatDate(enc.data_criacao) }} ·
               <font-awesome-icon :icon="['fas', enc.tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mx-0.5" />
@@ -327,6 +341,7 @@
 import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
+import PausaLoja from '@/components/horario/PausaLoja.vue'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -341,6 +356,7 @@ const ESTADOS_BLOQUEADOS = ['concluido', 'cancelado', 'enviado']
 
 export default {
   name: 'BackofficeEncomendas',
+  components: { PausaLoja },
   props: { lojaId: [String, Number] },
 
   data () {
@@ -366,6 +382,8 @@ export default {
         { value: 'enviado',   label: 'Enviadas',   active: 'bg-indigo-500/20 text-indigo-400' },
         { value: 'concluido', label: 'Concluídas', active: 'bg-green-500/20 text-green-400'   },
         { value: 'cancelado', label: 'Canceladas', active: 'bg-red-500/20 text-red-400'       },
+        // feitas com a loja fechada e ainda por preparar (filtro à parte — não é um estado)
+        { value: 'agendadas', label: 'Agendadas',  active: 'bg-amber-500/20 text-amber-300'   },
       ],
       modalCondutor:      null,
       condutores:         [],
@@ -429,7 +447,8 @@ export default {
       this.loading = true
       try {
         const params = { limit: this.limit, offset: (this.page - 1) * this.limit }
-        if (this.filtroStatus !== 'todos') params.status = this.filtroStatus
+        if (this.filtroStatus === 'agendadas') params.agendadas = 1
+        else if (this.filtroStatus !== 'todos') params.status = this.filtroStatus
         const { data } = await api.get(`/app/loja/${this.lojaId}/encomendas/`, { params })
         this.encomendas = data.results || data
         this.totalCount = data.count ?? this.encomendas.length
@@ -447,6 +466,8 @@ export default {
         estados.forEach((s, i) => {
           novasContagens[s] = respostas[i].data.count ?? (respostas[i].data.results || respostas[i].data).length
         })
+        const { data: ag } = await api.get(`/app/loja/${this.lojaId}/encomendas/`, { params: { agendadas: 1, limit: 1, offset: 0 } })
+        novasContagens.agendadas = ag.count ?? 0
         this.contagem = novasContagens
       } catch (e) { console.error(e) }
     },
@@ -509,8 +530,8 @@ export default {
       try {
         const payload = {}
         if (this.condutorSelecionado) payload.condutor_id = this.condutorSelecionado
+        // criar a entrega já passa a encomenda a "enviado" e avisa o cliente (no servidor)
         await api.post(`/app/loja/${this.lojaId}/encomendas/${encId}/entrega/criar/`, payload)
-        await api.patch(`/app/loja/${this.lojaId}/encomendas/${encId}/status/`, { status: 'enviado' })
         const encReal = this.encomendas.find(e => e.id === encId)
         if (encReal) {
           this.contagem = {

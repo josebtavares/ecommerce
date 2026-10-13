@@ -51,6 +51,7 @@
             <p class="vb-hero__tag">{{ loja.categoria || 'Loja' }}</p>
             <h1 class="vb-hero__nome">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+            <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
             <p v-if="loja.descricao" class="vb-hero__desc">{{ truncate(loja.descricao, 180) }}</p>
 
             <div class="vb-chips">
@@ -314,12 +315,13 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
   name: 'TemplateVibrante',
 
-  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
+  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

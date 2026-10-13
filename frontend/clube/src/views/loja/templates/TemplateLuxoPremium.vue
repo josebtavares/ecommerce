@@ -54,6 +54,7 @@
           <p class="lx-versal">{{ loja.categoria || 'Maison' }}<template v-if="loja.localizacao"> — {{ loja.localizacao }}</template></p>
           <h1 class="lx-hero__nome">{{ loja.nome }}</h1>
           <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
+          <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
           <p v-if="loja.descricao" class="lx-hero__desc">{{ truncate(loja.descricao, 160) }}</p>
           <div class="lx-hero__ctas">
             <button class="lx-btn lx-btn--ouro" @click="scrollToId(totalDestaques ? 'lx-vitrine' : 'lx-colecoes')">
@@ -332,6 +333,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import FimDaLista from '@/components/produtos/FimDaLista.vue'
@@ -339,7 +341,7 @@ import FimDaLista from '@/components/produtos/FimDaLista.vue'
 export default {
   name: 'TemplateLuxoPremium',
 
-  components: { ProductInfoCard, BotaoFavorito, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

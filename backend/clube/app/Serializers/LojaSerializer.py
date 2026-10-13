@@ -145,6 +145,8 @@ class LojaPublicSerializer(serializers.ModelSerializer):
     banner_poster_url = serializers.SerializerMethodField()
     rating_medio   = serializers.SerializerMethodField()
     total_avaliacoes = serializers.SerializerMethodField()
+    horario        = serializers.SerializerMethodField()   # aberta/fechada + semana (utils/horarios.py)
+    agendamento    = serializers.SerializerMethodField()   # o cliente pode escolher dia e hora?
 
     class Meta:
         model  = Loja
@@ -157,7 +159,16 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             'entrega_ativa', 'levantamento_ativo',
             'rating_medio', 'total_avaliacoes',
             'politica_devolucao', 'termos_servico', 'politica_privacidade',
+            'horario', 'agendamento',
         ]
+
+    def get_horario(self, obj):
+        from ..utils.horarios import payload_publico
+        return payload_publico(obj)
+
+    def get_agendamento(self, obj):
+        from ..utils.horarios import agendamento_publico
+        return agendamento_publico(obj)
 
     def get_logo_url(self, obj):
         request = self.context.get('request')

@@ -52,6 +52,7 @@ class Utilizador(models.Model):
             'gerir_pos',
             'atender_suporte',   # chat: caixa "Suporte Bendi" (superchat)
             'moderar_chat',      # chat: denúncias e bloqueios
+            'gerir_plataforma',  # definições do site (fuso horário)
         ],
         'moderador': [
             'ver_stats',
@@ -246,6 +247,28 @@ class Loja(models.Model):
     efatura_ativo = models.BooleanField(default=False)
     efatura_nif = models.CharField(max_length=20, blank=True)
     efatura_api_key = models.CharField(max_length=200, blank=True)
+
+    # ── Horário (ver utils/horarios.py) ──
+    # desligado = aberta 24h (como antes). db_default: o código antigo continua a gravar lojas
+    # entre a migração e o deploy.
+    FORA_HORARIO = [
+        ('agendar',  'Aceitar encomendas para a abertura'),
+        ('bloquear', 'Não aceitar encomendas'),
+    ]
+    horario_ativo = models.BooleanField(default=False, db_default=False)
+    fora_horario  = models.CharField(max_length=10, choices=FORA_HORARIO,
+                                     default='agendar', db_default='agendar')
+    # o cliente escolhe dia e hora para receber/levantar (só dentro do horário)
+    agendamento_ativo        = models.BooleanField(default=False, db_default=False)
+    agendamento_intervalo    = models.PositiveSmallIntegerField(default=30, db_default=30)   # minutos entre horas
+    agendamento_dias         = models.PositiveSmallIntegerField(default=7, db_default=7)     # dias que se podem escolher (hoje incluído)
+    agendamento_antecedencia = models.PositiveSmallIntegerField(default=30, db_default=30)   # minutos mínimos a partir de agora
+    # aceitar encomendas só até X minutos antes de fechar (0 = até fechar)
+    ultima_encomenda_min = models.PositiveSmallIntegerField(default=0, db_default=0)
+    # "Fechar agora": fechada para encomendas até esta hora (vazio/passado = sem pausa)
+    pausa_ate            = models.DateTimeField(null=True, blank=True)
+    # último dia em que se avisou a equipa das encomendas agendadas (worker)
+    aviso_agendadas_data = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -754,6 +777,13 @@ class Encomenda(models.Model):
         null=True, blank=True,
         related_name='encomendas',
     )
+    # vazio = o mais cedo possível. agendamento_origem diz porquê:
+    #   'abertura' → feita com a loja fechada, preparar a partir da abertura
+    #   'cliente'  → o cliente escolheu dia e hora para receber/levantar
+    AGENDAMENTO_ORIGEM = [('abertura', 'Loja fechada — para a abertura'), ('cliente', 'Escolhida pelo cliente')]
+    agendada_para   = models.DateTimeField(null=True, blank=True, db_index=True)
+    agendamento_origem = models.CharField(max_length=10, choices=AGENDAMENTO_ORIGEM, blank=True,
+                                          default='', db_default='')
 
     class Meta:
         ordering = ['-data_criacao']
@@ -793,6 +823,75 @@ class OpcaoEntrega(models.Model):
 
     def __str__(self):
         return f'{self.nome} ({self.loja.nome})'
+
+
+class HorarioLoja(models.Model):
+    """
+    Um intervalo em que a loja está aberta num dia da semana (0 = segunda … 6 = domingo).
+    Vários intervalos no mesmo dia = pausas (ex.: 08:00–12:00 e 14:00–22:00).
+    fecha <= abre → passa da meia-noite (18:00–02:00 fecha às 02:00 do dia seguinte).
+    """
+    DIAS = [(0, 'Segunda'), (1, 'Terça'), (2, 'Quarta'), (3, 'Quinta'),
+            (4, 'Sexta'), (5, 'Sábado'), (6, 'Domingo')]
+
+    loja       = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='horarios')
+    dia_semana = models.PositiveSmallIntegerField(choices=DIAS)
+    abre       = models.TimeField()
+    fecha      = models.TimeField()
+
+    class Meta:
+        ordering = ['dia_semana', 'abre']
+        indexes  = [models.Index(fields=['loja', 'dia_semana'])]
+
+    def __str__(self):
+        return f'{self.loja} · {self.get_dia_semana_display()} {self.abre:%H:%M}–{self.fecha:%H:%M}'
+
+
+class ExcecaoHorario(models.Model):
+    """
+    Dias especiais (feriados, férias, horário diferente) de `inicio` a `fim` (inclusive).
+    intervalos vazio = fechado; senão substitui o horário da semana nesses dias
+    ([{"abre": "08:00", "fecha": "16:00"}], como HorarioLoja).
+    """
+    loja       = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='excecoes')
+    inicio     = models.DateField()
+    fim        = models.DateField()
+    intervalos = models.JSONField(default=list, blank=True)
+    mensagem   = models.CharField(max_length=120, blank=True, default='')
+
+    class Meta:
+        ordering = ['inicio']
+        indexes  = [models.Index(fields=['loja', 'fim'])]
+
+    def __str__(self):
+        return f'{self.loja} · {self.inicio}–{self.fim} {"fechado" if not self.intervalos else "horário especial"}'
+
+
+class ConfiguracaoPlataforma(models.Model):
+    """Definições globais do site (uma só linha — ConfiguracaoPlataforma.atual())."""
+    fuso_horario     = models.CharField(max_length=64, default='Atlantic/Cape_Verde')
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Configuração da plataforma'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+        from django.core.cache import cache
+        cache.delete('configuracao_plataforma')
+
+    @classmethod
+    def atual(cls):
+        from django.core.cache import cache
+        cfg = cache.get('configuracao_plataforma')
+        if cfg is None:
+            cfg, _ = cls.objects.get_or_create(pk=1)
+            cache.set('configuracao_plataforma', cfg, 300)
+        return cfg
+
+    def __str__(self):
+        return f'Plataforma ({self.fuso_horario})'
 
 
 class Condutor(models.Model):
@@ -1099,6 +1198,7 @@ class Notificacao(models.Model):
         # Condutor
         ('entrega_atribuida',        'Entrega atribuída'),
         ('entrega_cancelada',        'Entrega cancelada'),
+        ('agendadas_hoje',           'Encomendas agendadas para hoje'),
         # Comprador
         ('encomenda_paga',           'Encomenda paga'),
         ('encomenda_enviada',        'Encomenda enviada'),
