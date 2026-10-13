@@ -33,12 +33,20 @@ class Comp:
     Componente normalizado (loja ou POS) — o resto do módulo só lida com isto.
     Fixo (sempre vem no conjunto) ou opção escolhida pelo cliente (grupo, extra, opcao_id).
     """
-    __slots__ = ('id', 'origem', 'produto', 'variante', 'quantidade', 'grupo', 'extra', 'opcao_id')
+    __slots__ = ('id', 'origem', 'produto', 'variante', 'quantidade', 'grupo', 'extra', 'opcao_id', 'livre')
 
-    def __init__(self, id, origem, produto, variante, quantidade, grupo=None, extra=0, opcao_id=None):
+    def __init__(self, id, origem, produto, variante, quantidade, grupo=None, extra=0, opcao_id=None, livre=False):
         self.id, self.origem, self.produto = id, origem, produto
         self.variante, self.quantidade = variante, quantidade
         self.grupo, self.extra, self.opcao_id = grupo, extra, opcao_id
+        # livre: a variação é escolhida pelo cliente (ex.: tamanho da peça) — `variante` só
+        # fica preenchida depois de aplicar as escolhas (ver com_variantes)
+        self.livre = livre
+
+    @property
+    def chave_variante(self):
+        """Chave da escolha de variação deste componente: "c<id>" (fixo) ou "o<id>" (opção)."""
+        return f'o{self.opcao_id}' if self.opcao_id else f'c{self.id}'
 
     @property
     def nome(self):
@@ -50,16 +58,40 @@ def componentes_de(conjunto):
     out = []
     for c in conjunto.componentes.all():
         if _e_pos(conjunto) and c.produto_pos_id:
-            out.append(Comp(c.id, 'pos', c.produto_pos, c.variante_pos, c.quantidade))
+            out.append(Comp(c.id, 'pos', c.produto_pos, c.variante_pos, c.quantidade, livre=c.variante_livre))
         else:
-            out.append(Comp(c.id, 'loja', c.produto, c.variante, c.quantidade))
+            out.append(Comp(c.id, 'loja', c.produto, c.variante, c.quantidade, livre=c.variante_livre))
     return out
 
 
 def _comp_opcao(o, grupo, pos_conjunto):
     if pos_conjunto and o.produto_pos_id:
-        return Comp(o.id, 'pos', o.produto_pos, o.variante_pos, o.quantidade, grupo.nome, o.preco_extra, o.id)
-    return Comp(o.id, 'loja', o.produto, o.variante, o.quantidade, grupo.nome, o.preco_extra, o.id)
+        return Comp(o.id, 'pos', o.produto_pos, o.variante_pos, o.quantidade, grupo.nome, o.preco_extra, o.id,
+                    livre=o.variante_livre)
+    return Comp(o.id, 'loja', o.produto, o.variante, o.quantidade, grupo.nome, o.preco_extra, o.id,
+                livre=o.variante_livre)
+
+
+def _variantes_activas(comp):
+    return [v for v in comp.produto.variantes.all() if v.ativo] if comp.produto.stock_por_variante else []
+
+
+def com_variantes(comps, escolhas):
+    """
+    Aplica as variações escolhidas pelo cliente aos componentes "livres" (ex.: tamanho da peça).
+    escolhas['variantes'] = {"c<id>": variante_id, "o<id>": variante_id}. Devolve erro ou None.
+    """
+    pedidas = (escolhas or {}).get('variantes') or {}
+    for c in comps:
+        if not c.livre:
+            continue
+        vid = pedidas.get(c.chave_variante)
+        v = next((x for x in _variantes_activas(c) if x.id == vid), None)
+        if v is None:
+            atributos = ' / '.join(c.produto.variantes.all()[0].combinacao.keys()) if c.produto.variantes.all() else 'a variação'
+            return f'Escolhe {atributos} de "{c.produto.nome}".'
+        c.variante = v
+    return None
 
 
 def grupos_de(conjunto):
@@ -73,7 +105,16 @@ def normalizar_escolhas(escolhas):
     if not isinstance(escolhas, dict):
         return {}
     out = {}
+    # variações escolhidas pelo cliente: {"c12": 5, "o7": 9}
+    variantes = escolhas.get('variantes')
+    if isinstance(variantes, dict):
+        vs = {k: _int(v) for k, v in variantes.items()
+              if isinstance(k, str) and k[:1] in ('c', 'o') and _int(k[1:]) and _int(v)}
+        if vs:
+            out['variantes'] = dict(sorted(vs.items()))
     for k, v in escolhas.items():
+        if k == 'variantes':
+            continue
         ids = v if isinstance(v, list) else [v]
         ids = sorted({i for i in (_int(x) for x in ids) if i})
         if ids and _int(k):
@@ -89,7 +130,7 @@ def validar_escolhas(conjunto, escolhas, pos=None):
     escolhas = normalizar_escolhas(escolhas)
     grupos = grupos_de(conjunto)
     ids_grupos = {str(g.id) for g, _ in grupos}
-    if set(escolhas) - ids_grupos:
+    if set(escolhas) - ids_grupos - {'variantes'}:
         return None, 'As opções escolhidas já não existem neste menu — volta a escolher.'
     out = []
     for g, opcoes in grupos:
@@ -121,11 +162,28 @@ def preco_com_escolhas(conjunto, escolhas):
     return total
 
 
+def comps_da_venda(conjunto, escolhas, pos=None):
+    """Fixos + opções escolhidas, com as variações do cliente aplicadas. Devolve (comps, erro)."""
+    escolhas = normalizar_escolhas(escolhas)
+    escolhidas, erro = validar_escolhas(conjunto, escolhas, pos)
+    if erro:
+        return None, erro
+    comps = componentes_de(conjunto) + escolhidas
+    erro = com_variantes(comps, escolhas)
+    if erro:
+        return None, erro
+    return comps, None
+
+
 def texto_escolhas(conjunto, escolhas):
-    """"Bebida: Fanta (33cl) +0,50 € · Extras: Queijo" — para o carrinho."""
+    """"T-shirt: M · Bebida: Fanta (33cl) +0,50 €" — para o carrinho."""
     escolhas = normalizar_escolhas(escolhas)
     partes = []
+    fixos = componentes_de(conjunto)
+    com_variantes(fixos, escolhas)
+    partes += [f'{c.produto.nome}: {c.variante.descricao()}' for c in fixos if c.livre and c.variante is not None]
     for g, opcoes in grupos_de(conjunto):
+        com_variantes(opcoes, escolhas)
         pedidas = set(escolhas.get(str(g.id), []))
         nomes = [c.nome + (f' +{c.extra:.2f} €'.replace('.', ',') if c.extra else '')
                  for c in opcoes if c.opcao_id in pedidas]
@@ -155,6 +213,9 @@ def _problema(comp, pos=None):
         if motivo:
             return f'"{p.nome}" é da loja Bendi e {motivo}'
     if p.stock_por_variante:
+        if comp.variante is None and comp.livre:
+            # o cliente escolhe — basta haver alguma variação activa
+            return None if _variantes_activas(comp) else f'"{p.nome}" não tem variações disponíveis'
         if comp.variante is None:
             return f'falta escolher a variação de "{p.nome}"'
         if not comp.variante.ativo:
@@ -271,11 +332,9 @@ def bloquear(conjunto, pos=None, escolhas=None):
     as opções que o cliente escolheu. Devolve (linhas, erro).
     linhas: [{'comp', 'chave', 'linha', 'por_unidade'}]
     """
-    comps = componentes_de(conjunto)
-    escolhidas, erro = validar_escolhas(conjunto, escolhas or {}, pos)
+    comps, erro = comps_da_venda(conjunto, escolhas or {}, pos)
     if erro:
         return None, erro
-    comps += escolhidas
     if not comps:
         return None, f'"{conjunto.nome}" não tem produtos — não pode ser vendido.'
     linhas = []
@@ -431,9 +490,12 @@ def validar_linhas(linhas, conjunto, resolver, vazio_ok=False):
             return None, 'Um conjunto não se pode conter a si próprio.'
         if produto.e_conjunto:
             return None, f'"{produto.nome}" já é um conjunto — não se pode pôr um conjunto dentro de outro.'
-        if produto.stock_por_variante:
+        livre = bool(l.get('variante_livre')) and produto.stock_por_variante
+        if livre:
+            variante = None          # o cliente escolhe a variação ao comprar
+        elif produto.stock_por_variante:
             if variante is None:
-                return None, f'Escolhe a variação de "{produto.nome}" que entra no conjunto.'
+                return None, f'Escolhe a variação de "{produto.nome}" que entra no conjunto (ou deixa o cliente escolher).'
             if not variante.ativo:
                 return None, f'A variação escolhida de "{produto.nome}" já não existe.'
         else:
@@ -442,7 +504,7 @@ def validar_linhas(linhas, conjunto, resolver, vazio_ok=False):
         if chave in vistos:
             return None, f'"{produto.nome}" aparece repetido — aumenta a quantidade em vez de o repetir.'
         vistos.add(chave)
-        out.append((produto, variante, qtd, origem))
+        out.append((produto, variante, qtd, origem, livre))
     return out, None
 
 
@@ -464,8 +526,8 @@ def resolver_loja(loja):
 def guardar_componentes_loja(conjunto, linhas_validas):
     ComponenteConjunto.objects.filter(conjunto=conjunto).delete()
     ComponenteConjunto.objects.bulk_create([
-        ComponenteConjunto(conjunto=conjunto, produto=p, variante=v, quantidade=q, ordem=i)
-        for i, (p, v, q, _) in enumerate(linhas_validas)
+        ComponenteConjunto(conjunto=conjunto, produto=p, variante=v, quantidade=q, ordem=i, variante_livre=livre)
+        for i, (p, v, q, _, livre) in enumerate(linhas_validas)
     ])
 
 
@@ -509,6 +571,7 @@ def componentes_payload(conjunto, request=None, pos=None):
             'preco': str(c.variante.preco_efetivo if c.variante is not None else p.preco),
             'imagem': imagem,
             'problema': _problema(c, pos),
+            **_livre_payload(c),
         })
     return out
 
@@ -545,11 +608,13 @@ def guardar_componentes_pos(conjunto, linhas_validas):
     from ..pos.models import ComponenteConjuntoPOS
     ComponenteConjuntoPOS.objects.filter(conjunto=conjunto).delete()
     objs = []
-    for i, (p, v, q, origem) in enumerate(linhas_validas):
+    for i, (p, v, q, origem, livre) in enumerate(linhas_validas):
         if origem == 'pos':
-            objs.append(ComponenteConjuntoPOS(conjunto=conjunto, produto_pos=p, variante_pos=v, quantidade=q, ordem=i))
+            objs.append(ComponenteConjuntoPOS(conjunto=conjunto, produto_pos=p, variante_pos=v, quantidade=q, ordem=i,
+                                              variante_livre=livre))
         else:
-            objs.append(ComponenteConjuntoPOS(conjunto=conjunto, produto=p, variante=v, quantidade=q, ordem=i))
+            objs.append(ComponenteConjuntoPOS(conjunto=conjunto, produto=p, variante=v, quantidade=q, ordem=i,
+                                              variante_livre=livre))
     ComponenteConjuntoPOS.objects.bulk_create(objs)
 
 
@@ -642,8 +707,8 @@ def validar_grupos(grupos, conjunto, resolver):
         out.append({
             'id': _int(g.get('id')), 'nome': nome, 'minimo': minimo, 'maximo': maximo,
             'opcoes': [{'id': _int(o.get('id')), 'produto': p, 'variante': v, 'quantidade': q,
-                        'extra': e, 'origem': origem}
-                       for o, (p, v, q, origem), e in zip(opcoes, linhas, extras)],
+                        'extra': e, 'origem': origem, 'livre': livre}
+                       for o, (p, v, q, origem, livre), e in zip(opcoes, linhas, extras)],
         })
     return out, None
 
@@ -668,6 +733,7 @@ def guardar_grupos(conjunto, grupos_validos):
         for j, o in enumerate(g['opcoes']):
             op = opc_exist.get(o['id']) or MO(grupo=grupo)
             op.quantidade, op.preco_extra, op.ordem = o['quantidade'], o['extra'], j
+            op.variante_livre = o['livre']
             if e_pos and o['origem'] == 'pos':
                 op.produto_pos, op.variante_pos, op.produto, op.variante = o['produto'], o['variante'], None, None
             elif e_pos:
@@ -693,6 +759,16 @@ def _imagem(c, request=None):
     return imagem
 
 
+def _livre_payload(c):
+    """Componente em que o cliente escolhe a variação: as variações activas para o seletor."""
+    if not c.livre:
+        return {'variante_livre': False, 'variantes_livres': []}
+    return {'variante_livre': True, 'variantes_livres': [
+        {'id': v.id, 'nome': v.descricao(), 'quantidade': v.quantidade,
+         'disponivel': v.quantidade >= c.quantidade, 'preco': str(v.preco_efetivo)}
+        for v in _variantes_activas(c)]}
+
+
 def grupos_payload(conjunto, request=None, pos=None):
     out = []
     for g, opcoes in grupos_de(conjunto):
@@ -711,6 +787,7 @@ def grupos_payload(conjunto, request=None, pos=None):
                 'imagem': _imagem(c, request),
                 'disponivel': opcao_disponivel(c, pos),
                 'problema': _problema(c, pos),
+                **_livre_payload(c),
             } for c in opcoes],
         })
     return out
@@ -750,10 +827,9 @@ def maximo_com_escolhas(conjunto, escolhas, pos=None):
     Quantos conjuntos com ESTAS escolhas cabem no stock (o mesmo produto fixo e escolhido soma).
     Devolve (quantidade|None, erro) — None = sem limite.
     """
-    escolhidas, erro = validar_escolhas(conjunto, escolhas, pos)
+    comps, erro = comps_da_venda(conjunto, escolhas, pos)
     if erro:
         return 0, erro
-    comps = componentes_de(conjunto) + escolhidas
     for c in comps:
         motivo = _problema(c, pos)
         if motivo:
@@ -769,3 +845,41 @@ def maximo_com_escolhas(conjunto, escolhas, pos=None):
     if not pedido:
         return None, None
     return min(max(s, 0) // q for s, q in pedido.values()), None
+
+
+# ── Relatórios: unidades vendidas por produto (sozinho + dentro de conjuntos) ──
+
+def _nome_sem_variante(c):
+    nome = c.get('nome') or ''
+    if c.get('variante_id') and nome.endswith(')') and ' (' in nome:
+        nome = nome[:nome.rfind(' (')]
+    return nome
+
+
+def vendas_por_produto(linhas):
+    """
+    linhas: [(origem, produto_id, nome, quantidade, preco_unitario, componentes_snapshot)]
+    Devolve [{origem, id, nome, qty, qty_direto, qty_conjuntos, valor}] por ordem de unidades.
+      qty_direto    = unidades vendidas sozinhas (o próprio conjunto conta aqui como produto)
+      qty_conjuntos = unidades que saíram dentro de menus/conjuntos
+      valor         = receita das vendas directas (preço × quantidade)
+    """
+    out = {}
+
+    def linha(origem, pid, nome):
+        return out.setdefault((origem, pid), {'origem': origem, 'id': pid, 'nome': nome, 'qty': 0,
+                                              'qty_direto': 0, 'qty_conjuntos': 0, 'valor': 0.0})
+    for origem, pid, nome, qtd, preco, comps in linhas:
+        if pid:
+            e = linha(origem, pid, nome)
+            e['qty'] += qtd
+            e['qty_direto'] += qtd
+            e['valor'] += float(preco or 0) * qtd
+        for c in comps or []:
+            n = int(c.get('quantidade') or 0) * qtd
+            if not n or not c.get('produto_id'):
+                continue
+            e = linha(c.get('origem') or 'loja', c['produto_id'], _nome_sem_variante(c))
+            e['qty'] += n
+            e['qty_conjuntos'] += n
+    return sorted(out.values(), key=lambda x: (-x['qty'], x['nome']))

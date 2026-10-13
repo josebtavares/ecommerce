@@ -614,17 +614,16 @@ def loja_dashboard(request, loja_id):
         for v in vendas_por_dia
     ]
 
-    top_produtos = (
-        ItemEncomenda.objects
-        .filter(encomenda__loja=loja, encomenda__data_criacao__range=(inicio, fim))
-        .values('produto__id', 'produto__nome')
-        .annotate(total_qty=Sum('quantidade'), total_val=Sum('preco'))
-        .order_by('-total_qty')[:5]
-    )
+    # unidades vendidas sozinhas + dentro de menus/conjuntos (encomendas canceladas não contam)
+    from ..utils.conjuntos import vendas_por_produto
+    itens = (ItemEncomenda.objects
+             .filter(encomenda__loja=loja, encomenda__data_criacao__range=(inicio, fim))
+             .exclude(encomenda__status='cancelado')
+             .values_list('produto__id', 'produto__nome', 'quantidade', 'preco', 'componentes'))
     produtos_top = [
-        {'id': p['produto__id'], 'nome': p['produto__nome'],
-         'qty': p['total_qty'], 'valor': float(p['total_val'] or 0)}
-        for p in top_produtos
+        {'id': p['id'], 'nome': p['nome'], 'qty': p['qty'], 'valor': round(p['valor'], 2),
+         'qty_direto': p['qty_direto'], 'qty_conjuntos': p['qty_conjuntos']}
+        for p in vendas_por_produto(('loja', pid, nome, q, preco, comps) for pid, nome, q, preco, comps in itens)[:5]
     ]
 
     com_qs = Comissao.objects.filter(loja=loja)

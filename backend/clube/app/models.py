@@ -620,6 +620,8 @@ class ComponenteConjunto(models.Model):
     variante   = models.ForeignKey(VarianteProduto, on_delete=models.RESTRICT, null=True, blank=True,
                                    related_name='em_conjuntos')
     quantidade = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    # produto com variações: o cliente escolhe a variação (ex.: o tamanho da peça) em vez de ser fixa
+    variante_livre = models.BooleanField(default=False)
     ordem      = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
@@ -666,6 +668,7 @@ class OpcaoEscolha(models.Model):
     variante    = models.ForeignKey(VarianteProduto, on_delete=models.RESTRICT, null=True, blank=True,
                                     related_name='em_opcoes')
     quantidade  = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    variante_livre = models.BooleanField(default=False)   # o cliente escolhe a variação
     preco_extra = models.DecimalField(max_digits=8, decimal_places=2, default=0,
                                       validators=[MinValueValidator(0)])
     ordem       = models.PositiveSmallIntegerField(default=0)

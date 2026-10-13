@@ -364,6 +364,7 @@ class ComponenteConjuntoPOS(models.Model):
     variante_pos = models.ForeignKey(VarianteProdutoPOS, on_delete=models.RESTRICT, null=True, blank=True,
                                      related_name='em_conjuntos')
     quantidade   = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    variante_livre = models.BooleanField(default=False)   # o cliente escolhe a variação
     ordem        = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
@@ -415,6 +416,7 @@ class OpcaoEscolhaPOS(models.Model):
     variante_pos = models.ForeignKey(VarianteProdutoPOS, on_delete=models.RESTRICT, null=True, blank=True,
                                      related_name='em_opcoes')
     quantidade   = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    variante_livre = models.BooleanField(default=False)   # o cliente escolhe a variação
     preco_extra  = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0.00'),
                                        validators=[MinValueValidator(Decimal('0.00'))])
     ordem        = models.PositiveSmallIntegerField(default=0)

@@ -18,8 +18,8 @@ from ..utils.tipos import tipos_para_loja, tipo_permitido
 from ..utils import conjuntos as conj
 
 # prefetch dos componentes dos conjuntos (evita uma query por componente nas listagens)
-PREFETCH_CONJUNTO = ('componentes__produto__inventario', 'componentes__variante',
-                     'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante')
+PREFETCH_CONJUNTO = ('componentes__produto__inventario', 'componentes__variante', 'componentes__produto__variantes',
+                     'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante', 'grupos__opcoes__produto__variantes')
 
 
 def _quer_conjunto(dados, atual=False):

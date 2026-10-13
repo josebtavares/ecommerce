@@ -1102,16 +1102,14 @@ def admin_relatorios(request):
     if loja_id:
         top_prod_qs = top_prod_qs.filter(encomenda__loja_id=loja_id)
  
-    top_produtos = (
-        top_prod_qs
-        .values('produto__id', 'produto__nome')
-        .annotate(qty=Sum('quantidade'), total=Sum('preco'))
-        .order_by('-qty')[:10]
-    )
+    # unidades vendidas sozinhas + dentro de menus/conjuntos (encomendas canceladas não contam)
+    from ..utils.conjuntos import vendas_por_produto
+    itens = (top_prod_qs.exclude(encomenda__status='cancelado')
+             .values_list('produto__id', 'produto__nome', 'quantidade', 'preco', 'componentes'))
     produtos_top = [
-        {'id': p['produto__id'], 'nome': p['produto__nome'],
-         'qty': p['qty'], 'total': float(p['total'] or 0)}
-        for p in top_produtos
+        {'id': p['id'], 'nome': p['nome'], 'qty': p['qty'], 'total': round(p['valor'], 2),
+         'qty_direto': p['qty_direto'], 'qty_conjuntos': p['qty_conjuntos']}
+        for p in vendas_por_produto(('loja', pid, nome, q, preco, comps) for pid, nome, q, preco, comps in itens)[:10]
     ]
  
     # ── Lista de lojas para o filtro ──────────────────────────

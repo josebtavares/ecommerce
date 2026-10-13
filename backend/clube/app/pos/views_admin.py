@@ -176,10 +176,16 @@ def admin_pos_detalhe(request, pos_id):
 
     vendas_dia = (fechadas.annotate(dia=TruncDate('fechada_em')).values('dia')
                   .annotate(total=Sum('total'), contas=Count('id')).order_by('dia'))
-    top = (ItemContaMesa.objects
-           .filter(conta__in=fechadas).exclude(status='cancelado')
-           .values('nome').annotate(qtd=Sum('quantidade'), total=Sum('preco_total'))
-           .order_by('-qtd')[:8])
+    # unidades vendidas sozinhas + dentro de menus (a cozinha serviu-as na mesma)
+    from ..utils.conjuntos import vendas_por_produto
+    itens = (ItemContaMesa.objects.filter(conta__in=fechadas).exclude(status='cancelado')
+             .values_list('produto_pos_id', 'produto_pos__nome', 'produto_id', 'produto__nome',
+                          'quantidade', 'preco_unitario', 'componentes'))
+    top = [{'nome': p['nome'], 'qtd': p['qty'], 'total': f"{p['valor']:.2f}",
+            'qty_conjuntos': p['qty_conjuntos']}
+           for p in vendas_por_produto(
+               ('pos', pp, ppn, q, preco, comps) if pp else ('loja', lp, lpn, q, preco, comps)
+               for pp, ppn, lp, lpn, q, preco, comps in itens)[:8]]
     abertas = (ContaMesa.objects.filter(pos=pos, status='aberta').select_related('mesa', 'atendente')
                .annotate(n_items=Count('items', filter=~Q(items__status='cancelado'))).order_by('criada_em'))
     historico = (ContaMesa.objects.filter(pos=pos).exclude(status='aberta').select_related('mesa')
@@ -195,7 +201,8 @@ def admin_pos_detalhe(request, pos_id):
         'mesas': pos.mesas.count(),
         'ticket_medio_30d': str(round(pos.vendas_30d / n_contas, 2)) if n_contas else '0.00',
         'vendas_por_dia': [{'dia': v['dia'], 'total': str(v['total']), 'contas': v['contas']} for v in vendas_dia],
-        'top_produtos': [{'nome': t['nome'], 'quantidade': t['qtd'], 'total': str(t['total'])} for t in top],
+        'top_produtos': [{'nome': t['nome'], 'quantidade': t['qtd'], 'total': t['total'],
+                          'em_menus': t['qty_conjuntos']} for t in top],
         'equipa': [
             {'id': m.id, 'nome': m.nome, 'username': m.username_pos, 'papel': m.papel, 'ativo': m.ativo}
             for m in pos.staff.all().order_by('nome')

@@ -54,9 +54,12 @@ from ..utils import conjuntos as conj
 PREFETCH_CONJUNTO_POS = ('componentes__produto_pos', 'componentes__variante_pos', 'componentes__produto__inventario',
                          'componentes__produto__loja', 'componentes__variante',
                          'grupos__opcoes__produto_pos', 'grupos__opcoes__variante_pos', 'grupos__opcoes__produto__inventario',
-                         'grupos__opcoes__produto__loja', 'grupos__opcoes__variante')
+                         'grupos__opcoes__produto__loja', 'grupos__opcoes__variante',
+                         'componentes__produto_pos__variantes', 'componentes__produto__variantes',
+                         'grupos__opcoes__produto_pos__variantes', 'grupos__opcoes__produto__variantes')
 PREFETCH_CONJUNTO_LOJA = ('componentes__produto__inventario', 'componentes__variante',
-                          'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante')
+                          'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante',
+                          'componentes__produto__variantes', 'grupos__opcoes__produto__variantes')
 from app.utils.auth import autenticar
 from app.utils.google_auth import google_obter_utilizador
 from app.utils.password import mensagem_password_fraca
