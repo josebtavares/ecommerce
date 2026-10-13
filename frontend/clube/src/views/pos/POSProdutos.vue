@@ -164,7 +164,8 @@
           />
           <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300"><font-awesome-icon :icon="['fas', 'box']" /></div>
 
-          <div class="absolute left-2 top-2 flex flex-wrap gap-1">
+          <!-- direita livre para o selo Ativo/Inativo -->
+          <div class="absolute left-2 right-20 top-2 flex flex-wrap gap-1">
             <span
               :class="[
                 'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide',
@@ -172,6 +173,13 @@
               ]"
             >
               {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}
+            </span>
+
+            <span
+              v-if="produto.e_conjunto"
+              class="rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-white"
+            >
+              <font-awesome-icon :icon="['fas', 'layer-group']" /> Menu
             </span>
 
             <span
@@ -208,8 +216,25 @@
             </span>
           </div>
 
+          <!-- menu: o que leva; indisponível → motivo e "Corrigir menu" -->
+          <template v-if="produto.e_conjunto">
+            <p class="mt-2 line-clamp-2 text-[11px] font-semibold text-slate-500">
+              {{ produto.componentes.map(c => c.quantidade + '× ' + c.nome).join(', ') }}
+            </p>
+            <p v-if="produto.grupos?.length" class="mt-1 text-[11px] font-bold text-sky-700">
+              Escolhe: {{ produto.grupos.map(g => g.nome).join(', ') }}
+            </p>
+            <p v-if="produto.conjunto?.motivo" class="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800">
+              <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> {{ produto.conjunto.motivo }}
+            </p>
+            <button v-if="podeCorrigir(produto)" type="button" @click="abrirSubstituir(produto)"
+              class="mt-2 w-full rounded-lg bg-slate-950 px-2 py-1.5 text-[11px] font-black text-white hover:bg-slate-800">
+              <font-awesome-icon :icon="['fas', 'wrench']" /> Corrigir menu
+            </button>
+          </template>
+
           <!-- stock por variação -->
-          <p v-if="produto.stock_por_variante" class="mt-2 text-[11px] font-bold text-slate-500">
+          <p v-else-if="produto.stock_por_variante" class="mt-2 text-[11px] font-bold text-slate-500">
             <font-awesome-icon :icon="['fas', 'boxes-stacked']" /> {{ produto.variantes.length }} variações
             <span v-if="produto.variantes.some(v => v.quantidade === 0)" class="text-red-600">
               · {{ produto.variantes.filter(v => v.quantidade === 0).length }} esgotada(s)
@@ -289,6 +314,25 @@
             </p>
           </div>
 
+          <!-- Produto simples ou menu (conjunto de produtos que já vendes) -->
+          <div>
+            <div class="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1" role="tablist">
+              <button type="button" role="tab" :aria-selected="!conjunto.ativo" @click="conjunto.ativo = false"
+                :class="['h-10 rounded-xl text-sm font-black transition', !conjunto.ativo ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800']">
+                Produto
+              </button>
+              <button type="button" role="tab" :aria-selected="conjunto.ativo" @click="conjunto.ativo = true"
+                :class="['h-10 rounded-xl text-sm font-black transition', conjunto.ativo ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800']">
+                Menu / conjunto
+              </button>
+            </div>
+            <p v-if="conjunto.ativo" class="mt-2 text-xs font-semibold text-slate-400">
+              Junta produtos que já vendes (ex.: hambúrguer + batata + bebida) com um preço só.
+              Ao vender, sai do stock de cada produto{{ formProduto.origem === 'pos' && modo === 'hibrido' ? ' — do POS ou da loja Bendi' : '' }}.
+            </p>
+          </div>
+
+
           <div>
             <label class="mb-2 block text-sm font-black text-slate-700">Nome *</label>
             <input
@@ -339,6 +383,13 @@
             </div>
           </div>
 
+          <div v-if="conjunto.ativo" class="space-y-2">
+            <label class="block text-sm font-black text-slate-700">Produtos do menu *</label>
+            <ConjuntoEditor v-model="conjunto.linhas" v-model:grupos="conjunto.grupos" claro :catalogo="catalogoConjunto"
+              :preco-conjunto="formProduto.preco" :problemas="problemasConjunto"
+              :mostrar-origem="formProduto.origem === 'pos' && modo === 'hibrido'" />
+          </div>
+
           <!-- Tipo + atributos -->
           <div>
             <label class="mb-2 block text-sm font-black text-slate-700">Tipo de produto</label>
@@ -359,7 +410,7 @@
             </p>
           </div>
 
-          <div v-if="tipoSelecionado && schemaTipo.length" class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div v-if="!conjunto.ativo && tipoSelecionado && schemaTipo.length" class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p class="text-xs font-black uppercase tracking-wider text-slate-500 capitalize">Atributos · {{ tipoSelecionado.nome }}</p>
             <div v-for="a in schemaTipo" :key="a.nome">
               <label class="mb-2 flex items-center gap-1 text-xs font-black capitalize text-slate-600">
@@ -379,7 +430,10 @@
             </div>
           </div>
 
-          <div v-if="grelhaAtiva" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
+          <div v-if="conjunto.ativo" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
+            <font-awesome-icon :icon="['fas', 'layer-group']" class="mr-1" />Um menu não tem stock próprio — vende-se enquanto houver stock de todos os produtos dele.
+          </div>
+          <div v-else-if="grelhaAtiva" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
             <font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock gerido por variação — define as quantidades em <b>Stock por variação</b> abaixo.
           </div>
           <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -405,7 +459,7 @@
           </div>
 
           <!-- Stock por variação (vai no mesmo pedido do produto) -->
-          <div v-if="atributosVarianteForm.length" class="space-y-3">
+          <div v-if="!conjunto.ativo && atributosVarianteForm.length" class="space-y-3">
             <p class="text-sm font-black text-slate-700"><font-awesome-icon :icon="['fas', 'boxes-stacked']" class="mr-1" />Stock por variação
               <span class="ml-1 rounded-lg bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800">{{ atributosVarianteForm.join(' × ') }}</span>
             </p>
@@ -473,6 +527,53 @@
         </form>
       </div>
     </div>
+
+    <!-- Corrigir menu: trocar o produto que o deixou indisponível (ex.: loja Bendi suspensa) -->
+    <div v-if="substituir.produto" class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4"
+         @click.self="substituir.produto = null">
+      <div class="w-full max-w-md rounded-t-[2rem] bg-white p-5 shadow-2xl sm:rounded-[2rem]">
+        <h3 class="text-lg font-black text-slate-950">Corrigir "{{ substituir.produto.nome }}"</h3>
+        <p class="mt-1 text-sm font-semibold text-slate-500">
+          {{ substituir.produto.conjunto?.motivo }}. Troca-o por um produto do POS para o menu voltar a vender.
+        </p>
+
+        <div class="mt-4 space-y-2 rounded-2xl border border-slate-200 p-4">
+          <p class="text-sm font-black text-slate-800">Criar no POS e substituir</p>
+          <p class="text-xs font-semibold text-slate-500">
+            Cria "{{ substituir.componente?.nome }}" no POS com o mesmo nome, preço e foto. O stock da loja não passa para o POS.
+          </p>
+          <label class="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <input v-model="substituir.controlar_stock" type="checkbox" class="h-4 w-4 accent-slate-950" /> Controlar stock
+          </label>
+          <input v-if="substituir.controlar_stock" v-model.number="substituir.stock" type="number" min="0" placeholder="Quantidade que tens"
+                 class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-slate-950" />
+          <button type="button" :disabled="substituir.aGuardar" @click="confirmarSubstituir(true)"
+                  class="h-11 w-full rounded-xl bg-slate-950 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60">
+            Criar e substituir
+          </button>
+        </div>
+
+        <div v-if="produtosPOSParaSubstituir.length" class="mt-3 space-y-2 rounded-2xl border border-slate-200 p-4">
+          <p class="text-sm font-black text-slate-800">Ou usar um produto do POS que já existe</p>
+          <select v-model="substituir.produto_pos_id" class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 outline-none">
+            <option :value="null" disabled>Escolhe o produto…</option>
+            <option v-for="p in produtosPOSParaSubstituir" :key="p.id" :value="p.id">{{ p.nome }} · {{ money(p.preco) }}</option>
+          </select>
+          <select v-if="variantesSubstituto.length" v-model="substituir.variante_pos_id"
+                  class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 outline-none">
+            <option :value="null" disabled>Escolhe a variação…</option>
+            <option v-for="v in variantesSubstituto" :key="v.id" :value="v.id">{{ Object.values(v.combinacao || {}).join(' · ') }}</option>
+          </select>
+          <button type="button" :disabled="substituir.aGuardar || !substituir.produto_pos_id" @click="confirmarSubstituir(false)"
+                  class="h-11 w-full rounded-xl border border-slate-950 text-sm font-black text-slate-950 hover:bg-slate-50 disabled:opacity-50">
+            Substituir
+          </button>
+        </div>
+
+        <p v-if="substituir.erro" class="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{{ substituir.erro }}</p>
+        <button type="button" @click="substituir.produto = null" class="mt-3 h-10 w-full rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800">Fechar</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -480,6 +581,7 @@
 import api from '@/services/api'
 import TiposModal from './components/TiposModal.vue'
 import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
+import ConjuntoEditor, { erroConjunto, gruposDoProduto } from '@/components/conjuntos/ConjuntoEditor.vue'
 import {
   combinacoesDe, mesclarLinhas, linhasDoProduto, linhasParaPayload, grelhaValida,
 } from '@/utils/variantes'
@@ -494,7 +596,7 @@ const FORM_VAZIO = () => ({
 export default {
   name: 'POSProdutos',
 
-  components: { TiposModal, VariantesGrelhaForm },
+  components: { TiposModal, VariantesGrelhaForm, ConjuntoEditor },
 
   props: {
     posId: {
@@ -536,6 +638,10 @@ export default {
       showTiposModal: false,
       tipos: [],          // tipos disponíveis para a origem do formulário
       grelha: { ativo: true, linhas: [] },   // stock por variação do formulário
+      conjunto: { ativo: false, linhas: [], grupos: [] },   // menu: produtos fixos e escolhas
+      // "Corrigir menu" — trocar o componente que o deixou indisponível
+      substituir: { produto: null, componente: null, controlar_stock: true, stock: 0,
+                    produto_pos_id: null, variante_pos_id: null, aGuardar: false, erro: '' },
       formProduto: FORM_VAZIO(),
     }
   },
@@ -598,6 +704,44 @@ export default {
     // stock por variação ligado → os campos de stock total desaparecem
     grelhaAtiva() {
       return this.combinacoesForm.length > 0 && this.grelha.ativo
+    },
+
+    // produtos que podem entrar no menu: do POS e (POS híbrido, menu do POS) da loja; sem menus nem ele próprio
+    catalogoConjunto() {
+      const origem = this.formProduto.origem
+      return this.produtos
+        .filter(p => !p.e_conjunto)
+        .filter(p => !(this.produtoEditando && p.origem === this.produtoEditando.origem && p.id === this.produtoEditando.id))
+        .filter(p => origem === 'loja' ? p.origem === 'loja' : (p.origem === 'pos' || this.modo === 'hibrido'))
+        .map(p => ({
+          origem: p.origem, id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem_url, ativo: p.ativo,
+          variantes: p.stock_por_variante
+            ? (p.variantes || []).map(v => ({ id: v.id, nome: Object.values(v.combinacao || {}).join(' · '), preco: v.preco_efetivo }))
+            : [],
+        }))
+    },
+
+    // problemas que o servidor detectou em cada componente (ex.: loja suspensa)
+    problemasConjunto() {
+      const out = {}
+      const todos = [...(this.produtoEditando?.componentes || []),
+                     ...(this.produtoEditando?.grupos || []).flatMap(g => g.opcoes)]
+      todos.forEach(c => {
+        if (c.problema) out[c.origem + '-' + c.produto_id] = c.problema
+      })
+      return out
+    },
+
+    produtosPOSParaSubstituir() {
+      const menu = this.substituir.produto
+      if (!menu) return []
+      const usados = new Set(menu.componentes.filter(c => c.origem === 'pos' && c.id !== this.substituir.componente?.id).map(c => c.produto_id))
+      return this.produtos.filter(p => p.origem === 'pos' && !p.e_conjunto && p.ativo && p.id !== menu.id && !usados.has(p.id))
+    },
+
+    variantesSubstituto() {
+      const p = this.produtos.find(x => x.origem === 'pos' && x.id === this.substituir.produto_pos_id)
+      return p?.stock_por_variante ? (p.variantes || []) : []
     },
 
     produtosFiltrados() {
@@ -675,6 +819,7 @@ export default {
 
       this.showProdutoModal = true
       this.grelha = { ativo: true, linhas: [] }   // produto novo: stock por variação ligado por defeito
+      this.conjunto = { ativo: false, linhas: [], grupos: [] }
       if (this.formProduto.origem) this.carregarTipos(this.formProduto.origem)
     },
 
@@ -729,6 +874,14 @@ export default {
       this.isImagePreview = true
       this.showProdutoModal = true
       this.grelha = { ativo: !!produto.stock_por_variante, linhas: linhasDoProduto(produto) }
+      this.conjunto = {
+        ativo: !!produto.e_conjunto,
+        linhas: (produto.componentes || []).map(c => ({
+          origem: c.origem, produto_id: c.produto_id, variante_id: c.variante_id, quantidade: c.quantidade,
+          variante_livre: !!c.variante_livre,
+        })),
+        grupos: gruposDoProduto(produto),
+      }
       this.carregarTipos(produto.origem || 'pos')
     },
 
@@ -742,7 +895,7 @@ export default {
         formData.append('origem', produto.origem)
         formData.append('ativo', String(!this.produtoAtivo(produto)))
 
-        await api.patch(`/api/pos/${this.posId}/produtos/${produto.id}/`, formData)
+        await this.patchConfirmando(`/api/pos/${this.posId}/produtos/${produto.id}/`, formData)
 
         this.success = 'Produto atualizado com sucesso.'
         await this.carregarProdutos()
@@ -782,13 +935,27 @@ export default {
         formData.append('descricao',       this.formProduto.descricao || '')
         formData.append('preco',           String(this.formProduto.preco))
         formData.append('categoria',       this.formProduto.categoria || 'Sem categoria')
+        // menu: produtos e variações escolhidas (o servidor valida e grava tudo-ou-nada)
+        if (this.conjunto.ativo) {
+          const erroMenu = erroConjunto(this.conjunto.linhas, this.conjunto.grupos, this.catalogoConjunto)
+          if (erroMenu) {
+            this.error = erroMenu
+            this.salvando = false
+            return
+          }
+          formData.append('e_conjunto', 'true')
+          formData.append('componentes', JSON.stringify(this.conjunto.linhas))
+          formData.append('grupos', JSON.stringify(this.conjunto.grupos))
+        } else if (this.produtoEditando?.e_conjunto) {
+          formData.append('e_conjunto', 'false')
+        }
         // com stock por variação o total é a soma das variações
-        if (!this.grelhaAtiva) {
+        if (!this.conjunto.ativo && !this.grelhaAtiva) {
           formData.append('controlar_stock', String(Boolean(this.formProduto.controlar_stock)))
           formData.append('stock',           String(Number(this.formProduto.stock || 0)))
         }
         // grelha no mesmo pedido (o backend grava produto + variações tudo-ou-nada)
-        if (this.combinacoesForm.length) {
+        if (!this.conjunto.ativo && this.combinacoesForm.length) {
           if (this.grelha.ativo && !grelhaValida(this.grelha.linhas)) {
             this.error = 'Há quantidades inválidas na grelha de stock por variação.'
             this.salvando = false
@@ -800,7 +967,7 @@ export default {
         formData.append('ativo',           String(Boolean(this.formProduto.ativo)))
         formData.append('disponivel_pos',  String(Boolean(this.formProduto.disponivel_pos)))
         formData.append('tipo_id',         this.formProduto.tipo_id || '')
-        if (this.tipoSelecionado) {
+        if (this.tipoSelecionado && !this.conjunto.ativo) {
           formData.append('atributos', JSON.stringify(this.atributosParaEnviar()))
         }
 
@@ -814,7 +981,8 @@ export default {
         }
 
         if (this.produtoEditando) {
-          await api.patch(`/api/pos/${this.posId}/produtos/${this.produtoEditando.id}/`, formData)
+          const ok = await this.patchConfirmando(`/api/pos/${this.posId}/produtos/${this.produtoEditando.id}/`, formData)
+          if (!ok) { this.salvando = false; return }
           this.success = 'Produto atualizado com sucesso.'
         } else {
           await api.post(`/api/pos/${this.posId}/produtos/criar/`, formData)
@@ -827,6 +995,49 @@ export default {
         this.error = err.response?.data?.detail || this.formatBackendError(err.response?.data) || 'Erro ao guardar produto.'
       } finally {
         this.salvando = false
+      }
+    },
+
+    // PATCH que pode pedir confirmação (desactivar um produto que está dentro de menus)
+    async patchConfirmando(url, formData) {
+      try {
+        await api.patch(url, formData)
+      } catch (e) {
+        if (e.response?.status !== 409 || !e.response.data?.precisa_confirmar) throw e
+        if (!confirm(e.response.data.detail + '\n\nDesactivar mesmo assim?')) return false
+        await api.patch(url, formData, { params: { confirmar: 1 } })
+      }
+      return true
+    },
+
+    podeCorrigir(produto) {
+      return this.podeGerirProdutos && produto.origem === 'pos' && !!produto.conjunto?.componente_id &&
+        produto.componentes.some(c => c.id === produto.conjunto.componente_id && c.origem === 'loja')
+    },
+
+    abrirSubstituir(produto) {
+      const componente = produto.componentes.find(c => c.id === produto.conjunto.componente_id)
+      this.substituir = { produto, componente, controlar_stock: true, stock: 0,
+                          produto_pos_id: null, variante_pos_id: null, aGuardar: false, erro: '' }
+    },
+
+    async confirmarSubstituir(criar) {
+      const s = this.substituir
+      s.aGuardar = true
+      s.erro = ''
+      const corpo = criar
+        ? { criar: true, controlar_stock: s.controlar_stock, stock: Number(s.stock || 0) }
+        : { produto_pos_id: s.produto_pos_id, variante_pos_id: s.variante_pos_id }
+      try {
+        const { data } = await api.post(
+          `/api/pos/${this.posId}/produtos/${s.produto.id}/componentes/${s.componente.id}/substituir/`, corpo)
+        this.success = data.detail
+        this.substituir.produto = null
+        await this.carregarProdutos()
+      } catch (e) {
+        s.erro = e.response?.data?.detail || 'Não foi possível substituir.'
+      } finally {
+        s.aGuardar = false
       }
     },
 
@@ -870,7 +1081,7 @@ export default {
         imagem_url:   produto.imagem_url || produto.ficheiro_url || null,
         ativo:        produto.ativo ?? true,
         disponivel_pos: produto.disponivel_pos ?? true,
-        stock:        produto.stock ?? 0,
+        stock:        produto.e_conjunto ? produto.stock : (produto.stock ?? 0),   // menu sem limite → null
         origem:       produto.origem || 'pos'
       }
     },

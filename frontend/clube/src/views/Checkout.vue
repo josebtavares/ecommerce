@@ -210,6 +210,8 @@
               <div v-else class="w-10 h-10 rounded-lg bg-zinc-800 flex-shrink-0"></div>
               <div class="flex-1 min-w-0">
                 <p class="text-xs font-medium text-zinc-200 truncate">{{ item.produto?.nome }}</p>
+                <p v-if="item.produto?.inclui" class="text-[11px] text-zinc-500 leading-snug line-clamp-2">{{ item.produto.inclui }}</p>
+                <p v-if="item.escolhas_texto" class="text-[11px] text-red-400 leading-snug">{{ item.escolhas_texto }}</p>
                 <p class="text-xs text-zinc-500">x{{ item.quantidade }}</p>
                 <p v-if="item.variante && item.quantidade > (item.variante.ativo ? item.variante.quantidade_disponivel : 0)"
                    class="text-[11px] text-amber-500 mt-0.5">

@@ -15,6 +15,7 @@ from django.db.models import F
 from ..models import Produto, Inventario, VarianteProduto
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
 from .models import ProdutoPOS, VarianteProdutoPOS
+from ..utils import conjuntos as conj
 
 
 def _msg(nome, variante, disponivel):
@@ -24,9 +25,11 @@ def _msg(nome, variante, disponivel):
     return f'Stock insuficiente de "{nome}". Disponível: {disponivel}.'
 
 
-def reservar_stock(produto, quantidade, atributos):
+def reservar_stock(produto, quantidade, atributos, pos=None, escolhas=None):
     """
     Valida e desconta o stock para um item novo da conta.
+    Conjunto (menu): desconta cada componente; info['componentes'] guarda o que levava.
+    pos: o POS onde se vende (componentes da loja Bendi num conjunto do POS).
     produto: app.Produto ou pos.ProdutoPOS (já obtido; a linha é bloqueada aqui).
     Devolve (info, None) ou (None, mensagem_de_erro), com
       info = { variante, variante_pos, preco_unitario, nome }
@@ -37,6 +40,14 @@ def reservar_stock(produto, quantidade, atributos):
 
     info = {'variante': None, 'variante_pos': None,
             'preco_unitario': produto.preco, 'nome': produto.nome}
+
+    if produto.e_conjunto:
+        componentes, erro = conj.reservar(produto, quantidade, pos, escolhas)
+        if erro:
+            return None, erro
+        info['componentes'] = componentes
+        info['preco_unitario'] = conj.preco_com_escolhas(produto, escolhas or {})   # base + extras
+        return info, None
 
     variante, erro = resolver_variante(produto, atributos, lock=True)
     if erro:
@@ -78,6 +89,10 @@ def reservar_stock(produto, quantidade, atributos):
 def repor_stock_item(item):
     """Devolve ao stock as unidades de um item da conta (remoção, cancelamento)."""
     q = item.quantidade
+    if item.componentes:
+        # conjunto: devolve a cada componente o que se descontou (snapshot da venda)
+        conj.repor(item.componentes, q)
+        return
     if item.variante_pos_id:
         VarianteProdutoPOS.objects.filter(id=item.variante_pos_id).update(quantidade=F('quantidade') + q)
         atualizar_total_inventario(ProdutoPOS.objects.get(id=item.variante_pos.produto_id))

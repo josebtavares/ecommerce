@@ -297,7 +297,7 @@ def admin_loja_eliminar(request, loja_id):
     os ficheiros (logo, banner, imagens, vídeos) vão para a fila de limpeza em segundo plano.
     """
     from django.db import transaction
-    from django.db.models import ProtectedError
+    from django.db.models import ProtectedError, RestrictedError
 
     erro = _exige_admin(request, 'gerir_lojas')
     if erro: return erro
@@ -321,10 +321,11 @@ def admin_loja_eliminar(request, loja_id):
     try:
         with transaction.atomic():
             loja.delete()
-    except ProtectedError as e:
+    except (ProtectedError, RestrictedError) as e:
+        # RestrictedError: produto usado num menu de outro POS (ComponenteConjuntoPOS)
         # rede de segurança: on_delete=PROTECT nos registos financeiros
         return Response({'detail': 'Esta loja tem registos que não podem ser apagados.',
-                         'razoes': sorted({str(o._meta.verbose_name) for o in e.protected_objects})},
+                         'razoes': sorted({str(o._meta.verbose_name) for o in getattr(e, 'protected_objects', None) or e.restricted_objects})},
                         status=status.HTTP_409_CONFLICT)
     return Response({'detail': f'Loja "{nome}" eliminada definitivamente.'})
 
@@ -1101,16 +1102,14 @@ def admin_relatorios(request):
     if loja_id:
         top_prod_qs = top_prod_qs.filter(encomenda__loja_id=loja_id)
  
-    top_produtos = (
-        top_prod_qs
-        .values('produto__id', 'produto__nome')
-        .annotate(qty=Sum('quantidade'), total=Sum('preco'))
-        .order_by('-qty')[:10]
-    )
+    # unidades vendidas sozinhas + dentro de menus/conjuntos (encomendas canceladas não contam)
+    from ..utils.conjuntos import vendas_por_produto
+    itens = (top_prod_qs.exclude(encomenda__status='cancelado')
+             .values_list('produto__id', 'produto__nome', 'quantidade', 'preco', 'componentes'))
     produtos_top = [
-        {'id': p['produto__id'], 'nome': p['produto__nome'],
-         'qty': p['qty'], 'total': float(p['total'] or 0)}
-        for p in top_produtos
+        {'id': p['id'], 'nome': p['nome'], 'qty': p['qty'], 'total': round(p['valor'], 2),
+         'qty_direto': p['qty_direto'], 'qty_conjuntos': p['qty_conjuntos']}
+        for p in vendas_por_produto(('loja', pid, nome, q, preco, comps) for pid, nome, q, preco, comps in itens)[:10]
     ]
  
     # ── Lista de lojas para o filtro ──────────────────────────

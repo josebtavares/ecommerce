@@ -15,6 +15,24 @@
 
       <form @submit.prevent="guardar" class="p-6 space-y-6">
 
+        <!-- ══ PRODUTO OU CONJUNTO ══ -->
+        <div>
+          <div class="grid grid-cols-2 gap-1 p-1 rounded-xl bg-zinc-800" role="tablist">
+            <button type="button" role="tab" :aria-selected="!conjunto.ativo" @click="conjunto.ativo = false"
+              :class="['py-2 rounded-lg text-xs font-semibold transition', !conjunto.ativo ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200']">
+              Produto
+            </button>
+            <button type="button" role="tab" :aria-selected="conjunto.ativo" @click="ligarConjunto"
+              :class="['py-2 rounded-lg text-xs font-semibold transition', conjunto.ativo ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200']">
+              Conjunto · menu, pack
+            </button>
+          </div>
+          <p v-if="conjunto.ativo" class="text-[11px] text-zinc-500 mt-2 leading-relaxed">
+            Um conjunto junta produtos que já vendes (ex.: hambúrguer + batata + bebida). Defines o preço do conjunto;
+            ao vender, sai do stock de cada produto — o conjunto não tem stock próprio.
+          </p>
+        </div>
+
         <!-- ══ IMAGENS ══ -->
         <div>
           <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Imagens do produto</p>
@@ -197,7 +215,7 @@
         </div>
 
         <!-- ══ ATRIBUTOS DINÂMICOS ══ -->
-        <div v-if="tipoSelecionado && schemaNormalizado.length > 0">
+        <div v-if="!conjunto.ativo && tipoSelecionado && schemaNormalizado.length > 0">
           <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-2">
             Atributos
             <span class="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded text-[10px] font-medium capitalize">
@@ -254,8 +272,18 @@
           </div>
         </div>
 
+        <!-- ══ PRODUTOS DO CONJUNTO ══ -->
+        <div v-if="conjunto.ativo" class="space-y-3">
+          <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+            <font-awesome-icon :icon="['fas', 'layer-group']" /> Produtos do conjunto
+          </p>
+          <p v-if="aCarregarCatalogo" class="text-xs text-zinc-500">A carregar os produtos da loja…</p>
+          <ConjuntoEditor v-else v-model="conjunto.linhas" v-model:grupos="conjunto.grupos"
+            :catalogo="catalogoConjunto" :preco-conjunto="form.preco" />
+        </div>
+
         <!-- ══ STOCK POR VARIAÇÃO ══ -->
-        <div v-if="atributosVariante.length" class="space-y-3">
+        <div v-if="!conjunto.ativo && atributosVariante.length" class="space-y-3">
           <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
             <font-awesome-icon :icon="['fas', 'boxes-stacked']" /> Stock por variação
             <span class="px-1.5 py-0.5 bg-amber-500/10 text-amber-300 rounded text-[10px] font-medium normal-case">
@@ -300,13 +328,14 @@ import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconeCategoriaProduto, chaveCategoriaProduto } from '@/utils/icones'
 import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
+import ConjuntoEditor, { erroConjunto, gruposDoProduto } from '@/components/conjuntos/ConjuntoEditor.vue'
 import {
   combinacoesDe, mesclarLinhas, linhasDoProduto, linhasParaPayload, grelhaValida,
 } from '@/utils/variantes'
 
 export default {
   name: 'BackofficeProdutoModal',
-  components: { VariantesGrelhaForm },
+  components: { VariantesGrelhaForm, ConjuntoEditor },
   props: {
     lojaId:  [String, Number],
     produto: { type: Object, default: null },
@@ -324,6 +353,17 @@ export default {
       // stock por variação: novo produto → ligado por defeito; existente → como estiver gravado
       grelha: { ativo: !this.produto || !!this.produto.stock_por_variante, linhas: linhasDoProduto(this.produto) },
       erroGuardar: '',
+      // conjunto (menu, pack): produtos da loja que o compõem
+      conjunto: {
+        ativo: !!this.produto?.e_conjunto,
+        linhas: (this.produto?.componentes || []).map(c => ({
+          origem: 'loja', produto_id: c.produto_id, variante_id: c.variante_id, quantidade: c.quantidade,
+          variante_livre: !!c.variante_livre,
+        })),
+        grupos: gruposDoProduto(this.produto),   // escolhas do cliente (ex.: bebida)
+      },
+      catalogoConjunto: [],
+      aCarregarCatalogo: false,
       categoriasDaLoja: [],
       // Imagem principal
       ficheiro: null,
@@ -383,7 +423,7 @@ export default {
   },
 
   async created () {
-    await Promise.all([this.fetchTipos(), this.fetchCategorias()])
+    await Promise.all([this.fetchTipos(), this.fetchCategorias(), this.conjunto.ativo ? this.fetchCatalogoConjunto() : null])
     if (this.produto) {
       const schemaDoProduto = this.produto?.tipo?.atributos_schema || []
 
@@ -507,6 +547,37 @@ export default {
       this.form.categoria_ids = this.form.categoria_ids.filter(x => x !== id)
     },
 
+    ligarConjunto () {
+      this.conjunto.ativo = true
+      if (!this.catalogoConjunto.length) this.fetchCatalogoConjunto()
+    },
+
+    // produtos da loja que podem entrar num conjunto (todos, página a página; sem conjuntos nem ele próprio)
+    async fetchCatalogoConjunto () {
+      this.aCarregarCatalogo = true
+      const todos = []
+      try {
+        for (let offset = 0; offset < 1000; offset += 100) {
+          const { data } = await api.get(`/app/loja/${this.lojaId}/produtos/`, { params: { limit: 100, offset } })
+          const pagina = data.results || data
+          todos.push(...pagina)
+          if (!data.next_offset && data.next_offset !== 0) break
+          if (pagina.length < 100) break
+        }
+      } catch (e) { console.error(e) }
+      const video = u => /\.(mp4|webm|mov|mkv|m4v)(\?|$)/i.test(u || '')
+      this.catalogoConjunto = todos
+        .filter(p => !p.e_conjunto && p.id !== this.produto?.id)
+        .map(p => ({
+          origem: 'loja', id: p.id, nome: p.nome, preco: p.preco, ativo: p.ativo,
+          imagem: p.ficheiro_poster_url || (video(p.ficheiro_url) ? null : p.ficheiro_url),
+          variantes: p.stock_por_variante
+            ? (p.variantes || []).map(v => ({ id: v.id, nome: Object.values(v.combinacao || {}).join(' · '), preco: v.preco_efetivo }))
+            : [],
+        }))
+      this.aCarregarCatalogo = false
+    },
+
     async fetchTipos () {
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/tipos/`)
@@ -567,9 +638,23 @@ export default {
           fd.append('imagens_eliminar', JSON.stringify(this.imagensParaEliminar))
         }
 
-        // Stock por variação — vai no mesmo pedido (o backend grava tudo-ou-nada)
+        // Conjunto — produtos e variações escolhidas (o backend valida e grava tudo-ou-nada)
         this.erroGuardar = ''
-        if (this.combinacoesForm.length) {
+        if (this.conjunto.ativo) {
+          const erro = erroConjunto(this.conjunto.linhas, this.conjunto.grupos, this.catalogoConjunto)
+          if (erro) {
+            this.erroGuardar = erro
+            return
+          }
+          fd.append('e_conjunto', 'true')
+          fd.append('componentes', JSON.stringify(this.conjunto.linhas))
+          fd.append('grupos', JSON.stringify(this.conjunto.grupos))
+        } else if (this.produto?.e_conjunto) {
+          fd.append('e_conjunto', 'false')
+        }
+
+        // Stock por variação — vai no mesmo pedido (o backend grava tudo-ou-nada)
+        if (!this.conjunto.ativo && this.combinacoesForm.length) {
           if (this.grelha.ativo && !grelhaValida(this.grelha.linhas)) {
             this.erroGuardar = 'Há quantidades inválidas na grelha de stock por variação.'
             return
@@ -580,8 +665,16 @@ export default {
 
         try {
           if (this.produto) {
-            await api.patch(`/app/loja/${this.lojaId}/produtos/${this.produto.id}/editar/`, fd,
-              { headers: { 'Content-Type': 'multipart/form-data' } })
+            const url = `/app/loja/${this.lojaId}/produtos/${this.produto.id}/editar/`
+            const cfg = { headers: { 'Content-Type': 'multipart/form-data' } }
+            try {
+              await api.patch(url, fd, cfg)
+            } catch (e) {
+              // desactivar um produto que está dentro de conjuntos → confirmar primeiro
+              if (e.response?.status !== 409 || !e.response.data?.precisa_confirmar) throw e
+              if (!confirm(e.response.data.detail + '\n\nDesactivar mesmo assim?')) return
+              await api.patch(url, fd, { ...cfg, params: { confirmar: 1 } })
+            }
           } else {
             await api.post(`/app/loja/${this.lojaId}/produtos/criar/`, fd,
               { headers: { 'Content-Type': 'multipart/form-data' } })

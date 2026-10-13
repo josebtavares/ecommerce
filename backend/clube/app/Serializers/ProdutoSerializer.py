@@ -4,6 +4,7 @@ from ..models import Produto, TipoProduto, Inventario, CategoriaLoja, ProdutoIma
 from .LojaSerializer import LojaMiniSerializer
 from ..Serializers.CategoriaLojaSerializer import CategoriaLojaMiniSerializer
 from ..utils.variantes import atributos_variante, tem_atributos_variante, serializar_variante
+from ..utils import conjuntos as conj
 
 
 # ══════════════════════════════════════════════════════════════
@@ -130,6 +131,11 @@ class ProdutoSerializer(serializers.ModelSerializer):
     variantes           = serializers.SerializerMethodField()
     variantes_pendentes = serializers.SerializerMethodField()
 
+    # ── Conjunto (menu, pack) ─────────────────────────────────
+    componentes = serializers.SerializerMethodField()
+    conjunto    = serializers.SerializerMethodField()
+    grupos      = serializers.SerializerMethodField()   # escolhas do cliente (ex.: bebida)
+
     # ── Escrita ───────────────────────────────────────────────
     tipo_id = serializers.PrimaryKeyRelatedField(
         queryset=TipoProduto.objects.filter(ativo=True),
@@ -161,11 +167,12 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'atributos', 'atributos_normalizados', 'atributos_em_falta',  # ← atributos_normalizados novo
             'stock',
             'stock_por_variante', 'atributos_variante', 'variantes', 'variantes_pendentes',
+            'e_conjunto', 'componentes', 'grupos', 'conjunto',
             'destaque', 'ativo',
             'data_criacao',
             'categorias', 'categoria_ids',
         ]
-        read_only_fields = ['loja', 'data_criacao', 'stock_por_variante', 'ficheiro_estado']
+        read_only_fields = ['loja', 'data_criacao', 'stock_por_variante', 'ficheiro_estado', 'e_conjunto']
         extra_kwargs = {
             'ficheiro': {'write_only': True, 'required': False},
         }
@@ -186,6 +193,10 @@ class ProdutoSerializer(serializers.ModelSerializer):
         return obj.atributos_em_falta()
 
     def get_stock(self, obj):
+        if obj.e_conjunto:
+            # conjunto: quantos se podem vender com o stock dos componentes (None = sem limite)
+            d = self._disp(obj)
+            return None if d['quantidade'] is None else {'quantidade': d['quantidade']}
         try:
             inv = obj.inventario
             return {
@@ -195,6 +206,28 @@ class ProdutoSerializer(serializers.ModelSerializer):
             }
         except Inventario.DoesNotExist:
             return None
+
+    def _disp(self, obj):
+        if not hasattr(obj, '_disp_conjunto'):
+            obj._disp_conjunto = conj.disponibilidade(obj)
+        return obj._disp_conjunto
+
+    def get_componentes(self, obj):
+        if not obj.e_conjunto:
+            return []
+        return conj.componentes_payload(obj, self.context.get('request'))
+
+    def get_grupos(self, obj):
+        if not obj.e_conjunto:
+            return []
+        return conj.grupos_payload(obj, self.context.get('request'))
+
+    def get_conjunto(self, obj):
+        if not obj.e_conjunto:
+            return None
+        d = self._disp(obj)
+        return {'disponivel': d['disponivel'], 'motivo': d['motivo'],
+                'preco_componentes': str(conj.preco_componentes(obj))}
 
     def get_atributos_variante(self, obj):
         return atributos_variante(obj)
@@ -300,12 +333,18 @@ class ProdutoSerializer(serializers.ModelSerializer):
 
 class ProdutoMiniSerializer(serializers.ModelSerializer):
     ficheiro_url = serializers.SerializerMethodField()
+    inclui       = serializers.SerializerMethodField()   # conjunto: "1× Hambúrguer, 1× Batata (Média)"
     ficheiro_poster_url = serializers.SerializerMethodField()
     tipo_nome    = serializers.CharField(source='tipo.nome', read_only=True)
 
     class Meta:
         model  = Produto
-        fields = ['id', 'nome', 'preco', 'ficheiro_url', 'ficheiro_poster_url', 'tipo_nome', 'atributos']
+        fields = ['id', 'nome', 'preco', 'ficheiro_url', 'ficheiro_poster_url', 'tipo_nome', 'atributos', 'e_conjunto', 'inclui']
+
+    def get_inclui(self, obj):
+        if not obj.e_conjunto:
+            return ''
+        return ', '.join(f'{c.quantidade}× {c.nome}' for c in conj.componentes_de(obj))
 
     def get_ficheiro_poster_url(self, obj):
         request = self.context.get('request')

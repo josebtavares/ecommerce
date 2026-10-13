@@ -284,6 +284,9 @@ class ProdutoPOS(models.Model):
     atributos = models.JSONField(default=dict, blank=True)
     # True → stock gerido por VarianteProdutoPOS; `stock` passa a ser a soma das variantes
     stock_por_variante = models.BooleanField(default=False)
+    # Conjunto/menu feito de produtos do POS e/ou da loja Bendi ligada (ComponenteConjuntoPOS);
+    # sem stock próprio — vender desconta o stock de cada componente
+    e_conjunto = models.BooleanField(default=False)
 
     ativo = models.BooleanField(default=True)
     disponivel_pos = models.BooleanField(default=True)
@@ -342,6 +345,95 @@ class VarianteProdutoPOS(models.Model):
 
     def __str__(self):
         return f'{self.produto.nome} [{self.descricao()}] — {self.quantidade} un.'
+
+
+class ComponenteConjuntoPOS(models.Model):
+    """
+    Um produto dentro de um conjunto do POS. Pode ser um produto do próprio POS (produto_pos)
+    ou, num POS híbrido, um produto da loja Bendi ligada (produto) — exactamente um dos dois.
+    Se a loja for suspensa/desligada, o conjunto fica indisponível até o dono substituir o
+    componente (ver pos/views_conjuntos.py — "substituir").
+    """
+    conjunto     = models.ForeignKey(ProdutoPOS, on_delete=models.CASCADE, related_name='componentes')
+    produto      = models.ForeignKey('app.Produto', on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_conjuntos_pos')
+    produto_pos  = models.ForeignKey(ProdutoPOS, on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_conjuntos')
+    variante     = models.ForeignKey('app.VarianteProduto', on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_conjuntos_pos')
+    variante_pos = models.ForeignKey(VarianteProdutoPOS, on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_conjuntos')
+    quantidade   = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    variante_livre = models.BooleanField(default=False)   # o cliente escolhe a variação
+    ordem        = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'produto num menu do POS'
+        ordering = ['ordem', 'id']
+        constraints = [
+            models.CheckConstraint(
+                check=(models.Q(produto__isnull=False, produto_pos__isnull=True) |
+                       models.Q(produto__isnull=True, produto_pos__isnull=False)),
+                name='componente_pos_uma_origem'),
+            models.CheckConstraint(check=~models.Q(conjunto=models.F('produto_pos')),
+                                   name='conjunto_pos_nao_se_contem'),
+        ]
+
+    @property
+    def origem(self):
+        return 'pos' if self.produto_pos_id else 'loja'
+
+    def __str__(self):
+        alvo = self.produto_pos or self.produto
+        return f'{self.quantidade}× {alvo} em {self.conjunto.nome}'
+
+
+class GrupoEscolhaPOS(models.Model):
+    """Escolha dentro de um menu do POS (ex.: "Bebida — escolhe 1"). Ver app.GrupoEscolha."""
+    conjunto = models.ForeignKey(ProdutoPOS, on_delete=models.CASCADE, related_name='grupos')
+    nome     = models.CharField(max_length=60)
+    minimo   = models.PositiveSmallIntegerField(default=1)
+    maximo   = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    ordem    = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'escolha num menu do POS'
+        ordering = ['ordem', 'id']
+        constraints = [
+            models.CheckConstraint(check=models.Q(minimo__lte=models.F('maximo')), name='grupo_pos_minimo_ate_maximo'),
+        ]
+
+
+class OpcaoEscolhaPOS(models.Model):
+    """Opção de uma escolha do POS: produto do POS ou (POS híbrido) da loja Bendi — exactamente um."""
+    grupo        = models.ForeignKey(GrupoEscolhaPOS, on_delete=models.CASCADE, related_name='opcoes')
+    produto      = models.ForeignKey('app.Produto', on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_opcoes_pos')
+    produto_pos  = models.ForeignKey(ProdutoPOS, on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_opcoes')
+    variante     = models.ForeignKey('app.VarianteProduto', on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_opcoes_pos')
+    variante_pos = models.ForeignKey(VarianteProdutoPOS, on_delete=models.RESTRICT, null=True, blank=True,
+                                     related_name='em_opcoes')
+    quantidade   = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
+    variante_livre = models.BooleanField(default=False)   # o cliente escolhe a variação
+    preco_extra  = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0.00'),
+                                       validators=[MinValueValidator(Decimal('0.00'))])
+    ordem        = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'opção num menu do POS'
+        ordering = ['ordem', 'id']
+        constraints = [
+            models.CheckConstraint(
+                check=(models.Q(produto__isnull=False, produto_pos__isnull=True) |
+                       models.Q(produto__isnull=True, produto_pos__isnull=False)),
+                name='opcao_pos_uma_origem'),
+        ]
+
+    @property
+    def origem(self):
+        return 'pos' if self.produto_pos_id else 'loja'
 
 
 class ContaMesa(models.Model):
@@ -515,6 +607,9 @@ class ItemContaMesa(models.Model):
         null=True, blank=True, related_name='vendas',
     )
     atributos = models.JSONField(default=dict, blank=True)   # opções escolhidas (snapshot)
+    # conjunto: o que levava no momento da venda (cozinha, histórico e reposição do stock)
+    # [{"origem": "loja"|"pos", "produto_id", "variante_id", "nome", "quantidade" (por unidade)}]
+    componentes = models.JSONField(default=list, blank=True)
     nome = models.CharField(
         max_length=200,
         verbose_name='Nome do produto',

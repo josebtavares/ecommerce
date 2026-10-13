@@ -15,6 +15,56 @@ from ..Serializers.ProdutoSerializer import ProdutoSerializer, TipoProdutoSerial
 from ..utils.pagination import paginar
 from ..utils.variantes import sincronizar_variantes, aplicar_grelha_do_pedido
 from ..utils.tipos import tipos_para_loja, tipo_permitido
+from ..utils import conjuntos as conj
+
+# prefetch dos componentes dos conjuntos (evita uma query por componente nas listagens)
+PREFETCH_CONJUNTO = ('componentes__produto__inventario', 'componentes__variante', 'componentes__produto__variantes',
+                     'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante', 'grupos__opcoes__produto__variantes')
+
+
+def _quer_conjunto(dados, atual=False):
+    """Campo e_conjunto do formulário (multipart → texto); sem o campo, mantém o actual."""
+    if 'e_conjunto' not in dados:
+        return atual
+    return str(dados.get('e_conjunto')).lower() in ('1', 'true', 'on', 'sim')
+
+
+def _aplicar_conjunto(produto, dados):
+    """
+    Liga/desliga o conjunto e guarda os componentes enviados (tudo-ou-nada com o resto do
+    formulário: quem chama faz set_rollback se vier erro). Devolve a mensagem de erro ou None.
+    """
+    quer = _quer_conjunto(dados, produto.e_conjunto)
+    linhas, erro = conj.ler_componentes(dados)
+    if erro:
+        return erro
+
+    if not quer:
+        if produto.e_conjunto:
+            from ..models import Inventario
+            produto.componentes.all().delete()
+            produto.grupos.all().delete()
+            produto.e_conjunto = False
+            produto.save(update_fields=['e_conjunto'])
+            # volta a ser um produto normal → passa a ter stock próprio (começa a 0)
+            Inventario.objects.get_or_create(
+                loja=produto.loja, produto=produto,
+                defaults={'quantidade': 0, 'preco_custo': 0, 'preco_venda': produto.preco})
+        return None
+
+    if not produto.e_conjunto:
+        usado = conj.conjuntos_que_usam(produto)
+        if usado:
+            return (f'"{produto.nome}" faz parte de {", ".join(usado)} — '
+                    f'um produto dentro de um conjunto não pode ser ele próprio um conjunto.')
+        if produto.stock_por_variante:
+            return 'Este produto tem stock por variação — um conjunto não tem stock próprio. Cria um produto novo para o conjunto.'
+        if linhas is None and 'grupos' not in dados:
+            return 'Escolhe os produtos que fazem parte do conjunto.'
+        produto.e_conjunto = True
+        produto.save(update_fields=['e_conjunto'])
+
+    return conj.aplicar_formulario(produto, dados, conj.resolver_loja(produto.loja))
 
 
 # ══════════════════════════════════════════════════════════════
@@ -222,7 +272,7 @@ def produto_list_pagination(request):
     Funciona para QUALQUER tipo de produto e QUALQUER atributo
     sem precisar de mudar o código — basta passar atributo_<chave>=<valor>.
     """
-    qs = Produto.objects.select_related('loja', 'tipo', 'inventario').prefetch_related('variantes').filter(ativo=True)
+    qs = Produto.objects.select_related('loja', 'tipo', 'inventario').prefetch_related('variantes', *PREFETCH_CONJUNTO).filter(ativo=True)
 
     # ── 1) filtro por loja ────────────────────────────────────
     loja_id = request.GET.get('loja_id')
@@ -369,7 +419,7 @@ def produto_list_loja(request, loja_id):
     if erro:
         return erro
 
-    qs = Produto.objects.select_related('tipo', 'inventario').prefetch_related('variantes').filter(loja_id=loja_id)
+    qs = Produto.objects.select_related('tipo', 'inventario').prefetch_related('variantes', *PREFETCH_CONJUNTO).filter(loja_id=loja_id)
 
     q = request.GET.get('q')
     if q:
@@ -439,12 +489,21 @@ def produto_create(request, loja_id):
             cat, _ = CategoriaLoja.objects.get_or_create(loja=loja, nome=nome, defaults={'ativo': True})
             produto.categorias.add(cat)
  
+    # conjunto (menu, pack): sem inventário nem grelha próprios — o stock é o dos componentes
+    if _quer_conjunto(request.data):
+        erro_conj = _aplicar_conjunto(produto, request.data)
+        if erro_conj:
+            transaction.set_rollback(True)
+            return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
+        _gerir_imagens(produto, request)
+        return Response(ProdutoSerializer(produto, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
     from ..models import Inventario
     Inventario.objects.get_or_create(
         loja=loja, produto=produto,
         defaults={'quantidade': 0, 'preco_custo': 0, 'preco_venda': produto.preco}
     )
- 
+
     # ── NOVO: processar imagens adicionais ─────────────────────
     _gerir_imagens(produto, request)
 
@@ -467,6 +526,9 @@ def produto_update(request, loja_id, id):
         return erro
  
     produto = get_object_or_404(Produto, id=id, loja_id=loja_id)
+    aviso = conj.aviso_desactivar(produto, request.data, request.GET)
+    if aviso:
+        return Response(aviso, status=status.HTTP_409_CONFLICT)
  
     # DEPOIS — sem copy(), sem erro:
     atributos_raw = request.data.get('atributos')
@@ -518,8 +580,14 @@ def produto_update(request, loja_id, id):
     # ── NOVO: processar imagens adicionais ─────────────────────
     _gerir_imagens(produto, request)
 
-    # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
-    erro_grelha = aplicar_grelha_do_pedido(produto, request.data)
+    # conjunto: liga/desliga e componentes (tudo-ou-nada com o resto do formulário)
+    erro_conj = _aplicar_conjunto(produto, request.data)
+    if erro_conj:
+        transaction.set_rollback(True)
+        return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
+
+    # grelha de stock por variação enviada com o formulário (tudo-ou-nada) — conjuntos não têm
+    erro_grelha = None if produto.e_conjunto else aplicar_grelha_do_pedido(produto, request.data)
     if erro_grelha:
         transaction.set_rollback(True)
         return Response({'detail': erro_grelha}, status=status.HTTP_400_BAD_REQUEST)
@@ -540,6 +608,16 @@ def produto_delete(request, loja_id, id):
         return erro
 
     produto = get_object_or_404(Produto, id=id, loja_id=loja_id)
+    # faz parte de conjuntos → avisa primeiro (esses conjuntos deixam de se vender);
+    # o backoffice repete o pedido com ?confirmar=1 depois de o dono confirmar
+    usado = conj.conjuntos_que_usam(produto)
+    if usado and request.GET.get('confirmar') != '1':
+        return Response({
+            'detail': f'"{produto.nome}" faz parte de {", ".join(usado)}. '
+                      f'Se o desactivares, esses conjuntos ficam indisponíveis até o retirares deles.',
+            'conjuntos': usado,
+            'precisa_confirmar': True,
+        }, status=status.HTTP_409_CONFLICT)
     produto.ativo = False
     produto.save(update_fields=['ativo'])
     return Response({'detail': 'Produto desactivado.'}, status=status.HTTP_200_OK)

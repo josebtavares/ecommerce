@@ -254,6 +254,8 @@
               <div class="text-right flex-shrink-0">
                 <p class="text-xs font-bold text-zinc-200">{{ p.qty }} un.</p>
                 <p class="text-[10px] text-zinc-500">{{ fmt(p.total) }}</p>
+                <!-- unidades que saíram dentro de menus/conjuntos -->
+                <p v-if="p.qty_conjuntos" class="text-[10px] text-sky-400">{{ p.qty_conjuntos }} em conjuntos</p>
               </div>
             </div>
           </div>

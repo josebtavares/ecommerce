@@ -162,9 +162,16 @@
                       <span :class="['absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white', produto.origem === 'pos' ? 'bg-purple-600' : 'bg-blue-600']">
                         {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}
                       </span>
+                      <span v-if="produto.e_conjunto" class="absolute right-2 top-2 rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                        <font-awesome-icon :icon="['fas', 'layer-group']" /> Menu
+                      </span>
+                      <span v-if="produto.e_conjunto && produto.conjunto?.motivo" class="absolute inset-x-2 bottom-2 rounded-lg bg-amber-500/95 px-2 py-1 text-[10px] font-black leading-tight text-white">
+                        {{ produto.conjunto.motivo }}
+                      </span>
                     </div>
                     <div class="p-2.5">
                       <p class="line-clamp-2 min-h-[36px] text-xs font-black text-slate-950 sm:text-sm">{{ produto.nome }}</p>
+                      <p v-if="produto.e_conjunto" class="mt-0.5 line-clamp-2 text-[10px] font-semibold text-slate-500">{{ produto.componentes.map(c => c.quantidade + '× ' + c.nome).join(', ') }}</p>
                       <div class="mt-2 flex items-center justify-between gap-2">
                         <span class="text-sm font-black text-slate-950 sm:text-base">{{ money(produto.preco) }}</span>
                         <span v-if="produto.stock !== null && produto.stock !== undefined" class="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-500">
@@ -210,6 +217,9 @@
                           {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
                         </span>
                       </div>
+                      <p v-if="item.componentes?.length" class="mt-1 text-[11px] font-semibold leading-snug text-slate-600">
+                        {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
+                      </p>
                       <p class="mt-1 text-xs font-semibold text-slate-500">{{ money(item.preco_unitario) }} × {{ item.quantidade }}</p>
                     </div>
 
@@ -418,9 +428,16 @@
                     <span :class="['absolute left-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-white', produto.origem === 'pos' ? 'bg-purple-600' : 'bg-blue-600']">
                       {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}
                     </span>
+                    <span v-if="produto.e_conjunto" class="absolute right-2 top-2 rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                      <font-awesome-icon :icon="['fas', 'layer-group']" /> Menu
+                    </span>
+                    <span v-if="produto.e_conjunto && produto.conjunto?.motivo" class="absolute inset-x-2 bottom-2 rounded-lg bg-amber-500/95 px-2 py-1 text-[10px] font-black leading-tight text-white">
+                      {{ produto.conjunto.motivo }}
+                    </span>
                   </div>
                   <div class="p-3">
                     <p class="line-clamp-2 min-h-[40px] text-sm font-black text-slate-950">{{ produto.nome }}</p>
+                    <p v-if="produto.e_conjunto" class="mt-0.5 line-clamp-2 text-[10px] font-semibold text-slate-500">{{ produto.componentes.map(c => c.quantidade + '× ' + c.nome).join(', ') }}</p>
                     <div class="mt-3 flex items-center justify-between gap-2">
                       <span class="text-base font-black text-slate-950">{{ money(produto.preco) }}</span>
                       <span v-if="produto.stock !== null && produto.stock !== undefined" class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-500">
@@ -476,6 +493,9 @@
                         {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
                       </span>
                     </div>
+                    <p v-if="item.componentes?.length" class="mt-1 text-[11px] font-semibold leading-snug text-slate-600">
+                      {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
+                    </p>
                     <p class="mt-1 text-xs font-semibold text-slate-500">{{ money(item.preco_unitario) }} × {{ item.quantidade }}</p>
                   </div>
 
@@ -560,6 +580,15 @@
       @confirmar="onEscolhaConfirmada"
     />
 
+    <!-- Menu com escolhas (ex.: a bebida) -->
+    <ConjuntoPicker
+      v-if="menuEscolha"
+      :produto="menuEscolha"
+      :a-guardar="!!addingProdutoUid"
+      @close="menuEscolha = null"
+      @confirmar="onMenuConfirmado"
+    />
+
     <!-- Modal Pagamento -->
     <PagamentoModal
       v-if="showPagamentoModal"
@@ -576,12 +605,14 @@ import api from '@/services/api'
 import { toast } from 'vue3-toastify'
 import PagamentoModal from './PagamentoModal.vue'
 import VariantePicker from './VariantePicker.vue'
+import ConjuntoPicker from './ConjuntoPicker.vue'
+import { temEscolhas } from '@/components/conjuntos/EscolhasConjunto.vue'
 import { precisaEscolha } from '@/utils/variantes'
 
 export default {
   name: 'ContaModal',
 
-  components: { PagamentoModal, VariantePicker },
+  components: { PagamentoModal, VariantePicker, ConjuntoPicker },
 
   props: {
     mesa: {
@@ -618,6 +649,7 @@ export default {
       addingProdutoUid: null,
       showPagamentoModal: false,
       produtoEscolha: null,   // produto à espera de escolha de opções
+      menuEscolha: null,      // menu à espera das escolhas do cliente (ex.: bebida)
       error: '',
       mobileActiveTab: 'produtos',
       scrollPosition: 0
@@ -724,8 +756,14 @@ export default {
       if (!this.conta?.id) { this.error = 'A conta ainda não está pronta.'; return }
       if (!produto.disponivel) { this.error = 'Este produto não está disponível.'; return }
 
+      // menu com escolhas (ex.: bebida) → escolher primeiro
+      if (produto.e_conjunto && temEscolhas(produto)) {
+        this.error = ''
+        this.menuEscolha = produto
+        return
+      }
       // produto com opções (tamanho, cor, gelo…) → escolher primeiro
-      if (precisaEscolha(produto)) {
+      if (!produto.e_conjunto && precisaEscolha(produto)) {
         this.error = ''
         this.produtoEscolha = produto
         return
@@ -733,12 +771,17 @@ export default {
       await this.adicionarItem(produto, {}, 1)
     },
 
+    async onMenuConfirmado({ escolhas, quantidade }) {
+      const ok = await this.adicionarItem(this.menuEscolha, {}, quantidade, escolhas)
+      if (ok) this.menuEscolha = null
+    },
+
     async onEscolhaConfirmada({ atributos, quantidade }) {
       const ok = await this.adicionarItem(this.produtoEscolha, atributos, quantidade)
       if (ok) this.produtoEscolha = null
     },
 
-    async adicionarItem(produto, atributos, quantidade) {
+    async adicionarItem(produto, atributos, quantidade, escolhas = null) {
       this.addingProdutoUid = this.produtoUid(produto)
       this.error = ''
 
@@ -748,6 +791,7 @@ export default {
           origem:      produto.origem,
           quantidade,
           atributos,
+          ...(escolhas ? { escolhas } : {}),
           observacoes: ''
         })
         await this.recarregarConta()
@@ -759,7 +803,7 @@ export default {
         // ex.: "Stock insuficiente de 'Limonada (grande)'. Disponível: 1."
         const msg = err.response?.data?.detail || 'Erro ao adicionar produto.'
         this.error = msg
-        if (this.produtoEscolha) toast.error(msg)
+        if (this.produtoEscolha || this.menuEscolha) toast.error(msg)
         await this.carregarProdutos()   // o stock pode ter mudado — o seletor actualiza
         if (this.produtoEscolha) {
           this.produtoEscolha = this.produtos.find(p => this.produtoUid(p) === this.produtoUid(produto)) || this.produtoEscolha
@@ -823,7 +867,7 @@ export default {
         ativo:         produto.ativo ?? true,
         disponivel_pos: produto.disponivel_pos ?? true,
         disponivel:    produto.disponivel ?? true,
-        stock:         produto.stock ?? 0,
+        stock:         produto.e_conjunto ? produto.stock : (produto.stock ?? 0),
         origem:        produto.origem || 'pos'
       }
     },
