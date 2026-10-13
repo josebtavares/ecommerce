@@ -278,7 +278,8 @@
             <font-awesome-icon :icon="['fas', 'layer-group']" /> Produtos do conjunto
           </p>
           <p v-if="aCarregarCatalogo" class="text-xs text-zinc-500">A carregar os produtos da loja…</p>
-          <ConjuntoEditor v-else v-model="conjunto.linhas" :catalogo="catalogoConjunto" :preco-conjunto="form.preco" />
+          <ConjuntoEditor v-else v-model="conjunto.linhas" v-model:grupos="conjunto.grupos"
+            :catalogo="catalogoConjunto" :preco-conjunto="form.preco" />
         </div>
 
         <!-- ══ STOCK POR VARIAÇÃO ══ -->
@@ -327,7 +328,7 @@ import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconeCategoriaProduto, chaveCategoriaProduto } from '@/utils/icones'
 import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
-import ConjuntoEditor from '@/components/conjuntos/ConjuntoEditor.vue'
+import ConjuntoEditor, { erroConjunto, gruposDoProduto } from '@/components/conjuntos/ConjuntoEditor.vue'
 import {
   combinacoesDe, mesclarLinhas, linhasDoProduto, linhasParaPayload, grelhaValida,
 } from '@/utils/variantes'
@@ -358,6 +359,7 @@ export default {
         linhas: (this.produto?.componentes || []).map(c => ({
           origem: 'loja', produto_id: c.produto_id, variante_id: c.variante_id, quantidade: c.quantidade,
         })),
+        grupos: gruposDoProduto(this.produto),   // escolhas do cliente (ex.: bebida)
       },
       catalogoConjunto: [],
       aCarregarCatalogo: false,
@@ -638,18 +640,14 @@ export default {
         // Conjunto — produtos e variações escolhidas (o backend valida e grava tudo-ou-nada)
         this.erroGuardar = ''
         if (this.conjunto.ativo) {
-          if (!this.conjunto.linhas.length) {
-            this.erroGuardar = 'Adiciona pelo menos um produto ao conjunto.'
-            return
-          }
-          const semVariante = this.conjunto.linhas.find(l =>
-            this.catalogoConjunto.find(p => p.id === l.produto_id)?.variantes?.length && !l.variante_id)
-          if (semVariante) {
-            this.erroGuardar = 'Escolhe a variação de cada produto do conjunto.'
+          const erro = erroConjunto(this.conjunto.linhas, this.conjunto.grupos, this.catalogoConjunto)
+          if (erro) {
+            this.erroGuardar = erro
             return
           }
           fd.append('e_conjunto', 'true')
           fd.append('componentes', JSON.stringify(this.conjunto.linhas))
+          fd.append('grupos', JSON.stringify(this.conjunto.grupos))
         } else if (this.produto?.e_conjunto) {
           fd.append('e_conjunto', 'false')
         }

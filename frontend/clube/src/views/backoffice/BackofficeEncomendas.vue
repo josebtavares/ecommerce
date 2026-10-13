@@ -114,7 +114,7 @@
                     <p class="text-sm text-zinc-200 truncate">{{ item.produto?.nome }}</p>
                     <!-- conjunto: o que levava no momento da compra (para preparar) -->
                     <p v-if="item.componentes?.length" class="text-xs text-zinc-500 leading-snug">
-                      {{ item.componentes.map(c => c.quantidade * item.quantidade + '× ' + c.nome).join(', ') }}
+                      {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade * item.quantidade + '× ' + c.nome).join(', ') }}
                     </p>
                     <p class="text-xs text-zinc-500">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.</p>
                     <div v-if="temAtributos(item.atributos)"

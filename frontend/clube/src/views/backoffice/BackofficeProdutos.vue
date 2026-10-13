@@ -112,6 +112,9 @@
              :title="p.componentes.map(c => c.quantidade + '× ' + c.nome + (c.variante ? ' (' + c.variante + ')' : '')).join(', ')">
             {{ p.componentes.map(c => c.quantidade + '× ' + c.nome).join(', ') }}
           </p>
+          <p v-if="p.e_conjunto && p.grupos?.length" class="text-[11px] text-sky-400 truncate mt-0.5">
+            Escolhe: {{ p.grupos.map(g => g.nome).join(', ') }}
+          </p>
           <p v-if="p.e_conjunto && p.conjunto && !p.conjunto.disponivel" class="text-[11px] text-amber-400 mt-0.5 leading-snug">
             Indisponível: {{ p.conjunto.motivo || 'sem stock nos produtos' }}
           </p>

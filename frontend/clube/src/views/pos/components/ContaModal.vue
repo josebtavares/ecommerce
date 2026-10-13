@@ -218,7 +218,7 @@
                         </span>
                       </div>
                       <p v-if="item.componentes?.length" class="mt-1 text-[11px] font-semibold leading-snug text-slate-600">
-                        {{ item.componentes.map(c => c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
+                        {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
                       </p>
                       <p class="mt-1 text-xs font-semibold text-slate-500">{{ money(item.preco_unitario) }} × {{ item.quantidade }}</p>
                     </div>
@@ -494,7 +494,7 @@
                       </span>
                     </div>
                     <p v-if="item.componentes?.length" class="mt-1 text-[11px] font-semibold leading-snug text-slate-600">
-                      {{ item.componentes.map(c => c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
+                      {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
                     </p>
                     <p class="mt-1 text-xs font-semibold text-slate-500">{{ money(item.preco_unitario) }} × {{ item.quantidade }}</p>
                   </div>
@@ -580,6 +580,15 @@
       @confirmar="onEscolhaConfirmada"
     />
 
+    <!-- Menu com escolhas (ex.: a bebida) -->
+    <ConjuntoPicker
+      v-if="menuEscolha"
+      :produto="menuEscolha"
+      :a-guardar="!!addingProdutoUid"
+      @close="menuEscolha = null"
+      @confirmar="onMenuConfirmado"
+    />
+
     <!-- Modal Pagamento -->
     <PagamentoModal
       v-if="showPagamentoModal"
@@ -596,12 +605,13 @@ import api from '@/services/api'
 import { toast } from 'vue3-toastify'
 import PagamentoModal from './PagamentoModal.vue'
 import VariantePicker from './VariantePicker.vue'
+import ConjuntoPicker from './ConjuntoPicker.vue'
 import { precisaEscolha } from '@/utils/variantes'
 
 export default {
   name: 'ContaModal',
 
-  components: { PagamentoModal, VariantePicker },
+  components: { PagamentoModal, VariantePicker, ConjuntoPicker },
 
   props: {
     mesa: {
@@ -638,6 +648,7 @@ export default {
       addingProdutoUid: null,
       showPagamentoModal: false,
       produtoEscolha: null,   // produto à espera de escolha de opções
+      menuEscolha: null,      // menu à espera das escolhas do cliente (ex.: bebida)
       error: '',
       mobileActiveTab: 'produtos',
       scrollPosition: 0
@@ -744,6 +755,12 @@ export default {
       if (!this.conta?.id) { this.error = 'A conta ainda não está pronta.'; return }
       if (!produto.disponivel) { this.error = 'Este produto não está disponível.'; return }
 
+      // menu com escolhas (ex.: bebida) → escolher primeiro
+      if (produto.e_conjunto && produto.grupos?.length) {
+        this.error = ''
+        this.menuEscolha = produto
+        return
+      }
       // produto com opções (tamanho, cor, gelo…) → escolher primeiro
       if (!produto.e_conjunto && precisaEscolha(produto)) {
         this.error = ''
@@ -753,12 +770,17 @@ export default {
       await this.adicionarItem(produto, {}, 1)
     },
 
+    async onMenuConfirmado({ escolhas, quantidade }) {
+      const ok = await this.adicionarItem(this.menuEscolha, {}, quantidade, escolhas)
+      if (ok) this.menuEscolha = null
+    },
+
     async onEscolhaConfirmada({ atributos, quantidade }) {
       const ok = await this.adicionarItem(this.produtoEscolha, atributos, quantidade)
       if (ok) this.produtoEscolha = null
     },
 
-    async adicionarItem(produto, atributos, quantidade) {
+    async adicionarItem(produto, atributos, quantidade, escolhas = null) {
       this.addingProdutoUid = this.produtoUid(produto)
       this.error = ''
 
@@ -768,6 +790,7 @@ export default {
           origem:      produto.origem,
           quantidade,
           atributos,
+          ...(escolhas ? { escolhas } : {}),
           observacoes: ''
         })
         await this.recarregarConta()
@@ -779,7 +802,7 @@ export default {
         // ex.: "Stock insuficiente de 'Limonada (grande)'. Disponível: 1."
         const msg = err.response?.data?.detail || 'Erro ao adicionar produto.'
         this.error = msg
-        if (this.produtoEscolha) toast.error(msg)
+        if (this.produtoEscolha || this.menuEscolha) toast.error(msg)
         await this.carregarProdutos()   // o stock pode ter mudado — o seletor actualiza
         if (this.produtoEscolha) {
           this.produtoEscolha = this.produtos.find(p => this.produtoUid(p) === this.produtoUid(produto)) || this.produtoEscolha

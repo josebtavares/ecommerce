@@ -221,6 +221,9 @@
             <p class="mt-2 line-clamp-2 text-[11px] font-semibold text-slate-500">
               {{ produto.componentes.map(c => c.quantidade + '× ' + c.nome).join(', ') }}
             </p>
+            <p v-if="produto.grupos?.length" class="mt-1 text-[11px] font-bold text-sky-700">
+              Escolhe: {{ produto.grupos.map(g => g.nome).join(', ') }}
+            </p>
             <p v-if="produto.conjunto?.motivo" class="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800">
               <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> {{ produto.conjunto.motivo }}
             </p>
@@ -382,7 +385,7 @@
 
           <div v-if="conjunto.ativo" class="space-y-2">
             <label class="block text-sm font-black text-slate-700">Produtos do menu *</label>
-            <ConjuntoEditor v-model="conjunto.linhas" claro :catalogo="catalogoConjunto"
+            <ConjuntoEditor v-model="conjunto.linhas" v-model:grupos="conjunto.grupos" claro :catalogo="catalogoConjunto"
               :preco-conjunto="formProduto.preco" :problemas="problemasConjunto"
               :mostrar-origem="formProduto.origem === 'pos' && modo === 'hibrido'" />
           </div>
@@ -578,7 +581,7 @@
 import api from '@/services/api'
 import TiposModal from './components/TiposModal.vue'
 import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
-import ConjuntoEditor from '@/components/conjuntos/ConjuntoEditor.vue'
+import ConjuntoEditor, { erroConjunto, gruposDoProduto } from '@/components/conjuntos/ConjuntoEditor.vue'
 import {
   combinacoesDe, mesclarLinhas, linhasDoProduto, linhasParaPayload, grelhaValida,
 } from '@/utils/variantes'
@@ -635,7 +638,7 @@ export default {
       showTiposModal: false,
       tipos: [],          // tipos disponíveis para a origem do formulário
       grelha: { ativo: true, linhas: [] },   // stock por variação do formulário
-      conjunto: { ativo: false, linhas: [] },   // menu: produtos que o compõem
+      conjunto: { ativo: false, linhas: [], grupos: [] },   // menu: produtos fixos e escolhas
       // "Corrigir menu" — trocar o componente que o deixou indisponível
       substituir: { produto: null, componente: null, controlar_stock: true, stock: 0,
                     produto_pos_id: null, variante_pos_id: null, aGuardar: false, erro: '' },
@@ -721,7 +724,9 @@ export default {
     // problemas que o servidor detectou em cada componente (ex.: loja suspensa)
     problemasConjunto() {
       const out = {}
-      ;(this.produtoEditando?.componentes || []).forEach(c => {
+      const todos = [...(this.produtoEditando?.componentes || []),
+                     ...(this.produtoEditando?.grupos || []).flatMap(g => g.opcoes)]
+      todos.forEach(c => {
         if (c.problema) out[c.origem + '-' + c.produto_id] = c.problema
       })
       return out
@@ -814,7 +819,7 @@ export default {
 
       this.showProdutoModal = true
       this.grelha = { ativo: true, linhas: [] }   // produto novo: stock por variação ligado por defeito
-      this.conjunto = { ativo: false, linhas: [] }
+      this.conjunto = { ativo: false, linhas: [], grupos: [] }
       if (this.formProduto.origem) this.carregarTipos(this.formProduto.origem)
     },
 
@@ -874,6 +879,7 @@ export default {
         linhas: (produto.componentes || []).map(c => ({
           origem: c.origem, produto_id: c.produto_id, variante_id: c.variante_id, quantidade: c.quantidade,
         })),
+        grupos: gruposDoProduto(produto),
       }
       this.carregarTipos(produto.origem || 'pos')
     },
@@ -930,20 +936,15 @@ export default {
         formData.append('categoria',       this.formProduto.categoria || 'Sem categoria')
         // menu: produtos e variações escolhidas (o servidor valida e grava tudo-ou-nada)
         if (this.conjunto.ativo) {
-          if (!this.conjunto.linhas.length) {
-            this.error = 'Adiciona pelo menos um produto ao menu.'
-            this.salvando = false
-            return
-          }
-          const semVariante = this.conjunto.linhas.find(l =>
-            this.catalogoConjunto.find(p => p.origem === l.origem && p.id === l.produto_id)?.variantes?.length && !l.variante_id)
-          if (semVariante) {
-            this.error = 'Escolhe a variação de cada produto do menu.'
+          const erroMenu = erroConjunto(this.conjunto.linhas, this.conjunto.grupos, this.catalogoConjunto)
+          if (erroMenu) {
+            this.error = erroMenu
             this.salvando = false
             return
           }
           formData.append('e_conjunto', 'true')
           formData.append('componentes', JSON.stringify(this.conjunto.linhas))
+          formData.append('grupos', JSON.stringify(this.conjunto.grupos))
         } else if (this.produtoEditando?.e_conjunto) {
           formData.append('e_conjunto', 'false')
         }

@@ -229,7 +229,7 @@
                           <div class="flex-1 min-w-0">
                             <p class="text-sm truncate" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ item.produto?.nome }}</p>
                             <p v-if="item.componentes?.length" class="text-[11px] leading-snug" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-                              Inclui: {{ item.componentes.map(c => c.quantidade + '× ' + c.nome).join(', ') }}
+                              Inclui: {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade + '× ' + c.nome).join(', ') }}
                             </p>
                             <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.</p>
                             <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1">

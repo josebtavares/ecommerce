@@ -151,6 +151,7 @@
 
             <!-- ══ CONJUNTO: o que inclui (menu, pack) ══ -->
             <div v-if="eConjunto" class="mb-4 rounded-xl border p-3" :class="isDark ? 'border-zinc-800 bg-zinc-900/60' : 'border-gray-200 bg-gray-50'">
+              <template v-if="produto.componentes?.length">
               <p class="text-xs font-semibold uppercase tracking-wider mb-2" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Inclui</p>
               <ul class="space-y-2">
                 <li v-for="c in produto.componentes" :key="c.id" class="flex items-center gap-3">
@@ -163,13 +164,18 @@
                   </span>
                 </li>
               </ul>
+              </template>
               <p v-if="poupanca > 0" class="mt-3 text-xs font-semibold text-green-500">
                 Em separado custaria {{ formatPrice(produto.conjunto.preco_componentes) }} — poupas {{ formatPrice(poupanca) }}
               </p>
             </div>
 
+            <!-- ══ CONJUNTO: escolhas do cliente (ex.: bebida) ══ -->
+            <EscolhasConjunto v-if="eConjunto && produto.grupos?.length" v-model="escolhas"
+                              :grupos="produto.grupos" :isDark="isDark" class="mb-4" />
+
             <!-- ══ CHOICES: só as opções disponíveis no produto ══ -->
-            <div v-if="atributosChoices.length > 0" class="space-y-4 mb-4">
+            <div v-if="!eConjunto && atributosChoices.length > 0" class="space-y-4 mb-4">
               <div v-for="attr in atributosChoices" :key="attr.nome">
                 <p class="text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-1"
                    :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
@@ -365,6 +371,7 @@ import { toast } from 'vue3-toastify'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { contactarLoja } from '@/services/chat'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import EscolhasConjunto, { extrasDe, faltaEscolher } from '@/components/conjuntos/EscolhasConjunto.vue'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
   variantesPorEscolher, stockCompativel, intervaloPreco,
@@ -372,7 +379,7 @@ import {
 
 export default {
   name: 'ProductInfoCard',
-  components: { BotaoFavorito },
+  components: { BotaoFavorito, EscolhasConjunto },
 
   props: {
     produto: { type: Object,  default: null },
@@ -391,6 +398,7 @@ export default {
     return {
       qty: 1,
       seleccoes: {},
+      escolhas: {},      // conjunto: { grupo_id: [opcao_id] }
       imagemFullscreen: false,
       imagemActiva: 0,
       defaultImg: DEFAULT_PRODUTO,
@@ -553,6 +561,8 @@ export default {
     },
 
     precoUnitario () {
+      // conjunto: preço base + extras das opções escolhidas
+      if (this.eConjunto) return Number(this.produto.preco) + extrasDe(this.produto.grupos, this.escolhas)
       if (!this.comVariantes) return this.produto?.preco
       if (this.variante) return this.variante.preco_efetivo
       return this.intervalo ? this.intervalo.min : this.produto?.preco
@@ -568,6 +578,7 @@ export default {
     },
 
     obrigatoriosPorPreencher () {
+      if (this.eConjunto) return faltaEscolher(this.produto.grupos, this.escolhas)
       const obrig = this.atributosChoices
         .filter(a => a.obrigatorio && !this.seleccoes[a.nome])
         .map(a => a.nome)
@@ -594,6 +605,7 @@ export default {
     produto () {
       this.qty = 1
       this.seleccoes = {}
+      this.escolhas = {}
       this.imagemFullscreen = false
       this.imagemActiva = 0
     },
@@ -655,6 +667,7 @@ export default {
             produto_id: this.produto.id,
             quantidade: this.qty,
             atributos:  this.seleccoes,
+            ...(this.eConjunto ? { escolhas: this.escolhas } : {}),
           })
         } catch (e) {
           // ex.: stock mudou entretanto ("Stock insuficiente… Disponível: 1")
