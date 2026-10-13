@@ -27,7 +27,11 @@
           <span class="text-zinc-200 capitalize">{{ encomenda.tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}</span>
         </div>
         <!-- feita com a loja fechada -->
-        <div v-if="encomenda.agendada_texto" class="text-sm rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-amber-200">
+        <div v-if="encomenda.agendada_texto && encomenda.agendamento_origem === 'cliente'"
+             class="text-sm rounded-xl bg-sky-500/10 border border-sky-500/30 px-3 py-2.5 text-sky-200">
+          Agendada para <b>{{ encomenda.agendada_texto }}</b>.
+        </div>
+        <div v-else-if="encomenda.agendada_texto" class="text-sm rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-amber-200">
           A loja estava fechada — a tua encomenda vai ser preparada a partir de <b>{{ encomenda.agendada_texto }}</b>.
         </div>
         <div class="flex justify-between text-sm border-t border-zinc-800 pt-3">

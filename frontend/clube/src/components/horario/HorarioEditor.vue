@@ -100,6 +100,50 @@
         </div>
       </div>
 
+      <!-- o cliente escolhe dia e hora (funciona também sem horário: qualquer hora do dia) -->
+      <div class="mt-6 pt-5 border-t border-zinc-800">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-semibold text-zinc-200">O cliente escolhe dia e hora</p>
+            <p class="text-xs text-zinc-500 mt-0.5">
+              No checkout o cliente pode pedir para receber ou levantar mais tarde{{ form.horario_ativo ? ', só dentro do horário' : '' }}.
+              A encomenda é feita e paga logo, e aparece no calendário das Entregas.
+            </p>
+          </div>
+          <button type="button" role="switch" :aria-checked="form.agendamento.ativo ? 'true' : 'false'"
+            aria-label="O cliente escolhe dia e hora" @click="form.agendamento.ativo = !form.agendamento.ativo"
+            :class="['w-11 h-6 rounded-full transition-colors relative flex-shrink-0', form.agendamento.ativo ? 'bg-red-600' : 'bg-zinc-700']">
+            <span :class="['absolute top-0.5 w-5 h-5 rounded-full bg-white shadow', form.agendamento.ativo ? 'left-5.5' : 'left-0.5']" style="transition: left 0.2s"></span>
+          </button>
+        </div>
+        <div v-if="form.agendamento.ativo" class="grid sm:grid-cols-3 gap-3 mt-4">
+          <label class="block">
+            <span class="text-xs text-zinc-500 mb-1 block">Horas de</span>
+            <select v-model.number="form.agendamento.intervalo" aria-label="Intervalo entre horas"
+              class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+              <option :value="15">15 em 15 min</option>
+              <option :value="30">30 em 30 min</option>
+              <option :value="60">hora a hora</option>
+              <option :value="120">2 em 2 horas</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-zinc-500 mb-1 block">Até quantos dias à frente</span>
+            <select v-model.number="form.agendamento.dias" aria-label="Dias à frente"
+              class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+              <option v-for="d in [1, 2, 3, 7, 14, 30, 60]" :key="d" :value="d">{{ d === 1 ? 'Só hoje' : d + ' dias' }}</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-zinc-500 mb-1 block">Antecedência mínima</span>
+            <select v-model.number="form.agendamento.antecedencia" aria-label="Antecedência mínima"
+              class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+              <option v-for="a in ANTECEDENCIAS" :key="a.v" :value="a.v">{{ a.t }}</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
       <p v-if="erro" class="text-sm text-red-400 mt-4" role="alert">{{ erro }}</p>
       <div class="flex items-center gap-3 mt-5">
         <button type="button" @click="guardar" :disabled="aGuardar || !alterado"
@@ -123,6 +167,10 @@ const REGRAS = [
   { valor: 'bloquear', titulo: 'Não aceitar encomendas',
     texto: 'O cliente pode ver a loja e encher o carrinho, mas só encomenda com a loja aberta.' },
 ]
+const ANTECEDENCIAS = [
+  { v: 0, t: 'Nenhuma' }, { v: 15, t: '15 minutos' }, { v: 30, t: '30 minutos' }, { v: 60, t: '1 hora' },
+  { v: 120, t: '2 horas' }, { v: 240, t: '4 horas' }, { v: 1440, t: '1 dia' },
+]
 const min = h => { const [a, b] = String(h || '').split(':').map(Number); return a * 60 + b }
 
 function copia (dias) { return JSON.parse(JSON.stringify(dias)) }
@@ -134,9 +182,9 @@ export default {
 
   data () {
     return {
-      NOMES, MAX, REGRAS,
+      NOMES, MAX, REGRAS, ANTECEDENCIAS,
       carregando: true, aGuardar: false, guardado: false, erro: '',
-      form: { horario_ativo: false, fora_horario: 'agendar', dias: [] },
+      form: { horario_ativo: false, fora_horario: 'agendar', dias: [], agendamento: { ativo: false, intervalo: 30, dias: 7, antecedencia: 30 } },
       original: '', estado: null, fuso: '', agora: '', hoje: null,
     }
   },
@@ -170,6 +218,7 @@ export default {
         horario_ativo: data.horario_ativo,
         fora_horario:  data.fora_horario,
         dias: data.dias.map(d => ({ dia: d.dia, intervalos: d.intervalos.map(i => ({ ...i })) })),
+        agendamento: { ...data.agendamento },
       }
       this.original = JSON.stringify(this.form)
       this.estado = data.estado

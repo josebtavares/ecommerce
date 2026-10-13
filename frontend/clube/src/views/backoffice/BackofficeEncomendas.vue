@@ -44,7 +44,12 @@
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold text-zinc-200">
               {{ enc.comprador_username }}
-              <span v-if="enc.agendada_texto" title="Feita com a loja fechada — preparar a partir desta hora"
+              <span v-if="enc.agendada_texto && enc.agendamento_origem === 'cliente'"
+                    title="O cliente escolheu esta hora para receber/levantar"
+                    class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 text-[10px] font-bold align-middle">
+                <font-awesome-icon :icon="['fas', 'calendar-day']" /> Agendada pelo cliente · {{ enc.agendada_texto }}
+              </span>
+              <span v-else-if="enc.agendada_texto" title="Feita com a loja fechada — preparar a partir desta hora"
                     class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold align-middle">
                 <font-awesome-icon :icon="['fas', 'clock']" /> Agendada · {{ enc.agendada_texto }}
               </span>
