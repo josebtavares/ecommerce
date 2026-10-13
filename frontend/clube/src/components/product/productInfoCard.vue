@@ -171,8 +171,8 @@
             </div>
 
             <!-- ══ CONJUNTO: escolhas do cliente (ex.: bebida) ══ -->
-            <EscolhasConjunto v-if="eConjunto && produto.grupos?.length" v-model="escolhas"
-                              :grupos="produto.grupos" :isDark="isDark" class="mb-4" />
+            <EscolhasConjunto v-if="eConjunto && temEscolhas(produto)" v-model="escolhas"
+                              :grupos="produto.grupos" :componentes="produto.componentes" :isDark="isDark" class="mb-4" />
 
             <!-- ══ CHOICES: só as opções disponíveis no produto ══ -->
             <div v-if="!eConjunto && atributosChoices.length > 0" class="space-y-4 mb-4">
@@ -371,7 +371,7 @@ import { toast } from 'vue3-toastify'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { contactarLoja } from '@/services/chat'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
-import EscolhasConjunto, { extrasDe, faltaEscolher } from '@/components/conjuntos/EscolhasConjunto.vue'
+import EscolhasConjunto, { extrasDe, faltaEscolher, temEscolhas } from '@/components/conjuntos/EscolhasConjunto.vue'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
   variantesPorEscolher, stockCompativel, intervaloPreco,
@@ -578,7 +578,7 @@ export default {
     },
 
     obrigatoriosPorPreencher () {
-      if (this.eConjunto) return faltaEscolher(this.produto.grupos, this.escolhas)
+      if (this.eConjunto) return faltaEscolher(this.produto.grupos, this.escolhas, this.produto.componentes)
       const obrig = this.atributosChoices
         .filter(a => a.obrigatorio && !this.seleccoes[a.nome])
         .map(a => a.nome)
@@ -616,6 +616,7 @@ export default {
   },
 
   methods: {
+    temEscolhas,
     formatPrice (val) {
       return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
     },

@@ -763,10 +763,20 @@ def _livre_payload(c):
     """Componente em que o cliente escolhe a variação: as variações activas para o seletor."""
     if not c.livre:
         return {'variante_livre': False, 'variantes_livres': []}
-    return {'variante_livre': True, 'variantes_livres': [
+    activas = _variantes_activas(c)
+    # pela ordem das opções no tipo do produto (S, M, L…), não pela ordem alfabética da chave
+    schema = (getattr(c.produto.tipo, 'atributos_schema', None) or []) if getattr(c.produto, 'tipo_id', None) else []
+    ordem = {a.get('nome'): a.get('opcoes') or [] for a in schema if isinstance(a, dict)}
+
+    def _pos(v):
+        return [ordem.get(k, []).index(val) if val in ordem.get(k, []) else 999 for k, val in v.combinacao.items()]
+    activas.sort(key=_pos)
+    return {'variante_livre': True,
+            'atributos_variante': list(activas[0].combinacao.keys()) if activas else [],   # ex.: ["tamanho"]
+            'variantes_livres': [
         {'id': v.id, 'nome': v.descricao(), 'quantidade': v.quantidade,
          'disponivel': v.quantidade >= c.quantidade, 'preco': str(v.preco_efetivo)}
-        for v in _variantes_activas(c)]}
+        for v in activas]}
 
 
 def grupos_payload(conjunto, request=None, pos=None):

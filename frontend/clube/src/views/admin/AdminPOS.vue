@@ -181,7 +181,7 @@
                 <p class="text-xs font-bold text-zinc-400 mb-2">Mais vendidos (30 dias)</p>
                 <div v-for="t in d.top_produtos" :key="t.nome" class="flex justify-between py-1.5 border-b border-zinc-800 last:border-0 text-xs">
                   <span class="text-zinc-300 truncate">{{ t.nome }}</span>
-                  <span class="text-zinc-500 flex-shrink-0 ml-3">{{ t.quantidade }} un. · {{ money(t.total) }}</span>
+                  <span class="text-zinc-500 flex-shrink-0 ml-3">{{ t.quantidade }} un.<template v-if="t.em_menus"> ({{ t.em_menus }} em menus)</template> · {{ money(t.total) }}</span>
                 </div>
               </section>
 

@@ -878,6 +878,7 @@ export default {
         ativo: !!produto.e_conjunto,
         linhas: (produto.componentes || []).map(c => ({
           origem: c.origem, produto_id: c.produto_id, variante_id: c.variante_id, quantidade: c.quantidade,
+          variante_livre: !!c.variante_livre,
         })),
         grupos: gruposDoProduto(produto),
       }

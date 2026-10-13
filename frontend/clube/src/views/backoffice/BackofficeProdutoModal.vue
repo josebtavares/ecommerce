@@ -358,6 +358,7 @@ export default {
         ativo: !!this.produto?.e_conjunto,
         linhas: (this.produto?.componentes || []).map(c => ({
           origem: 'loja', produto_id: c.produto_id, variante_id: c.variante_id, quantidade: c.quantidade,
+          variante_livre: !!c.variante_livre,
         })),
         grupos: gruposDoProduto(this.produto),   // escolhas do cliente (ex.: bebida)
       },

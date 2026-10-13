@@ -18,7 +18,7 @@
       </header>
 
       <div class="flex-1 overflow-y-auto p-5">
-        <EscolhasConjunto v-model="escolhas" :grupos="produto.grupos" pos compacto />
+        <EscolhasConjunto v-model="escolhas" :grupos="produto.grupos" :componentes="produto.componentes" pos compacto />
       </div>
 
       <footer class="border-t border-slate-200 p-5">
@@ -57,7 +57,7 @@ export default {
 
   computed: {
     precoUnitario () { return Number(this.produto.preco) + extrasDe(this.produto.grupos, this.escolhas) },
-    falta () { return faltaEscolher(this.produto.grupos, this.escolhas) },
+    falta () { return faltaEscolher(this.produto.grupos, this.escolhas, this.produto.componentes) },
   },
 
   methods: {

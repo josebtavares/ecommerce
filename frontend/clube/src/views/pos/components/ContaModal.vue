@@ -606,6 +606,7 @@ import { toast } from 'vue3-toastify'
 import PagamentoModal from './PagamentoModal.vue'
 import VariantePicker from './VariantePicker.vue'
 import ConjuntoPicker from './ConjuntoPicker.vue'
+import { temEscolhas } from '@/components/conjuntos/EscolhasConjunto.vue'
 import { precisaEscolha } from '@/utils/variantes'
 
 export default {
@@ -756,7 +757,7 @@ export default {
       if (!produto.disponivel) { this.error = 'Este produto não está disponível.'; return }
 
       // menu com escolhas (ex.: bebida) → escolher primeiro
-      if (produto.e_conjunto && produto.grupos?.length) {
+      if (produto.e_conjunto && temEscolhas(produto)) {
         this.error = ''
         this.menuEscolha = produto
         return

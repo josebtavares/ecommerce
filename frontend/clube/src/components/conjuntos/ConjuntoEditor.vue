@@ -13,10 +13,11 @@
         <Miniatura :item="item(l)" :claro="claro" />
         <div class="flex-1 min-w-0">
           <NomeLinha :item="item(l)" :l="l" :mostrar-origem="mostrarOrigem" :claro="claro" />
-          <select v-if="item(l)?.variantes?.length" :value="l.variante_id || ''"
-                  @change="mudarFixo(i, { variante_id: Number($event.target.value) || null })"
+          <select v-if="item(l)?.variantes?.length" :value="valorVariante(l)"
+                  @change="mudarFixo(i, alteracaoVariante($event.target.value))"
                   class="mt-1 w-full max-w-[240px] px-2 py-1 rounded-lg text-xs border focus:outline-none" :class="selectCls(l)">
             <option value="" disabled>Escolhe a variação…</option>
+                  <option value="livre">O cliente escolhe</option>
             <option v-for="v in item(l).variantes" :key="v.id" :value="v.id">{{ v.nome }} · {{ dinheiro(v.preco) }}</option>
           </select>
           <p v-else class="text-xs" :class="claro ? 'text-gray-500' : 'text-zinc-500'">{{ dinheiro(precoLinha(l)) }} / un.</p>
@@ -83,10 +84,11 @@
           <Miniatura :item="item(o)" :claro="claro" pequena />
           <div class="flex-1 min-w-0">
             <NomeLinha :item="item(o)" :l="o" :mostrar-origem="mostrarOrigem" :claro="claro" />
-            <select v-if="item(o)?.variantes?.length" :value="o.variante_id || ''"
-                    @change="mudarOpcao(gi, oi, { variante_id: Number($event.target.value) || null })"
+            <select v-if="item(o)?.variantes?.length" :value="valorVariante(o)"
+                    @change="mudarOpcao(gi, oi, alteracaoVariante($event.target.value))"
                     class="mt-1 w-full max-w-[220px] px-2 py-1 rounded-lg text-xs border focus:outline-none" :class="selectCls(o)">
               <option value="" disabled>Escolhe a variação…</option>
+                  <option value="livre">O cliente escolhe</option>
               <option v-for="v in item(o).variantes" :key="v.id" :value="v.id">{{ v.nome }}</option>
             </select>
             <p v-if="problemaDe(o)" class="text-[11px] text-amber-500 mt-0.5">{{ problemaDe(o) }}</p>
@@ -211,7 +213,7 @@ export default {
       const p = this.item(l)
       if (!p) return 'Este produto já não existe.'
       if (p.ativo === false) return 'Este produto está desactivado.'
-      if (p.variantes?.length && !l.variante_id) return 'Escolhe a variação.'
+      if (p.variantes?.length && !l.variante_id && !l.variante_livre) return 'Escolhe a variação (ou "O cliente escolhe").'
       return this.problemas[this.chave(l)] || ''
     },
     caixa (l) {
@@ -220,7 +222,12 @@ export default {
     },
     selectCls (l) {
       return [this.claro ? 'bg-white border-gray-300 text-gray-800' : 'bg-zinc-900 border-zinc-700 text-zinc-200',
-              !l.variante_id && 'border-amber-500']
+              !l.variante_id && !l.variante_livre && 'border-amber-500']
+    },
+    // variação: fixa (id) ou escolhida pelo cliente ("livre")
+    valorVariante (l) { return l.variante_livre ? 'livre' : (l.variante_id || '') },
+    alteracaoVariante (valor) {
+      return valor === 'livre' ? { variante_livre: true, variante_id: null } : { variante_livre: false, variante_id: Number(valor) || null }
     },
     resumoGrupo (g) {
       const n = g.opcoes.length
@@ -242,6 +249,7 @@ export default {
       return {
         origem: p.origem, produto_id: p.id,
         variante_id: p.variantes?.length === 1 ? p.variantes[0].id : null,
+        variante_livre: false,
         quantidade: 1, ...extra,
       }
     },
@@ -275,7 +283,7 @@ export default {
 export function erroConjunto (linhas, grupos, catalogo) {
   const porChave = {}
   catalogo.forEach(p => { porChave[p.origem + '-' + p.id] = p })
-  const semVariante = l => porChave[(l.origem || 'loja') + '-' + l.produto_id]?.variantes?.length && !l.variante_id
+  const semVariante = l => porChave[(l.origem || 'loja') + '-' + l.produto_id]?.variantes?.length && !l.variante_id && !l.variante_livre
   if (!linhas.length && !grupos.length) return 'Adiciona produtos ou escolhas ao conjunto.'
   if (linhas.some(semVariante)) return 'Escolhe a variação de cada produto do conjunto.'
   for (const g of grupos) {
@@ -295,6 +303,7 @@ export function gruposDoProduto (produto) {
     id: g.id, nome: g.nome, minimo: g.minimo, maximo: g.maximo,
     opcoes: g.opcoes.map(o => ({
       id: o.id, origem: o.origem, produto_id: o.produto_id, variante_id: o.variante_id,
+      variante_livre: !!o.variante_livre,
       quantidade: o.quantidade, preco_extra: o.preco_extra,
     })),
   }))
