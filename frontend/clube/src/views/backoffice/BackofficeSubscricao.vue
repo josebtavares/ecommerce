@@ -26,6 +26,11 @@
 
       <!-- ═══ Subscrição ═══ -->
       <template v-else-if="sub">
+        <p v-if="dados.aviso" role="alert"
+           :class="['rounded-xl border px-4 py-3 text-sm font-semibold',
+                    dados.aviso.tipo === 'vence' ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-red-500/10 border-red-500/30 text-red-300']">
+          {{ dados.aviso.texto }}
+        </p>
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
           <div class="flex flex-wrap items-start gap-4">
             <div class="flex-1 min-w-0">
@@ -109,6 +114,7 @@ import api from '@/services/api'
 export default {
   name: 'BackofficeSubscricao',
   props: { lojaId: { type: [String, Number], required: true } },
+  emits: ['alterado'],
 
   data () {
     return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false }
@@ -159,6 +165,7 @@ export default {
         const { data } = await api.post(`/app/loja/${this.lojaId}/subscricao/faturas/${f.id}/pagar/`)
         this.dados = data
         this.aviso = 'Pagamento recebido. Obrigado!'
+        this.$emit('alterado')      // o layout volta a ler a loja (pode ter sido reactivada) e a faixa
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível pagar.'
       } finally {

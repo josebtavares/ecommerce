@@ -24,6 +24,12 @@ def hoje():
     return agora().date()
 
 
+def _eur(v):
+    """15.5 → "15,50 €" (como no resto do site)."""
+    numero = f"{v:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
+    return f"{numero} €"
+
+
 def mais_meses(d, n):
     """31/01 + 1 mês = 28/02 (ou 29); fica no último dia do mês quando o dia não existe."""
     m = d.month - 1 + n
@@ -121,11 +127,11 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None):
     from ..Views.notificacaoView import notificar_staff, notificar_admins
     notificar_staff(loja=fatura.loja, roles=['dono'], tipo='subscricao_paga',
                     titulo=f'Subscrição paga — {fatura.descricao}',
-                    mensagem=f'€{fatura.valor} recebidos. Pago até {sub.pago_ate - timedelta(days=1):%d/%m/%Y}.'
+                    mensagem=f'{_eur(fatura.valor)} recebidos. Pago até {sub.pago_ate - timedelta(days=1):%d/%m/%Y}.'
                              + (' A loja foi reactivada.' if reativou else ''),
                     link=f'/loja/{fatura.loja_id}/backoffice')
     notificar_admins(tipo='subscricao_paga', titulo=f'Subscrição paga — {fatura.loja.nome}',
-                     mensagem=f'Fatura #{fatura.id} · €{fatura.valor} · {fatura.get_metodo_display()}.',
+                     mensagem=f'Fatura #{fatura.id} · {_eur(fatura.valor)} · {fatura.get_metodo_display()}.',
                      loja=fatura.loja, link='/admin')
     return fatura
 
@@ -133,7 +139,7 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None):
 def _avisar_fatura(fatura, nova=False):
     from ..Views.notificacaoView import notificar_staff
     notificar_staff(loja=fatura.loja, roles=['dono'], tipo='subscricao_fatura',
-                    titulo=f'Nova fatura da subscrição — €{fatura.valor}' if nova else f'Fatura por pagar — €{fatura.valor}',
+                    titulo=f'Nova fatura da subscrição — {_eur(fatura.valor)}' if nova else f'Fatura por pagar — {_eur(fatura.valor)}',
                     mensagem=f'{fatura.descricao}. Vence a {fatura.vencimento:%d/%m/%Y}.',
                     link=f'/loja/{fatura.loja_id}/backoffice')
 
@@ -290,7 +296,7 @@ def _processar_uma(sub, d, resumo):
         falta = (f.vencimento - d).days
         # 3. lembretes
         if falta == 3 and _marcar(f, 'd3'):
-            _avisar_dono(loja, f'A fatura da subscrição vence daqui a 3 dias — €{f.valor}',
+            _avisar_dono(loja, f'A fatura da subscrição vence daqui a 3 dias — {_eur(f.valor)}',
                          f'{f.descricao}. Vence a {f.vencimento:%d/%m/%Y}.')
         # 4. no dia (ou depois, se o worker esteve parado): pagamento automático
         if falta <= 0 and sub.auto_renovar and 'auto' not in (f.avisos or []):
@@ -300,7 +306,7 @@ def _processar_uma(sub, d, resumo):
             sub.refresh_from_db()
             continue
         if falta == 0 and _marcar(f, 'd0'):
-            _avisar_dono(loja, f'A fatura da subscrição vence hoje — €{f.valor}',
+            _avisar_dono(loja, f'A fatura da subscrição vence hoje — {_eur(f.valor)}',
                          f'{f.descricao}. Paga hoje em Backoffice → Subscrição.')
         if falta >= 0:
             continue
@@ -313,13 +319,13 @@ def _processar_uma(sub, d, resumo):
             sub.save(update_fields=['estado', 'data_atualizacao'])
             resumo['em_atraso'] += 1
         if _marcar(f, 'atraso'):
-            _avisar_dono(loja, f'Subscrição em atraso — €{f.valor}',
+            _avisar_dono(loja, f'Subscrição em atraso — {_eur(f.valor)}',
                          f'{f.descricao} venceu a {f.vencimento:%d/%m/%Y}. Se não for paga, a loja é suspensa a {limite:%d/%m/%Y}.')
-            _avisar_admins(loja, f'Subscrição em atraso — {loja.nome}', f'Fatura #{f.id} · €{f.valor} · venceu a {f.vencimento:%d/%m/%Y}.')
+            _avisar_admins(loja, f'Subscrição em atraso — {loja.nome}', f'Fatura #{f.id} · {_eur(f.valor)} · venceu a {f.vencimento:%d/%m/%Y}.')
         for dias in (7, 14, 21, 28):
             if atraso >= dias and atraso < DIAS_CARENCIA and _marcar(f, f'a{dias}'):
                 faltam = (limite - d).days
-                _avisar_dono(loja, f'Subscrição em atraso há {dias} dias — €{f.valor}',
+                _avisar_dono(loja, f'Subscrição em atraso há {dias} dias — {_eur(f.valor)}',
                              f'Faltam {faltam} dia(s): a loja é suspensa a {limite:%d/%m/%Y} se a fatura não for paga.')
 
         # 6. fim da carência → suspensa
@@ -327,11 +333,11 @@ def _processar_uma(sub, d, resumo):
             sub.estado = 'suspensa'
             sub.save(update_fields=['estado', 'data_atualizacao'])
             if loja.estado == 'ativa':
-                loja.mudar_estado('suspensa', f'{MOTIVO_SUSPENSAO} (fatura #{f.id}, €{f.valor}).')
+                loja.mudar_estado('suspensa', f'{MOTIVO_SUSPENSAO} (fatura #{f.id}, {_eur(f.valor)}).')
             _avisar_dono(loja, 'A loja foi suspensa — subscrição por pagar',
-                         f'A fatura de €{f.valor} venceu a {f.vencimento:%d/%m/%Y}. Paga em Backoffice → Subscrição e a loja volta logo.')
+                         f'A fatura de {_eur(f.valor)} venceu a {f.vencimento:%d/%m/%Y}. Paga em Backoffice → Subscrição e a loja volta logo.')
             _avisar_admins(loja, f'Loja suspensa automaticamente — {loja.nome}',
-                           f'Subscrição por pagar: fatura #{f.id}, €{f.valor}, vencida a {f.vencimento:%d/%m/%Y}.')
+                           f'Subscrição por pagar: fatura #{f.id}, {_eur(f.valor)}, vencida a {f.vencimento:%d/%m/%Y}.')
             resumo['suspensas'] += 1
             break
 
@@ -352,11 +358,11 @@ def aviso_loja(sub, pendentes, quando=None):
     if vencidas:
         limite = suspensao_em(vencidas[0])
         return {'tipo': 'atraso', 'suspensao_em': limite.isoformat(),
-                'texto': f'Subscrição em atraso (€{sum(f.valor for f in vencidas)}). Paga até {limite - timedelta(days=1):%d/%m/%Y} '
+                'texto': f'Subscrição em atraso ({_eur(sum(f.valor for f in vencidas))}). Paga até {limite - timedelta(days=1):%d/%m/%Y} '
                          f'— a {limite:%d/%m/%Y} a loja é suspensa.'}
     breve = [f for f in pend if (f.vencimento - d).days <= 3]
     if breve and not sub.auto_renovar:
         f = breve[0]
         quando_txt = 'hoje' if f.vencimento == d else f'a {f.vencimento:%d/%m/%Y}'
-        return {'tipo': 'vence', 'suspensao_em': None, 'texto': f'A fatura da subscrição (€{f.valor}) vence {quando_txt}.'}
+        return {'tipo': 'vence', 'suspensao_em': None, 'texto': f'A fatura da subscrição ({_eur(f.valor)}) vence {quando_txt}.'}
     return None
