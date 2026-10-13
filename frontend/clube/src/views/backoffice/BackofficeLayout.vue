@@ -141,6 +141,7 @@
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
                                  :pode-fechar="podeFecharLoja" @updated="fetchLoja" />
         <BackofficeStaff         v-else-if="activeSection === 'staff'"         :loja-id="lojaId" />
+        <BackofficeSubscricao    v-else-if="activeSection === 'subscricao'"    :loja-id="lojaId" />
         <BackofficeTipos         v-else-if="activeSection === 'tipos'"         :loja-id="lojaId" />
         <BackofficeAvaliacoes    v-else-if="activeSection === 'avaliacoes'"    :loja-id="lojaId" />
         <BackofficeEntregas      v-else-if="activeSection === 'entregas'"      :loja-id="lojaId" :minha-role="role" />
@@ -168,6 +169,7 @@ import BackofficeEntregas       from './BackofficeEntregas.vue'
 import BackofficeCategorias     from './BackofficeCategorias.vue'
 import BackofficeTemplates       from './BackofficeTemplates.vue'
 import BackofficeMensagens      from './BackofficeMensagens.vue'
+import BackofficeSubscricao     from './BackofficeSubscricao.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 
@@ -177,15 +179,16 @@ const PERMISSOES = {
     'gerir_produtos','gerir_inventario','gerir_encomendas',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
+    'ver_subscricao','pagar_subscricao',
   ],
   gestor: [
     'ver_loja','editar_loja','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
-    'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
+    'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template', 'ver_subscricao',
   ],
   staff:        ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas'],
-  contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios'],
+  contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios','ver_subscricao'],
   condutor:     ['gerir_entregas'],
 }
 
@@ -202,11 +205,12 @@ const SECCOES = [
   { key: 'staff',         label: 'Staff',             icon: 'staff',     permissao: 'gerir_staff'      },
   { key: 'templates',     label: 'Templates',         icon: 'template',  permissao: 'gerir_template'   },
   { key: 'configuracoes', label: 'Configurações',     icon: 'settings',  permissao: 'editar_loja'      },
+  { key: 'subscricao',    label: 'Subscrição',        icon: 'card',      permissao: 'ver_subscricao'   },
 ]
 
 export default {
   name: 'BackofficeLayout',
-  components: {
+  components: { BackofficeSubscricao,
     BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas,
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,

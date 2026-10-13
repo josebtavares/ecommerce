@@ -1567,7 +1567,8 @@ class Subscricao(models.Model):
     meses        = models.PositiveSmallIntegerField()
     estado       = models.CharField(max_length=10, choices=ESTADOS, default='teste', db_index=True)
     inicio       = models.DateField()
-    pago_ate     = models.DateField()
+    pago_ate     = models.DateField()               # exclusivo: o primeiro dia já não pago
+    teste_ate    = models.DateField(null=True, blank=True)   # exclusivo: fim do período grátis (vazio = sem teste)
     auto_renovar = models.BooleanField(default=True)
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)

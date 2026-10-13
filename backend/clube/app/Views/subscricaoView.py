@@ -29,8 +29,10 @@ def _erro(msg, codigo=status.HTTP_400_BAD_REQUEST):
 @permission_classes([AllowAny])
 def planos_publicos(request):
     """GET /app/planos/ — planos activos + a comissão por defeito (formulário "Criar loja")."""
+    from ..models import ConfiguracaoPlataforma
     return Response({
         'comissao_padrao': str(Loja._meta.get_field('percentagem_comissao').default),
+        'dias_teste': ConfiguracaoPlataforma.atual().subscricao_dias_teste,
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos()],
     })
 

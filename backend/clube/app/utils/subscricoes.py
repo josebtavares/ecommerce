@@ -67,8 +67,9 @@ def arrancar(loja, com_teste=True):
     dias = ConfiguracaoPlataforma.atual().subscricao_dias_teste if com_teste else 0
     sub.inicio = d
     sub.pago_ate = d + timedelta(days=dias)
+    sub.teste_ate = sub.pago_ate if dias else None
     sub.estado = 'teste' if dias else 'ativa'
-    sub.save(update_fields=['inicio', 'pago_ate', 'estado', 'data_atualizacao'])
+    sub.save(update_fields=['inicio', 'pago_ate', 'teste_ate', 'estado', 'data_atualizacao'])
     fatura = emitir_fatura(sub, sub.pago_ate)
     _avisar_fatura(fatura, nova=True)
     return sub
@@ -138,7 +139,7 @@ def mudar_modelo(loja, modelo, plano=None):
         d = hoje()
         if sub:
             sub.plano, sub.preco, sub.meses = plano, plano.preco, plano.meses
-            sub.estado, sub.inicio, sub.pago_ate = 'aguarda', d, d
+            sub.estado, sub.inicio, sub.pago_ate, sub.teste_ate = 'aguarda', d, d, None
             sub.save()
         else:
             sub = Subscricao.objects.create(loja=loja, plano=plano, preco=plano.preco, meses=plano.meses,
@@ -185,6 +186,7 @@ def subscricao_payload(sub):
             'estado': sub.estado, 'estado_nome': sub.get_estado_display(), 'inicio': sub.inicio.isoformat(),
             # último dia pago (pago_ate é o dia em que deixa de estar)
             'pago_ate': (sub.pago_ate - timedelta(days=1)).isoformat() if sub.pago_ate > sub.inicio else None,
+            'teste_ate': (sub.teste_ate - timedelta(days=1)).isoformat() if sub.teste_ate else None,
             'auto_renovar': sub.auto_renovar}
 
 

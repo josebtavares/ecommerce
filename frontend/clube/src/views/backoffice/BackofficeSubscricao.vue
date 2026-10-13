@@ -1,0 +1,182 @@
+<template>
+  <!-- Backoffice → Subscrição: como a loja paga à plataforma (comissão ou subscrição),
+       faturas e pagamento (simulado). GET /app/loja/<id>/subscricao/ -->
+  <div class="space-y-5 max-w-4xl">
+    <div v-if="carregando" class="h-40 bg-zinc-900 rounded-2xl animate-pulse"></div>
+    <p v-else-if="erro && !dados" class="text-sm text-red-400" role="alert">{{ erro }}</p>
+
+    <template v-else-if="dados">
+      <!-- ═══ Comissão ═══ -->
+      <div v-if="dados.modelo === 'comissao'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+        <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Como pagas à plataforma</p>
+        <p class="text-2xl font-black text-zinc-100 mt-2">Comissão de {{ Number(dados.percentagem_comissao) }}% por venda</p>
+        <p class="text-sm text-zinc-400 mt-1">Pagas só quando vendes. Não há mensalidade.</p>
+        <div v-if="dados.planos.length" class="mt-5 pt-5 border-t border-zinc-800">
+          <p class="text-sm font-semibold text-zinc-200">Preferes uma mensalidade, sem comissão nas vendas?</p>
+          <div class="grid sm:grid-cols-3 gap-2 mt-3">
+            <div v-for="p in dados.planos" :key="p.id" class="rounded-xl border border-zinc-800 bg-zinc-800/40 p-3">
+              <p class="text-sm font-semibold text-zinc-100">{{ p.nome }}</p>
+              <p class="text-lg font-black text-zinc-100">{{ euros(p.preco) }}</p>
+              <p class="text-[11px] text-zinc-500">{{ p.periodicidade_nome }}<template v-if="p.meses > 1"> · {{ euros(p.preco_mes) }}/mês</template></p>
+            </div>
+          </div>
+          <p class="text-xs text-zinc-500 mt-3">Para mudar, fala com a plataforma (em breve vais poder pedir aqui).</p>
+        </div>
+      </div>
+
+      <!-- ═══ Subscrição ═══ -->
+      <template v-else-if="sub">
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+          <div class="flex flex-wrap items-start gap-4">
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">A tua subscrição</p>
+              <p class="text-2xl font-black text-zinc-100 mt-2">{{ sub.plano.nome }}
+                <span class="block sm:inline text-sm font-semibold text-zinc-400"><span class="hidden sm:inline">· </span>{{ euros(sub.preco) }} / {{ sub.meses === 1 ? 'mês' : sub.meses + ' meses' }}</span>
+              </p>
+              <p class="text-sm mt-1" :class="corEstadoTexto">{{ resumoEstado }}</p>
+            </div>
+            <span :class="['px-3 py-1 rounded-full text-xs font-bold', corEstado]">{{ sub.estado_nome }}</span>
+          </div>
+
+          <div class="grid sm:grid-cols-3 gap-3 mt-5">
+            <div class="rounded-xl bg-zinc-800/50 px-4 py-3">
+              <template v-if="sub.estado === 'teste' && sub.teste_ate">
+                <p class="text-[11px] text-zinc-500 uppercase tracking-wide">Teste grátis até</p>
+                <p class="text-base font-bold text-zinc-100">{{ data(sub.teste_ate) }}</p>
+                <p v-if="sub.pago_ate && sub.pago_ate > sub.teste_ate" class="text-[11px] text-green-400">e já pago até {{ data(sub.pago_ate) }}</p>
+              </template>
+              <template v-else>
+                <p class="text-[11px] text-zinc-500 uppercase tracking-wide">Pago até</p>
+                <p class="text-base font-bold text-zinc-100">{{ sub.pago_ate ? data(sub.pago_ate) : '—' }}</p>
+              </template>
+            </div>
+            <div class="rounded-xl bg-zinc-800/50 px-4 py-3">
+              <p class="text-[11px] text-zinc-500 uppercase tracking-wide">Por pagar</p>
+              <p class="text-base font-bold" :class="Number(dados.por_pagar) ? 'text-amber-300' : 'text-zinc-100'">{{ euros(dados.por_pagar) }}</p>
+            </div>
+            <div class="rounded-xl bg-zinc-800/50 px-4 py-3 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-[11px] text-zinc-500 uppercase tracking-wide">Pagamento automático</p>
+                <p class="text-sm font-semibold text-zinc-200">{{ sub.auto_renovar ? 'Ligado' : 'Desligado' }}</p>
+              </div>
+              <button v-if="dados.pode_pagar" type="button" role="switch" :aria-checked="sub.auto_renovar ? 'true' : 'false'"
+                aria-label="Pagamento automático" @click="mudarAuto" :disabled="aGuardar"
+                :class="['w-11 h-6 rounded-full transition-colors relative flex-shrink-0', sub.auto_renovar ? 'bg-red-600' : 'bg-zinc-700']">
+                <span :class="['absolute top-0.5 w-5 h-5 rounded-full bg-white shadow', sub.auto_renovar ? 'left-5.5' : 'left-0.5']" style="transition: left 0.2s"></span>
+              </button>
+            </div>
+          </div>
+          <p class="text-[11px] text-zinc-500 mt-3">
+            Com o pagamento automático ligado, cada fatura é paga no dia em que vence. Os pagamentos ainda são simulados.
+          </p>
+        </div>
+
+        <!-- Faturas -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+          <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Faturas</p>
+          <p v-if="!dados.faturas.length" class="text-sm text-zinc-500 px-6 pb-6">Ainda não há faturas.</p>
+          <div v-else class="divide-y divide-zinc-800">
+            <div v-for="f in dados.faturas" :key="f.id" class="px-6 py-4 flex flex-wrap items-center gap-3">
+              <div class="flex-1 min-w-[200px]">
+                <p class="text-sm font-semibold text-zinc-200">{{ f.descricao }}</p>
+                <p class="text-xs text-zinc-500">
+                  <template v-if="f.estado === 'paga'">Paga a {{ data(f.paga_em) }} · {{ f.metodo_nome }}</template>
+                  <template v-else-if="f.estado === 'pendente'">Vence a {{ data(f.vencimento) }}<span v-if="f.atrasada" class="text-red-400 font-semibold"> · em atraso</span></template>
+                  <template v-else>{{ f.notas || 'Anulada' }}</template>
+                </p>
+              </div>
+              <span class="text-sm font-bold text-zinc-100">{{ euros(f.valor) }}</span>
+              <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', corFatura(f)]">{{ f.atrasada ? 'Em atraso' : f.estado_nome }}</span>
+              <button v-if="f.estado === 'pendente' && dados.pode_pagar" type="button" @click="pagar(f)" :disabled="aPagar === f.id"
+                class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold">
+                {{ aPagar === f.id ? 'A pagar…' : 'Pagar ' + euros(f.valor) }}
+              </button>
+            </div>
+          </div>
+          <p v-if="!dados.pode_pagar && Number(dados.por_pagar)" class="text-xs text-zinc-500 px-6 pb-4">Só o dono da loja pode pagar.</p>
+        </div>
+      </template>
+
+      <p v-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
+      <p v-if="aviso" class="text-sm text-green-400" role="status">{{ aviso }}</p>
+    </template>
+  </div>
+</template>
+
+<script>
+import api from '@/services/api'
+
+export default {
+  name: 'BackofficeSubscricao',
+  props: { lojaId: { type: [String, Number], required: true } },
+
+  data () {
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false }
+  },
+
+  computed: {
+    sub () { return this.dados?.subscricao },
+    resumoEstado () {
+      const s = this.sub
+      if (!s) return ''
+      if (s.estado === 'aguarda') return 'Começa quando a plataforma aprovar a loja.'
+      if (s.estado === 'teste') return `Período de teste grátis até ${this.data(s.teste_ate)}.`
+      if (s.estado === 'cancelada') return 'Esta subscrição foi cancelada.'
+      if (s.estado === 'em_atraso') return 'Tens faturas em atraso — paga para evitar a suspensão da loja.'
+      return `Tudo pago até ${this.data(s.pago_ate)}.`
+    },
+    corEstado () {
+      return { teste: 'bg-sky-500/15 text-sky-300', ativa: 'bg-green-500/15 text-green-400', em_atraso: 'bg-red-500/15 text-red-400',
+               aguarda: 'bg-zinc-700 text-zinc-300', suspensa: 'bg-red-500/15 text-red-400', cancelada: 'bg-zinc-700 text-zinc-400' }[this.sub?.estado] || ''
+    },
+    corEstadoTexto () { return this.sub?.estado === 'em_atraso' ? 'text-red-400' : 'text-zinc-400' },
+  },
+
+  created () { this.carregar() },
+
+  methods: {
+    euros (v) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0) },
+    data (s) { return s ? new Date(s.length === 10 ? s + 'T12:00:00' : s).toLocaleDateString('pt-PT') : '' },
+    corFatura (f) {
+      if (f.atrasada) return 'bg-red-500/15 text-red-400'
+      return { paga: 'bg-green-500/15 text-green-400', pendente: 'bg-amber-500/15 text-amber-300', anulada: 'bg-zinc-700 text-zinc-400' }[f.estado]
+    },
+    async carregar () {
+      try {
+        const { data } = await api.get(`/app/loja/${this.lojaId}/subscricao/`)
+        this.dados = data
+      } catch (e) {
+        this.erro = e.response?.data?.detail || 'Não foi possível carregar a subscrição.'
+      } finally {
+        this.carregando = false
+      }
+    },
+    async pagar (f) {
+      if (!confirm(`Pagar ${this.euros(f.valor)} — ${f.descricao}?\n\n(Pagamento simulado)`)) return
+      this.erro = ''; this.aviso = ''
+      this.aPagar = f.id
+      try {
+        const { data } = await api.post(`/app/loja/${this.lojaId}/subscricao/faturas/${f.id}/pagar/`)
+        this.dados = data
+        this.aviso = 'Pagamento recebido. Obrigado!'
+      } catch (e) {
+        this.erro = e.response?.data?.detail || 'Não foi possível pagar.'
+      } finally {
+        this.aPagar = null
+      }
+    },
+    async mudarAuto () {
+      this.aGuardar = true
+      this.erro = ''
+      try {
+        const { data } = await api.patch(`/app/loja/${this.lojaId}/subscricao/`, { auto_renovar: !this.sub.auto_renovar })
+        this.dados = data
+      } catch (e) {
+        this.erro = e.response?.data?.detail || 'Não foi possível mudar.'
+      } finally {
+        this.aGuardar = false
+      }
+    },
+  },
+}
+</script>
