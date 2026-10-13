@@ -497,6 +497,7 @@ def encomenda_criar(request, loja_id):
         opcao_entrega  = opcao,
         agendada_para  = agendada_para,
         agendamento_origem = origem,
+        modelo_cobranca = loja.modelo_cobranca,   # comissão ou subscrição — fica o que estava em vigor
     )
 
     # ── 2) Cria os itens e desconta o stock (uma vez por linha de stock, com F()) ──
@@ -669,7 +670,7 @@ def encomenda_atualizar_status(request, loja_id, id):
  
     # ── Notifica dono/gestor quando concluído ─────────────────
     if novo_status == 'concluido':
-        _perc = encomenda.loja.percentagem_comissao
+        _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
         _com  = (encomenda.valor_total * _perc / 100).quantize(Decimal('0.01'))
         _liq  = encomenda.valor_total - _com
  
@@ -678,13 +679,14 @@ def encomenda_atualizar_status(request, loja_id, id):
             roles=['dono', 'gestor'],
             tipo='encomenda_concluida_loja',
             titulo=f'Encomenda #{encomenda.id} concluída ✓',
-            mensagem=f'Receita: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com} · Líquido: €{_liq}.',
+            mensagem=(f'Receita: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com} · Líquido: €{_liq}.' if _com
+                      else f'Receita: €{encomenda.valor_total} · Sem comissão (subscrição).'),
             link=f'/loja/{encomenda.loja_id}/backoffice',
         )
  
         # notifica admins se pagamento era dinheiro (comissão registada agora)
         try:
-            if encomenda.pagamento.referencia_transacao == 'dinheiro':
+            if _com and encomenda.pagamento.referencia_transacao == 'dinheiro':
                 notificar_admins(
                     tipo='comissao_recebida',
                     titulo=f'Comissão registada (dinheiro) — {encomenda.loja.nome}',

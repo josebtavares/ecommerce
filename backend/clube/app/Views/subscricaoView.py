@@ -1,0 +1,256 @@
+"""
+Subscrições das lojas (utils/subscricoes.py):
+  público     → planos para a criação da loja
+  backoffice  → ver a subscrição/comissão, pagar faturas (simulado), renovação automática
+  admin       → planos, lista das lojas e faturas, marcar paga à mão, mudar o modelo de uma loja
+"""
+from decimal import Decimal, InvalidOperation
+
+from django.db import transaction
+from django.db.models import Count, Q, Sum
+from django.shortcuts import get_object_or_404
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
+from ..models import FaturaSubscricao, Loja, PlanoSubscricao, Subscricao
+from ..utils import subscricoes as subs
+from ..utils.pagination import paginar_lista
+from .adminView import _exige_admin
+from .lojaView import _exige_permissao
+
+
+def _erro(msg, codigo=status.HTTP_400_BAD_REQUEST):
+    return Response({'detail': msg}, status=codigo)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def planos_publicos(request):
+    """GET /app/planos/ — planos activos + a comissão por defeito (formulário "Criar loja")."""
+    return Response({
+        'comissao_padrao': str(Loja._meta.get_field('percentagem_comissao').default),
+        'planos': [subs.plano_payload(p) for p in subs.planos_ativos()],
+    })
+
+
+# ── Backoffice ────────────────────────────────────────────────
+
+def _resumo_loja(loja, membro):
+    sub = Subscricao.objects.select_related('plano').filter(loja=loja).first()
+    faturas = list(loja.faturas_subscricao.select_related('plano')[:24]) if sub else []
+    pendentes = [f for f in faturas if f.estado == 'pendente']
+    return {
+        'modelo': loja.modelo_cobranca,
+        'percentagem_comissao': str(loja.percentagem_comissao),
+        'subscricao': subs.subscricao_payload(sub),
+        'faturas': [subs.fatura_payload(f) for f in faturas],
+        'por_pagar': str(sum((f.valor for f in pendentes), Decimal('0'))),
+        'pode_pagar': membro.pode('pagar_subscricao'),
+        'planos': [subs.plano_payload(p) for p in subs.planos_ativos()],
+    }
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def loja_subscricao(request, loja_id):
+    """
+    GET   /app/loja/<loja_id>/subscricao/   (dono, gestor, contabilista)
+    PATCH /app/loja/<loja_id>/subscricao/   { auto_renovar }   (só o dono)
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    membro, erro = _exige_permissao(request, loja, 'ver_subscricao')
+    if erro:
+        return erro
+    if request.method == 'PATCH':
+        if not membro.pode('pagar_subscricao'):
+            return _erro('Só o dono da loja gere a subscrição.', status.HTTP_403_FORBIDDEN)
+        sub = Subscricao.objects.filter(loja=loja).exclude(estado='cancelada').first()
+        if not sub:
+            return _erro('Esta loja não está em subscrição.')
+        valor = request.data.get('auto_renovar')
+        if not isinstance(valor, bool):
+            return _erro('auto_renovar inválido.')
+        sub.auto_renovar = valor
+        sub.save(update_fields=['auto_renovar', 'data_atualizacao'])
+    return Response(_resumo_loja(loja, membro))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def loja_fatura_pagar(request, loja_id, fatura_id):
+    """POST /app/loja/<loja_id>/subscricao/faturas/<fatura_id>/pagar/ — pagamento (simulado) pelo dono."""
+    loja = get_object_or_404(Loja, id=loja_id)
+    membro, erro = _exige_permissao(request, loja, 'pagar_subscricao')
+    if erro:
+        return erro
+    fatura = get_object_or_404(FaturaSubscricao, id=fatura_id, loja=loja)
+    try:
+        subs.pagar(fatura, 'simulado', referencia=f'SIM-{fatura.id}')
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    return Response(_resumo_loja(loja, membro))
+
+
+# ── Admin ─────────────────────────────────────────────────────
+
+def _ler_plano(dados, plano=None):
+    """Valida os campos de um plano. Devolve (campos, None) ou (None, mensagem)."""
+    campos = {}
+    if 'nome' in dados or plano is None:
+        nome = str(dados.get('nome') or '').strip()
+        if not nome or len(nome) > 80:
+            return None, 'Dá um nome ao plano (até 80 caracteres).'
+        campos['nome'] = nome
+    if 'periodicidade' in dados or plano is None:
+        if dados.get('periodicidade') not in PlanoSubscricao.MESES:
+            return None, 'Periodicidade inválida (mensal, trimestral ou anual).'
+        campos['periodicidade'] = dados['periodicidade']
+    if 'preco' in dados or plano is None:
+        try:
+            preco = Decimal(str(dados.get('preco'))).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError, ValueError):
+            return None, 'Preço inválido.'
+        if preco < 0 or preco > Decimal('100000'):
+            return None, 'Preço inválido.'
+        campos['preco'] = preco
+    if 'descricao' in dados:
+        campos['descricao'] = str(dados.get('descricao') or '').strip()[:300]
+    if 'ativo' in dados:
+        if not isinstance(dados['ativo'], bool):
+            return None, 'ativo inválido.'
+        campos['ativo'] = dados['ativo']
+    if 'ordem' in dados:
+        try:
+            campos['ordem'] = max(0, min(int(dados['ordem']), 999))
+        except (TypeError, ValueError):
+            return None, 'Ordem inválida.'
+    return campos, None
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_planos(request):
+    """GET/POST /app/admin/planos/"""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    if request.method == 'POST':
+        campos, msg = _ler_plano(request.data)
+        if msg:
+            return _erro(msg)
+        p = PlanoSubscricao.objects.create(**campos)
+        return Response(subs.plano_payload(p), status=status.HTTP_201_CREATED)
+    planos = PlanoSubscricao.objects.annotate(n_lojas=Count('subscricoes', filter=~Q(subscricoes__estado='cancelada')))
+    return Response([{**subs.plano_payload(p), 'lojas': p.n_lojas} for p in planos])
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def admin_plano(request, plano_id):
+    """PATCH /app/admin/planos/<id>/ — o preço novo só vale para quem escolher o plano depois."""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    plano = get_object_or_404(PlanoSubscricao, id=plano_id)
+    campos, msg = _ler_plano(request.data, plano)
+    if msg:
+        return _erro(msg)
+    if 'periodicidade' in campos and campos['periodicidade'] != plano.periodicidade and plano.subscricoes.exists():
+        return _erro('Este plano já tem lojas — cria um plano novo para mudar a periodicidade.')
+    for k, v in campos.items():
+        setattr(plano, k, v)
+    plano.save()
+    return Response(subs.plano_payload(plano))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_subscricoes(request):
+    """
+    GET /app/admin/subscricoes/?modelo=subscricao|comissao&estado=…&q=…&offset&limit
+    As lojas com o modelo de cobrança, a subscrição e o que têm por pagar.
+    """
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    qs = Loja.objects.exclude(estado='pendente', modelo_cobranca='comissao').select_related('subscricao__plano')
+    modelo = request.GET.get('modelo')
+    if modelo in ('comissao', 'subscricao'):
+        qs = qs.filter(modelo_cobranca=modelo)
+    estado = request.GET.get('estado')
+    if estado in dict(Subscricao.ESTADOS):
+        qs = qs.filter(subscricao__estado=estado, modelo_cobranca='subscricao')
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        qs = qs.filter(nome__icontains=q)
+    qs = qs.annotate(
+        n_pendentes=Count('faturas_subscricao', filter=Q(faturas_subscricao__estado='pendente')),
+        v_pendente=Sum('faturas_subscricao__valor', filter=Q(faturas_subscricao__estado='pendente')),
+    ).order_by('-modelo_cobranca', 'nome')
+
+    def linha(l):
+        sub = getattr(l, 'subscricao', None) if l.modelo_cobranca == 'subscricao' else None
+        return {'loja_id': l.id, 'loja_nome': l.nome, 'loja_estado': l.estado, 'modelo': l.modelo_cobranca,
+                'percentagem_comissao': str(l.percentagem_comissao), 'subscricao': subs.subscricao_payload(sub),
+                'faturas_pendentes': l.n_pendentes, 'valor_pendente': str(l.v_pendente or 0)}
+    return paginar_lista(request, [linha(l) for l in qs])
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_faturas(request):
+    """GET /app/admin/faturas/?loja=<id>&estado=pendente|paga|anulada — faturas de subscrição."""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    qs = FaturaSubscricao.objects.select_related('loja', 'plano')
+    if (request.GET.get('loja') or '').isdigit():
+        qs = qs.filter(loja_id=int(request.GET['loja']))
+    if request.GET.get('estado') in dict(FaturaSubscricao.ESTADOS):
+        qs = qs.filter(estado=request.GET['estado'])
+    return paginar_lista(request, [{**subs.fatura_payload(f), 'loja_nome': f.loja.nome} for f in qs[:500]])
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_fatura_pagar(request, fatura_id):
+    """POST /app/admin/faturas/<id>/pagar/ { metodo: dinheiro|transferencia|oferta|outro, notas? } — pagamento à mão."""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    fatura = get_object_or_404(FaturaSubscricao, id=fatura_id)
+    metodo = request.data.get('metodo')
+    if metodo not in ('dinheiro', 'transferencia', 'oferta', 'outro'):
+        return _erro('Escolhe como foi pago: dinheiro, transferência, oferta ou outro.')
+    try:
+        subs.pagar(fatura, metodo, notas=str(request.data.get('notas') or '').strip())
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    fatura.refresh_from_db()
+    return Response(subs.fatura_payload(fatura))
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def admin_loja_cobranca(request, loja_id):
+    """PATCH /app/admin/lojas/<id>/cobranca/ { modelo: comissao|subscricao, plano_id? } — o admin força o modelo."""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    loja = get_object_or_404(Loja, id=loja_id)
+    modelo = request.data.get('modelo')
+    plano = None
+    if modelo == 'subscricao':
+        plano = PlanoSubscricao.objects.filter(id=request.data.get('plano_id'), ativo=True).first()
+        if not plano:
+            return _erro('Escolhe um plano activo.')
+    try:
+        with transaction.atomic():
+            subs.mudar_modelo(loja, modelo, plano)
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    loja.refresh_from_db()
+    sub = Subscricao.objects.filter(loja=loja).first()
+    return Response({'loja_id': loja.id, 'modelo': loja.modelo_cobranca, 'subscricao': subs.subscricao_payload(sub)})

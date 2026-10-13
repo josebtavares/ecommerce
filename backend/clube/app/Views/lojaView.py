@@ -138,12 +138,27 @@ def loja_create(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # como a plataforma vai ganhar com a loja: comissão (por defeito) ou subscrição com um plano
+    from ..models import PlanoSubscricao
+    modelo = request.data.get('modelo_cobranca') or 'comissao'
+    plano = None
+    if modelo not in ('comissao', 'subscricao'):
+        return Response({'modelo_cobranca': 'Escolhe comissão ou subscrição.'}, status=status.HTTP_400_BAD_REQUEST)
+    if modelo == 'subscricao':
+        plano = PlanoSubscricao.objects.filter(id=request.data.get('plano_id'), ativo=True).first()
+        if not plano:
+            return Response({'plano_id': 'Escolhe um dos planos de subscrição.'}, status=status.HTTP_400_BAD_REQUEST)
+
     loja = serializer.save(
         dono   = utilizador,
         estado = 'pendente',       # aguarda aprovação da plataforma (ativa=False por consequência)
         logo   = request.FILES.get('logo'),
         banner = request.FILES.get('banner'),
+        modelo_cobranca = modelo,
     )
+    if plano:
+        from ..utils import subscricoes
+        subscricoes.criar_para_loja_nova(loja, plano)     # arranca quando o admin aprovar a loja
 
     notificar_admins(
         tipo='loja_pendente',

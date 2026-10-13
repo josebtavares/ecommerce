@@ -211,6 +211,9 @@ def admin_loja_gerir(request, loja_id):
     motivo = (request.data.get('motivo') or '')[:300] if destino == 'suspensa' else ''
     canceladas = loja.mudar_estado(destino, motivo)
     _notificar_estado_loja(loja, acao, canceladas)
+    if acao == 'aprovar' and loja.modelo_cobranca == 'subscricao':
+        from ..utils import subscricoes
+        subscricoes.arrancar(loja)          # período de teste + primeira fatura
 
     pos_alterados = []
     if incluir_pos:
