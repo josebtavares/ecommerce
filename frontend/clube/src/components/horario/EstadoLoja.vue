@@ -16,13 +16,28 @@
     <Teleport to="body">
       <div v-if="aberto" class="estado-loja__painel" :style="posicao"
            role="dialog" aria-label="Horário da loja" @click.stop>
-        <p class="estado-loja__titulo">Horário</p>
-        <ul>
-          <li v-for="d in atual.semana" :key="d.dia" :class="{ 'is-hoje': d.dia === atual.hoje }">
-            <span class="estado-loja__dia">{{ d.nome }}<small v-if="d.dia === atual.hoje"> · hoje</small></span>
-            <span class="estado-loja__horas">{{ horasDoDia(d) }}</span>
-          </li>
-        </ul>
+        <p v-if="atual.aviso" class="estado-loja__aviso">{{ atual.aviso }}</p>
+        <template v-if="atual.semana?.length">
+          <p class="estado-loja__titulo">Horário</p>
+          <ul>
+            <li v-for="d in atual.semana" :key="d.dia" :class="{ 'is-hoje': d.dia === atual.hoje }">
+              <span class="estado-loja__dia">{{ d.nome }}<small v-if="d.dia === atual.hoje"> · hoje</small></span>
+              <span class="estado-loja__horas">{{ horasDoDia(d) }}</span>
+            </li>
+          </ul>
+        </template>
+        <template v-if="atual.excecoes?.length">
+          <p class="estado-loja__titulo estado-loja__titulo--sep">Dias especiais</p>
+          <ul>
+            <li v-for="e in atual.excecoes" :key="e.inicio">
+              <span class="estado-loja__dia">{{ e.texto.split(': ')[0] }}<small v-if="e.mensagem" class="estado-loja__msg"> · {{ e.mensagem }}</small></span>
+              <span class="estado-loja__horas">{{ e.texto.split(': ')[1] }}</span>
+            </li>
+          </ul>
+        </template>
+        <p v-if="atual.ultima_encomenda" class="estado-loja__nota">
+          Aceita encomendas até {{ atual.ultima_encomenda }} min antes de fechar.
+        </p>
         <p v-if="!atual.aberta" class="estado-loja__nota">
           <template v-if="atual.fora_horario === 'agendar' && atual.abre_em">
             Podes encomendar já — a loja prepara a tua encomenda quando abrir.
@@ -83,7 +98,9 @@ export default {
       const r = this.$refs.raiz.getBoundingClientRect()
       const largura = Math.min(LARGURA, window.innerWidth - 2 * MARGEM)
       const left = Math.max(MARGEM, Math.min(r.left, window.innerWidth - MARGEM - largura))
-      this.posicao = { top: `${r.bottom + 8}px`, left: `${left}px`, width: `${largura}px` }
+      // nunca passa do fundo do ecrã (com dias especiais o painel fica comprido) — o resto faz scroll
+      const altura = Math.max(180, window.innerHeight - r.bottom - 8 - MARGEM)
+      this.posicao = { top: `${r.bottom + 8}px`, left: `${left}px`, width: `${largura}px`, maxHeight: `${altura}px` }
       this.aberto = true
     },
 
@@ -126,7 +143,7 @@ export default {
 
 /* painel com cores próprias — legível em qualquer template */
 .estado-loja__painel {
-  position: fixed; z-index: 60; padding: 14px 16px; border-radius: 16px; background: #fff; color: #18181b;
+  position: fixed; z-index: 60; padding: 14px 16px; overflow-y: auto; overscroll-behavior: contain; border-radius: 16px; background: #fff; color: #18181b;
   text-align: left; box-shadow: 0 18px 40px rgba(0, 0, 0, .25); border: 1px solid #e4e4e7;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
@@ -137,5 +154,8 @@ export default {
 .estado-loja__painel li.is-hoje { font-weight: 700; }
 .estado-loja__dia small { font-weight: 600; color: #16a34a; }
 .estado-loja__horas { text-align: right; color: #3f3f46; }
+.estado-loja__titulo--sep { margin-top: 12px; }
+.estado-loja__aviso { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: #b45309; background: #fffbeb; border-radius: 10px; padding: 8px 10px; }
+.estado-loja__msg { font-weight: 500; color: #71717a; }
 .estado-loja__nota { margin: 10px 0 0; font-size: 12px; line-height: 1.4; color: #52525b; background: #fafafa; border-radius: 10px; padding: 8px 10px; }
 </style>

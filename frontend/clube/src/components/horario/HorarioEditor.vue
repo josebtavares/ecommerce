@@ -17,8 +17,8 @@
     </div>
 
     <div v-if="carregando" class="h-24 rounded-xl bg-zinc-800/50 animate-pulse"></div>
-
     <template v-else>
+      <PausaLoja :loja-id="lojaId" class="mb-4" @alterado="recarregarEstado" />
       <p v-if="!form.horario_ativo" class="text-sm text-zinc-400 bg-zinc-800/50 rounded-xl px-4 py-3 mb-4">
         Desligado — a loja está aberta 24 horas, todos os dias. Liga para definir o horário.
       </p>
@@ -98,6 +98,69 @@
             </span>
           </label>
         </div>
+
+        <!-- última encomenda -->
+        <label class="flex flex-wrap items-center gap-3 mt-5">
+          <span class="text-sm font-semibold text-zinc-200">Aceitar encomendas até</span>
+          <select v-model.number="form.ultima_encomenda" aria-label="Última encomenda"
+            class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+            <option v-for="o in ULTIMAS" :key="o.v" :value="o.v">{{ o.t }}</option>
+          </select>
+          <span class="text-xs text-zinc-500 w-full">Útil quando a cozinha fecha antes da porta — depois disso a loja conta como fechada para encomendas.</span>
+        </label>
+      </div>
+
+      <!-- dias especiais: feriados, férias, horário diferente (valem também sem horário) -->
+      <div class="mt-6 pt-5 border-t border-zinc-800">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <p class="text-sm font-semibold text-zinc-200">Dias especiais</p>
+            <p class="text-xs text-zinc-500 mt-0.5">Feriados, férias ou dias com outro horário. Mandam sobre o horário da semana.</p>
+          </div>
+          <button type="button" @click="adicionarExcecao" :disabled="form.excecoes.length >= 30" aria-label="Adicionar dia especial"
+            class="flex-shrink-0 text-xs font-semibold text-zinc-200 border border-zinc-700 hover:border-zinc-500 rounded-lg px-3 py-1.5 disabled:opacity-40">
+            + Adicionar
+          </button>
+        </div>
+        <p v-if="!form.excecoes.length" class="text-sm text-zinc-500 bg-zinc-800/40 rounded-xl px-4 py-3">Nenhum dia especial marcado.</p>
+        <div class="space-y-2">
+          <div v-for="(e, n) in form.excecoes" :key="n" class="rounded-xl border border-zinc-800 bg-zinc-800/30 p-3 space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="flex items-center gap-1.5 text-xs text-zinc-400">De
+                <input type="date" v-model="e.inicio" :min="hojeData" :aria-label="`Dia especial ${n + 1}: de`" @change="ajustarFim(e)"
+                  class="px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 [color-scheme:dark]" />
+              </label>
+              <label class="flex items-center gap-1.5 text-xs text-zinc-400">até
+                <input type="date" v-model="e.fim" :min="e.inicio" :aria-label="`Dia especial ${n + 1}: até`"
+                  class="px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 [color-scheme:dark]" />
+              </label>
+              <div class="flex rounded-lg border border-zinc-700 overflow-hidden ml-auto" role="radiogroup" :aria-label="`Dia especial ${n + 1}`">
+                <button type="button" role="radio" :aria-checked="!e.intervalos.length ? 'true' : 'false'" @click="e.intervalos = []"
+                  :class="['px-3 py-1.5 text-xs font-semibold', !e.intervalos.length ? 'bg-red-600 text-white' : 'text-zinc-400 hover:text-zinc-200']">Fechado</button>
+                <button type="button" role="radio" :aria-checked="e.intervalos.length ? 'true' : 'false'"
+                  @click="!e.intervalos.length && (e.intervalos = [{ abre: '09:00', fecha: '13:00' }])"
+                  :class="['px-3 py-1.5 text-xs font-semibold', e.intervalos.length ? 'bg-red-600 text-white' : 'text-zinc-400 hover:text-zinc-200']">Outro horário</button>
+              </div>
+              <button type="button" @click="form.excecoes.splice(n, 1)" :aria-label="`Remover dia especial ${n + 1}`"
+                class="w-8 h-8 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 text-lg leading-none">×</button>
+            </div>
+            <div v-if="e.intervalos.length" class="flex flex-wrap items-center gap-2">
+              <div v-for="(i, k) in e.intervalos" :key="k" class="flex items-center gap-1 rounded-lg bg-zinc-800 border border-zinc-700 pl-2 pr-1 py-1">
+                <input type="time" v-model="i.abre" :aria-label="`Dia especial ${n + 1}: abre`" class="bg-transparent text-sm text-zinc-100 focus:outline-none w-[6.75rem]" />
+                <span class="text-zinc-500 text-xs">–</span>
+                <input type="time" v-model="i.fecha" :aria-label="`Dia especial ${n + 1}: fecha`" class="bg-transparent text-sm text-zinc-100 focus:outline-none w-[6.75rem]" />
+                <button v-if="e.intervalos.length > 1" type="button" @click="e.intervalos.splice(k, 1)" aria-label="Remover intervalo"
+                  class="w-6 h-6 rounded-md text-zinc-500 hover:text-red-400 hover:bg-zinc-700 leading-none">×</button>
+              </div>
+              <button v-if="e.intervalos.length < MAX" type="button" @click="adicionarIntervalo({ intervalos: e.intervalos })"
+                class="text-xs font-semibold text-zinc-400 hover:text-zinc-100 px-2 py-1.5 rounded-lg hover:bg-zinc-800">+ intervalo</button>
+            </div>
+            <input v-model="e.mensagem" maxlength="120" :aria-label="`Dia especial ${n + 1}: mensagem`"
+              placeholder="Mensagem para os clientes (opcional) — ex.: Férias, voltamos dia 16"
+              class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500" />
+            <p v-if="avisoDia({ intervalos: e.intervalos })" class="text-xs text-amber-400">{{ avisoDia({ intervalos: e.intervalos }) }}</p>
+          </div>
+        </div>
       </div>
 
       <!-- o cliente escolhe dia e hora (funciona também sem horário: qualquer hora do dia) -->
@@ -158,6 +221,7 @@
 
 <script>
 import api from '@/services/api'
+import PausaLoja from './PausaLoja.vue'
 
 const NOMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
 const MAX = 4
@@ -166,6 +230,11 @@ const REGRAS = [
     texto: 'O cliente encomenda e paga já; a encomenda aparece marcada para a hora em que a loja abre.' },
   { valor: 'bloquear', titulo: 'Não aceitar encomendas',
     texto: 'O cliente pode ver a loja e encher o carrinho, mas só encomenda com a loja aberta.' },
+]
+const ULTIMAS = [
+  { v: 0, t: 'à hora de fechar' }, { v: 15, t: '15 min antes de fechar' }, { v: 30, t: '30 min antes de fechar' },
+  { v: 45, t: '45 min antes de fechar' }, { v: 60, t: '1 hora antes de fechar' }, { v: 90, t: '1h30 antes de fechar' },
+  { v: 120, t: '2 horas antes de fechar' },
 ]
 const ANTECEDENCIAS = [
   { v: 0, t: 'Nenhuma' }, { v: 15, t: '15 minutos' }, { v: 30, t: '30 minutos' }, { v: 60, t: '1 hora' },
@@ -177,14 +246,15 @@ function copia (dias) { return JSON.parse(JSON.stringify(dias)) }
 
 export default {
   name: 'HorarioEditor',
+  components: { PausaLoja },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['guardado'],
 
   data () {
     return {
-      NOMES, MAX, REGRAS, ANTECEDENCIAS,
+      NOMES, MAX, REGRAS, ANTECEDENCIAS, ULTIMAS, hojeData: '',
       carregando: true, aGuardar: false, guardado: false, erro: '',
-      form: { horario_ativo: false, fora_horario: 'agendar', dias: [], agendamento: { ativo: false, intervalo: 30, dias: 7, antecedencia: 30 } },
+      form: { horario_ativo: false, fora_horario: 'agendar', dias: [], agendamento: { ativo: false, intervalo: 30, dias: 7, antecedencia: 30 }, ultima_encomenda: 0, excecoes: [] },
       original: '', estado: null, fuso: '', agora: '', hoje: null,
     }
   },
@@ -219,12 +289,15 @@ export default {
         fora_horario:  data.fora_horario,
         dias: data.dias.map(d => ({ dia: d.dia, intervalos: d.intervalos.map(i => ({ ...i })) })),
         agendamento: { ...data.agendamento },
+        ultima_encomenda: data.ultima_encomenda || 0,
+        excecoes: (data.excecoes || []).map(e => ({ ...e, mensagem: e.mensagem || '', intervalos: (e.intervalos || []).map(i => ({ ...i })) })),
       }
       this.original = JSON.stringify(this.form)
       this.estado = data.estado
       this.fuso = data.fuso
       this.agora = data.agora
       this.hoje = data.hoje
+      this.hojeData = new Date().toISOString().slice(0, 10)
     },
 
     alternarDia (d) {
@@ -243,6 +316,19 @@ export default {
       const h = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
       d.intervalos.push({ abre: h(ini), fecha: h(Math.min(ini + 120, 23 * 60 + 59)) })
     },
+
+    // depois de "Fechar agora"/"Reabrir": actualiza o "Agora: …" sem mexer no que está por gravar
+    async recarregarEstado () {
+      try {
+        const { data } = await api.get(`/app/loja/${this.lojaId}/horario/`)
+        this.estado = data.estado
+      } catch (e) { /* fica o anterior */ }
+    },
+    adicionarExcecao () {
+      const amanha = new Date(Date.now() + 864e5).toISOString().slice(0, 10)
+      this.form.excecoes.push({ inicio: amanha, fim: amanha, intervalos: [], mensagem: '' })
+    },
+    ajustarFim (e) { if (!e.fim || e.fim < e.inicio) e.fim = e.inicio },
 
     copiar (destinos) {
       const seg = this.form.dias[0]
@@ -272,6 +358,7 @@ export default {
         return
       }
       const aviso = this.form.dias.map(d => this.avisoDia(d) && `${NOMES[d.dia]}: ${this.avisoDia(d)}`).find(Boolean)
+        || this.form.excecoes.map(e => (!e.inicio ? 'Dia especial: escolhe a data.' : this.avisoDia(e) && `Dia especial ${e.inicio.split('-').reverse().slice(0, 2).join('/')}: ${this.avisoDia(e)}`)).find(Boolean)
       if (aviso) { this.erro = aviso; return }
       this.aGuardar = true
       try {

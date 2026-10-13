@@ -1,6 +1,9 @@
 <template>
   <div class="space-y-5">
 
+    <!-- aberta/fechada + "Fechar agora" (cozinha cheia, imprevisto…) -->
+    <PausaLoja :loja-id="lojaId" />
+
     <!-- Filtros -->
     <div class="flex flex-wrap gap-2 items-center">
       <button v-for="s in statusFiltros" :key="s.value"
@@ -338,6 +341,7 @@
 import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
+import PausaLoja from '@/components/horario/PausaLoja.vue'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -352,6 +356,7 @@ const ESTADOS_BLOQUEADOS = ['concluido', 'cancelado', 'enviado']
 
 export default {
   name: 'BackofficeEncomendas',
+  components: { PausaLoja },
   props: { lojaId: [String, Number] },
 
   data () {

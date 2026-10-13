@@ -176,6 +176,7 @@ const ICONES = {
   novo_staff:               { icon: 'user-plus',           bg: 'bg-purple-500/20 text-purple-500' },
   avaliacao_recebida:       { icon: 'star',                bg: 'bg-yellow-500/20 text-yellow-500' },
   entrega_atribuida:        { icon: 'car-side',            bg: 'bg-blue-500/20 text-blue-500'     },
+  agendadas_hoje:           { icon: 'calendar-day',        bg: 'bg-sky-500/20 text-sky-500'       },
   entrega_cancelada:        { icon: 'circle-exclamation',  bg: 'bg-red-500/20 text-red-500'       },
   encomenda_paga:           { icon: 'credit-card',         bg: 'bg-green-500/20 text-green-500'   },
   encomenda_atualizada:     { icon: 'box',                 bg: 'bg-blue-500/20 text-blue-500'     },
