@@ -236,13 +236,24 @@ def fatura_payload(f):
             'estado': f.estado, 'estado_nome': f.get_estado_display(), 'vencimento': f.vencimento.isoformat(),
             'atrasada': f.estado == 'pendente' and f.vencimento < hoje(),
             'paga_em': f.paga_em.isoformat() if f.paga_em else None, 'metodo': f.metodo,
-            'metodo_nome': f.get_metodo_display() if f.metodo else '', 'notas': f.notas, 'loja_id': f.loja_id}
+            'metodo_nome': f.get_metodo_display() if f.metodo else '', 'notas': f.notas, 'loja_id': f.loja_id,
+            'loja_nome': f.loja.nome, 'paga': f.estado == 'paga'}
+
+
+def plano_em_curso(sub, d=None):
+    """O plano do período pago que está a decorrer (pode ser outro se o dono mudou de plano)."""
+    d = d or hoje()
+    f = sub.faturas.filter(estado='paga', periodo_inicio__lte=d, periodo_fim__gt=d).select_related('plano').order_by('-periodo_inicio').first()
+    return f.plano if f else None
 
 
 def subscricao_payload(sub):
     if not sub:
         return None
+    atual = plano_em_curso(sub)
     return {'id': sub.id, 'plano': plano_payload(sub.plano), 'preco': str(sub.preco), 'meses': sub.meses,
+            # mudou de plano a meio: o período em curso foi pago noutro plano (o novo começa em pago_ate)
+            'plano_em_curso': plano_payload(atual) if atual and atual.id != sub.plano_id else None,
             'estado': sub.estado, 'estado_nome': sub.get_estado_display(), 'inicio': sub.inicio.isoformat(),
             # último dia pago (pago_ate é o dia em que deixa de estar)
             'pago_ate': (sub.pago_ate - timedelta(days=1)).isoformat() if sub.pago_ate > sub.inicio else None,

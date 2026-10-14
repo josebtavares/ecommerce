@@ -11,16 +11,32 @@
         <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Como pagas à plataforma</p>
         <p class="text-2xl font-black text-zinc-100 mt-2">Comissão de {{ Number(dados.percentagem_comissao) }}% por venda</p>
         <p class="text-sm text-zinc-400 mt-1">Pagas só quando vendes. Não há mensalidade.</p>
-        <div v-if="dados.planos.length" class="mt-5 pt-5 border-t border-zinc-800">
+        <!-- pedido de mudança à espera da 1.ª fatura -->
+        <div v-if="dados.pedido" class="mt-5 rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
+          <p class="text-sm font-bold text-sky-200">Pediste para mudar para o plano {{ dados.pedido.plano.nome }}</p>
+          <p class="text-xs text-sky-200/80 mt-1">A subscrição começa quando pagares a 1.ª fatura. Até lá continuas em comissão.</p>
+          <div v-if="dados.pode_pagar" class="flex flex-wrap gap-2 mt-3">
+            <button v-if="dados.pedido.fatura" type="button" @click="pagar(dados.pedido.fatura)" :disabled="aPagar"
+              class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold">
+              Pagar {{ euros(dados.pedido.fatura.valor) }} e mudar já
+            </button>
+            <button type="button" @click="mudar({ acao: 'cancelar_pedido' })" :disabled="aGuardar"
+              class="px-4 py-2 rounded-xl border border-zinc-600 text-zinc-300 hover:text-white text-xs font-semibold">Cancelar pedido</button>
+          </div>
+        </div>
+        <div v-else-if="dados.planos.length" class="mt-5 pt-5 border-t border-zinc-800">
           <p class="text-sm font-semibold text-zinc-200">Preferes uma mensalidade, sem comissão nas vendas?</p>
           <div class="grid sm:grid-cols-3 gap-2 mt-3">
-            <div v-for="p in dados.planos" :key="p.id" class="rounded-xl border border-zinc-800 bg-zinc-800/40 p-3">
+            <div v-for="p in dados.planos" :key="p.id" class="rounded-xl border border-zinc-800 bg-zinc-800/40 p-3 flex flex-col">
               <p class="text-sm font-semibold text-zinc-100">{{ p.nome }}</p>
               <p class="text-lg font-black text-zinc-100">{{ euros(p.preco) }}</p>
-              <p class="text-[11px] text-zinc-500">{{ p.periodicidade_nome }}<template v-if="p.meses > 1"> · {{ euros(p.preco_mes) }}/mês</template></p>
+              <p class="text-[11px] text-zinc-500 flex-1">{{ p.periodicidade_nome }}<template v-if="p.meses > 1"> · {{ euros(p.preco_mes) }}/mês</template></p>
+              <button v-if="dados.pode_pagar && !dados.troca_livre_em" type="button" @click="pedirSubscricao(p)" :disabled="aGuardar"
+                class="mt-3 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-900 text-xs font-bold">Mudar para este plano</button>
             </div>
           </div>
-          <p class="text-xs text-zinc-500 mt-3">Para mudar, fala com a plataforma (em breve vais poder pedir aqui).</p>
+          <p v-if="dados.troca_livre_em" class="text-xs text-amber-300 mt-3">Mudaste de modelo há pouco tempo — podes mudar outra vez a partir de {{ data(dados.troca_livre_em) }}.</p>
+          <p v-else-if="!dados.pode_pagar" class="text-xs text-zinc-500 mt-3">Só o dono da loja pode mudar.</p>
         </div>
       </div>
 
@@ -35,7 +51,10 @@
           <div class="flex flex-wrap items-start gap-4">
             <div class="flex-1 min-w-0">
               <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">A tua subscrição</p>
-              <p class="text-2xl font-black text-zinc-100 mt-2">{{ sub.plano.nome }}
+              <p v-if="sub.plano_em_curso" class="text-2xl font-black text-zinc-100 mt-2">{{ sub.plano_em_curso.nome }}
+                <span class="block sm:inline text-sm font-semibold text-sky-300"><span class="hidden sm:inline">· </span>a partir de {{ data(diaSeguinte(sub.pago_ate)) }}: {{ sub.plano.nome }} ({{ euros(sub.preco) }})</span>
+              </p>
+              <p v-else class="text-2xl font-black text-zinc-100 mt-2">{{ sub.plano.nome }}
                 <span class="block sm:inline text-sm font-semibold text-zinc-400"><span class="hidden sm:inline">· </span>{{ euros(sub.preco) }} / {{ sub.meses === 1 ? 'mês' : sub.meses + ' meses' }}</span>
               </p>
               <p class="text-sm mt-1" :class="corEstadoTexto">{{ resumoEstado }}</p>
@@ -76,31 +95,71 @@
           </p>
         </div>
 
-        <!-- Faturas -->
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
-          <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Faturas</p>
-          <p v-if="!dados.faturas.length" class="text-sm text-zinc-500 px-6 pb-6">Ainda não há faturas.</p>
-          <div v-else class="divide-y divide-zinc-800">
-            <div v-for="f in dados.faturas" :key="f.id" class="px-6 py-4 flex flex-wrap items-center gap-3">
-              <div class="flex-1 min-w-[200px]">
-                <p class="text-sm font-semibold text-zinc-200">{{ f.descricao }}</p>
-                <p class="text-xs text-zinc-500">
-                  <template v-if="f.estado === 'paga'">Paga a {{ data(f.paga_em) }} · {{ f.metodo_nome }}</template>
-                  <template v-else-if="f.estado === 'pendente'">Vence a {{ data(f.vencimento) }}<span v-if="f.atrasada" class="text-red-400 font-semibold"> · em atraso</span></template>
-                  <template v-else>{{ f.notas || 'Anulada' }}</template>
-                </p>
-              </div>
-              <span class="text-sm font-bold text-zinc-100">{{ euros(f.valor) }}</span>
-              <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', corFatura(f)]">{{ f.atrasada ? 'Em atraso' : f.estado_nome }}</span>
-              <button v-if="f.estado === 'pendente' && dados.pode_pagar" type="button" @click="pagar(f)" :disabled="aPagar === f.id"
-                class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold">
-                {{ aPagar === f.id ? 'A pagar…' : 'Pagar ' + euros(f.valor) }}
-              </button>
-            </div>
+        <!-- Mudar: plano ou passar para comissão (só o dono) -->
+        <div v-if="dados.pode_pagar && ['teste', 'ativa', 'em_atraso'].includes(sub.estado)"
+             class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4">
+          <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Mudar</p>
+          <div v-if="sub.fim_agendado" class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-wrap items-center gap-3">
+            <p class="flex-1 text-sm text-amber-200">
+              A loja passa para <b>comissão ({{ Number(dados.percentagem_comissao) }}%)</b> a {{ data(sub.fim_agendado) }}, quando acaba o período pago.
+            </p>
+            <button type="button" @click="mudar({ acao: 'cancelar_comissao' })" :disabled="aGuardar"
+              class="px-3 py-1.5 rounded-lg border border-zinc-600 text-zinc-200 text-xs font-semibold">Ficar em subscrição</button>
           </div>
-          <p v-if="!dados.pode_pagar && Number(dados.por_pagar)" class="text-xs text-zinc-500 px-6 pb-4">Só o dono da loja pode pagar.</p>
+          <template v-else>
+            <div class="flex flex-wrap items-center gap-2">
+              <select v-model="novoPlano" aria-label="Novo plano"
+                class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+                <option :value="null" disabled>Mudar de plano…</option>
+                <option v-for="p in dados.planos.filter(p => p.id !== (sub.plano_seguinte || sub.plano).id)" :key="p.id" :value="p.id">
+                  {{ p.nome }} — {{ euros(p.preco) }} / {{ p.periodicidade_nome.toLowerCase() }}
+                </option>
+              </select>
+              <button type="button" @click="mudarPlano" :disabled="!novoPlano || aGuardar"
+                class="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white disabled:opacity-40 text-zinc-900 text-xs font-bold">Mudar de plano</button>
+            </div>
+            <p v-if="sub.plano_seguinte" class="text-xs text-sky-300">
+              A partir da próxima renovação passas para o plano <b>{{ sub.plano_seguinte.nome }}</b> ({{ euros(sub.plano_seguinte.preco) }}).
+            </p>
+            <p class="text-xs text-zinc-500">O plano novo vale a partir da próxima renovação — o que já pagaste não muda.</p>
+            <div class="pt-3 border-t border-zinc-800 flex flex-wrap items-center gap-3">
+              <p class="flex-1 text-sm text-zinc-400">Preferes voltar a pagar só quando vendes ({{ Number(dados.percentagem_comissao) }}% por venda)?</p>
+              <button v-if="!dados.troca_livre_em" type="button" @click="passarComissao" :disabled="aGuardar"
+                class="px-4 py-2 rounded-xl border border-zinc-600 text-zinc-200 hover:text-white text-xs font-semibold">Passar para comissão</button>
+              <p v-else class="text-xs text-amber-300">Podes mudar a partir de {{ data(dados.troca_livre_em) }}.</p>
+            </div>
+          </template>
         </div>
       </template>
+
+      <!-- Faturas (também o histórico de uma loja que voltou à comissão) -->
+      <div v-if="sub || dados.faturas.length" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+        <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Faturas</p>
+        <p v-if="!dados.faturas.length" class="text-sm text-zinc-500 px-6 pb-6">Ainda não há faturas.</p>
+        <div v-else class="divide-y divide-zinc-800">
+          <div v-for="f in dados.faturas" :key="f.id" class="px-6 py-4 flex flex-wrap items-center gap-3">
+            <div class="flex-1 min-w-[200px]">
+              <p class="text-sm font-semibold text-zinc-200">{{ f.descricao }}</p>
+              <p class="text-xs text-zinc-500">
+                <template v-if="f.estado === 'paga'">Paga a {{ data(f.paga_em) }} · {{ f.metodo_nome }}</template>
+                <template v-else-if="f.estado === 'pendente'">Vence a {{ data(f.vencimento) }}<span v-if="f.atrasada" class="text-red-400 font-semibold"> · em atraso</span></template>
+                <template v-else>{{ f.notas || 'Anulada' }}</template>
+              </p>
+            </div>
+            <span class="text-sm font-bold text-zinc-100">{{ euros(f.valor) }}</span>
+            <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', corFatura(f)]">{{ f.atrasada ? 'Em atraso' : f.estado_nome }}</span>
+            <button v-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Recibo da fatura ${f.id}`"
+              class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold">
+              <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Recibo
+            </button>
+            <button v-if="f.estado === 'pendente' && dados.pode_pagar" type="button" @click="pagar(f)" :disabled="aPagar === f.id"
+              class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold">
+              {{ aPagar === f.id ? 'A pagar…' : 'Pagar ' + euros(f.valor) }}
+            </button>
+          </div>
+        </div>
+        <p v-if="!dados.pode_pagar && Number(dados.por_pagar)" class="text-xs text-zinc-500 px-6 pb-4">Só o dono da loja pode pagar.</p>
+      </div>
 
       <p v-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
       <p v-if="aviso" class="text-sm text-green-400" role="status">{{ aviso }}</p>
@@ -110,6 +169,7 @@
 
 <script>
 import api from '@/services/api'
+import { gerarReciboSubscricao } from '@/utils/reciboSubscricao'
 
 export default {
   name: 'BackofficeSubscricao',
@@ -117,7 +177,7 @@ export default {
   emits: ['alterado'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false }
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, novoPlano: null }
   },
 
   computed: {
@@ -172,6 +232,39 @@ export default {
         this.aPagar = null
       }
     },
+    recibo (f) { gerarReciboSubscricao(f) },
+    diaSeguinte (s) { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) },
+
+    // trocas (POST /subscricao/mudar/) — as regras estão no servidor (utils/subscricoes.py)
+    async mudar (corpo, ok = '') {
+      this.erro = ''; this.aviso = ''
+      this.aGuardar = true
+      try {
+        const { data } = await api.post(`/app/loja/${this.lojaId}/subscricao/mudar/`, corpo)
+        this.dados = data
+        this.novoPlano = null
+        if (ok) this.aviso = ok
+        this.$emit('alterado')
+      } catch (e) {
+        this.erro = e.response?.data?.detail || 'Não foi possível mudar.'
+      } finally {
+        this.aGuardar = false
+      }
+    },
+    pedirSubscricao (p) {
+      if (!confirm(`Mudar para o plano ${p.nome} (${this.euros(p.preco)})?\n\nA subscrição começa quando pagares a 1.ª fatura — até lá continuas em comissão. Depois só podes voltar a mudar daqui a 3 meses.`)) return
+      this.mudar({ acao: 'subscricao', plano_id: p.id }, 'Pedido feito — paga a 1.ª fatura para começar.')
+    },
+    mudarPlano () {
+      const p = this.dados.planos.find(x => x.id === this.novoPlano)
+      if (!p || !confirm(`Mudar para o plano ${p.nome} (${this.euros(p.preco)})?\n\nVale a partir da próxima renovação.`)) return
+      this.mudar({ acao: 'plano', plano_id: p.id }, 'Plano mudado — vale a partir da próxima renovação.')
+    },
+    passarComissao () {
+      if (!confirm(`Passar para comissão (${Number(this.dados.percentagem_comissao)}% por venda)?\n\nContinuas em subscrição até ${this.data(this.sub.pago_ate)} (o que já pagaste não é devolvido). Depois só podes voltar a mudar daqui a 3 meses.`)) return
+      this.mudar({ acao: 'comissao' }, 'Agendado: passas para comissão no fim do período pago.')
+    },
+
     async mudarAuto () {
       this.aGuardar = true
       this.erro = ''
