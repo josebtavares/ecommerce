@@ -27,6 +27,7 @@ from .subscricoes import ErroFatura, _eur, hoje, mais_meses
 
 MESES_GRATIS_EXISTENTES = 1
 DIAS_APOS_COBERTURA = 30          # sai do plano Loja + POS → 30 dias até pagar o próprio plano
+DIAS_ENTRE_CARENCIAS = 90         # …mas só uma vez a cada 90 dias
 
 
 def _criar(pos, plano, dias=None, meses=None):
@@ -167,16 +168,27 @@ def sincronizar(sub, d=None):
         return cob
     if sub.coberta_por_id:
         loja_antes = sub.coberta_por.loja.nome if sub.coberta_por and sub.coberta_por.loja_id else 'a loja'
+        # os 30 dias só uma vez a cada 90: alternar a loja entre Loja + POS e Loja a cada renovação
+        # deixava o POS sempre sem pagar o seu plano
+        recente = sub.cobertura_fim_em and (d - sub.cobertura_fim_em).days < DIAS_ENTRE_CARENCIAS
         sub.coberta_por, sub.avisos = None, []
-        sub.pago_ate = max(sub.pago_ate, d + timedelta(days=DIAS_APOS_COBERTURA))
+        if recente:
+            sub.pago_ate = max(sub.pago_ate, d)
+        else:
+            sub.pago_ate = max(sub.pago_ate, d + timedelta(days=DIAS_APOS_COBERTURA))
+            sub.cobertura_fim_em = d
         sub.estado = 'teste' if (sub.teste_ate and d < sub.teste_ate) else 'ativa'
         sub.save()
         subs.reativar_pos(pos)
         ultimo = sub.pago_ate - timedelta(days=1)
-        subs._avisar_dono(pos, 'O POS deixou de estar incluído no plano da loja',
-                          f'O POS já não faz parte do plano da loja {loja_antes}. Continua grátis até {ultimo:%d/%m/%Y}'
-                          + (f' — depois passas a pagar o plano {sub.plano.nome}.' if sub.plano_id
-                             else ' — escolhe um plano em POS → Subscrição.'))
+        if sub.pago_ate > d:
+            texto = (f'O POS já não faz parte do plano da loja {loja_antes}. Continua grátis até {ultimo:%d/%m/%Y}'
+                     + (f' — depois passas a pagar o plano {sub.plano.nome}.' if sub.plano_id
+                        else ' — escolhe um plano em POS → Subscrição.'))
+        else:
+            texto = (f'O POS já não faz parte do plano da loja {loja_antes} e já teve 30 dias grátis há menos de 3 meses — '
+                     + (f'passa já ao plano {sub.plano.nome}.' if sub.plano_id else 'escolhe um plano em POS → Subscrição.'))
+        subs._avisar_dono(pos, 'O POS deixou de estar incluído no plano da loja', texto)
     return None
 
 

@@ -25,6 +25,17 @@ def _erro(msg, codigo=status.HTTP_400_BAD_REQUEST):
     return Response({'detail': msg}, status=codigo)
 
 
+def _inteiro(v):
+    """Um número inteiro vindo do pedido (7 ou "7"); 0 para o resto — True, 1.5, "abc", listas…"""
+    if isinstance(v, bool):
+        return 0
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and v.strip().lstrip('-').isdigit() and len(v.strip()) < 10:
+        return int(v)
+    return 0
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def planos_publicos(request):
@@ -335,10 +346,7 @@ def admin_oferecer(request, loja_id):
     if erro:
         return erro
     sub = get_object_or_404(Subscricao, loja_id=loja_id)
-    try:
-        meses = int(request.data.get('meses'))
-    except (TypeError, ValueError):
-        meses = 0
+    meses = _inteiro(request.data.get('meses'))
     if not 1 <= meses <= 12:
         return _erro('Oferece entre 1 e 12 meses.')
     try:
@@ -356,10 +364,7 @@ def admin_fatura_adiar(request, fatura_id):
     if erro:
         return erro
     fatura = get_object_or_404(FaturaSubscricao, id=fatura_id)
-    try:
-        dias = int(request.data.get('dias'))
-    except (TypeError, ValueError):
-        dias = 0
+    dias = _inteiro(request.data.get('dias'))
     if not 1 <= dias <= 60:
         return _erro('Adia entre 1 e 60 dias.')
     try:
@@ -469,10 +474,7 @@ def admin_pos_oferecer(request, pos_id):
     if erro:
         return erro
     sub = _sub_do_pos(pos_id)
-    try:
-        meses = int(request.data.get('meses'))
-    except (TypeError, ValueError):
-        meses = 0
+    meses = _inteiro(request.data.get('meses'))
     if not 1 <= meses <= 12:
         return _erro('Oferece entre 1 e 12 meses.')
     try:

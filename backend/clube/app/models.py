@@ -1586,6 +1586,8 @@ class Subscricao(models.Model):
     # POS: incluído no plano Loja + POS da loja ligada (a subscrição da loja). Enquanto estiver,
     # o POS não tem faturas próprias; quando deixa de estar, tem 30 dias para pagar o seu plano.
     coberta_por  = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='pos_cobertos')
+    # último dia em que o POS ganhou os 30 dias por deixar de estar incluído (só um a cada 90 dias)
+    cobertura_fim_em = models.DateField(null=True, blank=True)
     # avisos já enviados que não pertencem a uma fatura (POS sem plano: 'sp_d7', 'sp_fim'…)
     avisos       = models.JSONField(default=list, blank=True)
     data_criacao = models.DateTimeField(auto_now_add=True)
