@@ -117,6 +117,22 @@
           class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-bold transition flex-shrink-0">
           <font-awesome-icon :icon="['fas', 'store']" class="mr-1.5" />Reabrir loja
         </button>
+        <button v-if="suspensaPorSubscricao && permissoes.includes('ver_subscricao')" @click="activeSection = 'subscricao'"
+          class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex-shrink-0">
+          <font-awesome-icon :icon="['fas', 'credit-card']" class="mr-1.5" />Pagar subscrição
+        </button>
+      </div>
+
+      <!-- Subscrição em atraso / a vencer (a loja continua a funcionar) -->
+      <div v-if="avisoSub && avisoSub.tipo !== 'suspensa' && loja?.estado === 'ativa'" role="alert"
+           :class="['mx-4 lg:mx-6 mt-4 px-4 py-3 rounded-xl border text-sm flex flex-col sm:flex-row sm:items-center gap-3',
+                    avisoSub.tipo === 'atraso' ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-200']">
+        <font-awesome-icon :icon="['fas', avisoSub.tipo === 'atraso' ? 'triangle-exclamation' : 'clock']" class="w-4 h-4 flex-shrink-0 hidden sm:block" />
+        <p class="flex-1 min-w-0">{{ avisoSub.texto }}</p>
+        <button v-if="activeSection !== 'subscricao'" @click="activeSection = 'subscricao'"
+          class="px-4 py-2 rounded-lg bg-zinc-100 hover:bg-white text-zinc-900 text-xs font-bold transition flex-shrink-0">
+          Ver subscrição
+        </button>
       </div>
 
       <!-- Sem permissão -->
@@ -141,6 +157,7 @@
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
                                  :pode-fechar="podeFecharLoja" @updated="fetchLoja" />
         <BackofficeStaff         v-else-if="activeSection === 'staff'"         :loja-id="lojaId" />
+        <BackofficeSubscricao    v-else-if="activeSection === 'subscricao'"    :loja-id="lojaId" @alterado="fetchLoja" />
         <BackofficeTipos         v-else-if="activeSection === 'tipos'"         :loja-id="lojaId" />
         <BackofficeAvaliacoes    v-else-if="activeSection === 'avaliacoes'"    :loja-id="lojaId" />
         <BackofficeEntregas      v-else-if="activeSection === 'entregas'"      :loja-id="lojaId" :minha-role="role" />
@@ -168,6 +185,7 @@ import BackofficeEntregas       from './BackofficeEntregas.vue'
 import BackofficeCategorias     from './BackofficeCategorias.vue'
 import BackofficeTemplates       from './BackofficeTemplates.vue'
 import BackofficeMensagens      from './BackofficeMensagens.vue'
+import BackofficeSubscricao     from './BackofficeSubscricao.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 
@@ -177,15 +195,16 @@ const PERMISSOES = {
     'gerir_produtos','gerir_inventario','gerir_encomendas',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
+    'ver_subscricao','pagar_subscricao',
   ],
   gestor: [
     'ver_loja','editar_loja','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
-    'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
+    'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template', 'ver_subscricao',
   ],
   staff:        ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas'],
-  contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios'],
+  contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios','ver_subscricao'],
   condutor:     ['gerir_entregas'],
 }
 
@@ -202,11 +221,12 @@ const SECCOES = [
   { key: 'staff',         label: 'Staff',             icon: 'staff',     permissao: 'gerir_staff'      },
   { key: 'templates',     label: 'Templates',         icon: 'template',  permissao: 'gerir_template'   },
   { key: 'configuracoes', label: 'Configurações',     icon: 'settings',  permissao: 'editar_loja'      },
+  { key: 'subscricao',    label: 'Subscrição',        icon: 'card',      permissao: 'ver_subscricao'   },
 ]
 
 export default {
   name: 'BackofficeLayout',
-  components: {
+  components: { BackofficeSubscricao,
     BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas,
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
@@ -219,6 +239,7 @@ export default {
       loja:          null,
       seccaoEscolhida: false,
       aMudarEstado:  false,
+      avisoSub:      null,    // faixa da subscrição (em atraso / a vencer)
       loadingLoja:   true,
       activeSection: 'dashboard',
       sidebarAberta: false,
@@ -248,12 +269,20 @@ export default {
           titulo: 'Loja fechada',
           texto:  'Não aparece no site nem recebe encomendas novas. As encomendas em curso continuam a ser geridas aqui.',
         },
-        suspensa: {
+        suspensa: this.suspensaPorSubscricao ? {
+          icone: 'ban', classe: 'bg-red-500/10 border-red-500/30 text-red-300',
+          titulo: 'Loja suspensa — subscrição por pagar',
+          texto:  'Não aparece no site nem recebe encomendas novas. Paga a fatura em atraso e a loja volta logo, sem esperar pela plataforma.',
+        } : {
           icone: 'ban', classe: 'bg-red-500/10 border-red-500/30 text-red-300',
           titulo: 'Loja suspensa pela plataforma',
           texto:  'Não aparece no site nem recebe encomendas novas. As encomendas em curso continuam aqui. Contacta o suporte para a reactivar.',
         },
       })[this.loja?.estado] || {}
+    },
+    // suspensa automaticamente por falta de pagamento (utils/subscricoes.py MOTIVO_SUSPENSAO)
+    suspensaPorSubscricao () {
+      return this.loja?.estado === 'suspensa' && (this.loja.estado_motivo || '').startsWith('Subscrição por pagar')
     },
     currentNavItem () { return SECCOES.find(n => n.key === this.activeSection) },
     roleColor () {
@@ -297,11 +326,21 @@ export default {
       } finally { this.aMudarEstado = false }
     },
 
+    async fetchAvisoSub () {
+      const perms = PERMISSOES[this.loja?.minha_role] || []
+      if (this.loja?.modelo_cobranca !== 'subscricao' || !perms.includes('ver_subscricao')) { this.avisoSub = null; return }
+      try {
+        const { data } = await api.get(`/app/loja/${this.lojaId}/subscricao/`)
+        this.avisoSub = data.aviso
+      } catch (e) { this.avisoSub = null }
+    },
+
     async fetchLoja () {
       this.loadingLoja = true
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/backoffice/`)
         this.loja = data
+        this.fetchAvisoSub()
         // só escolhe a secção inicial na 1.ª carga (ou se a actual deixou de ser permitida) —
         // recarregar a loja depois de guardar não deve mudar de secção
         const permitidas = PERMISSOES[data.minha_role] || []

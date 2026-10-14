@@ -17,7 +17,7 @@ from django.db import close_old_connections
 from django.db.utils import OperationalError, ProgrammingError
 
 from app.models import ConversaoVideo, Galeria, Loja, Produto
-from app.utils import horarios, limpeza, video
+from app.utils import horarios, limpeza, subscricoes, video
 
 
 class Command(BaseCommand):
@@ -52,6 +52,7 @@ class Command(BaseCommand):
         while not self.parar:
             close_old_connections()
             self._avisos_horario()
+            self._ciclo_subscricoes()
             try:
                 apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
@@ -80,6 +81,18 @@ class Command(BaseCommand):
                 self.stdout.write(f'  {t.estado}: {t.erro[-300:] if t.erro else ""}')
 
         self.stdout.write('Worker de vídeo parado.')
+
+    def _ciclo_subscricoes(self):
+        """A cada 10 minutos: faturas, avisos, pagamento automático e suspensões (utils/subscricoes.py)."""
+        if time.monotonic() - getattr(self, '_ultimo_ciclo', -1e9) < 600:
+            return
+        self._ultimo_ciclo = time.monotonic()
+        try:
+            r = subscricoes.processar()
+            if any(r.values()):
+                self.stdout.write(f'  subscrições: {r}')
+        except Exception as e:          # um erro aqui não pode parar os vídeos
+            self.stderr.write(f'  subscrições: ciclo falhou: {e}')
 
     def _avisos_horario(self):
         """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py)."""

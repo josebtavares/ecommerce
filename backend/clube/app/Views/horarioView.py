@@ -163,21 +163,35 @@ def loja_vagas(request, loja_id):
 def admin_plataforma(request):
     """
     GET   /app/admin/plataforma/
-    PATCH /app/admin/plataforma/   { fuso_horario: 'Atlantic/Cape_Verde' }
+    PATCH /app/admin/plataforma/   { fuso_horario?: 'Atlantic/Cape_Verde', subscricao_dias_teste?: 30 }
     """
     erro = _exige_admin(request, 'gerir_plataforma')
     if erro:
         return erro
     cfg = ConfiguracaoPlataforma.atual()
     if request.method == 'PATCH':
-        nome = request.data.get('fuso_horario')
-        if not horarios.fuso_valido(nome):
+        dados = request.data
+        if 'fuso_horario' not in dados and 'subscricao_dias_teste' not in dados:
+            return Response({'detail': 'Nada para mudar.'}, status=status.HTTP_400_BAD_REQUEST)
+        if 'fuso_horario' in dados and not horarios.fuso_valido(dados.get('fuso_horario')):
             return Response({'detail': 'Fuso horário inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+        dias = None
+        if 'subscricao_dias_teste' in dados:
+            try:
+                dias = int(dados.get('subscricao_dias_teste'))
+            except (TypeError, ValueError):
+                dias = -1
+            if not 0 <= dias <= 365:
+                return Response({'detail': 'Dias de teste entre 0 e 365.'}, status=status.HTTP_400_BAD_REQUEST)
         cfg = ConfiguracaoPlataforma.objects.get_or_create(pk=1)[0]
-        cfg.fuso_horario = nome
+        if 'fuso_horario' in dados:
+            cfg.fuso_horario = dados['fuso_horario']
+        if dias is not None:
+            cfg.subscricao_dias_teste = dias
         cfg.save()
     hora = timezone.now().astimezone(horarios.fuso())
     return Response({
+        'subscricao_dias_teste': cfg.subscricao_dias_teste,
         'fuso_horario': cfg.fuso_horario,
         'hora_local':   hora.strftime('%d/%m/%Y %H:%M'),
         'utc_offset':   hora.strftime('%z'),

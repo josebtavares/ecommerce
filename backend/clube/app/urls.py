@@ -19,6 +19,7 @@ urlpatterns = [
     path('', include('app.Urls.categorialojaUrl')),
     path('', include('app.Urls.paginaUrl')),
     path('', include('app.Urls.favoritoUrl')),
+    path('', include('app.Urls.subscricaoUrl')),
     
 
     

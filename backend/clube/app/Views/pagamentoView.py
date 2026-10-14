@@ -104,7 +104,7 @@ def _registar_pagamento_aprovado(encomenda, metodo, referencia, valor):
     Comissao.registar(encomenda)
     
     # calcula valor da comissao para a mensagem
-    _perc = encomenda.loja.percentagem_comissao
+    _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
     _com  = (encomenda.valor_total * _perc / 100).quantize(Decimal('0.01'))
     _liq  = encomenda.valor_total - _com
  
@@ -118,14 +118,15 @@ def _registar_pagamento_aprovado(encomenda, metodo, referencia, valor):
         link=f'/loja/{encomenda.loja_id}/backoffice',
     )
  
-    # notifica admins — comissão registada
-    notificar_admins(
-        tipo='comissao_recebida',
-        titulo=f'Comissão registada — {encomenda.loja.nome}',
-        mensagem=f'Encomenda #{encomenda.id} · Total: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com}.',
-        loja=encomenda.loja,
-        link='/admin',
-    )
+    # notifica admins — comissão registada (as lojas em subscrição não pagam comissão)
+    if _com:
+        notificar_admins(
+            tipo='comissao_recebida',
+            titulo=f'Comissão registada — {encomenda.loja.nome}',
+            mensagem=f'Encomenda #{encomenda.id} · Total: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com}.',
+            loja=encomenda.loja,
+            link='/admin',
+        )
 
     # limpa carrinho
     _limpar_carrinho(encomenda)
@@ -387,8 +388,8 @@ def iniciar_pagamento_flutterwave(request):
     utilizador  = request.user.utilizador
     valor_total = float(encomenda.valor_total)
  
-    # calcular comissão
-    percentagem_comissao = float(loja.percentagem_comissao)
+    # calcular comissão (0 se a encomenda foi feita com a loja em subscrição → sem divisão)
+    percentagem_comissao = float(encomenda.percentagem_comissao_aplicavel)
     valor_comissao = round(valor_total * percentagem_comissao / 100, 2)
  
     # payload base

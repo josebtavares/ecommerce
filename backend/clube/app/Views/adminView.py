@@ -203,6 +203,13 @@ def admin_loja_gerir(request, loja_id):
             msg = f'Não é possível "{acao}" uma loja no estado "{loja.get_estado_display()}".'
         return Response({'detail': msg, 'estado': loja.estado}, status=status.HTTP_400_BAD_REQUEST)
 
+    # suspensa por falta de pagamento: reactivar aqui deixava a subscrição presa em "suspensa"
+    from ..utils.subscricoes import MOTIVO_SUSPENSAO
+    if acao == 'reativar' and loja.estado_motivo.startswith(MOTIVO_SUSPENSAO):
+        return Response({'detail': 'Esta loja foi suspensa por falta de pagamento da subscrição — vai a Subscrições '
+                                   'e marca a fatura como paga, adia-a ou oferece meses: a loja volta sozinha.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
     incluir_pos = request.data.get('incluir_pos') in (True, 'true', '1', 1) and acao in ('suspender', 'reativar')
     if incluir_pos:
         erro = _exige_admin(request, 'gerir_pos')
@@ -211,6 +218,9 @@ def admin_loja_gerir(request, loja_id):
     motivo = (request.data.get('motivo') or '')[:300] if destino == 'suspensa' else ''
     canceladas = loja.mudar_estado(destino, motivo)
     _notificar_estado_loja(loja, acao, canceladas)
+    if acao == 'aprovar' and loja.modelo_cobranca == 'subscricao':
+        from ..utils import subscricoes
+        subscricoes.arrancar(loja)          # período de teste + primeira fatura
 
     pos_alterados = []
     if incluir_pos:
@@ -276,6 +286,9 @@ def _bloqueios_eliminar_loja(loja):
     n = loja.comissoes.count()
     if n:
         razoes.append(f'{n} comissão(ões)')
+    n = loja.faturas_subscricao.count()
+    if n:
+        razoes.append(f'{n} fatura(s) de subscrição — registos financeiros nunca são apagados')
     n = ItemContaMesa.objects.filter(produto__loja=loja).count()
     if n:
         razoes.append(f'{n} venda(s) no POS com produtos desta loja')
@@ -320,6 +333,9 @@ def admin_loja_eliminar(request, loja_id):
     nome = loja.nome
     try:
         with transaction.atomic():
+            # subscrição que nunca cobrou nada (sem faturas): vai com a loja; com faturas já bloqueou acima
+            from ..models import Subscricao
+            Subscricao.objects.filter(loja=loja, faturas__isnull=True).delete()
             loja.delete()
     except (ProtectedError, RestrictedError) as e:
         # RestrictedError: produto usado num menu de outro POS (ComponenteConjuntoPOS)

@@ -138,12 +138,27 @@ def loja_create(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # como a plataforma vai ganhar com a loja: comissão (por defeito) ou subscrição com um plano
+    from ..utils.subscricoes import plano_ativo
+    modelo = request.data.get('modelo_cobranca') or 'comissao'
+    plano = None
+    if modelo not in ('comissao', 'subscricao'):
+        return Response({'modelo_cobranca': 'Escolhe comissão ou subscrição.'}, status=status.HTTP_400_BAD_REQUEST)
+    if modelo == 'subscricao':
+        plano = plano_ativo(request.data.get('plano_id'))
+        if not plano:
+            return Response({'plano_id': 'Escolhe um dos planos de subscrição.'}, status=status.HTTP_400_BAD_REQUEST)
+
     loja = serializer.save(
         dono   = utilizador,
         estado = 'pendente',       # aguarda aprovação da plataforma (ativa=False por consequência)
         logo   = request.FILES.get('logo'),
         banner = request.FILES.get('banner'),
+        modelo_cobranca = modelo,
     )
+    if plano:
+        from ..utils import subscricoes
+        subscricoes.criar_para_loja_nova(loja, plano)     # arranca quando o admin aprovar a loja
 
     notificar_admins(
         tipo='loja_pendente',
@@ -266,6 +281,11 @@ def loja_reabrir(request, id):
         return erro
     if loja.estado != 'fechada':
         return Response({'detail': f'Só uma loja fechada pelo dono pode ser reaberta (estado actual: {loja.get_estado_display()}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    # fechar a loja não serve para fugir à suspensão por falta de pagamento
+    from ..models import Subscricao
+    if loja.modelo_cobranca == 'subscricao' and Subscricao.objects.filter(loja=loja, estado='suspensa').exists():
+        return Response({'detail': 'A subscrição está por pagar — paga a fatura em atraso (Backoffice → Subscrição) e depois reabre a loja.'},
                         status=status.HTTP_400_BAD_REQUEST)
 
     loja.mudar_estado('ativa')

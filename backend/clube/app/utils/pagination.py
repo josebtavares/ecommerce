@@ -54,3 +54,19 @@ def paginar(request, qs, serializer_cls, limit_default=DEFAULT_LIMIT):
         'next_offset': offset + limit if has_more else None,
         'results'    : serializer.data,
     }), None
+
+def paginar_lista(request, itens, limit_default=DEFAULT_LIMIT):
+    """Como paginar(), mas para uma lista já montada (dicts). Devolve a Response (ou o erro 400)."""
+    try:
+        offset = max(int(request.GET.get('offset', 0)), 0)
+        limit  = min(int(request.GET.get('limit', limit_default)), MAX_LIMIT)
+        if limit <= 0:
+            raise ValueError
+    except ValueError:
+        return Response({'detail': 'offset/limit inválidos.'}, status=status.HTTP_400_BAD_REQUEST)
+    total = len(itens)
+    return Response({
+        'count'      : total,
+        'next_offset': offset + limit if offset + limit < total else None,
+        'results'    : itens[offset: offset + limit],
+    })

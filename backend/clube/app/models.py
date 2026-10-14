@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
@@ -53,6 +55,7 @@ class Utilizador(models.Model):
             'atender_suporte',   # chat: caixa "Suporte Bendi" (superchat)
             'moderar_chat',      # chat: denúncias e bloqueios
             'gerir_plataforma',  # definições do site (fuso horário)
+            'gerir_subscricoes', # planos, subscrições e faturas das lojas
         ],
         'moderador': [
             'ver_stats',
@@ -75,6 +78,7 @@ class Utilizador(models.Model):
             'gerir_pagamentos',
             'gerir_encomendas',
             'ver_pos',
+            'gerir_subscricoes',
         ],
     }
  
@@ -182,6 +186,11 @@ class Loja(models.Model):
     localizacao     = models.CharField(max_length=300, blank=True, default='')
     percentagem_iva = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     percentagem_comissao = models.DecimalField(max_digits=5, decimal_places=2, default=10.00, validators=[MinValueValidator(0), MaxValueValidator(100)],help_text='Percentagem de comissao cobrada pela plataforma')
+    # como a plataforma ganha com a loja: % por venda (comissão) ou mensalidade (subscrição — ver Subscricao)
+    MODELOS_COBRANCA = [('comissao', 'Comissão por venda'), ('subscricao', 'Subscrição')]
+    modelo_cobranca = models.CharField(max_length=10, choices=MODELOS_COBRANCA, default='comissao', db_default='comissao')
+    # última troca de modelo (o dono só pode trocar uma vez a cada 3 meses)
+    modelo_alterado_em = models.DateTimeField(null=True, blank=True)
 
     # Opções de entrega/levantamento
     entrega_ativa   = models.BooleanField(default=False)
@@ -324,6 +333,8 @@ class UtilizadorLoja(models.Model):
     PERMISSOES = {
         'dono': [
             'ver_loja',
+            'ver_subscricao',
+            'pagar_subscricao',
             'editar_loja',
             'apagar_loja',
             'gerir_staff',
@@ -340,6 +351,7 @@ class UtilizadorLoja(models.Model):
         ],
         'gestor': [
             'ver_loja',
+            'ver_subscricao',
             'editar_loja',
             'gerir_staff',
             'gerir_produtos',
@@ -361,6 +373,7 @@ class UtilizadorLoja(models.Model):
         ],
         'contabilista': [
             'ver_loja',
+            'ver_subscricao',
             'gerir_pagamentos',
             'ver_relatorios',
         ],
@@ -784,12 +797,21 @@ class Encomenda(models.Model):
     agendada_para   = models.DateTimeField(null=True, blank=True, db_index=True)
     agendamento_origem = models.CharField(max_length=10, choices=AGENDAMENTO_ORIGEM, blank=True,
                                           default='', db_default='')
+    # modelo de cobrança da loja quando a encomenda foi feita ('' = antiga → comissão)
+    modelo_cobranca = models.CharField(max_length=10, blank=True, default='', db_default='')
 
     class Meta:
         ordering = ['-data_criacao']
 
     def __str__(self):
         return f'Encomenda #{self.pk} — {self.comprador} @ {self.loja}'
+
+    @property
+    def percentagem_comissao_aplicavel(self):
+        """% de comissão desta encomenda: 0 se foi feita com a loja em subscrição."""
+        if (self.modelo_cobranca or 'comissao') == 'subscricao':
+            return Decimal('0')
+        return self.loja.percentagem_comissao
 
 
 class ItemEncomenda(models.Model):
@@ -870,6 +892,8 @@ class ExcecaoHorario(models.Model):
 class ConfiguracaoPlataforma(models.Model):
     """Definições globais do site (uma só linha — ConfiguracaoPlataforma.atual())."""
     fuso_horario     = models.CharField(max_length=64, default='Atlantic/Cape_Verde')
+    # dias grátis das lojas novas em subscrição (0 = paga desde a aprovação)
+    subscricao_dias_teste = models.PositiveSmallIntegerField(default=30, db_default=30)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -1091,6 +1115,8 @@ class Comissao(models.Model):
         ou quando encomenda.status = concluido (dinheiro).
         Evita duplicados com get_or_create.
         """
+        if (encomenda.modelo_cobranca or 'comissao') == 'subscricao':
+            return None, False          # loja em subscrição quando a encomenda foi feita → sem comissão
         loja = encomenda.loja
         percentagem   = loja.percentagem_comissao
         valor_comissao = (encomenda.valor_total * percentagem / 100).quantize(
@@ -1199,6 +1225,8 @@ class Notificacao(models.Model):
         ('entrega_atribuida',        'Entrega atribuída'),
         ('entrega_cancelada',        'Entrega cancelada'),
         ('agendadas_hoje',           'Encomendas agendadas para hoje'),
+        ('subscricao_fatura',        'Fatura da subscrição'),
+        ('subscricao_paga',          'Subscrição paga'),
         # Comprador
         ('encomenda_paga',           'Encomenda paga'),
         ('encomenda_enviada',        'Encomenda enviada'),
@@ -1490,3 +1518,97 @@ class Favorito(models.Model):
 
     def __str__(self):
         return f'{self.utilizador} ♥ {self.produto or self.loja}'
+
+
+# ══════════════════════════════════════════════════════════════
+# SUBSCRIÇÕES — a loja paga uma mensalidade em vez de comissão (utils/subscricoes.py)
+# ══════════════════════════════════════════════════════════════
+
+class PlanoSubscricao(models.Model):
+    """Planos gerais definidos pelo admin (mensal / trimestral / anual)."""
+    PERIODICIDADES = [('mensal', 'Mensal'), ('trimestral', 'Trimestral'), ('anual', 'Anual')]
+    MESES = {'mensal': 1, 'trimestral': 3, 'anual': 12}
+
+    nome          = models.CharField(max_length=80)
+    periodicidade = models.CharField(max_length=10, choices=PERIODICIDADES)
+    preco         = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    descricao     = models.CharField(max_length=300, blank=True, default='')
+    ativo         = models.BooleanField(default=True)
+    ordem         = models.PositiveSmallIntegerField(default=0)
+    data_criacao  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['ordem', 'preco']
+
+    @property
+    def meses(self):
+        return self.MESES[self.periodicidade]
+
+    def __str__(self):
+        return f'{self.nome} ({self.get_periodicidade_display()} · €{self.preco})'
+
+
+class Subscricao(models.Model):
+    """
+    A subscrição de uma loja (uma por loja). `preco` e `meses` ficam fixos no contrato — mudar
+    o preço do plano só vale para as lojas que o escolham depois (ou na renovação).
+    pago_ate = até quando a loja tem o serviço pago (ou o fim do período de teste).
+    """
+    ESTADOS = [
+        ('aguarda',   'Aguarda aprovação da loja'),
+        ('teste',     'Período de teste'),
+        ('ativa',     'Em dia'),
+        ('em_atraso', 'Em atraso'),
+        ('suspensa',  'Suspensa'),
+        ('cancelada', 'Cancelada'),
+    ]
+    # PROTECT: o histórico de faturas depende disto
+    loja         = models.OneToOneField(Loja, on_delete=models.PROTECT, related_name='subscricao')
+    plano        = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, related_name='subscricoes')
+    preco        = models.DecimalField(max_digits=10, decimal_places=2)
+    meses        = models.PositiveSmallIntegerField()
+    estado       = models.CharField(max_length=10, choices=ESTADOS, default='teste', db_index=True)
+    inicio       = models.DateField()
+    pago_ate     = models.DateField()               # exclusivo: o primeiro dia já não pago
+    teste_ate    = models.DateField(null=True, blank=True)   # exclusivo: fim do período grátis (vazio = sem teste)
+    auto_renovar = models.BooleanField(default=True)
+    # o dono pediu para passar a comissão: acontece neste dia (o fim do período pago)
+    fim_agendado = models.DateField(null=True, blank=True)
+    # o dono mudou de plano: vale a partir da renovação seguinte
+    plano_seguinte = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, null=True, blank=True, related_name='+')
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Subscrição {self.loja} · {self.plano.nome} · {self.estado} até {self.pago_ate}'
+
+
+class FaturaSubscricao(models.Model):
+    """Uma fatura por período. Registo financeiro — nunca se apaga (anula-se)."""
+    ESTADOS = [('pendente', 'Por pagar'), ('paga', 'Paga'), ('anulada', 'Anulada')]
+    METODOS = [('simulado', 'Pagamento simulado'), ('dinheiro', 'Dinheiro'), ('transferencia', 'Transferência'),
+               ('oferta', 'Oferta da plataforma'), ('outro', 'Outro')]
+
+    loja           = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='faturas_subscricao')
+    subscricao     = models.ForeignKey(Subscricao, on_delete=models.PROTECT, related_name='faturas')
+    plano          = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, related_name='faturas')
+    descricao      = models.CharField(max_length=200)
+    periodo_inicio = models.DateField()
+    periodo_fim    = models.DateField()           # exclusivo: o dia em que o período seguinte começa
+    valor          = models.DecimalField(max_digits=10, decimal_places=2)
+    estado         = models.CharField(max_length=10, choices=ESTADOS, default='pendente', db_index=True)
+    vencimento     = models.DateField()
+    paga_em        = models.DateTimeField(null=True, blank=True)
+    metodo         = models.CharField(max_length=15, choices=METODOS, blank=True, default='')
+    referencia     = models.CharField(max_length=100, blank=True, default='')
+    notas          = models.CharField(max_length=300, blank=True, default='')
+    # avisos já enviados ('d3', 'd0', 'atraso', 'a7'…, 'suspensa') — o worker não os repete
+    avisos         = models.JSONField(default=list, blank=True)
+    data_criacao   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-periodo_inicio', '-id']
+        indexes  = [models.Index(fields=['loja', 'estado'])]
+
+    def __str__(self):
+        return f'Fatura #{self.pk} — {self.loja} — {self.periodo_inicio}→{self.periodo_fim} — €{self.valor} ({self.estado})'

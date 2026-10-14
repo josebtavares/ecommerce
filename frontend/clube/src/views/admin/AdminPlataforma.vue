@@ -55,6 +55,24 @@
         <span v-if="guardado" class="text-sm text-green-400">Guardado.</span>
       </div>
     </div>
+
+    <!-- subscrições: dias grátis das lojas novas -->
+    <div v-if="!loading" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+      <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Subscrições — período de teste</h3>
+      <p class="text-xs text-zinc-500 mt-1 mb-4">
+        Dias grátis das lojas novas que escolhem subscrição, contados a partir da aprovação. 0 = pagam desde o primeiro dia.
+      </p>
+      <div class="flex flex-wrap items-center gap-3">
+        <input id="dias-teste" v-model.number="diasTeste" type="number" min="0" max="365" aria-label="Dias de teste"
+          class="w-28 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" />
+        <span class="text-sm text-zinc-400">dias</span>
+        <button type="button" @click="guardarTeste" :disabled="aGuardar || diasTeste === dados.subscricao_dias_teste"
+          class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition">
+          Guardar
+        </button>
+        <span v-if="guardadoTeste" class="text-sm text-green-400">Guardado.</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -77,7 +95,7 @@ export default {
   name: 'AdminPlataforma',
   data () {
     return { SUGESTOES, loading: true, aGuardar: false, guardado: false, erro: '',
-             dados: { fusos: [] }, escolhido: '', pesquisa: '' }
+             dados: { fusos: [] }, escolhido: '', pesquisa: '', diasTeste: 30, guardadoTeste: false }
   },
 
   computed: {
@@ -92,6 +110,7 @@ export default {
       const { data } = await api.get('/app/admin/plataforma/')
       this.dados = data
       this.escolhido = data.fuso_horario
+      this.diasTeste = data.subscricao_dias_teste
     } catch (e) {
       this.erro = e.response?.data?.detail || 'Não foi possível carregar as definições.'
     } finally {
@@ -102,6 +121,21 @@ export default {
   methods: {
     nome (fuso) { return SUGESTOES.find(s => s.fuso === fuso)?.nome || String(fuso || '').split('/').pop().replace(/_/g, ' ') },
     offset (z) { return z ? `${z.slice(0, 3)}:${z.slice(3)}` : '' },
+    async guardarTeste () {
+      this.erro = ''
+      this.guardadoTeste = false
+      this.aGuardar = true
+      try {
+        const { data } = await api.patch('/app/admin/plataforma/', { subscricao_dias_teste: this.diasTeste })
+        this.dados = { ...this.dados, ...data }
+        this.diasTeste = data.subscricao_dias_teste
+        this.guardadoTeste = true
+      } catch (e) {
+        this.erro = e.response?.data?.detail || 'Não foi possível guardar.'
+      } finally {
+        this.aGuardar = false
+      }
+    },
     async guardar () {
       this.erro = ''
       this.guardado = false

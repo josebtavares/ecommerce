@@ -404,7 +404,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
             except Exception:
                 pass
  
-            _perc = loja.percentagem_comissao
+            _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
             _com  = (encomenda.valor_total * _perc / 100).quantize(Decimal('0.01'))
             _liq  = encomenda.valor_total - _com
             notificar_staff(
@@ -416,7 +416,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 link=f'/loja/{loja.id}/backoffice',
             )
             try:
-                if encomenda.pagamento.referencia_transacao == 'dinheiro':
+                if _com and encomenda.pagamento.referencia_transacao == 'dinheiro':
                     notificar_admins(
                         tipo='comissao_recebida',
                         titulo=f'Comissão registada — {loja.nome}',

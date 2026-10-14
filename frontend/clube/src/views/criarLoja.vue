@@ -325,6 +325,9 @@
           </div>
         </div>
 
+        <!-- comissão ou subscrição -->
+        <EscolherCobranca v-model="cobranca" />
+
         <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4 flex items-start gap-3">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -475,6 +478,7 @@ import { iconeCategoria, iconePagamento } from '@/utils/icones'
 import { TEMPLATES, CATEGORIAS_FILTRO, getTemplatesSugeridos } from '@/config/lojaTemplates'
 import TemplateMiniPreview from '@/components/templates/TemplateMiniPreview.vue'
 import TemplatePreviewFrame from '@/components/templates/TemplatePreviewFrame.vue'
+import EscolherCobranca from '@/components/subscricao/EscolherCobranca.vue'
 import { DEMO_ID } from '@/utils/demoLoja'
 
 const TAG_STYLES = {
@@ -492,12 +496,13 @@ const TAG_STYLES = {
 
 export default {
   name: 'CriarLoja',
-  components: { TemplateMiniPreview, TemplatePreviewFrame },
+  components: { TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca },
 
   data () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
     return {
       step: 1,
+      cobranca: { modelo: 'comissao', plano_id: null },   // como a loja paga à plataforma
       loading: false,
       erro: '',
       sucesso: false,
@@ -608,6 +613,7 @@ export default {
       if (this.form.metodos_pagamento.length === 0) return false
       if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0) return false
       if (!this.form.entrega_ativa && !this.form.levantamento_ativo) return false
+      if (this.cobranca.modelo === 'subscricao' && !this.cobranca.plano_id) return false
       return true
     },
 
@@ -705,6 +711,8 @@ export default {
         fd.append('cor_primaria',       this.form.cor_primaria)
         fd.append('cor_secundaria',     this.form.cor_secundaria)
         fd.append('template_id',        this.form.template_id)
+        fd.append('modelo_cobranca',    this.cobranca.modelo)
+        if (this.cobranca.plano_id) fd.append('plano_id', this.cobranca.plano_id)
         fd.append('entrega_ativa',      this.form.entrega_ativa)
         fd.append('levantamento_ativo', this.form.levantamento_ativo)
         if (this.form.logo)   fd.append('logo',   this.form.logo)
