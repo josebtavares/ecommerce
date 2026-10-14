@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, views_variantes, views_conjuntos
+from . import views, views_variantes, views_conjuntos, views_subscricao
 
 urlpatterns = [
     # ── AUTENTICAÇÃO ─────────────────────────────────────────────────
@@ -10,6 +10,10 @@ urlpatterns = [
 
     # ── CONFIGURAÇÃO POS ──────────────────────────────────────────────
     path('meus/',                            views.pos_meus,            name='pos_meus'),
+    path('planos/',                          views_subscricao.planos_pos, name='pos_planos'),
+    path('<int:pos_id>/subscricao/',         views_subscricao.pos_subscricao, name='pos_subscricao'),
+    path('<int:pos_id>/subscricao/plano/',   views_subscricao.pos_subscricao_plano, name='pos_subscricao_plano'),
+    path('<int:pos_id>/subscricao/faturas/<int:fatura_id>/pagar/', views_subscricao.pos_fatura_pagar, name='pos_fatura_pagar'),
     path('criar/',                           views.pos_criar,           name='pos_criar'),
     path('<int:pos_id>/',                    views.pos_detalhe,         name='pos_detalhe'),
     path('<int:pos_id>/conectar-loja/',      views.pos_conectar_loja,   name='pos_conectar_loja'),

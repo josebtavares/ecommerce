@@ -8,6 +8,10 @@ Subscrições das lojas — a alternativa à comissão por venda.
 - As encomendas guardam o modelo da loja quando são feitas (Encomenda.modelo_cobranca) —
   as de subscrição não registam comissão (Comissao.registar).
 Fase 2 (worker): emitir as faturas seguintes, avisos, carência e suspensão automática.
+
+A subscrição pode ser de uma loja OU de um POS (Subscricao.alvo). O que é só dos POS
+(criação, mês grátis, escolher o plano) está em utils/subscricoes_pos.py; aqui ficam as
+peças comuns (faturas, pagar, avisos, acções do admin).
 """
 import calendar
 from datetime import date, timedelta
@@ -39,7 +43,7 @@ def mais_meses(d, n):
 
 def _descricao(plano, inicio, fim):
     ultimo = fim - timedelta(days=1)
-    return f'{plano.nome} — {inicio:%d/%m/%Y} a {ultimo:%d/%m/%Y}'
+    return f'{plano.nome if plano else "Subscrição"} — {inicio:%d/%m/%Y} a {ultimo:%d/%m/%Y}'
 
 
 def emitir_fatura(sub, inicio, vencimento=None):
@@ -50,7 +54,7 @@ def emitir_fatura(sub, inicio, vencimento=None):
     """
     fim = mais_meses(inicio, sub.meses)
     f = FaturaSubscricao.objects.create(
-        loja=sub.loja, subscricao=sub, plano=sub.plano, descricao=_descricao(sub.plano, inicio, fim),
+        loja_id=sub.loja_id, pos_id=sub.pos_id, subscricao=sub, plano=sub.plano, descricao=_descricao(sub.plano, inicio, fim),
         periodo_inicio=inicio, periodo_fim=fim, valor=sub.preco, vencimento=vencimento or inicio,
     )
     if not f.valor:
@@ -118,9 +122,9 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
     fatura = FaturaSubscricao.objects.select_for_update().get(pk=fatura.pk)
     if fatura.estado != 'pendente':
         raise ErroFatura('Esta fatura já não está por pagar.')
-    loja = Loja.objects.select_for_update().get(pk=fatura.loja_id)
+    loja = Loja.objects.select_for_update().get(pk=fatura.loja_id) if fatura.loja_id else None
 
-    ativacao = sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao'
+    ativacao = bool(loja) and sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao'
     if ativacao:
         # o período conta a partir do dia em que paga (não do dia em que pediu)
         fatura.periodo_inicio, fatura.periodo_fim = d, mais_meses(d, sub.meses)
@@ -144,17 +148,16 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
     if not avisar:
         return fatura
 
-    from ..Views.notificacaoView import notificar_staff, notificar_admins
-    notificar_staff(loja=loja, roles=['dono'], tipo='subscricao_paga',
-                    titulo=f'Subscrição paga — {fatura.descricao}',
-                    mensagem=(f'{_eur(fatura.valor)} recebidos. Pago até {sub.pago_ate - timedelta(days=1):%d/%m/%Y}.'
-                              + (' A loja passou para subscrição — as vendas deixam de pagar comissão.' if ativacao else '')
-                              + (' A loja foi reactivada.' if reativou else '')),
-                    link=f'/loja/{loja.id}/backoffice')
-    notificar_admins(tipo='subscricao_paga', titulo=f'Subscrição paga — {loja.nome}',
-                     mensagem=f'Fatura #{fatura.id} · {_eur(fatura.valor)} · {fatura.get_metodo_display()}.'
-                              + (' Passou de comissão para subscrição.' if ativacao else ''),
-                     loja=loja, link='/admin')
+    alvo = sub.alvo
+    _avisar_dono(alvo, f'Subscrição paga — {fatura.descricao}',
+                 f'{_eur(fatura.valor)} recebidos. Pago até {sub.pago_ate - timedelta(days=1):%d/%m/%Y}.'
+                 + (' A loja passou para subscrição — as vendas deixam de pagar comissão.' if ativacao else '')
+                 + ((' A loja foi reactivada.' if loja else ' O POS foi reactivado.') if reativou else ''),
+                 tipo='subscricao_paga')
+    _avisar_admins(alvo, f'Subscrição paga — {nome_alvo(alvo)}',
+                   f'Fatura #{fatura.id} · {_eur(fatura.valor)} · {fatura.get_metodo_display()}.'
+                   + (' Passou de comissão para subscrição.' if ativacao else ''),
+                   tipo='subscricao_paga')
     return fatura
 
 
@@ -173,6 +176,14 @@ def _reavaliar(sub, d=None):
         era_suspensa = sub.estado == 'suspensa'
         sub.estado = 'teste' if (sub.teste_ate and d < sub.teste_ate) else 'ativa'
         sub.save(update_fields=['estado', 'data_atualizacao'])
+        if sub.pos_id:
+            from ..pos.models import ConfiguracaoPOS
+            pos = ConfiguracaoPOS.objects.get(pk=sub.pos_id)
+            if era_suspensa and pos.suspenso and pos.suspenso_motivo.startswith(MOTIVO_SUSPENSAO):
+                pos.suspenso, pos.suspenso_motivo, pos.suspenso_em = False, '', None
+                pos.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em'])
+                reativou = True
+            return reativou
         loja = Loja.objects.get(pk=sub.loja_id)
         if era_suspensa and loja.estado == 'suspensa' and loja.estado_motivo.startswith(MOTIVO_SUSPENSAO):
             loja.mudar_estado('ativa')
@@ -184,11 +195,9 @@ def _reavaliar(sub, d=None):
 
 
 def _avisar_fatura(fatura, nova=False):
-    from ..Views.notificacaoView import notificar_staff
-    notificar_staff(loja=fatura.loja, roles=['dono'], tipo='subscricao_fatura',
-                    titulo=f'Nova fatura da subscrição — {_eur(fatura.valor)}' if nova else f'Fatura por pagar — {_eur(fatura.valor)}',
-                    mensagem=f'{fatura.descricao}. Vence a {fatura.vencimento:%d/%m/%Y}.',
-                    link=f'/loja/{fatura.loja_id}/backoffice')
+    _avisar_dono(fatura.alvo,
+                 f'Nova fatura da subscrição — {_eur(fatura.valor)}' if nova else f'Fatura por pagar — {_eur(fatura.valor)}',
+                 f'{fatura.descricao}. Vence a {fatura.vencimento:%d/%m/%Y}.')
 
 
 # ── Mudar o modelo (admin) ────────────────────────────────────
@@ -238,7 +247,8 @@ def mudar_modelo(loja, modelo, plano=None):
 # ── Payloads ──────────────────────────────────────────────────
 
 def plano_payload(p):
-    return {'id': p.id, 'nome': p.nome, 'periodicidade': p.periodicidade, 'periodicidade_nome': p.get_periodicidade_display(),
+    return {'id': p.id, 'nome': p.nome, 'tipo': p.tipo, 'tipo_nome': p.get_tipo_display(),
+            'periodicidade': p.periodicidade, 'periodicidade_nome': p.get_periodicidade_display(),
             'meses': p.meses, 'preco': str(p.preco), 'preco_mes': str((p.preco / p.meses).quantize(Decimal('0.01'))),
             'descricao': p.descricao, 'ativo': p.ativo, 'ordem': p.ordem}
 
@@ -250,7 +260,7 @@ def fatura_payload(f):
             'atrasada': f.estado == 'pendente' and f.vencimento < hoje(),
             'paga_em': f.paga_em.isoformat() if f.paga_em else None, 'metodo': f.metodo,
             'metodo_nome': f.get_metodo_display() if f.metodo else '', 'notas': f.notas, 'loja_id': f.loja_id,
-            'loja_nome': f.loja.nome, 'paga': f.estado == 'paga'}
+            'pos_id': f.pos_id, 'loja_nome': nome_alvo(f.alvo), 'paga': f.estado == 'paga'}
 
 
 def plano_em_curso(sub, d=None):
@@ -264,7 +274,8 @@ def subscricao_payload(sub):
     if not sub:
         return None
     atual = plano_em_curso(sub)
-    return {'id': sub.id, 'plano': plano_payload(sub.plano), 'preco': str(sub.preco), 'meses': sub.meses,
+    return {'id': sub.id, 'plano': plano_payload(sub.plano) if sub.plano_id else None,
+            'preco': str(sub.preco), 'meses': sub.meses,
             # mudou de plano a meio: o período em curso foi pago noutro plano (o novo começa em pago_ate)
             'plano_em_curso': plano_payload(atual) if atual and atual.id != sub.plano_id else None,
             'estado': sub.estado, 'estado_nome': sub.get_estado_display(), 'inicio': sub.inicio.isoformat(),
@@ -277,8 +288,15 @@ def subscricao_payload(sub):
             'auto_renovar': sub.auto_renovar}
 
 
-def planos_ativos():
-    return list(PlanoSubscricao.objects.filter(ativo=True))
+def planos_ativos(tipos=('loja',)):
+    return list(PlanoSubscricao.objects.filter(ativo=True, tipo__in=tipos))
+
+
+def nome_alvo(alvo):
+    """Nome para mostrar: a loja ou "POS <nome> (<código>)"."""
+    if isinstance(alvo, Loja):
+        return alvo.nome
+    return f'POS {alvo.nome} ({alvo.codigo_pos})' if alvo else ''
 
 
 # ── Ciclo automático (worker: processar_videos, a cada 10 minutos) ───────────
@@ -292,15 +310,20 @@ def _marcar(fatura, chave):
     return True
 
 
-def _avisar_dono(loja, titulo, mensagem):
-    from ..Views.notificacaoView import notificar_staff
-    notificar_staff(loja=loja, roles=['dono'], tipo='subscricao_fatura', titulo=titulo, mensagem=mensagem,
-                    link=f'/loja/{loja.id}/backoffice')
+def _avisar_dono(alvo, titulo, mensagem, tipo='subscricao_fatura'):
+    """Notifica o dono da loja (backoffice) ou do POS (painel do POS)."""
+    from ..Views.notificacaoView import notificar, notificar_staff
+    if isinstance(alvo, Loja):
+        notificar_staff(loja=alvo, roles=['dono'], tipo=tipo, titulo=titulo, mensagem=mensagem,
+                        link=f'/loja/{alvo.id}/backoffice')
+    else:
+        notificar(utilizador=alvo.dono, tipo=tipo, titulo=titulo, mensagem=mensagem, link='/pos/dashboard')
 
 
-def _avisar_admins(loja, titulo, mensagem):
+def _avisar_admins(alvo, titulo, mensagem, tipo='subscricao_fatura'):
     from ..Views.notificacaoView import notificar_admins
-    notificar_admins(tipo='subscricao_fatura', titulo=titulo, mensagem=mensagem, loja=loja, link='/admin')
+    notificar_admins(tipo=tipo, titulo=titulo, mensagem=mensagem,
+                     loja=alvo if isinstance(alvo, Loja) else None, link='/admin')
 
 
 def suspensao_em(fatura):
@@ -327,7 +350,7 @@ def processar(quando=None):
     for sub in subs_qs:
         try:
             with transaction.atomic():
-                _processar_uma(Subscricao.objects.select_for_update().select_related('loja', 'plano').get(pk=sub.pk), d, resumo)
+                _processar_uma(Subscricao.objects.select_for_update(of=('self',)).select_related('loja', 'plano').get(pk=sub.pk), d, resumo)
         except Exception as e:          # uma loja com problemas não pára as outras
             import logging
             logging.getLogger(__name__).exception('subscrição %s: %s', sub.pk, e)
@@ -551,6 +574,13 @@ def mudar_plano(loja, plano):
         raise ErroFatura('A loja não está numa subscrição activa.')
     if sub.fim_agendado:
         raise ErroFatura('A loja vai passar para comissão — cancela isso primeiro.')
+    return mudar_plano_sub(sub, plano)
+
+
+def mudar_plano_sub(sub, plano):
+    """O núcleo de mudar_plano (loja ou POS); `sub` já vem bloqueada, dentro de uma transacção."""
+    if sub.estado not in ('teste', 'ativa', 'em_atraso'):
+        raise ErroFatura('A subscrição não está activa.')
     if plano.id == sub.plano_id and not sub.plano_seguinte_id:
         raise ErroFatura('Já estás neste plano.')
     renovacao = sub.faturas.filter(estado='pendente', periodo_inicio=sub.pago_ate).first()
@@ -583,7 +613,7 @@ def oferecer(sub, meses, motivo=''):
         estado='anulada', notas='Anulada: meses oferecidos pela plataforma.')
     inicio, fim = sub.pago_ate, mais_meses(sub.pago_ate, meses)
     f = FaturaSubscricao.objects.create(
-        loja=sub.loja, subscricao=sub, plano=sub.plano, descricao=f'Oferta — {_descricao(sub.plano, inicio, fim)}',
+        loja_id=sub.loja_id, pos_id=sub.pos_id, subscricao=sub, plano=sub.plano, descricao=f'Oferta — {_descricao(sub.plano, inicio, fim)}',
         periodo_inicio=inicio, periodo_fim=fim, valor=0, estado='paga', vencimento=inicio, paga_em=timezone.now(),
         metodo='oferta', notas=(motivo or 'Oferta da plataforma')[:300], avisos=['emitida'])
     sub.pago_ate = fim
@@ -591,7 +621,7 @@ def oferecer(sub, meses, motivo=''):
         sub.fim_agendado = fim
     sub.save()
     _reavaliar(sub)
-    _avisar_dono(sub.loja, f'A plataforma ofereceu-te {meses} mês(es) de subscrição',
+    _avisar_dono(sub.alvo, f'A plataforma ofereceu-te {meses} mês(es) de subscrição',
                  f'Não pagas nada até {fim - timedelta(days=1):%d/%m/%Y}.' + (f' {motivo}' if motivo else ''))
     return f
 
@@ -607,7 +637,7 @@ def adiar(fatura, dias):
     fatura.avisos = [a for a in (fatura.avisos or []) if a in ('emitida',)]
     fatura.save(update_fields=['vencimento', 'avisos'])
     _reavaliar(fatura.subscricao)
-    _avisar_dono(fatura.loja, 'Tens mais prazo para pagar a subscrição',
+    _avisar_dono(fatura.alvo, 'Tens mais prazo para pagar a subscrição',
                  f'{fatura.descricao}: vence agora a {fatura.vencimento:%d/%m/%Y}.')
     return fatura
 
@@ -673,10 +703,13 @@ def resumo_periodo(inicio, fim):
     }
 
 
-def plano_ativo(valor):
-    """O plano activo com este id (vindo do pedido) ou None — nunca rebenta com lixo ('abc', None, listas)."""
+def plano_ativo(valor, tipos=('loja',)):
+    """
+    O plano activo com este id (vindo do pedido) e de um destes tipos, ou None — nunca rebenta
+    com lixo ('abc', None, listas). Uma loja não pode escolher um plano de POS e vice-versa.
+    """
     try:
         pid = int(valor)
     except (TypeError, ValueError):
         return None
-    return PlanoSubscricao.objects.filter(id=pid, ativo=True).first()
+    return PlanoSubscricao.objects.filter(id=pid, ativo=True, tipo__in=tipos).first()

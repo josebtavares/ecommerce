@@ -757,14 +757,27 @@ def pos_criar(request):
     if modo not in ['standalone', 'integrado', 'hibrido']:
         modo = 'standalone'
 
-    config = ConfiguracaoPOS.objects.create(nome=nome, dono=utilizador, modo='standalone')
-
+    # o plano do POS (subscrição) — obrigatório quando há planos de POS; sem planos, escolhe depois
+    from ..utils import subscricoes as subs
+    from ..utils import subscricoes_pos as subs_pos
+    plano = None
+    if subs.planos_ativos(('pos',)):
+        plano = subs.plano_ativo(request.data.get('plano_id'), tipos=('pos',))
+        if not plano:
+            return Response({'detail': 'Escolhe um plano para o POS.'}, status=status.HTTP_400_BAD_REQUEST)
+    loja = None
     if loja_id:
         loja = get_object_or_404(Loja, id=loja_id, dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
-        config.conectar_loja(loja, modo='hibrido' if modo == 'hibrido' else 'integrado')
-    else:
-        config.modo = 'standalone'
-        config.save(update_fields=['modo'])
+
+    with transaction.atomic():
+        # uma conta, um POS (a equipa entra nesse POS com os seus logins)
+        Utilizador.objects.select_for_update().get(pk=utilizador.pk)
+        if ConfiguracaoPOS.objects.filter(dono=utilizador).exists():
+            return Response({'detail': 'Esta conta já tem um POS.'}, status=status.HTTP_400_BAD_REQUEST)
+        config = ConfiguracaoPOS.objects.create(nome=nome, dono=utilizador, modo='standalone')
+        if loja:
+            config.conectar_loja(loja, modo='hibrido' if modo == 'hibrido' else 'integrado')
+        subs_pos.criar_para_pos_novo(config, plano)
 
     return Response(_pos_response(config), status=status.HTTP_201_CREATED)
 

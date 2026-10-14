@@ -119,6 +119,11 @@ def _ler_plano(dados, plano=None):
         if dados.get('periodicidade') not in PlanoSubscricao.MESES:
             return None, 'Periodicidade inválida (mensal, trimestral ou anual).'
         campos['periodicidade'] = dados['periodicidade']
+    if 'tipo' in dados or plano is None:
+        tipo = dados.get('tipo') or 'loja'
+        if tipo not in dict(PlanoSubscricao.TIPOS):
+            return None, 'Tipo inválido (loja, pos ou loja_pos).'
+        campos['tipo'] = tipo
     if 'preco' in dados or plano is None:
         try:
             preco = Decimal(str(dados.get('preco'))).quantize(Decimal('0.01'))
@@ -171,6 +176,8 @@ def admin_plano(request, plano_id):
         return _erro(msg)
     if 'periodicidade' in campos and campos['periodicidade'] != plano.periodicidade and plano.subscricoes.exists():
         return _erro('Este plano já tem lojas — cria um plano novo para mudar a periodicidade.')
+    if 'tipo' in campos and campos['tipo'] != plano.tipo and (plano.subscricoes.exists() or plano.faturas.exists()):
+        return _erro('Este plano já foi usado — cria um plano novo para outro tipo.')
     for k, v in campos.items():
         setattr(plano, k, v)
     plano.save()
@@ -217,12 +224,12 @@ def admin_faturas(request):
     erro = _exige_admin(request, 'gerir_subscricoes')
     if erro:
         return erro
-    qs = FaturaSubscricao.objects.select_related('loja', 'plano')
+    qs = FaturaSubscricao.objects.select_related('loja', 'pos', 'plano')
     if (request.GET.get('loja') or '').isdigit():
         qs = qs.filter(loja_id=int(request.GET['loja']))
     if request.GET.get('estado') in dict(FaturaSubscricao.ESTADOS):
         qs = qs.filter(estado=request.GET['estado'])
-    return paginar_lista(request, [{**subs.fatura_payload(f), 'loja_nome': f.loja.nome} for f in qs[:500]])
+    return paginar_lista(request, [subs.fatura_payload(f) for f in qs[:500]])
 
 
 @api_view(['POST'])

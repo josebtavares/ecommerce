@@ -1528,8 +1528,11 @@ class PlanoSubscricao(models.Model):
     """Planos gerais definidos pelo admin (mensal / trimestral / anual)."""
     PERIODICIDADES = [('mensal', 'Mensal'), ('trimestral', 'Trimestral'), ('anual', 'Anual')]
     MESES = {'mensal': 1, 'trimestral': 3, 'anual': 12}
+    # o que o plano cobre: a loja online, o POS, ou a loja e o POS ligado a ela
+    TIPOS = [('loja', 'Loja online'), ('pos', 'POS'), ('loja_pos', 'Loja + POS')]
 
     nome          = models.CharField(max_length=80)
+    tipo          = models.CharField(max_length=10, choices=TIPOS, default='loja', db_default='loja', db_index=True)
     periodicidade = models.CharField(max_length=10, choices=PERIODICIDADES)
     preco         = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     descricao     = models.CharField(max_length=300, blank=True, default='')
@@ -1550,9 +1553,10 @@ class PlanoSubscricao(models.Model):
 
 class Subscricao(models.Model):
     """
-    A subscrição de uma loja (uma por loja). `preco` e `meses` ficam fixos no contrato — mudar
-    o preço do plano só vale para as lojas que o escolham depois (ou na renovação).
-    pago_ate = até quando a loja tem o serviço pago (ou o fim do período de teste).
+    A subscrição de uma loja OU de um POS (uma por cada). `preco` e `meses` ficam fixos no
+    contrato — mudar o preço do plano só vale para quem o escolha depois (ou na renovação).
+    pago_ate = até quando o serviço está pago (ou o fim do período de teste).
+    Um POS pode estar sem plano (plano vazio) no período grátis — escolhe-o antes de acabar.
     """
     ESTADOS = [
         ('aguarda',   'Aguarda aprovação da loja'),
@@ -1563,8 +1567,11 @@ class Subscricao(models.Model):
         ('cancelada', 'Cancelada'),
     ]
     # PROTECT: o histórico de faturas depende disto
-    loja         = models.OneToOneField(Loja, on_delete=models.PROTECT, related_name='subscricao')
-    plano        = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, related_name='subscricoes')
+    loja         = models.OneToOneField(Loja, on_delete=models.PROTECT, related_name='subscricao', null=True, blank=True)
+    # CASCADE: um POS sem faturas apaga-se com a subscrição; com faturas, elas (PROTECT) impedem-no
+    pos          = models.OneToOneField('pos.ConfiguracaoPOS', on_delete=models.CASCADE, related_name='subscricao',
+                                        null=True, blank=True)
+    plano        = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, related_name='subscricoes', null=True, blank=True)
     preco        = models.DecimalField(max_digits=10, decimal_places=2)
     meses        = models.PositiveSmallIntegerField()
     estado       = models.CharField(max_length=10, choices=ESTADOS, default='teste', db_index=True)
@@ -1579,8 +1586,18 @@ class Subscricao(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [models.CheckConstraint(
+            check=models.Q(loja__isnull=False, pos__isnull=True) | models.Q(loja__isnull=True, pos__isnull=False),
+            name='subscricao_loja_ou_pos')]
+
+    @property
+    def alvo(self):
+        """A loja ou o POS desta subscrição."""
+        return self.loja if self.loja_id else self.pos
+
     def __str__(self):
-        return f'Subscrição {self.loja} · {self.plano.nome} · {self.estado} até {self.pago_ate}'
+        return f'Subscrição {self.alvo} · {self.plano.nome if self.plano_id else "sem plano"} · {self.estado} até {self.pago_ate}'
 
 
 class FaturaSubscricao(models.Model):
@@ -1589,9 +1606,11 @@ class FaturaSubscricao(models.Model):
     METODOS = [('simulado', 'Pagamento simulado'), ('dinheiro', 'Dinheiro'), ('transferencia', 'Transferência'),
                ('oferta', 'Oferta da plataforma'), ('outro', 'Outro')]
 
-    loja           = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='faturas_subscricao')
+    loja           = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='faturas_subscricao', null=True, blank=True)
+    pos            = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.PROTECT, related_name='faturas_subscricao',
+                                       null=True, blank=True)
     subscricao     = models.ForeignKey(Subscricao, on_delete=models.PROTECT, related_name='faturas')
-    plano          = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, related_name='faturas')
+    plano          = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, related_name='faturas', null=True, blank=True)
     descricao      = models.CharField(max_length=200)
     periodo_inicio = models.DateField()
     periodo_fim    = models.DateField()           # exclusivo: o dia em que o período seguinte começa
@@ -1610,5 +1629,9 @@ class FaturaSubscricao(models.Model):
         ordering = ['-periodo_inicio', '-id']
         indexes  = [models.Index(fields=['loja', 'estado'])]
 
+    @property
+    def alvo(self):
+        return self.loja if self.loja_id else self.pos
+
     def __str__(self):
-        return f'Fatura #{self.pk} — {self.loja} — {self.periodo_inicio}→{self.periodo_fim} — €{self.valor} ({self.estado})'
+        return f'Fatura #{self.pk} — {self.alvo} — {self.periodo_inicio}→{self.periodo_fim} — €{self.valor} ({self.estado})'
