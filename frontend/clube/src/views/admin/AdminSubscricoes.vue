@@ -210,7 +210,7 @@
               class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 disabled:opacity-50">
               <option value="loja">Loja online</option><option value="pos">POS</option><option value="loja_pos">Loja + POS</option>
             </select></label>
-          <p v-if="modal.form.tipo === 'loja_pos'" class="text-xs text-amber-300">Os planos Loja + POS ainda não aparecem às lojas — chegam na próxima fase.</p>
+          <p v-if="modal.form.tipo === 'loja_pos'" class="text-xs text-violet-300">Aparece às lojas: cobre a loja e o POS ligado a ela (o POS deixa de pagar o seu plano).</p>
           <div class="grid grid-cols-2 gap-3">
             <label class="block"><span class="text-xs text-zinc-500">Periodicidade</span>
               <select v-model="modal.form.periodicidade" :disabled="modal.plano && modal.plano.lojas > 0"
@@ -270,7 +270,7 @@
             <p class="text-sm text-zinc-300">Passar para subscrição — escolhe o plano:</p>
             <select v-model="modal.form.plano_id" aria-label="Plano" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100">
               <option :value="null" disabled>Escolhe um plano</option>
-              <option v-for="p in planos.filter(x => x.ativo && x.tipo === 'loja')" :key="p.id" :value="p.id">{{ p.nome }} — {{ euros(p.preco) }}</option>
+              <option v-for="p in planos.filter(x => x.ativo && x.tipo !== 'pos')" :key="p.id" :value="p.id">{{ p.nome }}{{ p.tipo === 'loja_pos' ? ' (Loja + POS)' : '' }} — {{ euros(p.preco) }}</option>
             </select>
             <p class="text-xs text-zinc-500">Sem período de teste: a primeira fatura vence hoje. As encomendas já feitas continuam a pagar comissão.</p>
           </div>

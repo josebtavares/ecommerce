@@ -13,8 +13,30 @@
         {{ dados.aviso.texto }}
       </p>
 
+      <!-- ═══ Incluído no plano Loja + POS da loja ligada ═══ -->
+      <div v-if="cob" class="rounded-[1.5rem] border border-slate-200 bg-white p-5 sm:p-6">
+        <div class="flex flex-wrap items-start gap-4">
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-black uppercase tracking-wider text-slate-400">Subscrição do POS</p>
+            <p class="mt-2 text-2xl font-black text-slate-950">Incluído no plano da loja</p>
+            <p class="mt-1 text-sm font-semibold text-slate-500">
+              A loja <span class="font-black text-slate-700">{{ cob.loja_nome }}</span> tem o plano
+              <span class="font-black text-slate-700">{{ cob.plano.nome }}</span> ({{ euros(cob.plano.preco) }} / {{ cob.plano.meses === 1 ? 'mês' : cob.plano.meses + ' meses' }}),
+              que cobre a loja e este POS. Não pagas o POS à parte.
+            </p>
+          </div>
+          <span :class="['rounded-full px-3 py-1 text-xs font-black', cob.estado === 'suspensa' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700']">
+            {{ cob.estado === 'suspensa' ? 'Loja suspensa' : 'Incluído' }}
+          </span>
+        </div>
+        <p class="mt-4 text-[11px] font-semibold text-slate-400">
+          As faturas são da loja: vês e pagas no backoffice da loja → Subscrição. Se desligares o POS da loja (ou a loja mudar
+          de plano), o POS fica 30 dias grátis e depois passa a ter o seu próprio plano.
+        </p>
+      </div>
+
       <!-- ═══ Estado ═══ -->
-      <div class="rounded-[1.5rem] border border-slate-200 bg-white p-5 sm:p-6">
+      <div v-else class="rounded-[1.5rem] border border-slate-200 bg-white p-5 sm:p-6">
         <div class="flex flex-wrap items-start gap-4">
           <div class="min-w-0 flex-1">
             <p class="text-xs font-black uppercase tracking-wider text-slate-400">Subscrição do POS</p>
@@ -89,7 +111,7 @@
       </div>
 
       <!-- ═══ Faturas ═══ -->
-      <div class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white">
+      <div v-if="!cob || dados.faturas.length" class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white">
         <p class="px-5 pb-3 pt-5 text-xs font-black uppercase tracking-wider text-slate-400 sm:px-6">Faturas</p>
         <p v-if="!dados.faturas.length" class="px-5 pb-6 text-sm font-semibold text-slate-500 sm:px-6">
           Ainda não há faturas.<template v-if="sub.plano && sub.estado === 'teste'"> A primeira chega 7 dias antes de acabar o período grátis.</template>
@@ -139,7 +161,8 @@ export default {
 
   computed: {
     sub () { return this.dados?.subscricao },
-    podeEscolher () { return this.sub && ['teste', 'ativa', 'em_atraso'].includes(this.sub.estado) },
+    cob () { return this.dados?.cobertura },
+    podeEscolher () { return this.sub && !this.cob && ['teste', 'ativa', 'em_atraso'].includes(this.sub.estado) },
     resumoEstado () {
       const s = this.sub
       if (!s) return ''

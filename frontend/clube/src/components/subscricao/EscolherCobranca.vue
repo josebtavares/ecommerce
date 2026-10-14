@@ -39,7 +39,8 @@
           <span v-if="modelValue.plano_id === p.id" class="w-2 h-2 rounded-full bg-red-500"></span>
         </span>
         <span class="flex-1 min-w-0">
-          <span class="block text-sm font-semibold text-zinc-100">{{ p.nome }} <span class="text-xs font-normal text-zinc-500">· {{ p.periodicidade_nome }}</span></span>
+          <span class="block text-sm font-semibold text-zinc-100">{{ p.nome }} <span class="text-xs font-normal text-zinc-500">· {{ p.periodicidade_nome }}</span>
+            <span v-if="p.tipo === 'loja_pos'" class="ml-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold text-violet-300">Inclui o POS</span></span>
           <span v-if="p.descricao" class="block text-xs text-zinc-500 truncate">{{ p.descricao }}</span>
         </span>
         <span class="text-right flex-shrink-0">
