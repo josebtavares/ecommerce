@@ -59,7 +59,12 @@
                 <span class="block sm:inline text-sm font-semibold text-zinc-400"><span class="hidden sm:inline">· </span>{{ euros(sub.preco) }} / {{ sub.meses === 1 ? 'mês' : sub.meses + ' meses' }}</span>
               </p>
               <p class="text-sm mt-1" :class="corEstadoTexto">{{ resumoEstado }}</p>
-              <p v-if="(sub.plano_em_curso || sub.plano).tipo === 'loja_pos'" class="text-xs mt-1 font-semibold text-violet-300">Plano Loja + POS: inclui o POS ligado à loja — o POS não paga à parte.</p>
+              <p v-if="(sub.plano_em_curso || sub.plano).tipo === 'loja_pos'" class="text-xs mt-1 font-semibold text-violet-300">
+                Plano Loja + POS:
+                <template v-if="posIncluidos.length">inclui o POS {{ posIncluidos.map(p => p.nome).join(', ') }} — o POS não paga à parte.</template>
+                <template v-else-if="(dados.pos_ligados || []).length">o POS ligado passa a estar incluído no início do período deste plano.</template>
+                <template v-else>inclui o POS quando ligares um POS a esta loja.</template>
+              </p>
             </div>
             <span :class="['px-3 py-1 rounded-full text-xs font-bold', corEstado]">{{ sub.estado_nome }}</span>
           </div>
@@ -183,6 +188,7 @@ export default {
   },
 
   computed: {
+    posIncluidos () { return (this.dados?.pos_ligados || []).filter(p => p.incluido) },
     sub () { return this.dados?.subscricao },
     resumoEstado () {
       const s = this.sub

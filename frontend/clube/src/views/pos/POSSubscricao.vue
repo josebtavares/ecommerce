@@ -110,6 +110,66 @@
         <p v-if="sub.plano" class="mt-2 text-xs font-semibold text-slate-400">O plano novo vale a partir da próxima renovação — o que já pagaste não muda.</p>
       </div>
 
+      <!-- ═══ Plano Loja + POS (a loja ligada é do mesmo dono) ═══ -->
+      <div v-if="loja && (cob || loja.planos_combo.length)" class="rounded-[1.5rem] border border-violet-200 bg-violet-50/40 p-5 sm:p-6">
+        <p class="text-xs font-black uppercase tracking-wider text-violet-500">Plano Loja + POS</p>
+
+        <!-- incluído: sair do plano -->
+        <template v-if="cob">
+          <p v-if="loja.plano_seguinte && loja.plano_seguinte.tipo === 'loja'" class="mt-2 text-sm font-bold text-slate-700">
+            Na próxima renovação a loja passa para o plano {{ loja.plano_seguinte.nome }}. A partir daí o POS fica 30 dias grátis e depois
+            {{ sub.plano ? `paga o plano ${sub.plano.nome} (${euros(sub.plano.preco)})` : 'precisa de um plano próprio' }}.
+          </p>
+          <template v-else>
+            <p class="mt-2 text-sm font-semibold text-slate-600">Queres pagar a loja e o POS em separado? Escolhe o plano da loja e o do POS — muda na próxima renovação da loja.</p>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="block"><span class="text-[11px] font-black uppercase tracking-wide text-slate-400">Plano da loja</span>
+                <select v-model="separar.loja" aria-label="Plano da loja" class="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700">
+                  <option :value="null" disabled>Escolhe…</option>
+                  <option v-for="p in loja.planos_loja" :key="p.id" :value="p.id">{{ p.nome }} — {{ euros(p.preco) }} / {{ p.periodicidade_nome.toLowerCase() }}</option>
+                </select></label>
+              <label class="block"><span class="text-[11px] font-black uppercase tracking-wide text-slate-400">Plano do POS</span>
+                <select v-model="separar.pos" aria-label="Plano do POS" class="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700">
+                  <option :value="null" disabled>Escolhe…</option>
+                  <option v-for="p in dados.planos" :key="p.id" :value="p.id">{{ p.nome }} — {{ euros(p.preco) }} / {{ p.periodicidade_nome.toLowerCase() }}</option>
+                </select></label>
+            </div>
+            <p v-if="!loja.planos_loja.length" class="mt-2 text-xs font-semibold text-slate-500">Ainda não há planos só de loja.</p>
+            <button type="button" @click="sairCombo" :disabled="aGuardar || !separar.loja || (dados.planos.length && !separar.pos)"
+              class="mt-3 h-10 rounded-xl bg-slate-950 px-4 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-40">Pagar em separado</button>
+          </template>
+        </template>
+
+        <!-- não incluído: passar a loja para Loja + POS -->
+        <template v-else>
+          <p v-if="loja.pedido" class="mt-2 text-sm font-bold text-slate-700">
+            Pediste o plano {{ loja.pedido.nome }} para a loja {{ loja.loja_nome }}. Paga a 1.ª fatura no backoffice da loja → Subscrição —
+            a partir daí a loja e o POS ficam num só plano.
+          </p>
+          <p v-else-if="loja.plano_seguinte && loja.plano_seguinte.tipo === 'loja_pos'" class="mt-2 text-sm font-bold text-slate-700">
+            Na próxima renovação a loja {{ loja.loja_nome }} passa para o plano {{ loja.plano_seguinte.nome }} — a partir daí o POS fica incluído.
+          </p>
+          <template v-else>
+            <p class="mt-2 text-sm font-semibold text-slate-600">
+              Junta a loja {{ loja.loja_nome }} e este POS num só plano.
+              <template v-if="loja.modelo === 'comissao'"> A loja está em comissão: passa para subscrição (sem comissão nas vendas) quando pagares a 1.ª fatura, que vence hoje, no backoffice da loja.</template>
+              <template v-else> Muda na próxima renovação da loja.</template>
+            </p>
+            <p v-if="loja.troca_livre_em" class="mt-2 text-xs font-bold text-amber-700">A loja só pode mudar de modelo a partir de {{ data(loja.troca_livre_em) }}.</p>
+            <div class="mt-3 grid gap-3 sm:grid-cols-3">
+              <div v-for="p in loja.planos_combo" :key="p.id" class="flex flex-col rounded-2xl border-2 border-violet-200 bg-white p-4">
+                <p class="text-sm font-black text-slate-950">{{ p.nome }}</p>
+                <p class="mt-1 text-xl font-black text-slate-950">{{ euros(p.preco) }}</p>
+                <p class="text-[11px] font-semibold text-slate-500">{{ p.periodicidade_nome }} · loja + POS</p>
+                <p v-if="p.descricao" class="mt-2 flex-1 text-xs text-slate-500">{{ p.descricao }}</p>
+                <button type="button" @click="passarCombo(p)" :disabled="aGuardar || !!loja.troca_livre_em"
+                  class="mt-3 h-10 rounded-xl bg-violet-600 text-xs font-black text-white hover:bg-violet-500 disabled:opacity-40">Passar para este</button>
+              </div>
+            </div>
+          </template>
+        </template>
+      </div>
+
       <!-- ═══ Faturas ═══ -->
       <div v-if="!cob || dados.faturas.length" class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white">
         <p class="px-5 pb-3 pt-5 text-xs font-black uppercase tracking-wider text-slate-400 sm:px-6">Faturas</p>
@@ -156,12 +216,13 @@ export default {
   emits: ['alterado'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false }
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, separar: { loja: null, pos: null } }
   },
 
   computed: {
     sub () { return this.dados?.subscricao },
     cob () { return this.dados?.cobertura },
+    loja () { return this.dados?.loja },
     podeEscolher () { return this.sub && !this.cob && ['teste', 'ativa', 'em_atraso'].includes(this.sub.estado) },
     resumoEstado () {
       const s = this.sub
@@ -226,6 +287,24 @@ export default {
       this.aGuardar = true
       await this.enviar(() => api.post(`/api/pos/${this.posId}/subscricao/plano/`, { plano_id: p.id }),
         this.sub.plano ? 'Plano mudado — vale a partir da próxima renovação.' : 'Plano escolhido.')
+      this.aGuardar = false
+    },
+    async passarCombo (p) {
+      const msg = this.loja.modelo === 'comissao'
+        ? `Passar a loja ${this.loja.loja_nome} para o plano ${p.nome} (${this.euros(p.preco)})?\n\nA loja deixa a comissão quando pagares a 1.ª fatura (vence hoje) no backoffice da loja. Depois só podes voltar a mudar daqui a 3 meses.`
+        : `Passar a loja ${this.loja.loja_nome} para o plano ${p.nome} (${this.euros(p.preco)})?\n\nVale a partir da próxima renovação da loja.`
+      if (!confirm(msg)) return
+      this.aGuardar = true
+      await this.enviar(() => api.post(`/api/pos/${this.posId}/subscricao/loja/`, { acao: 'combo', plano_id: p.id }),
+        this.loja.modelo === 'comissao' ? 'Pedido feito — paga a 1.ª fatura no backoffice da loja.' : 'Feito — muda na próxima renovação da loja.')
+      this.aGuardar = false
+    },
+    async sairCombo () {
+      if (!confirm('Pagar a loja e o POS em separado a partir da próxima renovação da loja?')) return
+      this.aGuardar = true
+      await this.enviar(() => api.post(`/api/pos/${this.posId}/subscricao/loja/`,
+        { acao: 'separar', plano_id: this.separar.loja, plano_pos_id: this.separar.pos }),
+        'Feito — a loja muda na próxima renovação; depois o POS tem 30 dias grátis.')
       this.aGuardar = false
     },
     async mudarAuto () {
