@@ -184,9 +184,26 @@
         </div>
       </section>
 
-      <!-- POS suspenso pela plataforma -->
+      <!-- faixa da subscrição (dono): grátis a acabar, em atraso… -->
       <section
-        v-if="posId && currentPOS?.suspenso"
+        v-if="posId && !isMembro && avisoSub && !currentPOS?.suspenso && activeTab !== 'subscricao'"
+        :class="['mb-5 flex flex-wrap items-center gap-3 rounded-[2rem] border p-4 shadow-sm',
+                 ['vence', 'sem_plano'].includes(avisoSub.tipo) ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50']"
+        role="alert"
+      >
+        <font-awesome-icon :icon="['fas', 'credit-card']" :class="['vence', 'sem_plano'].includes(avisoSub.tipo) ? 'text-amber-500' : 'text-red-500'" />
+        <p :class="['min-w-0 flex-1 text-sm font-bold', ['vence', 'sem_plano'].includes(avisoSub.tipo) ? 'text-amber-800' : 'text-red-700']">
+          {{ avisoSub.texto }}
+        </p>
+        <button type="button" @click="activeTab = 'subscricao'"
+          class="h-10 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800">
+          {{ avisoSub.tipo === 'sem_plano' ? 'Escolher plano' : 'Ver subscrição' }}
+        </button>
+      </section>
+
+      <!-- POS suspenso pela plataforma (a aba Subscrição continua aberta ao dono, para pagar) -->
+      <section
+        v-if="posId && currentPOS?.suspenso && !(activeTab === 'subscricao' && !isMembro)"
         class="rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center shadow-sm"
       >
         <font-awesome-icon :icon="['fas', 'ban']" class="text-3xl text-red-500" />
@@ -194,9 +211,19 @@
         <p class="mt-1 text-sm font-semibold text-red-700">
           {{ currentPOS.suspenso_motivo || 'Suspenso pela plataforma.' }}
         </p>
-        <p class="mt-3 text-xs font-semibold text-red-600/80">
+        <p v-if="suspensoPorSubscricao && !isMembro" class="mt-3 text-xs font-semibold text-red-600/80">
+          Paga a subscrição e o POS volta a funcionar logo.
+        </p>
+        <p v-else-if="suspensoPorSubscricao" class="mt-3 text-xs font-semibold text-red-600/80">
+          A subscrição do POS está por pagar. Fala com o responsável do POS.
+        </p>
+        <p v-else class="mt-3 text-xs font-semibold text-red-600/80">
           As vendas, mesas e produtos estão bloqueados até a suspensão ser levantada. Contacta o suporte da plataforma.
         </p>
+        <button v-if="suspensoPorSubscricao && !isMembro" type="button" @click="activeTab = 'subscricao'"
+          class="mt-4 h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800">
+          Pagar subscrição
+        </button>
       </section>
 
       <!-- Área principal -->
@@ -210,6 +237,7 @@
           :pos-id="posId"
           :permissoes="permissoes"
           :is-membro="isMembro"
+          @alterado="onSubscricaoAlterada"
         />
       </section>
 
@@ -245,20 +273,7 @@
             @click="abrirOnboarding"
             class="inline-flex h-12 items-center justify-center rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
           >
-            Escolher configuração
-          </button>
-
-          <button
-            type="button"
-            @click="criarPOS"
-            :disabled="creatingPos"
-            class="inline-flex h-12 items-center justify-center rounded-2xl bg-slate-100 px-6 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span v-if="!creatingPos">Criar standalone rápido</span>
-            <span v-else class="flex items-center gap-2">
-              <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-slate-900"></span>
-              A criar...
-            </span>
+            Escolher configuração e plano
           </button>
         </div>
       </section>
@@ -400,6 +415,7 @@ import POSPedidos from './POSPedidos.vue'
 import POSHistorico from './POSHistorico.vue'
 import POSProdutos from './POSProdutos.vue'
 import POSEquipa from './POSEquipa.vue'
+import POSSubscricao from './POSSubscricao.vue'
 import OnboardingModal from './components/OnboardingModal.vue'
 
 export default {
@@ -411,6 +427,7 @@ export default {
     POSHistorico,
     POSProdutos,
     POSEquipa,
+    POSSubscricao,
     OnboardingModal
   },
 
@@ -459,7 +476,11 @@ export default {
         { id: 'produtos', label: 'Produtos',  icon: 'box',             apenasNaoMembro: false },
         { id: 'historico',label: 'Histórico', icon: 'clock-rotate-left', apenasNaoMembro: false },
         { id: 'equipa',   label: 'Equipa',    icon: 'users',           apenasNaoMembro: true  },
+        { id: 'subscricao', label: 'Subscrição', icon: 'credit-card',  apenasNaoMembro: true  },
       ],
+
+      // faixa da subscrição (só o dono) — GET /api/pos/<id>/subscricao/
+      avisoSub: null,
 
       modoOptions: [
         {
@@ -521,8 +542,14 @@ export default {
         produtos: 'POSProdutos',
         historico:'POSHistorico',
         equipa:   'POSEquipa',
+        subscricao: 'POSSubscricao',
       }
       return map[this.activeTab] || 'POSMesas'
+    },
+
+    // suspenso por falta de pagamento (o dono paga na aba Subscrição e o POS volta logo)
+    suspensoPorSubscricao() {
+      return Boolean(this.currentPOS?.suspenso && (this.currentPOS.suspenso_motivo || '').startsWith('Subscrição por pagar'))
     },
 
     modoLabel() {
@@ -686,6 +713,28 @@ export default {
 
       this.showOnboardingModal = false
       this.componentRefreshKey += 1
+      this.carregarAvisoSub()
+    },
+
+    // ── SUBSCRIÇÃO ──────────────────────────────────────────────────
+    async carregarAvisoSub() {
+      if (this.isMembro || !this.posId) return
+      try {
+        const { data } = await api.get(`/api/pos/${this.posId}/subscricao/`)
+        this.avisoSub = data.aviso
+      } catch {
+        this.avisoSub = null
+      }
+    },
+
+    async onSubscricaoAlterada(dados) {
+      this.avisoSub = dados?.aviso || null
+      // pagou e a suspensão levantou: volta a ler o POS (desbloqueia as outras abas)
+      if (this.currentPOS?.suspenso && dados && !dados.suspenso) {
+        const { data } = await api.get(`/api/pos/${this.posId}/`)
+        this.currentPOS = data
+        localStorage.setItem('pos_selected', JSON.stringify(data))
+      }
     },
 
     // ── ONBOARDING ──────────────────────────────────────────────────
@@ -706,6 +755,7 @@ export default {
       try {
         const body = { nome: payload.nome || 'POS Principal', modo: payload.modo || 'standalone' }
         if (payload.loja_id) body.loja_id = payload.loja_id
+        if (payload.plano_id) body.plano_id = payload.plano_id
         const { data } = await api.post('/api/pos/criar/', body)
         this.setCurrentPOS(data)
       } catch (error) {
@@ -714,10 +764,6 @@ export default {
       } finally {
         this.creatingPos = false
       }
-    },
-
-    async criarPOS() {
-      await this.criarPOSComPayload({ nome: 'POS Principal', modo: 'standalone' })
     },
 
     // ── CONFIGURAÇÃO ────────────────────────────────────────────────

@@ -177,21 +177,21 @@
         <button type="button" @click="abrirPlano(null)" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold">+ Novo plano</button>
       </div>
       <div v-if="!planos.length && !carregando" class="text-center py-12 text-sm text-zinc-500 bg-zinc-900 rounded-2xl border border-zinc-800">
-        Ainda não há planos — sem planos activos as lojas só podem escolher comissão.
+        Ainda não há planos — sem planos activos as lojas só podem escolher comissão e os POS começam sem plano.
       </div>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div v-for="p in planos" :key="p.id" :class="['bg-zinc-900 rounded-2xl border p-4', p.ativo ? 'border-zinc-800' : 'border-zinc-800 opacity-60']">
           <div class="flex items-start justify-between gap-2">
             <div>
               <p class="text-sm font-bold text-zinc-100">{{ p.nome }}</p>
-              <p class="text-xs text-zinc-500">{{ p.periodicidade_nome }}<template v-if="!p.ativo"> · inactivo</template></p>
+              <p class="text-xs text-zinc-500"><span :class="['font-semibold', corTipo(p.tipo)]">{{ p.tipo_nome }}</span> · {{ p.periodicidade_nome }}<template v-if="!p.ativo"> · inactivo</template></p>
             </div>
             <button type="button" @click="abrirPlano(p)" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Editar</button>
           </div>
           <p class="text-2xl font-black text-zinc-100 mt-2">{{ euros(p.preco) }}</p>
           <p v-if="p.meses > 1" class="text-xs text-zinc-500">{{ euros(p.preco_mes) }}/mês</p>
           <p v-if="p.descricao" class="text-xs text-zinc-400 mt-2">{{ p.descricao }}</p>
-          <p class="text-xs text-zinc-500 mt-2">{{ p.lojas }} loja(s) neste plano</p>
+          <p class="text-xs text-zinc-500 mt-2">{{ p.lojas }} {{ p.tipo === 'pos' ? 'POS' : 'loja(s)' }} neste plano</p>
         </div>
       </div>
     </template>
@@ -205,6 +205,12 @@
         <template v-if="modal.tipo === 'plano'">
           <label class="block"><span class="text-xs text-zinc-500">Nome</span>
             <input v-model="modal.form.nome" maxlength="80" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" /></label>
+          <label class="block"><span class="text-xs text-zinc-500">Para</span>
+            <select v-model="modal.form.tipo" :disabled="modal.plano && modal.plano.lojas > 0"
+              class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 disabled:opacity-50">
+              <option value="loja">Loja online</option><option value="pos">POS</option><option value="loja_pos">Loja + POS</option>
+            </select></label>
+          <p v-if="modal.form.tipo === 'loja_pos'" class="text-xs text-amber-300">Os planos Loja + POS ainda não aparecem às lojas — chegam na próxima fase.</p>
           <div class="grid grid-cols-2 gap-3">
             <label class="block"><span class="text-xs text-zinc-500">Periodicidade</span>
               <select v-model="modal.form.periodicidade" :disabled="modal.plano && modal.plano.lojas > 0"
@@ -264,7 +270,7 @@
             <p class="text-sm text-zinc-300">Passar para subscrição — escolhe o plano:</p>
             <select v-model="modal.form.plano_id" aria-label="Plano" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100">
               <option :value="null" disabled>Escolhe um plano</option>
-              <option v-for="p in planos.filter(x => x.ativo)" :key="p.id" :value="p.id">{{ p.nome }} — {{ euros(p.preco) }}</option>
+              <option v-for="p in planos.filter(x => x.ativo && x.tipo === 'loja')" :key="p.id" :value="p.id">{{ p.nome }} — {{ euros(p.preco) }}</option>
             </select>
             <p class="text-xs text-zinc-500">Sem período de teste: a primeira fatura vence hoje. As encomendas já feitas continuam a pagar comissão.</p>
           </div>
@@ -352,9 +358,10 @@ export default {
 
     abrirPlano (p) {
       this.modal = { tipo: 'plano', plano: p, titulo: p ? `Editar "${p.nome}"` : 'Novo plano', botao: p ? 'Guardar' : 'Criar plano', erro: '', aGuardar: false,
-                     form: p ? { nome: p.nome, periodicidade: p.periodicidade, preco: p.preco, descricao: p.descricao, ativo: p.ativo }
-                             : { nome: '', periodicidade: 'mensal', preco: '', descricao: '', ativo: true } }
+                     form: p ? { nome: p.nome, tipo: p.tipo, periodicidade: p.periodicidade, preco: p.preco, descricao: p.descricao, ativo: p.ativo }
+                             : { nome: '', tipo: 'loja', periodicidade: 'mensal', preco: '', descricao: '', ativo: true } }
     },
+    corTipo (t) { return { loja: 'text-zinc-300', pos: 'text-sky-300', loja_pos: 'text-violet-300' }[t] || '' },
     abrirPagar (f) {
       this.modal = { tipo: 'pagar', fatura: f, titulo: `Marcar a fatura #${f.id} como paga`, botao: 'Marcar paga', erro: '', aGuardar: false,
                      form: { metodo: 'transferencia', notas: '' } }
@@ -397,7 +404,7 @@ export default {
       try {
         if (m.tipo === 'plano') {
           const corpo = { ...m.form }
-          if (m.plano && m.plano.lojas > 0) delete corpo.periodicidade
+          if (m.plano && m.plano.lojas > 0) { delete corpo.periodicidade; delete corpo.tipo }
           if (m.plano) await api.patch(`/app/admin/planos/${m.plano.id}/`, corpo)
           else await api.post('/app/admin/planos/', corpo)
           await this.carregarPlanos()

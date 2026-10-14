@@ -19,7 +19,7 @@ export async function gerarReciboSubscricao (f) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(22)
   doc.text('Bendi', mg, 24)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(113, 113, 122)
-  doc.text('Subscrição da loja na plataforma', mg, 30)
+  doc.text(f.pos_id ? 'Subscrição do POS na plataforma' : 'Subscrição da loja na plataforma', mg, 30)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(24, 24, 27)
   doc.text(`${titulo} nº ${f.id}`, pw - mg, 24, { align: 'right' })
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(113, 113, 122)
@@ -35,7 +35,7 @@ export async function gerarReciboSubscricao (f) {
     doc.text(String(valor), pw - mg, y, { align: 'right', maxWidth: pw - mg * 2 - 50 })
     y += 11
   }
-  linha('Loja', f.loja_nome || '—')
+  linha(f.pos_id ? 'POS' : 'Loja', f.loja_nome || '—')
   linha('Descrição', f.descricao)
   linha('Período', `${data(f.periodo_inicio)} a ${data(f.periodo_fim)}`)
   if (paga) {
@@ -52,7 +52,7 @@ export async function gerarReciboSubscricao (f) {
   // rodapé
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(161, 161, 170)
   const rodape = paga
-    ? 'Documento de quitação da mensalidade. As lojas em subscrição não pagam comissão sobre as vendas.'
+    ? (f.pos_id ? 'Documento de quitação da mensalidade do POS.' : 'Documento de quitação da mensalidade. As lojas em subscrição não pagam comissão sobre as vendas.')
     : 'Documento informativo — não serve de recibo.'
   doc.text(rodape, mg, 280, { maxWidth: pw - mg * 2 })
   if (f.metodo === 'simulado') doc.text('Pagamento simulado (ambiente de testes).', mg, 285)
