@@ -40,6 +40,7 @@ from app.models import (
     UtilizadorLoja,
     TipoProduto,
     CategoriaLoja,
+    Subscricao,
 )
 
 try:
@@ -757,17 +758,18 @@ def pos_criar(request):
     if modo not in ['standalone', 'integrado', 'hibrido']:
         modo = 'standalone'
 
-    # o plano do POS (subscrição) — obrigatório quando há planos de POS; sem planos, escolhe depois
+    # o plano do POS (subscrição) — obrigatório quando há planos de POS; sem planos, escolhe depois.
+    # Ligado a uma loja com o plano Loja + POS, não precisa: está incluído no plano da loja.
     from ..utils import subscricoes as subs
     from ..utils import subscricoes_pos as subs_pos
-    plano = None
-    if subs.planos_ativos(('pos',)):
-        plano = subs.plano_ativo(request.data.get('plano_id'), tipos=('pos',))
-        if not plano:
-            return Response({'detail': 'Escolhe um plano para o POS.'}, status=status.HTTP_400_BAD_REQUEST)
     loja = None
     if loja_id:
         loja = get_object_or_404(Loja, id=loja_id, dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
+    sub_loja = Subscricao.objects.select_related('loja', 'plano').filter(loja=loja).first() if loja else None
+    incluido = subs_pos.loja_cobre_pos(sub_loja)
+    plano = subs.plano_ativo(request.data.get('plano_id'), tipos=('pos',))      # opcional se incluído
+    if subs.planos_ativos(('pos',)) and not incluido and not plano:
+        return Response({'detail': 'Escolhe um plano para o POS.'}, status=status.HTTP_400_BAD_REQUEST)
 
     with transaction.atomic():
         # uma conta, um POS (a equipa entra nesse POS com os seus logins)
@@ -841,6 +843,8 @@ def pos_conectar_loja(request, pos_id):
         )
 
     pos.conectar_loja(loja, modo=modo)
+    from ..utils.subscricoes_pos import sincronizar_pos
+    sincronizar_pos(pos)          # a loja tem o plano Loja + POS → o POS passa a estar incluído
     loja.pos_ativo = True
     loja.save(update_fields=['pos_ativo'])
 
@@ -853,6 +857,8 @@ def pos_desconectar_loja(request, pos_id):
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     _bloquear_se_suspenso(pos)
     pos.desconectar_loja()
+    from ..utils.subscricoes_pos import sincronizar_pos
+    sincronizar_pos(pos)          # saiu do plano Loja + POS da loja → 30 dias até ao seu plano
     return Response({'detail': 'POS desconectado da loja', 'pos': _pos_response(pos)})
 
 

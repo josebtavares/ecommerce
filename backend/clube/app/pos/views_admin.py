@@ -296,6 +296,8 @@ def admin_pos_desligar_loja(request, pos_id):
 
     loja_nome = pos.loja_vinculada.nome
     pos.desconectar_loja()
+    from ..utils.subscricoes_pos import sincronizar_pos
+    sincronizar_pos(pos)          # se estava no plano Loja + POS da loja: 30 dias até ao seu plano
     _notificar_dono(pos, 'pos_admin', f'POS "{pos.nome}" desligado da loja',
                     f'A plataforma desligou o POS da loja "{loja_nome}". O POS passou a standalone.')
     return Response({'detail': 'Loja desligada. O POS passou a standalone.', 'modo': pos.modo})

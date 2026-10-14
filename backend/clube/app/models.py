@@ -1583,6 +1583,11 @@ class Subscricao(models.Model):
     fim_agendado = models.DateField(null=True, blank=True)
     # o dono mudou de plano: vale a partir da renovação seguinte
     plano_seguinte = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, null=True, blank=True, related_name='+')
+    # POS: incluído no plano Loja + POS da loja ligada (a subscrição da loja). Enquanto estiver,
+    # o POS não tem faturas próprias; quando deixa de estar, tem 30 dias para pagar o seu plano.
+    coberta_por  = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='pos_cobertos')
+    # avisos já enviados que não pertencem a uma fatura (POS sem plano: 'sp_d7', 'sp_fim'…)
+    avisos       = models.JSONField(default=list, blank=True)
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 

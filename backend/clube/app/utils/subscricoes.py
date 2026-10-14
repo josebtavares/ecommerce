@@ -105,6 +105,8 @@ class ErroFatura(Exception):
 MOTIVO_SUSPENSAO = 'Subscrição por pagar'
 DIAS_AVISO = 7          # a fatura seguinte é emitida 7 dias antes do fim do período
 DIAS_CARENCIA = 30      # depois do vencimento a loja continua a funcionar 30 dias
+# os planos que uma loja pode escolher (o Loja + POS inclui também o POS ligado à loja)
+TIPOS_LOJA = ('loja', 'loja_pos')
 
 
 @transaction.atomic
@@ -145,6 +147,9 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
         sub.estado = 'ativa'
     sub.save()
     reativou = _reavaliar(sub, d)
+    if ativacao:
+        from .subscricoes_pos import sincronizar_pos_da_loja
+        sincronizar_pos_da_loja(loja.id)           # plano Loja + POS: o POS ligado passa a estar incluído
     if not avisar:
         return fatura
 
@@ -178,16 +183,14 @@ def _reavaliar(sub, d=None):
         sub.save(update_fields=['estado', 'data_atualizacao'])
         if sub.pos_id:
             from ..pos.models import ConfiguracaoPOS
-            pos = ConfiguracaoPOS.objects.get(pk=sub.pos_id)
-            if era_suspensa and pos.suspenso and pos.suspenso_motivo.startswith(MOTIVO_SUSPENSAO):
-                pos.suspenso, pos.suspenso_motivo, pos.suspenso_em = False, '', None
-                pos.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em'])
-                reativou = True
-            return reativou
+            return era_suspensa and reativar_pos(ConfiguracaoPOS.objects.get(pk=sub.pos_id))
         loja = Loja.objects.get(pk=sub.loja_id)
         if era_suspensa and loja.estado == 'suspensa' and loja.estado_motivo.startswith(MOTIVO_SUSPENSAO):
             loja.mudar_estado('ativa')
             reativou = True
+        if era_suspensa:
+            from .subscricoes_pos import sincronizar_pos_da_loja
+            sincronizar_pos_da_loja(sub.loja_id)       # o POS incluído no plano da loja volta com ela
     elif vencidas and sub.estado in ('teste', 'ativa'):
         sub.estado = 'em_atraso'
         sub.save(update_fields=['estado', 'data_atualizacao'])
@@ -241,6 +244,8 @@ def mudar_modelo(loja, modelo, plano=None):
         loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
     else:
         raise ErroFatura('Modelo inválido.')
+    from .subscricoes_pos import sincronizar_pos_da_loja
+    sincronizar_pos_da_loja(loja.id)
     return loja
 
 
@@ -288,7 +293,7 @@ def subscricao_payload(sub):
             'auto_renovar': sub.auto_renovar}
 
 
-def planos_ativos(tipos=('loja',)):
+def planos_ativos(tipos=TIPOS_LOJA):
     return list(PlanoSubscricao.objects.filter(ativo=True, tipo__in=tipos))
 
 
@@ -333,28 +338,62 @@ def suspensao_em(fatura):
 
 def processar(quando=None):
     """
-    Uma volta do ciclo para todas as subscrições activas. Idempotente: os avisos ficam
-    registados na fatura (FaturaSubscricao.avisos) e cada passo só acontece uma vez.
+    Uma volta do ciclo para todas as subscrições activas (lojas primeiro, depois os POS).
+    Idempotente: os avisos ficam registados na fatura (FaturaSubscricao.avisos) e cada passo
+    só acontece uma vez.
       1. fim do teste → 'ativa'
       2. fatura do período seguinte emitida 7 dias antes (ao preço actual do plano)
       3. avisos 3 dias antes e no dia
       4. no dia: pagamento automático (simulado) se estiver ligado
       5. depois do vencimento: 'em_atraso' + avisos aos 7, 14, 21 e 28 dias
-      6. 30 dias depois do vencimento: loja suspensa (MOTIVO_SUSPENSAO)
+      6. 30 dias depois do vencimento: loja / POS suspenso (MOTIVO_SUSPENSAO)
+    Os POS têm ainda o fim do período grátis sem plano e o plano Loja + POS (subscricoes_pos).
     Devolve um resumo {'emitidas', 'pagas_auto', 'em_atraso', 'suspensas'}.
     """
+    from .subscricoes_pos import processar_pos
     d = quando or hoje()
     resumo = {'emitidas': 0, 'pagas_auto': 0, 'em_atraso': 0, 'suspensas': 0}
-    subs_qs = (Subscricao.objects.select_related('loja', 'plano')
-               .filter(estado__in=['teste', 'ativa', 'em_atraso'], loja__modelo_cobranca='subscricao'))
-    for sub in subs_qs:
+    lojas = Subscricao.objects.filter(estado__in=['teste', 'ativa', 'em_atraso'], loja__modelo_cobranca='subscricao')
+    # os suspensos também: deixam de o estar se passarem a estar incluídos no plano da loja
+    pos = Subscricao.objects.filter(pos__isnull=False, estado__in=['teste', 'ativa', 'em_atraso', 'suspensa'])
+    for pk in [*lojas.order_by('pk').values_list('pk', flat=True), *pos.order_by('pk').values_list('pk', flat=True)]:
         try:
             with transaction.atomic():
-                _processar_uma(Subscricao.objects.select_for_update(of=('self',)).select_related('loja', 'plano').get(pk=sub.pk), d, resumo)
+                sub = Subscricao.objects.select_for_update(of=('self',)).select_related('loja', 'pos', 'plano').get(pk=pk)
+                (_processar_uma if sub.loja_id else processar_pos)(sub, d, resumo)
         except Exception as e:          # uma loja com problemas não pára as outras
             import logging
-            logging.getLogger(__name__).exception('subscrição %s: %s', sub.pk, e)
+            logging.getLogger(__name__).exception('subscrição %s: %s', pk, e)
     return resumo
+
+
+def textos(alvo):
+    """As palavras que mudam entre loja e POS nos avisos."""
+    if isinstance(alvo, Loja):
+        return {'o': 'a loja', 'O': 'A loja', 'suspenso': 'suspensa', 'reactivado': 'reactivada',
+                'onde': 'Backoffice → Subscrição', 'nome': alvo.nome}
+    return {'o': 'o POS', 'O': 'O POS', 'suspenso': 'suspenso', 'reactivado': 'reactivado',
+            'onde': 'POS → Subscrição', 'nome': nome_alvo(alvo)}
+
+
+def suspender(alvo, motivo):
+    """Suspende a loja ou o POS por falta de pagamento (se ainda estiver a funcionar)."""
+    if isinstance(alvo, Loja):
+        if alvo.estado == 'ativa':
+            alvo.mudar_estado('suspensa', motivo)
+        return
+    if not alvo.suspenso:
+        alvo.suspenso, alvo.suspenso_motivo, alvo.suspenso_em = True, motivo[:300], timezone.now()
+        alvo.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em'])
+
+
+def reativar_pos(pos):
+    """Levanta a suspensão do POS só se foi por falta de pagamento. True se levantou."""
+    if pos.suspenso and pos.suspenso_motivo.startswith(MOTIVO_SUSPENSAO):
+        pos.suspenso, pos.suspenso_motivo, pos.suspenso_em = False, '', None
+        pos.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em'])
+        return True
+    return False
 
 
 def _processar_uma(sub, d, resumo):
@@ -372,6 +411,14 @@ def _processar_uma(sub, d, resumo):
         _avisar_dono(loja, 'A loja passou para comissão',
                      f'A partir de hoje pagas {loja.percentagem_comissao}% por venda e deixas de ter mensalidade.')
         return
+    if ciclo_faturas(sub, loja, d, resumo):
+        from .subscricoes_pos import sincronizar_pos_da_loja
+        sincronizar_pos_da_loja(loja.id)          # o POS incluído no plano da loja vai com ela
+
+
+def ciclo_faturas(sub, alvo, d, resumo):
+    """Passos 1–6 para uma loja ou um POS com plano. Devolve True se suspendeu."""
+    t = textos(alvo)
 
     # 1. fim do teste
     if sub.estado == 'teste' and sub.teste_ate and d >= sub.teste_ate:
@@ -397,7 +444,7 @@ def _processar_uma(sub, d, resumo):
         falta = (f.vencimento - d).days
         # 3. lembretes
         if falta == 3 and _marcar(f, 'd3'):
-            _avisar_dono(loja, f'A fatura da subscrição vence daqui a 3 dias — {_eur(f.valor)}',
+            _avisar_dono(alvo, f'A fatura da subscrição vence daqui a 3 dias — {_eur(f.valor)}',
                          f'{f.descricao}. Vence a {f.vencimento:%d/%m/%Y}.')
         # 4. no dia (ou depois, se o worker esteve parado): pagamento automático
         if falta <= 0 and sub.auto_renovar and 'auto' not in (f.avisos or []):
@@ -407,8 +454,8 @@ def _processar_uma(sub, d, resumo):
             sub.refresh_from_db()
             continue
         if falta == 0 and _marcar(f, 'd0'):
-            _avisar_dono(loja, f'A fatura da subscrição vence hoje — {_eur(f.valor)}',
-                         f'{f.descricao}. Paga hoje em Backoffice → Subscrição.')
+            _avisar_dono(alvo, f'A fatura da subscrição vence hoje — {_eur(f.valor)}',
+                         f'{f.descricao}. Paga hoje em {t["onde"]}.')
         if falta >= 0:
             continue
 
@@ -420,27 +467,30 @@ def _processar_uma(sub, d, resumo):
             sub.save(update_fields=['estado', 'data_atualizacao'])
             resumo['em_atraso'] += 1
         if _marcar(f, 'atraso'):
-            _avisar_dono(loja, f'Subscrição em atraso — {_eur(f.valor)}',
-                         f'{f.descricao} venceu a {f.vencimento:%d/%m/%Y}. Se não for paga, a loja é suspensa a {limite:%d/%m/%Y}.')
-            _avisar_admins(loja, f'Subscrição em atraso — {loja.nome}', f'Fatura #{f.id} · {_eur(f.valor)} · venceu a {f.vencimento:%d/%m/%Y}.')
+            _avisar_dono(alvo, f'Subscrição em atraso — {_eur(f.valor)}',
+                         f'{f.descricao} venceu a {f.vencimento:%d/%m/%Y}. '
+                         f'Se não for paga, {t["o"]} é {t["suspenso"]} a {limite:%d/%m/%Y}.')
+            _avisar_admins(alvo, f'Subscrição em atraso — {t["nome"]}',
+                           f'Fatura #{f.id} · {_eur(f.valor)} · venceu a {f.vencimento:%d/%m/%Y}.')
         for dias in (7, 14, 21, 28):
             if atraso >= dias and atraso < DIAS_CARENCIA and _marcar(f, f'a{dias}'):
                 faltam = (limite - d).days
-                _avisar_dono(loja, f'Subscrição em atraso há {dias} dias — {_eur(f.valor)}',
-                             f'Faltam {faltam} dia(s): a loja é suspensa a {limite:%d/%m/%Y} se a fatura não for paga.')
+                _avisar_dono(alvo, f'Subscrição em atraso há {dias} dias — {_eur(f.valor)}',
+                             f'Faltam {faltam} dia(s): {t["o"]} é {t["suspenso"]} a {limite:%d/%m/%Y} se a fatura não for paga.')
 
         # 6. fim da carência → suspensa
         if d >= limite and _marcar(f, 'suspensa'):
             sub.estado = 'suspensa'
             sub.save(update_fields=['estado', 'data_atualizacao'])
-            if loja.estado == 'ativa':
-                loja.mudar_estado('suspensa', f'{MOTIVO_SUSPENSAO} (fatura #{f.id}, {_eur(f.valor)}).')
-            _avisar_dono(loja, 'A loja foi suspensa — subscrição por pagar',
-                         f'A fatura de {_eur(f.valor)} venceu a {f.vencimento:%d/%m/%Y}. Paga em Backoffice → Subscrição e a loja volta logo.')
-            _avisar_admins(loja, f'Loja suspensa automaticamente — {loja.nome}',
+            suspender(alvo, f'{MOTIVO_SUSPENSAO} (fatura #{f.id}, {_eur(f.valor)}).')
+            _avisar_dono(alvo, f'{t["O"]} foi {t["suspenso"]} — subscrição por pagar',
+                         f'A fatura de {_eur(f.valor)} venceu a {f.vencimento:%d/%m/%Y}. '
+                         f'Paga em {t["onde"]} e {t["o"]} volta logo.')
+            _avisar_admins(alvo, f'{"Loja suspensa" if isinstance(alvo, Loja) else "POS suspenso"} automaticamente — {t["nome"]}',
                            f'Subscrição por pagar: fatura #{f.id}, {_eur(f.valor)}, vencida a {f.vencimento:%d/%m/%Y}.')
             resumo['suspensas'] += 1
-            break
+            return True
+    return False
 
 
 def aviso_loja(sub, pendentes, quando=None):
@@ -703,7 +753,7 @@ def resumo_periodo(inicio, fim):
     }
 
 
-def plano_ativo(valor, tipos=('loja',)):
+def plano_ativo(valor, tipos=TIPOS_LOJA):
     """
     O plano activo com este id (vindo do pedido) e de um destes tipos, ou None — nunca rebenta
     com lixo ('abc', None, listas). Uma loja não pode escolher um plano de POS e vice-versa.

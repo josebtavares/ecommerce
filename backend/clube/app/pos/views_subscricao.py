@@ -9,13 +9,14 @@ os membros da equipa não. Funciona mesmo com o POS suspenso (é por aqui que se
 """
 from decimal import Decimal
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 
 from rest_framework.response import Response
 
-from app.models import ConfiguracaoPlataforma, FaturaSubscricao
+from app.models import ConfiguracaoPlataforma, FaturaSubscricao, Subscricao
 from ..utils import subscricoes as subs
 from ..utils import subscricoes_pos as subs_pos
 from .models import ConfiguracaoPOS
@@ -42,13 +43,20 @@ def _dias_teste():
 
 def _resumo(pos):
     sub = subs_pos.garantir(pos)
+    with transaction.atomic():
+        cob = subs_pos.sincronizar(Subscricao.objects.select_for_update().get(pk=sub.pk))
+    sub.refresh_from_db()
+    pos.refresh_from_db()
     faturas = list(sub.faturas.select_related('plano', 'pos')[:24])
     pendentes = [f for f in faturas if f.estado == 'pendente']
     return {
         'pos_id': pos.id,
-        'aviso': subs_pos.aviso_pos(sub, pendentes),
+        'aviso': subs_pos.aviso_pos(sub, pendentes, cob=cob),
         'subscricao': subs.subscricao_payload(sub),
         'sem_plano': not sub.plano_id,
+        # incluído no plano Loja + POS da loja ligada: não paga o POS à parte
+        'cobertura': {'loja_id': cob.loja_id, 'loja_nome': cob.loja.nome, 'estado': cob.estado,
+                      'plano': subs.plano_payload(subs.plano_em_curso(cob) or cob.plano)} if cob else None,
         'faturas': [subs.fatura_payload(f) for f in faturas],
         'por_pagar': str(sum((f.valor for f in pendentes), Decimal('0'))),
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('pos',))],
@@ -60,8 +68,15 @@ def _resumo(pos):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def planos_pos(request):
+    utilizador = getattr(request.user, 'utilizador', None)
+    # lojas do dono com o plano Loja + POS: um POS ligado a elas não precisa de plano
+    incluido = []
+    if utilizador and not get_membro_from_request(request):
+        incluido = [s.loja_id for s in Subscricao.objects.select_related('loja', 'plano')
+                    .filter(loja__dono=utilizador) if subs_pos.loja_cobre_pos(s)]
     return Response({'dias_teste': _dias_teste(),
-                     'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('pos',))]})
+                     'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('pos',))],
+                     'lojas_com_pos_incluido': incluido})
 
 
 @api_view(['GET', 'PATCH'])
