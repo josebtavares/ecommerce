@@ -88,7 +88,10 @@ def escolher_plano(pos, plano):
     if plano.tipo != 'pos':
         raise ErroFatura('Escolhe um plano de POS.')
     if sincronizar(sub):
-        raise ErroFatura('O POS está incluído no plano Loja + POS da loja — não precisa de plano próprio.')
+        # incluído no plano da loja: fica guardado para quando deixar de estar (sem faturas agora)
+        sub.plano, sub.preco, sub.meses, sub.plano_seguinte = plano, plano.preco, plano.meses, None
+        sub.save(update_fields=['plano', 'preco', 'meses', 'plano_seguinte', 'data_atualizacao'])
+        return sub, None
     if sub.plano_id:
         return subs.mudar_plano_sub(sub, plano)
     sub.plano, sub.preco, sub.meses = plano, plano.preco, plano.meses
@@ -302,3 +305,47 @@ def aviso_pos(sub, pendentes, quando=None, cob=None):
         quando_txt = 'hoje' if f.vencimento == d else f'a {f.vencimento:%d/%m/%Y}'
         return {'tipo': 'vence', 'suspensao_em': None, 'texto': f'A fatura da subscrição ({_eur(f.valor)}) vence {quando_txt}.'}
     return None
+
+
+# ── Trocas pedidas a partir do POS (plano próprio ↔ Loja + POS) ──
+
+def loja_do_dono(pos):
+    """A loja ligada ao POS, se for do mesmo dono e estiver a funcionar (senão None)."""
+    loja = pos.loja_vinculada
+    if loja and loja.dono_id == pos.dono_id and loja.estado in ('ativa', 'fechada'):
+        return loja
+    return None
+
+
+@transaction.atomic
+def passar_para_combo(pos, plano):
+    """
+    O dono do POS passa a loja ligada para um plano Loja + POS. Loja em subscrição: muda na
+    renovação (como no backoffice). Loja em comissão: é um pedido de mudança — a loja passa a
+    subscrição quando pagar a 1.ª fatura (no backoffice). Devolve (sub_loja, fatura ou None).
+    """
+    loja = loja_do_dono(pos)
+    if not loja:
+        raise ErroFatura('Liga o POS a uma das tuas lojas para usar um plano Loja + POS.')
+    if plano.tipo != 'loja_pos':
+        raise ErroFatura('Escolhe um plano Loja + POS.')
+    if loja.modelo_cobranca == 'comissao':
+        return subs.pedir_subscricao(loja, plano)
+    return subs.mudar_plano(loja, plano)
+
+
+@transaction.atomic
+def sair_do_combo(pos, plano_loja, plano_pos=None):
+    """
+    Deixa o plano Loja + POS: a loja passa para um plano só de loja na renovação. Quando esse
+    período começa, o POS deixa de estar incluído (30 dias) e passa ao seu plano (plano_pos).
+    """
+    loja = loja_do_dono(pos)
+    if not loja or not cobertura(pos):
+        raise ErroFatura('O POS não está incluído no plano da loja.')
+    if plano_loja.tipo != 'loja':
+        raise ErroFatura('Escolhe um plano só de loja.')
+    res = subs.mudar_plano(loja, plano_loja)
+    if plano_pos:
+        escolher_plano(pos, plano_pos)
+    return res

@@ -661,12 +661,18 @@ def oferecer(sub, meses, motivo=''):
         raise ErroFatura('Esta subscrição não está activa.')
     sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate).update(
         estado='anulada', notas='Anulada: meses oferecidos pela plataforma.')
-    inicio, fim = sub.pago_ate, mais_meses(sub.pago_ate, meses)
+    if sub.coberta_por_id:
+        raise ErroFatura('Este POS está incluído no plano da loja — oferece os meses à loja.')
+    # POS sem plano com o período grátis acabado: o tempo sem plano não se cobrou, a oferta conta a partir de hoje
+    inicio = sub.pago_ate if sub.plano_id else max(sub.pago_ate, hoje())
+    fim = mais_meses(inicio, meses)
     f = FaturaSubscricao.objects.create(
         loja_id=sub.loja_id, pos_id=sub.pos_id, subscricao=sub, plano=sub.plano, descricao=f'Oferta — {_descricao(sub.plano, inicio, fim)}',
         periodo_inicio=inicio, periodo_fim=fim, valor=0, estado='paga', vencimento=inicio, paga_em=timezone.now(),
         metodo='oferta', notas=(motivo or 'Oferta da plataforma')[:300], avisos=['emitida'])
     sub.pago_ate = fim
+    if not sub.plano_id:
+        sub.avisos = []                      # os lembretes do fim do período grátis voltam a contar
     if sub.fim_agendado:
         sub.fim_agendado = fim
     sub.save()
@@ -750,7 +756,24 @@ def resumo_periodo(inicio, fim):
                   'subscricao': lojas.filter(modelo_cobranca='subscricao').count()},
         'por_estado': dict(Subscricao.objects.filter(loja__modelo_cobranca='subscricao')
                            .values_list('estado').annotate(n=Count('id'))),
+        # lojas vs POS: receita do período e como estão os POS hoje
+        'por_alvo': {chave: {'valor': d2(x['v']), 'faturas': x['n']} for chave, x in (
+            ('lojas', pagas.exclude(metodo='oferta').filter(loja__isnull=False).aggregate(v=Sum('valor'), n=Count('id'))),
+            ('pos', pagas.exclude(metodo='oferta').filter(pos__isnull=False).aggregate(v=Sum('valor'), n=Count('id'))))},
+        'pos': _resumo_pos(),
     }
+
+
+def _resumo_pos():
+    from django.db.models import Count
+    from ..pos.models import ConfiguracaoPOS
+    s = Subscricao.objects.filter(pos__isnull=False)
+    proprios = s.filter(coberta_por__isnull=True)
+    return {'total': ConfiguracaoPOS.objects.count(),
+            'incluidos': s.filter(coberta_por__isnull=False).count(),
+            'sem_plano': proprios.filter(plano__isnull=True).count(),
+            'suspensos': ConfiguracaoPOS.objects.filter(suspenso=True).count(),
+            'por_estado': dict(proprios.values_list('estado').annotate(n=Count('id')))}
 
 
 def plano_ativo(valor, tipos=TIPOS_LOJA):

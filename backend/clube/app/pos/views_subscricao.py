@@ -6,6 +6,7 @@ os membros da equipa não. Funciona mesmo com o POS suspenso (é por aqui que se
   PATCH /api/pos/<pos_id>/subscricao/   { auto_renovar }
   POST  /api/pos/<pos_id>/subscricao/plano/   { plano_id }  escolher / mudar de plano
   POST  /api/pos/<pos_id>/subscricao/faturas/<fid>/pagar/  pagamento (simulado)
+  POST  /api/pos/<pos_id>/subscricao/loja/   { acao }       plano Loja + POS da loja ligada
 """
 from decimal import Decimal
 
@@ -41,6 +42,27 @@ def _dias_teste():
     return ConfiguracaoPlataforma.atual().subscricao_dias_teste
 
 
+def _loja_ligada(pos):
+    """A loja ligada (do mesmo dono) e o seu plano — para passar para Loja + POS ou sair dele."""
+    loja = subs_pos.loja_do_dono(pos)
+    if not loja:
+        return None
+    sl = Subscricao.objects.select_related('plano', 'plano_seguinte').filter(loja=loja).first()
+    em_sub = loja.modelo_cobranca == 'subscricao' and sl and sl.estado not in ('aguarda', 'cancelada')
+    pedido = sl.plano if sl and sl.estado == 'aguarda' and loja.modelo_cobranca == 'comissao' else None
+    livre = subs.proxima_troca(loja)
+    return {
+        'loja_id': loja.id, 'loja_nome': loja.nome, 'modelo': loja.modelo_cobranca,
+        'plano': subs.plano_payload(sl.plano) if em_sub else None,
+        'plano_seguinte': subs.plano_payload(sl.plano_seguinte) if em_sub and sl.plano_seguinte_id else None,
+        # pedido de mudança de comissão para subscrição à espera da 1.ª fatura (paga-se no backoffice)
+        'pedido': subs.plano_payload(pedido) if pedido else None,
+        'troca_livre_em': livre.isoformat() if livre and loja.modelo_cobranca == 'comissao' else None,
+        'planos_combo': [subs.plano_payload(p) for p in subs.planos_ativos(('loja_pos',))],
+        'planos_loja': [subs.plano_payload(p) for p in subs.planos_ativos(('loja',))],
+    }
+
+
 def _resumo(pos):
     sub = subs_pos.garantir(pos)
     with transaction.atomic():
@@ -61,6 +83,7 @@ def _resumo(pos):
         'por_pagar': str(sum((f.valor for f in pendentes), Decimal('0'))),
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('pos',))],
         'suspenso': pos.suspenso,
+        'loja': _loja_ligada(pos),
     }
 
 
@@ -127,4 +150,41 @@ def pos_fatura_pagar(request, pos_id, fatura_id):
     except subs.ErroFatura as e:
         return _erro(str(e))
     pos.refresh_from_db()           # pagar pode ter levantado a suspensão
+    return Response(_resumo(pos))
+
+
+@api_view(['POST'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def pos_subscricao_loja(request, pos_id):
+    """
+    POST /api/pos/<pos_id>/subscricao/loja/   (o dono do POS, que é também o dono da loja ligada)
+      { acao: 'combo', plano_id }                      → a loja passa para um plano Loja + POS
+      { acao: 'separar', plano_id, plano_pos_id? }     → a loja volta a um plano só de loja (na renovação)
+    """
+    pos, erro = _pos_do_dono(request, pos_id)
+    if erro:
+        return erro
+    acao = request.data.get('acao')
+    subs_pos.garantir(pos)
+    try:
+        if acao == 'combo':
+            plano = subs.plano_ativo(request.data.get('plano_id'), tipos=('loja_pos',))
+            if not plano:
+                return _erro('Escolhe um dos planos Loja + POS.')
+            subs_pos.passar_para_combo(pos, plano)
+        elif acao == 'separar':
+            plano = subs.plano_ativo(request.data.get('plano_id'), tipos=('loja',))
+            if not plano:
+                return _erro('Escolhe o plano da loja.')
+            plano_pos = None
+            if request.data.get('plano_pos_id') not in (None, ''):
+                plano_pos = subs.plano_ativo(request.data.get('plano_pos_id'), tipos=('pos',))
+                if not plano_pos:
+                    return _erro('Escolhe um dos planos de POS.')
+            subs_pos.sair_do_combo(pos, plano, plano_pos)
+        else:
+            return _erro('Acção inválida.')
+    except subs.ErroFatura as e:
+        return _erro(str(e))
     return Response(_resumo(pos))

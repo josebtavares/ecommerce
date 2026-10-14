@@ -18,4 +18,7 @@ urlpatterns = [
     path('admin/faturas/<int:fatura_id>/adiar/',                        v.admin_fatura_adiar,  name='admin-fatura-adiar'),
     path('admin/faturas/<int:fatura_id>/anular/',                       v.admin_fatura_anular, name='admin-fatura-anular'),
     path('admin/subscricoes/resumo/',                                     v.admin_resumo,        name='admin-subscricoes-resumo'),
+    path('admin/subscricoes/pos/',                                      v.admin_subscricoes_pos, name='admin-subscricoes-pos'),
+    path('admin/pos/<int:pos_id>/subscricao/oferecer/',                v.admin_pos_oferecer,  name='admin-pos-oferecer'),
+    path('admin/pos/<int:pos_id>/subscricao/plano/',                   v.admin_pos_plano,     name='admin-pos-plano'),
 ]
