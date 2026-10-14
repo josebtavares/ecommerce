@@ -43,12 +43,21 @@ def _descricao(plano, inicio, fim):
 
 
 def emitir_fatura(sub, inicio, vencimento=None):
-    """Fatura do período que começa em `inicio` (preço e duração do contrato da loja)."""
+    """
+    Fatura do período que começa em `inicio` (preço e duração do contrato da loja).
+    Plano de 0 € → fica logo paga ("Plano gratuito"), sem avisos: nunca há nada para pagar
+    nem suspensão por "dívida" de 0 €.
+    """
     fim = mais_meses(inicio, sub.meses)
-    return FaturaSubscricao.objects.create(
+    f = FaturaSubscricao.objects.create(
         loja=sub.loja, subscricao=sub, plano=sub.plano, descricao=_descricao(sub.plano, inicio, fim),
         periodo_inicio=inicio, periodo_fim=fim, valor=sub.preco, vencimento=vencimento or inicio,
     )
+    if not f.valor:
+        pagar(f, 'oferta', referencia=f'GRATIS-{f.id}', notas='Plano gratuito', avisar=False)
+        f.refresh_from_db()
+        sub.refresh_from_db()
+    return f
 
 
 # ── Criar / arrancar ──────────────────────────────────────────
@@ -77,7 +86,8 @@ def arrancar(loja, com_teste=True):
     sub.estado = 'teste' if dias else 'ativa'
     sub.save(update_fields=['inicio', 'pago_ate', 'teste_ate', 'estado', 'data_atualizacao'])
     fatura = emitir_fatura(sub, sub.pago_ate)
-    _avisar_fatura(fatura, nova=True)
+    if fatura.estado == 'pendente':
+        _avisar_fatura(fatura, nova=True)
     return sub
 
 
@@ -94,19 +104,20 @@ DIAS_CARENCIA = 30      # depois do vencimento a loja continua a funcionar 30 di
 
 
 @transaction.atomic
-def pagar(fatura, metodo, referencia='', notas='', quando=None):
+def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
     """
     Marca a fatura como paga e estende o serviço até ao fim do período. Reactiva a loja se estava
     suspensa por falta de pagamento. Se for a 1.ª fatura de um pedido de mudança para subscrição
     (subscrição 'aguarda' numa loja activa em comissão), a subscrição começa agora.
     """
     d = quando or hoje()
+    if metodo not in dict(FaturaSubscricao.METODOS):
+        raise ErroFatura('Método de pagamento inválido.')
+    # bloqueios sempre pela mesma ordem do worker (subscrição → fatura → loja): sem impasses
+    sub = Subscricao.objects.select_for_update().get(pk=fatura.subscricao_id)
     fatura = FaturaSubscricao.objects.select_for_update().get(pk=fatura.pk)
     if fatura.estado != 'pendente':
         raise ErroFatura('Esta fatura já não está por pagar.')
-    if metodo not in dict(FaturaSubscricao.METODOS):
-        raise ErroFatura('Método de pagamento inválido.')
-    sub = Subscricao.objects.select_for_update().get(pk=fatura.subscricao_id)
     loja = Loja.objects.select_for_update().get(pk=fatura.loja_id)
 
     ativacao = sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao'
@@ -130,6 +141,8 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None):
         sub.estado = 'ativa'
     sub.save()
     reativou = _reavaliar(sub, d)
+    if not avisar:
+        return fatura
 
     from ..Views.notificacaoView import notificar_staff, notificar_admins
     notificar_staff(loja=loja, roles=['dono'], tipo='subscricao_paga',
@@ -187,8 +200,8 @@ def mudar_modelo(loja, modelo, plano=None):
     primeira fatura a vencer hoje. Para comissão: a subscrição fica cancelada e as faturas por
     pagar anuladas (não se apagam). As encomendas já feitas mantêm o modelo que tinham.
     """
+    sub = Subscricao.objects.select_for_update().filter(loja_id=loja.pk).first()     # subscrição → loja
     loja = Loja.objects.select_for_update().get(pk=loja.pk)
-    sub = Subscricao.objects.select_for_update().filter(loja=loja).first()
     if modelo == 'subscricao':
         if plano is None:
             raise ErroFatura('Escolhe o plano.')
@@ -353,7 +366,8 @@ def _processar_uma(sub, d, resumo):
             sub.save(update_fields=['preco', 'meses', 'data_atualizacao'])
         f = emitir_fatura(sub, sub.pago_ate)
         _marcar(f, 'emitida')
-        _avisar_fatura(f, nova=True)
+        if f.estado == 'pendente':
+            _avisar_fatura(f, nova=True)
         resumo['emitidas'] += 1
 
     for f in sub.faturas.filter(estado='pendente').order_by('vencimento'):
@@ -435,6 +449,8 @@ def aviso_loja(sub, pendentes, quando=None):
 # ── Trocas pedidas pelo dono ──────────────────────────────────
 
 DIAS_ENTRE_TROCAS = 90
+MAX_PEDIDOS_DIA = 3
+NOTA_PEDIDO_CANCELADO = 'Anulada: pedido de mudança cancelado'
 
 
 def proxima_troca(loja):
@@ -457,12 +473,18 @@ def pedir_subscricao(loja, plano):
     Loja em comissão pede para passar a subscrição: emite a 1.ª fatura (vence hoje). A loja
     continua em comissão até a pagar — aí a subscrição começa (ver pagar()). Sem período de teste.
     """
+    Subscricao.objects.select_for_update().filter(loja_id=loja.pk).first()           # subscrição → loja
     loja = Loja.objects.select_for_update().get(pk=loja.pk)
     if loja.modelo_cobranca != 'comissao':
         raise ErroFatura('A loja já está em subscrição.')
     if loja.estado != 'ativa':
         raise ErroFatura('A loja tem de estar activa.')
     _exige_troca_livre(loja)
+    # pedir e cancelar em ciclo só enche a lista de faturas anuladas
+    cancelados = FaturaSubscricao.objects.filter(loja=loja, notas__startswith=NOTA_PEDIDO_CANCELADO,
+                                                 data_criacao__gte=timezone.now() - timedelta(days=1)).count()
+    if cancelados >= MAX_PEDIDOS_DIA:
+        raise ErroFatura('Já pediste e cancelaste a mudança várias vezes hoje — tenta outra vez amanhã.')
     d = hoje()
     sub = Subscricao.objects.select_for_update().filter(loja=loja).first()
     if sub and sub.estado == 'aguarda':
@@ -484,7 +506,7 @@ def cancelar_pedido(loja):
     sub = Subscricao.objects.select_for_update().filter(loja=loja, estado='aguarda').first()
     if not sub or loja.modelo_cobranca != 'comissao':
         raise ErroFatura('Não há nenhum pedido de mudança para cancelar.')
-    sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: pedido de mudança cancelado.')
+    sub.faturas.filter(estado='pendente').update(estado='anulada', notas=NOTA_PEDIDO_CANCELADO + '.')
     sub.estado = 'cancelada'
     sub.save(update_fields=['estado', 'data_atualizacao'])
 
@@ -492,8 +514,8 @@ def cancelar_pedido(loja):
 @transaction.atomic
 def agendar_comissao(loja):
     """Subscrição → comissão no fim do período pago (sem reembolso). Não com faturas em atraso."""
+    sub = Subscricao.objects.select_for_update().filter(loja_id=loja.pk).first()     # subscrição → loja
     loja = Loja.objects.select_for_update().get(pk=loja.pk)
-    sub = Subscricao.objects.select_for_update().filter(loja=loja).first()
     if loja.modelo_cobranca != 'subscricao' or not sub or sub.estado not in ('teste', 'ativa', 'em_atraso'):
         raise ErroFatura('A loja não está numa subscrição activa.')
     if sub.fim_agendado:
@@ -577,6 +599,7 @@ def oferecer(sub, meses, motivo=''):
 @transaction.atomic
 def adiar(fatura, dias):
     """Dá mais prazo a uma fatura por pagar (os avisos de atraso recomeçam a contar)."""
+    Subscricao.objects.select_for_update().get(pk=fatura.subscricao_id)              # subscrição → fatura
     fatura = FaturaSubscricao.objects.select_for_update().get(pk=fatura.pk)
     if fatura.estado != 'pendente':
         raise ErroFatura('Só se adiam faturas por pagar.')
@@ -592,6 +615,7 @@ def adiar(fatura, dias):
 @transaction.atomic
 def anular(fatura, motivo):
     """Anula uma fatura por pagar (nunca se apaga). O ciclo volta a emitir a do período, se for preciso."""
+    Subscricao.objects.select_for_update().get(pk=fatura.subscricao_id)              # subscrição → fatura
     fatura = FaturaSubscricao.objects.select_for_update().get(pk=fatura.pk)
     if fatura.estado != 'pendente':
         raise ErroFatura('Só se anulam faturas por pagar.')
@@ -626,23 +650,33 @@ def resumo_periodo(inicio, fim):
     a_receber = pend.filter(vencimento__gte=max(inicio, d), vencimento__lte=fim).aggregate(v=Sum('valor'), n=Count('id'))
     lojas = Loja.objects.exclude(estado='pendente')
     zero = Decimal('0')
+    d2 = lambda v: str((v or zero).quantize(Decimal('0.01')))         # sempre "0.00"
     metodos = dict(FaturaSubscricao.METODOS)
     return {
         'inicio': inicio.isoformat(), 'fim': fim.isoformat(),
         'subscricoes': {
-            'valor': str(receita_sub['v'] or zero), 'faturas': receita_sub['n'],
+            'valor': d2(receita_sub['v']), 'faturas': receita_sub['n'],
             'ofertas': pagas.filter(metodo='oferta').count(),
-            'por_plano': [{'plano': x['plano__nome'], 'valor': str(x['v']), 'faturas': x['n']} for x in por_plano],
+            'por_plano': [{'plano': x['plano__nome'], 'valor': d2(x['v']), 'faturas': x['n']} for x in por_plano],
             'por_metodo': [{'metodo': x['metodo'], 'nome': metodos.get(x['metodo'], x['metodo']),
-                            'valor': str(x['v']), 'faturas': x['n']} for x in por_metodo],
+                            'valor': d2(x['v']), 'faturas': x['n']} for x in por_metodo],
         },
-        'comissoes': {'valor': str(com['v'] or zero), 'encomendas': com['n'],
-                      'liquidada': str(com['liquidada'] or zero), 'pendente': str(com['pendente'] or zero)},
-        'total': str((receita_sub['v'] or zero) + (com['v'] or zero)),
-        'em_atraso': {'valor': str(atraso['v'] or zero), 'faturas': atraso['n']},
-        'a_receber': {'valor': str(a_receber['v'] or zero), 'faturas': a_receber['n']},
+        'comissoes': {'valor': d2(com['v']), 'encomendas': com['n'],
+                      'liquidada': d2(com['liquidada']), 'pendente': d2(com['pendente'])},
+        'total': d2((receita_sub['v'] or zero) + (com['v'] or zero)),
+        'em_atraso': {'valor': d2(atraso['v']), 'faturas': atraso['n']},
+        'a_receber': {'valor': d2(a_receber['v']), 'faturas': a_receber['n']},
         'lojas': {'comissao': lojas.filter(modelo_cobranca='comissao').count(),
                   'subscricao': lojas.filter(modelo_cobranca='subscricao').count()},
         'por_estado': dict(Subscricao.objects.filter(loja__modelo_cobranca='subscricao')
                            .values_list('estado').annotate(n=Count('id'))),
     }
+
+
+def plano_ativo(valor):
+    """O plano activo com este id (vindo do pedido) ou None — nunca rebenta com lixo ('abc', None, listas)."""
+    try:
+        pid = int(valor)
+    except (TypeError, ValueError):
+        return None
+    return PlanoSubscricao.objects.filter(id=pid, ativo=True).first()

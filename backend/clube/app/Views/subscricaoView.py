@@ -124,7 +124,7 @@ def _ler_plano(dados, plano=None):
             preco = Decimal(str(dados.get('preco'))).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError, ValueError):
             return None, 'Preço inválido.'
-        if preco < 0 or preco > Decimal('100000'):
+        if not preco.is_finite() or preco < 0 or preco > Decimal('100000'):
             return None, 'Preço inválido.'
         campos['preco'] = preco
     if 'descricao' in dados:
@@ -255,7 +255,7 @@ def admin_loja_cobranca(request, loja_id):
     modelo = request.data.get('modelo')
     plano = None
     if modelo == 'subscricao':
-        plano = PlanoSubscricao.objects.filter(id=request.data.get('plano_id'), ativo=True).first()
+        plano = subs.plano_ativo(request.data.get('plano_id'))
         if not plano:
             return _erro('Escolhe um plano activo.')
     try:
@@ -288,7 +288,7 @@ def loja_subscricao_mudar(request, loja_id):
     acao = request.data.get('acao')
     plano = None
     if acao in ('subscricao', 'plano'):
-        plano = PlanoSubscricao.objects.filter(id=request.data.get('plano_id'), ativo=True).first()
+        plano = subs.plano_ativo(request.data.get('plano_id'))
         if not plano:
             return _erro('Escolhe um dos planos disponíveis.')
     try:
