@@ -99,7 +99,8 @@ class Command(BaseCommand):
             self.stderr.write(f'  subscrições: ciclo falhou: {e}')
 
     def _avisos_horario(self):
-        """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py)."""
+        """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py) e cancela
+        as encomendas por pagar fora do prazo (utils/encomendas.py)."""
         if time.monotonic() - getattr(self, '_ultimo_aviso', -1e9) < 60:
             return
         self._ultimo_aviso = time.monotonic()
@@ -109,6 +110,13 @@ class Command(BaseCommand):
                 self.stdout.write(f'  horários: {n} loja(s) avisada(s) das encomendas agendadas para hoje')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  horários: aviso falhou: {e}')
+        try:
+            from app.utils.encomendas import expirar_por_pagar
+            n = expirar_por_pagar()
+            if n:
+                self.stdout.write(f'  encomendas: {n} por pagar fora do prazo cancelada(s) (stock reposto)')
+        except Exception as e:
+            self.stderr.write(f'  encomendas: expirar falhou: {e}')
 
     def _sinal(self, *_):
         # termina a conversão em curso e sai

@@ -28,7 +28,7 @@ from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
 )
 from ..utils.pagination import paginar
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
-from ..utils.encomendas import repor_stock
+from ..utils.encomendas import repor_stock, cancelar_anteriores_por_pagar
 from ..utils import conjuntos as conj
 from ..utils import horarios
 
@@ -423,6 +423,10 @@ def encomenda_criar(request, loja_id):
                                  'codigo': 'confirmar_agendamento', 'horario': horarios.payload_publico(loja)},
                                 status=status.HTTP_409_CONFLICT)
             agendada_para, origem = hor['abre_em'], 'abertura'
+
+    # ── 0) Encomendas deste cliente nesta loja ainda por pagar (o pagamento falhou e está a
+    #       tentar de novo): a nova substitui-as e o stock delas volta antes de validar o desta ──
+    cancelar_anteriores_por_pagar(utilizador, loja)
 
     # ── 1) Bloqueia e valida o stock de TODOS os itens antes de escrever ──
     # select_for_update impede que duas compras simultâneas vendam a mesma unidade.
