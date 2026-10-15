@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from ..Views.notificacaoView import notificar_staff, notificar_admins
+from ..utils.encomendas import expirar_encomenda, MSG_EXPIROU, PRAZO_PAGAMENTO_MIN
 from decimal import Decimal
 from ..models import (
     Encomenda, Pagamento, MetodoPagamento,
@@ -62,11 +63,21 @@ def _get_ou_criar_stripe_customer(utilizador) -> str:
     return customer.id
 
 
-def _verificar_encomenda(request, encomenda_id):
+def _verificar_encomenda(request, encomenda_id, prazo=True):
+    """
+    A encomenda do comprador, por pagar e bloqueada (as views de pagamento são atómicas: o worker
+    que cancela as expiradas não lhe mexe enquanto o pagamento decorre).
+    prazo=False (regresso do Flutterwave): o dinheiro já foi cobrado — aceita-se mesmo fora do prazo
+    se a encomenda ainda não foi cancelada.
+    """
     utilizador = request.user.utilizador
-    encomenda  = get_object_or_404(Encomenda, id=encomenda_id)
+    encomenda  = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)).select_related('loja'),
+                                   id=encomenda_id)
     if encomenda.comprador != utilizador:
         return None, Response({'detail': 'Sem permissao.'}, status=status.HTTP_403_FORBIDDEN)
+    if prazo and expirar_encomenda(encomenda):
+        return None, Response({'detail': MSG_EXPIROU.format(min=PRAZO_PAGAMENTO_MIN), 'codigo': 'encomenda_expirada'},
+                              status=status.HTTP_400_BAD_REQUEST)
     if encomenda.status != 'pendente':
         return None, Response({'detail': f'Encomenda ja esta: {encomenda.status}'}, status=status.HTTP_400_BAD_REQUEST)
     if not encomenda.loja.ativa:
@@ -465,9 +476,14 @@ def verificar_pagamento_flutterwave(request):
     except (IndexError, ValueError):
         return Response({'detail': 'tx_ref inválido.'}, status=status.HTTP_400_BAD_REQUEST)
  
-    encomenda, erro = _verificar_encomenda(request, encomenda_id)
-    if erro:
-        return erro
+    cancelada = Encomenda.objects.filter(id=encomenda_id, comprador=request.user.utilizador,
+                                         status='cancelado').select_related('loja').first()
+    if cancelada is None:
+        encomenda, erro = _verificar_encomenda(request, encomenda_id, prazo=False)
+        if erro:
+            return erro
+    else:
+        encomenda = cancelada
  
     # verificar na API do Flutterwave
     resp = flw_requests.get(
@@ -499,6 +515,13 @@ def verificar_pagamento_flutterwave(request):
             status=status.HTTP_400_BAD_REQUEST
         )
  
+    # cobrado, mas a encomenda já tinha sido cancelada (expirou / a loja fechou) → reembolso
+    if cancelada is not None:
+        _pedir_reembolso(encomenda, f'flw_{transaction_id}')
+        return Response({'detail': 'O pagamento chegou depois de a encomenda ter sido cancelada. '
+                                   'Vais ser reembolsado — a equipa já foi avisada.', 'codigo': 'reembolso'},
+                        status=status.HTTP_409_CONFLICT)
+
     # pagamento confirmado — registar
     metodo = MetodoPagamento.objects.filter(
         loja=encomenda.loja, tipo='flutterwave', ativo=True
@@ -513,6 +536,22 @@ def verificar_pagamento_flutterwave(request):
     return Response(PagamentoSerializer(pagamento).data, status=status.HTTP_200_OK)
  
  
+def _pedir_reembolso(encomenda, referencia):
+    """Avisa os admins (uma vez por encomenda — o webhook e o regresso do cliente podem chegar os dois)."""
+    from ..models import Notificacao
+    titulo = f'Reembolso necessário — Encomenda #{encomenda.id}'
+    if Notificacao.objects.filter(tipo='pagamento_reembolsar', titulo=titulo).exists():
+        return
+    notificar_admins(
+        tipo='pagamento_reembolsar',
+        titulo=titulo,
+        mensagem=f'O Flutterwave confirmou €{encomenda.valor_total} (tx {referencia}) '
+                 f'para uma encomenda cancelada da loja {encomenda.loja.nome}. Reembolsa o cliente.',
+        loja=encomenda.loja,
+        link='/admin',
+    )
+
+
 # chamado pelo Flutterwave (sem utilizador): a autenticidade vem do verif-hash
 @api_view(['POST'])
 @authentication_classes([])
@@ -545,14 +584,7 @@ def flutterwave_webhook(request):
     # cobrança confirmada para uma encomenda já cancelada (ex.: a loja fechou enquanto o
     # cliente estava na página do Flutterwave) → o dinheiro entrou, é preciso reembolsar à mão
     if encomenda.status == 'cancelado':
-        notificar_admins(
-            tipo='pagamento_reembolsar',
-            titulo=f'Reembolso necessário — Encomenda #{encomenda.id}',
-            mensagem=f'O Flutterwave confirmou €{encomenda.valor_total} (tx flw_{data.get("data", {}).get("id", "")}) '
-                     f'para uma encomenda cancelada da loja {encomenda.loja.nome}. Reembolsa o cliente.',
-            loja=encomenda.loja,
-            link='/admin',
-        )
+        _pedir_reembolso(encomenda, f'flw_{data.get("data", {}).get("id", "")}')
         return Response({'detail': 'ok'})
 
     # evitar duplicados
