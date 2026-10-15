@@ -81,7 +81,7 @@ def _int(v, padrao=None):
 
 def _dados_seccao(s):
     return {
-        'id': s.id, 'tipo': s.tipo, 'titulo': s.titulo, 'subtitulo': s.subtitulo,
+        'id': s.id, 'tipo': s.tipo, 'ativa': s.ativa, 'titulo': s.titulo, 'subtitulo': s.subtitulo,
         'inicio': s.inicio.isoformat() if s.inicio else None,
         'fim': s.fim.isoformat() if s.fim else None,
         'fonte': s.fonte, 'criterio': s.criterio, 'parametros': s.parametros or {}, 'limite': s.limite,
@@ -91,9 +91,9 @@ def _dados_seccao(s):
 
 
 def publicar(user=None):
-    """Copia o rascunho (só as secções activas) para uma nova publicação."""
+    """Copia o rascunho para uma nova publicação (as escondidas vão também, para Descartar/Restaurar as manter)."""
     from ..models import HomeSeccao, HomePublicacao
-    seccoes = HomeSeccao.objects.filter(ativa=True).prefetch_related('itens')
+    seccoes = HomeSeccao.objects.prefetch_related('itens')
     pub = HomePublicacao.objects.create(dados=[_dados_seccao(s) for s in seccoes], publicado_por=user)
     return pub
 
@@ -109,6 +109,8 @@ def publicada():
 
 def _visivel(s, agora):
     from django.utils.dateparse import parse_datetime
+    if not s.get('ativa', True):
+        return False
     inicio = parse_datetime(s['inicio']) if s.get('inicio') else None
     fim = parse_datetime(s['fim']) if s.get('fim') else None
     return (inicio is None or inicio <= agora) and (fim is None or agora < fim)
@@ -410,20 +412,25 @@ def categorias_lojas():
     return [{'valor': v, 'nome': rotulo_categoria(v)} for v in vistas]
 
 
+def montar(seccoes, request, pub_id):
+    """Resolve as secções (só as que estão dentro das datas e têm conteúdo)."""
+    agora = timezone.now()
+    resolvidas = []
+    for s in seccoes:
+        if s.get('tipo') in CONTEUDO and _visivel(s, agora):
+            r = resolver(s, request)
+            if r:
+                resolvidas.append(r)
+    return {'publicacao': pub_id, 'seccoes': resolvidas, 'categorias_lojas': categorias_lojas()}
+
+
 def home(request):
     """Payload completo da home (cache curta por publicação e por origem do pedido)."""
     pub_id, seccoes = publicada()
     chave = f'home:v1:{pub_id}:{request.build_absolute_uri("/")}'
     dados = cache.get(chave)
     if dados is None:
-        agora = timezone.now()
-        resolvidas = []
-        for s in seccoes:
-            if s.get('tipo') in CONTEUDO and _visivel(s, agora):
-                r = resolver(s, request)
-                if r:
-                    resolvidas.append(r)
-        dados = {'publicacao': pub_id, 'seccoes': resolvidas, 'categorias_lojas': categorias_lojas()}
+        dados = montar(seccoes, request, pub_id)
         cache.set(chave, dados, CACHE_SEGUNDOS)
     return dados
 
@@ -432,3 +439,296 @@ def seccao_publicada(seccao_id):
     _, seccoes = publicada()
     agora = timezone.now()
     return next((s for s in seccoes if str(s.get('id')) == str(seccao_id) and _visivel(s, agora)), None)
+
+
+# ══════════════════════════════════════════════════════════════
+# RASCUNHO (admin)
+# ══════════════════════════════════════════════════════════════
+
+MAX_SECCOES = 40
+MAX_ITENS = 50
+TIPOS_COM_ITENS = {
+    'hero':          ('loja', 'produto', 'banner'),
+    'lojas':         ('loja',),
+    'produtos':      ('produto',),
+    'loja_destaque': ('produto',),
+    'banner':        ('banner',),
+}
+CRITERIOS_POR_TIPO = {
+    'hero': CRITERIOS_LOJAS, 'lojas': CRITERIOS_LOJAS, 'produtos': CRITERIOS_PRODUTOS,
+}
+# parâmetro → (tipo, mínimo, máximo) ; str/lista: máximo = comprimento
+PARAMETROS = {
+    'categoria':        ('str', 0, 100),
+    'categoria_loja':   ('str', 0, 100),
+    'dias':             ('int', 1, 365),
+    'min_avaliacoes':   ('int', 1, 100),
+    'abertas_primeiro': ('bool', 0, 0),
+    'tipo_id':          ('int', 1, None),
+    'loja_id':          ('int', 1, None),
+    'categoria_id':     ('int', 1, None),
+    'ancora':           ('str', 0, 30),
+    'estilo_titulo':    ('str', 0, 10),
+    'categorias':       ('lista', 0, 30),
+}
+LIMITE_PADRAO = {'hero': 5, 'loja_destaque': 8}
+
+
+def limite_padrao(tipo):
+    return LIMITE_PADRAO.get(tipo, 50 if tipo in GRUPOS else 12)
+
+
+def _normalizar(s):
+    """Forma comparável de uma secção (sem id), para saber se o rascunho difere do publicado."""
+    return {
+        'tipo': s.get('tipo'), 'ativa': s.get('ativa', True) is not False,
+        'titulo': s.get('titulo') or '', 'subtitulo': s.get('subtitulo') or '',
+        'inicio': s.get('inicio'), 'fim': s.get('fim'), 'fonte': s.get('fonte') or 'auto',
+        'criterio': s.get('criterio') or '', 'parametros': s.get('parametros') or {},
+        'limite': s.get('limite') or limite_padrao(s.get('tipo')),
+        'itens': [{'loja_id': i.get('loja_id'), 'produto_id': i.get('produto_id'), 'titulo': i.get('titulo') or '',
+                   'texto': i.get('texto') or '', 'link': i.get('link') or ''} for i in s.get('itens') or []],
+    }
+
+
+def rascunho_dados():
+    from ..models import HomeSeccao
+    return [_dados_seccao(s) for s in HomeSeccao.objects.prefetch_related('itens')]
+
+
+def carregar_rascunho(seccoes):
+    """Substitui o rascunho por estas secções (itens de lojas/produtos que já não existem são ignorados)."""
+    from django.db import transaction
+    from django.utils.dateparse import parse_datetime
+    from ..models import HomeSeccao, HomeItem, Loja, Produto
+    with transaction.atomic():
+        HomeSeccao.objects.all().delete()
+        todos = [i for s in seccoes for i in s.get('itens') or []]
+        lojas = set(Loja.objects.filter(id__in=[i['loja_id'] for i in todos if i.get('loja_id')])
+                    .values_list('id', flat=True))
+        prods = set(Produto.objects.filter(id__in=[i['produto_id'] for i in todos if i.get('produto_id')])
+                    .values_list('id', flat=True))
+        for ordem, s in enumerate(seccoes):
+            n = _normalizar(s)
+            sec = HomeSeccao.objects.create(
+                tipo=n['tipo'], titulo=n['titulo'], subtitulo=n['subtitulo'], ordem=ordem, ativa=n['ativa'],
+                inicio=parse_datetime(n['inicio']) if n['inicio'] else None,
+                fim=parse_datetime(n['fim']) if n['fim'] else None,
+                fonte=n['fonte'], criterio=n['criterio'], parametros=n['parametros'], limite=n['limite'])
+            itens = []
+            for o, i in enumerate(n['itens']):
+                if (i['loja_id'] and i['loja_id'] not in lojas) or (i['produto_id'] and i['produto_id'] not in prods):
+                    continue
+                itens.append(HomeItem(seccao=sec, ordem=o, loja_id=i['loja_id'], produto_id=i['produto_id'],
+                                      titulo=i['titulo'], texto=i['texto'], link=i['link']))
+            HomeItem.objects.bulk_create(itens)
+
+
+def garantir_rascunho():
+    """Na primeira visita ao admin, o rascunho começa igual ao que está publicado (ou ao padrão)."""
+    from ..models import HomeSeccao
+    if not HomeSeccao.objects.exists():
+        carregar_rascunho(publicada()[1])
+
+
+def tem_alteracoes():
+    _, publicadas = publicada()
+    return [_normalizar(s) for s in rascunho_dados()] != [_normalizar(s) for s in publicadas]
+
+
+def avisos_seccao(s):
+    """Problemas que o admin deve ver (lojas/produtos escolhidos que não aparecem, datas…)."""
+    from ..models import Loja, Produto
+    avisos = []
+    itens = list(s.itens.all())
+    lojas = [i.loja_id for i in itens if i.loja_id]
+    prods = [i.produto_id for i in itens if i.produto_id]
+    if lojas:
+        for l in Loja.objects.filter(id__in=lojas, ativa=False):
+            avisos.append(f'A loja "{l.nome}" não está activa ({l.estado}) e não aparece.')
+    if prods:
+        for p in Produto.objects.filter(id__in=prods).filter(Q(ativo=False) | Q(loja__ativa=False)):
+            avisos.append(f'O produto "{p.nome}" não está visível (inactivo ou loja não activa) e não aparece.')
+    agora = timezone.now()
+    if s.fim and s.fim <= agora:
+        avisos.append('As datas já terminaram: a secção não aparece.')
+    elif s.inicio and s.inicio > agora:
+        avisos.append('Só aparece a partir da data de início.')
+    if s.fonte == 'manual' and s.tipo in ('hero', 'lojas', 'produtos', 'banner') and not itens:
+        avisos.append('Sem itens escolhidos: a secção não aparece.')
+    if s.tipo == 'cabecalho' and not s.titulo:
+        avisos.append('Cabeçalho sem título: não aparece.')
+    if s.tipo == 'loja_destaque' and not (s.parametros or {}).get('loja_id'):
+        avisos.append('Escolhe a loja em destaque.')
+    return avisos
+
+
+def _link_valido(link):
+    if not link:
+        return True
+    if link.startswith('/') and not link.startswith('//'):
+        return True
+    from urllib.parse import urlparse
+    u = urlparse(link)
+    return u.scheme in ('http', 'https') and bool(u.netloc)
+
+
+def _validar_parametros(p):
+    from ..models import Loja, TipoProduto, CategoriaLoja
+    if not isinstance(p, dict):
+        return None, 'Parâmetros inválidos.'
+    limpos = {}
+    for k, v in p.items():
+        if k not in PARAMETROS:
+            return None, f'Parâmetro desconhecido: {k}.'
+        t, mn, mx = PARAMETROS[k]
+        if v is None or v == '':
+            continue
+        if t == 'int':
+            n = _int(v)
+            if n is None or n < mn or (mx is not None and n > mx):
+                return None, f'Valor inválido em {k}.'
+            limpos[k] = n
+        elif t == 'bool':
+            if not isinstance(v, bool):
+                return None, f'Valor inválido em {k}.'
+            limpos[k] = v
+        elif t == 'str':
+            if not isinstance(v, str) or len(v) > mx:
+                return None, f'Valor inválido em {k}.'
+            limpos[k] = v.strip().lower() if k in ('categoria', 'categoria_loja') else v.strip()
+        else:
+            if not isinstance(v, list) or len(v) > mx or not all(isinstance(x, str) and len(x) <= 100 for x in v):
+                return None, f'Valor inválido em {k}.'
+            limpos[k] = [x.strip().lower() for x in v if x.strip()]
+    if limpos.get('estilo_titulo') not in (None, 'titulo', 'divisor'):
+        return None, 'Estilo do título inválido.'
+    if 'ancora' in limpos and not all(c.isalnum() or c in '-_' for c in limpos['ancora']):
+        return None, 'A âncora só pode ter letras, números, - e _.'
+    if 'tipo_id' in limpos and not TipoProduto.objects.filter(id=limpos['tipo_id'], loja__isnull=True,
+                                                              pos__isnull=True).exists():
+        return None, 'Esse tipo de produto não existe.'
+    if 'loja_id' in limpos and not Loja.objects.filter(id=limpos['loja_id']).exists():
+        return None, 'Essa loja não existe.'
+    if 'categoria_id' in limpos and not CategoriaLoja.objects.filter(id=limpos['categoria_id']).exists():
+        return None, 'Essa categoria não existe.'
+    return limpos, None
+
+
+def _validar_itens(lista, tipo, params):
+    from ..models import Loja, Produto
+    if not isinstance(lista, list) or len(lista) > MAX_ITENS:
+        return None, f'Itens inválidos (máximo {MAX_ITENS}).'
+    aceites = TIPOS_COM_ITENS.get(tipo, ())
+    itens = []
+    for i in lista:
+        if not isinstance(i, dict):
+            return None, 'Item inválido.'
+        loja_id, produto_id = _int(i.get('loja_id')), _int(i.get('produto_id'))
+        titulo, texto, link = (i.get('titulo') or ''), (i.get('texto') or ''), (i.get('link') or '')
+        if not all(isinstance(x, str) for x in (titulo, texto, link)):
+            return None, 'Item inválido.'
+        if len(titulo) > 120 or len(texto) > 300 or len(link) > 300:
+            return None, 'Texto do item demasiado longo.'
+        if loja_id and produto_id:
+            return None, 'Cada item é uma loja, um produto ou um banner.'
+        genero = 'loja' if loja_id else 'produto' if produto_id else 'banner'
+        if genero not in aceites:
+            return None, f'Esta secção não aceita itens do tipo {genero}.'
+        if genero == 'banner' and not titulo.strip():
+            return None, 'O banner precisa de um título.'
+        if not _link_valido(link.strip()):
+            return None, 'Link inválido: usa um caminho do site (ex.: /loja/12) ou um endereço http(s).'
+        itens.append({'loja_id': loja_id, 'produto_id': produto_id,
+                      'titulo': titulo.strip(), 'texto': texto.strip(), 'link': link.strip()})
+    lojas = {x['loja_id'] for x in itens if x['loja_id']}
+    prods = {x['produto_id'] for x in itens if x['produto_id']}
+    if lojas and Loja.objects.filter(id__in=lojas).count() != len(lojas):
+        return None, 'Uma das lojas escolhidas não existe.'
+    if prods and Produto.objects.filter(id__in=prods).count() != len(prods):
+        return None, 'Um dos produtos escolhidos não existe.'
+    if tipo == 'loja_destaque' and prods and \
+            Produto.objects.filter(id__in=prods).exclude(loja_id=params.get('loja_id')).exists():
+        return None, 'Os produtos têm de ser da loja em destaque.'
+    return itens, None
+
+
+def validar(dados, atual=None):
+    """Valida os campos de uma secção (criar: atual=None; editar: só os campos enviados).
+    Devolve (campos, itens|None, erro)."""
+    from django.utils.dateparse import parse_datetime
+    from ..models import HomeSeccao
+    if not isinstance(dados, dict):
+        return None, None, 'Pedido inválido.'
+    campos = {}
+    tipo = atual.tipo if atual else dados.get('tipo')
+    if tipo not in dict(HomeSeccao.TIPOS):
+        return None, None, 'Tipo de secção inválido.'
+    if atual is None:
+        campos['tipo'] = tipo
+    elif 'tipo' in dados and dados['tipo'] != atual.tipo:
+        return None, None, 'O tipo de uma secção não se muda: cria uma nova.'
+    for k, maximo in (('titulo', 120), ('subtitulo', 200)):
+        if k in dados:
+            v = dados[k] if dados[k] is not None else ''
+            if not isinstance(v, str) or len(v.strip()) > maximo:
+                return None, None, f'{k.capitalize()} inválido (máximo {maximo} caracteres).'
+            campos[k] = v.strip()
+    if 'ativa' in dados:
+        if not isinstance(dados['ativa'], bool):
+            return None, None, 'Campo "ativa" inválido.'
+        campos['ativa'] = dados['ativa']
+    for k in ('inicio', 'fim'):
+        if k in dados:
+            v = dados[k]
+            if v is None or v == '':
+                campos[k] = None
+                continue
+            d = parse_datetime(v) if isinstance(v, str) else None
+            if d is None:
+                return None, None, f'Data de {k} inválida.'
+            campos[k] = timezone.make_aware(d) if timezone.is_naive(d) else d
+    inicio = campos.get('inicio', atual.inicio if atual else None)
+    fim = campos.get('fim', atual.fim if atual else None)
+    if inicio and fim and fim <= inicio:
+        return None, None, 'A data de fim tem de ser depois do início.'
+    if 'fonte' in dados:
+        if dados['fonte'] not in dict(HomeSeccao.FONTES):
+            return None, None, 'Fonte inválida.'
+        campos['fonte'] = dados['fonte']
+    fonte = campos.get('fonte', atual.fonte if atual else 'auto')
+    if 'criterio' in dados:
+        crit = dados['criterio'] or ''
+        if not isinstance(crit, str):
+            return None, None, 'Critério inválido.'
+        validos = CRITERIOS_POR_TIPO.get(tipo)
+        if crit and (validos is None or crit not in validos):
+            return None, None, 'Critério inválido para este tipo de secção.'
+        campos['criterio'] = crit
+    if 'limite' in dados:
+        lim = _int(dados['limite'])
+        maximo = 20 if tipo in ('hero', 'loja_destaque') else LIMITE_MAX
+        if lim is None or not 1 <= lim <= maximo:
+            return None, None, f'O limite tem de estar entre 1 e {maximo}.'
+        campos['limite'] = lim
+    elif atual is None:
+        campos['limite'] = limite_padrao(tipo)
+    if 'parametros' in dados:
+        limpos, erro = _validar_parametros(dados['parametros'] or {})
+        if erro:
+            return None, None, erro
+        campos['parametros'] = limpos
+    crit = campos.get('criterio', atual.criterio if atual else '')
+    params = campos.get('parametros', atual.parametros if atual else {}) or {}
+    if fonte in ('auto', 'misto') and tipo in CRITERIOS_POR_TIPO:
+        if not crit:
+            return None, None, 'Escolhe o critério automático.'
+        precisa = {'tipo': 'tipo_id', 'loja': 'loja_id', 'categoria_produto': 'categoria_id'}.get(crit)
+        if precisa and not params.get(precisa):
+            return None, None, 'Falta escolher o valor do critério.'
+    itens = None
+    if 'itens' in dados:
+        itens, erro = _validar_itens(dados['itens'] or [], tipo, params)
+        if erro:
+            return None, None, erro
+    return campos, itens, None

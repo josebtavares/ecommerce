@@ -149,6 +149,12 @@
       <!-- ═══ MAIN ═══ -->
       <main class="flex-1 overflow-x-hidden">
 
+        <!-- ── PRÉ-VISUALIZAÇÃO (admin → Página inicial) ── -->
+        <div v-if="preview || previewErro" class="sticky top-0 z-20 px-4 py-2 text-center text-xs font-semibold"
+             :class="previewErro ? 'bg-red-600 text-white' : 'bg-amber-400 text-zinc-900'">
+          {{ previewErro || 'Pré-visualização do rascunho: os visitantes ainda vêem a home publicada.' }}
+        </div>
+
         <!-- ── SECÇÕES (montadas no admin → /app/home/) ── -->
         <div v-if="loadingHome" class="py-10 px-6 md:px-12 space-y-10">
           <div class="h-[50vh] rounded-2xl animate-pulse" :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'"></div>
@@ -261,10 +267,10 @@
                        ? ['py-8 px-6 md:px-12', gi % 2 !== 0 ? (isDark ? 'bg-zinc-900/40' : 'bg-stone-100/60') : '']
                        : ['py-4 px-6 md:px-12', isDark ? 'bg-zinc-900/50' : 'bg-white']">
               <StoreSlider v-if="sec.conteudo === 'lojas'" :title="g.titulo" :icon="iconeCategoria(null, g.chave)"
-                :inicial="g.pagina" :endpoint="`/app/home/seccao/${sec.id}/`" :params="{ grupo: g.chave }"
+                :inicial="g.pagina" :endpoint="endpointSeccao(sec.id)" :params="{ grupo: g.chave }"
                 :isDark="isDark" @store-click="goToStore($event.id)" />
               <ProductSlider v-else :title="g.titulo"
-                :inicial="g.pagina" :endpoint="`/app/home/seccao/${sec.id}/`" :params="{ grupo: g.chave }"
+                :inicial="g.pagina" :endpoint="endpointSeccao(sec.id)" :params="{ grupo: g.chave }"
                 :isDark="isDark" @product-click="openProduct($event)" />
             </section>
           </template>
@@ -273,7 +279,7 @@
           <section v-else-if="sec.tipo === 'lojas'" class="py-8 px-6 md:px-12">
             <p v-if="sec.subtitulo" class="-mb-2 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ sec.subtitulo }}</p>
             <StoreSlider :title="sec.titulo || 'Lojas'"
-              :inicial="sec.pagina" :endpoint="`/app/home/seccao/${sec.id}/`"
+              :inicial="sec.pagina" :endpoint="endpointSeccao(sec.id)"
               :isDark="isDark" @store-click="goToStore($event.id)" />
           </section>
 
@@ -281,7 +287,7 @@
           <section v-else-if="sec.tipo === 'produtos'" class="py-4 px-6 md:px-12"
                    :class="isDark ? 'bg-zinc-900/50' : 'bg-white'">
             <ProductSlider :title="sec.titulo || 'Produtos'"
-              :inicial="sec.pagina" :endpoint="`/app/home/seccao/${sec.id}/`"
+              :inicial="sec.pagina" :endpoint="endpointSeccao(sec.id)"
               :isDark="isDark" @product-click="openProduct($event)" />
           </section>
         </template>
@@ -367,6 +373,8 @@ export default {
       categoriasExistentes: [],
       loadingHome: true,
       heroRefs: {},
+      preview: false,           // ?preview=1 → rascunho do admin
+      previewErro: '',
       bannerPadrao: DEFAULT_BANNER,
       produtoPadrao: DEFAULT_PRODUTO,
       selectedProduct: null,
@@ -468,9 +476,23 @@ export default {
       return { novas: 'Nova Loja', populares: 'Popular', mais_vendidas: 'Mais vendida', mais_favoritas: 'Favorita' }[sec.criterio] || 'Em destaque'
     },
 
+    endpointSeccao (id) {
+      return this.preview ? `/app/admin/home/preview/seccao/${id}/` : `/app/home/seccao/${id}/`
+    },
+
     async fetchHome () {
+      this.preview = this.$route.query.preview === '1'
       try {
-        const { data } = await api.get('/app/home/')
+        let data
+        if (this.preview) {
+          try {
+            ({ data } = await api.get('/app/admin/home/preview/'))
+          } catch (e) {
+            this.previewErro = 'Sem permissão para pré-visualizar: estás a ver a home publicada.'
+            this.preview = false
+          }
+        }
+        if (!data) ({ data } = await api.get('/app/home/'))
         this.seccoes = data.seccoes || []
         this.categoriasExistentes = (data.categorias_lojas || []).map(c => ({
           value: c.valor, label: c.nome, icon: iconeCategoria(null, c.valor),

@@ -56,6 +56,7 @@ class Utilizador(models.Model):
             'moderar_chat',      # chat: denúncias e bloqueios
             'gerir_plataforma',  # definições do site (fuso horário)
             'gerir_subscricoes', # planos, subscrições e faturas das lojas
+            'gerir_home',        # secções da página inicial
         ],
         'moderador': [
             'ver_stats',
