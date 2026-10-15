@@ -29,6 +29,7 @@
           <div class="grid sm:grid-cols-3 gap-2 mt-3">
             <div v-for="p in dados.planos" :key="p.id" class="rounded-xl border border-zinc-800 bg-zinc-800/40 p-3 flex flex-col">
               <p class="text-sm font-semibold text-zinc-100">{{ p.nome }}</p>
+              <p v-if="p.tipo === 'loja_pos'" class="text-[11px] font-semibold text-violet-300">Inclui o POS</p>
               <p class="text-lg font-black text-zinc-100">{{ euros(p.preco) }}</p>
               <p class="text-[11px] text-zinc-500 flex-1">{{ p.periodicidade_nome }}<template v-if="p.meses > 1"> · {{ euros(p.preco_mes) }}/mês</template></p>
               <button v-if="dados.pode_pagar && !dados.troca_livre_em" type="button" @click="pedirSubscricao(p)" :disabled="aGuardar"
@@ -58,6 +59,12 @@
                 <span class="block sm:inline text-sm font-semibold text-zinc-400"><span class="hidden sm:inline">· </span>{{ euros(sub.preco) }} / {{ sub.meses === 1 ? 'mês' : sub.meses + ' meses' }}</span>
               </p>
               <p class="text-sm mt-1" :class="corEstadoTexto">{{ resumoEstado }}</p>
+              <p v-if="(sub.plano_em_curso || sub.plano).tipo === 'loja_pos'" class="text-xs mt-1 font-semibold text-violet-300">
+                Plano Loja + POS:
+                <template v-if="posIncluidos.length">inclui o POS {{ posIncluidos.map(p => p.nome).join(', ') }} — o POS não paga à parte.</template>
+                <template v-else-if="(dados.pos_ligados || []).length">o POS ligado passa a estar incluído no início do período deste plano.</template>
+                <template v-else>inclui o POS quando ligares um POS a esta loja.</template>
+              </p>
             </div>
             <span :class="['px-3 py-1 rounded-full text-xs font-bold', corEstado]">{{ sub.estado_nome }}</span>
           </div>
@@ -112,7 +119,7 @@
                 class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
                 <option :value="null" disabled>Mudar de plano…</option>
                 <option v-for="p in dados.planos.filter(p => p.id !== (sub.plano_seguinte || sub.plano).id)" :key="p.id" :value="p.id">
-                  {{ p.nome }} — {{ euros(p.preco) }} / {{ p.periodicidade_nome.toLowerCase() }}
+                  {{ p.nome }}{{ p.tipo === 'loja_pos' ? ' (inclui o POS)' : '' }} — {{ euros(p.preco) }} / {{ p.periodicidade_nome.toLowerCase() }}
                 </option>
               </select>
               <button type="button" @click="mudarPlano" :disabled="!novoPlano || aGuardar"
@@ -181,6 +188,7 @@ export default {
   },
 
   computed: {
+    posIncluidos () { return (this.dados?.pos_ligados || []).filter(p => p.incluido) },
     sub () { return this.dados?.subscricao },
     resumoEstado () {
       const s = this.sub

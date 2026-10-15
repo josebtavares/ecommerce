@@ -88,6 +88,10 @@ class Command(BaseCommand):
             return
         self._ultimo_ciclo = time.monotonic()
         try:
+            from app.utils import subscricoes_pos
+            n = subscricoes_pos.garantir_todos()        # POS de antes das subscrições → mês grátis
+            if n:
+                self.stdout.write(f'  subscrições: {n} POS com o mês grátis')
             r = subscricoes.processar()
             if any(r.values()):
                 self.stdout.write(f'  subscrições: {r}')

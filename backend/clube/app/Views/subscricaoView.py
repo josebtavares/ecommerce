@@ -25,6 +25,17 @@ def _erro(msg, codigo=status.HTTP_400_BAD_REQUEST):
     return Response({'detail': msg}, status=codigo)
 
 
+def _inteiro(v):
+    """Um número inteiro vindo do pedido (7 ou "7"); 0 para o resto — True, 1.5, "abc", listas…"""
+    if isinstance(v, bool):
+        return 0
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and v.strip().lstrip('-').isdigit() and len(v.strip()) < 10:
+        return int(v)
+    return 0
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def planos_publicos(request):
@@ -60,6 +71,10 @@ def _resumo_loja(loja, membro):
         'por_pagar': str(sum((f.valor for f in pendentes), Decimal('0'))),
         'pode_pagar': membro.pode('pagar_subscricao'),
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos()],
+        # os POS do dono ligados a esta loja (o plano Loja + POS inclui-os)
+        'pos_ligados': [{'id': p.id, 'nome': p.nome, 'codigo': p.codigo_pos,
+                         'incluido': bool(sub) and getattr(getattr(p, 'subscricao', None), 'coberta_por_id', None) == sub.id}
+                        for p in loja.pos_vinculados.filter(dono_id=loja.dono_id).select_related('subscricao')],
     }
 
 
@@ -119,6 +134,11 @@ def _ler_plano(dados, plano=None):
         if dados.get('periodicidade') not in PlanoSubscricao.MESES:
             return None, 'Periodicidade inválida (mensal, trimestral ou anual).'
         campos['periodicidade'] = dados['periodicidade']
+    if 'tipo' in dados or plano is None:
+        tipo = dados.get('tipo') or 'loja'
+        if tipo not in dict(PlanoSubscricao.TIPOS):
+            return None, 'Tipo inválido (loja, pos ou loja_pos).'
+        campos['tipo'] = tipo
     if 'preco' in dados or plano is None:
         try:
             preco = Decimal(str(dados.get('preco'))).quantize(Decimal('0.01'))
@@ -171,6 +191,8 @@ def admin_plano(request, plano_id):
         return _erro(msg)
     if 'periodicidade' in campos and campos['periodicidade'] != plano.periodicidade and plano.subscricoes.exists():
         return _erro('Este plano já tem lojas — cria um plano novo para mudar a periodicidade.')
+    if 'tipo' in campos and campos['tipo'] != plano.tipo and (plano.subscricoes.exists() or plano.faturas.exists()):
+        return _erro('Este plano já foi usado — cria um plano novo para outro tipo.')
     for k, v in campos.items():
         setattr(plano, k, v)
     plano.save()
@@ -213,16 +235,22 @@ def admin_subscricoes(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_faturas(request):
-    """GET /app/admin/faturas/?loja=<id>&estado=pendente|paga|anulada — faturas de subscrição."""
+    """GET /app/admin/faturas/?loja=<id>&pos=<id>&tipo=loja|pos&estado=pendente|paga|anulada — faturas de subscrição."""
     erro = _exige_admin(request, 'gerir_subscricoes')
     if erro:
         return erro
-    qs = FaturaSubscricao.objects.select_related('loja', 'plano')
+    qs = FaturaSubscricao.objects.select_related('loja', 'pos', 'plano')
     if (request.GET.get('loja') or '').isdigit():
         qs = qs.filter(loja_id=int(request.GET['loja']))
+    if (request.GET.get('pos') or '').isdigit():
+        qs = qs.filter(pos_id=int(request.GET['pos']))
+    if request.GET.get('tipo') == 'loja':
+        qs = qs.filter(loja__isnull=False)
+    elif request.GET.get('tipo') == 'pos':
+        qs = qs.filter(pos__isnull=False)
     if request.GET.get('estado') in dict(FaturaSubscricao.ESTADOS):
         qs = qs.filter(estado=request.GET['estado'])
-    return paginar_lista(request, [{**subs.fatura_payload(f), 'loja_nome': f.loja.nome} for f in qs[:500]])
+    return paginar_lista(request, [subs.fatura_payload(f) for f in qs[:500]])
 
 
 @api_view(['POST'])
@@ -318,10 +346,7 @@ def admin_oferecer(request, loja_id):
     if erro:
         return erro
     sub = get_object_or_404(Subscricao, loja_id=loja_id)
-    try:
-        meses = int(request.data.get('meses'))
-    except (TypeError, ValueError):
-        meses = 0
+    meses = _inteiro(request.data.get('meses'))
     if not 1 <= meses <= 12:
         return _erro('Oferece entre 1 e 12 meses.')
     try:
@@ -339,10 +364,7 @@ def admin_fatura_adiar(request, fatura_id):
     if erro:
         return erro
     fatura = get_object_or_404(FaturaSubscricao, id=fatura_id)
-    try:
-        dias = int(request.data.get('dias'))
-    except (TypeError, ValueError):
-        dias = 0
+    dias = _inteiro(request.data.get('dias'))
     if not 1 <= dias <= 60:
         return _erro('Adia entre 1 e 60 dias.')
     try:
@@ -386,3 +408,99 @@ def admin_resumo(request):
     if fim < inicio or (fim - inicio).days > 3660:
         return _erro('Período inválido.')
     return Response(subs.resumo_periodo(inicio, fim))
+
+
+# ── Admin: POS ────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_subscricoes_pos(request):
+    """
+    GET /app/admin/subscricoes/pos/?situacao=incluido|sem_plano|suspenso&estado=…&q=…&offset&limit
+    Os POS com a subscrição, se estão incluídos no plano de uma loja e o que têm por pagar.
+    """
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    from ..pos.models import ConfiguracaoPOS
+    from ..utils import subscricoes_pos as subs_pos
+    subs_pos.garantir_todos()               # um POS acabado de criar sem subscrição (o worker ainda não passou)
+    qs = ConfiguracaoPOS.objects.select_related('dono__user', 'loja_vinculada', 'subscricao__plano',
+                                                'subscricao__plano_seguinte', 'subscricao__coberta_por__loja',
+                                                'subscricao__coberta_por__plano')
+    situacao = request.GET.get('situacao')
+    if situacao == 'incluido':
+        qs = qs.filter(subscricao__coberta_por__isnull=False)
+    elif situacao == 'sem_plano':
+        qs = qs.filter(subscricao__plano__isnull=True, subscricao__coberta_por__isnull=True)
+    elif situacao == 'suspenso':
+        qs = qs.filter(suspenso=True)
+    estado = request.GET.get('estado')
+    if estado in dict(Subscricao.ESTADOS):
+        qs = qs.filter(subscricao__estado=estado, subscricao__coberta_por__isnull=True)
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        qs = qs.filter(Q(nome__icontains=q) | Q(codigo_pos__icontains=q) | Q(dono__user__first_name__icontains=q)
+                       | Q(dono__user__email__icontains=q))
+    qs = qs.annotate(
+        n_pendentes=Count('faturas_subscricao', filter=Q(faturas_subscricao__estado='pendente')),
+        v_pendente=Sum('faturas_subscricao__valor', filter=Q(faturas_subscricao__estado='pendente')),
+    ).order_by('nome', 'id')
+
+    def linha(p):
+        sub = getattr(p, 'subscricao', None)
+        cob = sub.coberta_por if sub and sub.coberta_por_id else None
+        return {'pos_id': p.id, 'pos_nome': subs.nome_alvo(p), 'codigo_pos': p.codigo_pos,
+                'dono': p.dono.user.get_full_name() or p.dono.user.username, 'dono_email': p.dono.user.email,
+                'loja_vinculada': p.loja_vinculada.nome if p.loja_vinculada_id else None,
+                'suspenso': p.suspenso, 'suspenso_motivo': p.suspenso_motivo,
+                'subscricao': subs.subscricao_payload(sub),
+                'cobertura': {'loja_id': cob.loja_id, 'loja_nome': cob.loja.nome, 'plano': cob.plano.nome if cob.plano_id else ''} if cob else None,
+                'faturas_pendentes': p.n_pendentes, 'valor_pendente': str(p.v_pendente or 0)}
+    return paginar_lista(request, [linha(p) for p in qs])
+
+
+def _sub_do_pos(pos_id):
+    from ..pos.models import ConfiguracaoPOS
+    from ..utils import subscricoes_pos as subs_pos
+    return subs_pos.garantir(get_object_or_404(ConfiguracaoPOS, id=pos_id))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_pos_oferecer(request, pos_id):
+    """POST /app/admin/pos/<pos_id>/subscricao/oferecer/ { meses: 1-12, motivo? }"""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    sub = _sub_do_pos(pos_id)
+    meses = _inteiro(request.data.get('meses'))
+    if not 1 <= meses <= 12:
+        return _erro('Oferece entre 1 e 12 meses.')
+    try:
+        f = subs.oferecer(sub, meses, str(request.data.get('motivo') or '').strip())
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    return Response(subs.fatura_payload(f), status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_pos_plano(request, pos_id):
+    """POST /app/admin/pos/<pos_id>/subscricao/plano/ { plano_id } — escolhe / muda o plano pelo dono (como na aba do POS)."""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    from ..utils import subscricoes_pos as subs_pos
+    sub = _sub_do_pos(pos_id)
+    plano = subs.plano_ativo(request.data.get('plano_id'), tipos=('pos',))
+    if not plano:
+        return _erro('Escolhe um plano de POS activo.')
+    try:
+        subs_pos.escolher_plano(sub.pos, plano)
+    except subs.ErroFatura as e:
+        return _erro(str(e))
+    sub.refresh_from_db()
+    subs._avisar_dono(sub.pos, f'A plataforma mudou o plano do POS para {plano.nome}',
+                      f'{subs._eur(plano.preco)} / {plano.get_periodicidade_display().lower()}. Vês os detalhes em POS → Subscrição.')
+    return Response({'pos_id': sub.pos_id, 'subscricao': subs.subscricao_payload(sub)})

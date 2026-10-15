@@ -274,6 +274,12 @@ def admin_pos_reativar(request, pos_id):
     pos = get_object_or_404(ConfiguracaoPOS.objects.select_for_update(), id=pos_id)
     if not pos.suspenso:
         return Response({'detail': 'O POS não está suspenso.'}, status=status.HTTP_400_BAD_REQUEST)
+    from ..utils.subscricoes import MOTIVO_SUSPENSAO
+    if pos.suspenso_motivo.startswith(MOTIVO_SUSPENSAO):
+        # reactivar à mão deixava o POS a funcionar sem pagar (o ciclo já não volta a suspendê-lo)
+        return Response({'detail': 'Este POS foi suspenso por falta de pagamento da subscrição — vai a Subscrições → POS '
+                                   'e marca a fatura como paga, adia-a ou oferece meses: o POS volta sozinho.'},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     reativar_pos(pos)
     return Response({'detail': 'POS reactivado.', 'estado': _estado(pos)})
@@ -296,6 +302,9 @@ def admin_pos_desligar_loja(request, pos_id):
 
     loja_nome = pos.loja_vinculada.nome
     pos.desconectar_loja()
+    from ..utils.subscricoes_pos import sincronizar_pos
+    # depois do commit: aqui o POS está bloqueado e o ciclo bloqueia subscrição → POS (sem impasses)
+    transaction.on_commit(lambda: sincronizar_pos(pos))   # se estava no plano Loja + POS: 30 dias até ao seu plano
     _notificar_dono(pos, 'pos_admin', f'POS "{pos.nome}" desligado da loja',
                     f'A plataforma desligou o POS da loja "{loja_nome}". O POS passou a standalone.')
     return Response({'detail': 'Loja desligada. O POS passou a standalone.', 'modo': pos.modo})

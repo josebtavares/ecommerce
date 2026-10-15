@@ -177,10 +177,46 @@
           </p>
         </div>
 
+        <!-- Plano (subscrição do POS) -->
+        <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+          <p class="text-sm font-black text-slate-700">Escolhe o plano</p>
+          <p class="mt-1 text-xs font-semibold text-slate-500">
+            <template v-if="diasTeste">Os primeiros {{ diasTeste }} dias são grátis — só pagas depois. </template>
+            A tua equipa entra neste POS sem pagar nada à parte.
+          </p>
+          <div v-if="carregandoPlanos" class="mt-3 h-20 animate-pulse rounded-2xl bg-slate-200"></div>
+          <p v-else-if="incluidoNaLoja" class="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+            A loja {{ lojaSelecionada.nome }} tem o plano Loja + POS — este POS fica incluído e não pagas nada à parte.
+          </p>
+          <p v-else-if="!planos.length" class="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+            Ainda não há planos disponíveis — começas no período grátis e escolhes o plano depois, na aba Subscrição.
+          </p>
+          <div v-else class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Plano do POS">
+            <button v-for="p in planos" :key="p.id" type="button" role="radio" :aria-checked="form.plano_id === p.id ? 'true' : 'false'"
+              @click="form.plano_id = p.id"
+              :class="['rounded-2xl border-2 bg-white p-4 text-left transition',
+                       form.plano_id === p.id ? 'border-slate-950 shadow-lg shadow-slate-950/10' : 'border-slate-200 hover:border-slate-300']">
+              <div class="flex items-start justify-between gap-2">
+                <p class="text-sm font-black text-slate-950">{{ p.nome }}</p>
+                <span v-if="form.plano_id === p.id" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-950 text-[10px] text-white">
+                  <font-awesome-icon :icon="['fas', 'check']" />
+                </span>
+              </div>
+              <p class="mt-1 text-xl font-black text-slate-950">{{ euros(p.preco) }}</p>
+              <p class="text-[11px] font-semibold text-slate-500">{{ p.periodicidade_nome }}<template v-if="p.meses > 1"> · {{ euros(p.preco_mes) }}/mês</template></p>
+              <p v-if="p.descricao" class="mt-2 text-xs text-slate-500">{{ p.descricao }}</p>
+            </button>
+          </div>
+        </div>
+
         <!-- Resumo -->
         <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-white p-4">
           <p class="text-sm font-black text-slate-950">Resumo da configuração</p>
-          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <div class="rounded-2xl bg-slate-50 p-3">
+              <p class="text-xs font-black uppercase text-slate-400">Plano</p>
+              <p class="mt-1 truncate text-sm font-black text-slate-900">{{ incluidoNaLoja ? 'Incluído na loja' : planoSelecionado ? planoSelecionado.nome : (planos.length ? '—' : 'Depois') }}</p>
+            </div>
             <div class="rounded-2xl bg-slate-50 p-3">
               <p class="text-xs font-black uppercase text-slate-400">Modo</p>
               <p class="mt-1 text-sm font-black text-slate-900">{{ modoLabel }}</p>
@@ -223,6 +259,8 @@
 </template>
 
 <script>
+import api from '@/services/api'
+
 export default {
   name: 'OnboardingModal',
 
@@ -254,8 +292,27 @@ export default {
       form: {
         nome:    'POS Principal',
         modo:    'standalone',
-        loja_id: ''
-      }
+        loja_id: '',
+        plano_id: null
+      },
+      planos: [],
+      lojasComPosIncluido: [],
+      diasTeste: 0,
+      carregandoPlanos: true
+    }
+  },
+
+  async created () {
+    try {
+      const { data } = await api.get('/api/pos/planos/')
+      this.planos = data.planos || []
+      this.diasTeste = data.dias_teste || 0
+      this.lojasComPosIncluido = data.lojas_com_pos_incluido || []
+      if (this.planos.length) this.form.plano_id = this.planos[0].id
+    } catch {
+      this.planos = []
+    } finally {
+      this.carregandoPlanos = false
     }
   },
 
@@ -284,8 +341,19 @@ export default {
       return { integrado: 'Da loja', hibrido: 'Loja + POS' }[this.form.modo] || 'Próprios'
     },
 
+    // ligado a uma loja com o plano Loja + POS: não precisa de plano próprio
+    incluidoNaLoja() {
+      return this.form.modo !== 'standalone' && Boolean(this.lojaSelecionada) &&
+        this.lojasComPosIncluido.some(id => String(id) === String(this.form.loja_id))
+    },
+
+    planoSelecionado() {
+      return this.planos.find(p => p.id === this.form.plano_id) || null
+    },
+
     canConfirm() {
       if (!this.form.nome.trim()) return false
+      if (this.carregandoPlanos || (this.planos.length && !this.form.plano_id && !this.incluidoNaLoja)) return false
       if (['integrado', 'hibrido'].includes(this.form.modo)) return Boolean(this.form.loja_id)
       return true
     }
@@ -342,10 +410,21 @@ export default {
         return
       }
 
+      if (this.planos.length && !this.form.plano_id && !this.incluidoNaLoja) {
+        this.error = 'Escolhe um plano.'
+        return
+      }
+
       const payload = { nome: this.form.nome.trim(), modo: this.form.modo }
-      if (this.form.loja_id) payload.loja_id = this.form.loja_id
+      // standalone não leva a loja (vinha pré-escolhida e o POS ficava ligado como integrado)
+      if (this.form.loja_id && this.form.modo !== 'standalone') payload.loja_id = this.form.loja_id
+      if (this.form.plano_id && !this.incluidoNaLoja) payload.plano_id = this.form.plano_id
 
       this.$emit('create-pos', payload)
+    },
+
+    euros(v) {
+      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
     },
 
     cardClass(modo) {
