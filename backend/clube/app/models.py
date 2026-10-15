@@ -1691,6 +1691,14 @@ class HomeSeccao(models.Model):
         return f'{self.get_tipo_display()} — {self.titulo or "(sem título)"}'
 
 
+class HomeImagem(models.Model):
+    """Imagem carregada no construtor da home (banners). Fica guardada enquanto existir: as publicações
+    antigas podem usá-la (o worker de limpeza só apaga ficheiros sem nenhum registo)."""
+    ficheiro  = models.ImageField(upload_to='home/%Y/%m/',
+                                  validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])])
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+
 class HomeItem(models.Model):
     """Loja, produto ou banner escolhido à mão para uma secção."""
     seccao  = models.ForeignKey(HomeSeccao, on_delete=models.CASCADE, related_name='itens')
@@ -1701,6 +1709,7 @@ class HomeItem(models.Model):
     titulo  = models.CharField(max_length=120, blank=True, default='')
     texto   = models.CharField(max_length=300, blank=True, default='')
     link    = models.CharField(max_length=300, blank=True, default='')
+    imagem  = models.ForeignKey(HomeImagem, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
 
     class Meta:
         ordering = ['ordem', 'id']

@@ -15,6 +15,7 @@ urlpatterns = [
     path('admin/home/padrao/',                            homeView.admin_home_padrao,         name='admin-home-padrao'),
     path('admin/home/publicacoes/',                       homeView.admin_home_publicacoes,    name='admin-home-publicacoes'),
     path('admin/home/publicacoes/<int:pub_id>/restaurar/', homeView.admin_home_restaurar,     name='admin-home-restaurar'),
+    path('admin/home/imagens/',                           homeView.admin_home_imagem,         name='admin-home-imagem'),
     path('admin/home/procurar/',                          homeView.admin_home_procurar,       name='admin-home-procurar'),
     path('admin/home/preview/',                           homeView.admin_home_preview,        name='admin-home-preview'),
     path('admin/home/preview/seccao/<str:seccao_id>/',    homeView.admin_home_preview_seccao, name='admin-home-preview-seccao'),

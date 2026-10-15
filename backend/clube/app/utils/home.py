@@ -85,7 +85,7 @@ def _dados_seccao(s):
         'inicio': s.inicio.isoformat() if s.inicio else None,
         'fim': s.fim.isoformat() if s.fim else None,
         'fonte': s.fonte, 'criterio': s.criterio, 'parametros': s.parametros or {}, 'limite': s.limite,
-        'itens': [{'loja_id': i.loja_id, 'produto_id': i.produto_id,
+        'itens': [{'loja_id': i.loja_id, 'produto_id': i.produto_id, 'imagem_id': i.imagem_id,
                    'titulo': i.titulo, 'texto': i.texto, 'link': i.link} for i in s.itens.all()],
     }
 
@@ -95,7 +95,19 @@ def publicar(user=None):
     from ..models import HomeSeccao, HomePublicacao
     seccoes = HomeSeccao.objects.prefetch_related('itens')
     pub = HomePublicacao.objects.create(dados=[_dados_seccao(s) for s in seccoes], publicado_por=user)
+    limpar_imagens()
     return pub
+
+
+def limpar_imagens():
+    """Apaga as imagens carregadas há mais de 1 dia que nenhum rascunho nem publicação usa
+    (o sinal post_delete põe o ficheiro na fila do worker de limpeza)."""
+    from ..models import HomeImagem, HomeItem, HomePublicacao
+    usadas = set(HomeItem.objects.exclude(imagem=None).values_list('imagem_id', flat=True))
+    for dados in HomePublicacao.objects.values_list('dados', flat=True):
+        for s in dados or []:
+            usadas.update(i.get('imagem_id') for i in s.get('itens') or [] if i.get('imagem_id'))
+    HomeImagem.objects.filter(criado_em__lt=timezone.now() - timedelta(days=1)).exclude(id__in=usadas).delete()
 
 
 def publicada():
@@ -234,6 +246,14 @@ def _serializar_produtos(ids, request):
     return ProdutoSerializer([produtos[i] for i in ids if i in produtos], many=True, context={'request': request}).data
 
 
+def _urls_imagens(ids, request):
+    from ..models import HomeImagem
+    ids = [i for i in ids if i]
+    if not ids:
+        return {}
+    return {im.id: request.build_absolute_uri(im.ficheiro.url) for im in HomeImagem.objects.filter(id__in=ids)}
+
+
 # ── páginas (sliders) ──────────────────────────────────────────
 
 def _pagina(ids, offset, limit, serializar, request):
@@ -269,14 +289,23 @@ def _grupos(s):
             qs = produtos_auto('tipo', {**p, 'tipo_id': t.id})
             grupos.append((str(t.id), t.nome, '', lambda qs=qs: list(qs.values_list('id', flat=True)[:limite])))
     elif tipo == 'produtos_categorias_destaque':
-        from ..models import CategoriaDestaque
-        destaques = CategoriaDestaque.objects.filter(ativo=True, categoria__loja__ativa=True) \
-                                             .select_related('categoria').order_by('ordem', 'id')
-        for d in destaques:
-            qs = produtos_auto('categoria_produto', {**p, 'categoria_id': d.categoria_id})
-            grupos.append((str(d.categoria_id), d.categoria.nome, '',
-                           lambda qs=qs: list(qs.values_list('id', flat=True)[:limite])))
+        for cat in categorias_destaque(p):
+            qs = produtos_auto('categoria_produto', {**p, 'categoria_id': cat.id})
+            grupos.append((str(cat.id), cat.nome, '', lambda qs=qs: list(qs.values_list('id', flat=True)[:limite])))
     return grupos
+
+
+def categorias_destaque(p):
+    """Categorias de produto da secção (parametros.categoria_ids, pela ordem escolhida). Sem lista, usa as da
+    antiga página Admin → Categorias em Destaque. Só de lojas activas."""
+    from ..models import CategoriaLoja, CategoriaDestaque
+    ids = [i for i in (p.get('categoria_ids') or []) if isinstance(i, int)]
+    if ids:
+        cats = {c.id: c for c in CategoriaLoja.objects.filter(id__in=ids, loja__ativa=True)}
+        return [cats[i] for i in ids if i in cats]
+    destaques = CategoriaDestaque.objects.filter(ativo=True, categoria__loja__ativa=True) \
+                                         .select_related('categoria').order_by('ordem', 'id')
+    return [d.categoria for d in destaques]
 
 
 def _ids_simples(s):
@@ -354,8 +383,9 @@ def resolver(s, request):
                 elif i.get('produto_id'):
                     if i['produto_id'] in prods_ok:
                         slides.append({'tipo': 'produto', 'id': i['produto_id'], 'titulo': i.get('titulo') or '', 'texto': i.get('texto') or ''})
-                elif i.get('titulo'):
-                    slides.append({'tipo': 'banner', 'titulo': i['titulo'], 'texto': i.get('texto') or '', 'link': i.get('link') or ''})
+                elif i.get('titulo') or i.get('imagem_id'):
+                    slides.append({'tipo': 'banner', 'titulo': i.get('titulo') or '', 'texto': i.get('texto') or '',
+                                   'link': i.get('link') or '', 'imagem_id': i.get('imagem_id')})
         slides = slides[:limite]
         if fonte in ('auto', 'misto') and len(slides) < limite:
             usadas = [x['id'] for x in slides if x['tipo'] == 'loja']
@@ -364,12 +394,16 @@ def resolver(s, request):
             slides += [{'tipo': 'loja', 'id': i, 'titulo': '', 'texto': ''} for i in extra]
         lojas = {l['id']: l for l in _serializar_lojas([x['id'] for x in slides if x['tipo'] == 'loja'], request)}
         prods = {x['id']: x for x in _serializar_produtos([x['id'] for x in slides if x['tipo'] == 'produto'], request)}
+        imagens = _urls_imagens([x.get('imagem_id') for x in slides], request)
         for x in slides:
+            if x['tipo'] == 'banner':
+                x['imagem_url'] = imagens.get(x.pop('imagem_id', None))
             if x['tipo'] == 'loja':
                 x['loja'] = lojas.get(x['id'])
             elif x['tipo'] == 'produto':
                 x['produto'] = prods.get(x['id'])
-        out['slides'] = [x for x in slides if x['tipo'] == 'banner' or x.get('loja') or x.get('produto')]
+        out['slides'] = [x for x in slides if (x['tipo'] == 'banner' and (x['titulo'] or x['imagem_url']))
+                         or x.get('loja') or x.get('produto')]
         return out if out['slides'] else None
 
     if tipo == 'loja_destaque':
@@ -395,8 +429,11 @@ def resolver(s, request):
         return out if out['categorias'] else None
 
     if tipo == 'banner':
-        out['banners'] = [{'titulo': i.get('titulo') or '', 'texto': i.get('texto') or '', 'link': i.get('link') or ''}
-                          for i in s.get('itens') or [] if i.get('titulo')]
+        itens = [i for i in s.get('itens') or [] if i.get('titulo') or i.get('imagem_id')]
+        imagens = _urls_imagens([i.get('imagem_id') for i in itens], request)
+        banners = [{'titulo': i.get('titulo') or '', 'texto': i.get('texto') or '', 'link': i.get('link') or '',
+                    'imagem_url': imagens.get(i.get('imagem_id'))} for i in itens]
+        out['banners'] = [b for b in banners if b['titulo'] or b['imagem_url']]
         return out if out['banners'] else None
 
     return None
@@ -470,6 +507,7 @@ PARAMETROS = {
     'ancora':           ('str', 0, 30),
     'estilo_titulo':    ('str', 0, 10),
     'categorias':       ('lista', 0, 30),
+    'categoria_ids':    ('ids', 0, 30),
 }
 LIMITE_PADRAO = {'hero': 5, 'loja_destaque': 8}
 
@@ -486,8 +524,9 @@ def _normalizar(s):
         'inicio': s.get('inicio'), 'fim': s.get('fim'), 'fonte': s.get('fonte') or 'auto',
         'criterio': s.get('criterio') or '', 'parametros': s.get('parametros') or {},
         'limite': s.get('limite') or limite_padrao(s.get('tipo')),
-        'itens': [{'loja_id': i.get('loja_id'), 'produto_id': i.get('produto_id'), 'titulo': i.get('titulo') or '',
-                   'texto': i.get('texto') or '', 'link': i.get('link') or ''} for i in s.get('itens') or []],
+        'itens': [{'loja_id': i.get('loja_id'), 'produto_id': i.get('produto_id'), 'imagem_id': i.get('imagem_id'),
+                   'titulo': i.get('titulo') or '', 'texto': i.get('texto') or '', 'link': i.get('link') or ''}
+                  for i in s.get('itens') or []],
     }
 
 
@@ -500,7 +539,7 @@ def carregar_rascunho(seccoes):
     """Substitui o rascunho por estas secções (itens de lojas/produtos que já não existem são ignorados)."""
     from django.db import transaction
     from django.utils.dateparse import parse_datetime
-    from ..models import HomeSeccao, HomeItem, Loja, Produto
+    from ..models import HomeSeccao, HomeItem, HomeImagem, Loja, Produto
     with transaction.atomic():
         HomeSeccao.objects.all().delete()
         todos = [i for s in seccoes for i in s.get('itens') or []]
@@ -508,6 +547,8 @@ def carregar_rascunho(seccoes):
                     .values_list('id', flat=True))
         prods = set(Produto.objects.filter(id__in=[i['produto_id'] for i in todos if i.get('produto_id')])
                     .values_list('id', flat=True))
+        imagens = set(HomeImagem.objects.filter(id__in=[i['imagem_id'] for i in todos if i.get('imagem_id')])
+                      .values_list('id', flat=True))
         for ordem, s in enumerate(seccoes):
             n = _normalizar(s)
             sec = HomeSeccao.objects.create(
@@ -520,19 +561,38 @@ def carregar_rascunho(seccoes):
                 if (i['loja_id'] and i['loja_id'] not in lojas) or (i['produto_id'] and i['produto_id'] not in prods):
                     continue
                 itens.append(HomeItem(seccao=sec, ordem=o, loja_id=i['loja_id'], produto_id=i['produto_id'],
+                                      imagem_id=i['imagem_id'] if i['imagem_id'] in imagens else None,
                                       titulo=i['titulo'], texto=i['texto'], link=i['link']))
             HomeItem.objects.bulk_create(itens)
+
+
+def layout_padrao_editavel():
+    """O layout original, com a lista actual de categorias em destaque escrita na secção
+    (a página antiga Admin → Categorias em Destaque passa a ser editada aqui)."""
+    from ..models import CategoriaDestaque
+    ids = list(CategoriaDestaque.objects.filter(ativo=True, categoria__isnull=False)
+               .order_by('ordem', 'id').values_list('categoria_id', flat=True))
+    out = []
+    for s in LAYOUT_PADRAO:
+        s = {**s, 'parametros': dict(s.get('parametros') or {})}
+        if s['tipo'] == 'produtos_categorias_destaque' and ids:
+            s['parametros']['categoria_ids'] = list(dict.fromkeys(ids))
+        out.append(s)
+    return out
 
 
 def garantir_rascunho():
     """Na primeira visita ao admin, o rascunho começa igual ao que está publicado (ou ao padrão)."""
     from ..models import HomeSeccao
     if not HomeSeccao.objects.exists():
-        carregar_rascunho(publicada()[1])
+        pub_id, seccoes = publicada()
+        carregar_rascunho(layout_padrao_editavel() if pub_id == 'padrao' else seccoes)
 
 
 def tem_alteracoes():
-    _, publicadas = publicada()
+    pub_id, publicadas = publicada()
+    if pub_id == 'padrao':
+        publicadas = layout_padrao_editavel()
     return [_normalizar(s) for s in rascunho_dados()] != [_normalizar(s) for s in publicadas]
 
 
@@ -558,8 +618,13 @@ def avisos_seccao(s):
         avisos.append('Sem itens escolhidos: a secção não aparece.')
     if s.tipo == 'cabecalho' and not s.titulo:
         avisos.append('Cabeçalho sem título: não aparece.')
-    if s.tipo == 'loja_destaque' and not (s.parametros or {}).get('loja_id'):
-        avisos.append('Escolhe a loja em destaque.')
+    if s.tipo == 'loja_destaque':
+        lid = (s.parametros or {}).get('loja_id')
+        loja = Loja.objects.filter(id=lid).first() if lid else None
+        if loja is None:
+            avisos.append('Escolhe a loja em destaque.')
+        elif not loja.ativa:
+            avisos.append(f'A loja "{loja.nome}" não está activa ({loja.estado}): a secção não aparece.')
     return avisos
 
 
@@ -597,10 +662,15 @@ def _validar_parametros(p):
             if not isinstance(v, str) or len(v) > mx:
                 return None, f'Valor inválido em {k}.'
             limpos[k] = v.strip().lower() if k in ('categoria', 'categoria_loja') else v.strip()
+        elif t == 'ids':
+            if not isinstance(v, list) or len(v) > mx or \
+                    not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in v):
+                return None, f'Valor inválido em {k}.'
+            limpos[k] = list(dict.fromkeys(v))
         else:
             if not isinstance(v, list) or len(v) > mx or not all(isinstance(x, str) and len(x) <= 100 for x in v):
                 return None, f'Valor inválido em {k}.'
-            limpos[k] = [x.strip().lower() for x in v if x.strip()]
+            limpos[k] = list(dict.fromkeys(x.strip().lower() for x in v if x.strip()))
     if limpos.get('estilo_titulo') not in (None, 'titulo', 'divisor'):
         return None, 'Estilo do título inválido.'
     if 'ancora' in limpos and not all(c.isalnum() or c in '-_' for c in limpos['ancora']):
@@ -612,11 +682,14 @@ def _validar_parametros(p):
         return None, 'Essa loja não existe.'
     if 'categoria_id' in limpos and not CategoriaLoja.objects.filter(id=limpos['categoria_id']).exists():
         return None, 'Essa categoria não existe.'
+    if limpos.get('categoria_ids') and \
+            CategoriaLoja.objects.filter(id__in=limpos['categoria_ids']).count() != len(limpos['categoria_ids']):
+        return None, 'Uma das categorias escolhidas não existe.'
     return limpos, None
 
 
 def _validar_itens(lista, tipo, params):
-    from ..models import Loja, Produto
+    from ..models import Loja, Produto, HomeImagem
     if not isinstance(lista, list) or len(lista) > MAX_ITENS:
         return None, f'Itens inválidos (máximo {MAX_ITENS}).'
     aceites = TIPOS_COM_ITENS.get(tipo, ())
@@ -624,7 +697,7 @@ def _validar_itens(lista, tipo, params):
     for i in lista:
         if not isinstance(i, dict):
             return None, 'Item inválido.'
-        loja_id, produto_id = _int(i.get('loja_id')), _int(i.get('produto_id'))
+        loja_id, produto_id, imagem_id = _int(i.get('loja_id')), _int(i.get('produto_id')), _int(i.get('imagem_id'))
         titulo, texto, link = (i.get('titulo') or ''), (i.get('texto') or ''), (i.get('link') or '')
         if not all(isinstance(x, str) for x in (titulo, texto, link)):
             return None, 'Item inválido.'
@@ -635,11 +708,13 @@ def _validar_itens(lista, tipo, params):
         genero = 'loja' if loja_id else 'produto' if produto_id else 'banner'
         if genero not in aceites:
             return None, f'Esta secção não aceita itens do tipo {genero}.'
-        if genero == 'banner' and not titulo.strip():
-            return None, 'O banner precisa de um título.'
+        if genero == 'banner' and not titulo.strip() and not imagem_id:
+            return None, 'O banner precisa de um título ou de uma imagem.'
+        if imagem_id and genero != 'banner':
+            return None, 'Só os banners têm imagem própria.'
         if not _link_valido(link.strip()):
             return None, 'Link inválido: usa um caminho do site (ex.: /loja/12) ou um endereço http(s).'
-        itens.append({'loja_id': loja_id, 'produto_id': produto_id,
+        itens.append({'loja_id': loja_id, 'produto_id': produto_id, 'imagem_id': imagem_id,
                       'titulo': titulo.strip(), 'texto': texto.strip(), 'link': link.strip()})
     lojas = {x['loja_id'] for x in itens if x['loja_id']}
     prods = {x['produto_id'] for x in itens if x['produto_id']}
@@ -647,6 +722,9 @@ def _validar_itens(lista, tipo, params):
         return None, 'Uma das lojas escolhidas não existe.'
     if prods and Produto.objects.filter(id__in=prods).count() != len(prods):
         return None, 'Um dos produtos escolhidos não existe.'
+    imagens = {x['imagem_id'] for x in itens if x['imagem_id']}
+    if imagens and HomeImagem.objects.filter(id__in=imagens).count() != len(imagens):
+        return None, 'Uma das imagens já não existe: carrega-a de novo.'
     if tipo == 'loja_destaque' and prods and \
             Produto.objects.filter(id__in=prods).exclude(loja_id=params.get('loja_id')).exists():
         return None, 'Os produtos têm de ser da loja em destaque.'

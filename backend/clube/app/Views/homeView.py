@@ -1,6 +1,7 @@
 from django.db.models import Q
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -39,9 +40,11 @@ def _admin(request):
     return _exige_admin(request, 'gerir_home')
 
 
-def _item_admin(i):
-    d = {'id': i.id, 'loja_id': i.loja_id, 'produto_id': i.produto_id,
+def _item_admin(i, request):
+    d = {'id': i.id, 'loja_id': i.loja_id, 'produto_id': i.produto_id, 'imagem_id': i.imagem_id,
          'titulo': i.titulo, 'texto': i.texto, 'link': i.link}
+    if i.imagem_id:
+        d['imagem_url'] = request.build_absolute_uri(i.imagem.ficheiro.url)
     if i.loja_id:
         d['loja'] = {'id': i.loja.id, 'nome': i.loja.nome, 'estado': i.loja.estado, 'ativa': i.loja.ativa}
     if i.produto_id:
@@ -51,19 +54,36 @@ def _item_admin(i):
     return d
 
 
-def _seccao_admin(s):
+def _refs(s):
+    """Nomes das lojas/categorias referidas nos parâmetros (para o editor mostrar)."""
+    from ..models import Loja, CategoriaLoja
+    p = s.parametros or {}
+    refs = {}
+    if p.get('loja_id'):
+        l = Loja.objects.filter(id=p['loja_id']).first()
+        refs['loja'] = {'id': l.id, 'nome': l.nome, 'estado': l.estado, 'ativa': l.ativa} if l else None
+    ids = list(p.get('categoria_ids') or []) + ([p['categoria_id']] if p.get('categoria_id') else [])
+    if ids:
+        cats = CategoriaLoja.objects.filter(id__in=ids).select_related('loja')
+        refs['categorias'] = {c.id: {'id': c.id, 'nome': c.nome, 'loja': c.loja.nome, 'loja_ativa': c.loja.ativa}
+                              for c in cats}
+    return refs
+
+
+def _seccao_admin(s, request):
     return {
         'id': s.id, 'tipo': s.tipo, 'tipo_nome': s.get_tipo_display(), 'titulo': s.titulo, 'subtitulo': s.subtitulo,
         'ordem': s.ordem, 'ativa': s.ativa, 'inicio': s.inicio, 'fim': s.fim,
         'fonte': s.fonte, 'criterio': s.criterio, 'parametros': s.parametros or {}, 'limite': s.limite,
-        'itens': [_item_admin(i) for i in s.itens.all()],
+        'itens': [_item_admin(i, request) for i in s.itens.all()],
+        'refs': _refs(s),
         'avisos': H.avisos_seccao(s),
     }
 
 
 def _seccoes_qs():
     from ..models import HomeSeccao
-    return HomeSeccao.objects.prefetch_related('itens__loja', 'itens__produto__loja')
+    return HomeSeccao.objects.prefetch_related('itens__loja', 'itens__produto__loja', 'itens__imagem')
 
 
 def _estado():
@@ -94,8 +114,8 @@ def _opcoes():
     }
 
 
-def _resposta_completa():
-    return {'seccoes': [_seccao_admin(s) for s in _seccoes_qs()], **_estado(), 'opcoes': _opcoes()}
+def _resposta_completa(request):
+    return {'seccoes': [_seccao_admin(s, request) for s in _seccoes_qs()], **_estado(), 'opcoes': _opcoes()}
 
 
 @api_view(['GET'])
@@ -106,7 +126,7 @@ def admin_home(request):
     if erro:
         return erro
     H.garantir_rascunho()
-    return Response(_resposta_completa())
+    return Response(_resposta_completa(request))
 
 
 def _gravar_itens(sec, itens):
@@ -136,7 +156,7 @@ def admin_home_criar(request):
         sec = HomeSeccao.objects.create(ordem=ordem, **campos)
         if itens is not None:
             _gravar_itens(sec, itens)
-    return Response({'seccao': _seccao_admin(_seccoes_qs().get(id=sec.id)), **_estado()},
+    return Response({'seccao': _seccao_admin(_seccoes_qs().get(id=sec.id), request), **_estado()},
                     status=status.HTTP_201_CREATED)
 
 
@@ -164,7 +184,7 @@ def admin_home_seccao(request, seccao_id):
         sec.save()
         if itens is not None:
             _gravar_itens(sec, itens)
-    return Response({'seccao': _seccao_admin(_seccoes_qs().get(id=sec.id)), **_estado()})
+    return Response({'seccao': _seccao_admin(_seccoes_qs().get(id=sec.id), request), **_estado()})
 
 
 @api_view(['POST'])
@@ -192,7 +212,7 @@ def admin_home_duplicar(request, seccao_id):
         sec.save()
         HomeItem.objects.bulk_create([HomeItem(seccao=sec, ordem=i.ordem, loja_id=i.loja_id, produto_id=i.produto_id,
                                                titulo=i.titulo, texto=i.texto, link=i.link) for i in itens])
-    return Response(_resposta_completa(), status=status.HTTP_201_CREATED)
+    return Response(_resposta_completa(request), status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -237,7 +257,7 @@ def admin_home_descartar(request):
     if erro:
         return erro
     H.carregar_rascunho(H.publicada()[1])
-    return Response(_resposta_completa())
+    return Response(_resposta_completa(request))
 
 
 @api_view(['POST'])
@@ -247,8 +267,8 @@ def admin_home_padrao(request):
     erro = _admin(request)
     if erro:
         return erro
-    H.carregar_rascunho(H.LAYOUT_PADRAO)
-    return Response(_resposta_completa())
+    H.carregar_rascunho(H.layout_padrao_editavel())
+    return Response(_resposta_completa(request))
 
 
 @api_view(['GET'])
@@ -276,7 +296,7 @@ def admin_home_restaurar(request, pub_id):
     if pub is None:
         return Response({'detail': 'Publicação não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
     H.carregar_rascunho(pub.dados or [])
-    return Response(_resposta_completa())
+    return Response(_resposta_completa(request))
 
 
 @api_view(['GET'])
@@ -306,7 +326,48 @@ def admin_home_procurar(request):
         qs = qs.order_by('-ativo', '-loja__ativa', 'nome')[:20]
         return Response([{'id': p.id, 'nome': p.nome, 'preco': str(p.preco), 'ativo': p.ativo, 'loja': p.loja.nome,
                           'loja_id': p.loja_id, 'loja_ativa': p.loja.ativa} for p in qs])
-    return Response({'detail': 'tipo tem de ser loja ou produto.'}, status=status.HTTP_400_BAD_REQUEST)
+    if tipo == 'categoria':
+        from ..models import CategoriaLoja
+        from django.db.models import Count
+        qs = CategoriaLoja.objects.select_related('loja').annotate(_n=Count('produtos', filter=Q(produtos__ativo=True)))
+        if q:
+            qs = qs.filter(Q(nome__icontains=q) | Q(loja__nome__icontains=q))
+        qs = qs.order_by('-loja__ativa', 'nome', 'loja__nome')[:20]
+        return Response([{'id': c.id, 'nome': c.nome, 'loja': c.loja.nome, 'loja_ativa': c.loja.ativa,
+                          'total_produtos': c._n} for c in qs])
+    return Response({'detail': 'tipo tem de ser loja, produto ou categoria.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+IMAGEM_MAX_MB = 5
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def admin_home_imagem(request):
+    """POST /app/admin/home/imagens/ (multipart: ficheiro) — imagem para um banner. Devolve {id, url}."""
+    from PIL import Image
+    from ..models import HomeImagem
+    erro = _admin(request)
+    if erro:
+        return erro
+    f = request.FILES.get('ficheiro')
+    if f is None:
+        return Response({'detail': 'Escolhe uma imagem.'}, status=status.HTTP_400_BAD_REQUEST)
+    if f.size > IMAGEM_MAX_MB * 1024 * 1024:
+        return Response({'detail': f'A imagem tem de ter no máximo {IMAGEM_MAX_MB} MB.'}, status=status.HTTP_400_BAD_REQUEST)
+    if f.name.rsplit('.', 1)[-1].lower() not in ('jpg', 'jpeg', 'png', 'webp'):
+        return Response({'detail': 'Formatos aceites: JPG, PNG ou WEBP.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        img = Image.open(f)
+        img.verify()
+        if img.format not in ('JPEG', 'PNG', 'WEBP'):
+            raise ValueError
+    except Exception:
+        return Response({'detail': 'O ficheiro não é uma imagem válida.'}, status=status.HTTP_400_BAD_REQUEST)
+    f.seek(0)
+    im = HomeImagem.objects.create(ficheiro=f)
+    return Response({'id': im.id, 'url': request.build_absolute_uri(im.ficheiro.url)}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])

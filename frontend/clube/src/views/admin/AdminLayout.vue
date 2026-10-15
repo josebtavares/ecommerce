@@ -121,7 +121,6 @@
         <AdminComissoes    v-else-if="activeSection === 'comissoes'"    />
         <AdminCategorias   v-else-if="activeSection === 'categorias'"   />
         <AdminRelatorios   v-else-if="activeSection === 'relatorios'"   />
-        <AdminCategoriasDestaque v-else-if="activeSection === 'categorias_destaque'" />
         <AdminHome         v-else-if="activeSection === 'home'"         />
         <AdminPaginas      v-else-if="activeSection === 'paginas'"      />
         <AdminPOS          v-else-if="activeSection === 'pos'"          />
@@ -146,7 +145,6 @@ import AdminTipos        from './AdminTipos.vue'
 import AdminComissoes    from './AdminComissoes.vue'
 import AdminCategorias   from './AdminCategorias.vue'
 import AdminRelatorios   from './AdminRelatorios.vue'
-import AdminCategoriasDestaque from './AdminCategoriasDestaque.vue'
 import AdminHome         from './AdminHome.vue'
 import AdminPaginas      from './AdminPaginas.vue'
 import AdminPOS          from './AdminPOS.vue'
@@ -166,7 +164,6 @@ const SECCOES = [
   { key: 'lojas',        label: 'Lojas',         icon: 'store',         permissao: 'gerir_lojas'         },
   { key: 'utilizadores', label: 'Utilizadores',  icon: 'users',         permissao: 'gerir_utilizadores'  },
   { key: 'produtos',     label: 'Produtos',      icon: 'box',           permissao: 'gerir_produtos'      },
-  { key: 'categorias_destaque', label: 'Categorias em Destaque', icon: 'fire', permissao: 'gerir_categorias_destaque' },
 
   { key: 'encomendas',   label: 'Encomendas',    icon: 'bag-shopping',  permissao: 'gerir_encomendas'   },
   { key: 'pagamentos',   label: 'Pagamentos',    icon: 'credit-card',   permissao: 'gerir_pagamentos'    },
@@ -194,7 +191,7 @@ export default {
   components: {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
-    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminCategoriasDestaque, AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes,
+    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes,
   },
 
   data () {

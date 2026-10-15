@@ -192,11 +192,13 @@
                   <img v-else-if="slide.tipo === 'produto'"
                     :src="slide.produto.ficheiro_poster_url || slide.produto.ficheiro_url || produtoPadrao"
                     :alt="slide.produto.nome" class="w-full h-full object-cover" />
+                  <img v-else-if="slide.imagem_url" :src="slide.imagem_url" :alt="slide.titulo" class="w-full h-full object-cover" />
                   <div v-else class="w-full h-full bg-gradient-to-br from-red-700 via-zinc-900 to-zinc-950"></div>
                   <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent"></div>
                   <div class="absolute inset-0 bg-gradient-to-r from-zinc-950/80 to-transparent"></div>
                   <div class="absolute bottom-0 left-0 p-8 md:p-12 max-w-2xl">
-                    <span class="inline-block px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full mb-4 uppercase tracking-wider">
+                    <span v-if="slide.tipo !== 'banner' || slide.titulo"
+                      class="inline-block px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full mb-4 uppercase tracking-wider">
                       {{ etiquetaSlide(sec, slide) }}
                     </span>
                     <h1 class="text-4xl md:text-6xl font-bold text-white mb-3 leading-tight">
@@ -290,6 +292,24 @@
               :inicial="sec.pagina" :endpoint="endpointSeccao(sec.id)"
               :isDark="isDark" @product-click="openProduct($event)" />
           </section>
+
+          <!-- Loja em destaque -->
+          <section v-else-if="sec.tipo === 'loja_destaque'" class="py-8 px-6 md:px-12">
+            <HomeLojaDestaque :loja="sec.loja" :produtos="sec.produtos" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
+              :isDark="isDark" @store-click="goToStore($event.id)" @product-click="openProduct($event)" />
+          </section>
+
+          <!-- Categorias -->
+          <section v-else-if="sec.tipo === 'categorias'" class="py-8 px-6 md:px-12">
+            <HomeCategorias :categorias="sec.categorias" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
+              :isDark="isDark" @escolher="filtrarCatalogo" />
+          </section>
+
+          <!-- Banners -->
+          <section v-else-if="sec.tipo === 'banner'" class="py-8 px-6 md:px-12">
+            <HomeBanners :banners="sec.banners" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
+              :isDark="isDark" @abrir="abrirLink" />
+          </section>
         </template>
 
         <!-- ── CATÁLOGO COMPLETO ── -->
@@ -300,7 +320,7 @@
             <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Explorar Lojas</h2>
             <p class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Pesquisa e filtra todas as lojas da plataforma</p>
           </div>
-          <StoreCatalog :isDark="isDark" @store-click="goToStore($event.id)" />
+          <StoreCatalog ref="catalogo" :isDark="isDark" @store-click="goToStore($event.id)" />
         </section>
 
         <!-- ── FOOTER ── -->
@@ -356,6 +376,9 @@ import StoreSlider     from '@/components/sliders/StoreSlider.vue'
 import ProductSlider   from '@/components/sliders/ProductSlider.vue'
 import StoreCatalog    from '@/components/catalog/StoreCatalog.vue'
 import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
+import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
+import HomeCategorias from '@/components/home/HomeCategorias.vue'
+import HomeBanners from '@/components/home/HomeBanners.vue'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 import api from '@/services/api'
@@ -364,7 +387,8 @@ import { iconeCategoria } from '@/utils/icones'
 
 export default {
   name: 'AppHome',
-  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, PaginaInfoModal },
+  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, PaginaInfoModal,
+                HomeLojaDestaque, HomeCategorias, HomeBanners },
 
   data () {
     return {
@@ -464,10 +488,19 @@ export default {
     abrirSlide (slide) {
       if (slide.tipo === 'loja') this.goToStore(slide.id)
       else if (slide.tipo === 'produto' && slide.produto) this.openProduct(slide.produto)
-      else if (slide.link) {
-        if (/^https?:\/\//i.test(slide.link)) window.open(slide.link, '_blank', 'noopener')
-        else this.$router.push(slide.link)
-      }
+      else if (slide.link) this.abrirLink(slide.link)
+    },
+
+    // links dos banners (o admin só aceita "/caminho" ou http(s))
+    abrirLink (link) {
+      if (/^https?:\/\//i.test(link)) window.open(link, '_blank', 'noopener')
+      else if (link.startsWith('/') && !link.startsWith('//')) this.$router.push(link)
+    },
+
+    // grelha de categorias → catálogo filtrado
+    filtrarCatalogo (categoria) {
+      this.$refs.catalogo?.selectCategoria(categoria)
+      this.scrollToSection('catalogo')
     },
 
     etiquetaSlide (sec, slide) {

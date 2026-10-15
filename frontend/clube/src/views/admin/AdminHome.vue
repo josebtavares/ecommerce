@@ -207,12 +207,10 @@
                   <option v-for="t in opcoes.tipos_produto" :key="t.id" :value="t.id">{{ t.nome }}</option>
                 </select>
               </div>
-              <div v-if="form.criterio === 'categoria_produto'">
-                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Categoria em destaque</label>
-                <select v-model="form.parametros.categoria_id" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500">
-                  <option :value="undefined" disabled>Escolhe…</option>
-                  <option v-for="c in opcoes.categorias_destaque" :key="c.id" :value="c.id">{{ c.nome }} — {{ c.loja }}</option>
-                </select>
+              <div v-if="form.criterio === 'categoria_produto'" class="sm:col-span-2">
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Categoria de produtos</label>
+                <Procurar tipo="categoria" :valor="categoriaCriterio"
+                  @escolher="c => { form.parametros.categoria_id = c.id; categoriaCriterio = { ...c, nome: `${c.nome} — ${c.loja}` } }" />
               </div>
               <div v-if="form.criterio === 'loja'" class="sm:col-span-2">
                 <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Loja</label>
@@ -228,8 +226,43 @@
 
           <!-- loja em destaque -->
           <div v-if="form.tipo === 'loja_destaque'">
+            <p class="text-xs text-zinc-500 mb-3">Os produtos escolhidos aparecem primeiro; o resto é preenchido com os destaques e os mais recentes da loja.</p>
             <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Loja em destaque</label>
             <Procurar tipo="loja" :valor="lojaCriterio" @escolher="l => { form.parametros.loja_id = l.id; lojaCriterio = l; form.itens = [] }" />
+          </div>
+
+          <!-- grelha de categorias de lojas -->
+          <div v-if="form.tipo === 'categorias'">
+            <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Categorias a mostrar</label>
+            <p class="text-[11px] text-zinc-500 mb-2">Nenhuma escolhida = todas, as que têm mais lojas primeiro. Clicar numa categoria filtra o catálogo.</p>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="c in opcoes.categorias_lojas" :key="c.valor" type="button" @click="alternarCategoria(c.valor)"
+                :class="['px-3 py-1.5 rounded-lg border text-xs font-semibold transition',
+                         (form.parametros.categorias || []).includes(c.valor) ? 'border-red-500/60 bg-red-500/10 text-red-300' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500']">
+                <span v-if="(form.parametros.categorias || []).includes(c.valor)" class="mr-1 text-red-400">{{ form.parametros.categorias.indexOf(c.valor) + 1 }}.</span>{{ c.nome }}
+              </button>
+            </div>
+          </div>
+
+          <!-- categorias de produtos em destaque (antiga página Categorias em Destaque) -->
+          <div v-if="form.tipo === 'produtos_categorias_destaque'">
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-xs text-zinc-400 font-medium block">Categorias ({{ form.categoriasSel.length }})</label>
+              <span class="text-[10px] text-zinc-600">máx. 30 · um slider por categoria</span>
+            </div>
+            <div class="space-y-2">
+              <div v-for="(c, k) in form.categoriasSel" :key="c.id" class="flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2">
+                <font-awesome-icon :icon="['fas', 'tags']" class="text-zinc-500 w-3.5" />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-zinc-100 truncate">{{ c.nome }} <span class="text-zinc-500">— {{ c.loja }}</span></p>
+                  <p v-if="c.loja_ativa === false" class="text-[11px] text-amber-400">Loja não activa: não aparece.</p>
+                </div>
+                <button @click="moverCategoria(k, -1)" :disabled="k === 0" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition" aria-label="Subir"><font-awesome-icon :icon="['fas', 'chevron-up']" /></button>
+                <button @click="moverCategoria(k, 1)" :disabled="k === form.categoriasSel.length - 1" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition" aria-label="Descer"><font-awesome-icon :icon="['fas', 'chevron-down']" /></button>
+                <button @click="form.categoriasSel.splice(k, 1)" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-red-400 disabled:opacity-20 transition" aria-label="Remover"><font-awesome-icon :icon="['fas', 'xmark']" /></button>
+              </div>
+            </div>
+            <Procurar v-if="form.categoriasSel.length < 30" class="mt-2" tipo="categoria" :limpar="true" @escolher="adicionarCategoria" />
           </div>
 
           <!-- grupos -->
@@ -259,11 +292,22 @@
                 </div>
                 <div v-if="form.tipo === 'hero' || !it.loja_id && !it.produto_id" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                   <input v-model="it.titulo" maxlength="120" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
-                         :placeholder="it.loja_id || it.produto_id ? 'Título no hero (opcional)' : 'Título do banner'" />
+                         :placeholder="it.loja_id || it.produto_id ? 'Título no hero (opcional)' : 'Título do banner (opcional com imagem)'" />
                   <input v-model="it.texto" maxlength="300" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
                          :placeholder="it.loja_id || it.produto_id ? 'Texto no hero (opcional)' : 'Texto (opcional)'" />
                   <input v-if="!it.loja_id && !it.produto_id" v-model="it.link" maxlength="300" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500 sm:col-span-2"
                          placeholder="Link: /loja/12 ou https://…" />
+                  <div v-if="!it.loja_id && !it.produto_id" class="sm:col-span-2 flex items-center gap-3">
+                    <img v-if="it.imagem_url" :src="it.imagem_url" alt="" class="w-28 h-16 rounded-lg object-cover border border-zinc-700" />
+                    <label class="px-3 py-1.5 rounded-lg border border-zinc-700 text-xs font-semibold text-zinc-300 hover:border-zinc-500 cursor-pointer">
+                      {{ it._aCarregar ? 'A carregar…' : it.imagem_id ? 'Trocar imagem' : 'Carregar imagem' }}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" :disabled="it._aCarregar"
+                             @change="e => carregarImagem(it, e)" />
+                    </label>
+                    <button v-if="it.imagem_id" type="button" @click="it.imagem_id = null; it.imagem_url = ''"
+                      class="text-xs text-zinc-500 hover:text-red-400">Remover imagem</button>
+                    <span class="text-[10px] text-zinc-600">JPG, PNG ou WEBP · até 5 MB · ideal 1600×600</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -402,8 +446,6 @@ const DESCRICAO_GRUPO = {
   produtos_por_tipo: 'Mostra um slider por cada tipo global de produto com produtos visíveis.',
   produtos_categorias_destaque: 'Mostra um slider por cada categoria em Admin → Categorias em Destaque.',
 }
-// tipos que a home pública já desenha (loja em destaque, categorias e banner chegam na fase 3)
-const TIPOS_DISPONIVEIS = ['hero', 'lojas', 'produtos', 'cabecalho', 'lojas_por_categoria', 'produtos_por_tipo', 'produtos_categorias_destaque']
 const TEM_FONTE = ['hero', 'lojas', 'produtos']
 const GRUPOS = ['lojas_por_categoria', 'produtos_por_tipo', 'produtos_categorias_destaque']
 const ITENS_POR_TIPO = { hero: ['loja', 'produto', 'banner'], lojas: ['loja'], produtos: ['produto'], loja_destaque: ['produto'], banner: ['banner'] }
@@ -446,6 +488,7 @@ export default {
       form: null,
       original: '',
       lojaCriterio: null,
+      categoriaCriterio: null,
       generoNovo: 'loja',
       loading: true,
       aGuardar: false,
@@ -471,7 +514,7 @@ export default {
       return !TEM_FONTE.includes(this.form.tipo) || this.form.fonte !== 'auto'
     },
     limiteMax () { return ['hero', 'loja_destaque'].includes(this.form?.tipo) ? 20 : (this.opcoes.limite_max || 100) },
-    tiposDisponiveis () { return this.opcoes.tipos.filter(t => TIPOS_DISPONIVEIS.includes(t.valor)) },
+    tiposDisponiveis () { return this.opcoes.tipos },
     placeholderTitulo () {
       return { lojas_por_categoria: 'Sem título: só os sliders', produtos_por_tipo: 'Ex.: Produtos', cabecalho: 'Ex.: Produtos' }[this.form?.tipo] || ''
     },
@@ -541,12 +584,16 @@ export default {
         fonte: s.fonte, criterio: s.criterio, limite: s.limite,
         parametros: { estilo_titulo: 'titulo', categoria: '', categoria_loja: '', ...JSON.parse(JSON.stringify(s.parametros || {})) },
         itens: s.itens.map(i => ({ ...i, _k: ++uid })),
+        categoriasSel: (s.parametros?.categoria_ids || []).map(id => s.refs?.categorias?.[id] || { id, nome: `Categoria #${id}`, loja: '' }),
       }
       if (['lojas', 'hero'].includes(s.tipo) && this.form.parametros.abertas_primeiro === undefined) {
         this.form.parametros.abertas_primeiro = ['novas', 'todas', ''].includes(s.criterio)
       }
       const lid = this.form.parametros.loja_id
-      this.lojaCriterio = lid ? { id: lid, nome: s.itens.find(i => i.produto?.loja_id === lid)?.produto.loja || `Loja #${lid}` } : null
+      this.lojaCriterio = lid ? (s.refs?.loja || { id: lid, nome: `Loja #${lid}` }) : null
+      const cid = this.form.parametros.categoria_id
+      const cat = cid ? s.refs?.categorias?.[cid] : null
+      this.categoriaCriterio = cid ? { id: cid, nome: cat ? `${cat.nome} — ${cat.loja}` : `Categoria #${cid}` } : null
       this.generoNovo = (ITENS_POR_TIPO[s.tipo] || ['loja'])[0]
       this.original = JSON.stringify(this.payload())
     },
@@ -560,7 +607,8 @@ export default {
       if (f.tipo === 'cabecalho') { por('estilo_titulo', p.estilo_titulo); por('ancora', p.ancora) }
       if (GRUPOS.includes(f.tipo)) por('estilo_titulo', p.estilo_titulo)
       if (f.tipo === 'loja_destaque') por('loja_id', p.loja_id)
-      if (f.tipo === 'categorias') por('categorias', p.categorias)
+      if (f.tipo === 'categorias' && p.categorias?.length) out.categorias = [...p.categorias]
+      if (f.tipo === 'produtos_categorias_destaque' && f.categoriasSel.length) out.categoria_ids = f.categoriasSel.map(c => c.id)
       if (TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual') {
         if (this.eLojas) {
           por('categoria', p.categoria)
@@ -584,6 +632,7 @@ export default {
         fonte: f.fonte, criterio: TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual' ? (f.criterio || '') : '',
         limite: f.limite, parametros: this.parametrosLimpos(),
         itens: comItens ? f.itens.map(i => ({ loja_id: i.loja_id || null, produto_id: i.produto_id || null,
+                                               imagem_id: i.imagem_id || null,
                                                titulo: i.titulo || '', texto: i.texto || '', link: i.link || '' })) : [],
       }
     },
@@ -681,7 +730,7 @@ export default {
       const repetido = (dados.loja_id && this.form.itens.some(i => i.loja_id === dados.loja_id)) ||
                        (dados.produto_id && this.form.itens.some(i => i.produto_id === dados.produto_id))
       if (repetido) { toast.info('Já está na lista.'); return }
-      this.form.itens.push({ loja_id: null, produto_id: null, titulo: '', texto: '', link: '', ...dados, _k: ++uid })
+      this.form.itens.push({ loja_id: null, produto_id: null, imagem_id: null, imagem_url: '', titulo: '', texto: '', link: '', ...dados, _k: ++uid })
     },
 
     moverItem (k, d) {
@@ -691,10 +740,47 @@ export default {
       ;[itens[k], itens[j]] = [itens[j], itens[k]]
     },
 
+    alternarCategoria (valor) {
+      const lista = [...(this.form.parametros.categorias || [])]
+      const i = lista.indexOf(valor)
+      if (i >= 0) lista.splice(i, 1)
+      else lista.push(valor)
+      this.form.parametros.categorias = lista
+    },
+
+    adicionarCategoria (c) {
+      if (this.form.categoriasSel.some(x => x.id === c.id)) { toast.info('Já está na lista.'); return }
+      this.form.categoriasSel.push({ id: c.id, nome: c.nome, loja: c.loja, loja_ativa: c.loja_ativa })
+    },
+
+    moverCategoria (k, d) {
+      const j = k + d
+      const l = this.form.categoriasSel
+      if (j < 0 || j >= l.length) return
+      ;[l[k], l[j]] = [l[j], l[k]]
+    },
+
+    async carregarImagem (it, e) {
+      const ficheiro = e.target.files?.[0]
+      e.target.value = ''
+      if (!ficheiro) return
+      if (ficheiro.size > 5 * 1024 * 1024) { toast.error('A imagem tem de ter no máximo 5 MB.'); return }
+      it._aCarregar = true
+      try {
+        const fd = new FormData()
+        fd.append('ficheiro', ficheiro)
+        const { data } = await api.post('/app/admin/home/imagens/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        it.imagem_id = data.id
+        it.imagem_url = data.url
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Não foi possível carregar a imagem.')
+      } finally { it._aCarregar = false }
+    },
+
     nomeItem (it) {
       if (it.loja_id) return it.loja?.nome || `Loja #${it.loja_id}`
       if (it.produto_id) return it.produto ? `${it.produto.nome} — ${it.produto.loja}` : `Produto #${it.produto_id}`
-      return it.titulo || 'Banner sem título'
+      return it.titulo || (it.imagem_id ? 'Banner com imagem' : 'Banner sem título')
     },
 
     avisoItem (it) {
