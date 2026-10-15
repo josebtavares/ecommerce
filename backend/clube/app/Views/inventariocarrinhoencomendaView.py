@@ -8,6 +8,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_staff,notificar,notificar_admins
 from decimal import Decimal
+from datetime import timedelta
+from django.utils import timezone
 
 
 from ..models import (
@@ -406,7 +408,9 @@ def encomenda_criar(request, loja_id):
     # ── Horário: loja fechada → fica para a abertura ('agendar') ou não aceita ('bloquear') ──
     hor = horarios.estado(loja)
     if not hor['aberta']:
-        if loja.fora_horario == 'bloquear' or not hor['abre_em']:
+        # 'agendar' só até uma semana: com a loja de férias mais tempo, não se aceitam encomendas para tão longe
+        longe = hor['abre_em'] and hor['abre_em'] - timezone.now() > timedelta(days=horarios.MAX_DIAS_ABERTURA)
+        if loja.fora_horario == 'bloquear' or not hor['abre_em'] or longe:
             return Response({'detail': f'A loja está fechada. Abre {horarios.quando_texto(hor["abre_em"])}.'
                                        if hor['abre_em'] else 'A loja está fechada de momento.',
                              'codigo': 'loja_fechada', 'horario': horarios.payload_publico(loja)},
