@@ -73,7 +73,7 @@
               </button>
             </div>
 
-            <div v-if="loadingCategorias" class="space-y-2">
+            <div v-if="loadingHome" class="space-y-2">
               <div v-for="n in 5" :key="n" class="h-10 rounded-lg animate-pulse"
                    :class="isDark ? 'bg-zinc-800' : 'bg-stone-100'"></div>
             </div>
@@ -149,59 +149,9 @@
       <!-- ═══ MAIN ═══ -->
       <main class="flex-1 overflow-x-hidden">
 
-        <!-- ── HERO Swiper ── -->
-        <section class="relative overflow-hidden">
-          <swiper ref="heroSwiper" :pagination="heroPagination" :modules="modules"
-                  :autoplay="{ delay: 3500, disableOnInteraction: false }"
-                  :speed="800" effect="slide" class="md:h-[90vh] h-[70vh]"
-                  @mouseenter="stopHeroAutoplay" @mouseleave="startHeroAutoplay">
-            <swiper-slide v-for="store in newStores" :key="store.id"
-              @click="goToStore(store.id)" class="cursor-pointer">
-              <div class="relative h-full w-full">
-                <video v-if="isVideo(store.banner_url)"
-                  :src="store.banner_url" :poster="store.banner_poster_url"
-                  class="w-full h-full object-cover"
-                  v-video-visivel muted loop playsinline></video>
-                <img v-else
-                  :src="store.banner_url || '/placeholder-banner.jpg'"
-                  :alt="store.nome"
-                  class="w-full h-full object-cover" />
-                <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent"></div>
-                <div class="absolute inset-0 bg-gradient-to-r from-zinc-950/80 to-transparent"></div>
-                <div class="absolute bottom-0 left-0 p-8 md:p-12 max-w-2xl">
-                  <span class="inline-block px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full mb-4 uppercase tracking-wider">
-                    Nova Loja
-                  </span>
-                  <h1 class="text-4xl md:text-6xl font-bold text-white mb-3 leading-tight">{{ store.nome }}</h1>
-                  <p class="text-base text-zinc-300 mb-4 line-clamp-2">{{ store.descricao }}</p>
-                  <div class="flex items-center gap-4 text-zinc-400 text-sm flex-wrap mb-5">
-                    <span v-if="store.localizacao" class="flex items-center gap-1.5">
-                      <font-awesome-icon :icon="['fas', 'location-dot']" /> {{ store.localizacao }}
-                    </span>
-                    <span class="flex items-center gap-1.5 capitalize">
-                      <font-awesome-icon :icon="['fas', iconeCategoria(null, store.categoria)]" /> {{ store.categoria }}
-                    </span>
-                    <span v-if="store.rating_medio" class="flex items-center gap-1">
-                      <svg class="h-4 w-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                      </svg>
-                      {{ store.rating_medio }}
-                    </span>
-                  </div>
-                  <button class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition flex items-center gap-2">
-                    Visitar Loja
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </swiper-slide>
-          </swiper>
-        </section>
-
-        <!-- ── SLIDERS POR CATEGORIA ── -->
-        <div v-if="loadingCategorias" class="py-10 px-6 md:px-12 space-y-10">
+        <!-- ── SECÇÕES (montadas no admin → /app/home/) ── -->
+        <div v-if="loadingHome" class="py-10 px-6 md:px-12 space-y-10">
+          <div class="h-[50vh] rounded-2xl animate-pulse" :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'"></div>
           <div v-for="n in 3" :key="n">
             <div class="h-5 w-40 rounded animate-pulse mb-4"
                  :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'"></div>
@@ -212,51 +162,127 @@
           </div>
         </div>
 
-        <template v-else>
-          <section v-for="(cat, index) in categoriasExistentes" :key="cat.value"
-                   :ref="el => { if (el) sectionRefs[cat.value] = el }"
-                   class="py-8 px-6 md:px-12"
-                   :class="index % 2 !== 0 ? (isDark ? 'bg-zinc-900/40' : 'bg-stone-100/60') : ''">
-            <StoreSlider :title="cat.label" :icon="cat.icon"
-              :params="{ categoria: cat.value }" :isDark="isDark"
-              @store-click="goToStore($event.id)" />
+        <template v-for="sec in seccoes" :key="sec.id">
+
+          <!-- Hero -->
+          <section v-if="sec.tipo === 'hero'" class="relative overflow-hidden">
+            <swiper :ref="el => { if (el) heroRefs[sec.id] = el }" :pagination="heroPagination" :modules="modules"
+                    :autoplay="{ delay: 3500, disableOnInteraction: false }"
+                    :speed="800" effect="slide" class="md:h-[90vh] h-[70vh]"
+                    @mouseenter="pararHero(sec.id)" @mouseleave="retomarHero(sec.id)">
+              <swiper-slide v-for="(slide, i) in sec.slides" :key="i"
+                @click="abrirSlide(slide)" class="cursor-pointer">
+                <div class="relative h-full w-full">
+                  <template v-if="slide.tipo === 'loja'">
+                    <video v-if="isVideo(slide.loja.banner_url)"
+                      :src="slide.loja.banner_url" :poster="slide.loja.banner_poster_url"
+                      class="w-full h-full object-cover"
+                      v-video-visivel muted loop playsinline></video>
+                    <img v-else
+                      :src="slide.loja.banner_url || bannerPadrao"
+                      :alt="slide.loja.nome"
+                      class="w-full h-full object-cover" />
+                  </template>
+                  <img v-else-if="slide.tipo === 'produto'"
+                    :src="slide.produto.ficheiro_poster_url || slide.produto.ficheiro_url || produtoPadrao"
+                    :alt="slide.produto.nome" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-full bg-gradient-to-br from-red-700 via-zinc-900 to-zinc-950"></div>
+                  <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent"></div>
+                  <div class="absolute inset-0 bg-gradient-to-r from-zinc-950/80 to-transparent"></div>
+                  <div class="absolute bottom-0 left-0 p-8 md:p-12 max-w-2xl">
+                    <span class="inline-block px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full mb-4 uppercase tracking-wider">
+                      {{ etiquetaSlide(sec, slide) }}
+                    </span>
+                    <h1 class="text-4xl md:text-6xl font-bold text-white mb-3 leading-tight">
+                      {{ slide.titulo || slide.loja?.nome || slide.produto?.nome }}
+                    </h1>
+                    <p class="text-base text-zinc-300 mb-4 line-clamp-2">
+                      {{ slide.texto || slide.loja?.descricao || slide.produto?.descricao }}
+                    </p>
+                    <div v-if="slide.tipo === 'loja'" class="flex items-center gap-4 text-zinc-400 text-sm flex-wrap mb-5">
+                      <span v-if="slide.loja.localizacao" class="flex items-center gap-1.5">
+                        <font-awesome-icon :icon="['fas', 'location-dot']" /> {{ slide.loja.localizacao }}
+                      </span>
+                      <span class="flex items-center gap-1.5 capitalize">
+                        <font-awesome-icon :icon="['fas', iconeCategoria(null, slide.loja.categoria)]" /> {{ slide.loja.categoria }}
+                      </span>
+                      <span v-if="slide.loja.rating_medio" class="flex items-center gap-1">
+                        <svg class="h-4 w-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                        {{ slide.loja.rating_medio }}
+                      </span>
+                    </div>
+                    <div v-else-if="slide.tipo === 'produto'" class="flex items-center gap-4 text-zinc-300 text-sm flex-wrap mb-5">
+                      <span class="text-xl font-bold text-white">{{ Number(slide.produto.preco).toFixed(2) }} €</span>
+                      <span v-if="slide.produto.loja" class="flex items-center gap-1.5">
+                        <font-awesome-icon :icon="['fas', 'store']" /> {{ slide.produto.loja.nome }}
+                      </span>
+                    </div>
+                    <button v-if="slide.tipo !== 'banner' || slide.link"
+                      class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition flex items-center gap-2">
+                      {{ slide.tipo === 'loja' ? 'Visitar Loja' : slide.tipo === 'produto' ? 'Ver Produto' : 'Saber mais' }}
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </swiper-slide>
+            </swiper>
           </section>
-        </template>
 
-        <!-- ── PRODUTOS ── -->
-        <section :ref="el => { if (el) sectionRefs['produtos'] = el }"
-                 class="py-10 px-6 md:px-12 border-t"
-                 :class="isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-stone-200'">
-          <div class="mb-4">
-            <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Produtos</h2>
-            <p class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Descobre produtos de todas as lojas</p>
-          </div>
-
-          <ProductSlider title="Em Destaque"
-            :params="{ destaque: true }" :isDark="isDark"
-            @product-click="openProduct($event)" />
-
-          <ProductSlider v-for="tipo in tiposExistentes" :key="tipo.id"
-            :title="tipo.nome"
-            :params="{ tipo: tipo.nome }" :isDark="isDark"
-            @product-click="openProduct($event)" />
-        </section>
-
-        <!-- ── POR CATEGORIA PLATAFORMA ── -->
-        <template v-if="categoriasPlataforma.length > 0">
-          <section class="py-4 px-6 md:px-12">
-            <div class="flex items-center gap-3 mb-2">
-              <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'"></div>
-              <span class="text-xs font-bold uppercase tracking-widest"
-                    :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Por categoria</span>
-              <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'"></div>
-            </div>
+          <!-- Cabeçalho / divisor -->
+          <section v-else-if="sec.tipo === 'cabecalho'"
+                   :ref="el => { if (el && sec.parametros.ancora) sectionRefs[sec.parametros.ancora] = el }"
+                   class="pt-10 pb-2 px-6 md:px-12 border-t"
+                   :class="isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-stone-200'">
+            <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ sec.titulo }}</h2>
+            <p v-if="sec.subtitulo" class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ sec.subtitulo }}</p>
           </section>
-          <section v-for="cat in categoriasPlataforma" :key="'cat-' + cat.categoria_id"
-                   class="py-4 px-6 md:px-12">
-            <ProductSlider :title="cat.nome"
-              :params="{ categoria_id: cat.categoria_id }" :isDark="isDark"
-              @product-click="openProduct($event)" />
+
+          <!-- Grupos: um slider por categoria / tipo -->
+          <template v-else-if="sec.grupos">
+            <section v-if="sec.titulo" class="py-4 px-6 md:px-12">
+              <div v-if="sec.parametros.estilo_titulo === 'divisor'" class="flex items-center gap-3 mb-2">
+                <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'"></div>
+                <span class="text-xs font-bold uppercase tracking-widest"
+                      :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ sec.titulo }}</span>
+                <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'"></div>
+              </div>
+              <template v-else>
+                <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ sec.titulo }}</h2>
+                <p v-if="sec.subtitulo" class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ sec.subtitulo }}</p>
+              </template>
+            </section>
+            <section v-for="(g, gi) in sec.grupos" :key="sec.id + '-' + g.chave"
+                     :ref="el => { if (el && sec.conteudo === 'lojas') sectionRefs[g.chave] = el }"
+                     :class="sec.conteudo === 'lojas'
+                       ? ['py-8 px-6 md:px-12', gi % 2 !== 0 ? (isDark ? 'bg-zinc-900/40' : 'bg-stone-100/60') : '']
+                       : ['py-4 px-6 md:px-12', isDark ? 'bg-zinc-900/50' : 'bg-white']">
+              <StoreSlider v-if="sec.conteudo === 'lojas'" :title="g.titulo" :icon="iconeCategoria(null, g.chave)"
+                :inicial="g.pagina" :endpoint="`/app/home/seccao/${sec.id}/`" :params="{ grupo: g.chave }"
+                :isDark="isDark" @store-click="goToStore($event.id)" />
+              <ProductSlider v-else :title="g.titulo"
+                :inicial="g.pagina" :endpoint="`/app/home/seccao/${sec.id}/`" :params="{ grupo: g.chave }"
+                :isDark="isDark" @product-click="openProduct($event)" />
+            </section>
+          </template>
+
+          <!-- Lojas -->
+          <section v-else-if="sec.tipo === 'lojas'" class="py-8 px-6 md:px-12">
+            <p v-if="sec.subtitulo" class="-mb-2 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ sec.subtitulo }}</p>
+            <StoreSlider :title="sec.titulo || 'Lojas'"
+              :inicial="sec.pagina" :endpoint="`/app/home/seccao/${sec.id}/`"
+              :isDark="isDark" @store-click="goToStore($event.id)" />
+          </section>
+
+          <!-- Produtos -->
+          <section v-else-if="sec.tipo === 'produtos'" class="py-4 px-6 md:px-12"
+                   :class="isDark ? 'bg-zinc-900/50' : 'bg-white'">
+            <ProductSlider :title="sec.titulo || 'Produtos'"
+              :inicial="sec.pagina" :endpoint="`/app/home/seccao/${sec.id}/`"
+              :isDark="isDark" @product-click="openProduct($event)" />
           </section>
         </template>
 
@@ -327,21 +353,8 @@ import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
 import api from '@/services/api'
+import { DEFAULT_BANNER, DEFAULT_PRODUTO } from '@/services/media'
 import { iconeCategoria } from '@/utils/icones'
-
-// rótulos das categorias de loja (o ícone vem de utils/icones.js)
-const CATEGORIAS_MAP = {
-  restaurante:  { label: 'Restaurantes' },
-  moda:         { label: 'Moda' },
-  tecnologia:   { label: 'Tecnologia' },
-  supermercado: { label: 'Supermercado' },
-  farmacia:     { label: 'Farmácia' },
-  desporto:     { label: 'Desporto' },
-  beleza:       { label: 'Beleza' },
-  livraria:     { label: 'Livraria' },
-  casa:         { label: 'Casa e Jardim' },
-  outros:       { label: 'Outros' },
-}
 
 export default {
   name: 'AppHome',
@@ -350,16 +363,17 @@ export default {
   data () {
     return {
       isDark: true,   // dark por defeito — pode ser lido de localStorage se quiseres
-      newStores: [],
+      seccoes: [],              // secções da home (admin → /app/home/)
       categoriasExistentes: [],
-      tiposExistentes: [],
-      loadingCategorias: true,
+      loadingHome: true,
+      heroRefs: {},
+      bannerPadrao: DEFAULT_BANNER,
+      produtoPadrao: DEFAULT_PRODUTO,
       selectedProduct: null,
       selectedLoja: null,
       selectedCategoria: null,
       storesByCategory: [],
       sidebarAberta: false,
-      categoriasPlataforma: [],
       user: {},
       sectionRefs: {},
       logoDefault,
@@ -393,10 +407,7 @@ export default {
     if (savedDark !== null) this.isDark = savedDark === 'true'
 
     await Promise.all([
-      this.fetchNewStores(),
-      this.fetchCategoriasExistentes(),
-      this.fetchTiposExistentes(),
-      this.fetchCategoriasPlataforma(),
+      this.fetchHome(),
       this.fetchPaginasRodape(),
     ])
   },
@@ -439,42 +450,33 @@ export default {
       } catch (e) { console.error(e) }
     },
 
-    stopHeroAutoplay  () { this.$refs.heroSwiper?.swiper?.autoplay.stop() },
-    startHeroAutoplay () { this.$refs.heroSwiper?.swiper?.autoplay.start() },
+    pararHero  (id) { this.heroRefs[id]?.swiper?.autoplay.stop() },
+    retomarHero (id) { this.heroRefs[id]?.swiper?.autoplay.start() },
 
-    async fetchNewStores () {
-      try {
-        const { data } = await api.get('/app/loja/?offset=0&limit=5')
-        this.newStores = data.results || data
-      } catch (e) { console.error(e) }
+    abrirSlide (slide) {
+      if (slide.tipo === 'loja') this.goToStore(slide.id)
+      else if (slide.tipo === 'produto' && slide.produto) this.openProduct(slide.produto)
+      else if (slide.link) {
+        if (/^https?:\/\//i.test(slide.link)) window.open(slide.link, '_blank', 'noopener')
+        else this.$router.push(slide.link)
+      }
     },
 
-    async fetchCategoriasExistentes () {
+    etiquetaSlide (sec, slide) {
+      if (slide.tipo === 'produto') return 'Produto em destaque'
+      if (slide.tipo === 'banner') return 'Novidade'
+      return { novas: 'Nova Loja', populares: 'Popular', mais_vendidas: 'Mais vendida', mais_favoritas: 'Favorita' }[sec.criterio] || 'Em destaque'
+    },
+
+    async fetchHome () {
       try {
-        const { data } = await api.get('/app/loja/?limit=100')
-        const lojas = data.results || data
-        const unicas = [...new Set(lojas.map(l => l.categoria?.toLowerCase()).filter(Boolean))]
-        this.categoriasExistentes = unicas.map(val => ({
-          value: val,
-          label: CATEGORIAS_MAP[val]?.label || (val.charAt(0).toUpperCase() + val.slice(1)),
-          icon:  iconeCategoria(null, val),
+        const { data } = await api.get('/app/home/')
+        this.seccoes = data.seccoes || []
+        this.categoriasExistentes = (data.categorias_lojas || []).map(c => ({
+          value: c.valor, label: c.nome, icon: iconeCategoria(null, c.valor),
         }))
       } catch (e) { console.error(e) }
-      finally { this.loadingCategorias = false }
-    },
-
-    async fetchCategoriasPlataforma () {
-      try {
-        const { data } = await api.get('/app/categorias-destaque/')
-        this.categoriasPlataforma = data
-      } catch (e) { console.error(e) }
-    },
-
-    async fetchTiposExistentes () {
-      try {
-        const { data } = await api.get('/app/produto/tipos/')
-        this.tiposExistentes = data
-      } catch (e) { console.error(e) }
+      finally { this.loadingHome = false }
     },
 
     log_out () {

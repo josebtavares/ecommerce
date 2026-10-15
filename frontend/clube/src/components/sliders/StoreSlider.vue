@@ -141,6 +141,8 @@ export default {
     params:   { type: Object,  default: () => ({}) },
     endpoint: { type: String,  default: '/app/loja/' },
     limit:    { type: Number,  default: 8 },
+    // primeira página já carregada ({ results, count, next_offset }) — a home manda-a no /app/home/
+    inicial:  { type: Object,  default: null },
     isDark:   { type: Boolean, default: true },
   },
 
@@ -160,6 +162,13 @@ export default {
   },
 
   async created () {
+    if (this.inicial) {
+      this.lojas = [...(this.inicial.results || [])]
+      this.total = this.inicial.count ?? this.lojas.length
+      this.offset = this.inicial.next_offset ?? null
+      this.reachedEnd = !this.offset
+      return
+    }
     await this.fetch(true)
   },
 
