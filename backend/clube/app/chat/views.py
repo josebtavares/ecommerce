@@ -363,6 +363,11 @@ def marcar_lida(request, conversa_id):
     """POST /api/chat/conversas/<id>/lida/ { caixa, ate? } — sem `ate`, marca tudo."""
     try:
         conversa, caixa = _conversa_e_caixa(request, conversa_id, request.data.get('caixa'))
+        # o condutor lê as conversas das suas entregas, mas o "lida" da caixa é de toda a equipa da loja:
+        # se ele ler, a equipa não pode deixar de ver a mensagem como nova
+        if regras.acesso_caixa(request.user.utilizador, caixa) != 'total':
+            p = Participante.objects.filter(conversa=conversa, caixa=caixa).first()
+            return Response({'ultima_lida': p.ultima_lida if p else 0})
         ultima = conversa.mensagens.aggregate(m=Max('id'))['m'] or 0
         try:
             ate = min(int(request.data.get('ate') or ultima), ultima)
@@ -386,6 +391,9 @@ def preferencias(request, conversa_id):
     """POST /api/chat/conversas/<id>/preferencias/ { caixa, silenciada?, arquivada? }"""
     try:
         conversa, caixa = _conversa_e_caixa(request, conversa_id, request.data.get('caixa'))
+        # arquivar/silenciar na caixa da loja vale para toda a equipa — o condutor não o faz
+        if regras.acesso_caixa(request.user.utilizador, caixa) != 'total':
+            return Response({'detail': 'Sem permissão.'}, status=403)
         p, _ = Participante.objects.get_or_create(conversa=conversa, caixa=caixa)
         for campo in ('silenciada', 'arquivada'):
             if campo in request.data:

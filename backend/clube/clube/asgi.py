@@ -43,9 +43,10 @@ class JwtAuthMiddleware:
                 token = AccessToken(token_str)
                 uid   = token["user_id"]
                 User  = get_user_model()
-                scope["user"] = await database_sync_to_async(
-                    User.objects.get
-                )(id=uid)
+                user = await database_sync_to_async(User.objects.get)(id=uid)
+                from app.autenticacao import conta_ativa
+                if await database_sync_to_async(conta_ativa)(user):   # contas banidas/suspensas não ligam
+                    scope["user"] = user
             except Exception:
                 pass  # token inválido → AnonymousUser
 

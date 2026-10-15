@@ -124,6 +124,7 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS' : True,
     'AUTH_HEADER_TYPES'     : ('Bearer',),
+    'TOKEN_REFRESH_SERIALIZER': 'app.autenticacao.RefreshContaAtiva',   # renovar também verifica a conta
 }
 
 
@@ -132,7 +133,7 @@ SIMPLE_JWT = {
 # ══════════════════════════════════════════════════════════════
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'app.autenticacao.JWTContaAtiva',      # JWT + recusa contas banidas/suspensas
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',

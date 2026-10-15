@@ -36,7 +36,7 @@ def membro_ativo(utilizador, loja_id):
 
 
 def atende_suporte(utilizador):
-    return utilizador.user.is_staff and utilizador.pode_admin('atender_suporte')
+    return utilizador.is_active and utilizador.user.is_staff and utilizador.pode_admin('atender_suporte')
 
 
 def pode_agir_como(utilizador, caixa):
@@ -304,6 +304,9 @@ def verificar_envio(utilizador, conversa, caixa):
         raise ErroChat('A tua conta não está activa.', 403)
     if caixa.tipo == Caixa.LOJA and caixa.loja.estado not in LOJAS_COM_CHAT and conversa.tipo != Conversa.SUPORTE:
         raise ErroChat('Esta loja só pode falar com o suporte.', 403)
+    # o cliente não escreve a uma loja suspensa/pendente (ela já não lhe pode responder — só ao suporte)
+    if conversa.tipo == Conversa.CLIENTE_LOJA and caixa.tipo == Caixa.PESSOAL and conversa.loja             and conversa.loja.estado not in LOJAS_COM_CHAT:
+        raise ErroChat('Esta loja não está disponível de momento. Para ajuda, fala com o suporte.', 403)
     if conversa.tipo != Conversa.EQUIPA_GRUPO:
         for outra in outras_caixas(conversa, caixa):
             _verificar_bloqueio(caixa, outra)
