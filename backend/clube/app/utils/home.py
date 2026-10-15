@@ -135,10 +135,16 @@ def _lojas_base():
     return Loja.objects.filter(ativa=True)
 
 
-def _abertas_primeiro(qs):
+def _abertas_primeiro(qs, ordem):
+    """Fechadas no fim. Sem nenhuma fechada não há nada a ordenar — e o Case com lista vazia vira a constante 0,
+    que com .values_list() sai como "ORDER BY 0" (o Postgres lê como posição de coluna e dá erro)."""
     from django.db.models import Case, When, IntegerField
     from .horarios import ids_fechadas
-    return qs.annotate(_fechada=Case(When(id__in=ids_fechadas(), then=1), default=0, output_field=IntegerField()))
+    fechadas = ids_fechadas()
+    if not fechadas:
+        return qs, ordem
+    qs = qs.annotate(_fechada=Case(When(id__in=fechadas, then=1), default=0, output_field=IntegerField()))
+    return qs, ['_fechada', *ordem]
 
 
 def lojas_auto(criterio, p):
@@ -170,8 +176,7 @@ def lojas_auto(criterio, p):
         from .horarios import ids_fechadas
         qs = qs.exclude(id__in=ids_fechadas())
     if p.get('abertas_primeiro', abertas):
-        qs = _abertas_primeiro(qs)
-        ordem = ['_fechada', *ordem]
+        qs, ordem = _abertas_primeiro(qs, ordem)
     return qs.order_by(*ordem)
 
 
