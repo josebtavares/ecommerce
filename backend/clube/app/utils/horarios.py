@@ -20,6 +20,7 @@ DIAS        = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Dom
 DIAS_MINUSC = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
 MAX_INTERVALOS_DIA = 4
 FUSO_PADRAO = 'Atlantic/Cape_Verde'
+MAX_DIAS_ABERTURA = 8   # regra 'agendar': aceita encomendas para a reabertura até 8 dias depois
 HORA_RE = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
 
 
@@ -151,6 +152,9 @@ def estado(loja, quando=None):
                      else f'Aberta · {verbo} às {f:%H:%M}')
             return {'ativo': True, 'aberta': True, 'fecha_em': f, 'abre_em': None, 'texto': texto, 'pausa': False}
     prox = next((a for a, _ in js if a > ref), None)
+    if prox is None:
+        # férias/dias especiais longos: procura a reabertura mais à frente (só nestes casos, que são raros)
+        prox = next((a for a, _ in janelas(loja, ref, dias=MAX_DIAS_EXCECAO + 8, tz=tz) if a > ref), None)
     if pausa and prox and prox == loja.pausa_ate.astimezone(tz):
         texto = f'Fechada · reabre às {prox:%H:%M}' if prox.date() == ref.date() else f'Fechada · reabre {_quando(prox, ref)}'
     else:
@@ -294,6 +298,28 @@ def texto_agendada(dt):
         return ''
     d = dt.astimezone(fuso())
     return f'{DIAS[d.weekday()]} {d:%d/%m} às {d:%H:%M}'
+
+
+def agendadas_fora(loja, quando=None, maximo=50):
+    """
+    Encomendas por entregar agendadas para uma hora em que a loja, com o horário actual, está fechada
+    (ex.: o dono marcou feriado num dia que já tinha encomendas). Não se mudam sozinhas — o backoffice
+    avisa para a loja falar com os clientes.
+    """
+    from ..models import Encomenda
+    tz = fuso()
+    ref = (quando or timezone.now()).astimezone(tz)
+    qs = (Encomenda.objects.filter(loja=loja, agendada_para__gte=ref)
+          .exclude(status__in=['enviado', 'concluido', 'cancelado'])
+          .select_related('comprador__user').order_by('agendada_para'))
+    lista = list(qs[:500])
+    if not lista:
+        return []
+    dias = (lista[-1].agendada_para.astimezone(tz).date() - ref.date()).days + 1
+    js = janelas(loja, ref, dias=dias, tz=tz, encomendas=False)
+    fora = [e for e in lista if not any(a <= e.agendada_para < f for a, f in js)]
+    return [{'id': e.id, 'quando': texto_agendada(e.agendada_para), 'status': e.status,
+             'cliente': e.comprador.nome or e.comprador.user.username} for e in fora[:maximo]]
 
 
 # ── Gravar (backoffice) ───────────────────────────────────────
@@ -495,8 +521,9 @@ def avisar_agendadas(quando=None):
     hoje = ref.date()
     de = datetime.combine(hoje, time(0), tzinfo=tz)
     ate = de + timedelta(days=1)
+    # só as que há para preparar: por pagar ('pendente'), canceladas e concluídas não contam
     hoje_qs = (Encomenda.objects.filter(agendada_para__gte=de, agendada_para__lt=ate)
-               .exclude(status__in=['cancelado', 'concluido']))
+               .exclude(status__in=['pendente', 'cancelado', 'concluido']))
     lojas = (Loja.objects.filter(id__in=hoje_qs.values('loja'), ativa=True)
              .exclude(aviso_agendadas_data=hoje).prefetch_related('horarios', 'excecoes'))
     avisadas = 0
@@ -508,9 +535,12 @@ def avisar_agendadas(quando=None):
         do_dia = hoje_qs.filter(loja=loja)
         n = do_dia.count()
         link = f'/loja/{loja.id}/backoffice'
-        notificar_staff(loja=loja, roles=['dono', 'gestor', 'staff'], tipo='agendadas_hoje',
-                        titulo=f'{n} encomenda{"s" if n != 1 else ""} agendada{"s" if n != 1 else ""} para hoje',
+        titulo = f'{n} encomenda{"s" if n != 1 else ""} agendada{"s" if n != 1 else ""} para hoje'
+        notificar_staff(loja=loja, roles=['dono', 'gestor'], tipo='agendadas_hoje', titulo=titulo,
                         mensagem='Vê-as em Entregas → Calendário.', link=link)
+        # o staff não tem o calendário (Entregas é do dono/gestor/condutor) — vê-as nas Encomendas
+        notificar_staff(loja=loja, roles=['staff'], tipo='agendadas_hoje', titulo=titulo,
+                        mensagem='Vê-as em Encomendas → Agendadas.', link=link)
         por_condutor = {}
         for en in Entrega.objects.filter(encomenda__in=do_dia, condutor__isnull=False).select_related('condutor__utilizador'):
             por_condutor.setdefault(en.condutor.utilizador, 0)

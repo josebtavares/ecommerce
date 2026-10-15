@@ -30,6 +30,7 @@ def _horario_loja(loja):
         'fuso':          ConfiguracaoPlataforma.atual().fuso_horario,
         'agora':         horarios.agora().strftime('%H:%M'),
         'hoje':          horarios.agora().weekday(),
+        'hoje_data':     horarios.agora().date().isoformat(),
         'agendamento': {
             'ativo':        loja.agendamento_ativo,
             'intervalo':    loja.agendamento_intervalo,
@@ -39,6 +40,8 @@ def _horario_loja(loja):
         'ultima_encomenda': loja.ultima_encomenda_min,
         'excecoes':      horarios.excecoes_backoffice(loja),
         'pausa_ate':     loja.pausa_ate.isoformat() if horarios.pausa_ativa(loja) else None,
+        # encomendas já agendadas para horas em que a loja agora está fechada → o editor avisa
+        'agendadas_fora': horarios.agendadas_fora(loja),
     }
 
 
@@ -189,6 +192,7 @@ def admin_plataforma(request):
         if dias is not None:
             cfg.subscricao_dias_teste = dias
         cfg.save()
+        horarios.limpar_cache_fechadas()   # com outro fuso, as lojas abertas/fechadas mudam já
     hora = timezone.now().astimezone(horarios.fuso())
     return Response({
         'subscricao_dias_teste': cfg.subscricao_dias_teste,

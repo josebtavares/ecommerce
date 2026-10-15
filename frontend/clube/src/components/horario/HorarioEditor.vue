@@ -19,6 +19,20 @@
     <div v-if="carregando" class="h-24 rounded-xl bg-zinc-800/50 animate-pulse"></div>
     <template v-else>
       <PausaLoja :loja-id="lojaId" class="mb-4" @alterado="recarregarEstado" />
+      <!-- encomendas já agendadas para horas em que, com este horário, a loja está fechada -->
+      <div v-if="agendadasFora.length" role="alert" class="mb-4 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+        <p class="text-sm font-semibold text-amber-300">
+          {{ agendadasFora.length === 1 ? 'Há 1 encomenda agendada' : `Há ${agendadasFora.length} encomendas agendadas` }}
+          para uma hora em que a loja está fechada
+        </p>
+        <p class="text-xs text-amber-200/80 mt-1">Não mudam sozinhas: fala com o cliente ou prepara-as na mesma.</p>
+        <ul class="mt-2 space-y-0.5">
+          <li v-for="e in agendadasFora.slice(0, 8)" :key="e.id" class="text-xs text-zinc-300">
+            #{{ e.id }} · {{ e.cliente }} · {{ e.quando }}
+          </li>
+          <li v-if="agendadasFora.length > 8" class="text-xs text-zinc-500">e mais {{ agendadasFora.length - 8 }}…</li>
+        </ul>
+      </div>
       <p v-if="!form.horario_ativo" class="text-sm text-zinc-400 bg-zinc-800/50 rounded-xl px-4 py-3 mb-4">
         Desligado — a loja está aberta 24 horas, todos os dias. Liga para definir o horário.
       </p>
@@ -255,7 +269,7 @@ export default {
       NOMES, MAX, REGRAS, ANTECEDENCIAS, ULTIMAS, hojeData: '',
       carregando: true, aGuardar: false, guardado: false, erro: '',
       form: { horario_ativo: false, fora_horario: 'agendar', dias: [], agendamento: { ativo: false, intervalo: 30, dias: 7, antecedencia: 30 }, ultima_encomenda: 0, excecoes: [] },
-      original: '', estado: null, fuso: '', agora: '', hoje: null,
+      original: '', estado: null, fuso: '', agora: '', hoje: null, agendadasFora: [],
     }
   },
 
@@ -297,7 +311,8 @@ export default {
       this.fuso = data.fuso
       this.agora = data.agora
       this.hoje = data.hoje
-      this.hojeData = new Date().toISOString().slice(0, 10)
+      this.hojeData = data.hoje_data || new Date().toISOString().slice(0, 10)   // a data no fuso da plataforma
+      this.agendadasFora = data.agendadas_fora || []
     },
 
     alternarDia (d) {
@@ -325,7 +340,8 @@ export default {
       } catch (e) { /* fica o anterior */ }
     },
     adicionarExcecao () {
-      const amanha = new Date(Date.now() + 864e5).toISOString().slice(0, 10)
+      const base = this.hojeData ? new Date(this.hojeData + 'T12:00:00Z') : new Date()
+      const amanha = new Date(base.getTime() + 864e5).toISOString().slice(0, 10)
       this.form.excecoes.push({ inicio: amanha, fim: amanha, intervalos: [], mensagem: '' })
     },
     ajustarFim (e) { if (!e.fim || e.fim < e.inicio) e.fim = e.inicio },
