@@ -249,6 +249,8 @@ export default {
     params: { type: Object, default: () => ({}) },
     endpoint: { type: String, default: '/app/produto/' },
     limit: { type: Number, default: 10 },
+    // primeira página já carregada ({ results, count, next_offset }) — a home manda-a no /app/home/
+    inicial: { type: Object, default: null },
     isDark: { type: Boolean, default: true },
 
     // Card dimensions
@@ -317,7 +319,14 @@ export default {
     }
   },
 
-  async created() {
+  async created () {
+    if (this.inicial) {
+      this.produtos = [...(this.inicial.results || [])]
+      this.total = this.inicial.count ?? this.produtos.length
+      this.offset = this.inicial.next_offset ?? null
+      this.reachedEnd = !this.offset
+      return
+    }
     await this.fetch(true)
   },
 

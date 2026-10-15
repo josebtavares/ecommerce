@@ -56,6 +56,7 @@ class Utilizador(models.Model):
             'moderar_chat',      # chat: denúncias e bloqueios
             'gerir_plataforma',  # definições do site (fuso horário)
             'gerir_subscricoes', # planos, subscrições e faturas das lojas
+            'gerir_home',        # secções da página inicial
         ],
         'moderador': [
             'ver_stats',
@@ -1642,3 +1643,83 @@ class FaturaSubscricao(models.Model):
 
     def __str__(self):
         return f'Fatura #{self.pk} — {self.alvo} — {self.periodo_inicio}→{self.periodo_fim} — €{self.valor} ({self.estado})'
+
+
+# ══════════════════════════════════════════════════════════════
+# HOME — secções montadas pelo admin (utils/home.py)
+# ══════════════════════════════════════════════════════════════
+
+class HomeSeccao(models.Model):
+    """Rascunho da home: o admin edita estas linhas e publica (HomePublicacao guarda a cópia em uso)."""
+    TIPOS = [
+        ('hero',          'Hero (topo)'),
+        ('lojas',         'Lojas'),
+        ('produtos',      'Produtos'),
+        ('loja_destaque', 'Loja em destaque'),
+        ('categorias',    'Categorias de lojas'),
+        ('banner',        'Banner'),
+        ('cabecalho',     'Cabeçalho / divisor'),
+        # grupos: cada um mostra um slider por categoria / tipo / categoria em destaque
+        ('lojas_por_categoria',          'Lojas por categoria'),
+        ('produtos_por_tipo',            'Produtos por tipo'),
+        ('produtos_categorias_destaque', 'Produtos das categorias em destaque'),
+    ]
+    FONTES = [
+        ('manual', 'Escolhidos à mão'),
+        ('auto',   'Automático'),
+        ('misto',  'Fixados + automático'),
+    ]
+
+    tipo       = models.CharField(max_length=30, choices=TIPOS)
+    titulo     = models.CharField(max_length=120, blank=True, default='')
+    subtitulo  = models.CharField(max_length=200, blank=True, default='')
+    ordem      = models.PositiveSmallIntegerField(default=0)
+    ativa      = models.BooleanField(default=True)
+    inicio     = models.DateTimeField(null=True, blank=True)   # só aparece a partir de…
+    fim        = models.DateTimeField(null=True, blank=True)   # …e até (exclusivo)
+    fonte      = models.CharField(max_length=10, choices=FONTES, default='auto')
+    criterio   = models.CharField(max_length=30, blank=True, default='')   # utils/home.py CRITERIOS_*
+    parametros = models.JSONField(default=dict, blank=True)               # categoria, tipo_id, loja_id, dias…
+    limite     = models.PositiveSmallIntegerField(default=12)
+    data_criacao  = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['ordem', 'id']
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.titulo or "(sem título)"}'
+
+
+class HomeImagem(models.Model):
+    """Imagem carregada no construtor da home (banners). Fica guardada enquanto existir: as publicações
+    antigas podem usá-la (o worker de limpeza só apaga ficheiros sem nenhum registo)."""
+    ficheiro  = models.ImageField(upload_to='home/%Y/%m/',
+                                  validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])])
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+
+class HomeItem(models.Model):
+    """Loja, produto ou banner escolhido à mão para uma secção."""
+    seccao  = models.ForeignKey(HomeSeccao, on_delete=models.CASCADE, related_name='itens')
+    ordem   = models.PositiveSmallIntegerField(default=0)
+    loja    = models.ForeignKey(Loja, on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
+    # banner próprio (sem loja nem produto)
+    titulo  = models.CharField(max_length=120, blank=True, default='')
+    texto   = models.CharField(max_length=300, blank=True, default='')
+    link    = models.CharField(max_length=300, blank=True, default='')
+    imagem  = models.ForeignKey(HomeImagem, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['ordem', 'id']
+
+
+class HomePublicacao(models.Model):
+    """Cópia publicada das secções — é o que a home pública lê. A mais recente está em uso."""
+    dados         = models.JSONField(default=list)
+    publicado_em  = models.DateTimeField(auto_now_add=True)
+    publicado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-publicado_em', '-id']

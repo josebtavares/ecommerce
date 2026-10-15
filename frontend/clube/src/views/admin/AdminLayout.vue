@@ -121,7 +121,7 @@
         <AdminComissoes    v-else-if="activeSection === 'comissoes'"    />
         <AdminCategorias   v-else-if="activeSection === 'categorias'"   />
         <AdminRelatorios   v-else-if="activeSection === 'relatorios'"   />
-        <AdminCategoriasDestaque v-else-if="activeSection === 'categorias_destaque'" />
+        <AdminHome         v-else-if="activeSection === 'home'"         />
         <AdminPaginas      v-else-if="activeSection === 'paginas'"      />
         <AdminPOS          v-else-if="activeSection === 'pos'"          />
         <AdminSuporte      v-else-if="activeSection === 'suporte_chat'" />
@@ -145,7 +145,7 @@ import AdminTipos        from './AdminTipos.vue'
 import AdminComissoes    from './AdminComissoes.vue'
 import AdminCategorias   from './AdminCategorias.vue'
 import AdminRelatorios   from './AdminRelatorios.vue'
-import AdminCategoriasDestaque from './AdminCategoriasDestaque.vue'
+import AdminHome         from './AdminHome.vue'
 import AdminPaginas      from './AdminPaginas.vue'
 import AdminPOS          from './AdminPOS.vue'
 import AdminSuporte      from './AdminSuporte.vue'
@@ -164,13 +164,13 @@ const SECCOES = [
   { key: 'lojas',        label: 'Lojas',         icon: 'store',         permissao: 'gerir_lojas'         },
   { key: 'utilizadores', label: 'Utilizadores',  icon: 'users',         permissao: 'gerir_utilizadores'  },
   { key: 'produtos',     label: 'Produtos',      icon: 'box',           permissao: 'gerir_produtos'      },
-  { key: 'categorias_destaque', label: 'Categorias em Destaque', icon: 'fire', permissao: 'gerir_categorias_destaque' },
 
   { key: 'encomendas',   label: 'Encomendas',    icon: 'bag-shopping',  permissao: 'gerir_encomendas'   },
   { key: 'pagamentos',   label: 'Pagamentos',    icon: 'credit-card',   permissao: 'gerir_pagamentos'    },
   { key: 'tipos',        label: 'Tipos Globais', icon: 'shapes',        permissao: 'gerir_tipos_globais' },
   { key: 'comissoes',    label: 'Comissões',     icon: 'coins',         permissao: 'gerir_comissoes'     },
   { key: 'subscricoes',  label: 'Subscrições',   icon: 'file-invoice-dollar', permissao: 'gerir_subscricoes' },
+  { key: 'home',         label: 'Página inicial', icon: 'house',       permissao: 'gerir_home'        },
   { key: 'paginas',      label: 'Páginas & Ajuda', icon: 'file-lines',  permissao: 'gerir_conteudo'    },
   { key: 'pos',          label: 'POS',             icon: 'cash-register', permissao: 'ver_pos'           },
   { key: 'suporte_chat', label: 'Suporte (chat)',  icon: 'headset',       permissao: 'atender_suporte'   },
@@ -180,7 +180,7 @@ const SECCOES = [
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_home'],
   moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','ver_relatorios','moderar_chat'],
   suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios','gerir_conteudo','ver_pos','gerir_pos','atender_suporte'],
   contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos','gerir_subscricoes'],
@@ -191,7 +191,7 @@ export default {
   components: {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
-    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminCategoriasDestaque, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes,
+    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes,
   },
 
   data () {
