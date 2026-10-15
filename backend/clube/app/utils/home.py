@@ -197,9 +197,11 @@ def _ids_seccao(s, base_qs, auto_qs, campo):
 
 
 def _serializar_lojas(ids, request):
-    from ..models import Loja
+    from django.db.models import Prefetch
+    from ..models import Loja, AvaliacaoLoja
     from ..Serializers.LojaSerializer import LojaPublicSerializer
-    lojas = {l.id: l for l in Loja.objects.filter(id__in=ids).prefetch_related('horarios', 'excecoes')}
+    avaliacoes = Prefetch('avaliacoes', queryset=AvaliacaoLoja.objects.only('id', 'loja_id', 'pontuacao'))
+    lojas = {l.id: l for l in Loja.objects.filter(id__in=ids).prefetch_related('horarios', 'excecoes', avaliacoes)}
     return LojaPublicSerializer([lojas[i] for i in ids if i in lojas], many=True, context={'request': request}).data
 
 
@@ -241,7 +243,7 @@ def _serializar_produtos(ids, request):
     from ..Serializers.ProdutoSerializer import ProdutoSerializer
     from ..Views.produtoView import PREFETCH_CONJUNTO
     qs = Produto.objects.filter(id__in=ids).select_related('loja', 'tipo', 'inventario') \
-                        .prefetch_related('variantes', *PREFETCH_CONJUNTO)
+                        .prefetch_related('variantes', 'imagens', 'categorias', *PREFETCH_CONJUNTO)
     produtos = {p.id: p for p in qs}
     return ProdutoSerializer([produtos[i] for i in ids if i in produtos], many=True, context={'request': request}).data
 
@@ -316,18 +318,37 @@ def _ids_simples(s):
     return _ids_seccao(s, _produtos_base(), produtos_auto(s.get('criterio'), p), 'produto_id')
 
 
-def pagina_seccao(s, grupo, offset, limit, request):
-    """Página seguinte de um slider (endpoint /app/home/seccao/<id>/). None se não existir."""
+def pagina_seccao(s, grupo, offset, limit, request, chave_cache=None):
+    """Página seguinte de um slider (endpoint /app/home/seccao/<id>/). None se não existir.
+    Com chave_cache, a lista de ids fica em cache (o endpoint é público e cada página repetia as contas)."""
     conteudo = CONTEUDO.get(s['tipo'])
     if conteudo not in ('lojas', 'produtos'):
         return None
     serializar = _serializar_lojas if conteudo == 'lojas' else _serializar_produtos
-    if s['tipo'] in GRUPOS:
-        g = next((g for g in _grupos(s) if g[0] == grupo), None)
-        if g is None:
-            return None
-        return _pagina(g[3](), offset, limit, serializar, request)
-    return _pagina(_ids_simples(s), offset, limit, serializar, request)
+    ids = cache.get(chave_cache) if chave_cache else None
+    if ids is None:
+        if s['tipo'] in GRUPOS:
+            g = next((g for g in _grupos(s) if g[0] == grupo), None)
+            if g is None:
+                return None   # grupo inexistente: não fica em cache (o nome vem do pedido)
+            ids = g[3]()
+        else:
+            ids = _ids_simples(s)
+        if chave_cache:
+            cache.set(chave_cache, ids, CACHE_SEGUNDOS)
+    return _pagina(ids, offset, limit, serializar, request)
+
+
+def pagina_publica(seccao_id, grupo, offset, limit, request):
+    """Página de um slider da home publicada (None se a secção/grupo não existir ou não estiver visível)."""
+    pub_id, seccoes = publicada()
+    agora = timezone.now()
+    s = next((s for s in seccoes if str(s.get('id')) == str(seccao_id) and _visivel(s, agora)), None)
+    if s is None:
+        return None
+    from hashlib import md5
+    chave = f'home:v1:ids:{pub_id}:{s["id"]}:{md5((grupo or "").encode()).hexdigest()}'
+    return pagina_seccao(s, grupo, offset, limit, request, chave_cache=chave)
 
 
 # ── secção completa (primeira página) ─────────────────────────
@@ -541,6 +562,7 @@ def carregar_rascunho(seccoes):
     from django.utils.dateparse import parse_datetime
     from ..models import HomeSeccao, HomeItem, HomeImagem, Loja, Produto
     with transaction.atomic():
+        _trancar_rascunho()
         HomeSeccao.objects.all().delete()
         todos = [i for s in seccoes for i in s.get('itens') or []]
         lojas = set(Loja.objects.filter(id__in=[i['loja_id'] for i in todos if i.get('loja_id')])
@@ -581,12 +603,25 @@ def layout_padrao_editavel():
     return out
 
 
+def _trancar_rascunho():
+    """Tranca até ao fim da transacção: dois pedidos ao mesmo tempo não criam o rascunho duas vezes."""
+    from django.db import connection
+    if connection.vendor == 'postgresql':
+        with connection.cursor() as c:
+            c.execute('SELECT pg_advisory_xact_lock(%s)', [774411])
+
+
 def garantir_rascunho():
-    """Na primeira visita ao admin, o rascunho começa igual ao que está publicado (ou ao padrão)."""
-    from ..models import HomeSeccao
-    if not HomeSeccao.objects.exists():
-        pub_id, seccoes = publicada()
-        carregar_rascunho(layout_padrao_editavel() if pub_id == 'padrao' else seccoes)
+    """Na primeira visita ao admin (ainda nada publicado), o rascunho começa igual ao layout original.
+    Depois da primeira publicação, um rascunho vazio é escolha do admin (apagou tudo) e fica vazio."""
+    from django.db import transaction
+    from ..models import HomeSeccao, HomePublicacao
+    if HomeSeccao.objects.exists() or HomePublicacao.objects.exists():
+        return
+    with transaction.atomic():
+        _trancar_rascunho()
+        if not HomeSeccao.objects.exists() and not HomePublicacao.objects.exists():
+            carregar_rascunho(layout_padrao_editavel())
 
 
 def tem_alteracoes():
@@ -631,6 +666,9 @@ def avisos_seccao(s):
 def _link_valido(link):
     if not link:
         return True
+    # "\" e caracteres de controlo/espaços: os browsers tratam "/\site" como "//site" (outro domínio)
+    if '\\' in link or any(c.isspace() or ord(c) < 32 for c in link):
+        return False
     if link.startswith('/') and not link.startswith('//'):
         return True
     from urllib.parse import urlparse

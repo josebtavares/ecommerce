@@ -24,8 +24,7 @@ def home_seccao(request, seccao_id):
         limit = min(max(int(request.GET.get('limit', 10)), 1), 50)
     except ValueError:
         return Response({'detail': 'offset/limit inválidos.'}, status=status.HTTP_400_BAD_REQUEST)
-    s = H.seccao_publicada(seccao_id)
-    pagina = H.pagina_seccao(s, request.GET.get('grupo') or None, offset, limit, request) if s else None
+    pagina = H.pagina_publica(seccao_id, request.GET.get('grupo') or None, offset, limit, request)
     if pagina is None:
         return Response({'detail': 'Secção não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(pagina)
@@ -145,7 +144,6 @@ def admin_home_criar(request):
     erro = _admin(request)
     if erro:
         return erro
-    H.garantir_rascunho()
     if HomeSeccao.objects.count() >= H.MAX_SECCOES:
         return Response({'detail': f'Máximo de {H.MAX_SECCOES} secções.'}, status=status.HTTP_400_BAD_REQUEST)
     campos, itens, msg = H.validar(request.data)
@@ -211,7 +209,8 @@ def admin_home_duplicar(request, seccao_id):
         sec.ativa = False
         sec.save()
         HomeItem.objects.bulk_create([HomeItem(seccao=sec, ordem=i.ordem, loja_id=i.loja_id, produto_id=i.produto_id,
-                                               titulo=i.titulo, texto=i.texto, link=i.link) for i in itens])
+                                               imagem_id=i.imagem_id, titulo=i.titulo, texto=i.texto, link=i.link)
+                                      for i in itens])
     return Response(_resposta_completa(request), status=status.HTTP_201_CREATED)
 
 
@@ -244,7 +243,6 @@ def admin_home_publicar(request):
     erro = _admin(request)
     if erro:
         return erro
-    H.garantir_rascunho()
     H.publicar(request.user)
     return Response(_estado())
 
@@ -377,7 +375,6 @@ def admin_home_preview(request):
     erro = _admin(request)
     if erro:
         return erro
-    H.garantir_rascunho()
     return Response(H.montar(H.rascunho_dados(), request, 'rascunho'))
 
 
