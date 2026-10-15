@@ -92,6 +92,9 @@ class POSAuthentication(BaseAuthentication):
             user = User.objects.select_related('utilizador').get(id=user_id)
         except User.DoesNotExist:
             raise AuthenticationFailed('Utilizador não encontrado.')
+        from app.autenticacao import conta_ativa, MSG_INATIVA
+        if not conta_ativa(user):
+            raise AuthenticationFailed(MSG_INATIVA)
 
         return (user, token)
 
