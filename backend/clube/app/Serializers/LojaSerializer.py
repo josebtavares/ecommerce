@@ -191,15 +191,18 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.banner_poster.url)
         return None
 
+    def _visiveis(self, obj):
+        # só as avaliações que o público vê (as ocultas pela loja não contam) — percorre .all() para usar o prefetch
+        if not hasattr(obj, '_notas_visiveis'):
+            obj._notas_visiveis = [a.pontuacao for a in obj.avaliacoes.all() if not a.oculta]
+        return obj._notas_visiveis
+
     def get_rating_medio(self, obj):
-        avaliacoes = obj.avaliacoes.all()
-        if not avaliacoes.exists():
-            return None
-        total = sum(a.pontuacao for a in avaliacoes)
-        return round(total / avaliacoes.count(), 2)
+        notas = self._visiveis(obj)
+        return round(sum(notas) / len(notas), 2) if notas else None
 
     def get_total_avaliacoes(self, obj):
-        return obj.avaliacoes.count()
+        return len(self._visiveis(obj))
 
 
 # ══════════════════════════════════════════════════════════════

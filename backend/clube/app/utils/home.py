@@ -200,7 +200,7 @@ def _serializar_lojas(ids, request):
     from django.db.models import Prefetch
     from ..models import Loja, AvaliacaoLoja
     from ..Serializers.LojaSerializer import LojaPublicSerializer
-    avaliacoes = Prefetch('avaliacoes', queryset=AvaliacaoLoja.objects.only('id', 'loja_id', 'pontuacao'))
+    avaliacoes = Prefetch('avaliacoes', queryset=AvaliacaoLoja.objects.only('id', 'loja_id', 'pontuacao', 'oculta'))
     lojas = {l.id: l for l in Loja.objects.filter(id__in=ids).prefetch_related('horarios', 'excecoes', avaliacoes)}
     return LojaPublicSerializer([lojas[i] for i in ids if i in lojas], many=True, context={'request': request}).data
 
