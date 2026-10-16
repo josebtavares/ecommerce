@@ -149,6 +149,11 @@ def utilizador_create(request):
                         telefone?, morada?, foto? }
     Devolve o mesmo payload do login para o frontend autenticar imediatamente.
     """
+    # sem limite um script criava contas em massa (o axes ignora esta rota)
+    if is_ratelimited(request=request, group='utilizador_registar', key='ip', rate='10/h', method='POST', increment=True):
+        return Response({'detail': 'Demasiados registos a partir desta ligação. Tenta mais tarde.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS)
+
     serializer = UtilizadorSerializer(data={
         'new_username'  : request.data.get('username'),
         'new_email'     : request.data.get('email'),
