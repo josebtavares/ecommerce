@@ -412,7 +412,7 @@ def iniciar_pagamento_flutterwave(request):
     payload = {
         'tx_ref':       f'enc_{encomenda.id}_{encomenda.data_criacao.strftime("%Y%m%d%H%M%S")}',
         'amount':       valor_total,
-        'currency':     'EUR',  # mudar para CVE quando tiveres conta em escudos
+        'currency':     MOEDA_FLW,  # mudar para CVE quando tiveres conta em escudos
         'redirect_url': f'{os.environ.get("FRONTEND_BASE_URL", "")}/pagamento/callback',
         'customer': {
             'email':       utilizador.email,
@@ -519,7 +519,13 @@ def verificar_pagamento_flutterwave(request):
             {'detail': f'Valor incorreto. Esperado: {valor_esperado}, Pago: {valor_pago}'},
             status=status.HTTP_400_BAD_REQUEST
         )
- 
+
+    # a transacção tem de ser DESTA encomenda e ainda não usada. Antes bastava um transaction_id
+    # verdadeiro com o mesmo valor: um pagamento antigo de 5 € "pagava" qualquer outra encomenda de 5 €.
+    erro_tx = _transacao_flw_invalida(flw_data, encomenda, transaction_id)
+    if erro_tx:
+        return Response({'detail': erro_tx}, status=status.HTTP_400_BAD_REQUEST)
+
     # cobrado, mas a encomenda já tinha sido cancelada (expirou / a loja fechou) → reembolso
     if cancelada is not None:
         _pedir_reembolso(encomenda, f'flw_{transaction_id}')
@@ -541,6 +547,21 @@ def verificar_pagamento_flutterwave(request):
     return Response(PagamentoSerializer(pagamento).data, status=status.HTTP_200_OK)
  
  
+MOEDA_FLW = 'EUR'   # a mesma do iniciar_pagamento_flutterwave
+
+
+def _transacao_flw_invalida(flw_data, encomenda, transaction_id):
+    """Motivo para recusar a transacção do Flutterwave, ou None se pertence a esta encomenda."""
+    tx_ref = str(flw_data.get('tx_ref') or '')
+    if not tx_ref.startswith(f'enc_{encomenda.id}_'):
+        return 'Esta transacção não pertence a esta encomenda.'
+    if flw_data.get('currency') != MOEDA_FLW:
+        return 'Moeda do pagamento inválida.'
+    if Pagamento.objects.filter(referencia_transacao=f'flw_{transaction_id}').exclude(encomenda=encomenda).exists():
+        return 'Esta transacção já foi usada noutra encomenda.'
+    return None
+
+
 def _pedir_reembolso(encomenda, referencia):
     """Avisa os admins (uma vez por encomenda — o webhook e o regresso do cliente podem chegar os dois)."""
     from ..models import Notificacao
@@ -601,6 +622,15 @@ def flutterwave_webhook(request):
     ).first()
  
     transaction_id = data.get('data', {}).get('id', '')
+    # mesmo assinado, só confirma se o valor, a moeda e a transacção batem com esta encomenda
+    try:
+        valor_pago = float(data.get('data', {}).get('amount', 0))
+    except (TypeError, ValueError):
+        valor_pago = 0
+    if (abs(valor_pago - float(encomenda.valor_total)) > 0.01
+            or _transacao_flw_invalida(data.get('data', {}), encomenda, transaction_id)):
+        return Response({'detail': 'Pagamento não corresponde à encomenda.'}, status=status.HTTP_400_BAD_REQUEST)
+
     _registar_pagamento_aprovado(
         encomenda, metodo,
         f'flw_{transaction_id}',
