@@ -160,6 +160,14 @@ def _stock_disponivel(produto, variante=None):
 LIMITE_STOCK_BAIXO = 5
 
 
+def _inteiro(valor):
+    """Quantidade vinda do cliente: int ou None (texto/decimal davam erro 500)."""
+    try:
+        return int(str(valor).strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def _alerta_stock_baixo(loja, produto, antes, depois, variante=None):
     """Notifica dono/gestor só quando o stock CRUZA o limite (evita spam a cada venda)."""
     if not (antes > LIMITE_STOCK_BAIXO >= depois):
@@ -215,7 +223,9 @@ def carrinho_adicionar(request, loja_id):
  
     produto_id = request.data.get('produto_id')
     produto    = get_object_or_404(Produto, id=produto_id, loja=loja, ativo=True)
-    quantidade = int(request.data.get('quantidade', 1))
+    quantidade = _inteiro(request.data.get('quantidade', 1))
+    if quantidade is None:
+        return Response({'detail': 'Quantidade inválida.'}, status=status.HTTP_400_BAD_REQUEST)
     atributos  = request.data.get('atributos', {})
  
     # normalizar atributos (pode vir como string JSON do multipart)
@@ -312,7 +322,9 @@ def carrinho_atualizar_item(request, loja_id, item_id):
         carrinho__loja_id=loja_id
     )
 
-    quantidade = int(request.data.get('quantidade', 1))
+    quantidade = _inteiro(request.data.get('quantidade', 1))
+    if quantidade is None:
+        return Response({'detail': 'Quantidade inválida.'}, status=status.HTTP_400_BAD_REQUEST)
 
     if quantidade <= 0:
         item.delete()
@@ -393,6 +405,20 @@ def encomenda_criar(request, loja_id):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    custo_entrega = 0
+    opcao = None
+    opcao_entrega_id = serializer.validated_data.get('opcao_entrega_id')
+    if serializer.validated_data.get('tipo_entrega') == 'entrega':
+        from ..models import OpcaoEntrega
+        opcoes = OpcaoEntrega.objects.filter(loja=loja, ativa=True)
+        opcao = opcoes.filter(id=opcao_entrega_id).first() if opcao_entrega_id else None
+        # antes, sem opção (ou com um id inválido) a entrega saía de graça
+        if opcao is None and opcoes.exists():
+            return Response({'opcao_entrega_id': ['Escolhe uma opção de entrega.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if opcao:
+            custo_entrega = opcao.preco
+
     # ── Agendamento escolhido pelo cliente (dia e hora dentro do horário) ──
     agendada_para, origem = None, ''
     pedido = request.data.get('agendar_para')
@@ -445,6 +471,10 @@ def encomenda_criar(request, loja_id):
         produto  = item.produto
         variante = None
         snap     = []
+        # desactivado pela loja depois de ir para o carrinho → já não se vende
+        if not produto.ativo:
+            return Response({'detail': f'"{produto.nome}" já não está disponível — remove-o do carrinho.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         if produto.e_conjunto:
             comps, erro_conj = conj.bloquear(produto, escolhas=item.escolhas or {})
             if erro_conj:
@@ -482,16 +512,7 @@ def encomenda_criar(request, loja_id):
 
     valor_produtos = sum(_preco(item, v) * item.quantidade for item, v, _ in linhas)
 
-    # adiciona custo da opcao de entrega se existir
-    custo_entrega = 0
-    opcao = None
-    opcao_entrega_id = serializer.validated_data.get('opcao_entrega_id')
-    if opcao_entrega_id:
-        from ..models import OpcaoEntrega
-        opcao = OpcaoEntrega.objects.filter(id=opcao_entrega_id, loja=loja, ativa=True).first()
-        if opcao:
-            custo_entrega = opcao.preco
-
+    # + custo da opção de entrega (validada lá em cima)
     valor_total = valor_produtos + custo_entrega
 
     encomenda = Encomenda.objects.create(

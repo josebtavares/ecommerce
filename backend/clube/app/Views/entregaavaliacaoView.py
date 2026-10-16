@@ -343,6 +343,12 @@ def entrega_atualizar(request, loja_id, encomenda_id):
     if not _entrega_do_membro(membro, entrega):
         return Response({'detail': 'Esta entrega não é tua.'}, status=status.HTTP_403_FORBIDDEN)
 
+    # encomenda já fechada: antes, "entregue" numa encomenda cancelada (stock já reposto) passava-a
+    # a concluída e registava comissão; "falhou" reabria-a como "preparando"
+    if encomenda.status in ('cancelado', 'concluido'):
+        return Response({'detail': f'A encomenda já está {encomenda.status} — a entrega não pode ser alterada.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
     # reatribuir condutor (só quem pode atribuir — o condutor não passa entregas a outros)
     if 'condutor_id' in request.data:
         if not membro.pode('atribuir_condutor'):

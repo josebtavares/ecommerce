@@ -69,6 +69,15 @@ def _build_user_payload(utilizador: Utilizador, request=None) -> dict:
     }
 
 
+def _gere_utilizadores(request, superadmin=False) -> bool:
+    """Admin da plataforma com gerir_utilizadores (ou só o superadmin). Antes bastava is_staff:
+    um moderador ou contabilista via os dados de todos e podia apagar contas."""
+    util = getattr(request.user, 'utilizador', None)
+    if not util or not util.pode_admin('gerir_utilizadores'):
+        return False
+    return not superadmin or util.role_admin == 'superadmin'
+
+
 def _build_auth_response(utilizador: Utilizador, request=None) -> dict:
     """
     Devolve access_token, refresh_token e user —
@@ -244,7 +253,7 @@ def utilizador_list(request):
     GET /app/utilizador/
     Lista todos os utilizadores (apenas admins da plataforma).
     """
-    if not request.user.is_staff:
+    if not _gere_utilizadores(request):
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
     utilizadores = Utilizador.objects.select_related('user').all()
@@ -259,7 +268,7 @@ def utilizador_list_pagination(request):
     GET /app/utilizador/pagination/?search=joao&offset=0&limit=20
     Lista paginada com pesquisa (apenas admins da plataforma).
     """
-    if not request.user.is_staff:
+    if not _gere_utilizadores(request):
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
     search = request.query_params.get('search', '').strip()
@@ -296,15 +305,17 @@ def utilizador_list_pagination(request):
 def utilizador_delete(request, id):
     """
     DELETE /app/utilizador/<id>/eliminar/
-    Apenas admins da plataforma podem apagar utilizadores.
+    Apenas o superadmin apaga utilizadores (e nunca a própria conta).
     """
-    if not request.user.is_staff:
+    if not _gere_utilizadores(request, superadmin=True):
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
     from django.db import transaction
     from django.db.models import ProtectedError, RestrictedError
 
     utilizador = get_object_or_404(Utilizador, id=id)
+    if utilizador.user_id == request.user.id:
+        return Response({'detail': 'Não podes eliminar a tua própria conta aqui.'}, status=status.HTTP_400_BAD_REQUEST)
     try:
         with transaction.atomic():
             utilizador.user.delete()  # cascade apaga o Utilizador também
@@ -335,9 +346,16 @@ def password_reset_request(request):
     serializer.is_valid(raise_exception=True)
     email = serializer.validated_data['email']
 
-    try:
-        django_user = User.objects.get(email__iexact=email)
-    except User.DoesNotExist:
+    # sem limite dava para encher a caixa de correio de alguém com emails de recuperação
+    if (is_ratelimited(request=request, group='recuperar_senha_ip', key='ip', rate='10/h', method='POST', increment=True)
+            or is_ratelimited(request=request, group='recuperar_senha_email', key=lambda g, r: email.lower(),
+                              rate='3/h', method='POST', increment=True)):
+        return Response({'detail': 'Demasiados pedidos. Tenta novamente mais tarde.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    # .get() rebentava (500) quando dois Users partilham o email
+    django_user = User.objects.filter(email__iexact=email, is_active=True).order_by('id').first()
+    if not django_user:
         # não revela se o email existe ou não
         return Response(status=status.HTTP_200_OK)
 
@@ -353,7 +371,7 @@ def password_reset_request(request):
         subject='Recuperação de palavra-passe',
         message=f'Clique no link para redefinir a sua palavra-passe:\n\n{reset_link}',
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[email],
+        recipient_list=[django_user.email],
     )
 
     return Response(status=status.HTTP_200_OK)

@@ -312,9 +312,14 @@ def pagar_dinheiro(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     encomenda, erro = _verificar_encomenda(request, serializer.validated_data['encomenda_id'])
     if erro: return erro
-    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo='dinheiro', ativo=True).first()
+    # o checkout também manda por aqui (simulado) cartão, transferência e mobile money: antes procurava
+    # sempre o método "dinheiro" e uma loja que só aceitasse, p.ex., transferência recusava o pagamento
+    tipo = request.data.get('metodo') or 'dinheiro'
+    if tipo not in ('dinheiro', 'cartao', 'transferencia', 'mobile_money'):
+        return Response({'detail': 'Método de pagamento inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo=tipo, ativo=True).first()
     if not metodo:
-        return Response({'detail': 'Esta loja nao aceita pagamento em dinheiro.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Esta loja não aceita este método de pagamento.'}, status=status.HTTP_400_BAD_REQUEST)
 
     # dinheiro → pagamento pendente, encomenda pendente ate entrega fisica
     pagamento = Pagamento.objects.create(

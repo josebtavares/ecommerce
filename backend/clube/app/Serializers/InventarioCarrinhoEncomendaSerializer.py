@@ -387,11 +387,19 @@ class AtualizarStatusEncomendaSerializer(serializers.ModelSerializer):
  
         idx_actual = ordem.index(status_actual) if status_actual in ordem else -1
         idx_novo   = ordem.index(value)         if value in ordem         else -1
- 
-        # não permite retroceder após enviado (só para entrega)
-        if instancia.tipo_entrega == 'entrega' and status_actual == 'enviado' and idx_novo < idx_actual:
+
+        # por pagar: só o pagamento a faz avançar. Antes a loja marcava-a "pago" à mão e depois
+        # "concluido" — sem pagamento nem comissão (e o prazo de 30 min deixava de a cancelar)
+        if status_actual == 'pendente':
             raise serializers.ValidationError(
-                'Não é possível retroceder uma encomenda já enviada.'
+                'Esta encomenda ainda não foi paga — só pode ser cancelada.'
+            )
+
+        # não se volta atrás (o backoffice também não deixa). Voltar a "pendente" fazia o prazo de
+        # pagamento cancelar uma encomenda já paga.
+        if idx_novo < idx_actual:
+            raise serializers.ValidationError(
+                'Não é possível retroceder o estado de uma encomenda.'
             )
  
         return value
