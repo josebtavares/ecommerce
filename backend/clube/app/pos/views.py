@@ -190,6 +190,14 @@ def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
     return pos, None, utilizador
 
 
+def _sem_permissao(membro, flag, msg):
+    """Membro da equipa sem a permissão → 403 (a conta principal pode tudo). O frontend já escondia
+    estes botões, mas o servidor não verificava: bastava chamar a API."""
+    if membro and not getattr(membro, flag, False):
+        return Response({'detail': msg}, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
 def _loja_suspensa(pos):
     """
     Loja vinculada suspensa pela plataforma → os produtos dela não se vendem no POS (os
@@ -556,24 +564,24 @@ def pos_membro_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    membros = UtilizadorPOS.objects.filter(
-        username_pos__iexact=username,
-        ativo=True
-    ).select_related('pos')
+    # limite por username (além do por IP): trava adivinhar a password de um empregado a partir de vários IPs
+    if is_ratelimited(request=request, group='pos_membro_username', key=lambda g, r: username,
+                      rate='20/h', method='POST', increment=True):
+        return Response({'detail': 'Demasiadas tentativas. Aguarda um momento antes de tentar novamente.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-    if not membros.exists():
-        return Response({'detail': 'Utilizador não encontrado'}, status=status.HTTP_401_UNAUTHORIZED)
-
+    membros = UtilizadorPOS.objects.filter(username_pos__iexact=username, ativo=True).select_related('pos')
     if pos_id:
         membros = membros.filter(pos_id=pos_id)
-        if not membros.exists():
-            return Response(
-                {'detail': 'Utilizador não encontrado neste POS'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
 
-    # Username em vários POS → pedir escolha
-    if membros.count() > 1 and not pos_id:
+    # a password é verificada ANTES de dizer seja o que for: antes respondia "Utilizador não encontrado"
+    # (dava para descobrir usernames) e listava os POS de um username sem password
+    candidatos = [m for m in membros if m.check_password(password)]
+    if not candidatos:
+        return Response({'detail': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    # o mesmo username (e password) em vários POS → pedir escolha
+    if len(candidatos) > 1:
         return Response(
             {
                 'detail': 'Username existe em mais de um POS. Escolhe qual.',
@@ -584,16 +592,13 @@ def pos_membro_login(request):
                         'pos_nome': m.pos.nome,
                         'codigo_pos': m.pos.codigo_pos,
                     }
-                    for m in membros
+                    for m in candidatos
                 ]
             },
             status=status.HTTP_200_OK
         )
 
-    membro = membros.first()
-
-    if not membro.check_password(password):
-        return Response({'detail': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
+    membro = candidatos[0]
 
     if membro.pos.suspenso:
         return Response({'detail': 'Este POS está suspenso pela plataforma. Fala com o responsável do POS.'},
@@ -1382,6 +1387,9 @@ def conta_criar(request, pos_id, mesa_id):
             return Response({'detail': 'Esta mesa não tem conta aberta'}, status=status.HTTP_404_NOT_FOUND)
         return Response(_conta_payload(conta_aberta, request))
 
+    erro = _sem_permissao(membro, 'pode_abrir_mesas', 'Sem permissão para abrir mesas.')
+    if erro:
+        return erro
     if conta_aberta:
         return Response(_conta_payload(conta_aberta, request), status=status.HTTP_200_OK)
 
@@ -1486,6 +1494,9 @@ def conta_adicionar_item(request, pos_id, conta_id):
 @transaction.atomic
 def conta_remover_item(request, pos_id, conta_id, item_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
+    erro = _sem_permissao(membro, 'pode_cancelar_items', 'Sem permissão para remover items.')
+    if erro:
+        return erro
     conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
     item  = get_object_or_404(ItemContaMesa, id=item_id, conta=conta)
 
@@ -1504,9 +1515,14 @@ def conta_remover_item(request, pos_id, conta_id, item_id):
 @api_view(['POST'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
+@transaction.atomic
 def conta_fechar(request, pos_id, conta_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
-    conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
+    erro = _sem_permissao(membro, 'pode_fechar_contas', 'Sem permissão para fechar contas.')
+    if erro:
+        return erro
+    # bloqueada: dois "fechar" ao mesmo tempo (duplo clique, dois terminais) não a fecham duas vezes
+    conta = get_object_or_404(ContaMesa.objects.select_for_update(), id=conta_id, pos=pos)
 
     if conta.status != 'aberta':
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1516,6 +1532,8 @@ def conta_fechar(request, pos_id, conta_id):
 
     if not metodo_pagamento:
         return Response({'detail': 'metodo_pagamento é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
+    if metodo_pagamento not in dict(ContaMesa.METODO_PAGAMENTO_CHOICES):
+        return Response({'detail': 'Método de pagamento inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
     if nif_cliente:
         conta.nif_cliente = nif_cliente
@@ -1564,6 +1582,9 @@ def contas_ativas(request, pos_id):
 @permission_classes([IsPOSAuthenticated])
 def pos_historico(request, pos_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
+    erro = _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para ver o histórico.')
+    if erro:
+        return erro
 
     contas = ContaMesa.objects.filter(pos=pos, status='fechada').select_related('mesa', 'atendente').prefetch_related('items')
 
@@ -1600,6 +1621,14 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
 
     if novo_status not in ['pendente', 'preparando', 'pronto', 'entregue', 'cancelado']:
         return Response({'detail': 'Status inválido'}, status=status.HTTP_400_BAD_REQUEST)
+    erro = (_sem_permissao(membro, 'pode_cancelar_items', 'Sem permissão para cancelar items.')
+            if novo_status == 'cancelado' else
+            _sem_permissao(membro, 'pode_atualizar_status_items', 'Sem permissão para atualizar o estado dos items.'))
+    if erro:
+        return erro
+    # conta já paga: a cozinha continua a mudar o estado, mas cancelar mexia no total e no stock
+    if novo_status == 'cancelado' and conta.status != 'aberta':
+        return Response({'detail': 'A conta já está fechada — não se cancelam items.'}, status=status.HTTP_400_BAD_REQUEST)
 
     if item.status == 'cancelado' and novo_status != 'cancelado':
         # o stock já foi devolvido; reactivar exigiria nova reserva → adicionar o item de novo
@@ -1632,6 +1661,8 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def turno_abrir(request, pos_id):
+    if is_membro(request):
+        return Response({'detail': 'Só o responsável do POS abre e fecha turnos.'}, status=status.HTTP_403_FORBIDDEN)
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     _bloquear_se_suspenso(pos)
@@ -1651,6 +1682,8 @@ def turno_abrir(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def turno_fechar(request, pos_id, turno_id):
+    if is_membro(request):
+        return Response({'detail': 'Só o responsável do POS abre e fecha turnos.'}, status=status.HTTP_403_FORBIDDEN)
     utilizador = request.user.utilizador
     pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     _bloquear_se_suspenso(pos)
