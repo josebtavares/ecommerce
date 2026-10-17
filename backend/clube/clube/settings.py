@@ -41,7 +41,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'axes.middleware.AxesMiddleware',                          # ← primeiro sempre
+    'app.middleware.IPRealMiddleware',                         # IP real atrás do proxy do Railway (antes do axes)
+    'axes.middleware.AxesMiddleware',                          # ← primeiro sempre (depois do IP real)
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -138,6 +139,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
+    'EXCEPTION_HANDLER': 'app.erros.tratar_excecao',   # valores mal formados → 400 em vez de 500
 }
 
 

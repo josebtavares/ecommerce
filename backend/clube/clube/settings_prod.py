@@ -53,7 +53,6 @@ _idx = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
 MIDDLEWARE.insert(_idx + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # ══════════════════════════════════════════════════════════════
 # MEDIA — não persiste entre deploys (ok para testes)
@@ -130,8 +129,12 @@ AWS_QUERYSTRING_AUTH  = False  # URLs públicos sem assinatura
 # URL público das imagens (usar o domínio público do bucket)
 AWS_S3_CUSTOM_DOMAIN  = os.environ.get('R2_PUBLIC_DOMAIN', '')
 
-# Usar R2 para ficheiros media
-DEFAULT_FILE_STORAGE  = 'storages.backends.s3boto3.S3Boto3Storage'
+# Usar R2 para ficheiros media e whitenoise para os estáticos
+# (Django 5.1+ só lê STORAGES; DEFAULT_FILE_STORAGE/STATICFILES_STORAGE são ignorados)
+STORAGES = {
+    'default':     {'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 
 # Media URL aponta para o R2
 if AWS_S3_CUSTOM_DOMAIN:

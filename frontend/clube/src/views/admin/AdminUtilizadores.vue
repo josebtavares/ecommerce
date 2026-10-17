@@ -56,14 +56,15 @@
           <p class="text-xs text-zinc-500">{{ u.email }} · {{ u.total_lojas }} lojas · desde {{ u.data_criacao }}</p>
         </div>
 
-        <div class="flex gap-2 flex-shrink-0 opacity-100 group-hover:opacity-100 transition">
+        <!-- contas da equipa de admin e permissões: só o Super Admin mexe (o servidor também recusa) -->
+        <div v-if="souSuperadmin || !u.is_staff" class="flex gap-2 flex-shrink-0 opacity-100 group-hover:opacity-100 transition">
           <button @click="toggleVerificado(u)" :title="u.verificado ? 'Remover verificacao' : 'Verificar'"
             :class="['w-8 h-8 rounded-lg flex items-center justify-center transition text-xs',
                      u.verificado ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-green-400']"><font-awesome-icon :icon="['fas', 'check']" /></button>
           <button @click="toggleBan(u)" :title="u.status === 'banido' ? 'Remover ban' : 'Banir'"
             :class="['w-8 h-8 rounded-lg flex items-center justify-center transition text-xs',
                      u.status === 'banido' ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-red-400']"><font-awesome-icon :icon="['fas', 'ban']" /></button>
-          <button @click="abrirEditarRole(u)" title="Permissões"
+          <button v-if="souSuperadmin" @click="abrirEditarRole(u)" title="Permissões"
             class="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-500 hover:text-purple-400 flex items-center justify-center transition text-xs"><font-awesome-icon :icon="['fas', 'gear']" /></button>
         </div>
       </div>
@@ -139,6 +140,7 @@ export default {
       q: '', filtroVerificado: '', filtroStatus: '',
       debounceTimer: null,
       editandoRole: null, novaRole: '',
+      souSuperadmin: JSON.parse(localStorage.getItem('user') || '{}').role_admin === 'superadmin',
     }
   },
   computed: {

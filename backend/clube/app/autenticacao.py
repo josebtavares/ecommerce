@@ -41,6 +41,14 @@ class RefreshContaAtiva(TokenRefreshSerializer):
             refresh = self.token_class(attrs['refresh'])
         except TokenError as e:
             raise InvalidToken(e.args[0])
+        if refresh.get('tipo_sessao') == 'membro':
+            # sessão de um membro da equipa do POS: não tem User Django (o token não leva user_id).
+            # Sem isto o POS desligava os empregados ao fim de 30 min (o access expira e não renovava).
+            from .pos.models import UtilizadorPOS
+            if not UtilizadorPOS.objects.filter(id=refresh.get('membro_id'), pos_id=refresh.get('pos_id'),
+                                                ativo=True, pos__suspenso=False).exists():
+                raise AuthenticationFailed('Membro não encontrado ou inativo.', code='conta_inativa')
+            return super().validate(attrs)
         user = get_user_model().objects.filter(**{api_settings.USER_ID_FIELD: refresh.get(api_settings.USER_ID_CLAIM)}).first()
         if not conta_ativa(user):
             raise AuthenticationFailed(MSG_INATIVA, code='conta_inativa')

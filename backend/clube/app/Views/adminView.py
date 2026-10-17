@@ -429,8 +429,18 @@ def admin_utilizador_gerir(request, utilizador_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # papéis de admin e contas da equipa: só o superadmin. Antes o "suporte" (tem gerir_utilizadores)
+    # conseguia tornar qualquer conta superadmin, ou banir/despromover o próprio superadmin.
+    e_superadmin = request.user.utilizador.role_admin == 'superadmin'
+    mexe_em_papeis = 'is_staff' in request.data or 'role_admin' in request.data
+    if not e_superadmin and (mexe_em_papeis or utilizador.user.is_staff):
+        return Response(
+            {'detail': 'Só o Super Admin pode alterar permissões ou contas da equipa de administração.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
     if 'verificado' in request.data:
-        utilizador.verificado = request.data['verificado']
+        utilizador.verificado = request.data['verificado'] is True
 
     if 'status' in request.data:
         novo_status = request.data['status']
@@ -438,8 +448,9 @@ def admin_utilizador_gerir(request, utilizador_id):
             utilizador.status = novo_status
 
     if 'is_staff' in request.data:
-        utilizador.user.is_staff = request.data['is_staff']
-        if not request.data['is_staff']:
+        # "false" (texto) era verdadeiro em Python e dava acesso de staff
+        utilizador.user.is_staff = request.data['is_staff'] is True
+        if not utilizador.user.is_staff:
             utilizador.role_admin = None
         utilizador.user.save(update_fields=['is_staff'])
 

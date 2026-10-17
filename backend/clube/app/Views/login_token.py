@@ -1,91 +1,55 @@
-from django.contrib.auth.models import User
-from django.db.models import Q
-
-from rest_framework import serializers
+from rest_framework.exceptions import Throttled, AuthenticationFailed
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+from ..autenticacao import conta_ativa
+from ..utils.auth import autenticar
 
 
 class MyTokenSerializer(TokenObtainPairSerializer):
     """
-    Serializer JWT customizado:
+    POST /api/token/ — login JWT alternativo (o site usa /app/utilizador/login/).
     - aceita login por username ou email
-    - devolve dados do utilizador no payload
-    - adiciona claims ao token (username, is_staff)
+    - passa pelo django-axes (utils/auth.autenticar): antes comparava a password à mão
+      e as falhas nunca contavam → tentativas ilimitadas de adivinhar a password
+    - recusa contas banidas/suspensas
     """
 
     def validate(self, attrs):
-        username = attrs.get('username', '').strip()
-        password = attrs.get('password', '')
-
-        # 1) procurar o Django User por username ou email (case-insensitive)
-        django_user = User.objects.filter(
-            Q(username__iexact=username) | Q(email__iexact=username)
-        ).first()
-
-        if not django_user:
-            raise serializers.ValidationError(
-                {'detail': 'Credenciais inválidas.'},
-                code='authorization'
-            )
-
-        # 2) verificar a password via Django (check_password faz a comparação do hash)
-        if not django_user.check_password(password):
-            raise serializers.ValidationError(
-                {'detail': 'Credenciais inválidas.'},
-                code='authorization'
-            )
-
-        # 3) verificar se o utilizador está activo
-        if not django_user.is_active:
-            raise serializers.ValidationError(
-                {'detail': 'Conta desactivada.'},
-                code='authorization'
-            )
-
-        # 4) verificar se tem Utilizador ligado
+        request = self.context.get('request')
+        user, erro, codigo = autenticar(request, attrs.get('username', ''), attrs.get('password', ''))
+        if erro:
+            if codigo == 429:
+                raise Throttled(detail=erro)
+            raise AuthenticationFailed(erro)
+        if not conta_ativa(user):
+            raise AuthenticationFailed('Conta desactivada.')
         try:
-            utilizador = django_user.utilizador
+            utilizador = user.utilizador
         except Exception:
-            raise serializers.ValidationError(
-                {'detail': 'Perfil não encontrado.'},
-                code='authorization'
-            )
+            raise AuthenticationFailed('Perfil não encontrado.')
 
-        if not utilizador.is_active:
-            raise serializers.ValidationError(
-                {'detail': 'Conta desactivada.'},
-                code='authorization'
-            )
-
-        # 5) forçar o username correcto para o SimpleJWT gerar o token
-        attrs['username'] = django_user.username
-        data = super().validate(attrs)
-
-        # 6) adicionar dados do utilizador à resposta
-        #    — alinhado com o payload que o frontend guarda em localStorage
+        refresh = self.get_token(user)
         foto_url = utilizador.foto.url if utilizador.foto else None
-
-        data['user'] = {
-            'id'          : utilizador.id,
-            'username'    : django_user.username,
-            'email'       : django_user.email,
-            'first_name'  : django_user.first_name,
-            'last_name'   : django_user.last_name,
-            'telefone'    : utilizador.telefone,
-            'morada'      : utilizador.morada,
-            'foto'        : foto_url,
-            'verificado'  : utilizador.verificado,
-            'rating'      : str(utilizador.rating),
-            'status'      : utilizador.status,
-            'data_criacao': utilizador.data_criacao.strftime('%d-%m-%Y %H:%M:%S'),
+        return {
+            'access_token' : str(refresh.access_token),
+            'refresh_token': str(refresh),
+            # alinhado com o payload que o frontend guarda em localStorage
+            'user': {
+                'id'          : utilizador.id,
+                'username'    : user.username,
+                'email'       : user.email,
+                'first_name'  : user.first_name,
+                'last_name'   : user.last_name,
+                'telefone'    : utilizador.telefone,
+                'morada'      : utilizador.morada,
+                'foto'        : foto_url,
+                'verificado'  : utilizador.verificado,
+                'rating'      : str(utilizador.rating),
+                'status'      : utilizador.status,
+                'data_criacao': utilizador.data_criacao.strftime('%d-%m-%Y %H:%M:%S'),
+            },
         }
-
-        # renomear para coincidir com o que o frontend guarda
-        data['access_token']  = data.pop('access')
-        data['refresh_token'] = data.pop('refresh')
-
-        return data
 
     @classmethod
     def get_token(cls, user):
@@ -98,3 +62,4 @@ class MyTokenSerializer(TokenObtainPairSerializer):
 
 class MyTokenView(TokenObtainPairView):
     serializer_class = MyTokenSerializer
+    authentication_classes = []   # um token antigo/inválido no browser não pode impedir o login

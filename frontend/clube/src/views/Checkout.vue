@@ -543,7 +543,7 @@ export default {
 
         // 2b — outros métodos: pagamento simulado
         const endpoint = ENDPOINT_PAGAMENTO[this.metodoPagamento] || '/app/pagamento/dinheiro/'
-        const pagamentoPayload = { encomenda_id: encomenda.id }
+        const pagamentoPayload = { encomenda_id: encomenda.id, metodo: this.metodoPagamento }
         if (this.metodoPagamento === 'mbway') {
           const user = JSON.parse(localStorage.getItem('user') || '{}')
           pagamentoPayload.telemovel = user.telefone || '910000000'
