@@ -26,7 +26,9 @@ SALT = 'chat-anexo'
 
 
 def _usa_s3():
-    return 'S3Boto3Storage' in str(getattr(settings, 'DEFAULT_FILE_STORAGE', ''))
+    # Django 5.1+ só lê STORAGES (o DEFAULT_FILE_STORAGE antigo é ignorado)
+    backend = getattr(settings, 'STORAGES', {}).get('default', {}).get('BACKEND', '')
+    return 'S3Boto3Storage' in backend
 
 
 def armazenamento_privado():
