@@ -222,13 +222,64 @@
                 Mostrar primeiro as lojas abertas agora
               </label>
             </div>
+
+            <!-- home inteligente: sem repetir o que já aparece em cima, esconder secções quase vazias -->
+            <div v-if="['lojas', 'produtos'].includes(form.tipo)" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label v-if="form.fonte !== 'manual'" class="flex items-start gap-2 text-xs text-zinc-400 cursor-pointer">
+                <input type="checkbox" v-model="form.parametros.sem_repetidos" class="accent-red-600 mt-0.5" />
+                <span>Não repetir {{ form.tipo === 'lojas' ? 'lojas' : 'produtos' }} que já aparecem nas secções de cima
+                  <span class="block text-[10px] text-zinc-600">O automático passa ao seguinte; os escolhidos à mão aparecem sempre.</span></span>
+              </label>
+              <div>
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Esconder com menos de</label>
+                <input v-model.number="form.parametros.minimo" type="number" min="1" max="20" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
+                       :placeholder="`1 ${form.tipo === 'lojas' ? 'loja' : 'produto'} (mostra sempre)`" />
+              </div>
+            </div>
           </template>
 
           <!-- loja em destaque -->
           <div v-if="form.tipo === 'loja_destaque'">
             <p class="text-xs text-zinc-500 mb-3">Os produtos escolhidos aparecem primeiro; o resto é preenchido com os destaques e os mais recentes da loja.</p>
-            <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Loja em destaque</label>
-            <Procurar tipo="loja" :valor="lojaCriterio" @escolher="l => { form.parametros.loja_id = l.id; lojaCriterio = l; form.itens = [] }" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+              <button v-for="m in [{ v: false, n: 'Escolhida por mim', d: 'Fica sempre a mesma loja.' },
+                                   { v: true, n: 'Automática', d: 'Uma das primeiras do critério, muda todos os dias.' }]"
+                :key="String(m.v)" type="button" @click="form.destaqueAuto = m.v"
+                :class="['px-3 py-2.5 rounded-xl border text-left transition',
+                         form.destaqueAuto === m.v ? 'border-red-500/60 bg-red-500/10' : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600']">
+                <p class="text-sm font-semibold text-zinc-100">{{ m.n }}</p>
+                <p class="text-[11px] text-zinc-500">{{ m.d }}</p>
+              </button>
+            </div>
+            <div v-if="form.destaqueAuto" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Critério</label>
+                <select v-model="form.criterio" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500">
+                  <option value="" disabled>Escolhe…</option>
+                  <option v-for="c in opcoes.criterios_lojas" :key="c.valor" :value="c.valor">{{ c.nome }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Só da categoria</label>
+                <select v-model="form.parametros.categoria" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500">
+                  <option value="">Todas as categorias</option>
+                  <option v-for="c in opcoes.categorias_lojas" :key="c.valor" :value="c.valor">{{ c.nome }}</option>
+                </select>
+              </div>
+              <div v-if="form.criterio === 'populares'">
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Mínimo de avaliações</label>
+                <input v-model.number="form.parametros.min_avaliacoes" type="number" min="1" max="100" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="3" />
+              </div>
+              <div v-if="['novas', 'mais_vendidas'].includes(form.criterio)">
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">{{ form.criterio === 'mais_vendidas' ? 'Vendas dos últimos (dias)' : 'Criadas nos últimos (dias, opcional)' }}</label>
+                <input v-model.number="form.parametros.dias" type="number" min="1" max="365" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
+                       :placeholder="form.criterio === 'mais_vendidas' ? '30' : 'sem limite'" />
+              </div>
+            </div>
+            <template v-else>
+              <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Loja em destaque</label>
+              <Procurar tipo="loja" :valor="lojaCriterio" @escolher="l => { form.parametros.loja_id = l.id; lojaCriterio = l; form.itens = [] }" />
+            </template>
           </div>
 
           <!-- grelha de categorias de lojas -->
@@ -537,7 +588,11 @@ export default {
         if (s.fonte === 'manual') partes.push(`${s.itens.length} escolhidos`)
         else if (s.fonte === 'misto') partes.push(`${s.itens.length} fixados + ${crit || '?'}`)
         else partes.push(crit || 'Automático')
+      } else if (s.tipo === 'loja_destaque' && !s.parametros?.loja_id && s.criterio) {
+        partes.push(`Automática: ${this.opcoes.criterios_lojas.find(c => c.valor === s.criterio)?.nome || s.criterio}`)
       } else partes.push(s.tipo_nome)
+      if (s.parametros?.sem_repetidos) partes.push('sem repetidos')
+      if (s.parametros?.minimo > 1) partes.push(`mín. ${s.parametros.minimo}`)
       if (s.inicio || s.fim) partes.push('com datas')
       if (!s.ativa) partes.push('escondida')
       return partes.join(' · ')
@@ -585,6 +640,7 @@ export default {
         parametros: { estilo_titulo: 'titulo', categoria: '', categoria_loja: '', ...JSON.parse(JSON.stringify(s.parametros || {})) },
         itens: s.itens.map(i => ({ ...i, _k: ++uid })),
         categoriasSel: (s.parametros?.categoria_ids || []).map(id => s.refs?.categorias?.[id] || { id, nome: `Categoria #${id}`, loja: '' }),
+        destaqueAuto: s.tipo === 'loja_destaque' && !s.parametros?.loja_id && !!s.criterio,
       }
       if (['lojas', 'hero'].includes(s.tipo) && this.form.parametros.abertas_primeiro === undefined) {
         this.form.parametros.abertas_primeiro = ['novas', 'todas', ''].includes(s.criterio)
@@ -606,7 +662,16 @@ export default {
       const por = (k, v) => { if (v !== undefined && v !== null && v !== '') out[k] = v }
       if (f.tipo === 'cabecalho') { por('estilo_titulo', p.estilo_titulo); por('ancora', p.ancora) }
       if (GRUPOS.includes(f.tipo)) por('estilo_titulo', p.estilo_titulo)
-      if (f.tipo === 'loja_destaque') por('loja_id', p.loja_id)
+      if (f.tipo === 'loja_destaque' && !f.destaqueAuto) por('loja_id', p.loja_id)
+      if (f.tipo === 'loja_destaque' && f.destaqueAuto) {
+        por('categoria', p.categoria)
+        if (['novas', 'mais_vendidas'].includes(f.criterio)) por('dias', p.dias)
+        if (f.criterio === 'populares') por('min_avaliacoes', p.min_avaliacoes)
+      }
+      if (['lojas', 'produtos'].includes(f.tipo)) {
+        por('minimo', p.minimo)
+        if (f.fonte !== 'manual' && p.sem_repetidos) out.sem_repetidos = true
+      }
       if (f.tipo === 'categorias' && p.categorias?.length) out.categorias = [...p.categorias]
       if (f.tipo === 'produtos_categorias_destaque' && f.categoriasSel.length) out.categoria_ids = f.categoriasSel.map(c => c.id)
       if (TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual') {
@@ -629,7 +694,8 @@ export default {
       return {
         titulo: f.titulo || '', subtitulo: f.subtitulo || '', ativa: f.ativa,
         inicio: paraIso(f.inicio), fim: paraIso(f.fim),
-        fonte: f.fonte, criterio: TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual' ? (f.criterio || '') : '',
+        fonte: f.fonte,
+        criterio: (TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual') || (f.tipo === 'loja_destaque' && f.destaqueAuto) ? (f.criterio || '') : '',
         limite: f.limite, parametros: this.parametrosLimpos(),
         itens: comItens ? f.itens.map(i => ({ loja_id: i.loja_id || null, produto_id: i.produto_id || null,
                                                imagem_id: i.imagem_id || null,

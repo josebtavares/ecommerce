@@ -390,8 +390,10 @@ def admin_home_preview_seccao(request, seccao_id):
         limit = min(max(int(request.GET.get('limit', 10)), 1), 50)
     except ValueError:
         return Response({'detail': 'offset/limit inválidos.'}, status=status.HTTP_400_BAD_REQUEST)
-    s = next((s for s in H.rascunho_dados() if str(s['id']) == str(seccao_id)), None)
-    pagina = H.pagina_seccao(s, request.GET.get('grupo') or None, offset, limit, request) if s else None
+    rascunho = H.rascunho_dados()
+    s = next((s for s in rascunho if str(s['id']) == str(seccao_id)), None)
+    pagina = H.pagina_seccao(s, request.GET.get('grupo') or None, offset, limit, request,
+                             vistos=H.vistos_antes(rascunho, seccao_id)) if s else None
     if pagina is None:
         return Response({'detail': 'Secção não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(pagina)
