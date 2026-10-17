@@ -77,6 +77,7 @@
 </template>
 
 <script setup>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/services/api'
@@ -118,7 +119,7 @@ async function carregar (mais = false) {
 }
 
 function preco (v) {
-  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+  return formatarDinheiro(Number(v) || 0)
 }
 
 function abrirProduto (f) {

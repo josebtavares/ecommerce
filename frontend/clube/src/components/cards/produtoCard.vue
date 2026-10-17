@@ -42,14 +42,14 @@
             <div class="price-section">
               <div class="price-container">
                 <span v-if="item.desconto < 1" class="original-price">
-                  €{{ truncateDecimals(item.preco, 2) }}
+                  {{ $dinheiro(item.preco) }}
                 </span>
                 <span class="current-price">
-                  €{{ truncateDecimals(item.preco * item.desconto, 2) }}
+                  {{ $dinheiro(item.preco * item.desconto) }}
                 </span>
               </div>
               <div v-if="item.desconto < 1" class="savings">
-                Poupa €{{ truncateDecimals(item.preco * (1 - item.desconto), 2) }}
+                Poupa {{ $dinheiro(item.preco * (1 - item.desconto)) }}
               </div>
             </div>
             
@@ -135,10 +135,10 @@
               
               <div class="card-price">
                 <span v-if="p.desconto < 1" class="old-price">
-                  €{{ truncateDecimals(p.preco, 2) }}
+                  {{ $dinheiro(p.preco) }}
                 </span>
                 <span class="new-price">
-                  €{{ truncateDecimals(p.preco * p.desconto, 2) }}
+                  {{ $dinheiro(p.preco * p.desconto) }}
                 </span>
               </div>
               
@@ -188,12 +188,7 @@ const emit = defineEmits(['close', 'add_to_cart', 'loaded'])
 const isFetchMode = computed(() => !!props.fetchUrl)
 
 /* ─── shared helpers ───────────────────────────────────────────── */
-function truncateDecimals(num, dec) {
-  const k = 10 ** dec
-  return Math.trunc(num * k) / k
-}
-
-function close() { 
+function close() {
   emit('close') 
 }
 

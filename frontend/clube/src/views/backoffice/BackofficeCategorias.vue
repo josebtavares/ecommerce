@@ -283,6 +283,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { ICONES_CATEGORIA_PRODUTO, iconeCategoriaProduto, chaveCategoriaProduto } from '@/utils/icones'
 
@@ -354,7 +355,7 @@ export default {
     iconeCategoriaProduto,
 
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     // ── Categorias ─────────────────────────────────────────

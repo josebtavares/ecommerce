@@ -5,11 +5,11 @@
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
         <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Pendente</p>
-        <p class="text-xl font-extrabold text-yellow-400">€{{ totalPendente }}</p>
+        <p class="text-xl font-extrabold text-yellow-400">{{ $dinheiro(totalPendente) }}</p>
       </div>
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
         <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Liquidado</p>
-        <p class="text-xl font-extrabold text-green-400">€{{ totalLiquidado }}</p>
+        <p class="text-xl font-extrabold text-green-400">{{ $dinheiro(totalLiquidado) }}</p>
       </div>
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
         <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total comissões</p>
@@ -39,7 +39,7 @@
                    : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700']">
         {{ loja.nome }}
         <span v-if="loja.pendente" class="ml-1.5 px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-[9px] font-bold">
-          €{{ loja.pendente }}
+          {{ $dinheiro(loja.pendente) }}
         </span>
       </button>
     </div>
@@ -90,8 +90,8 @@
 
         <!-- Mínimo de comissão -->
         <div class="flex items-center gap-2">
-          <label class="text-xs text-zinc-500 whitespace-nowrap">Mín. €</label>
-          <input v-model="filtroMin" @input="debouncedFetch" type="number" min="0" step="0.01" placeholder="0.00"
+          <label class="text-xs text-zinc-500 whitespace-nowrap">Mín. (CVE)</label>
+          <input v-model="filtroMin" @input="debouncedFetch" type="number" min="0" step="1" placeholder="0"
             class="w-24 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-200
                    focus:outline-none focus:border-red-500 transition" />
         </div>
@@ -152,7 +152,7 @@
         </span>
         <span v-if="filtroMin"
               class="flex items-center gap-1 px-2 py-0.5 bg-zinc-700 text-zinc-300 text-[10px] rounded-lg">
-          Mín. €{{ filtroMin }}
+          Mín. {{ $dinheiro(filtroMin) }}
           <button @click="filtroMin = ''; fetchComissoes(1)" class="hover:text-white">×</button>
         </span>
       </div>
@@ -185,7 +185,7 @@
             <p class="text-xs text-zinc-500">
               Encomenda #{{ c.encomenda_id }}
               <span class="mx-1 text-zinc-700">·</span>
-              Valor €{{ c.valor_encomenda }}
+              Valor {{ $dinheiro(c.valor_encomenda) }}
               <span class="mx-1 text-zinc-700">·</span>
               Taxa {{ c.percentagem }}%
             </p>
@@ -195,7 +195,7 @@
             </p>
           </div>
           <div class="flex flex-col items-end gap-2 flex-shrink-0">
-            <p class="text-lg font-extrabold text-red-400">€{{ c.valor_comissao }}</p>
+            <p class="text-lg font-extrabold text-red-400">{{ $dinheiro(c.valor_comissao) }}</p>
             <button v-if="c.status === 'pendente'"
               @click="liquidar(c)" :disabled="liquidandoId === c.id"
               class="px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25
@@ -423,7 +423,7 @@ export default {
     },
 
     async liquidar (c) {
-      if (!confirm(`Marcar comissão #${c.id} (€${c.valor_comissao}) como liquidada?`)) return
+      if (!confirm(`Marcar comissão #${c.id} (${this.$dinheiro(c.valor_comissao)}) como liquidada?`)) return
       this.liquidandoId = c.id
       try {
         await api.patch(`/app/admin/comissoes/${c.id}/liquidar/`)

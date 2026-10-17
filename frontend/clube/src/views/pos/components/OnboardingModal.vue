@@ -259,6 +259,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 
 export default {
@@ -424,7 +425,7 @@ export default {
     },
 
     euros(v) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+      return formatarDinheiro(Number(v) || 0)
     },
 
     cardClass(modo) {

@@ -360,10 +360,10 @@
               <input
                 v-model.number="formProduto.preco"
                 type="number"
-                step="0.01"
+                step="1"
                 min="0"
                 required
-                placeholder="0.00"
+                placeholder="0"
                 class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
               />
             </div>
@@ -578,6 +578,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import TiposModal from './components/TiposModal.vue'
 import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
@@ -1089,7 +1090,7 @@ export default {
     produtoAtivo(produto) { return produto.ativo ?? true },
 
     money(value) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
+      return formatarDinheiro(Number(value || 0))
     },
 
     formatBackendError(data) {

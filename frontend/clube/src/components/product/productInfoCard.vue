@@ -364,6 +364,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
@@ -618,7 +619,7 @@ export default {
   methods: {
     temEscolhas,
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     toggleSeleccao (nome, opcao) {

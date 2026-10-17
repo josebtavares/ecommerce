@@ -71,7 +71,7 @@ class ItemCarrinhoSerializer(serializers.ModelSerializer):
     subtotal       = serializers.SerializerMethodField()
     preco_unitario = serializers.SerializerMethodField()
     variante       = serializers.SerializerMethodField()
-    escolhas_texto = serializers.SerializerMethodField()   # menu: "Bebida: Fanta (33cl) +0,50 €"
+    escolhas_texto = serializers.SerializerMethodField()   # menu: "Bebida: Fanta (33cl) +50$00"
 
     class Meta:
         model  = ItemCarrinho

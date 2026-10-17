@@ -144,7 +144,7 @@ def _ler_plano(dados, plano=None):
             preco = Decimal(str(dados.get('preco'))).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError, ValueError):
             return None, 'Preço inválido.'
-        if not preco.is_finite() or preco < 0 or preco > Decimal('100000'):
+        if not preco.is_finite() or preco < 0 or preco > Decimal('10000000'):
             return None, 'Preço inválido.'
         campos['preco'] = preco
     if 'descricao' in dados:

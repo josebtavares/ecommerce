@@ -287,6 +287,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { usePdfRelatorio } from '@/composables/usePdfRelatorio'
 
@@ -387,7 +388,7 @@ export default {
     },
 
     fmt (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     fmtDia (dia) {
@@ -480,17 +481,17 @@ export default {
         ['Comissões liquidadas', this.dados.comissoes_liquidadas],
         ['Comissões pendentes', this.dados.comissoes_pendentes],
         [],
-        ['Dia', 'Vendas (€)', 'Nº encomendas'],
+        ['Dia', 'Vendas (CVE)', 'Nº encomendas'],
         ...this.dados.grafico.map(g => [g.dia, g.total, g.count]),
       ]
 
       if (this.dados.lojas_top.length) {
-        linhas.push([], ['Loja', 'Vendas (€)', 'Encomendas'])
+        linhas.push([], ['Loja', 'Vendas (CVE)', 'Encomendas'])
         this.dados.lojas_top.forEach(l => linhas.push([l.nome, l.total, l.count]))
       }
 
       if (this.dados.produtos_top.length) {
-        linhas.push([], ['Produto', 'Quantidade', 'Total (€)'])
+        linhas.push([], ['Produto', 'Quantidade', 'Total (CVE)'])
         this.dados.produtos_top.forEach(p => linhas.push([p.nome, p.qty, p.total]))
       }
 

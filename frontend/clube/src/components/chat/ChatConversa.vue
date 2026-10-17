@@ -165,6 +165,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import ChatAvatar from './ChatAvatar.vue'
 import ChatEmojis from './ChatEmojis.vue'
 import {
@@ -253,7 +254,7 @@ export default {
       return new Date(chat.mensagens[i - 1].criada_em).toDateString() !== new Date(chat.mensagens[i].criada_em).toDateString()
     },
     preco (v) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v || 0))
+      return formatarDinheiro(Number(v || 0))
     },
     escritaPorMim (m) {
       // na caixa pessoal a API não manda `autor` (sou sempre eu); nas partilhadas compara o autor

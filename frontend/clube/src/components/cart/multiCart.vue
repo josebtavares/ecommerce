@@ -242,6 +242,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { toast } from 'vue3-toastify'
@@ -314,7 +315,7 @@ export default {
       return `Só restam ${lim} — reduz a quantidade para finalizar.`
     },
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
     getLojaItemCount (lojaId) {
       return (this.carrinhos[lojaId]?.itens || []).reduce((s, i) => s + i.quantidade, 0)

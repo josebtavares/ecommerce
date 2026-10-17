@@ -29,9 +29,9 @@ def hoje():
 
 
 def _eur(v):
-    """15.5 → "15,50 €" (como no resto do site)."""
-    numero = f"{v:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
-    return f"{numero} €"
+    """1500 → "1.500$00" (como no resto do site)."""
+    from .dinheiro import formatar
+    return formatar(v)
 
 
 def mais_meses(d, n):
@@ -49,8 +49,8 @@ def _descricao(plano, inicio, fim):
 def emitir_fatura(sub, inicio, vencimento=None):
     """
     Fatura do período que começa em `inicio` (preço e duração do contrato da loja).
-    Plano de 0 € → fica logo paga ("Plano gratuito"), sem avisos: nunca há nada para pagar
-    nem suspensão por "dívida" de 0 €.
+    Plano de 0$00 → fica logo paga ("Plano gratuito"), sem avisos: nunca há nada para pagar
+    nem suspensão por "dívida" de 0$00.
     """
     fim = mais_meses(inicio, sub.meses)
     f = FaturaSubscricao.objects.create(
@@ -654,7 +654,7 @@ def mudar_plano_sub(sub, plano):
 def oferecer(sub, meses, motivo=''):
     """
     Oferece `meses` de serviço: as faturas por pagar do período actual/seguinte são anuladas e
-    fica uma fatura de 0 € (paga, "Oferta da plataforma") a cobrir esses meses.
+    fica uma fatura de 0$00 (paga, "Oferta da plataforma") a cobrir esses meses.
     """
     sub = Subscricao.objects.select_for_update().get(pk=sub.pk)
     if sub.estado in ('aguarda', 'cancelada'):

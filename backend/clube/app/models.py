@@ -699,14 +699,14 @@ class GrupoEscolha(models.Model):
 
 
 class OpcaoEscolha(models.Model):
-    """Uma opção de um grupo (ex.: "Fanta 33cl", +0,50 €). Desconta o stock do produto se escolhida."""
+    """Uma opção de um grupo (ex.: "Fanta 33cl", +50$00). Desconta o stock do produto se escolhida."""
     grupo       = models.ForeignKey(GrupoEscolha, on_delete=models.CASCADE, related_name='opcoes')
     produto     = models.ForeignKey(Produto, on_delete=models.RESTRICT, related_name='em_opcoes')
     variante    = models.ForeignKey(VarianteProduto, on_delete=models.RESTRICT, null=True, blank=True,
                                     related_name='em_opcoes')
     quantidade  = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
     variante_livre = models.BooleanField(default=False)   # o cliente escolhe a variação
-    preco_extra = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+    preco_extra = models.DecimalField(max_digits=10, decimal_places=2, default=0,
                                       validators=[MinValueValidator(0)])
     ordem       = models.PositiveSmallIntegerField(default=0)
 
@@ -839,7 +839,7 @@ class ItemEncomenda(models.Model):
 class OpcaoEntrega(models.Model):
     loja            = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='opcoes_entrega')
     nome            = models.CharField(max_length=100)          # ex: 'Standard', 'Expresso'
-    preco           = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    preco           = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     tempo_estimado  = models.CharField(max_length=100, blank=True, default='')  # ex: '30–45 min'
     area_cobertura  = models.CharField(max_length=300, blank=True, default='')
     ativa           = models.BooleanField(default=True)
@@ -1106,7 +1106,7 @@ class Comissao(models.Model):
         ordering = ['-data_criacao']
  
     def __str__(self):
-        return f'Comissao #{self.pk} — {self.loja.nome} — {self.valor_comissao}€ ({self.status})'
+        return f'Comissao #{self.pk} — {self.loja.nome} — {self.valor_comissao} CVE ({self.status})'
  
     @classmethod
     def registar(cls, encomenda):
@@ -1549,7 +1549,7 @@ class PlanoSubscricao(models.Model):
         return self.MESES[self.periodicidade]
 
     def __str__(self):
-        return f'{self.nome} ({self.get_periodicidade_display()} · €{self.preco})'
+        return f'{self.nome} ({self.get_periodicidade_display()} · {self.preco} CVE)'
 
 
 class Subscricao(models.Model):
@@ -1642,7 +1642,7 @@ class FaturaSubscricao(models.Model):
         return self.loja if self.loja_id else self.pos
 
     def __str__(self):
-        return f'Fatura #{self.pk} — {self.alvo} — {self.periodo_inicio}→{self.periodo_fim} — €{self.valor} ({self.estado})'
+        return f'Fatura #{self.pk} — {self.alvo} — {self.periodo_inicio}→{self.periodo_fim} — {self.valor} CVE ({self.estado})'
 
 
 # ══════════════════════════════════════════════════════════════

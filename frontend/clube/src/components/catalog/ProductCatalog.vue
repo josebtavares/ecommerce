@@ -80,7 +80,7 @@
                 :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ currencySymbol }}</span>
           <input v-model="filters.preco_min" @input="debouncedFetch" type="number" min="0" placeholder="Min"
             :class="[
-              'w-full pl-7 pr-3 py-2 text-sm border focus:outline-none transition',
+              'w-full pl-11 pr-3 py-2 text-sm border focus:outline-none transition',
               inputBorderRadius,
               inputFocusClass,
               isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100 placeholder-zinc-500' : 'bg-gray-50 border-gray-300 text-zinc-900'
@@ -91,7 +91,7 @@
                 :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ currencySymbol }}</span>
           <input v-model="filters.preco_max" @input="debouncedFetch" type="number" min="0" placeholder="Max"
             :class="[
-              'w-full pl-7 pr-3 py-2 text-sm border focus:outline-none transition',
+              'w-full pl-11 pr-3 py-2 text-sm border focus:outline-none transition',
               inputBorderRadius,
               inputFocusClass,
               isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100 placeholder-zinc-500' : 'bg-gray-50 border-gray-300 text-zinc-900'
@@ -266,6 +266,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
 import { formatarAtributos } from '@/utils/atributos'
@@ -351,7 +352,7 @@ export default {
     showAttributes:   { type: Boolean, default: true },
     
     // Currency
-    currencySymbol: { type: String, default: '€' },
+    currencySymbol: { type: String, default: 'CVE' },
   },
   emits: ['product-click'],
 
@@ -391,7 +392,7 @@ export default {
 
   methods: {
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
     capitalize (str) {
       if (!str) return ''

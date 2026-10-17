@@ -64,7 +64,7 @@
                 </div>
               </td>
               <td v-if="mostrarExtras" class="px-3 py-1.5">
-                <input :value="l.preco" @input="setCampo(i, 'preco', $event.target.value)" type="number" min="0" step="0.01"
+                <input :value="l.preco" @input="setCampo(i, 'preco', $event.target.value)" type="number" min="0" step="1"
                   :placeholder="precoProduto !== '' && precoProduto !== null ? String(precoProduto) : 'preço'"
                   :class="['w-24 rounded-md border px-2 py-1 focus:outline-none', c.input]" />
               </td>

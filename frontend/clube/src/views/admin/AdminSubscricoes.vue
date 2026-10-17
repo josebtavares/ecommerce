@@ -291,8 +291,8 @@
                 class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 disabled:opacity-50">
                 <option value="mensal">Mensal</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option>
               </select></label>
-            <label class="block"><span class="text-xs text-zinc-500">Preço (€)</span>
-              <input v-model="modal.form.preco" type="number" min="0" step="0.01" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" /></label>
+            <label class="block"><span class="text-xs text-zinc-500">Preço (CVE)</span>
+              <input v-model="modal.form.preco" type="number" min="0" step="1" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" /></label>
           </div>
           <label class="block"><span class="text-xs text-zinc-500">Descrição (opcional)</span>
             <input v-model="modal.form.descricao" maxlength="300" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" /></label>
@@ -319,7 +319,7 @@
             <input v-model.number="modal.form.meses" type="number" min="1" max="12" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100" /></label>
           <label class="block"><span class="text-xs text-zinc-500">Motivo (o dono vê-o na notificação)</span>
             <input v-model="modal.form.motivo" maxlength="300" placeholder="ex.: compensação por falha do site" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100" /></label>
-          <p class="text-xs text-zinc-500">As faturas por pagar deste período ficam anuladas e é registada uma fatura de 0 € ("Oferta"). Se {{ modal.pos ? "o POS estiver suspenso" : "a loja estiver suspensa" }} por falta de pagamento, volta logo.<template v-if="modal.pos && !modal.pos.subscricao.plano"> Sem plano, os meses contam a partir de hoje.</template></p>
+          <p class="text-xs text-zinc-500">As faturas por pagar deste período ficam anuladas e é registada uma fatura de 0$00 ("Oferta"). Se {{ modal.pos ? "o POS estiver suspenso" : "a loja estiver suspensa" }} por falta de pagamento, volta logo.<template v-if="modal.pos && !modal.pos.subscricao.plano"> Sem plano, os meses contam a partir de hoje.</template></p>
         </template>
 
         <!-- plano do POS -->
@@ -379,6 +379,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { gerarReciboSubscricao } from '@/utils/reciboSubscricao'
 
@@ -411,7 +412,7 @@ export default {
   created () { this.escolherPeriodo('este_mes'); this.carregarPlanos() },
 
   methods: {
-    euros (v) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0) },
+    euros (v) { return formatarDinheiro(Number(v) || 0) },
     data (s) { return s ? new Date(s.length === 10 ? s + 'T12:00:00' : s).toLocaleDateString('pt-PT') : '' },
     corEstado (e) {
       return { teste: 'bg-sky-500/15 text-sky-300', ativa: 'bg-green-500/15 text-green-400', em_atraso: 'bg-red-500/15 text-red-400',

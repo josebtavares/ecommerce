@@ -207,6 +207,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { gerarReciboSubscricao } from '@/utils/reciboSubscricao'
 
@@ -242,7 +243,7 @@ export default {
   created () { this.carregar() },
 
   methods: {
-    euros (v) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0) },
+    euros (v) { return formatarDinheiro(Number(v) || 0) },
     data (s) { return s ? new Date(s.length === 10 ? s + 'T12:00:00' : s).toLocaleDateString('pt-PT') : '' },
     diaSeguinte (s) { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) },
     corFatura (f) {

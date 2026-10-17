@@ -34,7 +34,7 @@
             <div style="height:22px;position:relative;background:repeating-linear-gradient(135deg,rgba(255,255,255,0.04) 0,rgba(255,255,255,0.04) 10px,rgba(255,255,255,0.01) 10px,rgba(255,255,255,0.01) 20px)"></div>
             <div style="padding:2px 3px">
               <div style="font-size:3.5px;color:#e4e4e7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Produto</div>
-              <div :style="{ fontSize:'3.5px', color:primary, fontWeight:'700' }">89,90€</div>
+              <div :style="{ fontSize:'3.5px', color:primary, fontWeight:'700' }">8.990$00</div>
             </div>
           </div>
         </div>
@@ -176,7 +176,7 @@
       <!-- cartão de serviço -->
       <div style="position:absolute;bottom:11px;right:9px;width:30%;padding:5px 6px;border-radius:6px;background:rgba(20,16,13,.6);border:0.5px solid rgba(255,255,255,.15)">
         <div style="font-size:3px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:2px">Serviço</div>
-        <div v-for="([l,v]) in [['Entrega','desde 0€'],['Take-away','Sim'],['Pratos','42']]" :key="l"
+        <div v-for="([l,v]) in [['Entrega','desde 0$00'],['Take-away','Sim'],['Pratos','42']]" :key="l"
              style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:0.5px solid rgba(255,255,255,.1);font-size:3.5px">
           <span style="color:rgba(255,255,255,.7)">{{ l }}</span><span style="font-weight:700">{{ v }}</span>
         </div>
@@ -309,7 +309,7 @@
         <div>
           <div :style="{ fontSize:'2.8px', letterSpacing:'0.3em', color:primary }">Nº 01</div>
           <div style="font-size:6px;color:#f1ece3;font-family:Georgia,serif;margin:1px 0">Colar Aurora</div>
-          <div :style="{ fontSize:'5px', fontStyle:'italic', color:primary, fontFamily:'Georgia,serif' }">1 250,00 €</div>
+          <div :style="{ fontSize:'5px', fontStyle:'italic', color:primary, fontFamily:'Georgia,serif' }">125.000$00</div>
         </div>
       </div>
     </template>

@@ -265,6 +265,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { toast } from 'vue3-toastify'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
@@ -320,7 +321,7 @@ export default {
   methods: {
     passwordValida,
 
-    money (v) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v || 0)) },
+    money (v) { return formatarDinheiro(Number(v || 0)) },
     data (iso) { return iso ? new Date(iso).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' },
     quando (iso) {
       if (!iso) return 'nunca'

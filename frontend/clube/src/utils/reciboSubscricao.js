@@ -1,7 +1,8 @@
+import { formatarDinheiro } from '@/utils/dinheiro'
 // Recibo (ou fatura) de uma mensalidade da subscrição, em PDF, gerado no browser (jsPDF).
 // Fundo branco para poder ser impresso. Dados vêm de fatura_payload (utils/subscricoes.py).
 
-const euros = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+const euros = v => formatarDinheiro(Number(v) || 0)
 const data = s => (s ? new Date(s.length === 10 ? s + 'T12:00:00' : s).toLocaleDateString('pt-PT') : '—')
 
 export async function gerarReciboSubscricao (f) {

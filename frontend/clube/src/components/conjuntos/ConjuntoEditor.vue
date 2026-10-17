@@ -95,10 +95,10 @@
           </div>
           <label class="flex items-center gap-1 flex-shrink-0" title="Custo extra desta opção (0 = incluída no preço)">
             <span class="text-xs" :class="claro ? 'text-gray-500' : 'text-zinc-500'">+</span>
-            <input type="number" min="0" step="0.01" :value="o.preco_extra"
+            <input type="number" min="0" step="1" :value="o.preco_extra"
                    @input="mudarOpcao(gi, oi, { preco_extra: $event.target.value })"
                    class="w-20 px-2 py-1 rounded-lg text-xs border text-right focus:outline-none focus:border-red-500" :class="inputCls" />
-            <span class="text-xs" :class="claro ? 'text-gray-500' : 'text-zinc-500'">€</span>
+            <span class="text-xs" :class="claro ? 'text-gray-500' : 'text-zinc-500'">CVE</span>
           </label>
           <BotaoRetirar :claro="claro" :nome="item(o)?.nome" @click="mudarGrupo(gi, { opcoes: g.opcoes.filter((_, j) => j !== oi) })" />
         </div>
@@ -120,10 +120,11 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import { h } from 'vue'
 import PesquisaProduto from './PesquisaProduto.vue'
 
-const dinheiro = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+const dinheiro = v => formatarDinheiro(Number(v) || 0)
 
 // pequenas peças de apresentação partilhadas pelas linhas fixas e pelas opções
 const Miniatura = {

@@ -76,6 +76,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
   variantesPorEscolher, stockCompativel, intervaloPreco, opcoesDoProduto,
@@ -178,7 +179,7 @@ export default {
     },
 
     money (v) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v || 0))
+      return formatarDinheiro(Number(v || 0))
     },
   },
 }

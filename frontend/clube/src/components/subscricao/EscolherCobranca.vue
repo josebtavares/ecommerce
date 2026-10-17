@@ -54,6 +54,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 
 export default {
@@ -81,7 +82,7 @@ export default {
   },
 
   methods: {
-    euros (v) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0) },
+    euros (v) { return formatarDinheiro(Number(v) || 0) },
     escolher (modelo) {
       const plano = modelo === 'subscricao' ? (this.modelValue.plano_id || this.planos[0]?.id || null) : null
       this.$emit('update:modelValue', { modelo, plano_id: plano })

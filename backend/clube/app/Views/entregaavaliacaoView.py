@@ -22,6 +22,7 @@ from ..Serializers.EntregaAvaliacaoSerializer import (
     AvaliacaoMiniSerializer,
 )
 from ..utils.pagination import paginar
+from ..utils.dinheiro import formatar as dinheiro
 
 
 # ══════════════════════════════════════════════════════════════
@@ -418,7 +419,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 roles=['dono', 'gestor'],
                 tipo='encomenda_concluida_loja',
                 titulo=f'Encomenda #{encomenda.id} concluída ✓',
-                mensagem=f'Receita: €{encomenda.valor_total} · Líquido: €{_liq}.',
+                mensagem=f'Receita: {dinheiro(encomenda.valor_total)} · Líquido: {dinheiro(_liq)}.',
                 link=f'/loja/{loja.id}/backoffice',
             )
             try:
@@ -426,7 +427,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                     notificar_admins(
                         tipo='comissao_recebida',
                         titulo=f'Comissão registada — {loja.nome}',
-                        mensagem=f'Encomenda #{encomenda.id} · Comissão: €{_com}.',
+                        mensagem=f'Encomenda #{encomenda.id} · Comissão: {dinheiro(_com)}.',
                         loja=loja,
                         link='/admin',
                     )
