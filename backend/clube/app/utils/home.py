@@ -315,15 +315,82 @@ def categorias_destaque(p):
     return [d.categoria for d in destaques]
 
 
-def _ids_simples(s):
-    """Ids de uma secção de lojas ou produtos (não-grupo)."""
+def _ids_simples(s, vistos=None):
+    """Ids de uma secção de lojas ou produtos (não-grupo).
+    parametros.sem_repetidos: o automático salta o que as secções de cima já mostram (vistos);
+    parametros.minimo: com menos itens do que isto a secção esconde-se (um slider com 1 produto parece vazio)."""
     p = s.get('parametros') or {}
     if s['tipo'] == 'lojas':
-        return _ids_seccao(s, _lojas_base(), lojas_auto(s.get('criterio'), p), 'loja_id')
-    return _ids_seccao(s, _produtos_base(), produtos_auto(s.get('criterio'), p), 'produto_id')
+        base, auto, campo = _lojas_base(), lojas_auto(s.get('criterio'), p), 'loja_id'
+    else:
+        base, auto, campo = _produtos_base(), produtos_auto(s.get('criterio'), p), 'produto_id'
+    excluir = (vistos or {}).get(CONTEUDO[s['tipo']]) if p.get('sem_repetidos') else None
+    if excluir:
+        auto = auto.exclude(id__in=excluir)
+    ids = _ids_seccao(s, base, auto, campo)
+    minimo = _int(p.get('minimo'))
+    return [] if minimo and len(ids) < minimo else ids
 
 
-def pagina_seccao(s, grupo, offset, limit, request, chave_cache=None):
+def _escolher_loja_destaque(s):
+    """Loja do bloco "loja em destaque": a escolhida à mão; sem ela, uma das primeiras do critério,
+    que muda todos os dias (a mesma durante o dia inteiro, para todos)."""
+    p = s.get('parametros') or {}
+    loja_id = _int(p.get('loja_id')) or next((i['loja_id'] for i in s.get('itens') or [] if i.get('loja_id')), None)
+    if loja_id:
+        return loja_id if _lojas_base().filter(id=loja_id).exists() else None
+    if s.get('criterio') in CRITERIOS_LOJAS:
+        candidatas = list(lojas_auto(s['criterio'], p).values_list('id', flat=True)[:7])
+        if candidatas:
+            return candidatas[timezone.localdate().toordinal() % len(candidatas)]
+    return None
+
+
+def _ids_loja_destaque(s, loja_id):
+    manuais = [i for i in s.get('itens') or [] if i.get('produto_id')]
+    sub = {**s, 'itens': manuais, 'fonte': 'misto' if manuais else 'auto', 'limite': min(_int(s.get('limite'), 8) or 8, 20)}
+    base = _produtos_base().filter(loja_id=loja_id)
+    auto = produtos_auto('loja', {'loja_id': loja_id}).order_by('-destaque', '-id')
+    return _ids_seccao(sub, base, auto, 'produto_id')
+
+
+def _mostrados(s, vistos):
+    """Lojas e produtos que a secção mostra (ids completos, sem serializar) — para o sem_repetidos das de baixo.
+    O hero não conta: é a montra do topo, as secções de baixo podem repetir as lojas dele."""
+    tipo = s['tipo']
+    out = {'lojas': [], 'produtos': []}
+    if tipo in ('lojas', 'produtos'):
+        out[CONTEUDO[tipo]] = _ids_simples(s, vistos)
+    elif tipo in GRUPOS:
+        out[CONTEUDO[tipo]] = [i for g in _grupos(s) for i in g[3]()]
+    elif tipo == 'loja_destaque':
+        loja_id = _escolher_loja_destaque(s)
+        if loja_id:
+            out = {'lojas': [loja_id], 'produtos': _ids_loja_destaque(s, loja_id)}
+    return out
+
+
+def _usa_sem_repetidos(seccoes):
+    return any((s.get('parametros') or {}).get('sem_repetidos') for s in seccoes)
+
+
+def vistos_antes(seccoes, alvo_id, agora=None):
+    """O que as secções visíveis acima de alvo_id mostram (None se a secção não usa sem_repetidos)."""
+    agora = agora or timezone.now()
+    visiveis = [s for s in seccoes if s.get('tipo') in CONTEUDO and _visivel(s, agora)]
+    alvo = next((s for s in visiveis if str(s.get('id')) == str(alvo_id)), None)
+    if alvo is None or not (alvo.get('parametros') or {}).get('sem_repetidos'):
+        return None
+    vistos = {'lojas': set(), 'produtos': set()}
+    for s in visiveis:
+        if s is alvo:
+            break
+        for k, ids in _mostrados(s, vistos).items():
+            vistos[k].update(ids)
+    return vistos
+
+
+def pagina_seccao(s, grupo, offset, limit, request, chave_cache=None, vistos=None):
     """Página seguinte de um slider (endpoint /app/home/seccao/<id>/). None se não existir.
     Com chave_cache, a lista de ids fica em cache (o endpoint é público e cada página repetia as contas)."""
     conteudo = CONTEUDO.get(s['tipo'])
@@ -338,7 +405,7 @@ def pagina_seccao(s, grupo, offset, limit, request, chave_cache=None):
                 return None   # grupo inexistente: não fica em cache (o nome vem do pedido)
             ids = g[3]()
         else:
-            ids = _ids_simples(s)
+            ids = _ids_simples(s, vistos)
         if chave_cache:
             cache.set(chave_cache, ids, CACHE_SEGUNDOS)
     return _pagina(ids, offset, limit, serializar, request)
@@ -353,7 +420,10 @@ def pagina_publica(seccao_id, grupo, offset, limit, request):
         return None
     from hashlib import md5
     chave = f'home:v1:ids:{pub_id}:{s["id"]}:{md5((grupo or "").encode()).hexdigest()}'
-    return pagina_seccao(s, grupo, offset, limit, request, chave_cache=chave)
+    vistos = None
+    if (s.get('parametros') or {}).get('sem_repetidos') and cache.get(chave) is None:
+        vistos = vistos_antes(seccoes, s['id'], agora)
+    return pagina_seccao(s, grupo, offset, limit, request, chave_cache=chave, vistos=vistos)
 
 
 # ── secção completa (primeira página) ─────────────────────────
@@ -365,7 +435,7 @@ def _base(s):
             'parametros': {k: p[k] for k in ('estilo_titulo', 'ancora') if k in p}}
 
 
-def resolver(s, request):
+def resolver(s, request, vistos=None):
     tipo = s['tipo']
     out = _base(s)
     p = s.get('parametros') or {}
@@ -376,7 +446,7 @@ def resolver(s, request):
     if tipo in ('lojas', 'produtos'):
         conteudo = CONTEUDO[tipo]
         tam = PAGINA_LOJAS if conteudo == 'lojas' else PAGINA_PRODUTOS
-        pag = pagina_seccao(s, None, 0, tam, request)
+        pag = pagina_seccao(s, None, 0, tam, request, vistos=vistos)
         if not pag['results']:
             return None
         out['pagina'] = pag
@@ -433,15 +503,11 @@ def resolver(s, request):
         return out if out['slides'] else None
 
     if tipo == 'loja_destaque':
-        loja_id = _int(p.get('loja_id')) or next((i['loja_id'] for i in s.get('itens') or [] if i.get('loja_id')), None)
-        if not loja_id or not _lojas_base().filter(id=loja_id).exists():
+        loja_id = _escolher_loja_destaque(s)
+        if not loja_id:
             return None
         out['loja'] = _serializar_lojas([loja_id], request)[0]
-        manuais = [i for i in s.get('itens') or [] if i.get('produto_id')]
-        sub = {**s, 'itens': manuais, 'fonte': 'misto' if manuais else 'auto', 'limite': min(_int(s.get('limite'), 8) or 8, 20)}
-        base = _produtos_base().filter(loja_id=loja_id)
-        auto = produtos_auto('loja', {'loja_id': loja_id}).order_by('-destaque', '-id')
-        out['produtos'] = _serializar_produtos(_ids_seccao(sub, base, auto, 'produto_id'), request)
+        out['produtos'] = _serializar_produtos(_ids_loja_destaque(s, loja_id), request)
         return out
 
     if tipo == 'categorias':
@@ -478,12 +544,17 @@ def categorias_lojas():
 def montar(seccoes, request, pub_id):
     """Resolve as secções (só as que estão dentro das datas e têm conteúdo)."""
     agora = timezone.now()
+    visiveis = [s for s in seccoes if s.get('tipo') in CONTEUDO and _visivel(s, agora)]
+    # só se alguma secção pede "sem repetidos" vale a pena contar o que as de cima mostram
+    vistos = {'lojas': set(), 'produtos': set()} if _usa_sem_repetidos(visiveis) else None
     resolvidas = []
-    for s in seccoes:
-        if s.get('tipo') in CONTEUDO and _visivel(s, agora):
-            r = resolver(s, request)
-            if r:
-                resolvidas.append(r)
+    for s in visiveis:
+        r = resolver(s, request, vistos)
+        if r and vistos is not None:
+            for k, ids in _mostrados(s, vistos).items():
+                vistos[k].update(ids)
+        if r:
+            resolvidas.append(r)
     return {'publicacao': pub_id, 'seccoes': resolvidas, 'categorias_lojas': categorias_lojas()}
 
 
@@ -519,6 +590,7 @@ TIPOS_COM_ITENS = {
 }
 CRITERIOS_POR_TIPO = {
     'hero': CRITERIOS_LOJAS, 'lojas': CRITERIOS_LOJAS, 'produtos': CRITERIOS_PRODUTOS,
+    'loja_destaque': CRITERIOS_LOJAS,   # sem loja escolhida: uma das primeiras deste critério, muda todos os dias
 }
 # parâmetro → (tipo, mínimo, máximo) ; str/lista: máximo = comprimento
 PARAMETROS = {
@@ -534,6 +606,8 @@ PARAMETROS = {
     'estilo_titulo':    ('str', 0, 10),
     'categorias':       ('lista', 0, 30),
     'categoria_ids':    ('ids', 0, 30),
+    'sem_repetidos':    ('bool', 0, 0),
+    'minimo':           ('int', 1, 20),
 }
 LIMITE_PADRAO = {'hero': 5, 'loja_destaque': 8}
 
@@ -661,7 +735,10 @@ def avisos_seccao(s):
     if s.tipo == 'loja_destaque':
         lid = (s.parametros or {}).get('loja_id')
         loja = Loja.objects.filter(id=lid).first() if lid else None
-        if loja is None:
+        if loja is None and s.criterio in CRITERIOS_LOJAS:
+            if not lojas_auto(s.criterio, s.parametros or {}).exists():
+                avisos.append('Nenhuma loja cumpre o critério agora: a secção não aparece.')
+        elif loja is None:
             avisos.append('Escolhe a loja em destaque.')
         elif not loja.ativa:
             avisos.append(f'A loja "{loja.nome}" não está activa ({loja.estado}): a secção não aparece.')
@@ -841,7 +918,8 @@ def validar(dados, atual=None):
         campos['parametros'] = limpos
     crit = campos.get('criterio', atual.criterio if atual else '')
     params = campos.get('parametros', atual.parametros if atual else {}) or {}
-    if fonte in ('auto', 'misto') and tipo in CRITERIOS_POR_TIPO:
+    # a loja em destaque pode ser criada sem loja nem critério (o admin escolhe a seguir; avisos_seccao avisa)
+    if fonte in ('auto', 'misto') and tipo in CRITERIOS_POR_TIPO and tipo != 'loja_destaque':
         if not crit:
             return None, None, 'Escolhe o critério automático.'
         precisa = {'tipo': 'tipo_id', 'loja': 'loja_id', 'categoria_produto': 'categoria_id'}.get(crit)

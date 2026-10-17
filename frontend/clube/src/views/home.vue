@@ -286,7 +286,7 @@
           </section>
 
           <!-- Produtos -->
-          <section v-else-if="sec.tipo === 'produtos'" class="py-4 px-6 md:px-12"
+          <section v-else-if="sec.tipo === 'produtos'" data-produtos class="py-4 px-6 md:px-12"
                    :class="isDark ? 'bg-zinc-900/50' : 'bg-white'">
             <ProductSlider :title="sec.titulo || 'Produtos'"
               :inicial="sec.pagina" :endpoint="endpointSeccao(sec.id)"
@@ -463,14 +463,17 @@ export default {
     iconeCategoria,
 
     scrollToSection (key) {
-      const el = this.sectionRefs[key]
+      // sem cabeçalho "produtos" no layout publicado, vai para a primeira secção de produtos
+      const el = this.sectionRefs[key] || (key === 'produtos' ? this.$el.querySelector?.('[data-produtos]') : null)
       if (el) { el.scrollIntoView({ behavior: 'smooth' }); this.sidebarAberta = false }
     },
 
     async selectCategoria (cat) {
       this.selectedCategoria = cat.value
       await this.fetchStoresByCategory(cat.value)
-      this.scrollToSection(cat.value)
+      // sem slider dessa categoria no layout publicado, filtra o catálogo
+      if (this.sectionRefs[cat.value]) this.scrollToSection(cat.value)
+      else this.filtrarCatalogo(cat.value)
     },
 
     clearCategoria () { this.selectedCategoria = null; this.storesByCategory = [] },
@@ -506,7 +509,7 @@ export default {
     etiquetaSlide (sec, slide) {
       if (slide.tipo === 'produto') return 'Produto em destaque'
       if (slide.tipo === 'banner') return 'Novidade'
-      return { novas: 'Nova Loja', populares: 'Popular', mais_vendidas: 'Mais vendida', mais_favoritas: 'Favorita' }[sec.criterio] || 'Em destaque'
+      return { novas: 'Nova Loja', populares: 'Popular', mais_vendidas: 'Mais vendida', mais_favoritas: 'Favorita', abertas: 'Aberta agora' }[sec.criterio] || 'Em destaque'
     },
 
     endpointSeccao (id) {
