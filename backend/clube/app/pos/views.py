@@ -62,6 +62,7 @@ PREFETCH_CONJUNTO_LOJA = ('componentes__produto__inventario', 'componentes__vari
                           'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante',
                           'componentes__produto__variantes', 'grupos__opcoes__produto__variantes')
 from app.utils.auth import autenticar
+from app.utils.dinheiro import ler_valor
 from app.utils.google_auth import google_obter_utilizador
 from app.utils.password import mensagem_password_fraca
 from app.utils.contas import username_livre
@@ -986,6 +987,9 @@ def produto_criar(request, pos_id):
 
     if not nome or preco is None:
         return Response({'detail': 'Nome e preço são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)
+    preco, erro_preco = ler_valor(preco, 'O preço')
+    if erro_preco:
+        return Response({'detail': erro_preco}, status=status.HTTP_400_BAD_REQUEST)
 
     atributos, erro_attr = _ler_atributos(request)
     if erro_attr:
@@ -1006,7 +1010,7 @@ def produto_criar(request, pos_id):
 
         produto = ProdutoPOS.objects.create(
             pos=pos, nome=nome, descricao=descricao, categoria=categoria,
-            preco=Decimal(str(preco)), imagem=imagem, controlar_stock=controlar_stock,
+            preco=preco, imagem=imagem, controlar_stock=controlar_stock,
             stock=stock, ativo=ativo, disponivel_pos=disponivel_pos,
             tipo=tipo or None, atributos=atributos,
         )
@@ -1049,7 +1053,7 @@ def produto_criar(request, pos_id):
 
         produto = Produto.objects.create(
             loja=loja, tipo=tipo, nome=nome, descricao=descricao,
-            preco=Decimal(str(preco)), sku=request.data.get('sku', ''),
+            preco=preco, sku=request.data.get('sku', ''),
             ficheiro=imagem, atributos=atributos or {},
             destaque=_str_to_bool(request.data.get('destaque'), False),
             ativo=ativo, disponivel_pos=disponivel_pos,
@@ -1106,7 +1110,9 @@ def produto_atualizar(request, pos_id, produto_id):
             if campo == 'categoria':
                 produto.categoria = request.data['categoria'] or 'Sem categoria'
             elif campo == 'preco':
-                produto.preco = Decimal(str(request.data['preco']))
+                produto.preco, erro_preco = ler_valor(request.data['preco'], 'O preço')
+                if erro_preco:
+                    return Response({'detail': erro_preco}, status=status.HTTP_400_BAD_REQUEST)
             elif campo in ('controlar_stock', 'ativo', 'disponivel_pos'):
                 setattr(produto, campo, _str_to_bool(request.data.get(campo), getattr(produto, campo)))
             elif campo == 'stock':
@@ -1172,7 +1178,9 @@ def produto_atualizar(request, pos_id, produto_id):
             if campo in request.data:
                 setattr(produto, campo, request.data[campo])
         if 'preco' in request.data:
-            produto.preco = Decimal(str(request.data['preco']))
+            produto.preco, erro_preco = ler_valor(request.data['preco'], 'O preço')
+            if erro_preco:
+                return Response({'detail': erro_preco}, status=status.HTTP_400_BAD_REQUEST)
         for campo in ('ativo', 'disponivel_pos', 'destaque'):
             if campo in request.data:
                 setattr(produto, campo, _str_to_bool(request.data.get(campo), getattr(produto, campo)))
@@ -1670,11 +1678,11 @@ def turno_abrir(request, pos_id):
     if TurnoPOS.objects.filter(pos=pos, aberto=True).exists():
         return Response({'detail': 'Já existe um turno aberto'}, status=status.HTTP_400_BAD_REQUEST)
 
-    valor_abertura = request.data.get('valor_abertura')
-    if valor_abertura is None:
-        return Response({'detail': 'valor_abertura é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
+    valor_abertura, erro = ler_valor(request.data.get('valor_abertura'), 'O valor de abertura')
+    if erro:
+        return Response({'detail': erro}, status=status.HTTP_400_BAD_REQUEST)
 
-    turno = TurnoPOS.objects.create(pos=pos, operador=utilizador, valor_abertura=Decimal(str(valor_abertura)))
+    turno = TurnoPOS.objects.create(pos=pos, operador=utilizador, valor_abertura=valor_abertura)
     return Response({'id': turno.id, 'valor_abertura': str(turno.valor_abertura), 'aberto_em': turno.aberto_em}, status=status.HTTP_201_CREATED)
 
 
@@ -1692,11 +1700,11 @@ def turno_fechar(request, pos_id, turno_id):
     if not turno.aberto:
         return Response({'detail': 'Turno já está fechado'}, status=status.HTTP_400_BAD_REQUEST)
 
-    valor_fecho = request.data.get('valor_fecho')
-    if valor_fecho is None:
-        return Response({'detail': 'valor_fecho é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
+    valor_fecho, erro = ler_valor(request.data.get('valor_fecho'), 'O valor contado')
+    if erro:
+        return Response({'detail': erro}, status=status.HTTP_400_BAD_REQUEST)
 
-    turno.fechar_turno(Decimal(str(valor_fecho)))
+    turno.fechar_turno(valor_fecho)
     return Response({
         'id': turno.id, 'valor_abertura': str(turno.valor_abertura),
         'valor_fecho': str(turno.valor_fecho), 'diferenca': str(turno.diferenca), 'fechado_em': turno.fechado_em,

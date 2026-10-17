@@ -9,7 +9,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import uuid
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -529,7 +529,9 @@ class ContaMesa(models.Model):
         ) or Decimal('0.00')
 
         if self.taxa_servico_percentagem > 0:
-            self.taxa_servico_valor = (self.subtotal * self.taxa_servico_percentagem) / 100
+            # ao centavo (ex.: 12,5% de 1.653$00 = 206$63), como fica gravado — o total bate com a soma
+            self.taxa_servico_valor = ((self.subtotal * self.taxa_servico_percentagem) / 100).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP)
         else:
             self.taxa_servico_valor = Decimal('0.00')
 

@@ -10,11 +10,36 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 
 
+VALOR_MAX = Decimal('99999999.99')   # numeric(10, 2) — o máximo que a base de dados guarda
+
+
 def _decimal(v):
     try:
         return Decimal(str(v if v is not None else 0))
     except Exception:
         return Decimal('0')
+
+
+def ler_valor(v, nome='O valor', obrigatorio=True):
+    """
+    Valor vindo do cliente → (Decimal com 2 casas, None) ou (None, mensagem de erro).
+    Recusa texto, NaN/Infinity, negativos e valores acima do que a base de dados guarda
+    (antes "NaN" ou 1e12 davam erro 500 ou ficavam gravados).
+    """
+    if v in (None, ''):
+        return (None, f'{nome} é obrigatório.') if obrigatorio else (None, None)
+    try:
+        d = Decimal(str(v).strip().replace(',', '.'))
+    except Exception:
+        return None, f'{nome} não é um número válido.'
+    if not d.is_finite():
+        return None, f'{nome} não é um número válido.'
+    if d < 0:
+        return None, f'{nome} não pode ser negativo.'
+    d = d.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    if d > VALOR_MAX:
+        return None, f'{nome} é demasiado alto (máximo {formatar(VALOR_MAX)}).'
+    return d, None
 
 
 def formatar(v):

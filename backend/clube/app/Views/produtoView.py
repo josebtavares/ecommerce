@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from ..models import Produto, TipoProduto, Loja, UtilizadorLoja,ProdutoImagem
 from ..Serializers.ProdutoSerializer import ProdutoSerializer, TipoProdutoSerializer
 from ..utils.pagination import paginar
+from ..utils.dinheiro import ler_valor
 from ..utils.variantes import sincronizar_variantes, aplicar_grelha_do_pedido
 from ..utils.tipos import tipos_para_loja, tipo_permitido
 from ..utils import conjuntos as conj
@@ -306,16 +307,13 @@ def produto_list_pagination(request):
         )
 
     # ── 4) filtros de preço ───────────────────────────────────
-    try:
-        if 'preco_min' in request.GET:
-            qs = qs.filter(preco__gte=float(request.GET['preco_min']))
-        if 'preco_max' in request.GET:
-            qs = qs.filter(preco__lte=float(request.GET['preco_max']))
-    except ValueError:
-        return Response(
-            {'detail': 'preco_min / preco_max inválidos.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    # (NaN/Infinity/negativos eram aceites pelo float() e rebentavam a query com erro 500)
+    for campo, lookup in (('preco_min', 'preco__gte'), ('preco_max', 'preco__lte')):
+        valor, erro_preco = ler_valor(request.GET.get(campo), obrigatorio=False)
+        if erro_preco:
+            return Response({'detail': 'preco_min / preco_max inválidos.'}, status=status.HTTP_400_BAD_REQUEST)
+        if valor is not None:
+            qs = qs.filter(**{lookup: valor})
 
     # ── 5) filtros dinâmicos por atributos JSON ───────────────
     #

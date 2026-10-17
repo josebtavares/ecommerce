@@ -664,12 +664,8 @@ def ler_grupos(dados):
 
 
 def _decimal(v):
-    from decimal import Decimal, InvalidOperation
-    try:
-        d = Decimal(str(v if v not in (None, '') else 0)).quantize(Decimal('0.01'))
-    except (InvalidOperation, ValueError):
-        return None
-    return d if d >= 0 else None
+    from .dinheiro import ler_valor
+    return ler_valor(v if v not in (None, '') else 0)[0]
 
 
 def validar_grupos(grupos, conjunto, resolver):
