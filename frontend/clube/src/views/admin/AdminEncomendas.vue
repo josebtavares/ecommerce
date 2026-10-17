@@ -160,6 +160,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { iconePagamento } from '@/utils/icones'
 export default {
@@ -186,7 +187,7 @@ export default {
   methods: {
     iconePagamento,
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
     statusColor (s) {
       const map = { pendente: 'bg-yellow-500/15 text-yellow-400', pago: 'bg-blue-500/15 text-blue-400', preparando: 'bg-purple-500/15 text-purple-400', enviado: 'bg-indigo-500/15 text-indigo-400', concluido: 'bg-green-500/15 text-green-400', cancelado: 'bg-red-500/15 text-red-400' }

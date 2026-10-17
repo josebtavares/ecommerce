@@ -30,6 +30,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 export default {
   name: 'PesquisaProduto',
   props: {
@@ -60,7 +61,7 @@ export default {
 
   methods: {
     dinheiro (v) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+      return formatarDinheiro(Number(v) || 0)
     },
     escolher (p) {
       this.$emit('escolher', p)

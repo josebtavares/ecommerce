@@ -21,7 +21,7 @@
           <div class="flex-1 min-w-0">
             <p class="text-sm text-zinc-100 truncate">{{ r.nome }}</p>
             <p class="text-[11px] text-zinc-500 truncate">
-              {{ tipo === 'loja' ? r.categoria : tipo === 'categoria' ? `${r.loja} · ${r.total_produtos} produtos` : `${r.loja} · ${r.preco} €` }}
+              {{ tipo === 'loja' ? r.categoria : tipo === 'categoria' ? `${r.loja} · ${r.total_produtos} produtos` : `${r.loja} · ${$dinheiro(r.preco)}` }}
             </p>
           </div>
           <span v-if="tipo === 'loja' ? !r.ativa : tipo === 'categoria' ? !r.loja_ativa : (!r.ativo || !r.loja_ativa)"

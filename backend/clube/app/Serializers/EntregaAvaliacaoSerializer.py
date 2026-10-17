@@ -81,7 +81,7 @@ class EntregaSerializer(serializers.ModelSerializer):
     # campos da opção de entrega (flat — mais fácil de usar no frontend)
     opcao_entrega_nome  = serializers.CharField(source='opcao_entrega.nome',           read_only=True)
     opcao_entrega_tempo = serializers.CharField(source='opcao_entrega.tempo_estimado',  read_only=True)
-    opcao_entrega_preco = serializers.DecimalField(source='opcao_entrega.preco', max_digits=8, decimal_places=2, read_only=True)
+    opcao_entrega_preco = serializers.DecimalField(source='opcao_entrega.preco', max_digits=10, decimal_places=2, read_only=True)
     # campos do condutor (flat)
     condutor_nome     = serializers.SerializerMethodField()
     condutor_veiculo  = serializers.SerializerMethodField()

@@ -79,7 +79,7 @@
                 </div>
               </td>
               <td v-if="mostrarExtras" class="px-3 py-1.5">
-                <input v-model="l.preco" type="number" min="0" step="0.01" :placeholder="grelha.preco_produto"
+                <input v-model="l.preco" type="number" min="0" step="1" :placeholder="grelha.preco_produto"
                   :class="['w-24 px-2 py-1 border rounded-md focus:outline-none', c.input]" />
               </td>
               <td v-if="mostrarExtras" class="px-3 py-1.5">

@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import videoVisivel from './directives/videoVisivel';
 import App from './App.vue';
+import { formatarDinheiro } from './utils/dinheiro';
 import router from './router'; // Import the router
 import '@/assets/toastify.css';
 import 'vue3-toastify/dist/index.css';
@@ -23,6 +24,8 @@ const app = createApp(App);
 
 app.component('font-awesome-icon', FontAwesomeIcon);
 app.directive('video-visivel', videoVisivel); // vídeos só tocam quando visíveis (directives/videoVisivel.js)
+
+app.config.globalProperties.$dinheiro = formatarDinheiro; // 1250 → "1.250$00" em qualquer template
 
 app.use(router); // Use the router
 

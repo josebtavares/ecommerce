@@ -179,11 +179,11 @@
                   <p class="text-[10px] text-zinc-500">Total</p>
                 </div>
                 <div class="text-center">
-                  <p class="text-base font-bold text-yellow-400">€{{ detalheComissoes.pendente }}</p>
+                  <p class="text-base font-bold text-yellow-400">{{ $dinheiro(detalheComissoes.pendente) }}</p>
                   <p class="text-[10px] text-zinc-500">Pendente</p>
                 </div>
                 <div class="text-center">
-                  <p class="text-base font-bold text-green-400">€{{ detalheComissoes.liquidada }}</p>
+                  <p class="text-base font-bold text-green-400">{{ $dinheiro(detalheComissoes.liquidada) }}</p>
                   <p class="text-[10px] text-zinc-500">Liquidado</p>
                 </div>
               </div>
@@ -199,7 +199,7 @@
                     <p class="text-[10px] text-zinc-500">{{ c.data_criacao }} · {{ c.percentagem }}%</p>
                   </div>
                   <div class="text-right">
-                    <p class="text-xs font-bold text-red-400">€{{ c.valor_comissao }}</p>
+                    <p class="text-xs font-bold text-red-400">{{ $dinheiro(c.valor_comissao) }}</p>
                     <span :class="['text-[10px] font-bold', c.status === 'liquidada' ? 'text-green-400' : 'text-yellow-400']">
                       {{ c.status }}
                     </span>

@@ -67,9 +67,10 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import { h } from 'vue'
 
-const dinheiro = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+const dinheiro = v => formatarDinheiro(Number(v) || 0)
 
 // botões das variações de uma peça/opção (esgotadas desactivadas)
 const BotoesVariante = {

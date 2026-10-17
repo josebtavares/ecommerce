@@ -192,6 +192,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import BackofficeProdutoModal from './BackofficeProdutoModal.vue'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
@@ -266,7 +267,7 @@ export default {
       }
     },
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     slicedAtributos (atributos) {

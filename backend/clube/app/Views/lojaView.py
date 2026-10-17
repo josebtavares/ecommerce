@@ -22,7 +22,7 @@ from ..Serializers.LojaSerializer import (
     LojaMiniSerializer,
     UtilizadorLojaSerializer,
 )
-from ..utils.pagination import paginar
+from ..utils.pagination import paginar, periodo_dias
 from ..utils.password import mensagem_password_fraca
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso
 
@@ -595,7 +595,7 @@ def loja_dashboard(request, loja_id):
             return Response({'detail': 'Datas inválidas. Use YYYY-MM-DD.'}, status=400)
         periodo = None
     else:
-        periodo = int(request.GET.get('periodo', 30))
+        periodo = periodo_dias(request)
         inicio  = now() - timedelta(days=periodo)
         fim     = now()
         data_inicio_str = str(hoje - timedelta(days=periodo))

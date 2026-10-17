@@ -222,7 +222,7 @@
                       </span>
                     </div>
                     <div v-else-if="slide.tipo === 'produto'" class="flex items-center gap-4 text-zinc-300 text-sm flex-wrap mb-5">
-                      <span class="text-xl font-bold text-white">{{ Number(slide.produto.preco).toFixed(2) }} €</span>
+                      <span class="text-xl font-bold text-white">{{ $dinheiro(slide.produto.preco) }}</span>
                       <span v-if="slide.produto.loja" class="flex items-center gap-1.5">
                         <font-awesome-icon :icon="['fas', 'store']" /> {{ slide.produto.loja.nome }}
                       </span>

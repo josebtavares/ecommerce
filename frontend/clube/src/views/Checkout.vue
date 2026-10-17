@@ -324,6 +324,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
@@ -430,7 +431,7 @@ export default {
   methods: {
     formatarAtributos, temAtributos, quandoAbre,
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     async fetchLoja () {

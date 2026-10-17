@@ -225,6 +225,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
@@ -312,7 +313,7 @@ export default {
 
   methods: {
     diaSemana,
-    dinheiro (v) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0) },
+    dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     dataLonga (s) {
       const nomes = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
       return `${nomes[diaSemana(s)]}, ${Number(s.slice(8))} de ${MESES[Number(s.slice(5, 7)) - 1]}${s.slice(0, 4) !== this.hoje.slice(0, 4) ? ' de ' + s.slice(0, 4) : ''}`

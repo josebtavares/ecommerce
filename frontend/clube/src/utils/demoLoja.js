@@ -284,7 +284,8 @@ function construir () {
 
   const n = dados.produtos.length
   const produtos = dados.produtos.map(([nome, preco, tipoNome, catNome, icone, destaque, descricao], i) => {
-    const precoTxt = preco.toFixed(2)
+    // os preços da lista estão em euros: passam a escudos, arredondados a 50$00
+    const precoTxt = (Math.round(preco * 110.265 / 50) * 50).toFixed(2)
     const cat = categorias.find(c => c.nome === catNome)
     return {
       id: n - i,   // a API ordena por -id: o primeiro da lista aparece primeiro
@@ -353,8 +354,8 @@ function responder (metodo, caminho, params) {
     switch (caminho.slice(base.length)) {
       case '':                     return loja
       case 'entrega/opcoes/':      return [
-        { id: 1, nome: 'Standard', preco: '2.50', tempo_estimado: '24 h', area_cobertura: '', ativa: true },
-        { id: 2, nome: 'Expresso', preco: '4.90', tempo_estimado: '2 h', area_cobertura: '', ativa: true },
+        { id: 1, nome: 'Standard', preco: '250.00', tempo_estimado: '24 h', area_cobertura: '', ativa: true },
+        { id: 2, nome: 'Expresso', preco: '500.00', tempo_estimado: '2 h', area_cobertura: '', ativa: true },
       ]
       case 'pagamento/metodos/':   return ['dinheiro', 'cartao', 'mbway'].map((tipo, i) => ({ id: i + 1, tipo, ativo: true }))
       case 'produtos/tipos/':      return {

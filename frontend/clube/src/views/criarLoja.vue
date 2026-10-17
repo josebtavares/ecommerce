@@ -275,8 +275,8 @@
                     class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
                 </div>
                 <div>
-                  <label class="text-[10px] text-zinc-500 mb-1 block">Preço (€)</label>
-                  <input v-model="op.preco" type="number" min="0" step="0.5" placeholder="0.00"
+                  <label class="text-[10px] text-zinc-500 mb-1 block">Preço (CVE)</label>
+                  <input v-model="op.preco" type="number" min="0" step="1" placeholder="0"
                     class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
                 </div>
               </div>

@@ -40,6 +40,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import EscolhasConjunto, { extrasDe, faltaEscolher } from '@/components/conjuntos/EscolhasConjunto.vue'
 
 export default {
@@ -62,7 +63,7 @@ export default {
 
   methods: {
     money (v) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+      return formatarDinheiro(Number(v) || 0)
     },
     confirmar () {
       if (this.falta.length) return

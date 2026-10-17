@@ -104,7 +104,7 @@
               <span class="text-zinc-300 font-semibold">{{ entrega.opcao_entrega_nome }}</span>
               <span v-if="entrega.opcao_entrega_tempo" class="text-zinc-500">· {{ entrega.opcao_entrega_tempo }}</span>
               <span v-if="entrega.opcao_entrega_preco" class="text-zinc-500">
-                · {{ parseFloat(entrega.opcao_entrega_preco) === 0 ? 'Gratuito' : '€' + entrega.opcao_entrega_preco }}
+                · {{ parseFloat(entrega.opcao_entrega_preco) === 0 ? 'Gratuito' : $dinheiro(entrega.opcao_entrega_preco) }}
               </span>
             </div>
             <div v-if="entrega.metodo_pagamento" class="flex gap-2">

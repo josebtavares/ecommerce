@@ -226,6 +226,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { FreeMode } from 'swiper/modules'
 import 'swiper/css'
@@ -332,10 +333,7 @@ export default {
 
   methods: {
     formatPrice(val) {
-      return new Intl.NumberFormat('pt-PT', {
-        style: 'currency',
-        currency: 'EUR',
-      }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     onSwiper(swiper) {

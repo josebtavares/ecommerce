@@ -309,6 +309,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { usePdfRelatorio } from '@/composables/usePdfRelatorio'
 
@@ -403,7 +404,7 @@ export default {
     },
 
     fmt (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     fmtDia (dia) {

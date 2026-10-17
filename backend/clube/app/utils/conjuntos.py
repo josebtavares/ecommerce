@@ -17,6 +17,7 @@ from django.db.models import F
 
 from ..models import Produto, Inventario, VarianteProduto, ComponenteConjunto, GrupoEscolha, OpcaoEscolha
 from .variantes import atualizar_total_inventario
+from .dinheiro import formatar as dinheiro
 
 MAX_COMPONENTES = 20
 MAX_QUANTIDADE = 99
@@ -176,7 +177,7 @@ def comps_da_venda(conjunto, escolhas, pos=None):
 
 
 def texto_escolhas(conjunto, escolhas):
-    """"T-shirt: M · Bebida: Fanta (33cl) +0,50 €" — para o carrinho."""
+    """"T-shirt: M · Bebida: Fanta (33cl) +50$00" — para o carrinho."""
     escolhas = normalizar_escolhas(escolhas)
     partes = []
     fixos = componentes_de(conjunto)
@@ -185,7 +186,7 @@ def texto_escolhas(conjunto, escolhas):
     for g, opcoes in grupos_de(conjunto):
         com_variantes(opcoes, escolhas)
         pedidas = set(escolhas.get(str(g.id), []))
-        nomes = [c.nome + (f' +{c.extra:.2f} €'.replace('.', ',') if c.extra else '')
+        nomes = [c.nome + (f' +{dinheiro(c.extra)}' if c.extra else '')
                  for c in opcoes if c.opcao_id in pedidas]
         if nomes:
             partes.append(f'{g.nome}: {", ".join(nomes)}')
@@ -663,12 +664,8 @@ def ler_grupos(dados):
 
 
 def _decimal(v):
-    from decimal import Decimal, InvalidOperation
-    try:
-        d = Decimal(str(v if v not in (None, '') else 0)).quantize(Decimal('0.01'))
-    except (InvalidOperation, ValueError):
-        return None
-    return d if d >= 0 else None
+    from .dinheiro import ler_valor
+    return ler_valor(v if v not in (None, '') else 0)[0]
 
 
 def validar_grupos(grupos, conjunto, resolver):

@@ -395,6 +395,7 @@
 </template>
 
 <script setup>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import { ref, watch, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/services/api'
@@ -466,7 +467,7 @@ const lojas       = ref([])
 const loadingLojas = ref(false)
 
 function formatPrice(val) {
-  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+  return formatarDinheiro(val || 0)
 }
 function formatDate(d) { return new Date(d).toLocaleDateString('pt-PT') }
 function statusColor(s) {

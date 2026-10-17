@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_staff, notificar_admins
 from ..utils.encomendas import expirar_encomenda, MSG_EXPIROU, PRAZO_PAGAMENTO_MIN
 from decimal import Decimal
+from ..utils.dinheiro import formatar as dinheiro, valor_cobranca, moeda_cobranca
 from ..models import (
     Encomenda, Pagamento, MetodoPagamento,
     CartaoGuardado, UtilizadorLoja, Loja, Carrinho, Comissao,
@@ -125,7 +126,7 @@ def _registar_pagamento_aprovado(encomenda, metodo, referencia, valor):
         roles=['dono', 'gestor'],
         tipo='pagamento_aprovado',
         titulo=f'Pagamento confirmado — Encomenda #{encomenda.id}',
-        mensagem=f'€{encomenda.valor_total} recebido via {referencia}. Receita líquida: €{_liq}.',
+        mensagem=f'{dinheiro(encomenda.valor_total)} recebido via {referencia}. Receita líquida: {dinheiro(_liq)}.',
         link=f'/loja/{encomenda.loja_id}/backoffice',
     )
  
@@ -134,7 +135,7 @@ def _registar_pagamento_aprovado(encomenda, metodo, referencia, valor):
         notificar_admins(
             tipo='comissao_recebida',
             titulo=f'Comissão registada — {encomenda.loja.nome}',
-            mensagem=f'Encomenda #{encomenda.id} · Total: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com}.',
+            mensagem=f'Encomenda #{encomenda.id} · Total: {dinheiro(encomenda.valor_total)} · Comissão ({_perc}%): {dinheiro(_com)}.',
             loja=encomenda.loja,
             link='/admin',
         )
@@ -237,9 +238,10 @@ def pagar_com_cartao(request):
         else:
             payment_method_id = data['payment_method_id']
             stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
-        valor_centimos = int(encomenda.valor_total * 100)
+        valor, moeda = valor_cobranca(encomenda.valor_total, 'stripe')
+        valor_centimos = int(valor * 100)
         intent = stripe.PaymentIntent.create(
-            amount=valor_centimos, currency='eur', customer=customer_id,
+            amount=valor_centimos, currency=moeda.lower(), customer=customer_id,
             payment_method=payment_method_id, confirm=True,
             metadata={'encomenda_id': encomenda.id, 'utilizador_id': utilizador.id},
             return_url='http://localhost:8080/pagamento/sucesso',
@@ -402,17 +404,19 @@ def iniciar_pagamento_flutterwave(request):
         )
  
     utilizador  = request.user.utilizador
-    valor_total = float(encomenda.valor_total)
- 
+    # o valor cobrado vem na moeda do gateway (settings.MOEDA_COBRANCA): em EUR ao câmbio fixo
+    # enquanto a conta não aceitar CVE — a comissão do split vai na mesma moeda
+    valor_flw, moeda_flw = valor_cobranca(encomenda.valor_total, 'flutterwave')
+
     # calcular comissão (0 se a encomenda foi feita com a loja em subscrição → sem divisão)
     percentagem_comissao = float(encomenda.percentagem_comissao_aplicavel)
-    valor_comissao = round(valor_total * percentagem_comissao / 100, 2)
+    valor_comissao = round(float(valor_flw) * percentagem_comissao / 100, 2)
  
     # payload base
     payload = {
         'tx_ref':       f'enc_{encomenda.id}_{encomenda.data_criacao.strftime("%Y%m%d%H%M%S")}',
-        'amount':       valor_total,
-        'currency':     MOEDA_FLW,  # mudar para CVE quando tiveres conta em escudos
+        'amount':       float(valor_flw),
+        'currency':     moeda_flw,  # settings.MOEDA_COBRANCA (EUR ao câmbio fixo até a conta aceitar CVE)
         'redirect_url': f'{os.environ.get("FRONTEND_BASE_URL", "")}/pagamento/callback',
         'customer': {
             'email':       utilizador.email,
@@ -503,7 +507,7 @@ def verificar_pagamento_flutterwave(request):
     flw_data = resp.json().get('data', {})
  
     # validar valor e moeda
-    valor_esperado = float(encomenda.valor_total)
+    valor_esperado = float(valor_cobranca(encomenda.valor_total, 'flutterwave')[0])
     valor_pago     = float(flw_data.get('amount', 0))
     moeda_paga     = flw_data.get('currency', '')
     flw_status     = flw_data.get('status', '')
@@ -521,7 +525,7 @@ def verificar_pagamento_flutterwave(request):
         )
 
     # a transacção tem de ser DESTA encomenda e ainda não usada. Antes bastava um transaction_id
-    # verdadeiro com o mesmo valor: um pagamento antigo de 5 € "pagava" qualquer outra encomenda de 5 €.
+    # verdadeiro com o mesmo valor: um pagamento antigo de 500$00 "pagava" qualquer outra encomenda de 500$00.
     erro_tx = _transacao_flw_invalida(flw_data, encomenda, transaction_id)
     if erro_tx:
         return Response({'detail': erro_tx}, status=status.HTTP_400_BAD_REQUEST)
@@ -547,7 +551,6 @@ def verificar_pagamento_flutterwave(request):
     return Response(PagamentoSerializer(pagamento).data, status=status.HTTP_200_OK)
  
  
-MOEDA_FLW = 'EUR'   # a mesma do iniciar_pagamento_flutterwave
 
 
 def _transacao_flw_invalida(flw_data, encomenda, transaction_id):
@@ -555,7 +558,7 @@ def _transacao_flw_invalida(flw_data, encomenda, transaction_id):
     tx_ref = str(flw_data.get('tx_ref') or '')
     if not tx_ref.startswith(f'enc_{encomenda.id}_'):
         return 'Esta transacção não pertence a esta encomenda.'
-    if flw_data.get('currency') != MOEDA_FLW:
+    if flw_data.get('currency') != moeda_cobranca('flutterwave'):
         return 'Moeda do pagamento inválida.'
     if Pagamento.objects.filter(referencia_transacao=f'flw_{transaction_id}').exclude(encomenda=encomenda).exists():
         return 'Esta transacção já foi usada noutra encomenda.'
@@ -571,7 +574,7 @@ def _pedir_reembolso(encomenda, referencia):
     notificar_admins(
         tipo='pagamento_reembolsar',
         titulo=titulo,
-        mensagem=f'O Flutterwave confirmou €{encomenda.valor_total} (tx {referencia}) '
+        mensagem=f'O Flutterwave confirmou {dinheiro(encomenda.valor_total)} (tx {referencia}) '
                  f'para uma encomenda cancelada da loja {encomenda.loja.nome}. Reembolsa o cliente.',
         loja=encomenda.loja,
         link='/admin',
@@ -627,7 +630,7 @@ def flutterwave_webhook(request):
         valor_pago = float(data.get('data', {}).get('amount', 0))
     except (TypeError, ValueError):
         valor_pago = 0
-    if (abs(valor_pago - float(encomenda.valor_total)) > 0.01
+    if (abs(valor_pago - float(valor_cobranca(encomenda.valor_total, 'flutterwave')[0])) > 0.01
             or _transacao_flw_invalida(data.get('data', {}), encomenda, transaction_id)):
         return Response({'detail': 'Pagamento não corresponde à encomenda.'}, status=status.HTTP_400_BAD_REQUEST)
 

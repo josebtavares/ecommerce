@@ -155,7 +155,7 @@
           </div>
           <div>
             <label class="text-xs text-zinc-500 mb-1 block">Preço</label>
-            <input v-model.number="formOpcao.preco" type="number" step="0.01" min="0" placeholder="0.00"
+            <input v-model.number="formOpcao.preco" type="number" step="1" min="0" placeholder="0"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
           </div>
           <div>
@@ -325,6 +325,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconePagamento } from '@/utils/icones'
@@ -427,7 +428,7 @@ export default {
 
   methods: {
     formatPrice (val) {
-      return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+      return formatarDinheiro(val || 0)
     },
 
     initForm (l) {

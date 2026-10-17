@@ -173,13 +173,13 @@
           </div>
           <div>
             <label class="text-xs text-zinc-500 mb-1 block">Preço de custo</label>
-            <input v-model.number="ajustePrecoC" type="number" step="0.01"
+            <input v-model.number="ajustePrecoC" type="number" step="1"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                      focus:outline-none focus:border-red-500 transition" />
           </div>
           <div>
             <label class="text-xs text-zinc-500 mb-1 block">Preço de venda</label>
-            <input v-model.number="ajustePrecoV" type="number" step="0.01"
+            <input v-model.number="ajustePrecoV" type="number" step="1"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                      focus:outline-none focus:border-red-500 transition" />
           </div>
@@ -209,6 +209,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import VariantesStockEditor from '@/components/inventario/VariantesStockEditor.vue'
 
@@ -249,7 +250,7 @@ export default {
   async created () { await this.fetchInventario() },
 
   methods: {
-    formatPrice (val) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0) },
+    formatPrice (val) { return formatarDinheiro(val || 0) },
 
     debouncedFetch () {
       clearTimeout(this.debounceTimer)

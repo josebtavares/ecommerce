@@ -53,7 +53,7 @@
           <p class="text-xs font-semibold text-zinc-200 truncate">{{ p.nome }}</p>
           <p class="text-xs text-zinc-500 truncate">{{ p.loja?.nome }}</p>
           <div class="flex items-center justify-between mt-2">
-            <span class="text-xs font-bold text-red-400">€{{ p.preco }}</span>
+            <span class="text-xs font-bold text-red-400">{{ $dinheiro(p.preco) }}</span>
             <div class="flex gap-1">
               <button @click="toggleAtivo(p)"
                 :class="['px-2 py-0.5 rounded text-[10px] font-bold transition',

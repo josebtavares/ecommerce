@@ -9,7 +9,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import uuid
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -417,7 +417,7 @@ class OpcaoEscolhaPOS(models.Model):
                                      related_name='em_opcoes')
     quantidade   = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1)])
     variante_livre = models.BooleanField(default=False)   # o cliente escolhe a variação
-    preco_extra  = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('0.00'),
+    preco_extra  = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'),
                                        validators=[MinValueValidator(Decimal('0.00'))])
     ordem        = models.PositiveSmallIntegerField(default=0)
 
@@ -520,7 +520,7 @@ class ContaMesa(models.Model):
         ]
 
     def __str__(self):
-        return f"Conta #{self.id} - {self.mesa.numero} - {self.total}€"
+        return f"Conta #{self.id} - {self.mesa.numero} - {self.total} CVE"
 
     def calcular_totais(self):
         # itens cancelados não são cobrados
@@ -529,7 +529,9 @@ class ContaMesa(models.Model):
         ) or Decimal('0.00')
 
         if self.taxa_servico_percentagem > 0:
-            self.taxa_servico_valor = (self.subtotal * self.taxa_servico_percentagem) / 100
+            # ao centavo (ex.: 12,5% de 1.653$00 = 206$63), como fica gravado — o total bate com a soma
+            self.taxa_servico_valor = ((self.subtotal * self.taxa_servico_percentagem) / 100).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP)
         else:
             self.taxa_servico_valor = Decimal('0.00')
 
@@ -658,7 +660,7 @@ class ItemContaMesa(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.quantidade}x {self.nome} - {self.preco_total}€"
+        return f"{self.quantidade}x {self.nome} - {self.preco_total} CVE"
 
     @property
     def origem(self):
@@ -726,7 +728,7 @@ class PagamentoDividido(models.Model):
 
     def __str__(self):
         status = "✓ Pago" if self.pago else "Pendente"
-        return f"Pessoa {self.pessoa_numero} - {self.valor}€ ({status})"
+        return f"Pessoa {self.pessoa_numero} - {self.valor} CVE ({status})"
 
     def marcar_como_pago(self):
         self.pago = True

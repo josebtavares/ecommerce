@@ -21,7 +21,7 @@
                               <div><h3>{{ item.nome }}</h3></div>
                               <div class="text-gray-500"><h3>{{ item.desconto *100}}%</h3></div>
                               <div class="flex gap-1 items-center justify-between">
-                                  <div><h3>{{truncateDecimals(item.preco * item.desconto, 2) }}€</h3></div>
+                                  <div><h3>{{ $dinheiro(item.preco * item.desconto) }}</h3></div>
                                   <div class="flex gap-2">
                                       <font-awesome-icon :icon="['fas', 'circle-minus']" size="xl" style="color:#FFFFFF; cursor: pointer;" @click="set_qtd(item,-1)"/>
                                       <div ><h3>{{ item.quantidade }}</h3></div>
@@ -36,16 +36,16 @@
                 <div>
                     <div class="flex justify-between p-1 ">
                         <div class=" text-white-200"><h3>Itens</h3></div>
-                        <div><h3>{{ items_price }}€</h3></div>
+                        <div><h3>{{ $dinheiro(items_price) }}</h3></div>
                     </div>
                     <div class="flex justify-between p-1 ">
                         <div class=" text-white-200"><h3>Taxa</h3></div>
-                        <div><h3>{{ taxa}}€</h3></div>
+                        <div><h3>{{ $dinheiro(taxa) }}</h3></div>
                     </div>
                     
                     <div class="flex justify-between p-1 text-[#ffffff]">
                         <div ><h3>Total</h3></div>
-                        <div><h3>{{ total_price }}€</h3></div>
+                        <div><h3>{{ $dinheiro(total_price) }}</h3></div>
                     </div>
     
                     <button class="bg-[#ffffff] text-black p-2 rounded-lg w-full" @click="goto_payment">Finalizar compra</button>

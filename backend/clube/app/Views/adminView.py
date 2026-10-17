@@ -23,7 +23,8 @@ from ..models import (
     Pagamento, TipoProduto, UtilizadorLoja,Comissao
 )
 from ..Serializers.ProdutoSerializer import TipoProdutoSerializer
-from ..utils.pagination import paginar
+from ..utils.pagination import paginar, periodo_dias
+from ..utils.dinheiro import ler_valor
 
 
 # ══════════════════════════════════════════════════════════════
@@ -706,10 +707,9 @@ def admin_comissao_list(request):
  
     valor_min = request.GET.get('valor_min')
     if valor_min:
-        try:
-            qs = qs.filter(valor_comissao__gte=float(valor_min))
-        except ValueError:
-            pass
+        valor_min, erro_min = ler_valor(valor_min, obrigatorio=False)
+        if valor_min is not None:          # lixo ("NaN", "abc") é ignorado, como antes
+            qs = qs.filter(valor_comissao__gte=valor_min)
  
     # ── ordenação ─────────────────────────────────────────────
     ordering_map = {
@@ -943,7 +943,7 @@ def admin_dashboard(request):
     if not request.user.is_staff:
         return Response({'detail': 'Sem permissão.'}, status=403)
  
-    periodo = int(request.GET.get('periodo', 30))
+    periodo = periodo_dias(request)
     inicio  = now() - timedelta(days=periodo)
     inicio_anterior = inicio - timedelta(days=periodo)
  

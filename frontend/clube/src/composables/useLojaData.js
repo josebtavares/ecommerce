@@ -1,3 +1,4 @@
+import { formatarDinheiro } from '@/utils/dinheiro'
 // composables/useLojaData.js
 // Toda a lógica de fetch da loja — partilhada por todos os templates
 import { ref, computed, onMounted, watch } from 'vue'
@@ -121,7 +122,7 @@ export function useLojaData () {
   const backendUrl = process.env.VUE_APP_URL_BASE || 'http://localhost:8000'
 
   function formatPrice (val) {
-    return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+    return formatarDinheiro(val || 0)
   }
 
   const tipoIcon = iconeTipoProduto

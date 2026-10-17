@@ -235,15 +235,8 @@ def grelha_variantes(produto):
 
 
 def _preco(valor):
-    if valor in (None, ''):
-        return None, None
-    try:
-        p = Decimal(str(valor)).quantize(Decimal('0.01'))
-    except (InvalidOperation, ValueError):
-        return None, 'Preço inválido.'
-    if p < 0:
-        return None, 'O preço não pode ser negativo.'
-    return p, None
+    from .dinheiro import ler_valor
+    return ler_valor(valor, 'O preço', obrigatorio=False)
 
 
 def guardar_grelha(produto, dados):

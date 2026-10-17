@@ -338,6 +338,7 @@
 </template>
 
 <script>
+import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
@@ -409,7 +410,7 @@ export default {
   methods: {
     iconePagamento,
     formatarAtributos, temAtributos,
-    formatPrice (val) { return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0) },
+    formatPrice (val) { return formatarDinheiro(val || 0) },
     formatDate (d)    { return new Date(d).toLocaleDateString('pt-PT') },
 
     statusColor (s) {

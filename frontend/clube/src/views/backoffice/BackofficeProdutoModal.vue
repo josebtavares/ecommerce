@@ -134,7 +134,7 @@
           </div>
           <div>
             <label class="text-xs text-zinc-500 mb-1 block">Preço *</label>
-            <input v-model="form.preco" required type="number" step="0.01" min="0"
+            <input v-model="form.preco" required type="number" step="1" min="0"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                      focus:outline-none focus:border-red-500 transition" />
           </div>

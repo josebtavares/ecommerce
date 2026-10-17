@@ -70,3 +70,11 @@ def paginar_lista(request, itens, limit_default=DEFAULT_LIMIT):
         'next_offset': offset + limit if offset + limit < total else None,
         'results'    : itens[offset: offset + limit],
     })
+
+
+def periodo_dias(request, padrao=30, maximo=3650):
+    """?periodo= dos dashboards: inteiro entre 1 e `maximo` dias (lixo → o padrão, nunca erro 500)."""
+    try:
+        return min(max(int(request.GET.get('periodo', padrao)), 1), maximo)
+    except (TypeError, ValueError):
+        return padrao

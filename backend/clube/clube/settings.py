@@ -206,6 +206,16 @@ TIME_ZONE     = 'Atlantic/Cape_Verde'
 USE_I18N      = True
 USE_TZ        = True
 
+# Moeda da plataforma: preços, encomendas, comissões, faturas e POS são guardados e mostrados
+# nesta moeda (formato tradicional 1.250$00 — ver app/utils/dinheiro.py). O escudo tem câmbio
+# fixo com o euro; só se converte para cobrar nos gateways que ainda não aceitam CVE.
+MOEDA      = 'CVE'
+CAMBIO_EUR = '110.265'      # 1 EUR = 110,265 CVE (paridade fixa)
+MOEDA_COBRANCA = {
+    'stripe':      'EUR',
+    'flutterwave': 'EUR',   # mudar para 'CVE' quando a conta aceitar escudos
+}
+
 
 # ══════════════════════════════════════════════════════════════
 # ══════════════════════════════════════════════════════════════

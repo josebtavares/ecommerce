@@ -1,3 +1,4 @@
+import { formatarDinheiro } from '@/utils/dinheiro'
 // composable/usePdfRelatorio.js
 // Gera PDFs de relatórios usando jsPDF (sem dependências do servidor)
 // Instalar: npm install jspdf
@@ -19,7 +20,7 @@ export function usePdfRelatorio() {
   }
 
   function fmt(val) {
-    return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val || 0)
+    return formatarDinheiro(val || 0)
   }
 
   function fmtNum(n) {

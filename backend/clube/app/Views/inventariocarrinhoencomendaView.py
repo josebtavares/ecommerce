@@ -31,6 +31,7 @@ from ..utils.variantes import resolver_variante, atualizar_total_inventario
 from ..utils.encomendas import repor_stock, cancelar_anteriores_por_pagar
 from ..utils import conjuntos as conj
 from ..utils import horarios
+from ..utils.dinheiro import formatar as dinheiro
 
 
 # ══════════════════════════════════════════════════════════════
@@ -551,7 +552,7 @@ def encomenda_criar(request, loja_id):
         roles=['dono', 'gestor', 'staff'],
         tipo='nova_encomenda',
         titulo=f'Nova encomenda #{encomenda.id}',
-        mensagem=f'Encomenda de {utilizador.nome} no valor de €{encomenda.valor_total}.'
+        mensagem=f'Encomenda de {utilizador.nome} no valor de {dinheiro(encomenda.valor_total)}.'
                  + (f' Agendada pelo cliente para {horarios.texto_agendada(agendada_para)}.' if origem == 'cliente'
                     else f' Agendada para {horarios.quando_texto(agendada_para)} (feita com a loja fechada).'
                     if agendada_para else ''),
@@ -708,8 +709,8 @@ def encomenda_atualizar_status(request, loja_id, id):
             roles=['dono', 'gestor'],
             tipo='encomenda_concluida_loja',
             titulo=f'Encomenda #{encomenda.id} concluída ✓',
-            mensagem=(f'Receita: €{encomenda.valor_total} · Comissão ({_perc}%): €{_com} · Líquido: €{_liq}.' if _com
-                      else f'Receita: €{encomenda.valor_total} · Sem comissão (subscrição).'),
+            mensagem=(f'Receita: {dinheiro(encomenda.valor_total)} · Comissão ({_perc}%): {dinheiro(_com)} · Líquido: {dinheiro(_liq)}.' if _com
+                      else f'Receita: {dinheiro(encomenda.valor_total)} · Sem comissão (subscrição).'),
             link=f'/loja/{encomenda.loja_id}/backoffice',
         )
  
@@ -719,7 +720,7 @@ def encomenda_atualizar_status(request, loja_id, id):
                 notificar_admins(
                     tipo='comissao_recebida',
                     titulo=f'Comissão registada (dinheiro) — {encomenda.loja.nome}',
-                    mensagem=f'Encomenda #{encomenda.id} concluída · Comissão: €{_com}.',
+                    mensagem=f'Encomenda #{encomenda.id} concluída · Comissão: {dinheiro(_com)}.',
                     loja=encomenda.loja,
                     link='/admin',
                 )
