@@ -159,6 +159,23 @@
           </div>
         </section>
 
+        <section v-else-if="r.estado === 'a_devolver'" class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+          <template v-if="!r.entregue_em">
+            <p class="text-sm text-amber-100">
+              O cliente pagou em dinheiro: devolve-lhe <b>{{ dinheiro(r.valor_aprovado) }}</b> em mão até <b>{{ dataHora(r.prazo_resposta) }}</b>
+              e marca aqui. Se não marcares, o pedido vai para a equipa da Bendi.
+            </p>
+            <button type="button" @click="acao('dinheiro_entregue')" :disabled="aEnviar"
+              class="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-60">
+              Dinheiro entregue ao cliente
+            </button>
+          </template>
+          <p v-else class="text-sm text-zinc-300">
+            Entregaste {{ dinheiro(r.valor_aprovado) }} em mão a {{ dataHora(r.entregue_em) }}. À espera da confirmação do cliente —
+            fica confirmado sozinho a {{ dataHora(r.prazo_resposta) }}.
+          </p>
+        </section>
+
         <section v-else-if="aviso" class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-300">
           {{ aviso }}
           <p v-if="r.motivo_recusa && r.estado === 'recusado'" class="mt-2 text-zinc-400">“{{ r.motivo_recusa }}”</p>
@@ -206,7 +223,7 @@ const reporStock = ref(false)
 const dinheiro = v => formatarDinheiro(v || 0)
 const textoAtributos = a => temAtributos(a) ? Object.values(formatarAtributos(a)).join(' · ') : ''
 
-const podeEscrever = computed(() => ['pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'recusado'].includes(r.value?.estado))
+const podeEscrever = computed(() => ['pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver', 'recusado'].includes(r.value?.estado))
 const propostaValida = computed(() => {
   const v = Number(valorProposta.value)
   return v >= 1 && v < Number(r.value?.valor_pedido)
@@ -222,7 +239,9 @@ const aviso = computed(() => {
   if (!x) return ''
   return {
     proposta: `Propuseste ${formatarDinheiro(x.valor_aprovado)}. À espera da resposta do cliente.`,
-    em_disputa: 'A equipa da Bendi está a analisar o pedido e vai decidir. Deixa a tua versão nas mensagens.',
+    em_disputa: x.disputa_entrega
+      ? 'O cliente diz que não recebeu o dinheiro. A equipa da Bendi vai verificar — deixa a tua versão nas mensagens (ex.: quando e como entregaste).'
+      : 'A equipa da Bendi está a analisar o pedido e vai decidir. Deixa a tua versão nas mensagens.',
     reembolsado: Number(x.valor_aprovado) > 0
       ? (x.metodo === 'abatido'
           ? `${formatarDinheiro(x.valor_aprovado)} descontados no valor a cobrar na entrega.`
@@ -259,6 +278,7 @@ async function acao (nome, extra = {}) {
     motivoRecusa.value = ''
     toast.success({
       reembolsado: 'Reembolso feito.', proposta: 'Proposta enviada ao cliente.', aguarda_produto: 'Aceite — à espera do produto.',
+      a_devolver: data.entregue_em ? 'Registado — o cliente vai confirmar.' : 'Aceite — devolve o dinheiro em mão.',
       recusado: 'Pedido recusado.',
     }[data.estado] || 'Feito.')
     emit('alterado')

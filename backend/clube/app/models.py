@@ -1788,6 +1788,7 @@ class Reembolso(models.Model):
         ('proposta',        'A loja propôs outro valor'),
         ('em_disputa',      'Em análise pela Bendi'),
         ('aguarda_produto', 'A aguardar o produto'),
+        ('a_devolver',      'A devolver em mão'),       # pago em dinheiro: a loja devolve, o cliente confirma
         ('reembolsado',     'Reembolsado'),
         ('recusado',        'Recusado'),
         ('cancelado',       'Desistiu'),
@@ -1828,7 +1829,14 @@ class Reembolso(models.Model):
                                         related_name='reembolsos_decididos')
     decisao_admin   = models.BooleanField(default=False)             # decisão final da Bendi
     data_decisao    = models.DateTimeField(null=True, blank=True)
+    # data_reembolso = quando o dinheiro passou a ser devido ao cliente (pagamento e comissão já acertados)
     data_reembolso  = models.DateTimeField(null=True, blank=True)
+    # dinheiro em mão: a loja diz que entregou → o cliente confirma (ou fecha sozinho em 7 dias)
+    entregue_em     = models.DateTimeField(null=True, blank=True)
+    recebido_em     = models.DateTimeField(null=True, blank=True)
+    recebido_auto   = models.BooleanField(default=False)
+    # o cliente diz que não recebeu o dinheiro (em mão, ou do gateway depois de 10 dias) → Bendi
+    nao_recebido_em = models.DateTimeField(null=True, blank=True)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
 

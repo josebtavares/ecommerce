@@ -6,12 +6,13 @@ export const ESTADOS = {
   proposta:        { label: 'A loja propôs outro valor', cor: 'sky'    },
   em_disputa:      { label: 'Em análise pela Bendi',    cor: 'purple' },
   aguarda_produto: { label: 'A aguardar o produto',     cor: 'indigo' },
+  a_devolver:      { label: 'A devolver em mão',        cor: 'amber'  },
   reembolsado:     { label: 'Reembolsado',              cor: 'green'  },
   recusado:        { label: 'Recusado',                 cor: 'red'    },
   cancelado:       { label: 'Desistiu',                 cor: 'zinc'   },
 }
 
-export const ATIVOS = ['pedido', 'proposta', 'em_disputa', 'aguarda_produto']
+export const ATIVOS = ['pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver']
 
 // classes completas (o Tailwind só gera as que aparecem escritas por inteiro)
 const CORES = {

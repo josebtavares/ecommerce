@@ -160,7 +160,7 @@ class ItemEncomendaSerializer(serializers.ModelSerializer):
 
     def get_qtd_reembolsada(self, obj):
         from django.db.models import Sum
-        return obj.reembolsos.filter(reembolso__estado='reembolsado').aggregate(q=Sum('quantidade'))['q'] or 0
+        return obj.reembolsos.filter(reembolso__data_reembolso__isnull=False).aggregate(q=Sum('quantidade'))['q'] or 0
 
     def get_subtotal(self, obj):
         return round(float(obj.preco) * obj.quantidade, 2)
@@ -179,7 +179,7 @@ def _reembolso_resumo(obj):
 def _receita_liquida(obj):
     """O que a loja fica: total − reembolsado (incl. esgotados descontados) − comissão (já recalculada)."""
     from django.db.models import Sum
-    reemb = obj.reembolsos.filter(estado='reembolsado').aggregate(t=Sum('valor_aprovado'))['t'] or 0
+    reemb = obj.reembolsos.filter(data_reembolso__isnull=False).aggregate(t=Sum('valor_aprovado'))['t'] or 0
     try:
         com = obj.comissao.valor_comissao
     except Exception:
@@ -198,7 +198,7 @@ def _valor_a_pagar(obj):
 def _valor_reembolsado(obj):
     from django.db.models import Sum
     # dinheiro devolvido (os esgotados descontados antes de pagar não contam — vêem-se em valor_a_pagar)
-    return str(obj.reembolsos.filter(estado='reembolsado').exclude(metodo='abatido')
+    return str(obj.reembolsos.filter(data_reembolso__isnull=False).exclude(metodo='abatido')
                .aggregate(t=Sum('valor_aprovado'))['t'] or '0.00')
 
 

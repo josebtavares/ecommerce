@@ -328,7 +328,7 @@ export default {
       if (!(PERMISSOES[this.loja?.minha_role] || []).includes('gerir_devolucoes')) return
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/reembolsos/`, { params: { grupo: 'novos', limit: 1 } })
-        this.devolucoesPorResponder = data.contagem?.novos || 0
+        this.devolucoesPorResponder = (data.contagem?.novos || 0) + (data.contagem?.dinheiro || 0)
       } catch { /* o contador não é essencial */ }
     },
 

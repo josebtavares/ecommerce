@@ -45,8 +45,31 @@
           </p>
         </section>
 
+        <!-- o valor já está acertado: só se decide se o dinheiro chegou ao cliente -->
+        <section v-if="decideEntrega" class="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+          <p class="text-sm font-semibold text-purple-200">Entrega do dinheiro</p>
+          <p class="text-xs text-zinc-400">
+            {{ r.metodo === 'manual'
+               ? (r.entregue_em ? `A loja diz que entregou em mão a ${dataHora(r.entregue_em)}.` : 'A loja ainda não indicou que entregou o dinheiro em mão.')
+               : `Reembolsado pelo meio de pagamento a ${dataHora(r.data_reembolso)} (ref. ${r.referencia || '—'}). Confirma no gateway antes de decidir.` }}
+            <span v-if="r.nao_recebido_em"> O cliente diz que não recebeu ({{ dataHora(r.nao_recebido_em) }}).</span>
+          </p>
+          <textarea v-model="nota" rows="2" maxlength="2000" placeholder="Nota para o cliente e a loja (opcional)"
+            class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-purple-500 resize-none"></textarea>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <button type="button" @click="decidir('confirmar_recebido')" :disabled="aEnviar"
+              class="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50">
+              Dar como recebido
+            </button>
+            <button v-if="r.metodo === 'manual'" type="button" @click="decidir('loja_deve')" :disabled="aEnviar"
+              class="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-50">
+              A loja ainda tem de devolver
+            </button>
+          </div>
+        </section>
+
         <!-- decisão -->
-        <section v-if="podeDecidir" class="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+        <section v-else-if="podeDecidir" class="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
           <p class="text-sm font-semibold text-purple-200">Decisão da Bendi</p>
           <p v-if="r.motivo === 'pagamento_tardio'" class="text-xs text-zinc-400">
             O gateway cobrou depois de a encomenda ser cancelada. Devolve o dinheiro no gateway e confirma aqui.
@@ -97,7 +120,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { ATIVOS } from '@/utils/reembolsos'
+import { ATIVOS, dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
@@ -115,6 +138,8 @@ const devolverProduto = ref(false)
 
 const dinheiro = v => formatarDinheiro(v || 0)
 const podeDecidir = computed(() => r.value && (ATIVOS.includes(r.value.estado) || (r.value.estado === 'recusado' && !r.value.decisao_admin)))
+// pago em mão ou já reembolsado e o cliente diz que não recebeu: decide-se a entrega, não o valor
+const decideEntrega = computed(() => r.value && r.value.data_reembolso && ['em_disputa', 'a_devolver'].includes(r.value.estado))
 
 async function carregar () {
   erro.value = ''
@@ -131,11 +156,13 @@ async function decidir (decisao) {
   aEnviar.value = true
   try {
     const corpo = { decisao, nota: nota.value }
+    if (decisao === 'confirmar_recebido' || decisao === 'loja_deve') delete corpo.valor
     if (decisao === 'reembolsar') Object.assign(corpo, { valor: String(valor.value), devolver_produto: devolverProduto.value })
     const { data } = await api.post(`/app/admin/reembolsos/${r.value.id}/decidir/`, corpo)
     r.value = data
     nota.value = ''
-    toast.success(decisao === 'recusar' ? 'Pedido recusado.' : data.estado === 'aguarda_produto' ? 'Decidido — à espera do produto.' : 'Reembolso feito.')
+    toast.success({ recusar: 'Pedido recusado.', confirmar_recebido: 'Dado como recebido.', loja_deve: 'A loja foi avisada.' }[decisao]
+                  || (data.estado === 'aguarda_produto' ? 'Decidido — à espera do produto.' : 'Reembolso feito.'))
     emit('alterado')
   } catch (e) {
     toast.error(e.response?.data?.detail || 'Não foi possível decidir.')

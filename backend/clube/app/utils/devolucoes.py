@@ -31,11 +31,13 @@ from .dinheiro import formatar
 PRAZO_PROBLEMA_H = 48           # defeito / errado / em falta / não chegou
 PRAZO_RESPOSTA_LOJA_H = 48      # depois disto o pedido vai para a Bendi
 PRAZO_ESCALAR_DIAS = 7          # depois de a loja recusar, o cliente pode pedir ajuda à Bendi até aqui
+PRAZO_DINHEIRO_DIAS = 7         # em mão: a loja tem 7 dias para entregar; o cliente 7 para dizer que não recebeu
+DIAS_NAO_RECEBI = 10            # gateway: os bancos podem demorar — "não recebi" só a partir daqui
 MAX_FOTOS = 10
 MAX_TEXTO = 2000
 
 MOTIVOS_PROBLEMA = ('defeito', 'errado', 'em_falta', 'nao_chegou')
-ATIVOS = ('pedido', 'proposta', 'em_disputa', 'aguarda_produto')
+ATIVOS = ('pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver')
 NAO_CONTAM = ('recusado', 'cancelado')    # pedidos que não prendem artigos nem valor
 
 
@@ -68,8 +70,12 @@ def valor_pago(encomenda):
 
 
 def valor_reembolsado(encomenda):
-    """Dinheiro devolvido ao cliente (os artigos esgotados descontados antes de pagar não contam: nunca foram pagos)."""
-    return (encomenda.reembolsos.filter(estado='reembolsado').exclude(metodo='abatido')
+    """
+    Dinheiro devido/devolvido ao cliente: data_reembolso marca o momento em que o valor ficou acertado (também
+    o que está a ser devolvido em mão ou em disputa de entrega). Os esgotados descontados antes de pagar não
+    contam: nunca foram pagos.
+    """
+    return (encomenda.reembolsos.filter(data_reembolso__isnull=False).exclude(metodo='abatido')
             .aggregate(t=Sum('valor_aprovado'))['t'] or Decimal('0'))
 
 
@@ -486,6 +492,64 @@ def cliente_escalar(r, utilizador, texto=''):
     return r
 
 
+def pode_nao_recebi(r, agora=None):
+    """O cliente pode dizer que não recebeu o dinheiro?"""
+    agora = agora or timezone.now()
+    if r.nao_recebido_em:
+        return False
+    if r.estado == 'a_devolver':
+        return r.entregue_em is not None
+    return (r.estado == 'reembolsado' and r.metodo == 'gateway' and r.data_reembolso is not None
+            and agora >= r.data_reembolso + timedelta(days=DIAS_NAO_RECEBI))
+
+
+def cliente_recebi(r, utilizador):
+    if r.estado != 'a_devolver' or not r.entregue_em:
+        raise ErroReembolso('A loja ainda não indicou que te devolveu o dinheiro.')
+    mensagem(r, 'cliente', f'Recebi os {formatar(r.valor_aprovado)}.', utilizador)
+    _fechar_em_mao(r)
+    _avisar_loja(r, 'O cliente confirmou que recebeu o dinheiro', 'O reembolso está fechado.')
+    return r
+
+
+def cliente_nao_recebi(r, utilizador, texto=''):
+    if not pode_nao_recebi(r):
+        if r.estado == 'reembolsado' and r.metodo == 'gateway' and not r.nao_recebido_em:
+            raise ErroReembolso(f'Os bancos podem demorar até {DIAS_NAO_RECEBI} dias a mostrar o reembolso. '
+                                f'Se não o vires depois disso, diz-nos aqui.')
+        raise ErroReembolso('Não é possível indicar que não recebeste este reembolso.')
+    r.nao_recebido_em = timezone.now()
+    r.save(update_fields=['nao_recebido_em'])
+    mensagem(r, 'cliente', (texto or '').strip() or 'Não recebi o dinheiro.', utilizador)
+    escalar(r, 'O cliente diz que não recebeu o dinheiro.')
+    return r
+
+
+def _fechar_em_mao(r, auto=False):
+    r.estado = 'reembolsado'
+    r.recebido_em = timezone.now()
+    r.recebido_auto = auto
+    r.prazo_resposta = None
+    r.save()
+    if auto:
+        mensagem(r, 'sistema', f'Sem resposta do cliente em {PRAZO_DINHEIRO_DIAS} dias — o dinheiro ficou dado como recebido.')
+
+
+def loja_dinheiro_entregue(r, utilizador):
+    if r.estado != 'a_devolver':
+        raise ErroReembolso('Este pedido não está à espera de dinheiro em mão.')
+    if r.entregue_em:
+        raise ErroReembolso('Já indicaste que entregaste o dinheiro.')
+    r.entregue_em = timezone.now()
+    r.prazo_resposta = r.entregue_em + timedelta(days=PRAZO_DINHEIRO_DIAS)
+    r.save()
+    mensagem(r, 'loja', f'A loja entregou {formatar(r.valor_aprovado)} em mão ao cliente.', utilizador)
+    _avisar_cliente(r, 'A loja devolveu-te o dinheiro',
+                    f'A loja diz que te devolveu {formatar(r.valor_aprovado)} em mão. Se não recebeste, diz-nos até '
+                    f'{_hora(r.prazo_resposta)} — depois disso fica confirmado.')
+    return r
+
+
 def cliente_desistir(r, utilizador):
     if r.estado not in ('pedido', 'proposta', 'em_disputa', 'aguarda_produto'):
         raise ErroReembolso('Este pedido já está fechado.')
@@ -514,6 +578,8 @@ def admin_decidir(r, utilizador, decisao, valor=None, devolver_produto=False, no
     nota = (nota or '').strip()
     if r.estado not in ATIVOS and not (r.estado == 'recusado' and not r.decisao_admin):
         raise ErroReembolso('Este pedido já está fechado.')
+    if r.data_reembolso:                       # o dinheiro já está acertado: só se decide se chegou ao cliente
+        return _admin_decidir_entrega(r, utilizador, decisao, nota)
     if decisao == 'recusar':
         if len(nota) < 5:
             raise ErroReembolso('Explica a decisão.')
@@ -558,6 +624,32 @@ def admin_decidir(r, utilizador, decisao, valor=None, devolver_produto=False, no
     r.save()
     _concluir(r, valor)
     return r
+
+
+def _admin_decidir_entrega(r, utilizador, decisao, nota):
+    if decisao == 'confirmar_recebido':
+        _decidido(r, utilizador, admin=True)
+        mensagem(r, 'admin', 'A Bendi deu o reembolso como recebido.' + (f' {nota}' if nota else ''), utilizador)
+        if r.metodo == 'manual':
+            _fechar_em_mao(r)
+        else:
+            r.estado = 'reembolsado'
+            r.save()
+        _avisar_cliente(r, 'Decisão da Bendi', 'O reembolso foi dado como recebido.' + (f' {nota[:200]}' if nota else ''))
+        _avisar_loja(r, 'Decisão da Bendi', 'O reembolso foi dado como recebido.')
+        return r
+    if decisao == 'loja_deve' and r.metodo == 'manual':
+        _decidido(r, utilizador, admin=True)
+        r.estado = 'a_devolver'
+        r.entregue_em = None
+        r.prazo_resposta = timezone.now() + timedelta(days=PRAZO_DINHEIRO_DIAS)
+        r.save()
+        mensagem(r, 'admin', 'A Bendi decidiu que a loja ainda tem de devolver o dinheiro.' + (f' {nota}' if nota else ''), utilizador)
+        _avisar_loja(r, 'Decisão da Bendi', f'Devolve {formatar(r.valor_aprovado)} ao cliente em mão até '
+                                            f'{_hora(r.prazo_resposta)} e marca "Dinheiro entregue".')
+        _avisar_cliente(r, 'Decisão da Bendi', f'A loja tem de te devolver {formatar(r.valor_aprovado)}.')
+        return r
+    raise ErroReembolso('Decisão inválida para este pedido (o reembolso já está acertado).')
 
 
 # ── automáticos ──────────────────────────────────────────────────────
@@ -700,6 +792,15 @@ def escalar_sem_resposta(agora=None, lote=200):
             _resposta_loja(r, 'sem_resposta')
             escalar(r, f'A loja não respondeu em {PRAZO_RESPOSTA_LOJA_H}h.')
             n += 1
+        # dinheiro em mão: a loja não indicou a entrega → Bendi; entregue e o cliente calado → fecha
+        for r in (Reembolso.objects.select_for_update(skip_locked=True, of=('self',))
+                  .filter(estado='a_devolver', prazo_resposta__lt=agora)
+                  .select_related('loja', 'comprador').order_by('id')[:lote]):
+            if r.entregue_em:
+                _fechar_em_mao(r, auto=True)
+            else:
+                escalar(r, f'A loja não indicou em {PRAZO_DINHEIRO_DIAS} dias que devolveu o dinheiro em mão.')
+            n += 1
     return n
 
 
@@ -728,10 +829,11 @@ def _concluir(r, valor):
         tipo = p.metodo.tipo if p and p.metodo_id else ('dinheiro' if p and p.referencia_transacao == 'dinheiro' else '')
         metodo = 'manual' if tipo == 'dinheiro' else 'gateway'
         r.referencia = _executar_no_gateway(r, valor, metodo)
-    r.estado = 'reembolsado'
+    r.estado = 'a_devolver' if metodo == 'manual' else 'reembolsado'
     r.valor_aprovado = valor
     r.metodo = metodo
     r.data_reembolso = timezone.now()
+    r.prazo_resposta = r.data_reembolso + timedelta(days=PRAZO_DINHEIRO_DIAS) if metodo == 'manual' else None
     r.save()
 
     if p and valor > 0:
@@ -745,11 +847,15 @@ def _concluir(r, valor):
         _avisar_cliente(r, 'Cancelamento aceite', 'A encomenda foi cancelada. Não foi cobrado nada.')
         return r
     if metodo == 'manual':
-        txt = f'Reembolso de {formatar(valor)} registado — a loja devolve o dinheiro em mão.'
-    else:
-        txt = f'Reembolso de {formatar(valor)} feito para o meio de pagamento usado.'
+        mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite — pagaste em dinheiro, a loja devolve-te em mão.')
+        _avisar_cliente(r, 'Reembolso aceite', f'A loja vai devolver-te {formatar(valor)} em mão. Quando receberes, '
+                                               f'confirma no pedido.')
+        _avisar_loja(r, 'Devolve o dinheiro em mão', f'Devolve {formatar(valor)} ao cliente até {_hora(r.prazo_resposta)} '
+                                                     f'e marca "Dinheiro entregue" no pedido.')
+        return r
+    txt = f'Reembolso de {formatar(valor)} feito para o meio de pagamento usado.'
     mensagem(r, 'sistema', txt)
-    _avisar_cliente(r, 'Reembolso feito', txt)
+    _avisar_cliente(r, 'Reembolso feito', txt + f' Os bancos podem demorar até {DIAS_NAO_RECEBI} dias a mostrá-lo.')
     _avisar_loja(r, 'Reembolso feito', txt)
     return r
 
@@ -847,7 +953,7 @@ def anotar_liquido(qs):
     from django.db.models import DecimalField, F, OuterRef, Subquery, Value
     from django.db.models.functions import Coalesce
     from ..models import Reembolso
-    reemb = (Reembolso.objects.filter(encomenda=OuterRef('pk'), estado='reembolsado')
+    reemb = (Reembolso.objects.filter(encomenda=OuterRef('pk'), data_reembolso__isnull=False)
              .values('encomenda').annotate(t=Sum('valor_aprovado')).values('t'))
     dec = DecimalField(max_digits=12, decimal_places=2)
     return qs.annotate(liquido=F('valor_total') - Coalesce(Subquery(reemb, output_field=dec), Value(Decimal('0')),
@@ -857,5 +963,5 @@ def anotar_liquido(qs):
 def resumo_reembolsos(qs):
     """{'total', 'count'} dos reembolsos já feitos (qs de Reembolso já filtrado por loja/período)."""
     from django.db.models import Count
-    a = qs.filter(estado='reembolsado', valor_aprovado__gt=0).aggregate(t=Sum('valor_aprovado'), n=Count('id'))
+    a = qs.filter(data_reembolso__isnull=False, valor_aprovado__gt=0).aggregate(t=Sum('valor_aprovado'), n=Count('id'))
     return {'total': float(a['t'] or 0), 'count': a['n'] or 0}

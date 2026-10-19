@@ -57,7 +57,9 @@ const passos = computed(() => {
       : { titulo: 'Resposta da loja', estado: 'futuro', texto: '' })
     out.push({ chave: 'loja', ...loja })
   }
-  if (r.escalado_em) {
+  // disputa sobre a entrega do dinheiro (depois de acertado o valor): aparece mais abaixo, no sítio dela
+  const disputaDepois = r.escalado_em && r.data_reembolso && new Date(r.escalado_em) >= new Date(r.data_reembolso)
+  if (r.escalado_em && !disputaDepois) {
     const decidiu = r.decisao_admin
     out.push({ chave: 'bendi', titulo: decidiu ? 'A Bendi decidiu' : 'Em análise pela Bendi',
                texto: decidiu ? dataHora(r.data_decisao) : `Desde ${dataHora(r.escalado_em)}`,
@@ -68,6 +70,32 @@ const passos = computed(() => {
                                         : (cliente ? 'Devolver o produto à loja' : 'O cliente devolve o produto'),
                texto: r.produto_recebido_em ? dataHora(r.produto_recebido_em) : '',
                estado: r.produto_recebido_em ? 'feito' : (r.estado === 'aguarda_produto' ? 'atual' : 'futuro') })
+  }
+  // dinheiro em mão: aceite → a loja entrega → o cliente confirma
+  if (r.metodo === 'manual' && r.data_reembolso) {
+    out.push({ chave: 'aceite', estado: 'feito', titulo: `Reembolso aceite: ${formatarDinheiro(r.valor_aprovado)} em mão`, texto: dataHora(r.data_reembolso) })
+    out.push({ chave: 'entregue', titulo: r.entregue_em ? 'A loja entregou o dinheiro' : 'A loja entrega o dinheiro',
+               texto: r.entregue_em ? dataHora(r.entregue_em) : (r.estado === 'a_devolver' ? `Até ${dataHora(r.prazo_resposta)}` : ''),
+               estado: r.entregue_em ? 'feito' : (r.estado === 'a_devolver' ? 'atual' : 'futuro') })
+    if (r.nao_recebido_em) {
+      out.push({ chave: 'nao', estado: 'falhou', titulo: cliente ? 'Disseste que não recebeste' : 'O cliente diz que não recebeu', texto: dataHora(r.nao_recebido_em) })
+    } else if (disputaDepois) {
+      out.push({ chave: 'nao', estado: 'falhou', titulo: 'A loja não indicou a entrega a tempo', texto: dataHora(r.escalado_em) })
+    }
+    if (r.estado === 'em_disputa') {
+      out.push({ chave: 'bendi', estado: 'atual', titulo: 'A Bendi está a verificar', texto: '' })
+    }
+    out.push({ chave: 'fim', titulo: r.recebido_auto ? 'Dado como recebido' : 'Dinheiro recebido',
+               texto: dataHora(r.recebido_em),
+               estado: r.recebido_em ? 'feito' : (r.estado === 'a_devolver' && r.entregue_em ? 'atual' : 'futuro') })
+    return out
+  }
+  if (r.data_reembolso && r.nao_recebido_em) {           // gateway: "não recebi" depois de reembolsado
+    out.push({ chave: 'reemb', estado: 'feito', titulo: `Reembolsado ${formatarDinheiro(r.valor_aprovado)}`, texto: dataHora(r.data_reembolso) })
+    out.push({ chave: 'nao', estado: r.estado === 'reembolsado' ? 'feito' : 'atual',
+               titulo: r.estado === 'reembolsado' ? 'Confirmado pela Bendi' : 'A Bendi está a verificar a devolução',
+               texto: dataHora(r.nao_recebido_em) })
+    return out
   }
   if (r.estado === 'reembolsado') {
     out.push({ chave: 'fim', estado: 'feito', texto: dataHora(r.data_reembolso),

@@ -40,6 +40,7 @@ GRUPOS_LOJA = {
     'novos':      ('pedido',),
     'analise':    ('proposta', 'em_disputa'),
     'produto':    ('aguarda_produto',),
+    'dinheiro':   ('a_devolver',),
     'concluidos': ('reembolsado', 'recusado', 'cancelado'),
 }
 GRUPOS_ADMIN = {
@@ -78,7 +79,7 @@ def _resumo(r):
         'valor_aprovado': str(r.valor_aprovado) if r.valor_aprovado is not None else None,
         'devolver_produto': r.devolver_produto,
         'metodo': r.metodo,
-        'prazo_resposta': _data(r.prazo_resposta) if r.estado == 'pedido' else None,
+        'prazo_resposta': _data(r.prazo_resposta) if r.estado in ('pedido', 'a_devolver') else None,
         'data_criacao': _data(r.data_criacao),
         'data_atualizacao': _data(r.data_atualizacao),
     }
@@ -107,7 +108,16 @@ def _detalhe(request, r, papel):
         'data_decisao': _data(r.data_decisao),
         'data_reembolso': _data(r.data_reembolso),
         'escalado_em': _data(r.escalado_em),
+        'entregue_em': _data(r.entregue_em),
+        'recebido_em': _data(r.recebido_em),
+        'recebido_auto': r.recebido_auto,
+        'nao_recebido_em': _data(r.nao_recebido_em),
+        'disputa_entrega': r.estado == 'em_disputa' and r.data_reembolso is not None,
+        'referencia': r.referencia if papel == 'admin' else '',      # transacção do reembolso (para o admin verificar)
         'pode_escalar': papel == 'cliente' and dev.pode_escalar(r),
+        'pode_nao_recebi': papel == 'cliente' and dev.pode_nao_recebi(r),
+        'nao_recebi_a_partir': (_data(r.data_reembolso + dev.timedelta(days=dev.DIAS_NAO_RECEBI))
+                                if r.metodo == 'gateway' and r.data_reembolso else None),
         'encomenda': {
             'id': r.encomenda_id,
             'status': r.encomenda.status,
@@ -230,6 +240,8 @@ ACOES_CLIENTE = {
     'aceitar_proposta': lambda r, u, d: dev.cliente_aceitar_proposta(r, u),
     'escalar':          lambda r, u, d: dev.cliente_escalar(r, u, d.get('texto', '')),
     'desistir':         lambda r, u, d: dev.cliente_desistir(r, u),
+    'recebi':           lambda r, u, d: dev.cliente_recebi(r, u),
+    'nao_recebi':       lambda r, u, d: dev.cliente_nao_recebi(r, u, d.get('texto', '')),
 }
 
 
@@ -378,6 +390,8 @@ def acao_loja(request, loja_id, id):
                 dev.loja_recusar(r, u, d.get('motivo', ''))
             elif acao == 'recebido':
                 dev.loja_recebido(r, u, _sim(d.get('repor_stock')))
+            elif acao == 'dinheiro_entregue':
+                dev.loja_dinheiro_entregue(r, u)
             else:
                 raise ErroReembolso('Acção inválida.')
     except ErroReembolso as e:
@@ -465,10 +479,10 @@ def metricas_admin(request):
     so_pedidos = pedidos.filter(origem='cliente')
     agreg = dict(
         n=Count('id'),
-        reembolsados=Count('id', filter=Q(estado='reembolsado')),
+        reembolsados=Count('id', filter=Q(data_reembolso__isnull=False)),
         recusados=Count('id', filter=Q(estado='recusado')),
         disputas=Count('id', filter=Q(escalado_em__isnull=False)),
-        valor=Sum('valor_aprovado', filter=Q(estado='reembolsado')),
+        valor=Sum('valor_aprovado', filter=Q(data_reembolso__isnull=False)),
     )
     pagas = dict(Encomenda.objects.filter(data_criacao__gte=desde, status__in=['pago', 'preparando', 'enviado', 'concluido'])
                  .values('loja_id').annotate(n=Count('id')).values_list('loja_id', 'n'))

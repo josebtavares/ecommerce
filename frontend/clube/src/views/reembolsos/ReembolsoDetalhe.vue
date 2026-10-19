@@ -41,10 +41,34 @@
             <span>Reembolsado</span><span class="text-green-500">{{ dinheiro(r.valor_aprovado) }}</span>
           </div>
           <p v-if="r.estado === 'reembolsado' && Number(r.valor_aprovado) > 0" class="text-xs" :class="suave">
-            {{ r.metodo === 'manual' ? 'Pagaste em dinheiro: a loja devolve-te o valor em mão.'
+            {{ r.metodo === 'manual' ? (r.recebido_auto ? 'Devolvido em mão pela loja — ficou confirmado sem resposta tua.' : 'Devolvido em mão pela loja — confirmaste que recebeste.')
                : r.metodo === 'abatido' ? 'Ainda não tinhas pago: o valor foi descontado do que pagas na entrega.'
                : 'Devolvido para o meio de pagamento que usaste.' }}
           </p>
+          <!-- gateway: os bancos demoram; só depois disso "não recebi" -->
+          <template v-if="r.estado === 'reembolsado' && r.metodo === 'gateway' && !r.nao_recebido_em">
+            <button v-if="r.pode_nao_recebi && !naoRecebiAberto" type="button" @click="naoRecebiAberto = true"
+              class="w-full mt-2 py-2 rounded-xl text-xs font-semibold border" :class="botaoSec">
+              Não recebi o dinheiro
+            </button>
+            <p v-else-if="!r.pode_nao_recebi && r.nao_recebi_a_partir" class="text-[11px]" :class="suave">
+              Os bancos podem demorar até 10 dias a mostrar o reembolso. Se não o vires até {{ dataHora(r.nao_recebi_a_partir) }}, podes avisar aqui.
+            </p>
+          </template>
+        </div>
+      </section>
+
+      <!-- "não recebi" (gateway) -->
+      <section v-if="naoRecebiAberto" class="rounded-2xl border p-4 space-y-2" :class="cartao">
+        <textarea v-model="textoNaoRecebi" rows="3" maxlength="2000" placeholder="Conta-nos o que se passa (opcional)"
+          class="w-full px-3 py-2 rounded-xl text-sm border focus:outline-none focus:border-red-500 resize-none"
+          :class="isDark ? 'bg-zinc-950 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300 text-zinc-900'"></textarea>
+        <div class="flex gap-2">
+          <button type="button" @click="naoRecebiAberto = false" class="flex-1 py-2 rounded-xl text-sm border" :class="botaoSec">Voltar</button>
+          <button type="button" @click="acao('nao_recebi', { texto: textoNaoRecebi })" :disabled="aEnviar"
+            class="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-60">
+            Avisar a Bendi
+          </button>
         </div>
       </section>
 
@@ -54,6 +78,18 @@
         <p class="text-sm" :class="isDark ? 'text-amber-100' : 'text-amber-900'">{{ aviso }}</p>
         <p v-if="r.motivo_recusa && r.estado === 'recusado'" class="text-sm rounded-xl px-3 py-2"
            :class="isDark ? 'bg-zinc-950 text-zinc-300' : 'bg-white text-zinc-700'">“{{ r.motivo_recusa }}”</p>
+
+        <!-- dinheiro em mão: a loja diz que entregou -->
+        <div v-if="r.estado === 'a_devolver' && r.entregue_em && !naoRecebiAberto" class="flex flex-col sm:flex-row gap-2">
+          <button type="button" @click="acao('recebi')" :disabled="aEnviar"
+            class="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-60">
+            Recebi {{ dinheiro(r.valor_aprovado) }}
+          </button>
+          <button type="button" @click="naoRecebiAberto = true" :disabled="aEnviar"
+            class="flex-1 py-2.5 rounded-xl text-sm font-semibold border" :class="botaoSec">
+            Não recebi
+          </button>
+        </div>
 
         <div v-if="r.estado === 'proposta'" class="flex flex-col sm:flex-row gap-2">
           <button type="button" @click="acao('aceitar_proposta')" :disabled="aEnviar"
@@ -144,6 +180,8 @@ const aEnviar    = ref(false)
 const escalarAberto = ref(false)
 const textoEscalar  = ref('')
 const confirmarDesistir = ref(false)
+const naoRecebiAberto = ref(false)
+const textoNaoRecebi  = ref('')
 
 const cartao   = computed(() => isDark.value ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200')
 const suave    = computed(() => isDark.value ? 'text-zinc-500' : 'text-zinc-500')
@@ -152,7 +190,7 @@ const botaoSec = computed(() => isDark.value ? 'border-zinc-700 text-zinc-200 ho
 const dinheiro = v => formatarDinheiro(v || 0)
 const textoAtributos = a => temAtributos(a) ? Object.values(formatarAtributos(a)).join(' · ') : ''
 
-const podeEscrever = computed(() => ['pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'recusado'].includes(r.value?.estado))
+const podeEscrever = computed(() => ['pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver', 'recusado'].includes(r.value?.estado))
 const podeDesistir = computed(() => ['pedido', 'proposta', 'em_disputa', 'aguarda_produto'].includes(r.value?.estado))
 
 // o que o cliente tem de saber (ou fazer) agora
@@ -162,7 +200,12 @@ const aviso = computed(() => {
   return {
     pedido: `A loja tem até ${dataHora(x.prazo_resposta)} para responder. Se não responder, a equipa da Bendi decide.`,
     proposta: `A loja propõe reembolsar ${formatarDinheiro(x.valor_aprovado)} (pediste ${formatarDinheiro(x.valor_pedido)}).`,
-    em_disputa: 'A equipa da Bendi está a analisar o pedido. Podes deixar aqui mais informação ou fotos.',
+    em_disputa: x.disputa_entrega
+      ? 'Disseste que não recebeste o dinheiro. A equipa da Bendi está a verificar com a loja.'
+      : 'A equipa da Bendi está a analisar o pedido. Podes deixar aqui mais informação ou fotos.',
+    a_devolver: x.entregue_em
+      ? `A loja diz que te devolveu ${formatarDinheiro(x.valor_aprovado)} em mão. Recebeste? Se não disseres nada até ${dataHora(x.prazo_resposta)}, fica confirmado.`
+      : `Pagaste em dinheiro: a loja vai devolver-te ${formatarDinheiro(x.valor_aprovado)} em mão (até ${dataHora(x.prazo_resposta)}). Combina pelas mensagens.`,
     aguarda_produto: `Devolve o produto à loja ${x.loja_nome}. Combina a devolução pelas mensagens — o reembolso é feito quando a loja o receber.` +
                      (x.motivo === 'mudei_ideias' ? ' O envio de volta é por tua conta.' : ''),
     recusado: x.decisao_admin ? 'A equipa da Bendi analisou o pedido e recusou-o.'
@@ -187,7 +230,9 @@ async function acao (nome, extra = {}) {
     r.value = data
     escalarAberto.value = false
     confirmarDesistir.value = false
-    toast.success({ aceitar_proposta: 'Proposta aceite.', escalar: 'Pedido enviado à Bendi.', desistir: 'Desististe do pedido.' }[nome])
+    naoRecebiAberto.value = false
+    toast.success({ aceitar_proposta: 'Proposta aceite.', escalar: 'Pedido enviado à Bendi.', desistir: 'Desististe do pedido.',
+                    recebi: 'Obrigado! Reembolso fechado.', nao_recebi: 'A Bendi foi avisada.' }[nome])
   } catch (e) {
     toast.error(e.response?.data?.detail || 'Não foi possível concluir a acção.')
   } finally { aEnviar.value = false }
