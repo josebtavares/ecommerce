@@ -191,6 +191,10 @@
                 <span class="text-zinc-500">Valor da encomenda</span>
                 <span class="text-zinc-300">{{ formatPrice(detalhes[enc.id].valor_total) }}</span>
               </div>
+              <div v-if="reembolsadoTotal(detalhes[enc.id]) > 0" class="flex justify-between text-xs">
+                <span class="text-zinc-500">Reembolsado / esgotado</span>
+                <span class="text-sky-400">- {{ formatPrice(reembolsadoTotal(detalhes[enc.id])) }}</span>
+              </div>
               <div class="flex justify-between text-xs">
                 <span class="text-zinc-500">Comissao ({{ detalhes[enc.id].comissao_percentagem }}%)</span>
                 <span class="text-red-400">- {{ formatPrice(detalhes[enc.id].comissao_valor) }}</span>
@@ -205,10 +209,15 @@
             <div v-if="podeEsgotado(enc)" class="border-t border-zinc-800 pt-3">
               <button v-if="esgotadoAberto !== enc.id" type="button" @click="abrirEsgotado(enc)"
                 class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 transition">
-                <font-awesome-icon :icon="['fas', 'box-open']" class="mr-1" />Artigo esgotado
+                <font-awesome-icon :icon="['fas', 'box-open']" class="mr-1" />Declarar Artigo Esgotado
               </button>
               <div v-else class="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 space-y-3">
-                <p class="text-xs text-sky-100">
+                <p v-if="esgotadoTudo(enc)" class="text-xs text-amber-200 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-2">
+                  <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />
+                  Não fica nada para enviar: a encomenda vai ser cancelada{{ pagoDigital(enc) ? ' e o cliente reembolsado de tudo, com a taxa de entrega' : ' (ainda não estava paga — não é cobrado nada)' }}.
+                  O stock destes artigos não volta.
+                </p>
+                <p v-else class="text-xs text-sky-100">
                   Escolhe o que não tens. {{ pagoDigital(enc) ? 'O cliente é reembolsado desses artigos na hora' : 'Como ainda não está pago, o valor é descontado no que o cliente paga' }};
                   o resto da encomenda segue. A taxa de entrega não é devolvida e o stock não volta.
                 </p>
@@ -234,7 +243,7 @@
                   <button type="button" @click="esgotadoAberto = null" class="px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-zinc-200">Voltar</button>
                   <button type="button" @click="confirmarEsgotado(enc)" :disabled="aEsgotar || !totalEsgotado(enc)"
                     class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 disabled:opacity-40">
-                    {{ aEsgotar ? 'A guardar…' : 'Confirmar' }}
+                    {{ aEsgotar ? 'A guardar…' : (esgotadoTudo(enc) ? 'Cancelar encomenda' : 'Confirmar') }}
                   </button>
                 </div>
               </div>
@@ -548,6 +557,11 @@ export default {
       finally { this.loadingDetalhe = null }
     },
 
+    // total − comissão − receita líquida = o que saiu em reembolsos (incl. esgotados descontados)
+    reembolsadoTotal (d) {
+      return Math.round((Number(d.valor_total) - Number(d.comissao_valor || 0) - Number(d.receita_liquida)) * 100) / 100
+    },
+
     // ── Artigo esgotado ───────────────────────────────────────
     podeEsgotado (enc) {
       const r = enc.reembolso
@@ -566,6 +580,11 @@ export default {
       const n = Math.min(max, Math.max(0, (this.esgotadoQtd[item.id] || 0) + d))
       this.esgotadoQtd = { ...this.esgotadoQtd, [item.id]: n }
     },
+    // tudo o que falta enviar está esgotado → o servidor cancela a encomenda
+    esgotadoTudo (enc) {
+      const restam = (this.detalhes[enc.id]?.itens || []).filter(i => i.quantidade - (i.qtd_reembolsada || 0) > 0)
+      return restam.length > 0 && restam.every(i => (this.esgotadoQtd[i.id] || 0) === i.quantidade - (i.qtd_reembolsada || 0))
+    },
     totalEsgotado (enc) {
       return (this.detalhes[enc.id]?.itens || []).reduce((t, i) => t + Number(i.preco) * (this.esgotadoQtd[i.id] || 0), 0)
     },
@@ -578,6 +597,10 @@ export default {
         const { data } = await api.get(`/app/encomenda/${enc.id}/`)
         this.detalhes = { ...this.detalhes, [enc.id]: data }
         enc.reembolso = data.reembolso
+        if (data.status !== enc.status) {           // esgotado tudo → cancelada
+          enc.status = data.status
+          this.fetchContagens()
+        }
         this.esgotadoAberto = null
       } catch (e) {
         alert(e.response?.data?.detail || 'Não foi possível guardar.')

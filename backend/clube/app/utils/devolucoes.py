@@ -588,8 +588,10 @@ def loja_esgotado(encomenda, utilizador, itens, nota=''):
     """
     A loja não tem alguns artigos (antes de enviar): o cliente é reembolsado desses e o resto segue.
     Já pago → reembolso para o meio de pagamento; ainda por pagar (dinheiro na entrega) → desconta-se no
-    valor a pagar (metodo 'abatido'). A taxa de entrega não volta (a encomenda continua a ser entregue);
-    sem nenhum artigo para enviar, o caminho é cancelar a encomenda. O stock não volta (está esgotado).
+    valor a pagar (metodo 'abatido'). A taxa de entrega não volta (a encomenda continua a ser entregue).
+    Esgotado tudo o que faltava enviar → a encomenda é cancelada e o cliente reembolsado de tudo, com a entrega
+    (antes dava erro e a loja tinha de cancelar à parte — e esse cancelamento repunha o stock esgotado).
+    O stock nunca volta (está esgotado).
     """
     from django.db.models import F
     from ..models import Pagamento
@@ -603,14 +605,14 @@ def loja_esgotado(encomenda, utilizador, itens, nota=''):
     pedidos = _ler_itens(itens, disp)
     if not pedidos:
         raise ErroReembolso('Escolhe os artigos que não tens.')
-    if all(pedidos.get(k, 0) == v for k, v in disp.items()):
-        raise ErroReembolso('Não fica nenhum artigo para enviar — cancela a encomenda (o cliente é reembolsado '
-                            'de tudo, com a entrega).')
+    tudo = all(pedidos.get(k, 0) == v for k, v in disp.items())
 
     precos = {i.id: i.preco for i in encomenda.itens.all()}
     nomes = {i.id: (i.produto.nome if i.produto else 'Produto removido') for i in encomenda.itens.select_related('produto')}
     valor = sum((precos[k] * q for k, q in pedidos.items()), Decimal('0'))
     lista = ', '.join(f'{q}× {nomes[k]}' for k, q in pedidos.items())
+    if tudo:
+        return _esgotado_tudo(encomenda, utilizador, pedidos, lista, nota)
     r = _criar(encomenda, 'cancelamento', 'esgotado', 'loja', valor, Decimal('0'), nota, pedidos)
     _decidido(r, utilizador)
     r.save()
@@ -635,6 +637,22 @@ def loja_esgotado(encomenda, utilizador, itens, nota=''):
            f'e passa a {formatar(a_pagar)}.')
     mensagem(r, 'sistema', txt)
     _avisar_cliente(r, 'Artigo esgotado', txt)
+    return r
+
+
+def _esgotado_tudo(encomenda, utilizador, pedidos, lista, nota):
+    """Não fica nada para enviar: cancela (sem repor o stock) e reembolsa tudo o que foi pago, com a entrega."""
+    encomenda.status = 'cancelado'
+    encomenda.save(update_fields=['status', 'data_atualizacao'])
+    valor = reembolsavel(encomenda)
+    r = _criar(encomenda, 'cancelamento', 'esgotado', 'loja', valor, valor_entrega(encomenda) if valor > 0 else Decimal('0'),
+               nota, pedidos)
+    _decidido(r, utilizador)
+    r.save()
+    mensagem(r, 'loja', f'Sem stock: {lista}. A encomenda foi cancelada.' + (f' {nota}' if nota else ''), utilizador)
+    _avisar_cliente(r, 'Encomenda cancelada', f'A loja não tem {lista}, por isso cancelou a encomenda.'
+                    + (f' {nota}' if nota else ''), tipo='encomenda_cancelada')
+    _concluir(r, valor)          # 0 (ainda não pago) → "não foi cobrado nada"
     return r
 
 

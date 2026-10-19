@@ -176,6 +176,17 @@ def _reembolso_resumo(obj):
             'valor': str(r.valor_aprovado if r.valor_aprovado is not None else r.valor_pedido)}
 
 
+def _receita_liquida(obj):
+    """O que a loja fica: total − reembolsado (incl. esgotados descontados) − comissão (já recalculada)."""
+    from django.db.models import Sum
+    reemb = obj.reembolsos.filter(estado='reembolsado').aggregate(t=Sum('valor_aprovado'))['t'] or 0
+    try:
+        com = obj.comissao.valor_comissao
+    except Exception:
+        com = 0
+    return str(obj.valor_total - reemb - com)
+
+
 def _valor_a_pagar(obj):
     try:
         p = obj.pagamento
@@ -282,10 +293,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
             return None
  
     def get_receita_liquida(self, obj):
-        try:
-            return str(obj.valor_total - obj.comissao.valor_comissao)
-        except Exception:
-            return str(obj.valor_total)
+        return _receita_liquida(obj)
  
     def validate_tipo_entrega(self, value):
         loja = self.context.get('loja')
@@ -403,10 +411,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             return None
  
     def get_receita_liquida(self, obj):
-        try:
-            return str(obj.valor_total - obj.comissao.valor_comissao)
-        except Exception:
-            return str(obj.valor_total)
+        return _receita_liquida(obj)
         
     def get_comprador_nome(self, obj):
         try:
