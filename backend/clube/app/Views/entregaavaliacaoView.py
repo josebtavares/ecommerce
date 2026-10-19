@@ -202,7 +202,7 @@ def entrega_criar(request, loja_id, encomenda_id):
     if erro:
         return erro
  
-    encomenda = get_object_or_404(Encomenda, id=encomenda_id, loja=loja)
+    encomenda = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=encomenda_id, loja=loja)
  
     if encomenda.status not in ('pago', 'preparando', 'enviado'):
         return Response(
@@ -235,6 +235,7 @@ def entrega_criar(request, loja_id, encomenda_id):
             # encomenda volta a "enviado"
             encomenda.status = 'enviado'
             encomenda.save(update_fields=['status'])
+            devolucoes.ao_avancar_encomenda(encomenda, request.user.utilizador)
  
             if condutor:
                 from ..Views.notificacaoView import notificar
@@ -268,6 +269,8 @@ def entrega_criar(request, loja_id, encomenda_id):
     if encomenda.tipo_entrega == 'entrega' and encomenda.status in ('pago', 'preparando'):
         encomenda.status = 'enviado'
         encomenda.save(update_fields=['status'])
+        # pedido de cancelamento por responder: enviar conta como recusa (utils/devolucoes.py)
+        devolucoes.ao_avancar_encomenda(encomenda, request.user.utilizador)
         from ..Views.notificacaoView import notificar   # import local como no resto da função
         from ..utils import horarios
         futura = encomenda.agendada_para and encomenda.agendada_para > timezone.now()
@@ -340,7 +343,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
     if erro:
         return erro
 
-    encomenda = get_object_or_404(Encomenda, id=encomenda_id, loja=loja)
+    encomenda = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=encomenda_id, loja=loja)
     entrega   = get_object_or_404(Entrega, encomenda=encomenda)
     if not _entrega_do_membro(membro, entrega):
         return Response({'detail': 'Esta entrega não é tua.'}, status=status.HTTP_403_FORBIDDEN)

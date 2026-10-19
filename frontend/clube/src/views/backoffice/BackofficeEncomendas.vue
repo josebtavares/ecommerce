@@ -66,6 +66,12 @@
                 {{ enc.metodo_pagamento }}
               </span>
             </p>
+            <!-- pedido de reembolso desta encomenda: abre-o na secção Devoluções -->
+            <button v-if="enc.reembolso" type="button" @click.stop="$emit('ver-reembolso', enc.reembolso.id)"
+                    title="Ver o pedido de reembolso" class="mt-1 inline-flex items-center gap-1.5 hover:opacity-80">
+              <font-awesome-icon :icon="['fas', 'rotate-left']" class="text-[10px] text-zinc-500" />
+              <EstadoReembolso :estado="enc.reembolso.estado" :valor="enc.reembolso.valor" />
+            </button>
           </div>
           <div class="flex items-center gap-3 flex-shrink-0">
             <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColor(enc.status)]">
@@ -343,6 +349,7 @@ import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
 import PausaLoja from '@/components/horario/PausaLoja.vue'
+import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -357,7 +364,8 @@ const ESTADOS_BLOQUEADOS = ['concluido', 'cancelado', 'enviado']
 
 export default {
   name: 'BackofficeEncomendas',
-  components: { PausaLoja },
+  components: { PausaLoja, EstadoReembolso },
+  emits: ['ver-reembolso'],
   props: { lojaId: [String, Number] },
 
   data () {
@@ -496,6 +504,10 @@ export default {
         return
       }
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'levantamento') return
+      // cancelar uma encomenda paga reembolsa o cliente (utils/devolucoes.py) — confirmar antes
+      if (novoStatus === 'cancelado' && !confirm(['pago', 'preparando', 'enviado'].includes(enc.status) && enc.metodo_pagamento !== 'dinheiro'
+        ? `Cancelar a encomenda #${enc.id}? O cliente é reembolsado automaticamente (${this.formatPrice(enc.valor_total)}) e o stock volta.`
+        : `Cancelar a encomenda #${enc.id}? O stock volta ao inventário.`)) return
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'entrega') {
         this.abrirModalCondutor(enc)
         return

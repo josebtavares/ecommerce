@@ -51,7 +51,7 @@
           v-for="item in navItems" :key="item.key"
           :icon="item.icon" :label="item.label"
           :active="activeSection === item.key"
-          :badge="item.key === 'mensagens' ? naoLidasChat : 0"
+          :badge="item.key === 'mensagens' ? naoLidasChat : item.key === 'devolucoes' ? devolucoesPorResponder : 0"
           @click="navegarPara(item.key)"
         />
         <div v-if="navItems.length === 0 && !loadingLoja"
@@ -151,7 +151,9 @@
       <!-- pb-24: espaço para o balão do chat (canto inferior direito) não tapar o fim do conteúdo -->
       <main v-else class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
         <BackofficeDashboard     v-if="activeSection === 'dashboard'"      :loja-id="lojaId" />
-        <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" />
+        <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" @ver-reembolso="abrirReembolso" />
+        <BackofficeDevolucoes    v-else-if="activeSection === 'devolucoes'"    :loja-id="lojaId"
+                                 :reembolso-id="$route.query.reembolso || null" @contagem="devolucoesPorResponder = $event" />
         <BackofficeProdutos      v-else-if="activeSection === 'produtos'"      :loja-id="lojaId" />
         <BackofficeInventario    v-else-if="activeSection === 'inventario'"    :loja-id="lojaId" />
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
@@ -186,20 +188,21 @@ import BackofficeCategorias     from './BackofficeCategorias.vue'
 import BackofficeTemplates       from './BackofficeTemplates.vue'
 import BackofficeMensagens      from './BackofficeMensagens.vue'
 import BackofficeSubscricao     from './BackofficeSubscricao.vue'
+import BackofficeDevolucoes     from './BackofficeDevolucoes.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 
 const PERMISSOES = {
   dono: [
     'ver_loja','editar_loja','apagar_loja','gerir_staff',
-    'gerir_produtos','gerir_inventario','gerir_encomendas',
+    'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
     'ver_subscricao','pagar_subscricao',
   ],
   gestor: [
     'ver_loja','editar_loja','gerir_staff',
-    'gerir_produtos','gerir_inventario','gerir_encomendas',
+    'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template', 'ver_subscricao',
   ],
@@ -211,6 +214,7 @@ const PERMISSOES = {
 const SECCOES = [
   { key: 'dashboard',     label: 'Dashboard',        icon: 'chart',     permissao: 'ver_loja'         },
   { key: 'encomendas',    label: 'Encomendas',        icon: 'order',     permissao: 'gerir_encomendas' },
+  { key: 'devolucoes',    label: 'Devoluções',        icon: 'refund',    permissao: 'gerir_devolucoes' },
   { key: 'entregas',      label: 'Entregas',          icon: 'delivery',  permissao: 'gerir_entregas'   },
   { key: 'mensagens',     label: 'Mensagens',         icon: 'chat',      permissao: null               },   // todos os membros (equipa); clientes só quem atende
   { key: 'avaliacoes',    label: 'Avaliações',        icon: 'star',      permissao: 'ver_loja'         },
@@ -231,7 +235,7 @@ export default {
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
-    BackofficeTemplates, BackofficeMensagens,
+    BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes,
   },
 
   data () {
@@ -240,6 +244,7 @@ export default {
       seccaoEscolhida: false,
       aMudarEstado:  false,
       avisoSub:      null,    // faixa da subscrição (em atraso / a vencer)
+      devolucoesPorResponder: 0,   // pedidos de reembolso à espera da loja (contador no menu)
       loadingLoja:   true,
       activeSection: 'dashboard',
       sidebarAberta: false,
@@ -301,6 +306,11 @@ export default {
     await this.fetchLoja()
   },
 
+  watch: {
+    // notificação clicada já dentro do backoffice: ?seccao=devolucoes&reembolso=12
+    '$route.query.seccao' (s) { if (s && this.temPermissao(s)) this.activeSection = s },
+  },
+
   methods: {
     temPermissao (seccaoKey) {
       const seccao = SECCOES.find(s => s.key === seccaoKey)
@@ -309,8 +319,23 @@ export default {
       return this.permissoes.includes(seccao.permissao)
     },
 
+    abrirReembolso (id) {
+      this.$router.replace({ query: { ...this.$route.query, seccao: 'devolucoes', reembolso: id } })
+      this.activeSection = 'devolucoes'
+    },
+
+    async fetchDevolucoes () {
+      if (!(PERMISSOES[this.loja?.minha_role] || []).includes('gerir_devolucoes')) return
+      try {
+        const { data } = await api.get(`/app/loja/${this.lojaId}/reembolsos/`, { params: { grupo: 'novos', limit: 1 } })
+        this.devolucoesPorResponder = data.contagem?.novos || 0
+      } catch { /* o contador não é essencial */ }
+    },
+
     navegarPara (key) {
       this.activeSection = key
+      // o ?seccao=&reembolso= de uma notificação já foi usado — não reabrir o pedido ao voltar
+      if (this.$route.query.seccao || this.$route.query.reembolso) this.$router.replace({ query: {} })
       // fecha sidebar no mobile após navegar
       this.sidebarAberta = false
     },
@@ -341,12 +366,15 @@ export default {
         const { data } = await api.get(`/app/loja/${this.lojaId}/backoffice/`)
         this.loja = data
         this.fetchAvisoSub()
+        this.fetchDevolucoes()
         // só escolhe a secção inicial na 1.ª carga (ou se a actual deixou de ser permitida) —
         // recarregar a loja depois de guardar não deve mudar de secção
         const permitidas = PERMISSOES[data.minha_role] || []
         const atual = SECCOES.find(s => s.key === this.activeSection)
         if (!this.seccaoEscolhida || !atual || !permitidas.includes(atual.permissao)) {
-          const primeira = SECCOES.find(s => permitidas.includes(s.permissao))
+          // ?seccao= (links das notificações) manda, se o membro tiver acesso
+          const pedida = SECCOES.find(s => s.key === this.$route.query.seccao && permitidas.includes(s.permissao))
+          const primeira = pedida || SECCOES.find(s => permitidas.includes(s.permissao))
           if (primeira) this.activeSection = primeira.key
           this.seccaoEscolhida = true
         }

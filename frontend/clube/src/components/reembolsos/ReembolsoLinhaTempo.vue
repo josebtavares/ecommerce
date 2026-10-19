@@ -33,12 +33,14 @@ import { dataHora } from '@/utils/reembolsos'
 const props = defineProps({
   reembolso: { type: Object, required: true },
   isDark:    { type: Boolean, default: true },
+  papel:     { type: String, default: 'cliente' },   // os textos mudam para a loja e a Bendi
 })
 
 // passos a partir do estado e das datas do pedido
 const passos = computed(() => {
   const r = props.reembolso
-  const out = [{ chave: 'pedido', titulo: r.origem === 'cliente' ? 'Pedido enviado' : 'Reembolso automático',
+  const cliente = props.papel === 'cliente'
+  const out = [{ chave: 'pedido', titulo: r.origem !== 'cliente' ? 'Reembolso automático' : (cliente ? 'Pedido enviado' : 'Pedido do cliente'),
                  texto: dataHora(r.data_criacao), estado: 'feito' }]
   if (r.origem === 'cliente') {
     const quando = dataHora(r.data_resposta_loja)
@@ -47,7 +49,8 @@ const passos = computed(() => {
       recusado:     { titulo: 'A loja recusou', estado: 'falhou', texto: quando },
       sem_resposta: { titulo: 'A loja não respondeu a tempo', estado: 'falhou', texto: '' },
       proposta:     r.estado === 'proposta'
-        ? { titulo: `A loja propôs ${formatarDinheiro(r.valor_aprovado)}`, estado: 'atual', texto: 'Aceita a proposta ou pede ajuda à Bendi.' }
+        ? { titulo: `A loja propôs ${formatarDinheiro(r.valor_aprovado)}`, estado: 'atual',
+            texto: cliente ? 'Aceita a proposta ou pede ajuda à Bendi.' : 'À espera da resposta do cliente.' }
         : { titulo: 'A loja propôs outro valor', estado: 'feito', texto: quando },
     }[r.resposta_loja] || (r.estado === 'pedido'
       ? { titulo: 'Resposta da loja', estado: 'atual', texto: r.prazo_resposta ? `A loja tem até ${dataHora(r.prazo_resposta)}` : '' }
@@ -61,7 +64,8 @@ const passos = computed(() => {
                estado: decidiu ? (r.estado === 'recusado' ? 'falhou' : 'feito') : (r.estado === 'em_disputa' ? 'atual' : 'futuro') })
   }
   if (r.devolver_produto) {
-    out.push({ chave: 'produto', titulo: r.produto_recebido_em ? 'A loja recebeu o produto' : 'Devolver o produto à loja',
+    out.push({ chave: 'produto', titulo: r.produto_recebido_em ? 'A loja recebeu o produto'
+                                        : (cliente ? 'Devolver o produto à loja' : 'O cliente devolve o produto'),
                texto: r.produto_recebido_em ? dataHora(r.produto_recebido_em) : '',
                estado: r.produto_recebido_em ? 'feito' : (r.estado === 'aguarda_produto' ? 'atual' : 'futuro') })
   }
@@ -71,7 +75,7 @@ const passos = computed(() => {
   } else if (r.estado === 'recusado') {
     out.push({ chave: 'fim', estado: 'falhou', titulo: 'Pedido recusado', texto: '' })
   } else if (r.estado === 'cancelado') {
-    out.push({ chave: 'fim', estado: 'falhou', titulo: 'Desististe do pedido', texto: dataHora(r.data_atualizacao) })
+    out.push({ chave: 'fim', estado: 'falhou', titulo: cliente ? 'Desististe do pedido' : 'O cliente desistiu', texto: dataHora(r.data_atualizacao) })
   } else {
     out.push({ chave: 'fim', estado: 'futuro', titulo: 'Reembolso', texto: '' })
   }
