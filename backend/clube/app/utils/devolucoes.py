@@ -302,7 +302,7 @@ def pedir_devolucao(encomenda, utilizador, motivo, itens=None, descricao='', ago
         pedidos = {}
         for linha in itens:
             try:
-                item_id, q = int(linha.get('item_id')), int(linha.get('quantidade'))
+                item_id, q = _inteiro(linha.get('item_id')), _inteiro(linha.get('quantidade'))
             except (TypeError, ValueError, AttributeError):
                 raise ErroReembolso('Artigos inválidos.')
             if item_id not in disp:
@@ -329,6 +329,13 @@ def pedir_devolucao(encomenda, utilizador, motivo, itens=None, descricao='', ago
                  f'depois disso a Bendi decide.', 'reembolso_pedido')
     _avisar_cliente(r, 'Pedido de reembolso enviado', f'A loja tem até {_hora(r.prazo_resposta)} para responder.')
     return r
+
+
+def _inteiro(v):
+    """Inteiro estrito: 1.5, "1.5", True ou "abc" → ValueError (antes 1.5 virava 1 sem aviso)."""
+    if isinstance(v, bool) or (isinstance(v, float) and not v.is_integer()):
+        raise ValueError(v)
+    return int(str(v).strip()) if isinstance(v, str) else int(v)
 
 
 def _hora(dt):
@@ -638,7 +645,10 @@ def _concluir(r, valor):
     p = pagamento_de(enc)
     metodo = ''
     if valor > 0:
-        metodo = 'manual' if p and p.referencia_transacao == 'dinheiro' else 'gateway'
+        # em mão só o que foi pago em dinheiro — o cartão/transferência do checkout simulado também passa pelo
+        # endpoint do dinheiro (referência 'dinheiro'), mas o reembolso é para o meio de pagamento usado
+        tipo = p.metodo.tipo if p and p.metodo_id else ('dinheiro' if p and p.referencia_transacao == 'dinheiro' else '')
+        metodo = 'manual' if tipo == 'dinheiro' else 'gateway'
         r.referencia = _executar_no_gateway(r, valor, metodo)
     r.estado = 'reembolsado'
     r.valor_aprovado = valor

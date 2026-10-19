@@ -308,6 +308,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
 
 class EncomendaMiniSerializer(serializers.ModelSerializer):
     """Usado em listagens — sem itens detalhados."""
+    pagamento_status   = serializers.SerializerMethodField()   # o backoffice avisa se cancelar reembolsa
     loja_nome          = serializers.CharField(source='loja.nome', read_only=True)
     comprador_username = serializers.CharField(source='comprador.user.username', read_only=True)
     metodo_pagamento   = serializers.SerializerMethodField()
@@ -336,9 +337,15 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             'data_criacao',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'agendada_para', 'agendada_texto', 'agendamento_origem',
-            'reembolso', 'valor_reembolsado',
+            'reembolso', 'valor_reembolsado', 'pagamento_status',
         ]
  
+    def get_pagamento_status(self, obj):
+        try:
+            return obj.pagamento.status
+        except Exception:
+            return None
+
     def get_reembolso(self, obj):
         return _reembolso_resumo(obj)
 

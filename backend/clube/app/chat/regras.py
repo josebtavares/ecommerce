@@ -228,8 +228,10 @@ def iniciar(utilizador, origem, destino, destino_id=None, encomenda_id=None, loj
         if origem.tipo == Caixa.LOJA:
             raise ErroChat('As lojas não falam entre si.', 403)
 
-        # cliente → loja
-        if loja.estado != 'ativa' or not loja.ativa:
+        # cliente → loja. Fechada pelo dono: as encomendas em curso continuam, por isso quem lá comprou
+        # ainda a pode contactar (antes só respondia a conversas que já existiam)
+        if loja.estado not in LOJAS_COM_CHAT or (
+                loja.estado != 'ativa' and not Encomenda.objects.filter(loja=loja, comprador=utilizador).exists()):
             raise ErroChat('Esta loja não está disponível.', 404)
         if membro_ativo(utilizador, loja.id):
             raise ErroChat('Pertences a esta loja — usa o chat da equipa.', 400)

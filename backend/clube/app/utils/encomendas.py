@@ -37,6 +37,10 @@ def repor_stock(encomenda, quantidades=None):
                 quantidade=F('quantidade') + qtd
             )
             produtos_variante.add(item.produto)
+        elif item.produto.stock_por_variante:
+            # a variante comprada foi apagada depois: não há onde repor (somar ao total do produto
+            # deixava o inventário diferente da soma das variantes)
+            produtos_variante.add(item.produto)
         else:
             Inventario.objects.filter(produto=item.produto).update(
                 quantidade=F('quantidade') + qtd

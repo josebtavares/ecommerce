@@ -505,7 +505,7 @@ export default {
       }
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'levantamento') return
       // cancelar uma encomenda paga reembolsa o cliente (utils/devolucoes.py) — confirmar antes
-      if (novoStatus === 'cancelado' && !confirm(['pago', 'preparando', 'enviado'].includes(enc.status) && enc.metodo_pagamento !== 'dinheiro'
+      if (novoStatus === 'cancelado' && !confirm(['aprovado', 'reembolsado_parcial'].includes(enc.pagamento_status)
         ? `Cancelar a encomenda #${enc.id}? O cliente é reembolsado automaticamente (${this.formatPrice(enc.valor_total)}) e o stock volta.`
         : `Cancelar a encomenda #${enc.id}? O stock volta ao inventário.`)) return
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'entrega') {
