@@ -568,6 +568,8 @@ def _transacao_flw_invalida(flw_data, encomenda, transaction_id):
 def _pedir_reembolso(encomenda, referencia):
     """Avisa os admins (uma vez por encomenda — o webhook e o regresso do cliente podem chegar os dois)."""
     from ..models import Notificacao
+    from ..utils.devolucoes import pago_depois_de_cancelada
+    pago_depois_de_cancelada(encomenda, encomenda.valor_total, referencia)   # o cliente acompanha o reembolso
     titulo = f'Reembolso necessário — Encomenda #{encomenda.id}'
     if Notificacao.objects.filter(tipo='pagamento_reembolsar', titulo=titulo).exists():
         return

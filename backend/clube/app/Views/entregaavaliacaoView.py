@@ -23,6 +23,7 @@ from ..Serializers.EntregaAvaliacaoSerializer import (
 )
 from ..utils.pagination import paginar
 from ..utils.dinheiro import formatar as dinheiro
+from ..utils import devolucoes
 
 
 # ══════════════════════════════════════════════════════════════
@@ -390,7 +391,9 @@ def entrega_atualizar(request, loja_id, encomenda_id):
             entrega.data_entrega = now()
             entrega.save(update_fields=['data_entrega'])
             encomenda.status = 'concluido'
-            encomenda.save(update_fields=['status'])
+            encomenda.data_conclusao = entrega.data_entrega
+            encomenda.save(update_fields=['status', 'data_conclusao'])
+            devolucoes.ao_avancar_encomenda(encomenda, request.user.utilizador)
  
             notificar(
                     utilizador=encomenda.comprador,

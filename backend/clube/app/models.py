@@ -57,6 +57,7 @@ class Utilizador(models.Model):
             'gerir_plataforma',  # definições do site (fuso horário)
             'gerir_subscricoes', # planos, subscrições e faturas das lojas
             'gerir_home',        # secções da página inicial
+            'gerir_devolucoes',  # reembolsos: disputas e decisões finais
         ],
         'moderador': [
             'ver_stats',
@@ -73,6 +74,7 @@ class Utilizador(models.Model):
             'ver_pos',
             'gerir_pos',
             'atender_suporte',
+            'gerir_devolucoes',
         ],
         'contabilista': [
             'ver_stats',
@@ -280,6 +282,11 @@ class Loja(models.Model):
     # último dia em que se avisou a equipa das encomendas agendadas (worker)
     aviso_agendadas_data = models.DateField(null=True, blank=True)
 
+    # Devoluções por "mudei de ideias": dias depois de receber (0 = a loja não aceita).
+    # Os problemas reais (defeito, errado, em falta, não chegou) têm sempre 48h — ver utils/devolucoes.py
+    prazo_devolucao_dias = models.PositiveSmallIntegerField(default=14, db_default=14,
+                                                            validators=[MaxValueValidator(365)])
+
     class Meta:
         ordering = ['-data_criacao']
 
@@ -342,6 +349,7 @@ class UtilizadorLoja(models.Model):
             'gerir_produtos',
             'gerir_inventario',
             'gerir_encomendas',
+            'gerir_devolucoes',
             'atribuir_condutor',
             'gerir_pagamentos',
             'gerir_entregas',
@@ -358,6 +366,7 @@ class UtilizadorLoja(models.Model):
             'gerir_produtos',
             'gerir_inventario',
             'gerir_encomendas',
+            'gerir_devolucoes',
             'atribuir_condutor',
             'gerir_pagamentos',
             'gerir_entregas',
@@ -800,6 +809,8 @@ class Encomenda(models.Model):
                                           default='', db_default='')
     # modelo de cobrança da loja quando a encomenda foi feita ('' = antiga → comissão)
     modelo_cobranca = models.CharField(max_length=10, blank=True, default='', db_default='')
+    # quando passou a "concluido" (entregue/levantada) — conta o prazo para pedir devolução
+    data_conclusao  = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -985,13 +996,14 @@ class Pagamento(models.Model):
         ('aprovado',  'Aprovado'),
         ('falhado',   'Falhado'),
         ('reembolsado','Reembolsado'),
+        ('reembolsado_parcial', 'Parcialmente reembolsado'),
     ]
 
     encomenda           = models.OneToOneField(Encomenda, on_delete=models.PROTECT, related_name='pagamento')   # registo financeiro
     metodo              = models.ForeignKey(MetodoPagamento, on_delete=models.SET_NULL,
                                             null=True, blank=True)
     valor               = models.DecimalField(max_digits=10, decimal_places=2)
-    status              = models.CharField(max_length=15, choices=STATUS, default='pendente')
+    status              = models.CharField(max_length=20, choices=STATUS, default='pendente')
     referencia_transacao= models.CharField(max_length=255, blank=True, default='')
     data_criacao        = models.DateTimeField(auto_now_add=True)
 
@@ -1217,6 +1229,9 @@ class Notificacao(models.Model):
         ('nova_encomenda',           'Nova encomenda'),
         ('pagamento_aprovado',       'Pagamento aprovado'),
         ('pagamento_reembolsar',     'Pagamento a reembolsar'),
+        ('reembolso_pedido',         'Pedido de reembolso'),
+        ('reembolso_atualizado',     'Reembolso actualizado'),
+        ('reembolso_disputa',        'Reembolso em disputa'),
         ('encomenda_concluida_loja', 'Encomenda concluída na loja'),
         ('encomenda_cancelada_loja', 'Encomenda cancelada na loja'),
         ('stock_baixo',              'Stock baixo'),
@@ -1723,3 +1738,136 @@ class HomePublicacao(models.Model):
 
     class Meta:
         ordering = ['-publicado_em', '-id']
+
+
+# ══════════════════════════════════════════════════════════════
+# DEVOLUÇÕES / REEMBOLSOS  (regras em utils/devolucoes.py)
+# ══════════════════════════════════════════════════════════════
+
+def _armazenamento_privado():
+    # as fotos dos pedidos são privadas, como as imagens do chat (bucket/pasta sem acesso público)
+    from .chat.imagens import armazenamento_privado
+    return armazenamento_privado()
+
+
+def foto_reembolso_upload(instance, filename):
+    return f'reembolsos_privado/{now():%Y/%m}/{filename}'
+
+
+class Reembolso(models.Model):
+    """
+    Pedido de reembolso de uma encomenda (total ou de alguns artigos). Registo financeiro: nunca se apaga.
+    cancelamento → antes de receber (a encomenda é cancelada); devolucao → depois de concluída.
+    """
+    TIPOS = [
+        ('cancelamento', 'Cancelamento antes de receber'),
+        ('devolucao',    'Devolução depois de receber'),
+    ]
+    MOTIVOS = [
+        ('cancelado_cliente', 'Cancelado pelo cliente'),
+        ('cancelado_loja',    'Cancelado pela loja'),
+        ('pagamento_tardio',  'Pago depois de cancelada'),
+        ('defeito',           'Produto com defeito ou danificado'),
+        ('errado',            'Produto errado'),
+        ('em_falta',          'Faltou algo'),
+        ('nao_chegou',        'A encomenda não chegou'),
+        ('mudei_ideias',      'Mudei de ideias'),
+    ]
+    ESTADOS = [
+        ('pedido',          'A aguardar a loja'),
+        ('proposta',        'A loja propôs outro valor'),
+        ('em_disputa',      'Em análise pela Bendi'),
+        ('aguarda_produto', 'A aguardar o produto'),
+        ('reembolsado',     'Reembolsado'),
+        ('recusado',        'Recusado'),
+        ('cancelado',       'Desistiu'),
+    ]
+    ORIGENS = [('cliente', 'Cliente'), ('loja', 'Loja'), ('sistema', 'Automático')]
+    METODOS = [('gateway', 'Pelo meio de pagamento'), ('manual', 'Em mão pela loja')]
+
+    encomenda       = models.ForeignKey(Encomenda, on_delete=models.PROTECT, related_name='reembolsos')
+    loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='reembolsos')
+    comprador       = models.ForeignKey(Utilizador, on_delete=models.PROTECT, related_name='reembolsos')
+    tipo            = models.CharField(max_length=15, choices=TIPOS)
+    motivo          = models.CharField(max_length=20, choices=MOTIVOS)
+    origem          = models.CharField(max_length=10, choices=ORIGENS, default='cliente')
+    descricao       = models.TextField(blank=True, default='')
+    estado          = models.CharField(max_length=15, choices=ESTADOS, default='pedido', db_index=True)
+
+    valor_pedido    = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    valor_entrega   = models.DecimalField(max_digits=10, decimal_places=2, default=0)   # parte de valor_pedido
+    valor_aprovado  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    devolver_produto  = models.BooleanField(default=False)
+    produto_recebido_em = models.DateTimeField(null=True, blank=True)
+    stock_reposto     = models.BooleanField(default=False)
+
+    metodo          = models.CharField(max_length=10, choices=METODOS, blank=True, default='')
+    referencia      = models.CharField(max_length=255, blank=True, default='')
+
+    prazo_resposta  = models.DateTimeField(null=True, blank=True)    # a loja tem até aqui; depois vai à Bendi
+    escalado_em     = models.DateTimeField(null=True, blank=True)
+    motivo_recusa   = models.TextField(blank=True, default='')
+    decidido_por    = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, blank=True,
+                                        related_name='reembolsos_decididos')
+    decisao_admin   = models.BooleanField(default=False)             # decisão final da Bendi
+    data_decisao    = models.DateTimeField(null=True, blank=True)
+    data_reembolso  = models.DateTimeField(null=True, blank=True)
+    data_criacao    = models.DateTimeField(auto_now_add=True)
+    data_atualizacao= models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-data_criacao']
+        indexes = [models.Index(fields=['loja', 'estado'])]
+
+    def __str__(self):
+        return f'Reembolso #{self.pk} — encomenda #{self.encomenda_id} ({self.estado})'
+
+
+class ItemReembolso(models.Model):
+    reembolso  = models.ForeignKey(Reembolso, on_delete=models.CASCADE, related_name='itens')
+    item       = models.ForeignKey(ItemEncomenda, on_delete=models.PROTECT, related_name='reembolsos')
+    quantidade = models.PositiveIntegerField()
+    valor      = models.DecimalField(max_digits=10, decimal_places=2)
+
+
+class MensagemReembolso(models.Model):
+    """Conversa do pedido (cliente, loja e, em disputa, a Bendi) — separada do chat privado loja↔cliente."""
+    PAPEIS = [('cliente', 'Cliente'), ('loja', 'Loja'), ('admin', 'Bendi'), ('sistema', 'Sistema')]
+
+    reembolso = models.ForeignKey(Reembolso, on_delete=models.CASCADE, related_name='mensagens')
+    autor     = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    papel     = models.CharField(max_length=10, choices=PAPEIS)
+    texto     = models.TextField(blank=True, default='')
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+
+class FotoReembolso(models.Model):
+    reembolso = models.ForeignKey(Reembolso, on_delete=models.CASCADE, related_name='fotos')
+    mensagem  = models.ForeignKey(MensagemReembolso, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='fotos')
+    autor     = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    ficheiro  = models.FileField(upload_to=foto_reembolso_upload, storage=_armazenamento_privado)
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+
+class CreditoComissao(models.Model):
+    """
+    Comissão a devolver à loja por um reembolso de uma encomenda cuja comissão já foi liquidada.
+    Desconta-se na próxima liquidação. (Se a comissão ainda está pendente, recalcula-se nela.)
+    """
+    ESTADOS = [('pendente', 'Por descontar'), ('descontado', 'Descontado')]
+
+    loja           = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='creditos_comissao')
+    comissao       = models.ForeignKey(Comissao, on_delete=models.PROTECT, related_name='creditos')
+    reembolso      = models.OneToOneField(Reembolso, on_delete=models.PROTECT, related_name='credito_comissao')
+    valor          = models.DecimalField(max_digits=10, decimal_places=2)
+    estado         = models.CharField(max_length=12, choices=ESTADOS, default='pendente', db_index=True)
+    data_criacao   = models.DateTimeField(auto_now_add=True)
+    data_desconto  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-data_criacao']

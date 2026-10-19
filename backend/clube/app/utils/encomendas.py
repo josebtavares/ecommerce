@@ -1,7 +1,7 @@
 """
 Regras de encomendas partilhadas entre views e modelos.
 
-  repor_stock(encomenda)               → devolve ao stock o que a encomenda reservou
+  repor_stock(encomenda, quantidades)  → devolve ao stock o que a encomenda reservou (ou parte)
                                          (o stock é descontado quando a encomenda é criada)
   cancelar_pendentes_da_loja(loja)     → cancela as encomendas ainda por pagar de uma loja
                                          que deixou de estar activa (fechada/suspensa)
@@ -11,8 +11,11 @@ Regras de encomendas partilhadas entre views e modelos.
 from django.db.models import F
 
 
-def repor_stock(encomenda):
-    """Repõe o stock de todos os itens (na variante, se a compra foi de uma)."""
+def repor_stock(encomenda, quantidades=None):
+    """
+    Repõe o stock de todos os itens (na variante, se a compra foi de uma).
+    quantidades={item_id: qtd} → só essas unidades (devolução de parte da encomenda).
+    """
     from ..models import Inventario, VarianteProduto
     from .variantes import atualizar_total_inventario
 
@@ -20,20 +23,23 @@ def repor_stock(encomenda):
 
     produtos_variante = set()
     for item in encomenda.itens.select_related('produto', 'variante').all():
+        qtd = item.quantidade if quantidades is None else min(quantidades.get(item.id, 0), item.quantidade)
+        if qtd <= 0:
+            continue
         if item.componentes:
             # conjunto: devolve o que se descontou de cada componente (snapshot da compra)
-            repor_conjunto(item.componentes, item.quantidade)
+            repor_conjunto(item.componentes, qtd)
             continue
         if not item.produto:
             continue
         if item.variante_id:
             VarianteProduto.objects.filter(id=item.variante_id).update(
-                quantidade=F('quantidade') + item.quantidade
+                quantidade=F('quantidade') + qtd
             )
             produtos_variante.add(item.produto)
         else:
             Inventario.objects.filter(produto=item.produto).update(
-                quantidade=F('quantidade') + item.quantidade
+                quantidade=F('quantidade') + qtd
             )
     for produto in produtos_variante:
         atualizar_total_inventario(produto)

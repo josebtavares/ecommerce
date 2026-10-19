@@ -66,7 +66,7 @@ class LojaSerializer(serializers.ModelSerializer):
             'minha_role', 'meu_chat',
             'ativa', 'estado', 'estado_motivo', 'estado_alterado_em',
             'data_criacao', 'data_atualizacao',
-            'politica_devolucao', 'termos_servico', 'politica_privacidade',
+            'politica_devolucao', 'prazo_devolucao_dias', 'termos_servico', 'politica_privacidade',
             'flutterwave_subaccount_id', 'aceita_flutterwave',
             'modelo_cobranca', 'percentagem_comissao',
         ]
@@ -161,7 +161,7 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             'layout_produtos',
             'entrega_ativa', 'levantamento_ativo',
             'rating_medio', 'total_avaliacoes',
-            'politica_devolucao', 'termos_servico', 'politica_privacidade',
+            'politica_devolucao', 'prazo_devolucao_dias', 'termos_servico', 'politica_privacidade',
             'horario', 'agendamento',
         ]
 
