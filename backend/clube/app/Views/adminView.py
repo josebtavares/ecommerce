@@ -66,9 +66,13 @@ def admin_stats(request):
     lojas_pendentes    = lojas_por_estado.get('pendente', 0)
     total_produtos     = Produto.objects.filter(ativo=True).count()
     total_encomendas   = Encomenda.objects.count()
-    total_vendas       = Pagamento.objects.filter(status='aprovado').aggregate(
-                             total=Sum('valor')
-                         )['total'] or 0
+    # pago (também o que depois foi reembolsado) menos os reembolsos
+    from ..models import Reembolso
+    pago = Pagamento.objects.filter(status__in=['aprovado', 'reembolsado', 'reembolsado_parcial']).aggregate(
+               total=Sum('valor'))['total'] or 0
+    reembolsado = Reembolso.objects.filter(estado='reembolsado', encomenda__pagamento__isnull=False).aggregate(
+                      total=Sum('valor_aprovado'))['total'] or 0
+    total_vendas = pago - reembolsado
     utilizadores_verificados = Utilizador.objects.filter(verificado=True).count()
 
     # encomendas por estado
@@ -724,6 +728,12 @@ def admin_comissao_list(request):
     # ── totais globais (ignoram paginação e filtros de data/valor) ─
     total_pendente  = Comissao.objects.filter(status='pendente').aggregate(t=Sum('valor_comissao'))['t'] or 0
     total_liquidado = Comissao.objects.filter(status='liquidada').aggregate(t=Sum('valor_comissao'))['t'] or 0
+    # comissão a devolver às lojas por reembolsos de comissões já liquidadas (desconta-se na liquidação)
+    from ..models import CreditoComissao
+    creditos = CreditoComissao.objects.filter(estado='pendente')
+    if loja_id:
+        creditos = creditos.filter(loja_id=loja_id)
+    total_creditos  = creditos.aggregate(t=Sum('valor'))['t'] or 0
  
     # ── paginação ─────────────────────────────────────────────
     offset = int(request.GET.get('offset', 0))
@@ -752,6 +762,7 @@ def admin_comissao_list(request):
         'next_offset':     offset + limit if offset + limit < total else None,
         'total_pendente':  str(total_pendente),
         'total_liquidado': str(total_liquidado),
+        'total_creditos':  str(total_creditos),
         'results':         results,
     })
 
@@ -821,7 +832,9 @@ def admin_comissoes_por_loja(request):
     # agrupa por loja e calcula pendente + liquidado em uma query
     from ..models import Loja
  
-    lojas_ids = Comissao.objects.values_list('loja_id', flat=True).distinct()
+    from ..models import CreditoComissao
+    lojas_ids = set(Comissao.objects.values_list('loja_id', flat=True).distinct()) | set(
+        CreditoComissao.objects.values_list('loja_id', flat=True).distinct())
  
     resultado = []
     for loja in Loja.objects.filter(id__in=lojas_ids).order_by('nome'):
@@ -829,11 +842,13 @@ def admin_comissoes_por_loja(request):
             pendente=Sum('valor_comissao', filter=Q(status='pendente')),
             liquidado=Sum('valor_comissao', filter=Q(status='liquidada')),
         )
+        credito = loja.creditos_comissao.filter(estado='pendente').aggregate(v=Sum('valor'))['v'] or 0
         resultado.append({
             'id':        loja.id,
             'nome':      loja.nome,
             'pendente':  f"{agg['pendente'] or 0:.2f}",
             'liquidado': f"{agg['liquidado'] or 0:.2f}",
+            'credito':   f"{credito:.2f}",       # a devolver à loja (reembolsos de comissões já liquidadas)
         })
  
     return Response(resultado)
@@ -952,7 +967,10 @@ def admin_dashboard(request):
     )
     from django.contrib.auth.models import User
  
-    enc_qs      = Encomenda.objects.all()
+    from ..models import Reembolso, CreditoComissao
+    from ..utils.devolucoes import anotar_liquido, resumo_reembolsos
+    # GMV líquido: encomendas concluídas menos o que foi reembolsado delas
+    enc_qs      = anotar_liquido(Encomenda.objects.all())
     enc_periodo = enc_qs.filter(data_criacao__gte=inicio)
     enc_ant     = enc_qs.filter(data_criacao__gte=inicio_anterior, data_criacao__lt=inicio)
  
@@ -961,8 +979,9 @@ def admin_dashboard(request):
         return round(((actual - anterior) / anterior) * 100, 1)
  
     # ── KPIs globais ──────────────────────────────────────────
-    gmv         = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
-    gmv_ant     = enc_ant.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    gmv         = enc_periodo.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
+    gmv_ant     = enc_ant.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
+    reembolsos  = resumo_reembolsos(Reembolso.objects.filter(data_reembolso__gte=inicio))
  
     com_qs      = Comissao.objects.all()
     comissao_p  = com_qs.filter(status='pendente').aggregate(v=Sum('valor_comissao'))['v'] or 0
@@ -987,7 +1006,7 @@ def admin_dashboard(request):
         enc_qs.filter(data_criacao__gte=inicio, status='concluido')
         .annotate(dia=TruncDate('data_criacao'))
         .values('dia')
-        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .annotate(total=Sum('liquido'), count=Count('id'))
         .order_by('dia')
     )
     grafico_gmv = [
@@ -999,7 +1018,7 @@ def admin_dashboard(request):
     top_lojas = (
         enc_qs.filter(data_criacao__gte=inicio, status='concluido')
         .values('loja__id', 'loja__nome')
-        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .annotate(total=Sum('liquido'), count=Count('id'))
         .order_by('-total')[:5]
     )
     lojas_top = [
@@ -1022,6 +1041,10 @@ def admin_dashboard(request):
         'total_lojas':          total_lojas,
         'lojas_novas':          lojas_periodo,
         'lojas_pendentes':      lojas_pendentes,
+        'reembolsos_periodo':   reembolsos['total'],
+        'reembolsos_count':     reembolsos['count'],
+        'reembolsos_disputa':   Reembolso.objects.filter(estado='em_disputa').count(),
+        'creditos_comissao':    float(CreditoComissao.objects.filter(estado='pendente').aggregate(v=Sum('valor'))['v'] or 0),
         'total_utilizadores':   total_users,
         'utilizadores_novos':   users_periodo,
         'total_encomendas':     total_enc,
@@ -1065,17 +1088,23 @@ def admin_relatorios(request):
     from ..models import Encomenda, Comissao, AvaliacaoLoja, Loja
     from django.db.models.functions import TruncDate
  
-    enc_qs = Encomenda.objects.filter(data_criacao__range=(data_inicio, data_fim))
+    from ..models import Reembolso
+    from ..utils.devolucoes import anotar_liquido, resumo_reembolsos
+    enc_qs = anotar_liquido(Encomenda.objects.filter(data_criacao__range=(data_inicio, data_fim)))
     com_qs = Comissao.objects.filter(data_criacao__range=(data_inicio, data_fim))
+    reemb_qs = Reembolso.objects.filter(data_reembolso__range=(data_inicio, data_fim))
     av_qs  = AvaliacaoLoja.objects.filter(data_criacao__range=(data_inicio, data_fim))
  
     if loja_id:
         enc_qs = enc_qs.filter(loja_id=loja_id)
         com_qs = com_qs.filter(loja_id=loja_id)
         av_qs  = av_qs.filter(loja_id=loja_id)
+        reemb_qs = reemb_qs.filter(loja_id=loja_id)
  
     # ── KPIs do período ───────────────────────────────────────
-    gmv            = enc_qs.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    gmv            = enc_qs.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
+    gmv_bruto      = enc_qs.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    reembolsos     = resumo_reembolsos(reemb_qs)
     total_enc      = enc_qs.count()
     enc_concluidas = enc_qs.filter(status='concluido').count()
     enc_canceladas = enc_qs.filter(status='cancelado').count()
@@ -1098,7 +1127,7 @@ def admin_relatorios(request):
         enc_qs.filter(status='concluido')
         .annotate(dia=TruncDate('data_criacao'))
         .values('dia')
-        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .annotate(total=Sum('liquido'), count=Count('id'))
         .order_by('dia')
     )
     grafico = [
@@ -1112,7 +1141,7 @@ def admin_relatorios(request):
         top = (
             enc_qs.filter(status='concluido')
             .values('loja__id', 'loja__nome')
-            .annotate(total=Sum('valor_total'), count=Count('id'))
+            .annotate(total=Sum('liquido'), count=Count('id'))
             .order_by('-total')[:10]
         )
         lojas_top = [
@@ -1149,7 +1178,10 @@ def admin_relatorios(request):
         'periodo': {'inicio': data_inicio_str, 'fim': data_fim_str},
         'loja_id': loja_id,
         # KPIs
-        'gmv':             float(gmv),
+        'gmv':             float(gmv),          # líquido de reembolsos
+        'gmv_bruto':       float(gmv_bruto),
+        'reembolsos':      reembolsos['total'],
+        'reembolsos_count':reembolsos['count'],
         'total_encomendas':total_enc,
         'enc_concluidas':  enc_concluidas,
         'enc_canceladas':  enc_canceladas,
@@ -1169,3 +1201,54 @@ def admin_relatorios(request):
         # Meta
         'lojas_lista':     lojas_lista,
     })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_creditos_comissao(request):
+    """
+    GET /app/admin/comissoes/creditos/?loja_id=&estado=pendente|descontado
+    Comissão a devolver às lojas: reembolsos de encomendas cuja comissão já tinha sido liquidada.
+    """
+    from ..models import CreditoComissao
+    erro = _exige_admin(request, 'gerir_pagamentos')
+    if erro:
+        return erro
+    qs = CreditoComissao.objects.select_related('loja', 'reembolso').order_by('-data_criacao')
+    loja_id = request.GET.get('loja_id')
+    if loja_id and loja_id.isdigit():
+        qs = qs.filter(loja_id=int(loja_id))
+    estado = request.GET.get('estado')
+    if estado in ('pendente', 'descontado'):
+        qs = qs.filter(estado=estado)
+    return Response({
+        'total_pendente': str(qs.filter(estado='pendente').aggregate(v=Sum('valor'))['v'] or 0),
+        'results': [{
+            'id': c.id, 'loja_id': c.loja_id, 'loja_nome': c.loja.nome, 'comissao_id': c.comissao_id,
+            'reembolso_id': c.reembolso_id, 'encomenda_id': c.reembolso.encomenda_id,
+            'valor': str(c.valor), 'estado': c.estado,
+            'data_criacao': c.data_criacao.strftime('%d-%m-%Y %H:%M'),
+            'data_desconto': c.data_desconto.strftime('%d-%m-%Y %H:%M') if c.data_desconto else None,
+        } for c in qs[:200]],
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def admin_creditos_descontar(request):
+    """
+    POST /app/admin/comissoes/creditos/descontar/  { loja_id }
+    Ao liquidar com a loja, os créditos por descontar dela ficam descontados (nunca se apagam).
+    """
+    from ..models import CreditoComissao
+    erro = _exige_admin(request, 'gerir_pagamentos')
+    if erro:
+        return erro
+    try:
+        loja_id = int(request.data.get('loja_id'))
+    except (TypeError, ValueError):
+        return Response({'detail': 'Indica a loja.'}, status=status.HTTP_400_BAD_REQUEST)
+    qs = CreditoComissao.objects.select_for_update().filter(loja_id=loja_id, estado='pendente')
+    total = qs.aggregate(v=Sum('valor'))['v'] or 0
+    n = qs.update(estado='descontado', data_desconto=now())
+    return Response({'descontados': n, 'total': str(total)})

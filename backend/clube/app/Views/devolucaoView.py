@@ -410,14 +410,65 @@ def lista_admin(request):
     grupo = request.GET.get('grupo')
     if grupo in GRUPOS_ADMIN:
         qs = qs.filter(estado__in=GRUPOS_ADMIN[grupo])
-    loja_id = request.GET.get('loja_id')
-    if loja_id and loja_id.isdigit():
-        qs = qs.filter(loja_id=int(loja_id))
+    for campo, filtro in (('loja_id', 'loja_id'), ('comprador_id', 'comprador_id'), ('encomenda_id', 'encomenda_id')):
+        v = request.GET.get(campo)
+        if v and v.isdigit():
+            qs = qs.filter(**{filtro: int(v)})
     qs = qs.order_by('escalado_em', '-data_criacao') if grupo == 'disputa' else qs.order_by('-data_atualizacao')
     resp = paginar_lista(request, [_resumo(r) for r in qs[:500]])
     if resp.status_code == 200:
         resp.data['contagem'] = contagem
     return resp
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def metricas_admin(request):
+    """
+    GET /app/admin/reembolsos/metricas/?periodo=90
+    Por loja: pedidos, reembolsados, recusados, valor e taxa (pedidos / encomendas pagas) — para encontrar lojas
+    com problemas. Por cliente: quem pede mais (possíveis abusos).
+    """
+    from datetime import timedelta
+    from django.db.models import Sum
+    from django.utils import timezone
+    from ..utils.pagination import periodo_dias
+    erro = _admin(request)
+    if erro:
+        return erro
+    dias = periodo_dias(request, padrao=90)
+    desde = timezone.now() - timedelta(days=dias)
+    pedidos = Reembolso.objects.filter(data_criacao__gte=desde)
+    so_pedidos = pedidos.filter(origem='cliente')
+    agreg = dict(
+        n=Count('id'),
+        reembolsados=Count('id', filter=Q(estado='reembolsado')),
+        recusados=Count('id', filter=Q(estado='recusado')),
+        disputas=Count('id', filter=Q(escalado_em__isnull=False)),
+        valor=Sum('valor_aprovado', filter=Q(estado='reembolsado')),
+    )
+    pagas = dict(Encomenda.objects.filter(data_criacao__gte=desde, status__in=['pago', 'preparando', 'enviado', 'concluido'])
+                 .values('loja_id').annotate(n=Count('id')).values_list('loja_id', 'n'))
+    lojas = []
+    for l in (pedidos.values('loja_id', 'loja__nome').annotate(**agreg).order_by('-n')[:50]):
+        base = pagas.get(l['loja_id'], 0)
+        lojas.append({'loja_id': l['loja_id'], 'loja_nome': l['loja__nome'], 'pedidos': l['n'],
+                      'reembolsados': l['reembolsados'], 'recusados': l['recusados'], 'disputas': l['disputas'],
+                      'valor': str(l['valor'] or 0), 'encomendas': base,
+                      'taxa': round(l['n'] / base * 100, 1) if base else None})
+    clientes = [{'utilizador_id': c['comprador_id'], 'nome': c['comprador__user__first_name'] or c['comprador__user__username'],
+                 'username': c['comprador__user__username'], 'pedidos': c['n'], 'reembolsados': c['reembolsados'],
+                 'recusados': c['recusados'], 'valor': str(c['valor'] or 0)}
+                for c in (so_pedidos.values('comprador_id', 'comprador__user__first_name', 'comprador__user__username')
+                          .annotate(**agreg).order_by('-n')[:10])]
+    tot = pedidos.aggregate(**agreg)
+    return Response({
+        'periodo': dias,
+        'total': {'pedidos': tot['n'], 'reembolsados': tot['reembolsados'], 'recusados': tot['recusados'],
+                  'disputas': tot['disputas'], 'valor': str(tot['valor'] or 0)},
+        'lojas': lojas,
+        'clientes': clientes,
+    })
 
 
 @api_view(['POST'])

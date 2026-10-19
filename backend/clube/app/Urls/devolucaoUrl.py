@@ -17,5 +17,6 @@ urlpatterns = [
     path('loja/<int:loja_id>/reembolsos/<int:id>/acao/',   v.acao_loja,  name='reembolso-acao-loja'),
     # Bendi
     path('admin/reembolsos/',                     v.lista_admin,   name='reembolso-lista-admin'),
+    path('admin/reembolsos/metricas/',            v.metricas_admin, name='reembolso-metricas-admin'),
     path('admin/reembolsos/<int:id>/decidir/',    v.decidir_admin, name='reembolso-decidir'),
 ]

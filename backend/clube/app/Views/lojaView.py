@@ -605,7 +605,10 @@ def loja_dashboard(request, loja_id):
     inicio_anterior  = inicio - duracao
     fim_anterior     = inicio
 
-    enc_qs      = Encomenda.objects.filter(loja=loja)
+    from ..models import Reembolso
+    from ..utils.devolucoes import anotar_liquido, resumo_reembolsos
+    # vendas = encomendas concluídas menos o que foi reembolsado delas
+    enc_qs      = anotar_liquido(Encomenda.objects.filter(loja=loja))
     enc_periodo = enc_qs.filter(data_criacao__range=(inicio, fim))
     enc_ant     = enc_qs.filter(data_criacao__range=(inicio_anterior, fim_anterior))
 
@@ -613,8 +616,12 @@ def loja_dashboard(request, loja_id):
         if not anterior: return None
         return round(((actual - anterior) / anterior) * 100, 1)
 
-    total_vendas     = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
-    total_vendas_ant = enc_ant.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    total_vendas     = enc_periodo.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
+    total_vendas_ant = enc_ant.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
+    vendas_brutas    = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
+    # reembolsos feitos no período (inclui cancelamentos de encomendas pagas)
+    reemb_qs   = Reembolso.objects.filter(loja=loja)
+    reembolsos = resumo_reembolsos(reemb_qs.filter(data_reembolso__range=(inicio, fim)))
     total_enc        = enc_periodo.count()
     total_enc_ant    = enc_ant.count()
     enc_concluidas   = enc_periodo.filter(status='concluido').count()
@@ -629,7 +636,7 @@ def loja_dashboard(request, loja_id):
         enc_qs.filter(data_criacao__range=(inicio, fim), status='concluido')
         .annotate(dia=TruncDate('data_criacao'))
         .values('dia')
-        .annotate(total=Sum('valor_total'), count=Count('id'))
+        .annotate(total=Sum('liquido'), count=Count('id'))
         .order_by('dia')
     )
     grafico_vendas = [
@@ -682,8 +689,14 @@ def loja_dashboard(request, loja_id):
         'periodo':              periodo,
         'data_inicio':          data_inicio_str,
         'data_fim':             data_fim_str,
-        'total_vendas':         float(total_vendas),
+        'total_vendas':         float(total_vendas),          # líquido de reembolsos
+        'vendas_brutas':        float(vendas_brutas),
         'variacao_vendas':      variacao(total_vendas, total_vendas_ant),
+        'reembolsos_periodo':   reembolsos['total'],
+        'reembolsos_count':     reembolsos['count'],
+        'reembolsos_por_responder': reemb_qs.filter(estado='pedido').count(),
+        'credito_comissao':     float(loja.creditos_comissao.filter(estado='pendente')
+                                      .aggregate(v=Sum('valor'))['v'] or 0),
         'total_encomendas':     total_enc,
         'variacao_enc':         variacao(total_enc, total_enc_ant),
         'enc_concluidas':       enc_concluidas,

@@ -116,6 +116,7 @@
         <AdminUtilizadores v-else-if="activeSection === 'utilizadores'" />
         <AdminProdutos     v-else-if="activeSection === 'produtos'"     />
         <AdminEncomendas   v-else-if="activeSection === 'encomendas'"   />
+        <AdminDevolucoes   v-else-if="activeSection === 'devolucoes'"   @disputas="n => disputasReembolso = n" />
         <AdminPagamentos   v-else-if="activeSection === 'pagamentos'"   />
         <AdminTipos        v-else-if="activeSection === 'tipos'"        />
         <AdminComissoes    v-else-if="activeSection === 'comissoes'"    />
@@ -152,6 +153,7 @@ import AdminSuporte      from './AdminSuporte.vue'
 import AdminDenuncias    from './AdminDenuncias.vue'
 import AdminPlataforma   from './AdminPlataforma.vue'
 import AdminSubscricoes  from './AdminSubscricoes.vue'
+import AdminDevolucoes   from './AdminDevolucoes.vue'
 import api from '@/services/api'
 import { chat } from '@/services/chat'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
@@ -166,6 +168,7 @@ const SECCOES = [
   { key: 'produtos',     label: 'Produtos',      icon: 'box',           permissao: 'gerir_produtos'      },
 
   { key: 'encomendas',   label: 'Encomendas',    icon: 'bag-shopping',  permissao: 'gerir_encomendas'   },
+  { key: 'devolucoes',   label: 'Devoluções',    icon: 'rotate-left',   permissao: 'gerir_devolucoes'   },
   { key: 'pagamentos',   label: 'Pagamentos',    icon: 'credit-card',   permissao: 'gerir_pagamentos'    },
   { key: 'tipos',        label: 'Tipos Globais', icon: 'shapes',        permissao: 'gerir_tipos_globais' },
   { key: 'comissoes',    label: 'Comissões',     icon: 'coins',         permissao: 'gerir_comissoes'     },
@@ -180,9 +183,9 @@ const SECCOES = [
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_home'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_home','gerir_devolucoes'],
   moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','ver_relatorios','moderar_chat'],
-  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios','gerir_conteudo','ver_pos','gerir_pos','atender_suporte'],
+  suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','ver_relatorios','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','gerir_devolucoes'],
   contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos','gerir_subscricoes'],
 }
 
@@ -192,6 +195,7 @@ export default {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
     AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes,
+    AdminDevolucoes,
   },
 
   data () {
@@ -203,8 +207,10 @@ export default {
       sidebarAberta:    false,
       user,
       seccoes,
-      activeSection: seccoes[0]?.key || 'dashboard',
+      // ?seccao=devolucoes&reembolso=12 (links das notificações) abre essa secção
+      activeSection: seccoes.find(s => s.key === this.$route.query.seccao)?.key || seccoes[0]?.key || 'dashboard',
       denunciasPendentes: 0,
+      disputasReembolso:  0,
     }
   },
 
@@ -229,22 +235,41 @@ export default {
       this.carregarPendentes()
       this.temporizadorDenuncias = setInterval(this.carregarPendentes, 60000)
     }
+    // reembolsos à espera da decisão da Bendi
+    if (this.seccoes.some(s => s.key === 'devolucoes')) {
+      this.carregarDisputas()
+      this.temporizadorDisputas = setInterval(this.carregarDisputas, 60000)
+    }
+  },
+
+  watch: {
+    // notificação clicada já dentro do painel
+    '$route.query.seccao' (s) { if (this.seccoes.some(x => x.key === s)) this.activeSection = s },
   },
 
   beforeUnmount () {
     clearInterval(this.temporizadorDenuncias)
+    clearInterval(this.temporizadorDisputas)
   },
 
   methods: {
     navegarPara (key) {
       this.activeSection = key
       this.sidebarAberta = false
+      if (this.$route.query.seccao || this.$route.query.reembolso) this.$router.replace({ query: {} })
     },
     // contadores no menu: mensagens do suporte por ler e denúncias por analisar
     contador (key) {
       if (key === 'suporte_chat') return chat.caixas.find(c => c.tipo === 'suporte')?.nao_lidas || 0
       if (key === 'denuncias') return this.denunciasPendentes
+      if (key === 'devolucoes') return this.disputasReembolso
       return 0
+    },
+    async carregarDisputas () {
+      try {
+        const { data } = await api.get('/app/admin/reembolsos/', { params: { grupo: 'disputa', limit: 1 } })
+        this.disputasReembolso = data.contagem?.disputa || 0
+      } catch { /* o contador não é essencial */ }
     },
     async carregarPendentes () {
       try {

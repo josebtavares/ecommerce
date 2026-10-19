@@ -747,3 +747,27 @@ def gravar_fotos(r, prontas, autor, msg=None):
     for conteudo in prontas:
         foto = FotoReembolso(reembolso=r, mensagem=msg, autor=autor)
         foto.ficheiro.save(conteudo.name, conteudo, save=True)
+
+
+# ── relatórios: vendas líquidas de reembolsos ────────────────────────
+
+def anotar_liquido(qs):
+    """
+    Encomendas com `liquido` = valor_total − o que já foi reembolsado (dashboards e relatórios contam
+    as vendas assim: uma encomenda concluída e depois reembolsada não é receita).
+    """
+    from django.db.models import DecimalField, F, OuterRef, Subquery, Value
+    from django.db.models.functions import Coalesce
+    from ..models import Reembolso
+    reemb = (Reembolso.objects.filter(encomenda=OuterRef('pk'), estado='reembolsado')
+             .values('encomenda').annotate(t=Sum('valor_aprovado')).values('t'))
+    dec = DecimalField(max_digits=12, decimal_places=2)
+    return qs.annotate(liquido=F('valor_total') - Coalesce(Subquery(reemb, output_field=dec), Value(Decimal('0')),
+                                                           output_field=dec))
+
+
+def resumo_reembolsos(qs):
+    """{'total', 'count'} dos reembolsos já feitos (qs de Reembolso já filtrado por loja/período)."""
+    from django.db.models import Count
+    a = qs.filter(estado='reembolsado', valor_aprovado__gt=0).aggregate(t=Sum('valor_aprovado'), n=Count('id'))
+    return {'total': float(a['t'] or 0), 'count': a['n'] or 0}

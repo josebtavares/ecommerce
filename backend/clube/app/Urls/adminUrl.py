@@ -33,6 +33,8 @@ urlpatterns = [
      # ── Comissoes ──────────────────────────────────────────────
     path('admin/comissoes/',                        adminView.admin_comissao_list,          name='admin-comissao-list'),
     path('admin/comissoes/por-loja/',               adminView.admin_comissoes_por_loja, name='admin-comissoes-por-loja'),
+    path('admin/comissoes/creditos/',               adminView.admin_creditos_comissao,  name='admin-creditos-comissao'),
+    path('admin/comissoes/creditos/descontar/',     adminView.admin_creditos_descontar, name='admin-creditos-descontar'),
     path('admin/comissoes/<int:comissao_id>/liquidar/', adminView.admin_comissao_liquidar,  name='admin-comissao-liquidar'),
     path('admin/lojas/<int:loja_id>/comissao/',     adminView.admin_loja_comissao,          name='admin-loja-comissao'),
     path('admin/lojas/<int:loja_id>/comissao/editar/', adminView.admin_loja_comissao_update, name='admin-loja-comissao-update'),
