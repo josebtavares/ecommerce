@@ -176,7 +176,46 @@ def opcoes(encomenda, agora=None):
 
 def mensagem(r, papel, texto, autor=None):
     from ..models import MensagemReembolso
-    return MensagemReembolso.objects.create(reembolso=r, papel=papel, texto=(texto or '')[:MAX_TEXTO], autor=autor)
+    m = MensagemReembolso.objects.create(reembolso=r, papel=papel, texto=(texto or '')[:MAX_TEXTO], autor=autor)
+    emitir(r)          # todas as mudanças do pedido deixam uma mensagem — é aqui que se avisa em tempo real
+    return m
+
+
+def _destinatarios(r):
+    """user ids de quem vê o pedido: o cliente, a equipa da loja com gerir_devolucoes e a Bendi."""
+    from ..models import Utilizador, UtilizadorLoja
+    roles_loja = [k for k, v in UtilizadorLoja.PERMISSOES.items() if 'gerir_devolucoes' in v]
+    roles_admin = [k for k, v in Utilizador.PERMISSOES_ADMIN.items() if 'gerir_devolucoes' in v]
+    ids = {r.comprador.user_id}
+    ids |= set(UtilizadorLoja.objects.filter(loja_id=r.loja_id, ativo=True, role__in=roles_loja)
+               .values_list('utilizador__user_id', flat=True))
+    ids |= set(Utilizador.objects.filter(user__is_staff=True, role_admin__in=roles_admin)
+               .values_list('user_id', flat=True))
+    return ids
+
+
+def emitir(r):
+    """
+    Aviso em tempo real (WebSocket das notificações, grupo notif_<user>) depois de a transacção gravar —
+    antes disso a página iria buscar o estado antigo; se a transacção for desfeita, não se avisa.
+    Só leva ids (como o chat): quem recebe vai buscar o pedido com as suas permissões. Uma acção com
+    vários passos dá vários avisos seguidos — a página junta-os num só pedido.
+    """
+    from django.db import transaction
+    transaction.on_commit(lambda: _enviar(r))
+
+
+def _enviar(r):
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        camada = get_channel_layer()
+        evento = {'type': 'reembolso.atualizado',
+                  'reembolso': {'id': r.id, 'encomenda_id': r.encomenda_id, 'loja_id': r.loja_id}}
+        for uid in _destinatarios(r):
+            async_to_sync(camada.group_send)(f'notif_{uid}', evento)
+    except Exception:
+        pass     # sem Redis/WebSocket: as páginas actualizam ao voltar ao separador (como antes)
 
 
 def _avisar_cliente(r, titulo, texto, tipo='reembolso_atualizado'):

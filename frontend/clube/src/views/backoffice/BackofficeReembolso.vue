@@ -202,6 +202,7 @@ import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
+import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const props = defineProps({
   lojaId:      { type: [String, Number], required: true },
@@ -289,5 +290,6 @@ async function acao (nome, extra = {}) {
 }
 
 onMounted(carregar)
+useTempoRealReembolsos(carregar, d => String(d.id) === String(props.reembolsoId))
 watch(() => props.reembolsoId, () => { carregando.value = true; carregar() })
 </script>

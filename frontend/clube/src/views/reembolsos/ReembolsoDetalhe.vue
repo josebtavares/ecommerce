@@ -8,7 +8,8 @@
         <font-awesome-icon :icon="['fas', 'arrow-left']" />
       </button>
       <h1 class="font-bold truncate">{{ r ? (r.motivo === 'esgotado' ? 'Artigo esgotado' : r.tipo === 'cancelamento' ? 'Pedido de cancelamento' : 'Pedido de reembolso') : 'Pedido' }}</h1>
-      <button type="button" class="ml-auto h-9 w-9 rounded-lg flex items-center justify-center"
+      <NotificacaoSino class="ml-auto" :isDark="isDark" />
+      <button type="button" class="h-9 w-9 rounded-lg flex items-center justify-center"
               :aria-label="isDark ? 'Modo claro' : 'Modo escuro'" @click="alternarTema"
               :class="isDark ? 'hover:bg-zinc-800' : 'hover:bg-gray-100'">
         <font-awesome-icon :icon="['fas', isDark ? 'sun' : 'moon']" />
@@ -168,6 +169,8 @@ import { contactarLoja } from '@/services/chat'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
+import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
+import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const route  = useRoute()
 const router = useRouter()
@@ -251,6 +254,9 @@ function alternarTema () {
   isDark.value = !isDark.value
   localStorage.setItem('theme_preference', isDark.value ? 'dark' : 'light')
 }
+
+// tempo real: a loja (ou a Bendi) mexeu neste pedido
+useTempoRealReembolsos(() => { if (r.value) carregar() }, d => r.value && d.id === r.value.id)
 
 // ao voltar ao separador, mostra o que mudou (resposta da loja, mensagens)
 function aoFocar () { if (document.visibilityState === 'visible' && r.value) carregar() }

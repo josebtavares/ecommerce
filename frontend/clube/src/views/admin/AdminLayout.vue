@@ -157,6 +157,7 @@ import AdminDevolucoes   from './AdminDevolucoes.vue'
 import api from '@/services/api'
 import { chat } from '@/services/chat'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
+import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 
 const SECCOES = [
   // icon: nome do ícone Font Awesome (solid)
@@ -242,6 +243,13 @@ export default {
     }
   },
 
+  mounted () {
+    // contador de disputas no menu em tempo real
+    this.aoReembolso = () => { if (this.seccoes.some(s => s.key === 'devolucoes')) this.carregarDisputas() }
+    window.addEventListener(EVENTO_REEMBOLSO, this.aoReembolso)
+    window.addEventListener(EVENTO_RELIGADO, this.aoReembolso)
+  },
+
   watch: {
     // notificação clicada já dentro do painel
     '$route.query.seccao' (s) { if (this.seccoes.some(x => x.key === s)) this.activeSection = s },
@@ -250,6 +258,8 @@ export default {
   beforeUnmount () {
     clearInterval(this.temporizadorDenuncias)
     clearInterval(this.temporizadorDisputas)
+    window.removeEventListener(EVENTO_REEMBOLSO, this.aoReembolso)
+    window.removeEventListener(EVENTO_RELIGADO, this.aoReembolso)
   },
 
   methods: {

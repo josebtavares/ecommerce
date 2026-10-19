@@ -161,6 +161,7 @@
 
 <script>
 import api, { urlWebSocket } from '@/services/api'
+import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
@@ -322,6 +323,9 @@ export default {
       this.ws = ws
 
       ws.onopen = () => {
+        // voltou depois de cair: pode ter perdido avisos — as páginas de reembolso abertas recarregam
+        if (this.wsJaLigou) window.dispatchEvent(new CustomEvent(EVENTO_RELIGADO))
+        this.wsJaLigou = true
         this.wsTentativas = 0
         clearInterval(this.pollTimer); this.pollTimer = null   // tempo real activo → sem polling
       }
@@ -336,6 +340,8 @@ export default {
             }
           }
           if (msg.type === 'contador') this.naoLidas = msg.nao_lidas
+          // pedido de reembolso mudou (só ids) — quem o está a ver vai buscá-lo (useTempoRealReembolsos)
+          if (msg.type === 'reembolso') window.dispatchEvent(new CustomEvent(EVENTO_REEMBOLSO, { detail: msg.reembolso }))
         } catch (err) { /* silencioso */ }
       }
 

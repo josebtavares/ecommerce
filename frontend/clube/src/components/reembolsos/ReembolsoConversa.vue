@@ -5,8 +5,15 @@
       Mensagens
     </p>
 
-    <div class="px-4 pb-3 space-y-3">
-      <div v-for="m in reembolso.mensagens" :key="m.id"
+    <!-- paginadas como o chat: aparecem as últimas; ao subir até ao topo vêm as anteriores -->
+    <div ref="caixa" class="px-4 pb-3 space-y-3 max-h-[28rem] overflow-y-auto" @scroll="aoRolar">
+      <div v-if="maisAntigas" class="text-center">
+        <button type="button" @click="carregarAntigas" :disabled="aCarregar" class="text-xs underline"
+                :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
+          {{ aCarregar ? 'A carregar…' : 'Ver mensagens anteriores' }}
+        </button>
+      </div>
+      <div v-for="m in lista" :key="m.id"
            :class="['flex', m.papel === 'sistema' ? 'justify-center' : (m.papel === meuPapel ? 'justify-end' : 'justify-start')]">
         <p v-if="m.papel === 'sistema'" class="text-[11px] text-center max-w-[90%] px-3 py-1.5 rounded-full"
            :class="isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-gray-100 text-zinc-500'">
@@ -69,7 +76,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { dataHora } from '@/utils/reembolsos'
@@ -85,12 +92,60 @@ const props = defineProps({
 const emit = defineEmits(['atualizado'])
 
 const texto    = ref('')
+const caixa    = ref(null)
+const lista    = ref([...(props.reembolso.mensagens || [])])   // mensagens carregadas (as mais recentes no fim)
+const maisAntigas = ref(!!props.reembolso.mensagens_mais_antigas)
+const aCarregar = ref(false)
+
+function pertoDoFim () {
+  const el = caixa.value
+  return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 120
+}
+function irParaOFim () {
+  nextTick(() => { if (caixa.value) caixa.value.scrollTop = caixa.value.scrollHeight })
+}
+onMounted(irParaOFim)
+
+// o pedido foi recarregado (acção, mensagem enviada ou aviso em tempo real): junta as mensagens novas
+watch(() => props.reembolso, (novo, antigo) => {
+  if (!antigo || novo.id !== antigo.id) {
+    lista.value = [...(novo.mensagens || [])]
+    maisAntigas.value = !!novo.mensagens_mais_antigas
+    irParaOFim()
+    return
+  }
+  const ultima = lista.value.length ? lista.value[lista.value.length - 1].id : 0
+  const novas = (novo.mensagens || []).filter(m => m.id > ultima)
+  if (!novas.length) return
+  const descer = pertoDoFim()
+  lista.value = [...lista.value, ...novas]
+  if (descer) irParaOFim()
+})
+
+function aoRolar () {
+  if (caixa.value && caixa.value.scrollTop < 40 && maisAntigas.value && !aCarregar.value) carregarAntigas()
+}
+
+async function carregarAntigas () {
+  if (!lista.value.length) return
+  aCarregar.value = true
+  const el = caixa.value
+  const alturaAntes = el ? el.scrollHeight : 0
+  try {
+    const { data } = await api.get(`/app/reembolsos/${props.reembolso.id}/mensagens/`, { params: { antes: lista.value[0].id } })
+    lista.value = [...data.results, ...lista.value]
+    maisAntigas.value = data.mais_antigas
+    nextTick(() => { if (el) el.scrollTop = el.scrollHeight - alturaAntes })   // não salta
+  } catch (e) {
+    toast.error('Não foi possível carregar as mensagens anteriores.')
+  } finally { aCarregar.value = false }
+}
 const fotos    = ref([])      // [{ ficheiro, url }]
 const aEnviar  = ref(false)
 const lightbox = ref(null)
 
 function totalFotos () {
-  return props.reembolso.mensagens.reduce((n, m) => n + m.fotos.length, 0) + (props.reembolso.fotos?.length || 0)
+  return props.reembolso.total_fotos ?? 0
 }
 
 function juntarFotos (ev) {
@@ -124,6 +179,7 @@ async function enviar () {
     fotos.value.forEach(f => URL.revokeObjectURL(f.url))
     fotos.value = []
     emit('atualizado', data)
+    irParaOFim()
   } catch (e) {
     toast.error(e.response?.data?.detail || 'Não foi possível enviar a mensagem.')
   } finally { aEnviar.value = false }

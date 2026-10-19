@@ -55,6 +55,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import BackofficeReembolso from './BackofficeReembolso.vue'
+import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const GRUPOS = [
   { key: 'novos',      label: 'Por responder',        ajuda: 'Pedidos à espera da tua resposta. Sem resposta em 48 horas, a equipa da Bendi decide.' },
@@ -115,6 +116,9 @@ function tempoRestante (iso) {
   return h >= 1 ? `Responde em ${h} h` : `Responde em ${Math.max(1, Math.floor(ms / 60000))} min`
 }
 const urgente = r => new Date(r.prazo_resposta).getTime() - agora.value < 12 * 3600000
+
+// tempo real: a lista e os contadores acompanham os pedidos desta loja
+useTempoRealReembolsos(() => carregar(), d => String(d.loja_id) === String(props.lojaId))
 
 let relogio = null
 onMounted(() => {

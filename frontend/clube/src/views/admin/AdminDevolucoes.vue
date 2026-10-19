@@ -115,6 +115,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import AdminReembolso from './AdminReembolso.vue'
+import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const GRUPOS = [
   { key: 'disputa',    label: 'Para decidir', ajuda: 'A loja não respondeu em 48 horas, recusou ou o cliente rejeitou a proposta. A decisão da Bendi é final.' },
@@ -196,5 +197,6 @@ function fechar () {
 }
 
 onMounted(() => carregar())
+useTempoRealReembolsos(() => carregar())
 watch(() => route.query.reembolso, id => { if (id) aberto.value = Number(id) })
 </script>

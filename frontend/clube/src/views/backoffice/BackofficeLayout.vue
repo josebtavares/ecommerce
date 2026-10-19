@@ -191,6 +191,7 @@ import BackofficeSubscricao     from './BackofficeSubscricao.vue'
 import BackofficeDevolucoes     from './BackofficeDevolucoes.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
+import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 
 const PERMISSOES = {
   dono: [
@@ -304,6 +305,18 @@ export default {
 
   async created () {
     await this.fetchLoja()
+  },
+
+  mounted () {
+    // contador "Devoluções" no menu em tempo real (avisos do sino — composables/useTempoRealReembolsos)
+    this.aoReembolso = (e) => { if (!e.detail || String(e.detail.loja_id) === String(this.lojaId)) this.fetchDevolucoes() }
+    window.addEventListener(EVENTO_REEMBOLSO, this.aoReembolso)
+    window.addEventListener(EVENTO_RELIGADO, this.aoReembolso)
+  },
+
+  beforeUnmount () {
+    window.removeEventListener(EVENTO_REEMBOLSO, this.aoReembolso)
+    window.removeEventListener(EVENTO_RELIGADO, this.aoReembolso)
   },
 
   watch: {

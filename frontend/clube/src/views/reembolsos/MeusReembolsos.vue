@@ -8,6 +8,7 @@
         <font-awesome-icon :icon="['fas', 'arrow-left']" />
       </button>
       <h1 class="font-bold">Reembolsos</h1>
+      <NotificacaoSino class="ml-auto" :isDark="isDark" />
     </header>
 
     <main class="max-w-2xl mx-auto px-4 py-5 space-y-2">
@@ -50,6 +51,8 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
+import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
+import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const isDark        = ref(localStorage.getItem('theme_preference') !== 'light')
 const lista         = ref([])
@@ -68,4 +71,5 @@ async function carregar (mais = false) {
 }
 
 onMounted(() => carregar())
+useTempoRealReembolsos(() => carregar())
 </script>

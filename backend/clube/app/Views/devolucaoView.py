@@ -85,15 +85,37 @@ def _resumo(r):
     }
 
 
+MENSAGENS_POR_PAGINA = 30
+
+
+def _foto(request, f, u):
+    return {'id': f.id, 'url': request.build_absolute_uri(f'/app/reembolsos/fotos/{f.id}/?t={dev.assinar_foto(f.id, u.id)}')}
+
+
+def _mensagens(request, r, antes=None, depois=None, limit=MENSAGENS_POR_PAGINA):
+    """→ (mensagens em ordem cronológica, há mais antigas?) — cursor por id, como o chat."""
+    u = request.user.utilizador
+    qs = r.mensagens.all()
+    if depois:
+        pagina, mais = list(qs.filter(id__gt=depois).order_by('id')[:limit]), False
+    else:
+        if antes:
+            qs = qs.filter(id__lt=antes)
+        pagina = list(qs.order_by('-id')[:limit + 1])
+        mais = len(pagina) > limit
+        pagina = list(reversed(pagina[:limit]))
+    fotos = {}
+    for f in r.fotos.filter(mensagem__in=pagina).order_by('id'):
+        fotos.setdefault(f.mensagem_id, []).append(_foto(request, f, u))
+    nomes = {'cliente': r.comprador.nome, 'loja': r.loja.nome, 'admin': 'Bendi', 'sistema': 'Bendi'}
+    return [{'id': m.id, 'papel': m.papel, 'autor': nomes.get(m.papel, ''), 'texto': m.texto,
+             'criada_em': _data(m.criada_em), 'fotos': fotos.get(m.id, [])} for m in pagina], mais
+
+
 def _detalhe(request, r, papel):
     u = request.user.utilizador
-    fotos_por_msg = {}
-    fotos_soltas = []
-    for f in r.fotos.all().order_by('id'):
-        d = {'id': f.id, 'url': request.build_absolute_uri(
-            f'/app/reembolsos/fotos/{f.id}/?t={dev.assinar_foto(f.id, u.id)}')}
-        (fotos_por_msg.setdefault(f.mensagem_id, []) if f.mensagem_id else fotos_soltas).append(d)
-    nomes = {'cliente': r.comprador.nome, 'loja': r.loja.nome, 'admin': 'Bendi', 'sistema': 'Bendi'}
+    mensagens, mais_antigas = _mensagens(request, r)
+    fotos_soltas = [_foto(request, f, u) for f in r.fotos.filter(mensagem__isnull=True).order_by('id')]
     return {
         **_resumo(r),
         'papel': papel,
@@ -131,10 +153,9 @@ def _detalhe(request, r, papel):
                    'atributos': i.item.atributos, 'quantidade': i.quantidade, 'valor': str(i.valor)}
                   for i in r.itens.select_related('item__produto')],
         'fotos': fotos_soltas,
-        'mensagens': [{'id': m.id, 'papel': m.papel, 'autor': nomes.get(m.papel, ''),
-                       'texto': m.texto, 'criada_em': _data(m.criada_em),
-                       'fotos': fotos_por_msg.get(m.id, [])}
-                      for m in r.mensagens.all()],
+        'total_fotos': r.fotos.count(),
+        'mensagens': mensagens,                     # as últimas MENSAGENS_POR_PAGINA
+        'mensagens_mais_antigas': mais_antigas,     # GET …/mensagens/?antes=<id> para as anteriores
     }
 
 
@@ -277,9 +298,25 @@ def detalhe(request, id):
     return Response(_detalhe(request, r, papel))
 
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def nova_mensagem(request, id):
+    """
+    GET  /app/reembolsos/<id>/mensagens/?antes=<id>|depois=<id>&limit=   (paginadas, como o chat)
+    POST /app/reembolsos/<id>/mensagens/  { texto } (+ fotos)
+    """
+    if request.method == 'GET':
+        r = get_object_or_404(Reembolso.objects.select_related('loja', 'comprador__user'), id=id)
+        if not dev.papel(request.user.utilizador, r):
+            return Response({'detail': 'Pedido não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            antes = int(request.query_params.get('antes') or 0)
+            depois = int(request.query_params.get('depois') or 0)
+            limit = min(max(int(request.query_params.get('limit') or MENSAGENS_POR_PAGINA), 1), 100)
+        except ValueError:
+            return Response({'detail': 'Parâmetros inválidos.'}, status=status.HTTP_400_BAD_REQUEST)
+        msgs, mais = _mensagens(request, r, antes=antes, depois=depois, limit=limit)
+        return Response({'results': msgs, 'mais_antigas': mais})
     if _limitado(request, 'mensagem', '60/h'):
         return Response({'detail': 'Demasiadas mensagens. Tenta mais tarde.'}, status=429)
     u = request.user.utilizador
