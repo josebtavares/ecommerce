@@ -328,7 +328,8 @@ export default {
       if (!this.dados) return []
       const d = this.dados
       return [
-        { label: 'GMV',              valor: this.fmt(d.gmv),          color: 'text-red-400',   sub: 'vendas concluídas' },
+        { label: 'GMV',              valor: this.fmt(d.gmv),          color: 'text-red-400',
+          sub: d.reembolsos ? `líquido · ${this.fmt(d.reembolsos)} reembolsados (${d.reembolsos_count})` : 'vendas concluídas' },
         { label: 'Encomendas',       valor: d.total_encomendas,       color: 'text-blue-400',  sub: `${d.enc_concluidas} concluídas · ${d.enc_canceladas} canceladas` },
         { label: 'Taxa conclusão',   valor: `${d.taxa_conclusao}%`,   color: 'text-green-400', sub: 'encomendas concluídas' },
         { label: 'Comissões',        valor: this.fmt(d.comissoes_geradas), color: 'text-orange-400', sub: 'geradas no período' },
@@ -472,7 +473,10 @@ export default {
         ['Relatório', `${this.dataInicio} a ${this.dataFim}`],
         [],
         ['KPI', 'Valor'],
-        ['GMV', this.dados.gmv],
+        ['GMV (líquido de reembolsos)', this.dados.gmv],
+        ['GMV bruto', this.dados.gmv_bruto],
+        ['Reembolsos', this.dados.reembolsos],
+        ['Nº reembolsos', this.dados.reembolsos_count],
         ['Total encomendas', this.dados.total_encomendas],
         ['Concluídas', this.dados.enc_concluidas],
         ['Canceladas', this.dados.enc_canceladas],

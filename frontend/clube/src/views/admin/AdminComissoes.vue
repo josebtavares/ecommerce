@@ -15,10 +15,27 @@
         <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total comissões</p>
         <p class="text-xl font-extrabold text-zinc-100">{{ totalCount }}</p>
       </div>
-      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-        <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Nesta página</p>
-        <p class="text-xl font-extrabold text-zinc-400">{{ comissoes.length }}</p>
+      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4"
+           title="Comissão a devolver às lojas: reembolsos de encomendas cuja comissão já estava liquidada">
+        <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Créditos às lojas</p>
+        <p class="text-xl font-extrabold text-sky-400">{{ $dinheiro(totalCreditos) }}</p>
       </div>
+    </div>
+
+    <!-- ══ CRÉDITOS DA LOJA (reembolsos depois de liquidar) ══ -->
+    <div v-if="lojaSelecionada && Number(lojaSelecionada.credito) > 0"
+         class="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex-1 text-sm text-sky-100">
+        <p class="font-semibold">{{ lojaSelecionada.nome }} tem {{ $dinheiro(lojaSelecionada.credito) }} de créditos por descontar.</p>
+        <p class="text-xs text-sky-200/70 mt-0.5">
+          São comissões de encomendas reembolsadas depois de a comissão já estar liquidada.
+          Na próxima liquidação, a loja paga {{ $dinheiro(liquidoLoja) }} ({{ $dinheiro(lojaSelecionada.pendente) }} pendentes − créditos).
+        </p>
+      </div>
+      <button type="button" @click="descontarCreditos" :disabled="aDescontar"
+        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 disabled:opacity-50 flex-shrink-0">
+        Marcar créditos como descontados
+      </button>
     </div>
 
     <!-- ══ ABAS DE LOJAS ══ -->
@@ -40,6 +57,9 @@
         {{ loja.nome }}
         <span v-if="loja.pendente" class="ml-1.5 px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-[9px] font-bold">
           {{ $dinheiro(loja.pendente) }}
+        </span>
+        <span v-if="Number(loja.credito) > 0" title="Créditos por descontar" class="ml-1 px-1.5 py-0.5 bg-sky-500/20 text-sky-400 rounded text-[9px] font-bold">
+          −{{ $dinheiro(loja.credito) }}
         </span>
       </button>
     </div>
@@ -286,6 +306,8 @@ export default {
       // totais
       totalPendente:  '0.00',
       totalLiquidado: '0.00',
+      totalCreditos:  '0.00',
+      aDescontar:     false,
 
       // lojas para as abas
       lojas: [],
@@ -312,6 +334,12 @@ export default {
 
   computed: {
     totalPages () { return Math.ceil(this.totalCount / this.limit) },
+
+    lojaSelecionada () { return this.lojas.find(l => l.id === this.filtroLoja) || null },
+    liquidoLoja () {
+      const l = this.lojaSelecionada
+      return l ? Number(l.pendente) - Number(l.credito) : 0
+    },
 
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)
@@ -350,6 +378,7 @@ export default {
         this.totalCount     = data.count           ?? this.comissoes.length
         this.totalPendente  = data.total_pendente  || '0.00'
         this.totalLiquidado = data.total_liquidado || '0.00'
+        this.totalCreditos  = data.total_creditos  || '0.00'
       } catch (e) { console.error(e) }
       finally { this.loading = false }
     },
@@ -420,6 +449,18 @@ export default {
       this.filtroOrdem      = '-data_criacao'
       this.atalhoActivo     = null
       this.fetchComissoes(1)
+    },
+
+    async descontarCreditos () {
+      const l = this.lojaSelecionada
+      if (!l || !confirm(`Marcar os créditos de ${l.nome} (${this.$dinheiro(l.credito)}) como descontados nesta liquidação?`)) return
+      this.aDescontar = true
+      try {
+        await api.post('/app/admin/comissoes/creditos/descontar/', { loja_id: l.id })
+        await Promise.all([this.fetchLojas(), this.fetchComissoes(this.page)])
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível descontar os créditos.')
+      } finally { this.aDescontar = false }
     },
 
     async liquidar (c) {

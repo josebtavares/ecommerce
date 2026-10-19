@@ -100,7 +100,7 @@ export default {
         { icon: 'users',        cor: 'bg-blue-500/10 text-blue-400',   valor: this.stats.utilizadores.total,       label: 'Utilizadores',      sub: `${this.stats.utilizadores.verificados} verificados`, subColor: 'text-blue-400' },
         { icon: 'box',          cor: 'bg-amber-500/10 text-amber-400', valor: this.stats.produtos,                 label: 'Produtos activos'   },
         { icon: 'bag-shopping', cor: 'bg-violet-500/10 text-violet-400', valor: this.stats.encomendas.total,       label: 'Encomendas totais'  },
-        { icon: 'money-bill-wave',    cor: 'bg-green-500/10 text-green-400', valor: this.$dinheiro(this.stats.vendas_total), label: 'Volume de vendas', subColor: 'text-green-400' },
+        { icon: 'money-bill-wave',    cor: 'bg-green-500/10 text-green-400', valor: this.$dinheiro(this.stats.vendas_total), label: 'Volume de vendas', sub: 'pago, menos reembolsos', subColor: 'text-green-400' },
         { icon: 'hourglass-half', cor: 'bg-yellow-500/10 text-yellow-400', valor: this.stats.lojas.pendentes,      label: 'Lojas pendentes',   sub: 'a aguardar activacao', subColor: 'text-yellow-400' },
       ]
     },

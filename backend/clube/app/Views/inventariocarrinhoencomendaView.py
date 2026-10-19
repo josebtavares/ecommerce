@@ -31,6 +31,7 @@ from ..utils.variantes import resolver_variante, atualizar_total_inventario
 from ..utils.encomendas import repor_stock, cancelar_anteriores_por_pagar
 from ..utils import conjuntos as conj
 from ..utils import horarios
+from ..utils import devolucoes
 from ..utils.dinheiro import formatar as dinheiro
 
 
@@ -654,7 +655,7 @@ def encomenda_atualizar_status(request, loja_id, id):
     if erro:
         return erro
  
-    encomenda  = get_object_or_404(Encomenda, id=id, loja=loja)
+    encomenda  = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=id, loja=loja)
     serializer = AtualizarStatusEncomendaSerializer(
         encomenda, data=request.data, partial=True
     )
@@ -665,8 +666,15 @@ def encomenda_atualizar_status(request, loja_id, id):
     serializer.save()
  
     # cancelado → repõe stock de todos os itens (na variante, se a compra foi de uma)
+    # e, se já estava paga, o cliente é reembolsado na hora (utils/devolucoes.py)
     if novo_status == 'cancelado':
         repor_stock(encomenda)
+        devolucoes.ao_cancelar_pela_loja(encomenda, request.user.utilizador)
+    elif novo_status in ('enviado', 'concluido'):
+        if novo_status == 'concluido':
+            encomenda.data_conclusao = timezone.now()
+            encomenda.save(update_fields=['data_conclusao'])
+        devolucoes.ao_avancar_encomenda(encomenda, request.user.utilizador)
  
     # concluido + dinheiro → aprova pagamento e regista comissao
     if novo_status == 'concluido':
@@ -701,8 +709,8 @@ def encomenda_atualizar_status(request, loja_id, id):
     # ── Notifica dono/gestor quando concluído ─────────────────
     if novo_status == 'concluido':
         _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
-        _com  = (encomenda.valor_total * _perc / 100).quantize(Decimal('0.01'))
-        _liq  = encomenda.valor_total - _com
+        _com  = (encomenda.valor_devido * _perc / 100).quantize(Decimal('0.01'))
+        _liq  = encomenda.valor_devido - _com
  
         notificar_staff(
             loja=encomenda.loja,

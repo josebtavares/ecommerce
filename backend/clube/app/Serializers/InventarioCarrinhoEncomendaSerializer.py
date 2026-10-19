@@ -151,13 +151,55 @@ class CarrinhoSerializer(serializers.ModelSerializer):
 class ItemEncomendaSerializer(serializers.ModelSerializer):
     produto = ProdutoMiniSerializer(read_only=True)
     subtotal = serializers.SerializerMethodField()
+    qtd_reembolsada = serializers.SerializerMethodField()   # unidades já reembolsadas (p.ex. esgotadas)
 
     class Meta:
         model  = ItemEncomenda
-        fields = ['id', 'produto', 'quantidade', 'preco', 'atributos', 'variante', 'componentes', 'subtotal']
+        fields = ['id', 'produto', 'quantidade', 'preco', 'atributos', 'variante', 'componentes', 'subtotal',
+                  'qtd_reembolsada']
+
+    def get_qtd_reembolsada(self, obj):
+        from django.db.models import Sum
+        return obj.reembolsos.filter(reembolso__data_reembolso__isnull=False).aggregate(q=Sum('quantidade'))['q'] or 0
 
     def get_subtotal(self, obj):
         return round(float(obj.preco) * obj.quantidade, 2)
+
+
+def _reembolso_resumo(obj):
+    """O pedido de reembolso mais recente da encomenda (ou None) — para o selo na lista e no detalhe."""
+    r = obj.reembolsos.order_by('-id').first()
+    if not r:
+        return None
+    return {'id': r.id, 'estado': r.estado, 'estado_label': r.get_estado_display(), 'tipo': r.tipo, 'motivo': r.motivo,
+            'metodo': r.metodo,
+            'valor': str(r.valor_aprovado if r.valor_aprovado is not None else r.valor_pedido)}
+
+
+def _receita_liquida(obj):
+    """O que a loja fica: total − reembolsado (incl. esgotados descontados) − comissão (já recalculada)."""
+    from django.db.models import Sum
+    reemb = obj.reembolsos.filter(data_reembolso__isnull=False).aggregate(t=Sum('valor_aprovado'))['t'] or 0
+    try:
+        com = obj.comissao.valor_comissao
+    except Exception:
+        com = 0
+    return str(obj.valor_total - reemb - com)
+
+
+def _valor_a_pagar(obj):
+    try:
+        p = obj.pagamento
+    except Exception:
+        return None
+    return str(p.valor) if p.status == 'pendente' else None
+
+
+def _valor_reembolsado(obj):
+    from django.db.models import Sum
+    # dinheiro devolvido (os esgotados descontados antes de pagar não contam — vêem-se em valor_a_pagar)
+    return str(obj.reembolsos.filter(data_reembolso__isnull=False).exclude(metodo='abatido')
+               .aggregate(t=Sum('valor_aprovado'))['t'] or '0.00')
 
 
 class EncomendaSerializer(serializers.ModelSerializer):
@@ -176,6 +218,9 @@ class EncomendaSerializer(serializers.ModelSerializer):
     comprador_email    = serializers.CharField(source='comprador.user.email', read_only=True)
     comprador_telefone = serializers.CharField(source='comprador.telefone', read_only=True)
     agendada_texto     = serializers.SerializerMethodField()
+    reembolso          = serializers.SerializerMethodField()
+    valor_reembolsado  = serializers.SerializerMethodField()
+    valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
  
     class Meta:
         model  = Encomenda
@@ -200,12 +245,22 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'entrega_status',
             'agendada_para', 'agendada_texto', 'agendamento_origem',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
+            'reembolso', 'valor_reembolsado', 'valor_a_pagar',
         ]
         read_only_fields = [
             'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem',
             'data_criacao', 'data_atualizacao',
         ]
  
+    def get_reembolso(self, obj):
+        return _reembolso_resumo(obj)
+
+    def get_valor_reembolsado(self, obj):
+        return _valor_reembolsado(obj)
+
+    def get_valor_a_pagar(self, obj):
+        return _valor_a_pagar(obj)
+
     def get_agendada_texto(self, obj):
         if not obj.agendada_para:
             return ""
@@ -238,10 +293,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
             return None
  
     def get_receita_liquida(self, obj):
-        try:
-            return str(obj.valor_total - obj.comissao.valor_comissao)
-        except Exception:
-            return str(obj.valor_total)
+        return _receita_liquida(obj)
  
     def validate_tipo_entrega(self, value):
         loja = self.context.get('loja')
@@ -285,6 +337,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
 
 class EncomendaMiniSerializer(serializers.ModelSerializer):
     """Usado em listagens — sem itens detalhados."""
+    pagamento_status   = serializers.SerializerMethodField()   # o backoffice avisa se cancelar reembolsa
     loja_nome          = serializers.CharField(source='loja.nome', read_only=True)
     comprador_username = serializers.CharField(source='comprador.user.username', read_only=True)
     metodo_pagamento   = serializers.SerializerMethodField()
@@ -295,6 +348,9 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
     comprador_email    = serializers.CharField(source='comprador.user.email', read_only=True)
     comprador_telefone = serializers.CharField(source='comprador.telefone', read_only=True)
     agendada_texto     = serializers.SerializerMethodField()
+    reembolso          = serializers.SerializerMethodField()
+    valor_reembolsado  = serializers.SerializerMethodField()
+    valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
  
     class Meta:
         model  = Encomenda
@@ -311,8 +367,24 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             'data_criacao',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'agendada_para', 'agendada_texto', 'agendamento_origem',
+            'reembolso', 'valor_reembolsado', 'pagamento_status', 'valor_a_pagar',
         ]
  
+    def get_pagamento_status(self, obj):
+        try:
+            return obj.pagamento.status
+        except Exception:
+            return None
+
+    def get_reembolso(self, obj):
+        return _reembolso_resumo(obj)
+
+    def get_valor_reembolsado(self, obj):
+        return _valor_reembolsado(obj)
+
+    def get_valor_a_pagar(self, obj):
+        return _valor_a_pagar(obj)
+
     def get_agendada_texto(self, obj):
         if not obj.agendada_para:
             return ""
@@ -339,10 +411,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             return None
  
     def get_receita_liquida(self, obj):
-        try:
-            return str(obj.valor_total - obj.comissao.valor_comissao)
-        except Exception:
-            return str(obj.valor_total)
+        return _receita_liquida(obj)
         
     def get_comprador_nome(self, obj):
         try:

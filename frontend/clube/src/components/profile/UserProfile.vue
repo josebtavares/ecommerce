@@ -162,8 +162,14 @@
 
           <!-- ═══ TAB: ENCOMENDAS ═══ -->
           <div v-if="activeTab === 'encomendas'">
-            <h3 class="text-sm font-bold uppercase tracking-wider mb-4"
-                :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Histórico de encomendas</h3>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold uppercase tracking-wider"
+                  :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Histórico de encomendas</h3>
+              <button type="button" @click="isOpen = false; $router.push('/perfil/reembolsos')"
+                class="text-xs font-semibold text-red-500 hover:text-red-400 flex items-center gap-1">
+                <font-awesome-icon :icon="['fas', 'rotate-left']" /> Reembolsos
+              </button>
+            </div>
 
             <div v-if="loadingEncomendas" class="flex justify-center py-8">
               <svg class="animate-spin h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24">
@@ -190,11 +196,12 @@
                       <span class="text-xs font-bold" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">#{{ enc.id }}</span>
                       <span class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">· {{ enc.loja_nome }}</span>
                     </div>
-                    <div class="flex items-center gap-3">
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ formatDate(enc.data_criacao) }}</span>
                       <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColor(enc.status)]">
                         {{ enc.status }}
                       </span>
+                      <EstadoReembolso v-if="enc.reembolso" :estado="enc.reembolso.estado" :valor="enc.reembolso.valor" :metodo="enc.reembolso.metodo" />
                     </div>
                     <p v-if="enc.agendada_texto && !['concluido', 'cancelado'].includes(enc.status)"
                        class="text-[11px] font-semibold mt-1" :class="isDark ? 'text-amber-300' : 'text-amber-700'">
@@ -235,7 +242,9 @@
                             <p v-if="item.componentes?.length" class="text-[11px] leading-snug" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
                               Inclui: {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade + '× ' + c.nome).join(', ') }}
                             </p>
-                            <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.</p>
+                            <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.
+                              <span v-if="item.qtd_reembolsada" class="text-sky-500 font-semibold">· {{ item.qtd_reembolsada }} reembolsada{{ item.qtd_reembolsada > 1 ? 's' : '' }}</span>
+                            </p>
                             <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1">
                               <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
                                     class="px-1.5 py-0.5 text-[10px] rounded capitalize"
@@ -272,12 +281,20 @@
                       <span class="text-sm font-bold" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Total</span>
                       <span class="text-base font-bold text-red-500">{{ formatPrice(detalhesEncomenda[enc.id].valor_total) }}</span>
                     </div>
+                    <div v-if="detalhesEncomenda[enc.id].valor_a_pagar && Number(detalhesEncomenda[enc.id].valor_a_pagar) !== Number(detalhesEncomenda[enc.id].valor_total)"
+                         class="flex items-center justify-between text-xs">
+                      <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">A pagar na entrega (sem os artigos esgotados)</span>
+                      <span class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ formatPrice(detalhesEncomenda[enc.id].valor_a_pagar) }}</span>
+                    </div>
                     <!-- chat: conversa própria desta encomenda (o condutor da entrega também a vê) -->
                     <button type="button" @click="falarSobreEncomenda(enc)"
                       class="w-full py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-2"
                       :class="isDark ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'border-gray-300 text-zinc-600 hover:border-gray-400'">
                       <font-awesome-icon :icon="['fas', 'comment-dots']" /> Falar com a loja sobre esta encomenda
                     </button>
+                    <!-- cancelar / pedir reembolso / acompanhar o pedido -->
+                    <AcoesEncomenda :encomenda="detalhesEncomenda[enc.id]" :isDark="isDark"
+                      @atualizada="recarregarEncomenda(enc)" @navegar="isOpen = false" />
                   </template>
                 </div>
               </div>
@@ -397,7 +414,7 @@
 <script setup>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { ref, watch, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import api from '@/services/api'
 import { DEFAULT_UTILIZADOR } from '@/services/media'
 import { useAsyncAction } from '@/composables/useAsyncAction'
@@ -407,6 +424,8 @@ import FavoritosPerfil from '@/components/favoritos/FavoritosPerfil.vue'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
+import AcoesEncomenda from '@/components/reembolsos/AcoesEncomenda.vue'
+import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { contactarLoja, contactarSuporte } from '@/services/chat'
@@ -420,6 +439,7 @@ const props = defineProps({
 defineEmits(['log_out'])
 
 const router     = useRouter()
+const route      = useRoute()
 const isOpen     = ref(false)
 const fileInput  = ref(null)
 const previewUrl = ref('')
@@ -493,6 +513,15 @@ async function toggleEncomenda(id) {
   finally { loadingDetalhe.value = null }
 }
 
+// depois de cancelar: o detalhe e a linha da lista mostram o novo estado
+async function recarregarEncomenda(enc) {
+  try {
+    const { data } = await api.get(`/app/encomenda/${enc.id}/`)
+    detalhesEncomenda.value = { ...detalhesEncomenda.value, [enc.id]: data }
+    Object.assign(enc, { status: data.status, reembolso: data.reembolso, valor_reembolsado: data.valor_reembolsado })
+  } catch (e) { console.error(e) }
+}
+
 // visitante sem conta: o botão do perfil convida a entrar (o perfil e as encomendas pedem conta)
 const autenticado = ref(estaAutenticado())
 
@@ -536,6 +565,17 @@ function initForm() {
   }
   valoresAtuais.value = { username: form.value.username, email: form.value.email }
 }
+
+// ?perfil=encomendas (links das notificações, /perfil) → abre a gaveta nesse separador
+watch(() => route.query.perfil, (tab) => {
+  if (!tab || !autenticado.value) return
+  if (tabs.some(t => t.key === tab)) activeTab.value = tab
+  isOpen.value = true
+  if (activeTab.value === 'encomendas') fetchEncomendas()
+  const resto = { ...route.query }
+  delete resto.perfil
+  router.replace({ query: resto })
+}, { immediate: true })
 
 onMounted(() => {
   // o carrinho encosta-se ao grupo do perfil: sem sessão não há sino (ver assets/loja-acoes.css)

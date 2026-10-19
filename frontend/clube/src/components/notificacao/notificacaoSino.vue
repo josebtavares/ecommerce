@@ -161,6 +161,7 @@
 
 <script>
 import api, { urlWebSocket } from '@/services/api'
+import { EVENTO_REEMBOLSO, EVENTO_RELIGADO, marcarLigacao } from '@/composables/useTempoRealReembolsos'
 import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
@@ -322,6 +323,10 @@ export default {
       this.ws = ws
 
       ws.onopen = () => {
+        // voltou depois de cair: pode ter perdido avisos — as páginas de reembolso abertas recarregam
+        marcarLigacao(true)
+        if (this.wsJaLigou) window.dispatchEvent(new CustomEvent(EVENTO_RELIGADO))
+        this.wsJaLigou = true
         this.wsTentativas = 0
         clearInterval(this.pollTimer); this.pollTimer = null   // tempo real activo → sem polling
       }
@@ -336,6 +341,8 @@ export default {
             }
           }
           if (msg.type === 'contador') this.naoLidas = msg.nao_lidas
+          // pedido de reembolso mudou (só ids) — quem o está a ver vai buscá-lo (useTempoRealReembolsos)
+          if (msg.type === 'reembolso') window.dispatchEvent(new CustomEvent(EVENTO_REEMBOLSO, { detail: msg.reembolso }))
         } catch (err) { /* silencioso */ }
       }
 
@@ -343,7 +350,7 @@ export default {
       // Em qualquer queda: actualiza o contador por HTTP (renova o token),
       // garante polling enquanto não houver socket, e tenta religar com backoff.
       ws.onclose = (e) => {
-        if (this.ws === ws) this.ws = null
+        if (this.ws === ws) { this.ws = null; marcarLigacao(false) }
         if (this.destruido || e.code === 1000) return
 
         if (!this.pollTimer) this.pollTimer = setInterval(() => this.fetchContador(), 30000)
@@ -364,7 +371,7 @@ export default {
       clearTimeout(this.wsTimer)
       clearInterval(this.pollTimer)
       this.wsTimer = this.pollTimer = null
-      if (this.ws) { this.ws.onclose = null; this.ws.close(1000); this.ws = null }
+      if (this.ws) { this.ws.onclose = null; this.ws.close(1000); this.ws = null; marcarLigacao(false) }
     },
 
     async fetchContador () {

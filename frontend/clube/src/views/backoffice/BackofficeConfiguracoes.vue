@@ -253,6 +253,18 @@
       <p class="text-xs text-zinc-600 mb-5">Visíveis na página pública da loja.</p>
       <div class="space-y-4">
         <div>
+          <label class="text-xs text-zinc-500 mb-1 block">Devoluções por mudança de ideias</label>
+          <div class="flex items-center gap-2">
+            <input v-model.number="form.prazo_devolucao_dias" type="number" min="0" max="365" step="1"
+              class="w-24 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" />
+            <span class="text-sm text-zinc-400">dias depois de o cliente receber</span>
+          </div>
+          <p class="text-xs text-zinc-600 mt-1">
+            0 = não aceitas devoluções por mudança de ideias (ex.: comida). Produtos com defeito, errados, em falta
+            ou que não chegaram podem sempre ser reclamados nas 48 horas seguintes.
+          </p>
+        </div>
+        <div>
           <label class="text-xs text-zinc-500 mb-1 block">Política de devoluções</label>
           <textarea v-model="form.politica_devolucao" rows="4"
             placeholder="Ex: Aceitamos devoluções até 30 dias após a compra..."
@@ -366,6 +378,7 @@ export default {
         nome: '', descricao: '', categoria: '', localizacao: '',
         entrega_ativa: false, levantamento_ativo: false,
         politica_devolucao: '', termos_servico: '', politica_privacidade: '',
+        prazo_devolucao_dias: 14,
       },
       logoFicheiro:   null,
       bannerFicheiro: null,
@@ -442,6 +455,7 @@ export default {
         politica_devolucao:   l.politica_devolucao  || '',
         termos_servico:       l.termos_servico      || '',
         politica_privacidade: l.politica_privacidade|| '',
+        prazo_devolucao_dias: l.prazo_devolucao_dias ?? 14,
       }
       this.logoPreview   = l.logo_url   || ''
       this.bannerPreview = l.banner_url || ''
@@ -542,6 +556,11 @@ export default {
     // ── Loja ──────────────────────────────────────────────────
 
     async guardarLoja () {
+      const prazo = this.form.prazo_devolucao_dias
+      if (!Number.isInteger(prazo) || prazo < 0 || prazo > 365) {
+        alert('O prazo de devoluções tem de ser um número de dias entre 0 e 365.')
+        return
+      }
       await this.wrap(async () => {
         const fd = new FormData()
         Object.entries(this.form).forEach(([k, v]) => {

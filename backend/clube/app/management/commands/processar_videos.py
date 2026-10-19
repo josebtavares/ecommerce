@@ -117,6 +117,13 @@ class Command(BaseCommand):
                 self.stdout.write(f'  encomendas: {n} por pagar fora do prazo cancelada(s) (stock reposto)')
         except Exception as e:
             self.stderr.write(f'  encomendas: expirar falhou: {e}')
+        try:
+            from app.utils.devolucoes import escalar_sem_resposta
+            n = escalar_sem_resposta()
+            if n:
+                self.stdout.write(f'  devoluções: {n} pedido(s) sem resposta da loja enviado(s) à Bendi')
+        except Exception as e:
+            self.stderr.write(f'  devoluções: escalar falhou: {e}')
 
     def _sinal(self, *_):
         # termina a conversão em curso e sai

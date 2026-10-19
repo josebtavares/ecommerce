@@ -345,10 +345,13 @@ export default {
       if (!this.dados) return []
       const d = this.dados
       return [
-        { label: 'Vendas',         valor: this.fmt(d.total_vendas), color: 'text-red-400',   variacao: d.variacao_vendas },
+        // vendas já sem o que foi reembolsado (backend utils/devolucoes.anotar_liquido)
+        { label: 'Vendas',         valor: this.fmt(d.total_vendas), color: 'text-red-400',   variacao: d.variacao_vendas,
+          sub: d.reembolsos_periodo ? `líquidas · brutas ${this.fmt(d.vendas_brutas)}` : '' },
         { label: 'Encomendas',     valor: d.total_encomendas,       color: 'text-blue-400',  variacao: d.variacao_enc    },
-        { label: 'Taxa conclusão', valor: `${d.taxa_conclusao}%`,   color: 'text-green-400', sub: `${d.enc_concluidas} concluídas` },
-        { label: 'Canceladas',     valor: d.enc_canceladas,         color: 'text-zinc-400',  sub: 'neste período' },
+        { label: 'Taxa conclusão', valor: `${d.taxa_conclusao}%`,   color: 'text-green-400', sub: `${d.enc_concluidas} concluídas · ${d.enc_canceladas} canceladas` },
+        { label: 'Reembolsos',     valor: this.fmt(d.reembolsos_periodo || 0), color: 'text-sky-400',
+          sub: `${d.reembolsos_count || 0} no período` + (d.reembolsos_por_responder ? ` · ${d.reembolsos_por_responder} por responder` : '') },
       ]
     },
 

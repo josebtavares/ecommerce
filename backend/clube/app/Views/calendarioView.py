@@ -42,6 +42,14 @@ def encomendas_visiveis(loja, membro):
     return qs
 
 
+def _a_pagar(e):
+    try:
+        p = e.pagamento
+    except Exception:
+        return None
+    return str(p.valor) if p.status == 'pendente' else None
+
+
 def _item(e, tz):
     quando = (e.agendada_para or e.data_criacao).astimezone(tz)
     try:
@@ -58,6 +66,7 @@ def _item(e, tz):
         'tipo_entrega':   e.tipo_entrega,
         'status':         e.status,
         'valor_total':    str(e.valor_total),
+        'valor_a_pagar':  _a_pagar(e),        # dinheiro na entrega: o que o condutor cobra (sem os esgotados)
         'cliente':        e.comprador.nome or e.comprador.user.username,
         'telefone':       e.comprador.telefone or '',
         'morada':         e.morada_entrega,

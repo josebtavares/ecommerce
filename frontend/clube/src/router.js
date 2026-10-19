@@ -14,6 +14,9 @@ import MensagensPagina from './views/Mensagens.vue';
 import { POS_ACCESS } from './services/api';
 import { estaAutenticado } from './services/sessao';
 import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
+import PedirReembolso from './views/reembolsos/PedirReembolso.vue';
+import ReembolsoDetalhe from './views/reembolsos/ReembolsoDetalhe.vue';
+import MeusReembolsos from './views/reembolsos/MeusReembolsos.vue';
 
 
 
@@ -80,6 +83,29 @@ const routes = [
         path: '/completar-perfil',
         name: 'CompletarPerfil',
         component: CompletarPerfil,
+        meta: { requiresAuth: true }
+    },
+    {
+        // o perfil é uma gaveta da home: as notificações antigas apontam para /perfil
+        path: '/perfil',
+        redirect: { path: '/Home', query: { perfil: 'encomendas' } },
+    },
+    {
+        path: '/perfil/reembolsos',
+        name: 'Reembolsos',
+        component: MeusReembolsos,
+        meta: { requiresAuth: true }
+    },
+    {
+        path: '/perfil/reembolsos/:id',
+        name: 'Reembolso',
+        component: ReembolsoDetalhe,
+        meta: { requiresAuth: true }
+    },
+    {
+        path: '/encomenda/:id/reembolso',
+        name: 'PedirReembolso',
+        component: PedirReembolso,
         meta: { requiresAuth: true }
     },
     {

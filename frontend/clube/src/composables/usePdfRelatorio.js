@@ -212,17 +212,18 @@ export function usePdfRelatorio() {
     // KPIs — linha 1
     y = drawSectionHeader(doc, 'Resumo do período', mg, y, pw)
     const kpiW = (cw - 6) / 4
-    drawKpi(doc, mg,              y, kpiW, 26, 'Vendas',        fmt(dados.total_vendas),    CORES.vermelho)
+    drawKpi(doc, mg,              y, kpiW, 26, 'Vendas líquidas', fmt(dados.total_vendas),  CORES.vermelho)
     drawKpi(doc, mg + kpiW + 2,  y, kpiW, 26, 'Encomendas',    fmtNum(dados.total_encomendas), CORES.azul)
     drawKpi(doc, mg + (kpiW + 2) * 2, y, kpiW, 26, 'Concluídas', fmtNum(dados.enc_concluidas), CORES.verde)
     drawKpi(doc, mg + (kpiW + 2) * 3, y, kpiW, 26, 'Canceladas', fmtNum(dados.enc_canceladas), CORES.textoSub)
     y += 32
 
     // KPIs — linha 2
-    const kpiW2 = (cw - 4) / 3
+    const kpiW2 = (cw - 6) / 4
     drawKpi(doc, mg,              y, kpiW2, 26, 'Taxa conclusão', `${dados.taxa_conclusao}%`, CORES.verde)
-    drawKpi(doc, mg + kpiW2 + 2, y, kpiW2, 26, 'Com. pendentes', fmt(dados.comissao_pendente), CORES.amarelo)
-    drawKpi(doc, mg + (kpiW2 + 2) * 2, y, kpiW2, 26, 'Rating médio',
+    drawKpi(doc, mg + kpiW2 + 2, y, kpiW2, 26, 'Reembolsos', fmt(dados.reembolsos_periodo || 0), CORES.azul)
+    drawKpi(doc, mg + (kpiW2 + 2) * 2, y, kpiW2, 26, 'Com. pendentes', fmt(dados.comissao_pendente), CORES.amarelo)
+    drawKpi(doc, mg + (kpiW2 + 2) * 3, y, kpiW2, 26, 'Rating médio',
       dados.rating_medio ? `${dados.rating_medio.toFixed(1)} ★` : '—', CORES.amarelo)
     y += 34
 
@@ -312,7 +313,7 @@ export function usePdfRelatorio() {
 
     y = drawSectionHeader(doc, 'Métricas financeiras', mg, y, pw)
     const kpiW = (cw - 6) / 4
-    drawKpi(doc, mg,              y, kpiW, 26, 'GMV',               fmt(dados.gmv),                   CORES.vermelho)
+    drawKpi(doc, mg,              y, kpiW, 26, 'GMV líquido',       fmt(dados.gmv),                   CORES.vermelho)
     drawKpi(doc, mg + kpiW + 2,  y, kpiW, 26, 'Comissões geradas',  fmt(dados.comissoes_geradas),      CORES.laranja)
     drawKpi(doc, mg+(kpiW+2)*2,  y, kpiW, 26, 'Com. pendentes',     fmt(dados.comissoes_pendentes),    CORES.amarelo)
     drawKpi(doc, mg+(kpiW+2)*3,  y, kpiW, 26, 'Com. liquidadas',    fmt(dados.comissoes_liquidadas),   CORES.verde)
@@ -321,7 +322,7 @@ export function usePdfRelatorio() {
     y = drawSectionHeader(doc, 'Métricas operacionais', mg, y, pw)
     const kpiW2 = (cw - 6) / 4
     drawKpi(doc, mg,              y, kpiW2, 26, 'Encomendas',      fmtNum(dados.total_encomendas),    CORES.azul)
-    drawKpi(doc, mg+kpiW2+2,     y, kpiW2, 26, 'Concluídas',      fmtNum(dados.enc_concluidas),      CORES.verde)
+    drawKpi(doc, mg+kpiW2+2,     y, kpiW2, 26, 'Reembolsos',      fmt(dados.reembolsos || 0),        CORES.azul)
     drawKpi(doc, mg+(kpiW2+2)*2, y, kpiW2, 26, 'Taxa conclusão',   `${dados.taxa_conclusao}%`,        CORES.verde)
     drawKpi(doc, mg+(kpiW2+2)*3, y, kpiW2, 26, 'Canceladas',      fmtNum(dados.enc_canceladas),      CORES.textoSub)
     y += 34

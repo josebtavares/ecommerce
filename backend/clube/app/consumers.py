@@ -51,6 +51,10 @@ class NotificacaoConsumer(AsyncWebsocketConsumer):
         }))
 
     # backend → browser: só actualiza o badge
+    async def reembolso_atualizado(self, event):
+        # pedido de reembolso mudou (mensagem, estado…): só ids — a página aberta vai buscar o resto
+        await self.send(text_data=json.dumps({'type': 'reembolso', 'reembolso': event['reembolso']}))
+
     async def notificacao_contador(self, event):
         await self.send(text_data=json.dumps({
             "type":      "contador",
