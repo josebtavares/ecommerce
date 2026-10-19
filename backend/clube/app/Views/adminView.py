@@ -70,7 +70,8 @@ def admin_stats(request):
     from ..models import Reembolso
     pago = Pagamento.objects.filter(status__in=['aprovado', 'reembolsado', 'reembolsado_parcial']).aggregate(
                total=Sum('valor'))['total'] or 0
-    reembolsado = Reembolso.objects.filter(estado='reembolsado', encomenda__pagamento__isnull=False).aggregate(
+    reembolsado = Reembolso.objects.filter(estado='reembolsado', encomenda__pagamento__isnull=False).exclude(
+                      metodo='abatido').aggregate(
                       total=Sum('valor_aprovado'))['total'] or 0
     total_vendas = pago - reembolsado
     utilizadores_verificados = Utilizador.objects.filter(verificado=True).count()

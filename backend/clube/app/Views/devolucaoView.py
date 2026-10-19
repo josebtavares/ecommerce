@@ -77,6 +77,7 @@ def _resumo(r):
         'valor_entrega': str(r.valor_entrega),
         'valor_aprovado': str(r.valor_aprovado) if r.valor_aprovado is not None else None,
         'devolver_produto': r.devolver_produto,
+        'metodo': r.metodo,
         'prazo_resposta': _data(r.prazo_resposta) if r.estado == 'pedido' else None,
         'data_criacao': _data(r.data_criacao),
         'data_atualizacao': _data(r.data_atualizacao),
@@ -100,7 +101,7 @@ def _detalhe(request, r, papel):
         'decisao_admin': r.decisao_admin,
         'resposta_loja': r.resposta_loja,
         'data_resposta_loja': _data(r.data_resposta_loja),
-        'metodo': r.metodo, 'metodo_label': r.get_metodo_display() if r.metodo else '',
+        'metodo_label': r.get_metodo_display() if r.metodo else '',
         'produto_recebido_em': _data(r.produto_recebido_em),
         'stock_reposto': r.stock_reposto,
         'data_decisao': _data(r.data_decisao),
@@ -383,6 +384,28 @@ def acao_loja(request, loja_id, id):
         return _erro(e)
     r.refresh_from_db()
     return Response(_detalhe(request, r, 'loja'))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def esgotado_loja(request, loja_id, id):
+    """
+    POST /app/loja/<loja_id>/encomendas/<id>/esgotado/   { itens: [{item_id, quantidade}], nota? }
+    A loja não tem alguns artigos: reembolsa-os (ou desconta-os, se ainda não estava pago) e o resto segue.
+    Quem gere encomendas (também cancela a encomenda toda, com reembolso).
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    membro = UtilizadorLoja.objects.filter(loja=loja, utilizador=request.user.utilizador, ativo=True).first()
+    if not membro or not membro.pode('gerir_encomendas'):
+        return Response({'detail': 'Sem permissão: gerir_encomendas'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        with transaction.atomic():
+            enc = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=id, loja=loja)
+            r = dev.loja_esgotado(enc, request.user.utilizador, _itens_do_pedido(request), request.data.get('nota', ''))
+    except ErroReembolso as e:
+        return _erro(e)
+    r.refresh_from_db()
+    return Response(_detalhe(request, r, 'loja'), status=status.HTTP_201_CREATED)
 
 
 def _sim(v):

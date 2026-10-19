@@ -27,13 +27,13 @@
         class="w-full text-left rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-600 p-4 flex items-center gap-3 transition">
         <div class="flex-1 min-w-0">
           <p class="text-xs text-zinc-500 truncate">#{{ r.encomenda_id }} · {{ r.cliente_nome }} · {{ dataHora(r.data_criacao) }}</p>
-          <p class="text-sm font-semibold text-zinc-100 truncate">{{ r.tipo === 'cancelamento' ? 'Pedido de cancelamento' : r.motivo_label }}</p>
+          <p class="text-sm font-semibold text-zinc-100 truncate">{{ r.tipo === 'cancelamento' && r.motivo === 'cancelado_cliente' ? 'Pedido de cancelamento' : r.motivo_label }}</p>
           <p v-if="r.estado === 'pedido' && r.prazo_resposta" :class="['text-[11px] font-semibold mt-0.5', urgente(r) ? 'text-red-400' : 'text-amber-400']">
             <font-awesome-icon :icon="['fas', 'clock']" class="mr-1" />{{ tempoRestante(r.prazo_resposta) }}
           </p>
         </div>
         <div class="text-right flex-shrink-0 space-y-1">
-          <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" />
+          <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" :metodo="r.metodo" />
           <p class="text-sm font-bold text-zinc-100">{{ formatarDinheiro(r.valor_aprovado ?? r.valor_pedido) }}</p>
         </div>
       </button>

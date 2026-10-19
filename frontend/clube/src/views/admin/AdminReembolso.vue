@@ -10,7 +10,7 @@
           <font-awesome-icon :icon="['fas', 'xmark']" />
         </button>
         <h2 class="font-bold text-zinc-100 truncate">{{ r ? `Pedido #${r.id} · Encomenda #${r.encomenda_id}` : 'Pedido' }}</h2>
-        <EstadoReembolso v-if="r" class="ml-auto" :estado="r.estado" :valor="r.valor_aprovado ?? undefined" />
+        <EstadoReembolso v-if="r" :metodo="r.metodo" class="ml-auto" :estado="r.estado" :valor="r.valor_aprovado ?? undefined" />
       </header>
 
       <div v-if="carregando" class="flex-1 flex items-center justify-center">

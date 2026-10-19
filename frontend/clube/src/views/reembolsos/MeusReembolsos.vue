@@ -26,10 +26,10 @@
           <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">
             Encomenda #{{ r.encomenda_id }} · {{ r.loja_nome }} · {{ dataHora(r.data_criacao) }}
           </p>
-          <p class="text-sm font-semibold truncate">{{ r.tipo === 'cancelamento' ? 'Cancelamento' : r.motivo_label }}</p>
+          <p class="text-sm font-semibold truncate">{{ r.tipo === 'cancelamento' && r.motivo !== 'esgotado' ? 'Cancelamento' : r.motivo_label }}</p>
         </div>
         <div class="text-right flex-shrink-0 space-y-1">
-          <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" />
+          <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" :metodo="r.metodo" />
           <p class="text-sm font-bold">{{ formatarDinheiro(r.valor_aprovado ?? r.valor_pedido) }}</p>
         </div>
       </button>

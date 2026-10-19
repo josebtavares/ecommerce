@@ -7,10 +7,11 @@
       :class="isDark ? 'border-zinc-700 hover:border-zinc-500 text-zinc-300' : 'border-gray-300 hover:border-gray-400 text-zinc-700'">
       <span class="font-semibold flex items-center gap-1.5">
         <font-awesome-icon :icon="['fas', 'rotate-left']" />
-        {{ encomenda.reembolso.tipo === 'cancelamento' ? 'Pedido de cancelamento' : 'Pedido de reembolso' }}
+        {{ encomenda.reembolso.motivo === 'esgotado' ? 'Artigo esgotado'
+           : encomenda.reembolso.tipo === 'cancelamento' ? 'Pedido de cancelamento' : 'Pedido de reembolso' }}
       </span>
       <span class="flex items-center gap-2">
-        <EstadoReembolso :estado="encomenda.reembolso.estado" :valor="encomenda.reembolso.valor" />
+        <EstadoReembolso :estado="encomenda.reembolso.estado" :valor="encomenda.reembolso.valor" :metodo="encomenda.reembolso.metodo" />
         <font-awesome-icon :icon="['fas', 'chevron-right']" class="text-[10px] opacity-60" />
       </span>
     </button>

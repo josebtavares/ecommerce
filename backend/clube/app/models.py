@@ -819,6 +819,14 @@ class Encomenda(models.Model):
         return f'Encomenda #{self.pk} — {self.comprador} @ {self.loja}'
 
     @property
+    def valor_devido(self):
+        """O que o cliente paga: o total menos os artigos esgotados descontados antes de pagar (dinheiro)."""
+        from django.db.models import Sum
+        abatido = (self.reembolsos.filter(estado='reembolsado', metodo='abatido')
+                   .aggregate(t=Sum('valor_aprovado'))['t'] or 0) if self.pk else 0
+        return self.valor_total - abatido
+
+    @property
     def percentagem_comissao_aplicavel(self):
         """% de comissão desta encomenda: 0 se foi feita com a loja em subscrição."""
         if (self.modelo_cobranca or 'comissao') == 'subscricao':
@@ -1132,14 +1140,15 @@ class Comissao(models.Model):
             return None, False          # loja em subscrição quando a encomenda foi feita → sem comissão
         loja = encomenda.loja
         percentagem   = loja.percentagem_comissao
-        valor_comissao = (encomenda.valor_total * percentagem / 100).quantize(
+        valor = encomenda.valor_devido      # sem os artigos esgotados descontados antes de pagar
+        valor_comissao = (valor * percentagem / 100).quantize(
             __import__('decimal').Decimal('0.01')
         )
         comissao, criada = cls.objects.get_or_create(
             encomenda=encomenda,
             defaults={
                 'loja':           loja,
-                'valor_encomenda': encomenda.valor_total,
+                'valor_encomenda': valor,
                 'percentagem':    percentagem,
                 'valor_comissao': valor_comissao,
                 'status':         'pendente',
@@ -1772,6 +1781,7 @@ class Reembolso(models.Model):
         ('em_falta',          'Faltou algo'),
         ('nao_chegou',        'A encomenda não chegou'),
         ('mudei_ideias',      'Mudei de ideias'),
+        ('esgotado',          'Artigo esgotado'),          # a loja não tem o artigo (antes de enviar)
     ]
     ESTADOS = [
         ('pedido',          'A aguardar a loja'),
@@ -1783,7 +1793,8 @@ class Reembolso(models.Model):
         ('cancelado',       'Desistiu'),
     ]
     ORIGENS = [('cliente', 'Cliente'), ('loja', 'Loja'), ('sistema', 'Automático')]
-    METODOS = [('gateway', 'Pelo meio de pagamento'), ('manual', 'Em mão pela loja')]
+    METODOS = [('gateway', 'Pelo meio de pagamento'), ('manual', 'Em mão pela loja'),
+               ('abatido', 'Descontado no valor a pagar')]   # ainda não estava pago (dinheiro na entrega)
 
     encomenda       = models.ForeignKey(Encomenda, on_delete=models.PROTECT, related_name='reembolsos')
     loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='reembolsos')

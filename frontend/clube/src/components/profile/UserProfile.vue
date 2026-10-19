@@ -201,7 +201,7 @@
                       <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColor(enc.status)]">
                         {{ enc.status }}
                       </span>
-                      <EstadoReembolso v-if="enc.reembolso" :estado="enc.reembolso.estado" :valor="enc.reembolso.valor" />
+                      <EstadoReembolso v-if="enc.reembolso" :estado="enc.reembolso.estado" :valor="enc.reembolso.valor" :metodo="enc.reembolso.metodo" />
                     </div>
                     <p v-if="enc.agendada_texto && !['concluido', 'cancelado'].includes(enc.status)"
                        class="text-[11px] font-semibold mt-1" :class="isDark ? 'text-amber-300' : 'text-amber-700'">
@@ -242,7 +242,9 @@
                             <p v-if="item.componentes?.length" class="text-[11px] leading-snug" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
                               Inclui: {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade + '× ' + c.nome).join(', ') }}
                             </p>
-                            <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.</p>
+                            <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.
+                              <span v-if="item.qtd_reembolsada" class="text-sky-500 font-semibold">· {{ item.qtd_reembolsada }} reembolsada{{ item.qtd_reembolsada > 1 ? 's' : '' }}</span>
+                            </p>
                             <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1">
                               <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
                                     class="px-1.5 py-0.5 text-[10px] rounded capitalize"
@@ -278,6 +280,11 @@
                          :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
                       <span class="text-sm font-bold" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Total</span>
                       <span class="text-base font-bold text-red-500">{{ formatPrice(detalhesEncomenda[enc.id].valor_total) }}</span>
+                    </div>
+                    <div v-if="detalhesEncomenda[enc.id].valor_a_pagar && Number(detalhesEncomenda[enc.id].valor_a_pagar) !== Number(detalhesEncomenda[enc.id].valor_total)"
+                         class="flex items-center justify-between text-xs">
+                      <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">A pagar na entrega (sem os artigos esgotados)</span>
+                      <span class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ formatPrice(detalhesEncomenda[enc.id].valor_a_pagar) }}</span>
                     </div>
                     <!-- chat: conversa própria desta encomenda (o condutor da entrega também a vê) -->
                     <button type="button" @click="falarSobreEncomenda(enc)"

@@ -7,7 +7,7 @@
               class="h-9 w-9 rounded-lg flex items-center justify-center" :class="isDark ? 'hover:bg-zinc-800' : 'hover:bg-gray-100'">
         <font-awesome-icon :icon="['fas', 'arrow-left']" />
       </button>
-      <h1 class="font-bold truncate">{{ r ? (r.tipo === 'cancelamento' ? 'Pedido de cancelamento' : 'Pedido de reembolso') : 'Pedido' }}</h1>
+      <h1 class="font-bold truncate">{{ r ? (r.motivo === 'esgotado' ? 'Artigo esgotado' : r.tipo === 'cancelamento' ? 'Pedido de cancelamento' : 'Pedido de reembolso') : 'Pedido' }}</h1>
       <button type="button" class="ml-auto h-9 w-9 rounded-lg flex items-center justify-center"
               :aria-label="isDark ? 'Modo claro' : 'Modo escuro'" @click="alternarTema"
               :class="isDark ? 'hover:bg-zinc-800' : 'hover:bg-gray-100'">
@@ -31,7 +31,7 @@
             <p class="text-xs" :class="suave">Encomenda #{{ r.encomenda_id }} · {{ r.loja_nome }}</p>
             <p class="font-semibold">{{ r.motivo_label }}</p>
           </div>
-          <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" />
+          <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" :metodo="r.metodo" />
         </div>
         <p v-if="r.descricao" class="text-sm whitespace-pre-line" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ r.descricao }}</p>
         <div class="border-t pt-3 space-y-1.5 text-sm" :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
@@ -41,7 +41,9 @@
             <span>Reembolsado</span><span class="text-green-500">{{ dinheiro(r.valor_aprovado) }}</span>
           </div>
           <p v-if="r.estado === 'reembolsado' && Number(r.valor_aprovado) > 0" class="text-xs" :class="suave">
-            {{ r.metodo === 'manual' ? 'Pagaste em dinheiro: a loja devolve-te o valor em mão.' : 'Devolvido para o meio de pagamento que usaste.' }}
+            {{ r.metodo === 'manual' ? 'Pagaste em dinheiro: a loja devolve-te o valor em mão.'
+               : r.metodo === 'abatido' ? 'Ainda não tinhas pago: o valor foi descontado do que pagas na entrega.'
+               : 'Devolvido para o meio de pagamento que usaste.' }}
           </p>
         </div>
       </section>

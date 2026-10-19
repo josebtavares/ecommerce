@@ -181,6 +181,9 @@
           <div class="flex justify-between gap-3"><dt class="text-zinc-500">Itens</dt><dd class="text-zinc-200 text-right">{{ detalhe.itens }}</dd></div>
           <div v-if="detalhe.notas" class="flex justify-between gap-3"><dt class="text-zinc-500">Notas</dt><dd class="text-zinc-200 text-right">{{ detalhe.notas }}</dd></div>
           <div class="flex justify-between gap-3"><dt class="text-zinc-500">Total</dt><dd class="text-red-400 font-bold">{{ dinheiro(detalhe.valor_total) }}</dd></div>
+          <div v-if="detalhe.valor_a_pagar && Number(detalhe.valor_a_pagar) !== Number(detalhe.valor_total)" class="flex justify-between gap-3">
+            <dt class="text-zinc-500">A cobrar (sem esgotados)</dt><dd class="text-amber-300 font-bold">{{ dinheiro(detalhe.valor_a_pagar) }}</dd>
+          </div>
           <div class="flex justify-between gap-3"><dt class="text-zinc-500">Encomenda</dt>
             <dd><span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', corEstado(detalhe.status)]">{{ detalhe.status }}</span></dd></div>
           <div v-if="detalhe.entrega" class="flex justify-between gap-3"><dt class="text-zinc-500">Entrega</dt>

@@ -68,7 +68,8 @@ def valor_pago(encomenda):
 
 
 def valor_reembolsado(encomenda):
-    return (encomenda.reembolsos.filter(estado='reembolsado')
+    """Dinheiro devolvido ao cliente (os artigos esgotados descontados antes de pagar não contam: nunca foram pagos)."""
+    return (encomenda.reembolsos.filter(estado='reembolsado').exclude(metodo='abatido')
             .aggregate(t=Sum('valor_aprovado'))['t'] or Decimal('0'))
 
 
@@ -296,20 +297,7 @@ def pedir_devolucao(encomenda, utilizador, motivo, itens=None, descricao='', ago
     disp = {k: v for k, v in qtd_disponivel(encomenda).items() if v > 0}
     if not disp:
         raise ErroReembolso('Já pediste o reembolso de todos os artigos desta encomenda.')
-    if motivo == 'nao_chegou' or not itens:
-        pedidos = dict(disp)
-    else:
-        pedidos = {}
-        for linha in itens:
-            try:
-                item_id, q = _inteiro(linha.get('item_id')), _inteiro(linha.get('quantidade'))
-            except (TypeError, ValueError, AttributeError):
-                raise ErroReembolso('Artigos inválidos.')
-            if item_id not in disp:
-                raise ErroReembolso('Um dos artigos não pertence a esta encomenda ou já foi pedido.')
-            if q < 1 or pedidos.get(item_id, 0) + q > disp[item_id]:
-                raise ErroReembolso(f'Quantidade inválida (máximo {disp[item_id]}).')
-            pedidos[item_id] = pedidos.get(item_id, 0) + q
+    pedidos = dict(disp) if motivo == 'nao_chegou' or not itens else _ler_itens(itens, disp)
 
     precos = {i.id: i.preco for i in encomenda.itens.all()}
     valor_itens = sum((precos[k] * q for k, q in pedidos.items()), Decimal('0'))
@@ -329,6 +317,24 @@ def pedir_devolucao(encomenda, utilizador, motivo, itens=None, descricao='', ago
                  f'depois disso a Bendi decide.', 'reembolso_pedido')
     _avisar_cliente(r, 'Pedido de reembolso enviado', f'A loja tem até {_hora(r.prazo_resposta)} para responder.')
     return r
+
+
+def _ler_itens(itens, disp):
+    """[{'item_id', 'quantidade'}] → {item_id: qtd}, validado contra o que ainda se pode pedir (disp)."""
+    if not isinstance(itens, list):
+        raise ErroReembolso('Artigos inválidos.')
+    pedidos = {}
+    for linha in itens:
+        try:
+            item_id, q = _inteiro(linha.get('item_id')), _inteiro(linha.get('quantidade'))
+        except (TypeError, ValueError, AttributeError):
+            raise ErroReembolso('Artigos inválidos.')
+        if item_id not in disp:
+            raise ErroReembolso('Um dos artigos não pertence a esta encomenda ou já foi pedido.')
+        if q < 1 or pedidos.get(item_id, 0) + q > disp[item_id]:
+            raise ErroReembolso(f'Quantidade inválida (máximo {disp[item_id]}).')
+        pedidos[item_id] = pedidos.get(item_id, 0) + q
+    return pedidos
 
 
 def _inteiro(v):
@@ -575,6 +581,60 @@ def ao_cancelar_pela_loja(encomenda, utilizador=None):
     r.save()
     mensagem(r, 'sistema', 'A loja cancelou a encomenda depois de paga — reembolso total automático.')
     _concluir(r, valor)
+    return r
+
+
+def loja_esgotado(encomenda, utilizador, itens, nota=''):
+    """
+    A loja não tem alguns artigos (antes de enviar): o cliente é reembolsado desses e o resto segue.
+    Já pago → reembolso para o meio de pagamento; ainda por pagar (dinheiro na entrega) → desconta-se no
+    valor a pagar (metodo 'abatido'). A taxa de entrega não volta (a encomenda continua a ser entregue);
+    sem nenhum artigo para enviar, o caminho é cancelar a encomenda. O stock não volta (está esgotado).
+    """
+    from django.db.models import F
+    from ..models import Pagamento
+    nota = (nota or '').strip()
+    if encomenda.status not in ('pago', 'preparando'):
+        raise ErroReembolso('Só antes de enviar (encomenda paga ou em preparação). Depois de entregue, '
+                            'o cliente pede o reembolso do que faltou.')
+    if ativo(encomenda):
+        raise ErroReembolso('O cliente tem um pedido em curso nesta encomenda — responde-lhe primeiro em Devoluções.')
+    disp = {k: v for k, v in qtd_disponivel(encomenda).items() if v > 0}
+    pedidos = _ler_itens(itens, disp)
+    if not pedidos:
+        raise ErroReembolso('Escolhe os artigos que não tens.')
+    if all(pedidos.get(k, 0) == v for k, v in disp.items()):
+        raise ErroReembolso('Não fica nenhum artigo para enviar — cancela a encomenda (o cliente é reembolsado '
+                            'de tudo, com a entrega).')
+
+    precos = {i.id: i.preco for i in encomenda.itens.all()}
+    nomes = {i.id: (i.produto.nome if i.produto else 'Produto removido') for i in encomenda.itens.select_related('produto')}
+    valor = sum((precos[k] * q for k, q in pedidos.items()), Decimal('0'))
+    lista = ', '.join(f'{q}× {nomes[k]}' for k, q in pedidos.items())
+    r = _criar(encomenda, 'cancelamento', 'esgotado', 'loja', valor, Decimal('0'), nota, pedidos)
+    _decidido(r, utilizador)
+    r.save()
+    mensagem(r, 'loja', f'Sem stock: {lista}.' + (f' {nota}' if nota else ''), utilizador)
+
+    p = pagamento_de(encomenda)
+    if valor_pago(encomenda) > 0:
+        _concluir(r, valor)
+        return r
+    # ainda por pagar: o cliente paga menos na entrega
+    if p:
+        p = Pagamento.objects.select_for_update().get(pk=p.pk)
+        valor = min(valor, p.valor)
+        Pagamento.objects.filter(pk=p.pk).update(valor=F('valor') - valor)
+    r.estado = 'reembolsado'
+    r.valor_aprovado = valor
+    r.metodo = 'abatido'
+    r.data_reembolso = timezone.now()
+    r.save()
+    a_pagar = encomenda.valor_devido
+    txt = (f'A loja não tem {lista}. Como ainda não pagaste, o valor a pagar baixa {formatar(valor)} '
+           f'e passa a {formatar(a_pagar)}.')
+    mensagem(r, 'sistema', txt)
+    _avisar_cliente(r, 'Artigo esgotado', txt)
     return r
 
 

@@ -15,6 +15,7 @@ urlpatterns = [
     # loja
     path('loja/<int:loja_id>/reembolsos/',                 v.lista_loja, name='reembolso-lista-loja'),
     path('loja/<int:loja_id>/reembolsos/<int:id>/acao/',   v.acao_loja,  name='reembolso-acao-loja'),
+    path('loja/<int:loja_id>/encomendas/<int:id>/esgotado/', v.esgotado_loja, name='encomenda-esgotado'),
     # Bendi
     path('admin/reembolsos/',                     v.lista_admin,   name='reembolso-lista-admin'),
     path('admin/reembolsos/metricas/',            v.metricas_admin, name='reembolso-metricas-admin'),

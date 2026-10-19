@@ -28,7 +28,9 @@ export function corEstado (estado) {
   return CORES[ESTADOS[estado]?.cor] || CORES.zinc
 }
 
-export function labelEstado (estado, valorAprovado) {
+export function labelEstado (estado, valorAprovado, metodo) {
+  // artigo esgotado numa encomenda ainda por pagar: não houve dinheiro devolvido, baixou o valor a pagar
+  if (estado === 'reembolsado' && metodo === 'abatido') return 'Descontado'
   // cancelamento aceite sem nada pago (dinheiro na entrega) não é um "reembolso"
   if (estado === 'reembolsado' && valorAprovado !== undefined && Number(valorAprovado) === 0) return 'Cancelamento aceite'
   return ESTADOS[estado]?.label || estado
@@ -39,6 +41,7 @@ export const MOTIVOS = {
   errado:       { label: 'Produto errado',                    ajuda: 'Recebeste outro produto, tamanho ou cor.' },
   em_falta:     { label: 'Faltou algo',                       ajuda: 'A encomenda chegou incompleta.' },
   nao_chegou:   { label: 'A encomenda não chegou',            ajuda: 'Está marcada como entregue mas não a recebeste.' },
+  esgotado:     { label: 'Artigo esgotado',                   ajuda: 'A loja não tinha o artigo e reembolsou-o antes de enviar.' },
   mudei_ideias: { label: 'Mudei de ideias',                   ajuda: 'Devolves o produto à loja. O envio de volta é por tua conta e a taxa de entrega não é reembolsada.' },
 }
 export const MOTIVOS_PROBLEMA = ['defeito', 'errado', 'em_falta', 'nao_chegou']

@@ -709,8 +709,8 @@ def encomenda_atualizar_status(request, loja_id, id):
     # ── Notifica dono/gestor quando concluído ─────────────────
     if novo_status == 'concluido':
         _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
-        _com  = (encomenda.valor_total * _perc / 100).quantize(Decimal('0.01'))
-        _liq  = encomenda.valor_total - _com
+        _com  = (encomenda.valor_devido * _perc / 100).quantize(Decimal('0.01'))
+        _liq  = encomenda.valor_devido - _com
  
         notificar_staff(
             loja=encomenda.loja,

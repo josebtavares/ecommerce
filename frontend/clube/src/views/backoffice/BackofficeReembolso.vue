@@ -12,7 +12,7 @@
         <h2 class="font-bold text-zinc-100 truncate">
           {{ r ? `${r.tipo === 'cancelamento' ? 'Cancelamento' : 'Reembolso'} · Encomenda #${r.encomenda_id}` : 'Pedido' }}
         </h2>
-        <EstadoReembolso v-if="r" class="ml-auto" :estado="r.estado" :valor="r.valor_aprovado ?? undefined" />
+        <EstadoReembolso v-if="r" :metodo="r.metodo" class="ml-auto" :estado="r.estado" :valor="r.valor_aprovado ?? undefined" />
       </header>
 
       <div v-if="carregando" class="flex-1 flex items-center justify-center">
@@ -224,7 +224,9 @@ const aviso = computed(() => {
     proposta: `Propuseste ${formatarDinheiro(x.valor_aprovado)}. À espera da resposta do cliente.`,
     em_disputa: 'A equipa da Bendi está a analisar o pedido e vai decidir. Deixa a tua versão nas mensagens.',
     reembolsado: Number(x.valor_aprovado) > 0
-      ? `Reembolsado ${formatarDinheiro(x.valor_aprovado)}` + (x.metodo === 'manual' ? ' — pagamento em dinheiro: devolve o valor ao cliente em mão.' : ' para o meio de pagamento do cliente.')
+      ? (x.metodo === 'abatido'
+          ? `${formatarDinheiro(x.valor_aprovado)} descontados no valor a cobrar na entrega.`
+          : `Reembolsado ${formatarDinheiro(x.valor_aprovado)}` + (x.metodo === 'manual' ? ' — pagamento em dinheiro: devolve o valor ao cliente em mão.' : ' para o meio de pagamento do cliente.'))
       : 'Cancelamento aceite — não havia nada pago.',
     recusado: x.decisao_admin ? 'A equipa da Bendi recusou o pedido.' : 'O pedido foi recusado. O cliente ainda pode pedir à Bendi para analisar.',
     cancelado: 'O cliente desistiu do pedido.',
