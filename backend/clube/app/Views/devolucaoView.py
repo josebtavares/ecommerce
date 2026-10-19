@@ -98,6 +98,8 @@ def _detalhe(request, r, papel):
         'descricao': r.descricao,
         'motivo_recusa': r.motivo_recusa,
         'decisao_admin': r.decisao_admin,
+        'resposta_loja': r.resposta_loja,
+        'data_resposta_loja': _data(r.data_resposta_loja),
         'metodo': r.metodo, 'metodo_label': r.get_metodo_display() if r.metodo else '',
         'produto_recebido_em': _data(r.produto_recebido_em),
         'stock_reposto': r.stock_reposto,

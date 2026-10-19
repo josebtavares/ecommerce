@@ -337,6 +337,11 @@ def _hora(dt):
 
 # ── a loja responde ──────────────────────────────────────────────────
 
+def _resposta_loja(r, resposta):
+    r.resposta_loja = resposta
+    r.data_resposta_loja = timezone.now()
+
+
 def _decidido(r, utilizador, admin=False):
     r.decidido_por = utilizador
     r.data_decisao = timezone.now()
@@ -348,6 +353,7 @@ def loja_aceitar(r, utilizador, valor=None, devolver_produto=None):
         raise ErroReembolso('Este pedido já foi respondido.')
     enc = r.encomenda
     _decidido(r, utilizador)
+    _resposta_loja(r, 'aceite')
 
     if r.tipo == 'cancelamento':
         if enc.status not in ('pago', 'preparando'):
@@ -373,6 +379,7 @@ def loja_aceitar(r, utilizador, valor=None, devolver_produto=None):
                           or (bool(devolver_produto) and r.motivo in ('defeito', 'errado')))
     r.valor_aprovado = valor
     if valor < r.valor_pedido:
+        _resposta_loja(r, 'proposta')
         r.estado = 'proposta'
         r.save()
         mensagem(r, 'loja', f'A loja propõe reembolsar {formatar(valor)} (pediste {formatar(r.valor_pedido)}).',
@@ -401,6 +408,8 @@ def loja_recusar(r, utilizador, motivo_recusa):
         raise ErroReembolso('Este pedido já não pode ser recusado.')
     if len(motivo_recusa) < 5:
         raise ErroReembolso('Explica ao cliente porque recusas.')
+    if r.estado == 'pedido':
+        _resposta_loja(r, 'recusado')
     _recusar(r, utilizador, motivo_recusa, papel='loja')
     _avisar_cliente(r, 'Pedido recusado pela loja',
                     f'Motivo: {motivo_recusa[:200]}. Se não concordas, podes pedir ajuda à Bendi '
@@ -545,6 +554,7 @@ def ao_cancelar_pela_loja(encomenda, utilizador=None):
     em_curso = ativo(encomenda)
     if em_curso and em_curso.tipo == 'cancelamento' and em_curso.estado == 'pedido':
         _decidido(em_curso, utilizador)
+        _resposta_loja(em_curso, 'aceite')
         em_curso.save()
         mensagem(em_curso, 'loja', 'A loja cancelou a encomenda.', utilizador)
         _concluir(em_curso, em_curso.valor_pedido)
@@ -566,6 +576,7 @@ def ao_avancar_encomenda(encomenda, utilizador=None):
     em_curso = ativo(encomenda)
     if em_curso and em_curso.tipo == 'cancelamento' and em_curso.estado == 'pedido':
         txt = 'A loja enviou a encomenda.' if encomenda.status == 'enviado' else 'A loja concluiu a encomenda.'
+        _resposta_loja(em_curso, 'recusado')
         _recusar(em_curso, utilizador, txt, papel='sistema')
         _avisar_cliente(em_curso, 'Cancelamento não aceite',
                         f'{txt} Se não concordas, podes pedir ajuda à Bendi.')
@@ -601,6 +612,7 @@ def escalar_sem_resposta(agora=None, lote=200):
         for r in (Reembolso.objects.select_for_update(skip_locked=True, of=('self',))
                   .filter(estado='pedido', prazo_resposta__lt=agora)
                   .select_related('loja', 'comprador').order_by('id')[:lote]):
+            _resposta_loja(r, 'sem_resposta')
             escalar(r, f'A loja não respondeu em {PRAZO_RESPOSTA_LOJA_H}h.')
             n += 1
     return n

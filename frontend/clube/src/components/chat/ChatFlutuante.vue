@@ -32,7 +32,7 @@ import { chat, totalNaoLidas, iniciarChat, pararChat, carregarConversas } from '
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 
 // onde o balão aparece (fora: login/registo, checkout, POS, página /mensagens, pré-visualização de templates)
-const ROTAS = ['Home', 'Loja', 'Backoffice', 'Admin', 'CriarLoja']
+const ROTAS = ['Home', 'Loja', 'Backoffice', 'Admin', 'CriarLoja', 'Reembolso', 'Reembolsos']
 
 export default {
   name: 'ChatFlutuante',

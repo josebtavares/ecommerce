@@ -1808,6 +1808,11 @@ class Reembolso(models.Model):
     prazo_resposta  = models.DateTimeField(null=True, blank=True)    # a loja tem até aqui; depois vai à Bendi
     escalado_em     = models.DateTimeField(null=True, blank=True)
     motivo_recusa   = models.TextField(blank=True, default='')
+    # o que a loja respondeu (fica mesmo depois de a Bendi decidir — é o histórico do pedido)
+    RESPOSTAS_LOJA = [('aceite', 'Aceitou'), ('recusado', 'Recusou'), ('proposta', 'Propôs outro valor'),
+                      ('sem_resposta', 'Não respondeu a tempo')]
+    resposta_loja      = models.CharField(max_length=12, choices=RESPOSTAS_LOJA, blank=True, default='')
+    data_resposta_loja = models.DateTimeField(null=True, blank=True)
     decidido_por    = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, blank=True,
                                         related_name='reembolsos_decididos')
     decisao_admin   = models.BooleanField(default=False)             # decisão final da Bendi
