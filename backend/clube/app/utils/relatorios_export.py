@@ -53,6 +53,8 @@ def texto(v, tipo):
         return _data(v, tipo)
     if tipo == 'percent':
         return f'{Decimal(str(v)).normalize():f}'.replace('.', ',') + '%'
+    if tipo == 'id':                       # nº de encomenda, fatura… nunca com separador de milhares
+        return str(v)
     if tipo == 'numero':
         if isinstance(v, (float, Decimal)) and v != int(v):
             return f'{v:.1f}'.replace('.', ',')
@@ -84,6 +86,16 @@ def _cabecalho(meta):
     return out
 
 
+# ── injecção de fórmulas ─────────────────────────────────────────────
+# Nomes de clientes, produtos ou pesquisas vêm de quem usa o site: "=HYPERLINK(...)" ou "+cmd" num CSV/Excel
+# seria executado pela folha de cálculo de quem o abre. No CSV leva um apóstrofo à frente; no Excel fica texto.
+PERIGOSOS = ('=', '+', '-', '@', '\t', '\r')
+
+
+def _texto_seguro(v):
+    return "'" + v if isinstance(v, str) and v.startswith(PERIGOSOS) else v
+
+
 # ── CSV ──────────────────────────────────────────────────────────────
 
 def _csv_valor(v, tipo):
@@ -92,9 +104,9 @@ def _csv_valor(v, tipo):
         return ''
     if tipo in ('dinheiro', 'percent'):
         return f'{Decimal(str(v)).quantize(Decimal("0.01"))}'.replace('.', ',')
-    if tipo == 'numero':
+    if tipo in ('numero', 'id'):
         return str(v).replace('.', ',')
-    return texto(v, tipo)
+    return _texto_seguro(texto(v, tipo))
 
 
 def gerar_csv(meta, res):
@@ -102,7 +114,7 @@ def gerar_csv(meta, res):
     buf.write('﻿')                                     # BOM: o Excel abre com os acentos certos
     w = csv.writer(buf, delimiter=';', lineterminator='\r\n')
     for k, v in _cabecalho(meta):
-        w.writerow([k, v])
+        w.writerow([_texto_seguro(k), _texto_seguro(v)])
     w.writerow([])
     cols = res['colunas']
     w.writerow([c['label'] for c in cols])
@@ -132,6 +144,8 @@ def gerar_xlsx(meta, res):
             return ws.cell(r, c, None)
         if tipo in ('dinheiro', 'percent', 'numero'):
             v = float(v)
+        elif tipo == 'id':
+            v = int(v)
         elif tipo in ('data', 'mes'):
             v = date.fromisoformat(v[:10]) if isinstance(v, str) else _local(v)
             if isinstance(v, datetime):
@@ -139,6 +153,8 @@ def gerar_xlsx(meta, res):
         elif tipo == 'datahora':
             v = _local(v).replace(tzinfo=None) if isinstance(v, datetime) else v
         cel = ws.cell(r, c, v)
+        if isinstance(v, str):
+            cel.data_type = 's'                 # nunca fórmula (ver PERIGOSOS)
         if tipo in fmt:
             cel.number_format = fmt[tipo]
         return cel
@@ -148,14 +164,14 @@ def gerar_xlsx(meta, res):
     ws.title = 'Resumo'
     r = 1
     for k, v in _cabecalho(meta):
-        ws.cell(r, 1, k).font = negrito
-        ws.cell(r, 2, v)
+        celula(ws, r, 1, k, 'texto').font = negrito
+        celula(ws, r, 2, v, 'texto')
         r += 1
     r += 1
     ws.cell(r, 1, 'Resumo').font = Font(bold=True, size=12)
     r += 1
     for item in res['resumo']:
-        ws.cell(r, 1, item['label'])
+        celula(ws, r, 1, item['label'], 'texto')
         celula(ws, r, 2, item['valor'], item['tipo'])
         r += 1
     r += 1
@@ -271,7 +287,7 @@ def gerar_pdf(meta, res):
         hist += [t, Spacer(1, 5 * mm)]
 
     linhas = res['linhas'][:MAX_LINHAS_PDF]
-    direita = {i for i, c in enumerate(cols) if c['tipo'] in ('dinheiro', 'numero', 'percent')}
+    direita = {i for i, c in enumerate(cols) if c['tipo'] in ('dinheiro', 'numero', 'percent', 'id')}
     dados = [[Paragraph(esc(c['label']), est_cab) for c in cols]]
     for l in linhas:
         dados.append([esc(texto(l.get(c['chave']), c['tipo'])) if i in direita or c['tipo'] in ('data', 'datahora', 'mes')
@@ -287,7 +303,7 @@ def gerar_pdf(meta, res):
     util = pagina[0] - 30 * mm
     fixas = {}
     for i, c in enumerate(cols):
-        if c['tipo'] in ('dinheiro', 'numero', 'percent', 'data', 'datahora', 'mes'):
+        if c['tipo'] in ('dinheiro', 'numero', 'percent', 'id', 'data', 'datahora', 'mes'):
             amostra = [texto(l.get(c['chave']), c['tipo']) for l in linhas[:300]]
             if res.get('totais') and c['chave'] in res['totais']:
                 amostra.append(texto(res['totais'][c['chave']], c['tipo']))

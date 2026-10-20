@@ -3,7 +3,7 @@ Motor dos relatórios (admin e, com a loja fixa, o módulo Relatórios da backof
 
 Cada relatório recebe os filtros e devolve um dicionário:
   resumo  → [{label, valor, tipo}]          cartões no topo; 1.ª folha do Excel; topo do PDF
-  colunas → [{chave, label, tipo}]          tipo: texto | dinheiro | numero | data | datahora | percent
+  colunas → [{chave, label, tipo}]          tipo: texto | dinheiro | numero | id | data | datahora | percent
   linhas  → [dict]                          todas (o ecrã pagina; as exportações levam tudo)
   totais  → {chave: valor}                  linha de totais (só as colunas que somam)
   notas   → [str]                           as regras usadas (vão para o Excel e o PDF)
@@ -337,7 +337,7 @@ def _subscricoes(f):
         resumo += [_r('Receita mensal recorrente (hoje)', Decimal(hoje_['mrr'])), _r('Subscrições novas no período', novas, 'numero')]
     return {
         'resumo': resumo,
-        'colunas': [_col('fatura', 'Fatura', 'numero'), _col('cliente', 'Cliente'), _col('tipo', 'Tipo'), _col('plano', 'Plano'),
+        'colunas': [_col('fatura', 'Fatura', 'id'), _col('cliente', 'Cliente'), _col('tipo', 'Tipo'), _col('plano', 'Plano'),
                     _col('periodo_inicio', 'Período de', 'data'), _col('periodo_fim', 'até', 'data'),
                     _col('emitida', 'Emitida', 'data'), _col('vencimento', 'Vencimento', 'data'), _col('estado', 'Estado'),
                     _col('paga_em', 'Paga em', 'data'), _col('metodo', 'Método'), _col('referencia', 'Referência'),
@@ -379,7 +379,7 @@ def _comissoes(f):
                    _r('Valor das encomendas', tot['valor_encomenda']), _r('Por liquidar', pend),
                    _r('Créditos criados no período', cred_periodo),
                    _r('Créditos por descontar (hoje)', cred.filter(estado='pendente').aggregate(t=Sum('valor'))['t'] or ZERO)],
-        'colunas': [_col('comissao', 'Comissão', 'numero'), _col('encomenda', 'Encomenda', 'numero'), _col('loja', 'Loja'),
+        'colunas': [_col('comissao', 'Comissão', 'id'), _col('encomenda', 'Encomenda', 'id'), _col('loja', 'Loja'),
                     _col('gerada', 'Gerada', 'data'), _col('valor_encomenda', 'Valor da encomenda', 'dinheiro'),
                     _col('percentagem', '%', 'percent'), _col('valor', 'Comissão', 'dinheiro'), _col('estado', 'Estado'),
                     _col('liquidada_em', 'Liquidada em', 'data'), _col('creditos', 'Créditos', 'dinheiro')],
@@ -453,7 +453,7 @@ def _vendas_produtos(f):
     agrupar = f.escolha('agrupar', ('produto', 'variante', 'categoria', 'tipo'), 'produto')
     itens = (ItemEncomenda.objects.filter(encomenda__status='concluido', encomenda__data_conclusao__gte=p.de,
                                           encomenda__data_conclusao__lt=p.ate)
-             .select_related('encomenda__loja', 'produto__tipo', 'variante'))
+             .select_related('encomenda__loja', 'produto__tipo', 'produto__loja', 'variante'))
     itens = _loja(f, itens, 'encomenda__loja_id')
     tipo = f.inteiro('tipo')
     categoria = f.inteiro('categoria') if f.ambito == 'loja' else None
@@ -473,19 +473,34 @@ def _vendas_produtos(f):
     # devolvido: devoluções de encomendas concluídas (reembolsos depois da conclusão, pela data do reembolso).
     # O valor de cada artigo segue o que foi aprovado (a loja pode ter aprovado menos do que o pedido);
     # a taxa de entrega devolvida não é de nenhum produto.
+    def fator_aprovado(r):
+        base = r.valor_pedido - r.valor_entrega
+        aprovado = r.valor_aprovado or ZERO           # o aprovado cobre primeiro os artigos, depois a entrega
+        return min(max(aprovado / base, ZERO), Decimal('1')) if base > 0 else ZERO
+
     dev = {}
     its = (ItemReembolso.objects.filter(reembolso__data_reembolso__gte=p.de, reembolso__data_reembolso__lt=p.ate,
                                         reembolso__encomenda__status='concluido',
                                         reembolso__data_reembolso__gt=F('reembolso__encomenda__data_conclusao'))
            .select_related('reembolso', 'item'))
     for it in _loja(f, its, 'reembolso__loja_id'):
-        r = it.reembolso
-        base = r.valor_pedido - r.valor_entrega
-        aprovado = r.valor_aprovado or ZERO           # o aprovado cobre primeiro os artigos, depois a entrega
-        fator = min(max(aprovado / base, ZERO), Decimal('1')) if base > 0 else ZERO
+        fator = fator_aprovado(it.reembolso)
         k = (it.item.produto_id, it.item.variante_id)
         q0, v0 = dev.get(k, (0, ZERO))
         dev[k] = (q0 + it.quantidade, v0 + (it.valor * fator).quantize(Decimal('0.01')))
+
+    # ajustes: artigos retirados antes da conclusão (esgotado) das encomendas vendidas no período —
+    # nunca chegaram ao cliente, por isso não contam como vendidos
+    aj = {}
+    its = (ItemReembolso.objects.filter(item__encomenda__status='concluido', item__encomenda__data_conclusao__gte=p.de,
+                                        item__encomenda__data_conclusao__lt=p.ate, reembolso__data_reembolso__isnull=False,
+                                        reembolso__data_reembolso__lte=F('item__encomenda__data_conclusao'))
+           .select_related('reembolso', 'item'))
+    for it in _loja(f, its, 'reembolso__loja_id'):
+        k = (it.item.produto_id, it.item.variante_id)
+        q0, v0, c0 = aj.get(k, (0, ZERO, ZERO))
+        aj[k] = (q0 + it.quantidade, v0 + (it.valor * fator_aprovado(it.reembolso)).quantize(Decimal('0.01')),
+                 c0 + (it.item.custo_unitario or ZERO) * it.quantidade)
 
     linhas = {}
     custos = dict(Inventario.objects.values_list('produto_id', 'preco_custo'))
@@ -496,18 +511,21 @@ def _vendas_produtos(f):
         if agrupar == 'tipo':
             return ('tipo', prod.tipo_id if prod else None)
         if agrupar == 'categoria':
-            if pid not in cache_cats:
-                cache_cats[pid] = ', '.join(sorted(prod.categorias.values_list('nome', flat=True))) if prod else ''
-            return ('cat', cache_cats[pid] or 'Sem categoria')
+            return ('cat', cache_cats.get(pid) or 'Sem categoria')
         return (pid, None)
 
-    cache_prod = {}
+    itens = list(itens[:MAX_LINHAS * 4])
+    ids = {it.produto_id for it in itens if it.produto_id} | {k[0] for k in list(dev) + list(aj) if k[0]}
+    ids |= {c.get('produto_id') for it in itens for c in (it.componentes or []) if c.get('produto_id')}
+    cache_prod = Produto.objects.select_related('tipo', 'loja').in_bulk(ids)
     cache_cats = {}
+    if agrupar == 'categoria':
+        for pid, nome in Produto.categorias.through.objects.filter(produto_id__in=ids).values_list('produto_id', 'categorialoja__nome'):
+            cache_cats.setdefault(pid, []).append(nome)
+        cache_cats = {pid: ', '.join(sorted(n)) for pid, n in cache_cats.items()}
 
     def prod_de(pid):
-        if pid not in cache_prod:
-            cache_prod[pid] = Produto.objects.select_related('tipo', 'loja').filter(id=pid).first()
-        return cache_prod[pid]
+        return cache_prod.get(pid)
 
     def linha(chave, pid, vid, prod, nome_variante=''):
         if chave not in linhas:
@@ -523,11 +541,10 @@ def _vendas_produtos(f):
                              'valor_devolvido': ZERO, '_sem_custo': False}
         return linhas[chave]
 
-    for it in itens[:MAX_LINHAS * 4]:
+    for it in itens:
         pid, vid = it.produto_id, it.variante_id
         if pid and (produtos_ok is None or pid in produtos_ok):
-            prod = it.produto
-            cache_prod.setdefault(pid, prod)
+            prod = prod_de(pid)
             nome_var = ', '.join(f'{v}' for v in (it.atributos or {}).values()) if agrupar == 'variante' else ''
             l = linha(chave_de(pid, vid, prod), pid, vid, prod, nome_var)
             l['unidades'] += it.quantidade
@@ -545,6 +562,14 @@ def _vendas_produtos(f):
             prod = prod_de(cpid)
             l = linha(chave_de(cpid, c.get('variante_id'), prod), cpid, c.get('variante_id'), prod)
             l['em_conjuntos'] += n
+    for (pid, vid), (qa, va, ca) in aj.items():
+        if not pid or (produtos_ok is not None and pid not in produtos_ok):
+            continue
+        prod = prod_de(pid)
+        l = linha(chave_de(pid, vid, prod), pid, vid, prod)
+        l['unidades'] -= qa
+        l['valor'] -= va
+        l['custo'] -= ca
     for (pid, vid), (qd, vd) in dev.items():
         if not pid or (produtos_ok is not None and pid not in produtos_ok):
             continue
@@ -581,7 +606,8 @@ def _vendas_produtos(f):
         'colunas': colunas, 'linhas': out, 'totais': tot,
         'notas': ['Encomendas concluídas no período (data de conclusão). "Vendido" = preço × unidades vendidas sozinhas; '
                   'as unidades que saíram dentro de menus/conjuntos contam em "Em menus" (o valor fica no menu). '
-                  'Os valores são só dos artigos (sem taxas de entrega). '
+                  'Os valores são só dos artigos (sem taxas de entrega); os artigos retirados antes da entrega '
+                  '(esgotados) não contam como vendidos. '
                   'Devoluções pela data do reembolso. Margem = vendido − custo (o preço de custo guardado em cada venda; '
                   'nas vendas antigas, o custo atual do inventário). Vazia quando o produto não tem custo.'],
     }
@@ -635,7 +661,7 @@ def _encomendas(f):
         })
     tot = _somas(linhas, ['total', 'reembolsado', 'liquido', 'comissao'])
     concl = [l for l in linhas if l['concluida'] and l['estado'] == dict(Encomenda.STATUS)['concluido']]
-    colunas = [_col('encomenda', 'Encomenda', 'numero'), _col('criada', 'Feita em', 'datahora'),
+    colunas = [_col('encomenda', 'Encomenda', 'id'), _col('criada', 'Feita em', 'datahora'),
                _col('concluida', 'Concluída em', 'datahora')]
     if f.ambito == 'admin' and not _loja_id(f):
         colunas.append(_col('loja', 'Loja'))
@@ -704,8 +730,8 @@ def _reembolsos(f):
               _r('Decididos pela Bendi', sum(1 for l in linhas if l['decidiu'] == 'Bendi'), 'numero'),
               _r('Resposta média da loja (horas)', round(sum(horas) / len(horas), 1) if horas else None, 'numero')]
     resumo += [_r(f'Motivo: {m}', v) for m, v in sorted(por_motivo.items(), key=lambda x: -x[1])[:5]]
-    colunas = [_col('reembolso', 'Pedido', 'numero'), _col('pedido_em', 'Pedido em', 'datahora'),
-               _col('reembolsado_em', 'Reembolsado em', 'datahora'), _col('encomenda', 'Encomenda', 'numero')]
+    colunas = [_col('reembolso', 'Pedido', 'id'), _col('pedido_em', 'Pedido em', 'datahora'),
+               _col('reembolsado_em', 'Reembolsado em', 'datahora'), _col('encomenda', 'Encomenda', 'id')]
     if f.ambito == 'admin' and not _loja_id(f):
         colunas.append(_col('loja', 'Loja'))
     colunas += [_col('cliente', 'Cliente'), _col('tipo', 'Tipo'), _col('motivo', 'Motivo'), _col('estado', 'Estado'),
@@ -749,8 +775,8 @@ def _pagamentos(f):
     pend = _loja(f, Pagamento.objects.filter(status='pendente', referencia_transacao='dinheiro')
                  .exclude(encomenda__status__in=['cancelado', 'concluido']), 'encomenda__loja_id').aggregate(t=Sum('valor'), n=Count('id'))
     tot = _somas(linhas, ['valor'])
-    colunas = [_col('pagamento', 'Pagamento', 'numero'), _col('recebido_em', 'Recebido em', 'datahora'),
-               _col('encomenda', 'Encomenda', 'numero')]
+    colunas = [_col('pagamento', 'Pagamento', 'id'), _col('recebido_em', 'Recebido em', 'datahora'),
+               _col('encomenda', 'Encomenda', 'id')]
     if f.ambito == 'admin' and not _loja_id(f):
         colunas.append(_col('loja', 'Loja'))
     colunas += [_col('cliente', 'Cliente'), _col('metodo', 'Método'), _col('estado', 'Estado hoje'),
@@ -966,7 +992,7 @@ def _entregas(f):
                    _r('Falhadas', falhou, 'numero'),
                    _r('Taxa de sucesso', round(len(entregues) / fechadas * 100, 1) if fechadas else None, 'percent'),
                    _r('Tempo médio (minutos)', round(sum(tempos) / len(tempos)) if tempos else None, 'numero')],
-        'colunas': [_col('entrega', 'Entrega', 'numero'), _col('encomenda', 'Encomenda', 'numero'),
+        'colunas': [_col('entrega', 'Entrega', 'id'), _col('encomenda', 'Encomenda', 'id'),
                     _col('criada', 'Atribuída em', 'datahora'), _col('cliente', 'Cliente'), _col('condutor', 'Condutor'),
                     _col('opcao', 'Opção'), _col('estado', 'Estado'), _col('entregue_em', 'Entregue em', 'datahora'),
                     _col('minutos', 'Minutos', 'numero'), _col('valor', 'Valor da encomenda', 'dinheiro')],

@@ -10,6 +10,7 @@ export function formatarCelula (v, tipo) {
     case 'dinheiro': return formatarDinheiro(v)
     case 'percent':  return `${Number(v).toLocaleString('pt-PT', { maximumFractionDigits: 2 })}%`
     case 'numero':   return Number(v).toLocaleString('pt-PT', { maximumFractionDigits: 1 })
+    case 'id':       return String(v)          // nº de encomenda, fatura… sem separador de milhares
     case 'data': {
       const [a, m, d] = String(v).slice(0, 10).split('-')
       return `${d}/${m}/${a}`
@@ -28,7 +29,7 @@ export function formatarCelula (v, tipo) {
   }
 }
 
-export const NUMERICOS = ['dinheiro', 'numero', 'percent']
+export const NUMERICOS = ['dinheiro', 'numero', 'percent', 'id']
 
 export function nomeFicheiro (prefixo, rid, inicio, fim, formato) {
   const d = (s) => s.replaceAll('-', '')
