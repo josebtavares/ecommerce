@@ -953,109 +953,87 @@ def admin_categoria_gerir(request, cat_id):
 @permission_classes([IsAuthenticated])
 def admin_dashboard(request):
     """
-    GET /app/admin/dashboard/?periodo=30
-    Métricas globais para o painel de administração.
+    GET /app/admin/dashboard/?data_inicio=AAAA-MM-DD&data_fim=AAAA-MM-DD  (ou ?periodo=N dias)
+    O painel do admin: receita da plataforma (comissões + subscrições), vendas, recebimentos,
+    reembolsos, subscrições e alertas. As regras de data estão em utils/relatorios.py.
     """
-    if not request.user.is_staff:
-        return Response({'detail': 'Sem permissão.'}, status=403)
- 
-    periodo = periodo_dias(request)
-    inicio  = now() - timedelta(days=periodo)
-    inicio_anterior = inicio - timedelta(days=periodo)
- 
-    from ..models import (
-        Encomenda, Loja, Utilizador, Comissao, AvaliacaoLoja
-    )
-    from django.contrib.auth.models import User
- 
-    from ..models import Reembolso, CreditoComissao
-    from ..utils.devolucoes import anotar_liquido, resumo_reembolsos
-    # GMV líquido: encomendas concluídas menos o que foi reembolsado delas
-    enc_qs      = anotar_liquido(Encomenda.objects.all())
-    enc_periodo = enc_qs.filter(data_criacao__gte=inicio)
-    enc_ant     = enc_qs.filter(data_criacao__gte=inicio_anterior, data_criacao__lt=inicio)
- 
-    def variacao(actual, anterior):
-        if not anterior: return None
-        return round(((actual - anterior) / anterior) * 100, 1)
- 
-    # ── KPIs globais ──────────────────────────────────────────
-    gmv         = enc_periodo.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
-    gmv_ant     = enc_ant.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
-    reembolsos  = resumo_reembolsos(Reembolso.objects.filter(data_reembolso__gte=inicio))
- 
-    com_qs      = Comissao.objects.all()
-    comissao_p  = com_qs.filter(status='pendente').aggregate(v=Sum('valor_comissao'))['v'] or 0
-    comissao_l  = com_qs.filter(status='liquidada').aggregate(v=Sum('valor_comissao'))['v'] or 0
-    comissao_periodo = com_qs.filter(data_criacao__gte=inicio).aggregate(v=Sum('valor_comissao'))['v'] or 0
- 
-    total_lojas     = Loja.objects.filter(ativa=True).count()
-    lojas_periodo   = Loja.objects.filter(data_criacao__gte=inicio).count()
-    total_users     = Utilizador.objects.filter(status='ativo').count()
-    users_periodo   = Utilizador.objects.filter(data_criacao__gte=inicio).count()
-    total_enc       = enc_periodo.count()
-    total_enc_ant   = enc_ant.count()
- 
-    # ── Encomendas por estado ─────────────────────────────────
-    por_estado = {}
-    for s in ['pendente','pago','preparando','enviado','concluido','cancelado']:
-        por_estado[s] = enc_qs.filter(status=s).count()
- 
-    # ── GMV por dia ───────────────────────────────────────────
-    from django.db.models.functions import TruncDate
-    gmv_por_dia = (
-        enc_qs.filter(data_criacao__gte=inicio, status='concluido')
-        .annotate(dia=TruncDate('data_criacao'))
-        .values('dia')
-        .annotate(total=Sum('liquido'), count=Count('id'))
-        .order_by('dia')
-    )
-    grafico_gmv = [
-        {'dia': str(v['dia']), 'total': float(v['total']), 'count': v['count']}
-        for v in gmv_por_dia
-    ]
- 
-    # ── Top lojas por vendas ──────────────────────────────────
-    top_lojas = (
-        enc_qs.filter(data_criacao__gte=inicio, status='concluido')
-        .values('loja__id', 'loja__nome')
-        .annotate(total=Sum('liquido'), count=Count('id'))
-        .order_by('-total')[:5]
-    )
-    lojas_top = [
-        {'id': l['loja__id'], 'nome': l['loja__nome'],
-         'total': float(l['total']), 'count': l['count']}
-        for l in top_lojas
-    ]
- 
-    # ── Lojas pendentes de aprovação ─────────────────────────
-    lojas_pendentes = Loja.objects.filter(estado='pendente').count()
- 
+    erro = _exige_admin(request, 'ver_stats')
+    if erro: return erro
+    from ..models import CreditoComissao, Reembolso
+    from ..utils import relatorios as rel
+
+    try:
+        p = rel.ler_periodo(request)
+    except rel.PeriodoInvalido as e:
+        return Response({'detail': str(e)}, status=400)
+    ant = p.anterior()
+    d2 = rel.d2
+
+    receita, receita_ant = rel.receita_plataforma(p), rel.receita_plataforma(ant)
+    vendas, vendas_ant = rel.resumo_vendas(p), rel.resumo_vendas(ant)
+
+    # encomendas feitas no período (pela data de criação: é a procura, não a venda)
+    criadas = Encomenda.objects.filter(p.filtro('data_criacao'))
+    por_estado = dict(criadas.values_list('status').annotate(n=Count('id')))
+    n_criadas = sum(por_estado.values())
+    n_criadas_ant = Encomenda.objects.filter(ant.filtro('data_criacao')).count()
+
+    # top lojas: vendas do período e o que deram à plataforma
+    from ..models import Comissao, FaturaSubscricao
+    top = list(rel.encomendas_vendidas(p).values('loja_id', 'loja__nome', 'loja__modelo_cobranca')
+               .annotate(t=Sum('venda'), n=Count('id')).order_by('-t')[:8])
+    ids = [x['loja_id'] for x in top]
+    com_loja = dict(Comissao.objects.filter(p.filtro('data_criacao'), loja_id__in=ids)
+                    .values_list('loja_id').annotate(t=Sum('valor_comissao')))
+    sub_loja = dict(FaturaSubscricao.objects.filter(p.filtro('paga_em'), estado='paga', loja_id__in=ids)
+                    .exclude(metodo='oferta').values_list('loja_id').annotate(t=Sum('valor')))
+    lojas_top = [{'id': x['loja_id'], 'nome': x['loja__nome'], 'modelo': x['loja__modelo_cobranca'],
+                  'vendas': d2(x['t']), 'encomendas': x['n'],
+                  'receita_bendi': d2((com_loja.get(x['loja_id']) or 0) + (sub_loja.get(x['loja_id']) or 0))}
+                 for x in top]
+
+    lojas_estado = dict(Loja.objects.values_list('estado').annotate(n=Count('id')))
+    pendente = Comissao.objects.filter(status='pendente').aggregate(t=Sum('valor_comissao'))['t']
+    liquidadas = Comissao.objects.filter(p.filtro('data_liquidacao'), status='liquidada').aggregate(
+        t=Sum('valor_comissao'))['t']
+    creditos = CreditoComissao.objects.filter(estado='pendente').aggregate(t=Sum('valor'))['t']
+    subs = rel.subscricoes_hoje()
+
     return Response({
-        'periodo':              periodo,
-        # KPIs
-        'gmv':                  float(gmv),
-        'variacao_gmv':         variacao(gmv, gmv_ant),
-        'comissao_periodo':     float(comissao_periodo),
-        'comissao_pendente':    float(comissao_p),
-        'comissao_liquidada':   float(comissao_l),
-        'total_lojas':          total_lojas,
-        'lojas_novas':          lojas_periodo,
-        'lojas_pendentes':      lojas_pendentes,
-        'reembolsos_periodo':   reembolsos['total'],
-        'reembolsos_count':     reembolsos['count'],
-        'reembolsos_disputa':   Reembolso.objects.filter(estado='em_disputa').count(),
-        'creditos_comissao':    float(CreditoComissao.objects.filter(estado='pendente').aggregate(v=Sum('valor'))['v'] or 0),
-        'total_utilizadores':   total_users,
-        'utilizadores_novos':   users_periodo,
-        'total_encomendas':     total_enc,
-        'variacao_enc':         variacao(total_enc, total_enc_ant),
-        # Distribuição
-        'por_estado':           por_estado,
-        'grafico_gmv':          grafico_gmv,
-        'lojas_top':            lojas_top,
+        'periodo': p.payload(),
+        'periodo_anterior': ant.payload(),
+        'receita': {**{k: d2(v) for k, v in receita.items() if k != 'faturas_pagas'},
+                    'faturas_pagas': receita['faturas_pagas'],
+                    'variacao': rel.variacao(receita['total'], receita_ant['total'])},
+        'vendas': {**{k: d2(v) for k, v in vendas.items() if k not in ('encomendas', 'devolucoes_count')},
+                   'encomendas': vendas['encomendas'], 'devolucoes_count': vendas['devolucoes_count'],
+                   'variacao': rel.variacao(vendas['liquidas'], vendas_ant['liquidas'])},
+        'encomendas': {'criadas': n_criadas, 'variacao': rel.variacao(n_criadas, n_criadas_ant),
+                       'por_estado': {s: por_estado.get(s, 0) for s, _ in Encomenda.STATUS},
+                       'canceladas': por_estado.get('cancelado', 0)},
+        'recebimentos': rel.recebimentos(p),
+        'reembolsos': {**rel.reembolsos(p),
+                       'em_disputa': Reembolso.objects.filter(estado='em_disputa').count(),
+                       'por_responder': Reembolso.objects.filter(estado='pedido').count()},
+        'comissoes': {'geradas': d2(receita['comissoes']), 'liquidadas': d2(liquidadas),
+                      'pendentes': d2(pendente), 'creditos_pendentes': d2(creditos)},
+        'subscricoes': subs,
+        'lojas': {'total': sum(lojas_estado.values()), 'por_estado': lojas_estado,
+                  'novas': Loja.objects.filter(p.filtro('data_criacao')).count()},
+        'utilizadores': {'total': Utilizador.objects.count(),
+                         'verificados': Utilizador.objects.filter(verificado=True).count(),
+                         'novos': Utilizador.objects.filter(p.filtro('data_criacao')).count()},
+        'produtos_ativos': Produto.objects.filter(ativo=True).count(),
+        'grafico_vendas': rel.serie_vendas(p),
+        'grafico_receita': rel.serie_receita(p),
+        'lojas_top': lojas_top,
+        'alertas': {'lojas_pendentes': lojas_estado.get('pendente', 0),
+                    'reembolsos_disputa': Reembolso.objects.filter(estado='em_disputa').count(),
+                    'faturas_atraso': subs['em_atraso']['faturas'],
+                    'faturas_atraso_valor': subs['em_atraso']['valor']},
     })
-    
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_relatorios(request):

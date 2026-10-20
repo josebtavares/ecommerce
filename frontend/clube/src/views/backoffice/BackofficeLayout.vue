@@ -151,6 +151,8 @@
       <!-- pb-24: espaço para o balão do chat (canto inferior direito) não tapar o fim do conteúdo -->
       <main v-else class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
         <BackofficeDashboard     v-if="activeSection === 'dashboard'"      :loja-id="lojaId" />
+        <ModuloRelatorios        v-else-if="activeSection === 'relatorios'"    :key="'rel' + lojaId"
+                                 :base="`/app/loja/${lojaId}/relatorios`" :prefixo="`loja-${lojaId}`" />
         <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" @ver-reembolso="abrirReembolso" />
         <BackofficeDevolucoes    v-else-if="activeSection === 'devolucoes'"    :loja-id="lojaId"
                                  :reembolso-id="$route.query.reembolso || null" @contagem="devolucoesPorResponder = $event" />
@@ -189,6 +191,7 @@ import BackofficeTemplates       from './BackofficeTemplates.vue'
 import BackofficeMensagens      from './BackofficeMensagens.vue'
 import BackofficeSubscricao     from './BackofficeSubscricao.vue'
 import BackofficeDevolucoes     from './BackofficeDevolucoes.vue'
+import ModuloRelatorios         from '@/components/relatorios/ModuloRelatorios.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
@@ -214,6 +217,7 @@ const PERMISSOES = {
 
 const SECCOES = [
   { key: 'dashboard',     label: 'Dashboard',        icon: 'chart',     permissao: 'ver_loja'         },
+  { key: 'relatorios',    label: 'Relatórios',        icon: 'report',    permissao: 'ver_relatorios'   },
   { key: 'encomendas',    label: 'Encomendas',        icon: 'order',     permissao: 'gerir_encomendas' },
   { key: 'devolucoes',    label: 'Devoluções',        icon: 'refund',    permissao: 'gerir_devolucoes' },
   { key: 'entregas',      label: 'Entregas',          icon: 'delivery',  permissao: 'gerir_entregas'   },
@@ -232,7 +236,7 @@ const SECCOES = [
 export default {
   name: 'BackofficeLayout',
   components: { BackofficeSubscricao,
-    BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas,
+    BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas, ModuloRelatorios,
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,

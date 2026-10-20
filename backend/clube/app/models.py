@@ -58,6 +58,7 @@ class Utilizador(models.Model):
             'gerir_subscricoes', # planos, subscrições e faturas das lojas
             'gerir_home',        # secções da página inicial
             'gerir_devolucoes',  # reembolsos: disputas e decisões finais
+            'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
         ],
         'moderador': [
             'ver_stats',
@@ -82,6 +83,7 @@ class Utilizador(models.Model):
             'gerir_encomendas',
             'ver_pos',
             'gerir_subscricoes',
+            'ver_relatorios',
         ],
     }
  
@@ -845,6 +847,9 @@ class ItemEncomenda(models.Model):
     # conjunto: o que levava no momento da compra (para o histórico e para repor o stock)
     # [{"origem": "loja", "produto_id", "variante_id", "nome", "quantidade" (por unidade)}]
     componentes = models.JSONField(default=list, blank=True)
+    # custo unitário (preço de custo do inventário) no momento da venda — a margem dos relatórios não muda
+    # se o custo for alterado depois. Vazio nas vendas antigas e nos menus/conjuntos.
+    custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
 
     def __str__(self):
@@ -1014,6 +1019,16 @@ class Pagamento(models.Model):
     status              = models.CharField(max_length=20, choices=STATUS, default='pendente')
     referencia_transacao= models.CharField(max_length=255, blank=True, default='')
     data_criacao        = models.DateTimeField(auto_now_add=True)
+    # quando o dinheiro entrou (cartão: logo; dinheiro: na entrega) — os relatórios de recebimentos contam por aqui
+    data_pagamento      = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    def save(self, *args, **kwargs):
+        if self.status == 'aprovado' and not self.data_pagamento:
+            from django.utils import timezone
+            self.data_pagamento = timezone.now()
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = {*kwargs['update_fields'], 'data_pagamento'}
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'Pagamento #{self.pk} — {self.status}'
@@ -1895,3 +1910,25 @@ class CreditoComissao(models.Model):
 
     class Meta:
         ordering = ['-data_criacao']
+
+
+class RelatorioGerado(models.Model):
+    """Registo de cada exportação de um relatório (quem, quando, o quê e com que filtros) — auditoria."""
+    utilizador = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, related_name='relatorios_gerados')
+    loja       = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='relatorios_gerados')
+    pos        = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='relatorios_gerados')
+    autor      = models.CharField(max_length=150, blank=True, default='')   # nome de quem gerou (membros do POS não são Utilizador)
+    relatorio  = models.CharField(max_length=40)
+    formato    = models.CharField(max_length=5)
+    inicio     = models.DateField()
+    fim        = models.DateField()
+    filtros    = models.JSONField(default=dict, blank=True)
+    linhas     = models.PositiveIntegerField(default=0)
+    data_criacao = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-data_criacao']
+
+    def __str__(self):
+        return f'{self.relatorio} ({self.formato}) por {self.utilizador_id} em {self.data_criacao:%Y-%m-%d %H:%M}'

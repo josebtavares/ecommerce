@@ -532,6 +532,9 @@ def encomenda_criar(request, loja_id):
     )
 
     # ── 2) Cria os itens e desconta o stock (uma vez por linha de stock, com F()) ──
+    # custo de cada produto agora (para a margem nos relatórios); 0 = a loja não preencheu
+    custos = dict(Inventario.objects.filter(produto_id__in=[i.produto_id for i, _, _ in linhas], preco_custo__gt=0)
+                  .values_list('produto_id', 'preco_custo'))
     for item, variante, snap in linhas:
         ItemEncomenda.objects.create(
             encomenda   = encomenda,
@@ -541,6 +544,7 @@ def encomenda_criar(request, loja_id):
             atributos   = item.atributos,   # ← copia os atributos
             variante    = variante,
             componentes = snap,             # conjunto: o que levava (histórico + repor stock)
+            custo_unitario = None if item.produto.e_conjunto else custos.get(item.produto_id),
         )
 
     for chave, e in stock.items():

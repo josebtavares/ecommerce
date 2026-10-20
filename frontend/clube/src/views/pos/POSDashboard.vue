@@ -378,6 +378,21 @@
               </label>
             </div>
           </div>
+
+          <div>
+            <label for="pos-iva" class="mb-2 block text-sm font-black text-slate-700">Taxa de IVA (%)</label>
+            <input
+              id="pos-iva"
+              v-model.trim="configForm.percentagem_iva"
+              type="text"
+              inputmode="decimal"
+              placeholder="Ex: 15"
+              class="h-12 w-full max-w-[160px] rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+            />
+            <p class="mt-1.5 text-xs font-semibold text-slate-500">
+              Os preços do POS já incluem IVA. Esta taxa só serve para o Mapa de IVA dos relatórios.
+            </p>
+          </div>
         </form>
 
         <div class="grid grid-cols-2 gap-3 border-t border-slate-200 bg-slate-50 p-5">
@@ -416,6 +431,8 @@ import POSHistorico from './POSHistorico.vue'
 import POSProdutos from './POSProdutos.vue'
 import POSEquipa from './POSEquipa.vue'
 import POSSubscricao from './POSSubscricao.vue'
+import POSPainel from './POSPainel.vue'
+import POSRelatorios from './POSRelatorios.vue'
 import OnboardingModal from './components/OnboardingModal.vue'
 
 export default {
@@ -428,6 +445,8 @@ export default {
     POSProdutos,
     POSEquipa,
     POSSubscricao,
+    POSPainel,
+    POSRelatorios,
     OnboardingModal
   },
 
@@ -471,10 +490,12 @@ export default {
 
       // Todas as tabs possíveis
       allTabs: [
+        { id: 'painel',   label: 'Painel',    icon: 'chart-line',      apenasNaoMembro: false },
         { id: 'mesas',    label: 'Mesas',     icon: 'utensils',        apenasNaoMembro: false },
         { id: 'pedidos',  label: 'Pedidos',   icon: 'cart-shopping',   apenasNaoMembro: false },
         { id: 'produtos', label: 'Produtos',  icon: 'box',             apenasNaoMembro: false },
         { id: 'historico',label: 'Histórico', icon: 'clock-rotate-left', apenasNaoMembro: false },
+        { id: 'relatorios', label: 'Relatórios', icon: 'file-lines',   apenasNaoMembro: false },
         { id: 'equipa',   label: 'Equipa',    icon: 'users',           apenasNaoMembro: true  },
         { id: 'subscricao', label: 'Subscrição', icon: 'credit-card',  apenasNaoMembro: true  },
       ],
@@ -527,7 +548,7 @@ export default {
 
         // Filtrar por permissões do membro
         if (this.isMembro && this.permissoes) {
-          if (tab.id === 'historico' && !this.permissoes.pode_ver_relatorios) return false
+          if (['historico', 'painel', 'relatorios'].includes(tab.id) && !this.permissoes.pode_ver_relatorios) return false
           if (tab.id === 'produtos'  && !this.permissoes.pode_gerir_produtos)  return false
         }
 
@@ -541,6 +562,8 @@ export default {
         pedidos:  'POSPedidos',
         produtos: 'POSProdutos',
         historico:'POSHistorico',
+        painel:   'POSPainel',
+        relatorios: 'POSRelatorios',
         equipa:   'POSEquipa',
         subscricao: 'POSSubscricao',
       }
@@ -571,8 +594,15 @@ export default {
     }
   },
 
+  watch: {
+    activeTab(aba) {
+      try { localStorage.setItem('pos_aba', aba) } catch { /* sem storage */ }
+    },
+  },
+
   async created() {
     this.loadSessao()
+    this.escolherAbaInicial()
     this.loadLojasFromStorage()
     this.loadOnboardingData()
     await this.loadPOSData()
@@ -622,6 +652,14 @@ export default {
         this.setUtilizador(user)
         this.permissoes  = null
       }
+    },
+
+    escolherAbaInicial() {
+      let guardada = ''
+      try { guardada = localStorage.getItem('pos_aba') || '' } catch { /* sem storage */ }
+      const visiveis = this.tabsVisiveis.map(t => t.id)
+      if (visiveis.includes(guardada)) this.activeTab = guardada
+      else this.activeTab = !this.isMembro ? 'painel' : 'mesas'
     },
 
     setUtilizador(user) {
@@ -788,7 +826,8 @@ export default {
       this.configForm = {
         nome:    this.posNome || 'POS Principal',
         loja_id: this.lojaVinculada?.id || '',
-        modo:    this.modo || 'standalone'
+        modo:    this.modo || 'standalone',
+        percentagem_iva: this.currentPOS?.percentagem_iva ?? '0.00'
       }
 
       this.showConfigModal = true
@@ -810,6 +849,11 @@ export default {
         this.configError = 'Para usar modo integrado ou híbrido, escolhe uma loja Bendi.'
         return
       }
+      const iva = Number(String(this.configForm.percentagem_iva ?? '').replace(',', '.'))
+      if (String(this.configForm.percentagem_iva ?? '').trim() === '' || !Number.isFinite(iva) || iva < 0 || iva > 100) {
+        this.configError = 'A taxa de IVA vai de 0 a 100%.'
+        return
+      }
 
       this.savingConfig = true
 
@@ -825,8 +869,11 @@ export default {
           this.setCurrentPOS(data.pos || data)
         }
 
-        if (this.configForm.nome && this.configForm.nome !== this.posNome) {
-          const { data } = await api.patch(`/api/pos/${this.posId}/`, { nome: this.configForm.nome })
+        const alteracoes = {}
+        if (this.configForm.nome && this.configForm.nome !== this.posNome) alteracoes.nome = this.configForm.nome
+        if (iva !== Number(this.currentPOS?.percentagem_iva || 0)) alteracoes.percentagem_iva = iva.toFixed(2)
+        if (Object.keys(alteracoes).length) {
+          const { data } = await api.patch(`/api/pos/${this.posId}/`, alteracoes)
           this.setCurrentPOS(data)
         }
 

@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, views_variantes, views_conjuntos, views_subscricao
+from . import views, views_variantes, views_conjuntos, views_subscricao, views_relatorios
 
 urlpatterns = [
     # ── AUTENTICAÇÃO ─────────────────────────────────────────────────
@@ -42,6 +42,11 @@ urlpatterns = [
     # ── CONTAS ────────────────────────────────────────────────────────
     path('<int:pos_id>/mesas/<int:mesa_id>/conta/',                          views.conta_criar,          name='conta_criar'),
     path('<int:pos_id>/contas/ativas/',                                      views.contas_ativas,        name='contas_ativas'),
+    path('<int:pos_id>/painel/',                       views_relatorios.pos_painel,        name='pos_painel'),
+    path('<int:pos_id>/relatorios/catalogo/',          views_relatorios.pos_rel_catalogo,  name='pos_rel_catalogo'),
+    path('<int:pos_id>/relatorios/historico/',         views_relatorios.pos_rel_historico, name='pos_rel_historico'),
+    path('<int:pos_id>/relatorios/r/<slug:rid>/',      views_relatorios.pos_rel_relatorio, name='pos_rel_relatorio'),
+    path('<int:pos_id>/relatorios/r/<slug:rid>/exportar/', views_relatorios.pos_rel_exportar, name='pos_rel_exportar'),
     path('<int:pos_id>/historico/',                                          views.pos_historico,        name='pos_historico'),
     path('<int:pos_id>/contas/<int:conta_id>/',                              views.conta_detalhe,        name='conta_detalhe'),
     path('<int:pos_id>/contas/<int:conta_id>/items/',                        views.conta_adicionar_item, name='conta_adicionar_item'),

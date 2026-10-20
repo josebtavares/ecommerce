@@ -247,6 +247,19 @@
       </div>
     </div>
 
+    <!-- Impostos (mapa de IVA nos Relatórios) -->
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+      <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Impostos</h2>
+      <p class="text-xs text-zinc-600 mb-5">Usado no mapa de IVA dos Relatórios. Os preços dos produtos incluem IVA.</p>
+      <label class="text-xs text-zinc-500 mb-1 block">Taxa de IVA</label>
+      <div class="flex items-center gap-2">
+        <input v-model.number="form.percentagem_iva" type="number" min="0" max="100" step="0.01"
+          class="w-24 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" />
+        <span class="text-sm text-zinc-400">%</span>
+      </div>
+      <p class="text-xs text-zinc-600 mt-1">Em Cabo Verde a taxa normal é 15%. 0 = a loja não cobra IVA.</p>
+    </div>
+
     <!-- Políticas da loja -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Políticas da loja</h2>
@@ -379,6 +392,7 @@ export default {
         entrega_ativa: false, levantamento_ativo: false,
         politica_devolucao: '', termos_servico: '', politica_privacidade: '',
         prazo_devolucao_dias: 14,
+        percentagem_iva: 0,
       },
       logoFicheiro:   null,
       bannerFicheiro: null,
@@ -456,6 +470,7 @@ export default {
         termos_servico:       l.termos_servico      || '',
         politica_privacidade: l.politica_privacidade|| '',
         prazo_devolucao_dias: l.prazo_devolucao_dias ?? 14,
+        percentagem_iva: Number(l.percentagem_iva ?? 0),
       }
       this.logoPreview   = l.logo_url   || ''
       this.bannerPreview = l.banner_url || ''
@@ -559,6 +574,11 @@ export default {
       const prazo = this.form.prazo_devolucao_dias
       if (!Number.isInteger(prazo) || prazo < 0 || prazo > 365) {
         alert('O prazo de devoluções tem de ser um número de dias entre 0 e 365.')
+        return
+      }
+      const iva = this.form.percentagem_iva
+      if (typeof iva !== 'number' || Number.isNaN(iva) || iva < 0 || iva > 100) {
+        alert('A taxa de IVA tem de estar entre 0 e 100%.')
         return
       }
       await this.wrap(async () => {

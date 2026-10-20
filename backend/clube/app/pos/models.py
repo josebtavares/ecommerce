@@ -78,6 +78,13 @@ class ConfiguracaoPOS(models.Model):
         help_text='Percentagem aplicada sobre o subtotal (ex: 10 = 10%)'
     )
 
+    # taxa de IVA das vendas do POS (os preços incluem IVA) — só para o mapa de IVA dos relatórios
+    percentagem_iva = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('0.00'), db_default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))],
+        verbose_name='IVA (%)',
+    )
+
     efatura_ativo = models.BooleanField(
         default=False,
         verbose_name='eFatura ativo',
@@ -275,6 +282,9 @@ class ProdutoPOS(models.Model):
 
     controlar_stock = models.BooleanField(default=False, verbose_name='Controlar stock')
     stock = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    # o que custa ao POS (margem nos relatórios); vazio = desconhecido
+    preco_custo = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                      validators=[MinValueValidator(Decimal('0.00'))])
 
     # Tipo e atributos (globais ou tipos próprios do POS) — mesmo formato da loja
     tipo = models.ForeignKey(
@@ -463,6 +473,11 @@ class ContaMesa(models.Model):
         related_name='contas_atendidas',
         verbose_name='Atendente'
     )
+    # membro da equipa que abriu a conta (o campo acima só guarda a conta principal) + o nome no momento,
+    # para os relatórios por atendente continuarem certos se o membro for apagado
+    membro = models.ForeignKey('UtilizadorPOS', on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='contas_abertas')
+    atendente_nome = models.CharField(max_length=100, blank=True, default='', db_default='')
 
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     taxa_servico_percentagem = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
@@ -509,6 +524,8 @@ class ContaMesa(models.Model):
     criada_em = models.DateTimeField(auto_now_add=True)
     atualizada_em = models.DateTimeField(auto_now=True)
     fechada_em = models.DateTimeField(null=True, blank=True)
+    cancelada_em = models.DateTimeField(null=True, blank=True)
+    motivo_cancelamento = models.CharField(max_length=300, blank=True, default='', db_default='')
 
     class Meta:
         verbose_name = 'Conta de Mesa'
@@ -517,6 +534,7 @@ class ContaMesa(models.Model):
         indexes = [
             models.Index(fields=['pos', 'status']),
             models.Index(fields=['mesa', '-criada_em']),
+            models.Index(fields=['pos', 'fechada_em']),
         ]
 
     def __str__(self):
@@ -560,9 +578,11 @@ class ContaMesa(models.Model):
         for item in self.items.exclude(status='cancelado'):
             repor_stock_item(item)
         self.status = 'cancelada'
+        self.cancelada_em = timezone.now()
+        self.motivo_cancelamento = (motivo or '')[:300]
         if motivo:
-            self.observacoes += f"\n[CANCELADA] {motivo} em {timezone.now()}"
-        self.save(update_fields=['status', 'observacoes'])
+            self.observacoes += f"\n[CANCELADA] {motivo} em {self.cancelada_em}"
+        self.save(update_fields=['status', 'observacoes', 'cancelada_em', 'motivo_cancelamento'])
 
 
 class ItemContaMesa(models.Model):
@@ -625,6 +645,8 @@ class ItemContaMesa(models.Model):
 
     preco_unitario = models.DecimalField(max_digits=10, decimal_places=2)
     preco_total = models.DecimalField(max_digits=10, decimal_places=2)
+    # custo de uma unidade no momento da venda (margem nos relatórios); None = sem custo conhecido
+    custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     observacoes = models.TextField(blank=True)
 
@@ -777,22 +799,25 @@ class TurnoPOS(models.Model):
         status = "Aberto" if self.aberto else "Fechado"
         return f"Turno #{self.id} - {self.operador.nome} ({status})"
 
+    def vendas_dinheiro(self, ate=None):
+        """
+        Dinheiro que entrou na caixa durante o turno: contas pagas em dinheiro + a parte em dinheiro
+        das contas divididas (antes estas ficavam de fora e o turno mostrava uma falta que não existia).
+        """
+        fim = ate or self.fechado_em or timezone.now()
+        contas = ContaMesa.objects.filter(pos=self.pos, status='fechada',
+                                          fechada_em__gte=self.aberto_em, fechada_em__lte=fim)
+        inteiras = contas.filter(metodo_pagamento='dinheiro').aggregate(t=models.Sum('total'))['t']
+        partes = PagamentoDividido.objects.filter(conta__in=contas.filter(metodo_pagamento='dividida'),
+                                                  metodo='dinheiro').aggregate(t=models.Sum('valor'))['t']
+        return (inteiras or Decimal('0.00')) + (partes or Decimal('0.00'))
+
     def fechar_turno(self, valor_contado):
         self.aberto = False
         self.fechado_em = timezone.now()
         self.valor_fecho = valor_contado
 
-        vendas_dinheiro = ContaMesa.objects.filter(
-            pos=self.pos,
-            status='fechada',
-            metodo_pagamento='dinheiro',
-            fechada_em__gte=self.aberto_em,
-            fechada_em__lte=self.fechado_em
-        ).aggregate(
-            total=models.Sum('total')
-        )['total'] or Decimal('0.00')
-
-        valor_esperado = self.valor_abertura + vendas_dinheiro
+        valor_esperado = self.valor_abertura + self.vendas_dinheiro()
         self.diferenca = self.valor_fecho - valor_esperado
 
         self.save(update_fields=['aberto', 'fechado_em', 'valor_fecho', 'diferenca'])

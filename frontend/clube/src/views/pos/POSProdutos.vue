@@ -368,6 +368,20 @@
               />
             </div>
 
+            <!-- preço de custo (produtos do POS; num menu é a soma dos componentes) → margem nos relatórios -->
+            <div v-if="formProduto.origem === 'pos' && !conjunto.ativo">
+              <label for="pos-preco-custo" class="mb-2 block text-sm font-black text-slate-700">Preço de custo</label>
+              <input
+                id="pos-preco-custo"
+                v-model.trim="formProduto.preco_custo"
+                type="text"
+                inputmode="decimal"
+                placeholder="Opcional"
+                class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+              />
+              <p class="mt-1 text-xs font-semibold text-slate-500">Quanto te custa uma unidade. Serve para a margem nos relatórios.</p>
+            </div>
+
             <div>
               <label class="mb-2 block text-sm font-black text-slate-700">Categoria</label>
               <input
@@ -588,7 +602,7 @@ import {
 } from '@/utils/variantes'
 
 const FORM_VAZIO = () => ({
-  origem: 'pos', nome: '', descricao: '', preco: 0,
+  origem: 'pos', nome: '', descricao: '', preco: 0, preco_custo: '',
   categoria: '', controlar_stock: false, stock: 0,
   ativo: true, disponivel_pos: true, imagem: null,
   tipo_id: '', atributos: {},
@@ -862,6 +876,7 @@ export default {
         nome:            produto.nome || '',
         descricao:       produto.descricao || '',
         preco:           Number(produto.preco || 0),
+        preco_custo:     produto.preco_custo ?? '',
         categoria:       produto.categoria || '',
         controlar_stock: Boolean(produto.controlar_stock),
         stock:           Number(produto.stock || 0),
@@ -935,6 +950,9 @@ export default {
         formData.append('nome',            this.formProduto.nome.trim())
         formData.append('descricao',       this.formProduto.descricao || '')
         formData.append('preco',           String(this.formProduto.preco))
+        if (this.formProduto.origem === 'pos' && !this.conjunto.ativo) {
+          formData.append('preco_custo', String(this.formProduto.preco_custo ?? '').replace(',', '.'))
+        }
         formData.append('categoria',       this.formProduto.categoria || 'Sem categoria')
         // menu: produtos e variações escolhidas (o servidor valida e grava tudo-ou-nada)
         if (this.conjunto.ativo) {
