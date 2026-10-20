@@ -1,5 +1,6 @@
 from django.urls import path
 from ..Views import adminView
+from ..Views import relatorioView
 from ..pos import views_admin as pos_admin
 
 urlpatterns = [
@@ -7,6 +8,11 @@ urlpatterns = [
     # ── Estatísticas ──────────────────────────────────────────
     path('admin/stats/',                        adminView.admin_stats,               name='admin-stats'),
     path('admin/dashboard/',                    adminView.admin_dashboard,           name='admin-dashboard'),
+    # ── Relatórios (catálogo, consulta e exportação) ───────────
+    path('admin/relatorios/catalogo/',            relatorioView.admin_catalogo,  name='admin-relatorios-catalogo'),
+    path('admin/relatorios/historico/',           relatorioView.admin_historico, name='admin-relatorios-historico'),
+    path('admin/relatorios/r/<slug:rid>/',        relatorioView.admin_relatorio, name='admin-relatorio'),
+    path('admin/relatorios/r/<slug:rid>/exportar/', relatorioView.admin_exportar, name='admin-relatorio-exportar'),
     # ── Lojas ─────────────────────────────────────────────────
     path('admin/lojas/',                        adminView.admin_loja_list,           name='admin-loja-list'),
     path('admin/lojas/<int:loja_id>/',          adminView.admin_loja_gerir,          name='admin-loja-gerir'),

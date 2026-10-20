@@ -58,6 +58,7 @@ class Utilizador(models.Model):
             'gerir_subscricoes', # planos, subscrições e faturas das lojas
             'gerir_home',        # secções da página inicial
             'gerir_devolucoes',  # reembolsos: disputas e decisões finais
+            'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
         ],
         'moderador': [
             'ver_stats',
@@ -82,6 +83,7 @@ class Utilizador(models.Model):
             'gerir_encomendas',
             'ver_pos',
             'gerir_subscricoes',
+            'ver_relatorios',
         ],
     }
  
@@ -1905,3 +1907,22 @@ class CreditoComissao(models.Model):
 
     class Meta:
         ordering = ['-data_criacao']
+
+
+class RelatorioGerado(models.Model):
+    """Registo de cada exportação de um relatório (quem, quando, o quê e com que filtros) — auditoria."""
+    utilizador = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, related_name='relatorios_gerados')
+    loja       = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='relatorios_gerados')
+    relatorio  = models.CharField(max_length=40)
+    formato    = models.CharField(max_length=5)
+    inicio     = models.DateField()
+    fim        = models.DateField()
+    filtros    = models.JSONField(default=dict, blank=True)
+    linhas     = models.PositiveIntegerField(default=0)
+    data_criacao = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-data_criacao']
+
+    def __str__(self):
+        return f'{self.relatorio} ({self.formato}) por {self.utilizador_id} em {self.data_criacao:%Y-%m-%d %H:%M}'
