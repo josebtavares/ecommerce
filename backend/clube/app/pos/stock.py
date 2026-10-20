@@ -143,13 +143,14 @@ def _alerta(produto, antes, depois, variante=None):
     _alerta_stock_baixo(produto.loja, produto, antes, depois, variante)
 
 
-def cancelar_conta(conta, motivo=''):
+def cancelar_conta(conta, motivo='', por=''):
     """
     Cancela a conta inteira: repõe o stock dos itens não cancelados, marca-os
     cancelados, recalcula o total e liberta a mesa. Usado no POS e no admin.
     """
-    conta.cancelar(motivo)          # repõe o stock dos itens não cancelados
-    conta.items.exclude(status='cancelado').update(status='cancelado')
+    conta.cancelar(motivo, por)     # repõe o stock dos itens não cancelados
+    conta.items.exclude(status='cancelado').update(status='cancelado', cancelado_em=conta.cancelada_em,
+                                                   cancelado_por=(por or '')[:100], atualizado_em=conta.cancelada_em)
     conta.calcular_totais()
     if conta.mesa_id:
         conta.mesa.fechar()

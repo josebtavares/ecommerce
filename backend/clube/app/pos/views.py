@@ -62,7 +62,7 @@ PREFETCH_CONJUNTO_LOJA = ('componentes__produto__inventario', 'componentes__vari
                           'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante',
                           'componentes__produto__variantes', 'grupos__opcoes__produto__variantes')
 from app.utils.auth import autenticar
-from app.utils.dinheiro import ler_valor
+from app.utils.dinheiro import ler_valor, formatar as formatar_dinheiro
 from app.utils.google_auth import google_obter_utilizador
 from app.utils.password import mensagem_password_fraca
 from app.utils.contas import username_livre
@@ -197,6 +197,22 @@ def _sem_permissao(membro, flag, msg):
     if membro and not getattr(membro, flag, False):
         return Response({'detail': msg}, status=status.HTTP_403_FORBIDDEN)
     return None
+
+
+def _quem(membro, utilizador):
+    """Nome de quem faz a operação (membro da equipa ou conta principal), guardado nos registos."""
+    pessoa = membro or utilizador
+    return pessoa.nome[:100] if pessoa else ''
+
+
+def _cancelar_item(item, por, motivo=''):
+    """Artigo cancelado/retirado: repõe o stock e fica na conta (não cobrado) com quem, quando e porquê."""
+    repor_stock_item(item)
+    item.status = 'cancelado'
+    item.cancelado_em = timezone.now()
+    item.cancelado_por = (por or '')[:100]
+    item.motivo_cancelamento = (motivo or '')[:200]
+    item.save(update_fields=['status', 'cancelado_em', 'cancelado_por', 'motivo_cancelamento', 'atualizado_em'])
 
 
 def _loja_suspensa(pos):
@@ -435,7 +451,12 @@ def _conta_payload(conta, request=None):
         'taxa_servico_valor': str(conta.taxa_servico_valor),
         'gorjeta': str(conta.gorjeta),
         'desconto_valor': str(conta.desconto_valor),
+        'desconto_motivo': conta.desconto_motivo,
+        'desconto_por': conta.desconto_por,
         'total': str(conta.total),
+        'metodo_pagamento': conta.metodo_pagamento,
+        'partes': [{'pessoa': p.pessoa_numero, 'valor': str(p.valor), 'metodo': p.metodo}
+                   for p in conta.pagamentos_divididos.all()] if conta.metodo_pagamento == 'dividida' else [],
         'items': [
             {
                 'id': item.id,
@@ -452,11 +473,15 @@ def _conta_payload(conta, request=None):
                 'opcoes_texto': _opcoes_extra_texto(item),
                 # menu: o que leva (para a cozinha e para a conta)
                 'componentes': item.componentes or [],
+                'cancelado_em': item.cancelado_em,
+                'cancelado_por': item.cancelado_por,
+                'motivo_cancelamento': item.motivo_cancelamento,
             }
             for item in items
         ],
         'criada_em': conta.criada_em,
         'fechada_em': conta.fechada_em,
+        'fechada_por': conta.fechada_por,
     }
 
 
@@ -1519,21 +1544,24 @@ def conta_adicionar_item(request, pos_id, conta_id):
 @permission_classes([IsPOSAuthenticated])
 @transaction.atomic
 def conta_remover_item(request, pos_id, conta_id, item_id):
-    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    """
+    DELETE /api/pos/<pos_id>/contas/<conta_id>/items/<item_id>/   Body/query: { motivo? }
+    Retira o artigo da conta: repõe o stock e deixa-o marcado como cancelado (antes era apagado sem rasto).
+    """
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
     erro = _sem_permissao(membro, 'pode_cancelar_items', 'Sem permissão para remover items.')
     if erro:
         return erro
-    conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
-    item  = get_object_or_404(ItemContaMesa, id=item_id, conta=conta)
+    conta = get_object_or_404(ContaMesa.objects.select_for_update(), id=conta_id, pos=pos)
+    item  = get_object_or_404(ItemContaMesa.objects.select_for_update(), id=item_id, conta=conta)
 
     if conta.status != 'aberta':
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
+    if item.status == 'cancelado':
+        return Response({'detail': 'Este artigo já está cancelado.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # devolve ao stock (POS ou Bendi) — itens já cancelados já foram repostos
-    if item.status != 'cancelado':
-        repor_stock_item(item)
-
-    item.delete()
+    motivo = str(request.data.get('motivo') or request.query_params.get('motivo') or '').strip()
+    _cancelar_item(item, _quem(membro, utilizador), motivo)
     conta.calcular_totais()
     return Response({'detail': 'Item removido', 'conta': {'subtotal': str(conta.subtotal), 'total': str(conta.total)}})
 
@@ -1543,7 +1571,13 @@ def conta_remover_item(request, pos_id, conta_id, item_id):
 @permission_classes([IsPOSAuthenticated])
 @transaction.atomic
 def conta_fechar(request, pos_id, conta_id):
-    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    """
+    POST /api/pos/<pos_id>/contas/<conta_id>/fechar/
+    Body: { metodo_pagamento, nif_cliente?, gorjeta?, desconto_valor?, desconto_motivo?,
+            partes?: [{valor, metodo}] (obrigatório com metodo_pagamento "dividida") }
+    Total = artigos + taxa de serviço + gorjeta − desconto; numa conta dividida as partes somam o total.
+    """
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
     erro = _sem_permissao(membro, 'pode_fechar_contas', 'Sem permissão para fechar contas.')
     if erro:
         return erro
@@ -1553,22 +1587,76 @@ def conta_fechar(request, pos_id, conta_id):
     if conta.status != 'aberta':
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
 
+    def recusar(msg):
+        return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+
     metodo_pagamento = request.data.get('metodo_pagamento')
-    nif_cliente      = request.data.get('nif_cliente', '')
+    nif_cliente      = str(request.data.get('nif_cliente') or '').strip()[:20]
 
     if not metodo_pagamento:
-        return Response({'detail': 'metodo_pagamento é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
+        return recusar('metodo_pagamento é obrigatório')
     if metodo_pagamento not in dict(ContaMesa.METODO_PAGAMENTO_CHOICES):
-        return Response({'detail': 'Método de pagamento inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+        return recusar('Método de pagamento inválido.')
+    if not conta.items.exclude(status='cancelado').exists():
+        return recusar('A conta não tem artigos para cobrar.')
 
+    gorjeta, erro = ler_valor(request.data.get('gorjeta'), 'A gorjeta', obrigatorio=False)
+    if erro:
+        return recusar(erro)
+    desconto, erro = ler_valor(request.data.get('desconto_valor'), 'O desconto', obrigatorio=False)
+    if erro:
+        return recusar(erro)
+    desconto = desconto or Decimal('0.00')
+    if desconto and membro and not membro.pode_dar_descontos:
+        return Response({'detail': 'Sem permissão para dar descontos.'}, status=status.HTTP_403_FORBIDDEN)
+
+    quem = _quem(membro, utilizador)
+    conta.calcular_totais()   # artigos e taxa de serviço actuais
+    if desconto > conta.subtotal + conta.taxa_servico_valor:
+        return recusar('O desconto não pode ser maior do que a conta (artigos + taxa de serviço).')
+    conta.gorjeta = gorjeta or Decimal('0.00')
+    conta.desconto_valor = desconto
+    conta.desconto_motivo = str(request.data.get('desconto_motivo') or '').strip()[:200] if desconto else ''
+    conta.desconto_por = quem if desconto else ''
     if nif_cliente:
         conta.nif_cliente = nif_cliente
-        conta.save(update_fields=['nif_cliente'])
+    conta.save(update_fields=['gorjeta', 'desconto_valor', 'desconto_motivo', 'desconto_por', 'nif_cliente'])
+    conta.calcular_totais()
 
-    conta.fechar(metodo_pagamento)
+    partes = []
+    if metodo_pagamento == 'dividida':
+        bruto = request.data.get('partes')
+        if not isinstance(bruto, list) or not 2 <= len(bruto) <= 20:
+            return recusar('Numa conta dividida indica entre 2 e 20 partes.')
+        metodos = set(dict(ContaMesa.METODO_PAGAMENTO_CHOICES)) - {'dividida'}
+        for n, parte in enumerate(bruto, 1):
+            if not isinstance(parte, dict):
+                return recusar('Partes inválidas.')
+            valor, erro = ler_valor(parte.get('valor'), f'O valor da parte {n}')
+            if erro:
+                return recusar(erro)
+            if valor <= 0:
+                return recusar(f'A parte {n} tem de ter um valor maior do que zero.')
+            if parte.get('metodo') not in metodos:
+                return recusar(f'Escolhe o método de pagamento da parte {n}.')
+            partes.append((n, valor, parte['metodo']))
+        soma = sum((v for _, v, _ in partes), Decimal('0.00'))
+        if soma != conta.total:
+            return recusar(f'As partes somam {formatar_dinheiro(soma)} mas a conta é de {formatar_dinheiro(conta.total)}.')
+
+    agora = timezone.now()
+    for n, valor, metodo in partes:
+        PagamentoDividido.objects.create(conta=conta, pessoa_numero=n, valor=valor, metodo=metodo, pago=True, pago_em=agora)
+    if partes:
+        conta.dividida_em = len(partes)
+        conta.save(update_fields=['dividida_em'])
+
+    conta.fechar(metodo_pagamento, por=quem)
     return Response({
         'detail': 'Conta fechada com sucesso',
-        'conta': {'id': conta.id, 'total': str(conta.total), 'metodo_pagamento': conta.metodo_pagamento, 'fechada_em': conta.fechada_em}
+        'conta': {'id': conta.id, 'total': str(conta.total), 'metodo_pagamento': conta.metodo_pagamento,
+                  'fechada_em': conta.fechada_em, 'gorjeta': str(conta.gorjeta), 'desconto_valor': str(conta.desconto_valor),
+                  'partes': [{'pessoa': n, 'valor': str(v), 'metodo': m} for n, v, m in partes]}
     })
 
 
@@ -1581,7 +1669,7 @@ def conta_cancelar(request, pos_id, conta_id):
     POST /api/pos/<pos_id>/contas/<conta_id>/cancelar/   Body: { motivo? }
     Cancela a conta inteira: repõe o stock de todos os itens e liberta a mesa.
     """
-    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
     if membro and not membro.pode_cancelar_items:
         return Response({'detail': 'Sem permissão para cancelar.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1590,7 +1678,7 @@ def conta_cancelar(request, pos_id, conta_id):
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
 
     motivo = str(request.data.get('motivo') or '').strip()[:300]
-    cancelar_conta(conta, motivo)   # repõe o stock, cancela os itens e liberta a mesa
+    cancelar_conta(conta, motivo, por=_quem(membro, utilizador))   # repõe o stock, cancela os itens e liberta a mesa
     return Response({'detail': 'Conta cancelada. Stock reposto.', 'conta': {'id': conta.id, 'status': conta.status}})
 
 
@@ -1648,9 +1736,9 @@ def pos_historico(request, pos_id):
 @permission_classes([IsPOSAuthenticated])
 @transaction.atomic
 def item_status_atualizar(request, pos_id, conta_id, item_id):
-    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
     conta       = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
-    item        = get_object_or_404(ItemContaMesa, id=item_id, conta=conta)
+    item        = get_object_or_404(ItemContaMesa.objects.select_for_update(), id=item_id, conta=conta)
     novo_status = request.data.get('status')
 
     if novo_status not in ['pendente', 'preparando', 'pronto', 'entregue', 'cancelado']:
@@ -1669,11 +1757,13 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
         return Response({'detail': 'Item cancelado não pode ser reactivado. Adiciona-o de novo.'},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    if novo_status == 'cancelado' and item.status != 'cancelado':
-        repor_stock_item(item)
-
-    item.status = novo_status
-    item.save(update_fields=['status', 'atualizado_em'])
+    if novo_status == 'cancelado':
+        if item.status != 'cancelado':
+            motivo = str(request.data.get('motivo') or '').strip()
+            _cancelar_item(item, _quem(membro, utilizador), motivo)
+    else:
+        item.status = novo_status
+        item.save(update_fields=['status', 'atualizado_em'])
     conta.calcular_totais()   # item cancelado deixa de contar no total
 
     return Response({
@@ -1691,16 +1781,53 @@ def item_status_atualizar(request, pos_id, conta_id, item_id):
 # TURNOS
 # ═══════════════════════════════════════════════════════════════════
 
+def _pos_turno(request, pos_id):
+    """Turnos: a conta principal ou um membro com a permissão "Abrir/Fechar turno"."""
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
+    erro = _sem_permissao(membro, 'pode_abrir_fechar_turno', 'Sem permissão para abrir e fechar a caixa.')
+    return pos, membro, utilizador, erro
+
+
+def _turno_json(turno, ver_esperado):
+    from .relatorios import resumo_turno
+    r = {k: (str(v) if isinstance(v, Decimal) else v) for k, v in resumo_turno(turno).items()}
+    if not ver_esperado and turno.aberto:
+        # fecho "às cegas": quem não vê os relatórios conta o dinheiro sem saber quanto devia estar
+        for k in ('vendas_dinheiro', 'esperado', 'vendas_total', 'contas'):
+            r[k] = None
+    return r
+
+
+@api_view(['GET'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def turno_atual(request, pos_id):
+    """GET /api/pos/<pos_id>/turnos/atual/ — caixa aberta (ou o último turno fechado) e se quem pede a pode gerir."""
+    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    pode_gerir = not membro or membro.pode_abrir_fechar_turno
+    ver_esperado = not membro or membro.pode_ver_relatorios
+    if not pode_gerir and not ver_esperado:
+        return Response({'detail': 'Sem permissão para ver a caixa.'}, status=status.HTTP_403_FORBIDDEN)
+    aberto = TurnoPOS.objects.filter(pos=pos, aberto=True).select_related('operador__user').first()
+    ultimo = (TurnoPOS.objects.filter(pos=pos, aberto=False).select_related('operador__user')
+              .order_by('-fechado_em').first())
+    return Response({
+        'turno': _turno_json(aberto, ver_esperado) if aberto else None,
+        'ultimo_turno': _turno_json(ultimo, ver_esperado) if ultimo else None,
+        'pode_gerir': pode_gerir, 'ver_esperado': ver_esperado,
+    })
+
+
 @api_view(['POST'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
+@transaction.atomic
 def turno_abrir(request, pos_id):
-    if is_membro(request):
-        return Response({'detail': 'Só o responsável do POS abre e fecha turnos.'}, status=status.HTTP_403_FORBIDDEN)
-    utilizador = request.user.utilizador
-    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-    _bloquear_se_suspenso(pos)
-
+    pos, membro, utilizador, erro = _pos_turno(request, pos_id)
+    if erro:
+        return erro
+    # bloqueia o POS: dois "abrir caixa" ao mesmo tempo não abrem dois turnos
+    ConfiguracaoPOS.objects.select_for_update().filter(id=pos.id).first()
     if TurnoPOS.objects.filter(pos=pos, aberto=True).exists():
         return Response({'detail': 'Já existe um turno aberto'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1708,20 +1835,22 @@ def turno_abrir(request, pos_id):
     if erro:
         return Response({'detail': erro}, status=status.HTTP_400_BAD_REQUEST)
 
-    turno = TurnoPOS.objects.create(pos=pos, operador=utilizador, valor_abertura=valor_abertura)
-    return Response({'id': turno.id, 'valor_abertura': str(turno.valor_abertura), 'aberto_em': turno.aberto_em}, status=status.HTTP_201_CREATED)
+    # operador = a conta principal (o turno é dela); o membro que abriu fica em "membro" e no nome
+    turno = TurnoPOS.objects.create(pos=pos, operador=utilizador or pos.dono, membro=membro,
+                                    operador_nome=_quem(membro, utilizador), valor_abertura=valor_abertura)
+    return Response({'id': turno.id, 'valor_abertura': str(turno.valor_abertura), 'aberto_em': turno.aberto_em,
+                     'operador': turno.operador_nome}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
+@transaction.atomic
 def turno_fechar(request, pos_id, turno_id):
-    if is_membro(request):
-        return Response({'detail': 'Só o responsável do POS abre e fecha turnos.'}, status=status.HTTP_403_FORBIDDEN)
-    utilizador = request.user.utilizador
-    pos   = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
-    _bloquear_se_suspenso(pos)
-    turno = get_object_or_404(TurnoPOS, id=turno_id, pos=pos)
+    pos, membro, utilizador, erro = _pos_turno(request, pos_id)
+    if erro:
+        return erro
+    turno = get_object_or_404(TurnoPOS.objects.select_for_update(), id=turno_id, pos=pos)
 
     if not turno.aberto:
         return Response({'detail': 'Turno já está fechado'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1730,10 +1859,11 @@ def turno_fechar(request, pos_id, turno_id):
     if erro:
         return Response({'detail': erro}, status=status.HTTP_400_BAD_REQUEST)
 
-    turno.fechar_turno(valor_fecho)
+    turno.fechar_turno(valor_fecho, por=_quem(membro, utilizador))
     return Response({
         'id': turno.id, 'valor_abertura': str(turno.valor_abertura),
         'valor_fecho': str(turno.valor_fecho), 'diferenca': str(turno.diferenca), 'fechado_em': turno.fechado_em,
+        'fechado_por': turno.fechado_por,
     })
 
 

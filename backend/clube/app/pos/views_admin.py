@@ -323,7 +323,7 @@ def admin_pos_cancelar_conta(request, pos_id, conta_id):
         return Response({'detail': 'A conta já está fechada/cancelada.'}, status=status.HTTP_400_BAD_REQUEST)
 
     motivo = str(request.data.get('motivo') or '').strip()[:250]
-    cancelar_conta(conta, f'[Admin] {motivo}'.strip())
+    cancelar_conta(conta, f'[Admin] {motivo}'.strip(), por='Bendi (suporte)')
     return Response({'detail': 'Conta cancelada. Stock reposto e mesa libertada.'})
 
 
