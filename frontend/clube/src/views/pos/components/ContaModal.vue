@@ -68,7 +68,7 @@
               ]"
             >
               Pedido
-              <span class="ml-1 text-xs opacity-70">({{ items.length }})</span>
+              <span class="ml-1 text-xs opacity-70">({{ itensAtivos.length }})</span>
             </button>
           </div>
         </div>
@@ -206,12 +206,12 @@
                 <article
                   v-for="item in items"
                   :key="item.id"
-                  class="rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-sm"
+                  :class="['rounded-[1.25rem] border p-3 shadow-sm', item.status === 'cancelado' ? 'border-slate-200 bg-slate-50 opacity-70' : 'border-slate-200 bg-white']"
                 >
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                       <div class="flex items-center gap-2">
-                        <h4 class="truncate text-sm font-black text-slate-950">{{ item.nome }}</h4>
+                        <h4 :class="['truncate text-sm font-black text-slate-950', item.status === 'cancelado' && 'line-through']">{{ item.nome }}</h4>
                         <p v-if="item.opcoes_texto" class="truncate text-[11px] font-bold text-amber-700">{{ item.opcoes_texto }}</p>
                         <span :class="['rounded-full px-2 py-0.5 text-[10px] font-black uppercase', item.origem === 'pos' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
                           {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
@@ -221,13 +221,17 @@
                         {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
                       </p>
                       <p class="mt-1 text-xs font-semibold text-slate-500">{{ money(item.preco_unitario) }} × {{ item.quantidade }}</p>
+                      <p v-if="item.status === 'cancelado'" class="mt-1 text-[11px] font-bold text-red-700">
+                        Retirado{{ item.cancelado_por ? ` por ${item.cancelado_por}` : '' }}{{ item.motivo_cancelamento ? ` · ${item.motivo_cancelamento}` : '' }} · não é cobrado
+                      </p>
                     </div>
 
                     <!-- Botão remover: só se tiver permissão -->
                     <button
-                      v-if="podeCancelarItems"
+                      v-if="podeCancelarItems && item.status !== 'cancelado'"
                       type="button"
                       @click="removerItem(item)"
+                      :aria-label="`Retirar ${item.nome}`"
                       class="rounded-xl p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
                       title="Remover"
                     >
@@ -254,6 +258,7 @@
                 <div v-if="Number(conta.taxa_servico_valor) > 0" class="flex justify-between text-sm font-bold text-slate-500">
                   <span>Taxa ({{ conta.taxa_servico_percentagem }}%)</span><span>{{ money(conta.taxa_servico_valor) }}</span>
                 </div>
+                <p class="text-[11px] font-semibold text-slate-400">Desconto, gorjeta e dividir a conta no pagamento.</p>
                 <div class="flex justify-between border-t border-slate-200 pt-3 text-lg font-black text-slate-950">
                   <span>Total</span><span>{{ money(conta.total) }}</span>
                 </div>
@@ -272,7 +277,7 @@
                   v-if="podeFecharContas"
                   type="button"
                   @click="finalizarConta"
-                  :disabled="items.length === 0"
+                  :disabled="itensAtivos.length === 0"
                   class="h-11 rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   Pagar
@@ -482,12 +487,12 @@
               <article
                 v-for="item in items"
                 :key="item.id"
-                class="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm"
+                :class="['rounded-[1.25rem] border p-4 shadow-sm', item.status === 'cancelado' ? 'border-slate-200 bg-slate-50 opacity-70' : 'border-slate-200 bg-white']"
               >
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
                     <div class="flex items-center gap-2">
-                      <h4 class="truncate text-sm font-black text-slate-950">{{ item.nome }}</h4>
+                      <h4 :class="['truncate text-sm font-black text-slate-950', item.status === 'cancelado' && 'line-through']">{{ item.nome }}</h4>
                       <p v-if="item.opcoes_texto" class="truncate text-[11px] font-bold text-amber-700">{{ item.opcoes_texto }}</p>
                       <span :class="['rounded-full px-2 py-0.5 text-[10px] font-black uppercase', item.origem === 'pos' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
                         {{ item.origem === 'pos' ? 'POS' : 'Loja' }}
@@ -497,13 +502,17 @@
                       {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade * item.quantidade + '× ' + c.nome).join(' · ') }}
                     </p>
                     <p class="mt-1 text-xs font-semibold text-slate-500">{{ money(item.preco_unitario) }} × {{ item.quantidade }}</p>
+                      <p v-if="item.status === 'cancelado'" class="mt-1 text-[11px] font-bold text-red-700">
+                        Retirado{{ item.cancelado_por ? ` por ${item.cancelado_por}` : '' }}{{ item.motivo_cancelamento ? ` · ${item.motivo_cancelamento}` : '' }} · não é cobrado
+                      </p>
                   </div>
 
                   <!-- Botão remover: só se tiver permissão -->
                   <button
-                    v-if="podeCancelarItems"
+                    v-if="podeCancelarItems && item.status !== 'cancelado'"
                     type="button"
                     @click="removerItem(item)"
+                    :aria-label="`Retirar ${item.nome}`"
                     class="rounded-xl p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
                     title="Remover"
                   >
@@ -530,6 +539,7 @@
               <div v-if="Number(conta.taxa_servico_valor) > 0" class="flex justify-between text-sm font-bold text-slate-500">
                 <span>Taxa ({{ conta.taxa_servico_percentagem }}%)</span><span>{{ money(conta.taxa_servico_valor) }}</span>
               </div>
+              <p class="text-xs font-semibold text-slate-400">Desconto, gorjeta e dividir a conta no pagamento.</p>
               <div class="flex justify-between border-t border-slate-200 pt-3 text-xl font-black text-slate-950">
                 <span>Total</span><span>{{ money(conta.total) }}</span>
               </div>
@@ -549,7 +559,7 @@
                 v-if="podeFecharContas"
                 type="button"
                 @click="finalizarConta"
-                :disabled="items.length === 0"
+                :disabled="itensAtivos.length === 0"
                 class="h-12 rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
               >
                 Pagar
@@ -594,6 +604,7 @@
       v-if="showPagamentoModal"
       :conta="conta"
       :pos-id="posId"
+      :pode-dar-descontos="podeDarDescontos"
       @close="showPagamentoModal = false"
       @pago="handlePagamentoConcluido"
     />
@@ -662,6 +673,11 @@ export default {
       return Array.isArray(this.conta?.items) ? this.conta.items : []
     },
 
+    // os retirados/cancelados ficam na conta (riscados) mas não contam
+    itensAtivos() {
+      return this.items.filter(i => i.status !== 'cancelado')
+    },
+
     produtosFiltrados() {
       const query = this.searchQuery.toLowerCase().trim()
       return this.produtos.filter(produto => {
@@ -688,6 +704,11 @@ export default {
     podeCancelarItems() {
       if (!this.isMembro) return true
       return this.permissoes?.pode_cancelar_items ?? false
+    },
+
+    podeDarDescontos() {
+      if (!this.isMembro) return true
+      return this.permissoes?.pode_dar_descontos ?? false
     },
   },
 
@@ -832,11 +853,15 @@ export default {
 
     async removerItem(item) {
       if (!this.podeCancelarItems) return
-      if (!confirm(`Remover ${item.nome}?`)) return
+      // fica na conta como retirado (com quem e porquê), não é cobrado e o stock volta
+      const motivo = window.prompt(`Retirar ${item.nome} da conta? O stock volta a ficar disponível.
+
+Motivo (opcional):`, '')
+      if (motivo === null) return
 
       this.error = ''
       try {
-        await api.delete(`/api/pos/${this.posId}/contas/${this.conta.id}/items/${item.id}/`)
+        await api.delete(`/api/pos/${this.posId}/contas/${this.conta.id}/items/${item.id}/`, { data: { motivo } })
         await this.recarregarConta()
         await this.carregarProdutos()
       } catch (err) {
@@ -845,7 +870,7 @@ export default {
     },
 
     finalizarConta() {
-      if (!this.podeFecharContas || !this.conta || this.items.length === 0) return
+      if (!this.podeFecharContas || !this.conta || this.itensAtivos.length === 0) return
       this.showPagamentoModal = true
     },
 

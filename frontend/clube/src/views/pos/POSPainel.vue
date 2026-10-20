@@ -18,49 +18,12 @@
 
     <template v-if="d">
       <!-- Caixa (turno) + agora -->
-      <section class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex min-w-0 items-start gap-3">
-            <div :class="['flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg',
-                          d.turno ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500']">
-              <font-awesome-icon :icon="['fas', 'cash-register']" />
-            </div>
-            <div class="min-w-0">
-              <p class="text-sm font-black text-slate-950">
-                {{ d.turno ? `Caixa aberta desde ${hora(d.turno.aberto_em)}` : 'Caixa fechada' }}
-                <span v-if="d.turno?.operador" class="font-semibold text-slate-500">· {{ d.turno.operador }}</span>
-              </p>
-              <p v-if="d.turno" class="mt-1 text-sm font-semibold text-slate-600">
-                Fundo {{ dinheiro(d.turno.valor_abertura) }} · Dinheiro recebido {{ dinheiro(d.turno.vendas_dinheiro) }} ·
-                <span class="font-black text-slate-950">Esperado na caixa {{ dinheiro(d.turno.esperado) }}</span>
-              </p>
-              <p v-else-if="d.ultimo_turno" class="mt-1 text-sm font-semibold text-slate-600">
-                Último turno fechado {{ dataHora(d.ultimo_turno.fechado_em) }} ·
-                <span :class="corDiferenca(d.ultimo_turno.diferenca)">{{ textoDiferenca(d.ultimo_turno.diferenca) }}</span>
-              </p>
-              <p v-else class="mt-1 text-sm font-semibold text-slate-500">Abre a caixa no início do dia para controlar o dinheiro.</p>
-              <p class="mt-1 text-xs font-semibold text-slate-500">
-                Agora: {{ d.agora.contas_abertas }} {{ d.agora.contas_abertas === 1 ? 'conta aberta' : 'contas abertas' }}
-                <template v-if="d.agora.contas_abertas"> · {{ dinheiro(d.agora.valor_aberto) }} por cobrar</template>
-              </p>
-            </div>
-          </div>
-
-          <form v-if="d.pode_gerir_turno" class="flex flex-wrap items-end gap-2" @submit.prevent="acaoTurno">
-            <label class="flex flex-col gap-1">
-              <span class="text-xs font-black text-slate-600">{{ d.turno ? 'Dinheiro contado' : 'Fundo de caixa' }}</span>
-              <input v-model.trim="valorTurno" type="text" inputmode="decimal" placeholder="0" required
-                     class="h-11 w-36 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none focus:border-slate-950 focus:bg-white" />
-            </label>
-            <button type="submit" :disabled="aGuardarTurno"
-                    class="h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-60">
-              {{ d.turno ? 'Fechar caixa' : 'Abrir caixa' }}
-            </button>
-          </form>
-        </div>
-        <p v-if="erroTurno" class="mt-3 text-sm font-bold text-red-700">{{ erroTurno }}</p>
-        <p v-if="resultadoTurno" class="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">{{ resultadoTurno }}</p>
-      </section>
+      <CaixaCartao :pos-id="posId" @mudou="carregar">
+        <p class="mt-1 text-xs font-semibold text-slate-500">
+          Agora: {{ d.agora.contas_abertas }} {{ d.agora.contas_abertas === 1 ? 'conta aberta' : 'contas abertas' }}
+          <template v-if="d.agora.contas_abertas"> · {{ dinheiro(d.agora.valor_aberto) }} por cobrar</template>
+        </p>
+      </CaixaCartao>
 
       <!-- Indicadores -->
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-3" :class="carregando ? 'opacity-60' : ''">
@@ -195,12 +158,13 @@
 
 <script setup>
 // Painel do POS: vendas do período (com a variação face ao período anterior), caixa (turno), por hora,
-// por método, produtos, atendentes e mesas. Dono e membros com "ver relatórios"; só o dono abre/fecha a caixa.
+// por método, produtos, atendentes e mesas. Dono e membros com "ver relatórios"; a caixa é o CaixaCartao.
 import '@/assets/relatorios-claro.css'
 import { computed, onMounted, ref } from 'vue'
 import api from '@/services/api'
 import FiltroPeriodo from '@/components/relatorios/FiltroPeriodo.vue'
 import GraficoTempo from '@/components/relatorios/GraficoTempo.vue'
+import CaixaCartao from './components/CaixaCartao.vue'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { intervaloAtalho } from '@/utils/periodos'
 
@@ -213,23 +177,8 @@ const d = ref(null)
 const erro = ref('')
 const carregando = ref(false)
 const horaAtiva = ref(null)
-const valorTurno = ref('')
-const aGuardarTurno = ref(false)
-const erroTurno = ref('')
-const resultadoTurno = ref('')
 
 const dinheiro = (v) => formatarDinheiro(v || 0)
-const p2 = (n) => String(n).padStart(2, '0')
-function hora (iso) {
-  const t = new Date(iso)
-  const hoje = new Date()
-  const hh = `${p2(t.getHours())}:${p2(t.getMinutes())}`
-  return t.toDateString() === hoje.toDateString() ? hh : `${p2(t.getDate())}/${p2(t.getMonth() + 1)} ${hh}`
-}
-function dataHora (iso) {
-  const t = new Date(iso)
-  return `${p2(t.getDate())}/${p2(t.getMonth() + 1)} ${p2(t.getHours())}:${p2(t.getMinutes())}`
-}
 function pct (v, total) {
   const t = Number(total) || 0
   return t ? `${Math.round(Number(v) / t * 100)}%` : '0%'
@@ -239,13 +188,6 @@ function textoVariacao (v) {
   return `${v > 0 ? '▲' : v < 0 ? '▼' : '='} ${Math.abs(v).toLocaleString('pt-PT', { maximumFractionDigits: 1 })}% vs período anterior`
 }
 const corVariacao = (v) => v === null || v === 0 ? 'text-slate-500' : v > 0 ? 'text-emerald-700' : 'text-red-700'
-function textoDiferenca (v) {
-  const n = Number(v)
-  if (v === null || v === undefined) return ''
-  if (!n) return 'caixa certa'
-  return n < 0 ? `faltaram ${dinheiro(-n)}` : `sobraram ${dinheiro(n)}`
-}
-const corDiferenca = (v) => !Number(v) ? 'font-black text-emerald-700' : 'font-black text-red-700'
 
 const maxHora = computed(() => Math.max(0, ...(d.value?.por_hora || []).map(h => h.vendas)))
 const horaPico = computed(() => {
@@ -289,28 +231,6 @@ async function carregar () {
 }
 
 function mudarPeriodo (p) { periodo.value = p; carregar() }
-
-async function acaoTurno () {
-  erroTurno.value = ''
-  resultadoTurno.value = ''
-  const valor = valorTurno.value.replace(',', '.')
-  aGuardarTurno.value = true
-  try {
-    if (d.value.turno) {
-      const { data } = await api.post(`/api/pos/${props.posId}/turnos/${d.value.turno.id}/fechar/`, { valor_fecho: valor })
-      resultadoTurno.value = `Caixa fechada: ${textoDiferenca(data.diferenca)}.`
-    } else {
-      await api.post(`/api/pos/${props.posId}/turnos/abrir/`, { valor_abertura: valor })
-      resultadoTurno.value = 'Caixa aberta.'
-    }
-    valorTurno.value = ''
-    await carregar()
-  } catch (e) {
-    erroTurno.value = e.response?.data?.detail || 'Não foi possível guardar.'
-  } finally {
-    aGuardarTurno.value = false
-  }
-}
 
 onMounted(carregar)
 </script>

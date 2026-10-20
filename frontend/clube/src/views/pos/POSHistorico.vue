@@ -73,6 +73,7 @@
               <option value="cartao">Cartão</option>
               <option value="mbway">MBWay</option>
               <option value="transferencia">Transferência</option>
+              <option value="dividida">Dividida</option>
             </select>
           </div>
         </div>
@@ -233,16 +234,19 @@
             <article
               v-for="item in contaSelecionada.items"
               :key="item.id"
-              class="rounded-2xl bg-slate-50 p-4"
+              :class="['rounded-2xl bg-slate-50 p-4', item.status === 'cancelado' && 'opacity-60']"
             >
               <div class="flex items-center justify-between gap-3">
                 <div>
-                  <p class="font-black text-slate-950">{{ item.quantidade }}x {{ item.nome }}</p>
+                  <p :class="['font-black text-slate-950', item.status === 'cancelado' && 'line-through']">{{ item.quantidade }}x {{ item.nome }}</p>
                   <p class="mt-1 text-xs font-semibold text-slate-500">
                     {{ item.origem === 'pos' ? 'Produto POS' : 'Produto loja Bendi' }}
                   </p>
+                  <p v-if="item.status === 'cancelado'" class="mt-1 text-xs font-bold text-red-700">
+                    Retirado{{ item.cancelado_por ? ` por ${item.cancelado_por}` : '' }}{{ item.motivo_cancelamento ? ` · ${item.motivo_cancelamento}` : '' }} · não cobrado
+                  </p>
                 </div>
-                <p class="font-black text-slate-950">{{ money(item.preco_total) }}</p>
+                <p :class="['font-black text-slate-950', item.status === 'cancelado' && 'line-through']">{{ money(item.preco_total) }}</p>
               </div>
             </article>
           </div>
@@ -259,10 +263,28 @@
               <span>Taxa ({{ contaSelecionada.taxa_servico_percentagem }}%)</span>
               <span>{{ money(contaSelecionada.taxa_servico_valor) }}</span>
             </div>
+            <div v-if="Number(contaSelecionada.desconto_valor) > 0" class="mt-2 flex justify-between gap-3 text-sm font-bold text-emerald-300">
+              <span>Desconto<template v-if="contaSelecionada.desconto_motivo"> · {{ contaSelecionada.desconto_motivo }}</template></span>
+              <span>−{{ money(contaSelecionada.desconto_valor) }}</span>
+            </div>
+            <div v-if="Number(contaSelecionada.gorjeta) > 0" class="mt-2 flex justify-between text-sm font-bold text-slate-300">
+              <span>Gorjeta</span>
+              <span>{{ money(contaSelecionada.gorjeta) }}</span>
+            </div>
             <div class="mt-3 flex justify-between text-xl font-black">
               <span>Total</span>
               <span>{{ money(contaSelecionada.total) }}</span>
             </div>
+            <div v-if="contaSelecionada.partes?.length" class="mt-3 space-y-1 border-t border-white/15 pt-3 text-sm font-bold text-slate-300">
+              <div v-for="p in contaSelecionada.partes" :key="p.pessoa" class="flex justify-between">
+                <span>Pessoa {{ p.pessoa }} · {{ getMetodoLabel(p.metodo) }}</span>
+                <span>{{ money(p.valor) }}</span>
+              </div>
+            </div>
+            <p v-if="contaSelecionada.fechada_por || contaSelecionada.desconto_por" class="mt-3 text-xs font-semibold text-slate-400">
+              <template v-if="contaSelecionada.fechada_por">Recebido por {{ contaSelecionada.fechada_por }}</template>
+              <template v-if="contaSelecionada.desconto_por"> · desconto dado por {{ contaSelecionada.desconto_por }}</template>
+            </p>
           </div>
         </div>
       </div>

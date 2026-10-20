@@ -4,7 +4,7 @@ Painel e relatórios do POS (âmbito 'pos' do motor de relatórios: utils/relato
 Regras de data (fuso da plataforma, como na loja):
   venda              → quando a conta é fechada (paga)            ContaMesa.fechada_em
   conta cancelada    → quando foi cancelada                       ContaMesa.cancelada_em
-  artigo cancelado   → quando o artigo foi cancelado              ItemContaMesa.atualizado_em
+  artigo cancelado   → quando o artigo foi cancelado/retirado     ItemContaMesa.cancelado_em
   turno de caixa     → quando o turno abriu                       TurnoPOS.aberto_em
 
 Valores de uma conta fechada: artigos (os não cancelados) + taxa de serviço + gorjeta − desconto = total pago.
@@ -19,6 +19,7 @@ from django.db.models.functions import ExtractHour
 
 from ..utils import relatorios as rel
 from ..utils import relatorios_motor as motor
+from ..utils.dinheiro import formatar
 from ..utils.horarios import fuso
 from ..utils.relatorios import ZERO, d2
 from ..utils.relatorios_motor import DIAS_AGREGADO, _col, _r, _somas, relatorio
@@ -141,7 +142,8 @@ def resumo_turno(t, agora=None):
     a = contas.aggregate(v=Sum('total'), n=Count('id'))
     dinheiro = t.vendas_dinheiro(ate=fim)
     esperado = t.valor_abertura + dinheiro
-    return {'id': t.id, 'operador': t.operador.nome if t.operador_id else '', 'aberto': t.aberto,
+    return {'id': t.id, 'operador': t.operador_nome or (t.operador.nome if t.operador_id else ''),
+            'fechado_por': t.fechado_por, 'aberto': t.aberto,
             'aberto_em': t.aberto_em, 'fechado_em': t.fechado_em, 'valor_abertura': t.valor_abertura,
             'vendas_dinheiro': dinheiro, 'esperado': esperado, 'contado': t.valor_fecho,
             'diferenca': (t.valor_fecho - esperado) if t.valor_fecho is not None and not t.aberto else None,
@@ -200,7 +202,7 @@ def painel(pos, periodo, dono=False):
     # cancelamentos (controlo)
     canc = ContaMesa.objects.filter(p.filtro('cancelada_em'), pos_id=pos.id, status='cancelada').aggregate(
         n=Count('id', distinct=True), v=Sum('items__preco_total'))
-    itens_canc = ItemContaMesa.objects.filter(p.filtro('atualizado_em'), conta__pos_id=pos.id, status='cancelado').exclude(
+    itens_canc = ItemContaMesa.objects.filter(p.filtro('cancelado_em'), conta__pos_id=pos.id, status='cancelado').exclude(
         conta__status='cancelada').aggregate(n=Sum('quantidade'), v=Sum('preco_total'))
 
     # agora
@@ -584,7 +586,8 @@ def _pos_turnos(f):
     linhas = []
     for t in turnos.order_by('aberto_em', 'id')[:motor.MAX_LINHAS]:
         r = resumo_turno(t, agora)
-        linhas.append({'turno': t.id, 'operador': r['operador'], 'estado': 'Aberto' if t.aberto else 'Fechado',
+        linhas.append({'turno': t.id, 'operador': r['operador'], 'fechado_por': t.fechado_por,
+                       'estado': 'Aberto' if t.aberto else 'Fechado',
                        'aberto_em': t.aberto_em, 'fechado_em': t.fechado_em, 'contas': r['contas'],
                        'vendas_total': r['vendas_total'], 'abertura': t.valor_abertura, 'vendas_dinheiro': r['vendas_dinheiro'],
                        'esperado': r['esperado'], 'contado': r['contado'], 'diferenca': r['diferenca']})
@@ -596,7 +599,8 @@ def _pos_turnos(f):
                    _r('Vendas em dinheiro', tot['vendas_dinheiro']), _r('Diferença acumulada', tot['diferenca']),
                    _r('Turnos com falta', sum(1 for l in fechados if l['diferenca'] < 0), 'numero'),
                    _r('Turnos com sobra', sum(1 for l in fechados if l['diferenca'] > 0), 'numero')],
-        'colunas': [_col('turno', 'Turno', 'id'), _col('operador', 'Operador'), _col('estado', 'Estado'),
+        'colunas': [_col('turno', 'Turno', 'id'), _col('operador', 'Abriu'), _col('fechado_por', 'Fechou'),
+                    _col('estado', 'Estado'),
                     _col('aberto_em', 'Aberto em', 'datahora'), _col('fechado_em', 'Fechado em', 'datahora'),
                     _col('contas', 'Contas', 'numero'), _col('vendas_total', 'Vendas (todos os métodos)', 'dinheiro'),
                     _col('abertura', 'Fundo de caixa', 'dinheiro'), _col('vendas_dinheiro', 'Vendas em dinheiro', 'dinheiro'),
@@ -622,7 +626,7 @@ def _pos_atendentes(f):
     uni = por_atendente(_atendente(f, itens_vendidos(f.pos_id, p), 'conta__'), 'conta__', u=Sum('quantidade'))
     cc = por_atendente(_atendente(f, ContaMesa.objects.filter(p.filtro('cancelada_em'), pos_id=f.pos_id, status='cancelada')),
                        n=Count('id'))
-    ic = por_atendente(_atendente(f, ItemContaMesa.objects.filter(p.filtro('atualizado_em'), conta__pos_id=f.pos_id,
+    ic = por_atendente(_atendente(f, ItemContaMesa.objects.filter(p.filtro('cancelado_em'), conta__pos_id=f.pos_id,
                                                                   status='cancelado').exclude(conta__status='cancelada'), 'conta__'),
                        'conta__', n=Sum('quantidade'), v=Sum('preco_total'))
     linhas = []
@@ -670,20 +674,23 @@ def _pos_cancelamentos(f):
         for c in qs[:motor.MAX_LINHAS]:
             linhas.append({'quando': c.cancelada_em, 'tipo': 'Conta cancelada', 'conta': c.id,
                            'mesa': c.mesa.numero if c.mesa_id else '', 'atendente': nome_atendente(c),
-                           'descricao': f'{c.u or 0} artigo(s)', 'motivo': c.motivo_cancelamento, 'valor': c.v or ZERO})
+                           'por': c.cancelada_por, 'descricao': f'{c.u or 0} artigo(s)', 'motivo': c.motivo_cancelamento,
+                           'valor': c.v or ZERO})
     if tipo in ('', 'artigo'):
-        qs = _atendente(f, ItemContaMesa.objects.filter(p.filtro('atualizado_em'), conta__pos_id=f.pos_id, status='cancelado')
+        qs = _atendente(f, ItemContaMesa.objects.filter(p.filtro('cancelado_em'), conta__pos_id=f.pos_id, status='cancelado')
                         .exclude(conta__status='cancelada').select_related('conta__mesa'), 'conta__')
         for it in qs[:motor.MAX_LINHAS]:
-            linhas.append({'quando': it.atualizado_em, 'tipo': 'Artigo cancelado', 'conta': it.conta_id,
+            linhas.append({'quando': it.cancelado_em, 'tipo': 'Artigo cancelado', 'conta': it.conta_id,
                            'mesa': it.conta.mesa.numero if it.conta.mesa_id else '', 'atendente': nome_atendente(it.conta),
-                           'descricao': f'{it.quantidade}× {it.nome}', 'motivo': '', 'valor': it.preco_total})
+                           'por': it.cancelado_por, 'descricao': f'{it.quantidade}× {it.nome}',
+                           'motivo': it.motivo_cancelamento, 'valor': it.preco_total})
     if tipo in ('', 'desconto'):
         qs = _atendente(f, contas_vendidas(f.pos_id, p).filter(desconto_valor__gt=0).select_related('mesa'))
         for c in qs[:motor.MAX_LINHAS]:
             linhas.append({'quando': c.fechada_em, 'tipo': 'Desconto', 'conta': c.id, 'mesa': c.mesa.numero if c.mesa_id else '',
-                           'atendente': nome_atendente(c), 'descricao': f'conta de {d2(c.subtotal + c.taxa_servico_valor + c.gorjeta)}',
-                           'motivo': '', 'valor': c.desconto_valor})
+                           'atendente': nome_atendente(c), 'por': c.desconto_por,
+                           'descricao': f'conta de {formatar(c.subtotal + c.taxa_servico_valor + c.gorjeta)}',
+                           'motivo': c.desconto_motivo, 'valor': c.desconto_valor})
     linhas.sort(key=lambda l: (l['quando'], l['conta']))
 
     def soma(t):
@@ -694,12 +701,13 @@ def _pos_cancelamentos(f):
                    _r('Artigos cancelados', soma('Artigo cancelado')),
                    _r('Descontos', soma('Desconto'))],
         'colunas': [_col('quando', 'Quando', 'datahora'), _col('tipo', 'Tipo'), _col('conta', 'Conta', 'id'), _col('mesa', 'Mesa'),
-                    _col('atendente', 'Atendente da conta'), _col('descricao', 'Descrição'), _col('motivo', 'Motivo'),
+                    _col('atendente', 'Atendente da conta'), _col('por', 'Feito por'), _col('descricao', 'Descrição'),
+                    _col('motivo', 'Motivo'),
                     _col('valor', 'Valor', 'dinheiro')],
         'linhas': linhas, 'totais': _somas(linhas, ['valor']),
-        'notas': ['Artigos cancelados: os que ficaram na conta marcados como cancelados (não foram cobrados). '
-                  'Os artigos retirados de uma conta ainda aberta antes de serem pedidos não ficam registados. '
-                  'O atendente é quem abriu a conta.'],
+        'notas': ['Artigos cancelados: os cancelados ou retirados de uma conta (não foram cobrados), com quem o fez e o '
+                  'motivo. Até 20/10/2026 os artigos retirados de uma conta aberta eram apagados e não aparecem aqui; '
+                  'nesses registos antigos "Feito por" fica vazio. O atendente é quem abriu a conta.'],
     }
 
 

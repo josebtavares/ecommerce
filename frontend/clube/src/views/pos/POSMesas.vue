@@ -20,6 +20,9 @@
       </button>
     </div>
 
+    <!-- Caixa: membros com "Abrir/Fechar turno" (o dono tem-na no Painel) -->
+    <CaixaCartao v-if="isMembro && permissoes?.pode_abrir_fechar_turno" :pos-id="posId" />
+
     <!-- Alertas -->
     <div
       v-if="error"
@@ -191,6 +194,7 @@
       :mesa="mesaSelecionada"
       :pos-id="posId"
       :permissoes="permissoes"
+      :is-membro="isMembro"
       @close="fecharContaModal"
       @atualizar="carregarMesas"
     />
@@ -201,11 +205,12 @@
 import api from '@/services/api'
 import MesaCard from './components/MesaCard.vue'
 import ContaModal from './components/ContaModal.vue'
+import CaixaCartao from './components/CaixaCartao.vue'
 
 export default {
   name: 'POSMesas',
 
-  components: { MesaCard, ContaModal },
+  components: { MesaCard, ContaModal, CaixaCartao },
 
   props: {
     posId: {

@@ -484,6 +484,9 @@ class ContaMesa(models.Model):
     taxa_servico_valor = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     gorjeta = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     desconto_valor = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    # quem deu o desconto e porquê (controlo interno: relatório "Cancelamentos e descontos")
+    desconto_motivo = models.CharField(max_length=200, blank=True, default='', db_default='')
+    desconto_por = models.CharField(max_length=100, blank=True, default='', db_default='')
     total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 
     STATUS_CHOICES = [
@@ -524,8 +527,10 @@ class ContaMesa(models.Model):
     criada_em = models.DateTimeField(auto_now_add=True)
     atualizada_em = models.DateTimeField(auto_now=True)
     fechada_em = models.DateTimeField(null=True, blank=True)
+    fechada_por = models.CharField(max_length=100, blank=True, default='', db_default='')   # quem recebeu o pagamento
     cancelada_em = models.DateTimeField(null=True, blank=True)
     motivo_cancelamento = models.CharField(max_length=300, blank=True, default='', db_default='')
+    cancelada_por = models.CharField(max_length=100, blank=True, default='', db_default='')
 
     class Meta:
         verbose_name = 'Conta de Mesa'
@@ -565,24 +570,26 @@ class ContaMesa(models.Model):
 
         self.save(update_fields=['subtotal', 'taxa_servico_valor', 'total', 'atualizada_em'])
 
-    def fechar(self, metodo_pagamento):
+    def fechar(self, metodo_pagamento, por=''):
         self.status = 'fechada'
         self.metodo_pagamento = metodo_pagamento
         self.fechada_em = timezone.now()
-        self.save(update_fields=['status', 'metodo_pagamento', 'fechada_em'])
+        self.fechada_por = (por or '')[:100]
+        self.save(update_fields=['status', 'metodo_pagamento', 'fechada_em', 'fechada_por'])
 
         self.mesa.fechar()
 
-    def cancelar(self, motivo=''):
+    def cancelar(self, motivo='', por=''):
         from .stock import repor_stock_item   # evita import circular
         for item in self.items.exclude(status='cancelado'):
             repor_stock_item(item)
         self.status = 'cancelada'
         self.cancelada_em = timezone.now()
         self.motivo_cancelamento = (motivo or '')[:300]
+        self.cancelada_por = (por or '')[:100]
         if motivo:
             self.observacoes += f"\n[CANCELADA] {motivo} em {self.cancelada_em}"
-        self.save(update_fields=['status', 'observacoes', 'cancelada_em', 'motivo_cancelamento'])
+        self.save(update_fields=['status', 'observacoes', 'cancelada_em', 'motivo_cancelamento', 'cancelada_por'])
 
 
 class ItemContaMesa(models.Model):
@@ -669,6 +676,10 @@ class ItemContaMesa(models.Model):
         choices=STATUS_ITEM_CHOICES,
         default='pendente'
     )
+    # artigo cancelado/retirado: fica na conta (não é cobrado) com quem, quando e porquê
+    cancelado_em = models.DateTimeField(null=True, blank=True)
+    cancelado_por = models.CharField(max_length=100, blank=True, default='', db_default='')
+    motivo_cancelamento = models.CharField(max_length=200, blank=True, default='', db_default='')
 
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -776,6 +787,11 @@ class TurnoPOS(models.Model):
         related_name='turnos_operados',
         verbose_name='Operador'
     )
+    # membro da equipa que abriu o turno (operador fica a conta principal) + nomes no momento
+    membro = models.ForeignKey('UtilizadorPOS', on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='turnos_abertos')
+    operador_nome = models.CharField(max_length=100, blank=True, default='', db_default='')
+    fechado_por = models.CharField(max_length=100, blank=True, default='', db_default='')
 
     valor_abertura = models.DecimalField(max_digits=10, decimal_places=2)
     valor_fecho = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -797,7 +813,7 @@ class TurnoPOS(models.Model):
 
     def __str__(self):
         status = "Aberto" if self.aberto else "Fechado"
-        return f"Turno #{self.id} - {self.operador.nome} ({status})"
+        return f"Turno #{self.id} - {self.operador_nome or self.operador.nome} ({status})"
 
     def vendas_dinheiro(self, ate=None):
         """
@@ -812,15 +828,16 @@ class TurnoPOS(models.Model):
                                                   metodo='dinheiro').aggregate(t=models.Sum('valor'))['t']
         return (inteiras or Decimal('0.00')) + (partes or Decimal('0.00'))
 
-    def fechar_turno(self, valor_contado):
+    def fechar_turno(self, valor_contado, por=''):
         self.aberto = False
         self.fechado_em = timezone.now()
         self.valor_fecho = valor_contado
+        self.fechado_por = (por or '')[:100]
 
         valor_esperado = self.valor_abertura + self.vendas_dinheiro()
         self.diferenca = self.valor_fecho - valor_esperado
 
-        self.save(update_fields=['aberto', 'fechado_em', 'valor_fecho', 'diferenca'])
+        self.save(update_fields=['aberto', 'fechado_em', 'valor_fecho', 'diferenca', 'fechado_por'])
         
         
 class UtilizadorPOS(models.Model):
