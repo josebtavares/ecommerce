@@ -111,7 +111,7 @@
       <!-- Content -->
       <!-- pb-24: espaço para o balão do chat (canto inferior direito) não tapar o fim do conteúdo -->
       <div class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
-        <AdminDashboard    v-if="activeSection === 'dashboard'"    />
+        <AdminDashboard    v-if="activeSection === 'dashboard'"    @ir="irPara" />
         <AdminLojas        v-else-if="activeSection === 'lojas'"        />
         <AdminUtilizadores v-else-if="activeSection === 'utilizadores'" />
         <AdminProdutos     v-else-if="activeSection === 'produtos'"     />
@@ -263,6 +263,8 @@ export default {
   },
 
   methods: {
+    // atalhos do dashboard (alertas, "Ver →") — só para as secções que este papel vê
+    irPara (seccao) { if (this.seccoes.some(s => s.key === seccao)) this.activeSection = seccao },
     navegarPara (key) {
       this.activeSection = key
       this.sidebarAberta = false

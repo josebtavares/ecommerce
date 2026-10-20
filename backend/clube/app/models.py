@@ -1014,6 +1014,16 @@ class Pagamento(models.Model):
     status              = models.CharField(max_length=20, choices=STATUS, default='pendente')
     referencia_transacao= models.CharField(max_length=255, blank=True, default='')
     data_criacao        = models.DateTimeField(auto_now_add=True)
+    # quando o dinheiro entrou (cartão: logo; dinheiro: na entrega) — os relatórios de recebimentos contam por aqui
+    data_pagamento      = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    def save(self, *args, **kwargs):
+        if self.status == 'aprovado' and not self.data_pagamento:
+            from django.utils import timezone
+            self.data_pagamento = timezone.now()
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = {*kwargs['update_fields'], 'data_pagamento'}
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'Pagamento #{self.pk} — {self.status}'

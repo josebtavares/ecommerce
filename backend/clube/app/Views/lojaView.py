@@ -569,6 +569,27 @@ def metodos_pagamento_publico(request, loja_id):
 # DASHBOARD
 # ══════════════════════════════════════════════════════════════
 
+def _cobranca_loja(loja, p):
+    """O que a loja paga à Bendi: o modelo (comissão / subscrição), o plano e o que pagou no período."""
+    from ..models import FaturaSubscricao
+    from ..utils.relatorios import d2
+    from ..utils.subscricoes import hoje
+    sub = getattr(loja, 'subscricao', None) if loja.modelo_cobranca == 'subscricao' else None
+    fat = FaturaSubscricao.objects.filter(loja=loja)
+    pagas = fat.filter(p.filtro('paga_em'), estado='paga').exclude(metodo='oferta').aggregate(t=Sum('valor'), n=Count('id'))
+    proxima = fat.filter(estado='pendente').order_by('vencimento').first()
+    return {
+        'modelo': loja.modelo_cobranca,
+        'percentagem': str(loja.percentagem_comissao),
+        'subscricao': {'plano': sub.plano.nome if sub.plano_id else '', 'estado': sub.estado,
+                       'estado_nome': sub.get_estado_display(), 'pago_ate': sub.pago_ate.isoformat(),
+                       'preco': d2(sub.preco), 'meses': sub.meses} if sub else None,
+        'faturas_pagas': d2(pagas['t']), 'faturas_pagas_count': pagas['n'],
+        'proxima_fatura': {'id': proxima.id, 'valor': d2(proxima.valor), 'vencimento': proxima.vencimento.isoformat(),
+                           'em_atraso': proxima.vencimento < hoje()} if proxima else None,
+    }
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def loja_dashboard(request, loja_id):
@@ -583,47 +604,26 @@ def loja_dashboard(request, loja_id):
     if erro:
         return erro
 
-    hoje = date.today()
-    data_inicio_str = request.GET.get('data_inicio')
-    data_fim_str    = request.GET.get('data_fim')
-
-    if data_inicio_str and data_fim_str:
-        try:
-            inicio = make_aware(datetime.combine(parse_date(data_inicio_str), datetime.min.time()))
-            fim    = make_aware(datetime.combine(parse_date(data_fim_str),    datetime.max.time()))
-        except Exception:
-            return Response({'detail': 'Datas inválidas. Use YYYY-MM-DD.'}, status=400)
-        periodo = None
-    else:
-        periodo = periodo_dias(request)
-        inicio  = now() - timedelta(days=periodo)
-        fim     = now()
-        data_inicio_str = str(hoje - timedelta(days=periodo))
-        data_fim_str    = str(hoje)
-
-    duracao          = fim - inicio
-    inicio_anterior  = inicio - duracao
-    fim_anterior     = inicio
-
     from ..models import Reembolso
-    from ..utils.devolucoes import anotar_liquido, resumo_reembolsos
-    # vendas = encomendas concluídas menos o que foi reembolsado delas
-    enc_qs      = anotar_liquido(Encomenda.objects.filter(loja=loja))
-    enc_periodo = enc_qs.filter(data_criacao__range=(inicio, fim))
-    enc_ant     = enc_qs.filter(data_criacao__range=(inicio_anterior, fim_anterior))
+    from ..utils import relatorios as rel
+    try:
+        p = rel.ler_periodo(request)
+    except rel.PeriodoInvalido as e:
+        return Response({'detail': str(e)}, status=400)
+    ant = p.anterior()
+    inicio, fim = p.de, p.ate
+    periodo = p.dias if request.GET.get('periodo') and not request.GET.get('data_inicio') else None
 
-    def variacao(actual, anterior):
-        if not anterior: return None
-        return round(((actual - anterior) / anterior) * 100, 1)
-
-    total_vendas     = enc_periodo.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
-    total_vendas_ant = enc_ant.filter(status='concluido').aggregate(v=Sum('liquido'))['v'] or 0
-    vendas_brutas    = enc_periodo.filter(status='concluido').aggregate(v=Sum('valor_total'))['v'] or 0
-    # reembolsos feitos no período (inclui cancelamentos de encomendas pagas)
+    # vendas pela data de conclusão, sem ajustes (esgotados) e menos as devoluções (utils/relatorios.py)
+    vendas, vendas_ant = rel.resumo_vendas(p, loja.id), rel.resumo_vendas(ant, loja.id)
+    total_vendas     = vendas['liquidas']
     reemb_qs   = Reembolso.objects.filter(loja=loja)
-    reembolsos = resumo_reembolsos(reemb_qs.filter(data_reembolso__range=(inicio, fim)))
+    reembolsos = rel.reembolsos(p, loja.id)
+    # encomendas feitas no período (a procura) — as vendas contam pela conclusão
+    enc_qs           = Encomenda.objects.filter(loja=loja)
+    enc_periodo      = enc_qs.filter(p.filtro('data_criacao'))
     total_enc        = enc_periodo.count()
-    total_enc_ant    = enc_ant.count()
+    total_enc_ant    = enc_qs.filter(ant.filtro('data_criacao')).count()
     enc_concluidas   = enc_periodo.filter(status='concluido').count()
     enc_canceladas   = enc_periodo.filter(status='cancelado').count()
 
@@ -632,23 +632,13 @@ def loja_dashboard(request, loja_id):
         for s in ['pendente', 'pago', 'preparando', 'enviado', 'concluido', 'cancelado']
     }
 
-    vendas_por_dia = (
-        enc_qs.filter(data_criacao__range=(inicio, fim), status='concluido')
-        .annotate(dia=TruncDate('data_criacao'))
-        .values('dia')
-        .annotate(total=Sum('liquido'), count=Count('id'))
-        .order_by('dia')
-    )
-    grafico_vendas = [
-        {'dia': str(v['dia']), 'total': float(v['total']), 'count': v['count']}
-        for v in vendas_por_dia
-    ]
+    grafico_vendas = rel.serie_vendas(p, loja.id)
 
-    # unidades vendidas sozinhas + dentro de menus/conjuntos (encomendas canceladas não contam)
+    # unidades vendidas sozinhas + dentro de menus/conjuntos (encomendas concluídas no período)
     from ..utils.conjuntos import vendas_por_produto
     itens = (ItemEncomenda.objects
-             .filter(encomenda__loja=loja, encomenda__data_criacao__range=(inicio, fim))
-             .exclude(encomenda__status='cancelado')
+             .filter(encomenda__loja=loja, encomenda__status='concluido',
+                     encomenda__data_conclusao__gte=inicio, encomenda__data_conclusao__lt=fim)
              .values_list('produto__id', 'produto__nome', 'quantidade', 'preco', 'componentes'))
     produtos_top = [
         {'id': p['id'], 'nome': p['nome'], 'qty': p['qty'], 'valor': round(p['valor'], 2),
@@ -659,7 +649,7 @@ def loja_dashboard(request, loja_id):
     com_qs = Comissao.objects.filter(loja=loja)
     comissao_pendente  = com_qs.filter(status='pendente').aggregate(v=Sum('valor_comissao'))['v'] or 0
     comissao_liquidada = com_qs.filter(status='liquidada').aggregate(v=Sum('valor_comissao'))['v'] or 0
-    comissao_periodo   = com_qs.filter(data_criacao__range=(inicio, fim)).aggregate(v=Sum('valor_comissao'))['v'] or 0
+    comissao_periodo   = com_qs.filter(p.filtro('data_criacao')).aggregate(v=Sum('valor_comissao'))['v'] or 0
 
     av_qs      = AvaliacaoLoja.objects.filter(loja=loja)
     rating_med = av_qs.aggregate(m=Avg('pontuacao'))['m']
@@ -675,7 +665,7 @@ def loja_dashboard(request, loja_id):
     ]
 
     ent_qs      = Entrega.objects.filter(encomenda__loja=loja)
-    ent_periodo = ent_qs.filter(data_criacao__range=(inicio, fim))
+    ent_periodo = ent_qs.filter(p.filtro('data_criacao'))
     entregas_por_status = {
         s: ent_qs.filter(status=s).count()
         for s in ['atribuido', 'a_caminho', 'entregue', 'falhou']
@@ -687,18 +677,25 @@ def loja_dashboard(request, loja_id):
 
     return Response({
         'periodo':              periodo,
-        'data_inicio':          data_inicio_str,
-        'data_fim':             data_fim_str,
-        'total_vendas':         float(total_vendas),          # líquido de reembolsos
-        'vendas_brutas':        float(vendas_brutas),
-        'variacao_vendas':      variacao(total_vendas, total_vendas_ant),
-        'reembolsos_periodo':   reembolsos['total'],
+        'data_inicio':          p.inicio.isoformat(),
+        'data_fim':             p.fim.isoformat(),
+        'granularidade':        p.granularidade,
+        'total_vendas':         float(total_vendas),          # líquido: − ajustes − devoluções
+        'vendas_brutas':        float(vendas['brutas']),
+        'vendas_ajustes':       float(vendas['ajustes']),
+        'vendas_devolucoes':    float(vendas['devolucoes']),
+        'vendas_concluidas':    vendas['encomendas'],
+        'ticket_medio':         float(vendas['ticket_medio']),
+        'variacao_vendas':      rel.variacao(total_vendas, vendas_ant['liquidas']),
+        'recebimentos':         rel.recebimentos(p, loja.id),
+        'cobranca':             _cobranca_loja(loja, p),
+        'reembolsos_periodo':   float(reembolsos['total']),
         'reembolsos_count':     reembolsos['count'],
         'reembolsos_por_responder': reemb_qs.filter(estado='pedido').count(),
         'credito_comissao':     float(loja.creditos_comissao.filter(estado='pendente')
                                       .aggregate(v=Sum('valor'))['v'] or 0),
         'total_encomendas':     total_enc,
-        'variacao_enc':         variacao(total_enc, total_enc_ant),
+        'variacao_enc':         rel.variacao(total_enc, total_enc_ant),
         'enc_concluidas':       enc_concluidas,
         'enc_canceladas':       enc_canceladas,
         'taxa_conclusao':       round(enc_concluidas / total_enc * 100, 1) if total_enc else 0,
@@ -710,7 +707,7 @@ def loja_dashboard(request, loja_id):
         'comissao_periodo':     float(comissao_periodo),
         'rating_medio':         round(float(rating_med), 2) if rating_med else None,
         'total_avaliacoes':     av_qs.count(),
-        'avaliacoes_recentes':  av_qs.filter(data_criacao__range=(inicio, fim)).count(),
+        'avaliacoes_recentes':  av_qs.filter(p.filtro('data_criacao')).count(),
         'stock_baixo':          stock_baixo,
         'stock_alerta_count':   len(stock_baixo),
         'entregas_por_status':  entregas_por_status,

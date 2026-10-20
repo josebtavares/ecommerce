@@ -1,73 +1,23 @@
 <template>
   <div class="space-y-6">
 
-    <!-- Filtros de período ───────────────────────────────── -->
+    <!-- Período ───────────────────────────────────────────── -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-      <div class="flex flex-wrap gap-3 items-end">
-
-        <!-- Atalhos rápidos -->
-        <div class="flex gap-1 flex-wrap">
-          <button v-for="a in atalhos" :key="a.label"
-            @click="aplicarAtalho(a)"
-            :class="['px-3 py-1.5 rounded-lg text-xs font-semibold transition',
-                     atalhoActivo === a.label
-                       ? 'bg-red-600 text-white'
-                       : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-            {{ a.label }}
-          </button>
-        </div>
-
-        <!-- Datas personalizadas -->
-        <div class="flex items-center gap-2 flex-wrap">
-          <div class="flex flex-col gap-1">
-            <label class="text-[10px] text-zinc-500 uppercase tracking-wider">De</label>
-            <input type="date" v-model="dataInicio"
-              class="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm
-                     text-zinc-200 focus:outline-none focus:border-red-500 transition" />
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-[10px] text-zinc-500 uppercase tracking-wider">Até</label>
-            <input type="date" v-model="dataFim"
-              class="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm
-                     text-zinc-200 focus:outline-none focus:border-red-500 transition" />
-          </div>
-          <button @click="aplicarDatas"
-            :disabled="loading"
-            class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold
-                   rounded-xl transition disabled:opacity-50 self-end flex items-center gap-2">
-            <svg v-if="loading" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
-              <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" class="opacity-75"/>
-            </svg>
-            Aplicar
-          </button>
-
-          <!-- Exportar PDF -->
-          <button v-if="dados" @click="exportarPdf" :disabled="loadingPdf"
-            class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold
-                   rounded-xl transition self-end flex items-center gap-2 disabled:opacity-50">
-            <svg v-if="loadingPdf" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
-              <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" class="opacity-75"/>
-            </svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            {{ loadingPdf ? 'A gerar...' : 'PDF' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Período activo -->
+      <FiltroPeriodo padrao="mes" :carregando="loading" @mudar="mudarPeriodo">
+        <button v-if="dados" @click="exportarPdf" :disabled="loadingPdf"
+          class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold
+                 rounded-xl transition flex items-center gap-2 disabled:opacity-50">
+          <font-awesome-icon :icon="['fas', loadingPdf ? 'spinner' : 'download']" :class="loadingPdf ? 'animate-spin' : ''" />
+          {{ loadingPdf ? 'A gerar...' : 'PDF' }}
+        </button>
+      </FiltroPeriodo>
       <p v-if="dados" class="text-xs text-zinc-600 mt-3">
-        De <span class="text-zinc-400">{{ dataInicio }}</span>
-        até <span class="text-zinc-400">{{ dataFim }}</span>
+        {{ dataCurta(dataInicio) }} a {{ dataCurta(dataFim) }} · vendas pela data de conclusão, encomendas pela data em que foram feitas
       </p>
     </div>
 
     <!-- Loading skeleton -->
-    <div v-if="loading" class="space-y-4">
+    <div v-if="loading && !dados" class="space-y-4">
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div v-for="n in 4" :key="n" class="h-24 bg-zinc-900 rounded-2xl animate-pulse border border-zinc-800"></div>
       </div>
@@ -80,7 +30,7 @@
     <template v-else-if="dados">
 
       <!-- KPIs vendas ──────────────────────────────────────── -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-3 gap-4" :class="loading ? 'opacity-60' : ''">
         <div v-for="kpi in kpis" :key="kpi.label"
              class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
           <p class="text-xs text-zinc-500 mb-1">{{ kpi.label }}</p>
@@ -99,30 +49,10 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         <div class="lg:col-span-2 bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
-          <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">
-            Vendas no período
-          </h3>
-          <div v-if="!dados.grafico_vendas.length"
-               class="flex items-center justify-center h-40 text-zinc-600 text-sm">
-            Sem vendas concluídas neste período
-          </div>
-          <div v-else class="relative h-40">
-            <svg class="w-full h-full" :viewBox="`0 0 ${svgW} ${svgH}`" preserveAspectRatio="none">
-              <line v-for="i in 4" :key="i"
-                :x1="0" :y1="svgH / 4 * i" :x2="svgW" :y2="svgH / 4 * i"
-                stroke="#27272a" stroke-width="1" />
-              <path :d="areaPath" fill="rgba(239,68,68,0.1)" />
-              <path :d="linePath" fill="none" stroke="#ef4444" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" />
-              <circle v-for="(pt, i) in chartPoints" :key="i"
-                :cx="pt.x" :cy="pt.y" r="3" fill="#ef4444" />
-            </svg>
-            <div class="flex justify-between mt-2 text-[10px] text-zinc-600">
-              <span>{{ fmtDia(dados.grafico_vendas[0]?.dia) }}</span>
-              <span>{{ fmtDia(dados.grafico_vendas[Math.floor(dados.grafico_vendas.length/2)]?.dia) }}</span>
-              <span>{{ fmtDia(dados.grafico_vendas[dados.grafico_vendas.length-1]?.dia) }}</span>
-            </div>
-          </div>
+          <GraficoTempo titulo="Vendas no período" subtitulo="pela data de conclusão; devoluções abaixo do zero"
+                        :dados="dados.grafico_vendas" :granularidade="dados.granularidade || 'dia'"
+                        :series="[{ chave: 'vendas', label: 'Vendas', cor: COR_1 }, { chave: 'devolucoes', label: 'Devoluções', cor: COR_2, negativo: true }]"
+                        chave-total="total" label-total="Líquido" vazio="Sem vendas concluídas neste período" />
         </div>
 
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
@@ -275,34 +205,76 @@
         </div>
       </div>
 
-      <!-- Financeiro + Avaliações ───────────────────────────── -->
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-          <p class="text-xs text-zinc-500 mb-1">Comissões no período</p>
-          <p class="text-xl font-extrabold text-orange-400">{{ fmt(dados.comissao_periodo) }}</p>
+      <!-- Bendi + Recebimentos + Avaliações ──────────────────── -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- o que a loja paga à Bendi -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
+          <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Custos com a Bendi</h3>
+          <template v-if="dados.cobranca?.modelo === 'subscricao'">
+            <p class="text-xs text-zinc-500">Subscrição</p>
+            <p class="text-lg font-extrabold text-zinc-100">{{ dados.cobranca.subscricao?.plano || '—' }}</p>
+            <p v-if="dados.cobranca.subscricao" class="text-xs text-zinc-500 mt-0.5">
+              {{ fmt(dados.cobranca.subscricao.preco) }} / {{ dados.cobranca.subscricao.meses === 1 ? 'mês' : dados.cobranca.subscricao.meses + ' meses' }}
+              · {{ dados.cobranca.subscricao.estado_nome }} · pago até {{ dataCurta(dados.cobranca.subscricao.pago_ate) }}
+            </p>
+            <div class="mt-3 space-y-1.5 text-sm">
+              <p class="flex justify-between"><span class="text-zinc-400">Faturas pagas no período</span><span class="font-semibold text-zinc-200 tabular-nums">{{ fmt(dados.cobranca.faturas_pagas) }}</span></p>
+              <p v-if="dados.cobranca.proxima_fatura" class="flex justify-between">
+                <span class="text-zinc-400">{{ dados.cobranca.proxima_fatura.em_atraso ? 'Fatura em atraso' : 'Próxima fatura' }}</span>
+                <span :class="['font-semibold tabular-nums', dados.cobranca.proxima_fatura.em_atraso ? 'text-red-400' : 'text-zinc-200']">
+                  {{ fmt(dados.cobranca.proxima_fatura.valor) }} · {{ dataCurta(dados.cobranca.proxima_fatura.vencimento) }}
+                </span>
+              </p>
+              <p v-if="dados.comissao_pendente" class="flex justify-between"><span class="text-zinc-400">Comissões antigas por liquidar</span><span class="font-semibold text-yellow-400 tabular-nums">{{ fmt(dados.comissao_pendente) }}</span></p>
+            </div>
+          </template>
+          <template v-else>
+            <p class="text-xs text-zinc-500">Comissão de {{ Number(dados.cobranca?.percentagem || 0).toLocaleString('pt-PT') }}% por venda</p>
+            <p class="text-lg font-extrabold text-orange-400 tabular-nums">{{ fmt(dados.comissao_periodo) }}</p>
+            <p class="text-xs text-zinc-500 mt-0.5">no período</p>
+            <div class="mt-3 space-y-1.5 text-sm">
+              <p class="flex justify-between"><span class="text-zinc-400">Por liquidar</span><span class="font-semibold text-yellow-400 tabular-nums">{{ fmt(dados.comissao_pendente) }}</span></p>
+              <p class="flex justify-between"><span class="text-zinc-400">Liquidadas (total)</span><span class="font-semibold text-green-400 tabular-nums">{{ fmt(dados.comissao_liquidada) }}</span></p>
+              <p v-if="dados.credito_comissao" class="flex justify-between"><span class="text-zinc-400">Crédito a teu favor</span><span class="font-semibold text-sky-400 tabular-nums">{{ fmt(dados.credito_comissao) }}</span></p>
+            </div>
+          </template>
         </div>
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-          <p class="text-xs text-zinc-500 mb-1">Comissões pendentes</p>
-          <p class="text-xl font-extrabold text-yellow-400">{{ fmt(dados.comissao_pendente) }}</p>
-          <p class="text-xs text-zinc-600 mt-1">a liquidar</p>
+
+        <!-- recebimentos por método -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
+          <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Recebimentos</h3>
+          <p class="text-xs text-zinc-600 mb-3">pela data do pagamento</p>
+          <p v-if="!dados.recebimentos?.por_metodo?.length" class="text-sm text-zinc-600">Sem pagamentos no período</p>
+          <div v-else class="space-y-2.5">
+            <div v-for="m in dados.recebimentos.por_metodo" :key="m.metodo">
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300">{{ m.nome }} <span class="text-zinc-600">· {{ m.count }}</span></span>
+                <span class="text-zinc-200 font-semibold tabular-nums">{{ fmt(m.valor) }}</span>
+              </div>
+              <div class="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div class="h-full rounded-full" :style="{ width: Math.max(2, (Number(m.valor) / (Number(dados.recebimentos.total) || 1)) * 100) + '%', background: COR_1 }"></div>
+              </div>
+            </div>
+            <p class="flex justify-between text-sm border-t border-zinc-800 pt-2">
+              <span class="text-zinc-400">Total</span><span class="font-bold text-zinc-100 tabular-nums">{{ fmt(dados.recebimentos.total) }}</span>
+            </p>
+          </div>
         </div>
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-          <p class="text-xs text-zinc-500 mb-1">Comissões liquidadas</p>
-          <p class="text-xl font-extrabold text-green-400">{{ fmt(dados.comissao_liquidada) }}</p>
-        </div>
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-          <p class="text-xs text-zinc-500 mb-1">Rating médio</p>
-          <div class="flex items-baseline gap-1 mt-1">
-            <p class="text-xl font-extrabold text-yellow-400">
+
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
+          <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Avaliações</h3>
+          <div class="flex items-baseline gap-1">
+            <p class="text-3xl font-extrabold text-yellow-400">
               {{ dados.rating_medio ? dados.rating_medio.toFixed(1) : '—' }}
             </p>
-            <font-awesome-icon :icon="['fas', 'star']" class="text-yellow-400 w-3.5 h-3.5" />
+            <font-awesome-icon :icon="['fas', 'star']" class="text-yellow-400 w-4 h-4" />
           </div>
-          <p class="text-xs text-zinc-600 mt-1">
-            {{ dados.total_avaliacoes }} total · {{ dados.avaliacoes_recentes }} novas
+          <p class="text-xs text-zinc-500 mt-1">
+            {{ dados.total_avaliacoes }} no total · {{ dados.avaliacoes_recentes }} novas no período
           </p>
         </div>
       </div>
+
 
     </template>
   </div>
@@ -312,31 +284,25 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { usePdfRelatorio } from '@/composables/usePdfRelatorio'
+import FiltroPeriodo from '@/components/relatorios/FiltroPeriodo.vue'
+import GraficoTempo from '@/components/relatorios/GraficoTempo.vue'
+import { intervaloAtalho, dataCurta } from '@/utils/periodos'
 
 export default {
   name: 'BackofficeDashboard',
   props: { lojaId: [String, Number] },
+  components: { FiltroPeriodo, GraficoTempo },
 
   data () {
-    const hoje = new Date()
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+    const mes = intervaloAtalho('mes')
     return {
       loading:      true,
       dados:        null,
       encomendas:   [],
-      dataInicio:   this.fmtDate(inicioMes),
-      dataFim:      this.fmtDate(hoje),
-      atalhoActivo: 'Este mês',
-      svgW: 400,
-      svgH: 140,
+      dataInicio:   mes.inicio,
+      dataFim:      mes.fim,
       loadingPdf:   false,
-      atalhos: [
-        { label: 'Hoje',        dias: 0           },
-        { label: 'Últimos 7d',  dias: 7           },
-        { label: 'Últimos 30d', dias: 30          },
-        { label: 'Este mês',    mesActual: true   },
-        { label: 'Este ano',    anoActual: true   },
-      ],
+      COR_1: '#3987e5', COR_2: '#d95926',     // séries (validadas para o fundo escuro)
     }
   },
 
@@ -347,35 +313,16 @@ export default {
       return [
         // vendas já sem o que foi reembolsado (backend utils/devolucoes.anotar_liquido)
         { label: 'Vendas',         valor: this.fmt(d.total_vendas), color: 'text-red-400',   variacao: d.variacao_vendas,
-          sub: d.reembolsos_periodo ? `líquidas · brutas ${this.fmt(d.vendas_brutas)}` : '' },
+          sub: d.vendas_devolucoes || d.vendas_ajustes ? `líquidas · brutas ${this.fmt(d.vendas_brutas)}` : '' },
         { label: 'Encomendas',     valor: d.total_encomendas,       color: 'text-blue-400',  variacao: d.variacao_enc    },
         { label: 'Taxa conclusão', valor: `${d.taxa_conclusao}%`,   color: 'text-green-400', sub: `${d.enc_concluidas} concluídas · ${d.enc_canceladas} canceladas` },
         { label: 'Reembolsos',     valor: this.fmt(d.reembolsos_periodo || 0), color: 'text-sky-400',
           sub: `${d.reembolsos_count || 0} no período` + (d.reembolsos_por_responder ? ` · ${d.reembolsos_por_responder} por responder` : '') },
+        { label: 'Recebimentos',   valor: this.fmt(d.recebimentos?.total || 0), color: 'text-zinc-100',
+          sub: `${d.recebimentos?.count || 0} pagamentos recebidos` },
+        { label: 'Ticket médio',   valor: this.fmt(d.ticket_medio || 0), color: 'text-zinc-100',
+          sub: `${d.vendas_concluidas || 0} encomendas concluídas` },
       ]
-    },
-
-    chartPoints () {
-      const g = this.dados?.grafico_vendas || []
-      if (!g.length) return []
-      const max = Math.max(...g.map(d => d.total), 1)
-      return g.map((d, i) => ({
-        x: (i / (g.length - 1 || 1)) * this.svgW,
-        y: this.svgH - (d.total / max) * this.svgH * 0.85,
-      }))
-    },
-
-    linePath () {
-      const pts = this.chartPoints
-      if (!pts.length) return ''
-      return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-    },
-
-    areaPath () {
-      const pts = this.chartPoints
-      if (!pts.length) return ''
-      const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-      return `${line} L${this.svgW},${this.svgH} L0,${this.svgH} Z`
     },
 
     donutSegments () {
@@ -402,18 +349,10 @@ export default {
   },
 
   methods: {
-    fmtDate (d) {
-      return d.toISOString().split('T')[0]
-    },
+    dataCurta,
 
     fmt (val) {
       return formatarDinheiro(val || 0)
-    },
-
-    fmtDia (dia) {
-      if (!dia) return ''
-      const d = new Date(dia)
-      return `${d.getDate()}/${d.getMonth() + 1}`
     },
 
     fmtData (d) {
@@ -461,29 +400,9 @@ export default {
       return (qty / max) * 100
     },
 
-    aplicarAtalho (atalho) {
-      this.atalhoActivo = atalho.label
-      const hoje = new Date()
-      if (atalho.dias === 0) {
-        this.dataInicio = this.fmtDate(hoje)
-        this.dataFim    = this.fmtDate(hoje)
-      } else if (atalho.dias) {
-        const inicio = new Date(hoje)
-        inicio.setDate(hoje.getDate() - atalho.dias)
-        this.dataInicio = this.fmtDate(inicio)
-        this.dataFim    = this.fmtDate(hoje)
-      } else if (atalho.mesActual) {
-        this.dataInicio = this.fmtDate(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
-        this.dataFim    = this.fmtDate(hoje)
-      } else if (atalho.anoActual) {
-        this.dataInicio = this.fmtDate(new Date(hoje.getFullYear(), 0, 1))
-        this.dataFim    = this.fmtDate(hoje)
-      }
-      this.fetchDados()
-    },
-
-    aplicarDatas () {
-      this.atalhoActivo = ''
+    mudarPeriodo ({ inicio, fim }) {
+      this.dataInicio = inicio
+      this.dataFim    = fim
       this.fetchDados()
     },
 
