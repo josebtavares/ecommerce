@@ -1916,6 +1916,9 @@ class RelatorioGerado(models.Model):
     """Registo de cada exportação de um relatório (quem, quando, o quê e com que filtros) — auditoria."""
     utilizador = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, related_name='relatorios_gerados')
     loja       = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='relatorios_gerados')
+    pos        = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='relatorios_gerados')
+    autor      = models.CharField(max_length=150, blank=True, default='')   # nome de quem gerou (membros do POS não são Utilizador)
     relatorio  = models.CharField(max_length=40)
     formato    = models.CharField(max_length=5)
     inicio     = models.DateField()

@@ -10,6 +10,8 @@ O stock é descontado quando o item é ADICIONADO à conta (reserva enquanto est
 e reposto quando o item é removido/cancelado ou a conta é cancelada.
 Chamar sempre dentro de transaction.atomic (usa select_for_update).
 """
+from decimal import Decimal
+
 from django.db.models import F
 
 from ..models import Produto, Inventario, VarianteProduto
@@ -84,6 +86,36 @@ def reservar_stock(produto, quantidade, atributos, pos=None, escolhas=None):
         inv.save(update_fields=['quantidade', 'data_atualizacao'])
         _alerta(produto, antes, inv.quantidade)
     return info, None
+
+
+def custos_atuais(componentes_ou_ids):
+    """{('pos'|'loja', produto_id): custo} — o preço de custo de hoje (None/0 = desconhecido não entra)."""
+    pos_ids = {pid for o, pid in componentes_ou_ids if o == 'pos'}
+    loja_ids = {pid for o, pid in componentes_ou_ids if o == 'loja'}
+    out = {('pos', i): c for i, c in ProdutoPOS.objects.filter(id__in=pos_ids, preco_custo__isnull=False)
+           .values_list('id', 'preco_custo')}
+    out.update({('loja', i): c for i, c in Inventario.objects.filter(produto_id__in=loja_ids, preco_custo__gt=0)
+                .values_list('produto_id', 'preco_custo')})
+    return out
+
+
+def custo_de_venda(produto, componentes=None):
+    """
+    Custo de uma unidade vendida, guardado no item (a margem dos relatórios não muda se o custo mudar depois).
+    Menu: soma do custo dos componentes; se algum não tiver custo, fica sem custo (None).
+    """
+    origem = 'pos' if isinstance(produto, ProdutoPOS) else 'loja'
+    if componentes:
+        chaves = [(c.get('origem') or 'loja', c.get('produto_id')) for c in componentes]
+        custos = custos_atuais(chaves)
+        total = Decimal('0')
+        for c, k in zip(componentes, chaves):
+            custo = custos.get(k)
+            if custo is None:
+                return None
+            total += custo * int(c.get('quantidade') or 0)
+        return total
+    return custos_atuais([(origem, produto.pk)]).get((origem, produto.pk))
 
 
 def repor_stock_item(item):

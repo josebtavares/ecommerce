@@ -17,9 +17,9 @@ from ..utils import relatorios_motor as motor
 from .adminView import _exige_admin
 
 
-def _consultar(request, rid, ambito, loja=None):
+def _consultar(request, rid, ambito, loja=None, pos=None):
     try:
-        r, p, res = motor.executar(rid, request, ambito, loja.id if loja else None)
+        r, p, res = motor.executar(rid, request, ambito, loja.id if loja else None, pos.id if pos else None)
     except KeyError:
         return Response({'detail': 'Relatório não encontrado.'}, status=404)
     except (rel.PeriodoInvalido, motor.FiltroInvalido) as e:
@@ -47,31 +47,35 @@ def _consultar(request, rid, ambito, loja=None):
     })
 
 
-def _exportar(request, rid, ambito, loja=None):
+def _exportar(request, rid, ambito, loja=None, pos=None, autor=None):
+    """autor: o nome de quem exporta, quando não é um Utilizador (membro da equipa do POS)."""
     formato = request.GET.get('formato', '')
     if formato not in exp.FORMATOS:
         return Response({'detail': 'Formato inválido (csv, xlsx ou pdf).'}, status=400)
     if is_ratelimited(request=request, group='relatorios_exportar', key='user', rate='60/h', method=request.method, increment=True):
         return Response({'detail': 'Demasiadas exportações. Tenta daqui a pouco.'}, status=429)
     try:
-        r, p, res = motor.executar(rid, request, ambito, loja.id if loja else None)
+        r, p, res = motor.executar(rid, request, ambito, loja.id if loja else None, pos.id if pos else None)
     except KeyError:
         return Response({'detail': 'Relatório não encontrado.'}, status=404)
     except (rel.PeriodoInvalido, motor.FiltroInvalido) as e:
         return Response({'detail': str(e)}, status=400)
-    ut = request.user.utilizador
+    ut = None if autor else request.user.utilizador
+    autor = autor or ut.nome
+    emissor = loja or pos
     meta = {
-        'emissor': loja.nome if loja else 'Bendi',
-        'nif': (loja.efatura_nif if loja else '') or '',
+        'emissor': emissor.nome if emissor else 'Bendi',
+        'nif': (emissor.efatura_nif if emissor else '') or '',
         'titulo': res['titulo'], 'inicio': p.inicio, 'fim': p.fim, 'sem_periodo': r.sem_periodo,
-        'filtros': res['filtros_aplicados'], 'gerado_em': timezone.now(), 'gerado_por': ut.nome,
+        'filtros': res['filtros_aplicados'], 'gerado_em': timezone.now(), 'gerado_por': autor,
     }
     gerar, tipo, ext = exp.FORMATOS[formato]
     conteudo = gerar(meta, res)
     filtros = {k: v for k, v in request.GET.items() if k not in ('formato', 'offset', 'limit')}
-    RelatorioGerado.objects.create(utilizador=ut, loja=loja, relatorio=r.id, formato=formato, inicio=p.inicio, fim=p.fim,
-                                   filtros=filtros, linhas=len(res['linhas']))
-    nome = f'{"bendi" if not loja else "loja-" + str(loja.id)}_{r.id}_{p.inicio:%Y%m%d}-{p.fim:%Y%m%d}.{ext}'
+    RelatorioGerado.objects.create(utilizador=ut, loja=loja, pos=pos, autor=autor, relatorio=r.id, formato=formato,
+                                   inicio=p.inicio, fim=p.fim, filtros=filtros, linhas=len(res['linhas']))
+    prefixo = f'loja-{loja.id}' if loja else f'pos-{pos.id}' if pos else 'bendi'
+    nome = f'{prefixo}_{r.id}_{p.inicio:%Y%m%d}-{p.fim:%Y%m%d}.{ext}'
     resp = HttpResponse(conteudo, content_type=tipo)
     resp['Content-Disposition'] = f'attachment; filename="{nome}"'
     resp['Cache-Control'] = 'no-store'
@@ -83,7 +87,7 @@ def _historico(qs):
              'titulo': motor.RELATORIOS[x.relatorio].titulo if x.relatorio in motor.RELATORIOS else x.relatorio,
              'formato': x.formato, 'inicio': x.inicio, 'fim': x.fim, 'linhas': x.linhas, 'filtros': x.filtros,
              'sem_periodo': motor.RELATORIOS[x.relatorio].sem_periodo if x.relatorio in motor.RELATORIOS else False,
-             'por': x.utilizador.nome if x.utilizador_id else '', 'data': x.data_criacao}
+             'por': x.autor or (x.utilizador.nome if x.utilizador_id else ''), 'data': x.data_criacao}
             for x in qs.select_related('utilizador__user')[:30]]
 
 
@@ -125,7 +129,7 @@ def admin_historico(request):
     qs = RelatorioGerado.objects.all()
     if request.GET.get('meus') == '1':
         qs = qs.filter(utilizador=request.user.utilizador)
-    return Response(_historico(qs.filter(loja__isnull=True)))
+    return Response(_historico(qs.filter(loja__isnull=True, pos__isnull=True)))
 
 
 # ── loja (permissão ver_relatorios: dono, gestor, contabilista) ─────

@@ -209,7 +209,7 @@ def admin_pos_detalhe(request, pos_id):
         ],
         'contas_abertas_lista': [
             {'id': c.id, 'mesa': getattr(c.mesa, 'numero', None), 'total': str(c.total),
-             'itens': c.n_items, 'atendente': getattr(c.atendente, 'nome', None), 'criada_em': c.criada_em}
+             'itens': c.n_items, 'atendente': c.atendente_nome or getattr(c.atendente, 'nome', None), 'criada_em': c.criada_em}
             for c in abertas
         ],
         'historico': [

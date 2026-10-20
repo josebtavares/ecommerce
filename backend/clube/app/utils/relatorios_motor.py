@@ -1,5 +1,5 @@
 """
-Motor dos relatórios (admin e, com a loja fixa, o módulo Relatórios da backoffice).
+Motor dos relatórios (admin e, com a loja fixa, o módulo Relatórios da backoffice; com o POS fixo, o do POS).
 
 Cada relatório recebe os filtros e devolve um dicionário:
   resumo  → [{label, valor, tipo}]          cartões no topo; 1.ª folha do Excel; topo do PDF
@@ -33,7 +33,7 @@ class Relatorio:
     gerar: callable
     filtros: list = field(default_factory=list)      # nomes (ver FILTROS)
     max_dias: int = DIAS_DETALHE
-    ambitos: tuple = ('admin',)                       # 'admin' e/ou 'loja'
+    ambitos: tuple = ('admin',)                       # 'admin', 'loja' e/ou 'pos'
     grupo: str = 'Vendas'
     sem_periodo: bool = False                         # fotografia de hoje (ex.: inventário)
     titulos: dict = field(default_factory=dict)       # título por âmbito, quando muda ({'loja': '…'})
@@ -59,6 +59,7 @@ class Filtros:
     params: dict
     loja_id: int = None          # fixa no módulo da loja; escolhida no admin
     ambito: str = 'admin'
+    pos_id: int = None           # fixo no módulo do POS
 
     def escolha(self, nome, opcoes, padrao=''):
         v = (self.params.get(nome) or '').strip()
@@ -87,12 +88,20 @@ def _opcoes(choices):
     return [{'valor': v, 'label': str(l)} for v, l in choices]
 
 
-def definicoes_filtros(nomes, ambito='admin', loja_id=None):
+# filtros registados por outros módulos (ex.: pos/relatorios.py): nome → fn(ambito, loja_id, pos_id) → definição | None
+FILTROS_EXTRA = {}
+
+
+def definicoes_filtros(nomes, ambito='admin', loja_id=None, pos_id=None):
     from ..models import (Encomenda, FaturaSubscricao, Loja, MetodoPagamento, PlanoSubscricao, Reembolso,
                           Comissao, CategoriaLoja, TipoProduto)
     out = []
     for n in nomes:
-        if n == 'loja':
+        if n in FILTROS_EXTRA:
+            d = FILTROS_EXTRA[n](ambito, loja_id, pos_id)
+            if d:
+                out.append(d)
+        elif n == 'loja':
             if ambito != 'admin':
                 continue
             out.append({'nome': 'loja_id', 'label': 'Loja', 'tipo': 'select', 'todos': 'Todas as lojas',
@@ -124,9 +133,11 @@ def definicoes_filtros(nomes, ambito='admin', loja_id=None):
             out.append({'nome': 'alvo', 'label': 'Cliente', 'tipo': 'select', 'todos': 'Lojas e POS',
                         'opcoes': _opcoes([('loja', 'Só lojas'), ('pos', 'Só POS')])})
         elif n == 'plano':
+            planos = PlanoSubscricao.objects.order_by('tipo', 'ordem', 'preco')
+            if ambito == 'pos':
+                planos = planos.filter(tipo__in=('pos', 'loja_pos'))
             out.append({'nome': 'plano', 'label': 'Plano', 'tipo': 'select', 'todos': 'Todos os planos',
-                        'opcoes': [{'valor': str(p.id), 'label': f'{p.nome} ({p.get_tipo_display()})'}
-                                   for p in PlanoSubscricao.objects.order_by('tipo', 'ordem', 'preco')]})
+                        'opcoes': [{'valor': str(p.id), 'label': f'{p.nome} ({p.get_tipo_display()})'} for p in planos]})
         elif n == 'metodo_fatura':
             out.append({'nome': 'metodo', 'label': 'Pago com', 'tipo': 'select', 'todos': 'Todos',
                         'opcoes': _opcoes(FaturaSubscricao.METODOS)})
@@ -276,8 +287,9 @@ class _PeriodoFixo(rel.Periodo):
 @relatorio('subscricoes', 'Subscrições — faturas',
            'Todas as faturas de subscrição de lojas e POS: emitidas, pagas, em atraso e anuladas.',
            filtros=['base_faturas', 'estado_fatura', 'alvo', 'plano', 'metodo_fatura', 'loja'], grupo='Plataforma',
-           ambitos=('admin', 'loja'), titulos={'loja': 'Subscrição — faturas'},
-           descricoes={'loja': 'As faturas da subscrição da loja: emitidas, pagas, em atraso e anuladas.'})
+           ambitos=('admin', 'loja', 'pos'), titulos={'loja': 'Subscrição — faturas', 'pos': 'Subscrição — faturas'},
+           descricoes={'loja': 'As faturas da subscrição da loja: emitidas, pagas, em atraso e anuladas.',
+                       'pos': 'As faturas da subscrição do POS: emitidas, pagas, em atraso e anuladas.'})
 def _subscricoes(f):
     from ..models import FaturaSubscricao, Subscricao
     from .subscricoes import hoje, nome_alvo
@@ -309,7 +321,7 @@ def _subscricoes(f):
     metodo = f.escolha('metodo', dict(FaturaSubscricao.METODOS))
     if metodo:
         qs = qs.filter(metodo=metodo)
-    qs = _loja(f, qs)
+    qs = qs.filter(pos_id=f.pos_id) if f.ambito == 'pos' else _loja(f, qs)
     metodos = dict(FaturaSubscricao.METODOS)
 
     def estado_de(x):
@@ -331,7 +343,7 @@ def _subscricoes(f):
               _r('Em atraso', soma(lambda l: l['estado'] == 'Em atraso')),
               _r('Ofertas da plataforma', soma(lambda l: l['metodo'] == metodos['oferta'])),
               _r('Anuladas', soma(lambda l: l['estado'] == 'Anulada'))]
-    if not _loja_id(f):
+    if f.ambito == 'admin' and not _loja_id(f):
         hoje_ = rel.subscricoes_hoje()
         novas = Subscricao.objects.filter(p.filtro('data_criacao')).count()
         resumo += [_r('Receita mensal recorrente (hoje)', Decimal(hoje_['mrr'])), _r('Subscrições novas no período', novas, 'numero')]
@@ -1006,33 +1018,40 @@ def _entregas(f):
 # EXECUÇÃO
 # ══════════════════════════════════════════════════════════════
 
-def catalogo(ambito='admin', loja_id=None):
-    grupos_loja = {'Plataforma': 'Bendi e impostos'}
+GRUPOS_POR_AMBITO = {'loja': {'Plataforma': 'Bendi e impostos'}, 'pos': {'Plataforma': 'Bendi e impostos'}}
+
+
+def catalogo(ambito='admin', loja_id=None, pos_id=None, excluir=()):
+    nomes = GRUPOS_POR_AMBITO.get(ambito, {})
+    lista = [r for r in RELATORIOS.values() if ambito in r.ambitos and r.id not in excluir]
+    if ambito == 'pos':
+        ordem = ['Vendas', 'Caixa', 'Equipa', 'Plataforma']
+        lista.sort(key=lambda r: ordem.index(r.grupo) if r.grupo in ordem else len(ordem))
     return [{'id': r.id, 'titulo': r.titulos.get(ambito, r.titulo), 'descricao': r.descricoes.get(ambito, r.descricao),
-             'grupo': grupos_loja.get(r.grupo, r.grupo) if ambito == 'loja' else r.grupo,
+             'grupo': nomes.get(r.grupo, r.grupo),
              'max_dias': r.max_dias, 'sem_periodo': r.sem_periodo,
-             'filtros': definicoes_filtros(r.filtros, ambito, loja_id)}
-            for r in RELATORIOS.values() if ambito in r.ambitos]
+             'filtros': definicoes_filtros(r.filtros, ambito, loja_id, pos_id)}
+            for r in lista]
 
 
-def executar(rid, request, ambito='admin', loja_id=None):
+def executar(rid, request, ambito='admin', loja_id=None, pos_id=None):
     """(relatorio, periodo, resultado). Levanta KeyError (não existe) ou rel.PeriodoInvalido / FiltroInvalido."""
     r = RELATORIOS[rid]
     if ambito not in r.ambitos:
         raise KeyError(rid)
     periodo = rel.ler_periodo(request, maximo=r.max_dias)
-    f = Filtros(periodo, request.GET, loja_id=loja_id, ambito=ambito)
+    f = Filtros(periodo, request.GET, loja_id=loja_id, ambito=ambito, pos_id=pos_id)
     res = r.gerar(f)
     res['truncado'] = len(res['linhas']) >= MAX_LINHAS
     res['titulo'] = r.titulos.get(ambito, r.titulo)
-    res['filtros_aplicados'] = filtros_legiveis(r, request.GET, ambito, loja_id)
+    res['filtros_aplicados'] = filtros_legiveis(r, request.GET, ambito, loja_id, pos_id)
     return r, periodo, res
 
 
-def filtros_legiveis(r, params, ambito, loja_id):
+def filtros_legiveis(r, params, ambito, loja_id, pos_id=None):
     """[(label, valor escolhido)] — para o cabeçalho das exportações."""
     out = []
-    for d in definicoes_filtros(r.filtros, ambito, loja_id):
+    for d in definicoes_filtros(r.filtros, ambito, loja_id, pos_id):
         v = (params.get(d['nome']) or '').strip()
         if not v:
             if d.get('todos'):
@@ -1045,3 +1064,7 @@ def filtros_legiveis(r, params, ambito, loja_id):
         else:
             out.append((d['label'], next((o['label'] for o in d['opcoes'] if o['valor'] == v), v)))
     return out
+
+
+# os relatórios do POS registam-se no mesmo catálogo (âmbito 'pos')
+from ..pos import relatorios as _relatorios_pos  # noqa: E402,F401

@@ -1,0 +1,47 @@
+/*
+ * Tema claro dos componentes de relatórios (FiltroPeriodo, GraficoTempo, ModuloRelatorios).
+ * Os componentes são escritos para o tema escuro da backoffice/admin; dentro de um contentor
+ * .rel-claro (o POS, que é claro) as cores trocam para a paleta slate do POS.
+ * Só cores — o layout não muda.
+ */
+
+/* superfícies */
+.rel-claro .bg-zinc-900 { background-color: #fff; }
+.rel-claro .bg-zinc-950 { background-color: #fff; box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.15); }
+.rel-claro .bg-zinc-800 { background-color: #f1f5f9; }
+.rel-claro .bg-zinc-800\/60,
+.rel-claro .bg-zinc-800\/50,
+.rel-claro .bg-zinc-800\/40 { background-color: #f8fafc; }
+.rel-claro .hover\:bg-zinc-700:hover { background-color: #e2e8f0; }
+.rel-claro .hover\:bg-zinc-800\/30:hover { background-color: #f8fafc; }
+
+/* contornos */
+.rel-claro .border-zinc-800,
+.rel-claro .border-zinc-800\/80 { border-color: #e2e8f0; }
+.rel-claro .border-zinc-700,
+.rel-claro .hover\:border-zinc-700:hover { border-color: #cbd5e1; }
+.rel-claro .border-zinc-600 { border-color: #94a3b8; }
+.rel-claro .focus\:border-red-500:focus { border-color: #020617; }
+
+/* texto */
+.rel-claro .text-zinc-100 { color: #020617; }
+.rel-claro .text-zinc-200 { color: #0f172a; }
+.rel-claro .text-zinc-300 { color: #334155; }
+.rel-claro .text-zinc-400 { color: #475569; }
+.rel-claro .text-zinc-500 { color: #64748b; }
+.rel-claro .text-zinc-600 { color: #64748b; }
+.rel-claro .hover\:text-zinc-200:hover,
+.rel-claro .hover\:text-zinc-300:hover { color: #020617; }
+
+/* destaque: no POS é o slate-950 (vermelho fica só para erros) */
+.rel-claro .bg-red-600 { background-color: #020617; }
+.rel-claro .hover\:bg-red-500:hover { background-color: #1e293b; }
+.rel-claro .border-red-500\/60.bg-red-500\/10 { border-color: #020617; background-color: #f1f5f9; }
+.rel-claro .text-red-300 { color: #020617; }
+.rel-claro .text-red-400 { color: #dc2626; }
+.rel-claro .text-green-400 { color: #16a34a; }
+.rel-claro .text-sky-400 { color: #0284c7; }
+.rel-claro .text-amber-400 { color: #b45309; }
+
+/* campos de data nativos com o calendário claro */
+.rel-claro input[type="date"] { color-scheme: light; }

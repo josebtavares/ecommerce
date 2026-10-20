@@ -48,7 +48,7 @@ try:
 except Exception:
     Inventario = None
     
-from .stock import reservar_stock, repor_stock_item, cancelar_conta
+from .stock import reservar_stock, repor_stock_item, cancelar_conta, custo_de_venda
 from ..utils import conjuntos as conj
 
 # prefetch dos componentes dos conjuntos (menus) nas listagens do POS
@@ -334,6 +334,7 @@ def _produto_pos_payload(produto, request=None, pos=None):
         'nome': produto.nome,
         'descricao': produto.descricao,
         'preco': str(produto.preco),
+        'preco_custo': str(produto.preco_custo) if produto.preco_custo is not None else None,
         'categoria': produto.categoria or 'Sem categoria',
         'categorias': [{'id': None, 'nome': produto.categoria or 'Sem categoria'}],
         'tipo': _tipo_payload(produto.tipo),
@@ -403,6 +404,7 @@ def _pos_response(pos):
         } if pos.loja_vinculada else None,
         'loja_suspensa': _loja_suspensa(pos),
         'efatura_ativo': pos.efatura_ativo,
+        'percentagem_iva': str(pos.percentagem_iva),
         'suspenso': pos.suspenso,
         'suspenso_motivo': pos.suspenso_motivo,
         'criado_em': pos.criado_em,
@@ -426,7 +428,7 @@ def _conta_payload(conta, request=None):
         'atendente': {
             'id': conta.atendente.id,
             'nome': conta.atendente.nome
-        } if conta.atendente else None,
+        } if conta.atendente else ({'id': None, 'nome': conta.atendente_nome} if conta.atendente_nome else None),
         'status': conta.status,
         'subtotal': str(conta.subtotal),
         'taxa_servico_percentagem': str(conta.taxa_servico_percentagem),
@@ -813,6 +815,12 @@ def pos_detalhe(request, pos_id):
                 )
             pos.modo = modo
 
+        if 'percentagem_iva' in request.data:
+            iva, erro = ler_valor(request.data['percentagem_iva'], 'A taxa de IVA')
+            if erro or iva > 100:
+                return Response({'detail': erro or 'A taxa de IVA vai de 0 a 100%.'}, status=status.HTTP_400_BAD_REQUEST)
+            pos.percentagem_iva = iva
+
         pos.save()
         return Response(_pos_response(pos))
 
@@ -990,6 +998,9 @@ def produto_criar(request, pos_id):
     preco, erro_preco = ler_valor(preco, 'O preço')
     if erro_preco:
         return Response({'detail': erro_preco}, status=status.HTTP_400_BAD_REQUEST)
+    preco_custo, erro_custo = ler_valor(request.data.get('preco_custo'), 'O preço de custo', obrigatorio=False)
+    if erro_custo:
+        return Response({'detail': erro_custo}, status=status.HTTP_400_BAD_REQUEST)
 
     atributos, erro_attr = _ler_atributos(request)
     if erro_attr:
@@ -1010,7 +1021,7 @@ def produto_criar(request, pos_id):
 
         produto = ProdutoPOS.objects.create(
             pos=pos, nome=nome, descricao=descricao, categoria=categoria,
-            preco=preco, imagem=imagem, controlar_stock=controlar_stock,
+            preco=preco, preco_custo=preco_custo, imagem=imagem, controlar_stock=controlar_stock,
             stock=stock, ativo=ativo, disponivel_pos=disponivel_pos,
             tipo=tipo or None, atributos=atributos,
         )
@@ -1103,6 +1114,10 @@ def produto_atualizar(request, pos_id, produto_id):
         if aviso:
             return Response(aviso, status=status.HTTP_409_CONFLICT)
 
+        if 'preco_custo' in request.data:
+            produto.preco_custo, erro_custo = ler_valor(request.data['preco_custo'], 'O preço de custo', obrigatorio=False)
+            if erro_custo:
+                return Response({'detail': erro_custo}, status=status.HTTP_400_BAD_REQUEST)
         for campo, attr in [('nome','nome'),('descricao','descricao'),('categoria','categoria'),('preco',None),
                              ('controlar_stock',None),('stock',None),('ativo',None),('disponivel_pos',None)]:
             if campo not in request.data:
@@ -1345,6 +1360,7 @@ def mesa_abrir(request, pos_id, mesa_id):
         pos=pos,
         mesa=mesa,
         atendente=None if membro else request.user.utilizador,
+        membro=membro, atendente_nome=(membro or request.user.utilizador).nome[:100],
         taxa_servico_percentagem=pos.taxa_servico_percentagem if pos.taxa_servico_ativa else Decimal('0.00')
     )
 
@@ -1403,6 +1419,7 @@ def conta_criar(request, pos_id, mesa_id):
 
     conta = ContaMesa.objects.create(
         pos=pos, mesa=mesa, atendente=utilizador,
+        membro=membro, atendente_nome=(membro or utilizador).nome[:100],
         taxa_servico_percentagem=pos.taxa_servico_percentagem if pos.taxa_servico_ativa else Decimal('0.00')
     )
     mesa.abrir(utilizador)
@@ -1483,6 +1500,7 @@ def conta_adicionar_item(request, pos_id, conta_id):
         componentes=info.get('componentes') or [],
         nome=info['nome'][:200], quantidade=quantidade,
         preco_unitario=info['preco_unitario'], observacoes=observacoes,
+        custo_unitario=custo_de_venda(produto, info.get('componentes')),
     )
 
     return Response({
@@ -1600,18 +1618,26 @@ def pos_historico(request, pos_id):
     data_fim    = request.query_params.get('data_fim')
     metodo      = request.query_params.get('metodo')
 
-    if data_inicio:
-        contas = contas.filter(fechada_em__gte=data_inicio)
-    if data_fim:
-        from datetime import datetime, time as dt_time
-        data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d')
-        contas = contas.filter(fechada_em__lte=datetime.combine(data_fim_obj, dt_time(23, 59, 59)))
+    # dias inteiros no fuso da plataforma (antes: hora do servidor, e o dia final perdia o último segundo)
+    from datetime import date, datetime, time as dt_time, timedelta
+    from app.utils.horarios import fuso
+    try:
+        if data_inicio:
+            contas = contas.filter(fechada_em__gte=datetime.combine(date.fromisoformat(data_inicio), dt_time(0), tzinfo=fuso()))
+        if data_fim:
+            fim = date.fromisoformat(data_fim) + timedelta(days=1)
+            contas = contas.filter(fechada_em__lt=datetime.combine(fim, dt_time(0), tzinfo=fuso()))
+    except ValueError:
+        return Response({'detail': 'Datas inválidas. Usa AAAA-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
     if metodo:
         contas = contas.filter(metodo_pagamento=metodo)
 
     contas = contas.order_by('-fechada_em')
-    offset = int(request.query_params.get('offset', 0))
-    limit  = int(request.query_params.get('limit', 20))
+    try:
+        offset = max(int(request.query_params.get('offset', 0)), 0)
+        limit  = min(max(int(request.query_params.get('limit', 20)), 1), 100)
+    except ValueError:
+        offset, limit = 0, 20
     total  = contas.count()
 
     return Response({'count': total, 'results': [_conta_payload(c, request) for c in contas[offset:offset + limit]]})
