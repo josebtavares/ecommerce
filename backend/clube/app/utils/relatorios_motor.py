@@ -35,11 +35,16 @@ class Relatorio:
     max_dias: int = DIAS_DETALHE
     ambitos: tuple = ('admin',)                       # 'admin' e/ou 'loja'
     grupo: str = 'Vendas'
+    sem_periodo: bool = False                         # fotografia de hoje (ex.: inventário)
+    titulos: dict = field(default_factory=dict)       # título por âmbito, quando muda ({'loja': '…'})
+    descricoes: dict = field(default_factory=dict)    # idem para a descrição
 
 
-def relatorio(id, titulo, descricao, filtros=(), max_dias=DIAS_DETALHE, ambitos=('admin',), grupo='Vendas'):
+def relatorio(id, titulo, descricao, filtros=(), max_dias=DIAS_DETALHE, ambitos=('admin',), grupo='Vendas',
+              sem_periodo=False, titulos=None, descricoes=None):
     def reg(fn):
-        RELATORIOS[id] = Relatorio(id, titulo, descricao, fn, list(filtros), max_dias, ambitos, grupo)
+        RELATORIOS[id] = Relatorio(id, titulo, descricao, fn, list(filtros), max_dias, ambitos, grupo, sem_periodo,
+                                   titulos or {}, descricoes or {})
         return fn
     return reg
 
@@ -114,6 +119,8 @@ def definicoes_filtros(nomes, ambito='admin', loja_id=None):
                         'opcoes': _opcoes([('pendente', 'Por pagar'), ('em_atraso', 'Em atraso'), ('paga', 'Paga'),
                                            ('anulada', 'Anulada')])})
         elif n == 'alvo':
+            if ambito != 'admin':
+                continue
             out.append({'nome': 'alvo', 'label': 'Cliente', 'tipo': 'select', 'todos': 'Lojas e POS',
                         'opcoes': _opcoes([('loja', 'Só lojas'), ('pos', 'Só POS')])})
         elif n == 'plano':
@@ -159,6 +166,18 @@ def definicoes_filtros(nomes, ambito='admin', loja_id=None):
             out.append({'nome': 'categoria', 'label': 'Categoria', 'tipo': 'select', 'todos': 'Todas',
                         'opcoes': [{'valor': str(i), 'label': n} for i, n in
                                    CategoriaLoja.objects.filter(loja_id=loja_id).order_by('ordem', 'nome').values_list('id', 'nome')]})
+        elif n == 'estado_entrega':
+            from ..models import Entrega
+            out.append({'nome': 'estado', 'label': 'Estado', 'tipo': 'select', 'todos': 'Todos',
+                        'opcoes': _opcoes(Entrega.STATUS)})
+        elif n == 'condutor':
+            from ..models import Condutor
+            out.append({'nome': 'condutor', 'label': 'Condutor', 'tipo': 'select', 'todos': 'Todos',
+                        'opcoes': [{'valor': str(c.id), 'label': _nome(c.utilizador.user)} for c in
+                                   Condutor.objects.filter(loja_id=loja_id).select_related('utilizador__user')]})
+        elif n == 'stock':
+            out.append({'nome': 'stock', 'label': 'Stock', 'tipo': 'select', 'todos': 'Todos',
+                        'opcoes': _opcoes([('com', 'com stock'), ('baixo', 'baixo (5 ou menos)'), ('esgotado', 'esgotado')])})
         elif n == 'pesquisa_produto':
             out.append({'nome': 'q', 'label': 'Produto', 'tipo': 'texto', 'placeholder': 'Nome do produto'})
     return out
@@ -208,10 +227,7 @@ def _metodo_label():
            filtros=['loja', 'agrupar_tempo'], max_dias=DIAS_AGREGADO, grupo='Plataforma')
 def _receita(f):
     from ..models import Comissao, CreditoComissao, FaturaSubscricao
-    p = f.periodo
-    agrupar = f.escolha('agrupar', ('auto', 'dia', 'mes'), 'auto')
-    if agrupar != 'auto':
-        p = _PeriodoFixo(p.inicio, p.fim, agrupar)
+    p = _periodo_agrupado(f)
     com = _loja(f, Comissao.objects.all())
     fat = _loja(f, FaturaSubscricao.objects.filter(estado='paga').exclude(metodo='oferta'))
     cred = _loja(f, CreditoComissao.objects.all())
@@ -259,7 +275,9 @@ class _PeriodoFixo(rel.Periodo):
 
 @relatorio('subscricoes', 'Subscrições — faturas',
            'Todas as faturas de subscrição de lojas e POS: emitidas, pagas, em atraso e anuladas.',
-           filtros=['base_faturas', 'estado_fatura', 'alvo', 'plano', 'metodo_fatura', 'loja'], grupo='Plataforma')
+           filtros=['base_faturas', 'estado_fatura', 'alvo', 'plano', 'metodo_fatura', 'loja'], grupo='Plataforma',
+           ambitos=('admin', 'loja'), titulos={'loja': 'Subscrição — faturas'},
+           descricoes={'loja': 'As faturas da subscrição da loja: emitidas, pagas, em atraso e anuladas.'})
 def _subscricoes(f):
     from ..models import FaturaSubscricao, Subscricao
     from .subscricoes import hoje, nome_alvo
@@ -514,7 +532,7 @@ def _vendas_produtos(f):
             l = linha(chave_de(pid, vid, prod), pid, vid, prod, nome_var)
             l['unidades'] += it.quantidade
             l['valor'] += it.preco * it.quantidade
-            custo = custos.get(pid)
+            custo = it.custo_unitario if it.custo_unitario is not None else custos.get(pid)
             if custo:
                 l['custo'] += custo * it.quantidade
             else:
@@ -564,8 +582,8 @@ def _vendas_produtos(f):
         'notas': ['Encomendas concluídas no período (data de conclusão). "Vendido" = preço × unidades vendidas sozinhas; '
                   'as unidades que saíram dentro de menus/conjuntos contam em "Em menus" (o valor fica no menu). '
                   'Os valores são só dos artigos (sem taxas de entrega). '
-                  'Devoluções pela data do reembolso. Margem = vendido − preço de custo atual do inventário '
-                  '(vazia quando o produto não tem custo).'],
+                  'Devoluções pela data do reembolso. Margem = vendido − custo (o preço de custo guardado em cada venda; '
+                  'nas vendas antigas, o custo atual do inventário). Vazia quando o produto não tem custo.'],
     }
 
 
@@ -748,11 +766,225 @@ def _pagamentos(f):
 
 
 # ══════════════════════════════════════════════════════════════
+# VENDAS NO TEMPO
+# ══════════════════════════════════════════════════════════════
+
+@relatorio('vendas', 'Vendas por dia / mês',
+           'Encomendas concluídas, vendas brutas, ajustes, devoluções, líquido e ticket médio, por dia ou por mês.',
+           filtros=['agrupar_tempo', 'loja'], max_dias=DIAS_AGREGADO, ambitos=('admin', 'loja'))
+def _vendas(f):
+    from ..models import Encomenda
+    p = _periodo_agrupado(f)
+    loja_id = _loja_id(f)
+    base = Encomenda.objects.filter(loja_id=loja_id) if loja_id else None
+    v = rel.serie(rel.encomendas_vendidas(p, base), 'data_conclusao', p,
+                  brutas=Sum('valor_total'), ajustes=Sum('ajuste'), n=Count('id'))
+    d = rel.serie(rel.devolucoes(p, loja_id), 'data_reembolso', p, t=Sum('valor_aprovado'))
+    linhas = []
+    for b in p.baldes():
+        x = v.get(b) or {}
+        brutas, aj, de = x.get('brutas') or ZERO, x.get('ajustes') or ZERO, (d.get(b) or {}).get('t') or ZERO
+        n = x.get('n') or 0
+        linhas.append({'periodo': b.isoformat(), 'encomendas': n, 'brutas': brutas, 'ajustes': aj, 'devolucoes': de,
+                       'liquidas': brutas - aj - de, 'ticket_medio': (brutas - aj) / n if n else None})
+    tot = _somas(linhas, ['encomendas', 'brutas', 'ajustes', 'devolucoes', 'liquidas'])
+    n = int(tot['encomendas'])
+    tot['ticket_medio'] = (tot['brutas'] - tot['ajustes']) / n if n else None
+    return {
+        'resumo': [_r('Vendas líquidas', tot['liquidas']), _r('Vendas brutas', tot['brutas']), _r('Ajustes', tot['ajustes']),
+                   _r('Devoluções', tot['devolucoes']), _r('Encomendas concluídas', n, 'numero'),
+                   _r('Ticket médio', tot['ticket_medio'])],
+        'colunas': [_col('periodo', 'Mês' if p.granularidade == 'mes' else 'Dia', 'mes' if p.granularidade == 'mes' else 'data'),
+                    _col('encomendas', 'Encomendas', 'numero'), _col('brutas', 'Brutas', 'dinheiro'),
+                    _col('ajustes', 'Ajustes', 'dinheiro'), _col('devolucoes', 'Devoluções', 'dinheiro'),
+                    _col('liquidas', 'Líquidas', 'dinheiro'), _col('ticket_medio', 'Ticket médio', 'dinheiro')],
+        'linhas': linhas, 'totais': tot, 'notas': [NOTA_VENDAS],
+    }
+
+
+def _periodo_agrupado(f):
+    agrupar = f.escolha('agrupar', ('auto', 'dia', 'mes'), 'auto')
+    p = f.periodo
+    return _PeriodoFixo(p.inicio, p.fim, agrupar) if agrupar != 'auto' else p
+
+
+# ══════════════════════════════════════════════════════════════
+# IVA (MAPA DE APOIO)
+# ══════════════════════════════════════════════════════════════
+
+@relatorio('iva', 'Mapa de IVA',
+           'Vendas líquidas separadas em base tributável e IVA, à taxa definida nas configurações da loja.',
+           filtros=['agrupar_tempo'], max_dias=DIAS_AGREGADO, ambitos=('loja',), grupo='Plataforma')
+def _iva(f):
+    from ..models import Loja
+    loja = Loja.objects.get(id=f.loja_id)
+    taxa = loja.percentagem_iva or ZERO
+    res = _vendas(f)
+    fator = 1 + taxa / 100
+    linhas = []
+    for l in res['linhas']:
+        liq = l['liquidas']
+        base = (liq / fator).quantize(Decimal('0.01'))
+        linhas.append({'periodo': l['periodo'], 'encomendas': l['encomendas'], 'liquidas': liq, 'taxa': taxa,
+                       'base': base, 'iva': liq - base})
+    tot = _somas(linhas, ['encomendas', 'liquidas', 'base', 'iva'])
+    col_periodo = res['colunas'][0]
+    notas = ['Os preços da loja incluem IVA: base = líquido ÷ (1 + taxa); IVA = líquido − base. '
+             'As vendas incluem as taxas de entrega cobradas. Mapa de apoio: o apuramento oficial é feito pelo '
+             'contabilista com as faturas certificadas.']
+    if not taxa:
+        notas.insert(0, 'A loja não tem taxa de IVA definida (0%). Define-a em Configurações para este mapa fazer sentido.')
+    return {
+        'resumo': [_r('Vendas líquidas (com IVA)', tot['liquidas']), _r('Base tributável', tot['base']),
+                   _r(f'IVA ({taxa.normalize():f}%)'.replace('.', ','), tot['iva']),
+                   _r('Encomendas concluídas', int(tot['encomendas']), 'numero')],
+        'colunas': [col_periodo, _col('encomendas', 'Encomendas', 'numero'), _col('liquidas', 'Vendas líquidas', 'dinheiro'),
+                    _col('taxa', 'Taxa', 'percent'), _col('base', 'Base tributável', 'dinheiro'), _col('iva', 'IVA', 'dinheiro')],
+        'linhas': linhas, 'totais': tot, 'notas': notas,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+# CUSTOS COM A BENDI (LOJA)
+# ══════════════════════════════════════════════════════════════
+
+@relatorio('custos_bendi', 'Custos com a Bendi',
+           'O que a loja pagou à Bendi: comissões das vendas, subscrição e créditos a seu favor, por dia ou por mês.',
+           filtros=['agrupar_tempo'], max_dias=DIAS_AGREGADO, ambitos=('loja',), grupo='Plataforma')
+def _custos_bendi(f):
+    res = _receita(f)
+    linhas = [{'periodo': l['periodo'], 'encomendas': l['encomendas'], 'comissoes': l['comissoes'],
+               'subscricao': l['subscricoes_lojas'], 'creditos': l['creditos'],
+               'total': l['comissoes'] + l['subscricoes_lojas'] - l['creditos']} for l in res['linhas']]
+    tot = _somas(linhas, ['encomendas', 'comissoes', 'subscricao', 'creditos', 'total'])
+    return {
+        'resumo': [_r('Total pago à Bendi', tot['total']), _r('Comissões', tot['comissoes']),
+                   _r('Subscrição', tot['subscricao']), _r('Créditos a teu favor', tot['creditos'])],
+        'colunas': [res['colunas'][0], _col('encomendas', 'Encomendas c/ comissão', 'numero'),
+                    _col('comissoes', 'Comissões', 'dinheiro'), _col('subscricao', 'Subscrição', 'dinheiro'),
+                    _col('creditos', 'Créditos', 'dinheiro'), _col('total', 'Total', 'dinheiro')],
+        'linhas': linhas, 'totais': tot,
+        'notas': ['Comissões pela data em que foram geradas; subscrição pela data de pagamento (ofertas da Bendi não contam); '
+                  'créditos = comissões devolvidas por reembolsos depois de a comissão estar liquidada.'],
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+# INVENTÁRIO VALORIZADO (HOJE)
+# ══════════════════════════════════════════════════════════════
+
+@relatorio('inventario', 'Inventário valorizado',
+           'O stock de hoje de cada produto (e variante), ao preço de custo e ao preço de venda.',
+           filtros=['stock', 'tipo_produto', 'categoria_loja', 'pesquisa_produto'], ambitos=('loja',),
+           grupo='Stock', sem_periodo=True)
+def _inventario(f):
+    from ..models import Inventario, Produto, VarianteProduto
+    prods = Produto.objects.filter(loja_id=f.loja_id, e_conjunto=False).select_related('tipo')
+    tipo, categoria, q = f.inteiro('tipo'), f.inteiro('categoria'), f.texto('q')
+    if tipo:
+        prods = prods.filter(tipo_id=tipo)
+    if categoria:
+        prods = prods.filter(categorias__id=categoria)
+    if q:
+        prods = prods.filter(nome__icontains=q)
+    inv = {i.produto_id: i for i in Inventario.objects.filter(produto__in=prods)}
+    variantes = {}
+    for v in VarianteProduto.objects.filter(produto__in=prods.filter(stock_por_variante=True), ativo=True).order_by('id'):
+        variantes.setdefault(v.produto_id, []).append(v)
+    stock = f.escolha('stock', ('com', 'baixo', 'esgotado'))
+    linhas = []
+    for pr in prods.order_by('nome').distinct():
+        i = inv.get(pr.id)
+        custo = i.preco_custo if i and i.preco_custo else None
+        if pr.stock_por_variante:
+            itens = [(', '.join(str(x) for x in (v.combinacao or {}).values()), v.sku, v.quantidade,
+                      v.preco if v.preco is not None else pr.preco) for v in variantes.get(pr.id, [])]
+        else:
+            itens = [('', pr.sku, i.quantidade if i else 0, pr.preco)]
+        for var, sku, qtd, preco in itens:
+            if (stock == 'com' and qtd <= 0) or (stock == 'baixo' and not 0 < qtd <= 5) or (stock == 'esgotado' and qtd > 0):
+                continue
+            linhas.append({'produto': pr.nome, 'variante': var, 'sku': sku, 'tipo': pr.tipo.nome if pr.tipo_id else '',
+                           'ativo': 'Sim' if pr.ativo else 'Não', 'quantidade': qtd, 'custo': custo, 'preco': preco,
+                           'valor_custo': custo * qtd if custo is not None else None, 'valor_venda': preco * qtd,
+                           'margem': (preco - custo) * qtd if custo is not None else None})
+    tot = _somas(linhas, ['quantidade', 'valor_venda'])
+    com = [l for l in linhas if l['custo'] is not None]
+    tot['valor_custo'] = sum((l['valor_custo'] for l in com), ZERO) if com else None
+    tot['margem'] = sum((l['margem'] for l in com), ZERO) if com else None
+    sem_custo = len(linhas) - len(com)
+    notas = ['Fotografia do stock no momento em que o relatório é gerado (o período não se aplica). '
+             'Menus/conjuntos não têm stock próprio e não aparecem.']
+    if sem_custo:
+        notas.insert(0, f'{sem_custo} linha(s) sem preço de custo: preenche-o no Inventário para o valor ao custo e a margem ficarem completos.')
+    return {
+        'resumo': [_r('Unidades em stock', int(tot['quantidade']), 'numero'), _r('Valor ao custo', tot['valor_custo']),
+                   _r('Valor de venda', tot['valor_venda']), _r('Margem potencial', tot['margem']),
+                   _r('Esgotados', sum(1 for l in linhas if l['quantidade'] <= 0), 'numero')],
+        'colunas': [_col('produto', 'Produto'), _col('variante', 'Variante'), _col('sku', 'SKU'), _col('tipo', 'Tipo'),
+                    _col('ativo', 'Ativo'), _col('quantidade', 'Stock', 'numero'), _col('custo', 'Custo', 'dinheiro'),
+                    _col('preco', 'Preço', 'dinheiro'), _col('valor_custo', 'Valor ao custo', 'dinheiro'),
+                    _col('valor_venda', 'Valor de venda', 'dinheiro'), _col('margem', 'Margem', 'dinheiro')],
+        'linhas': linhas, 'totais': tot, 'notas': notas,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+# ENTREGAS
+# ══════════════════════════════════════════════════════════════
+
+@relatorio('entregas', 'Entregas',
+           'Cada entrega ao domicílio: condutor, estado, quando foi entregue e quanto tempo demorou.',
+           filtros=['estado_entrega', 'condutor'], ambitos=('loja',), grupo='Stock')
+def _entregas(f):
+    from ..models import Entrega
+    p = f.periodo
+    qs = (Entrega.objects.filter(p.filtro('data_criacao'), encomenda__loja_id=f.loja_id)
+          .select_related('encomenda__comprador__user', 'condutor__utilizador__user', 'opcao_entrega'))
+    estado = f.escolha('estado', dict(Entrega.STATUS))
+    if estado:
+        qs = qs.filter(status=estado)
+    condutor = f.inteiro('condutor')
+    if condutor:
+        qs = qs.filter(condutor_id=condutor)
+    linhas = []
+    for e in qs.order_by('data_criacao', 'id')[:MAX_LINHAS]:
+        minutos = (e.data_entrega - e.data_criacao).total_seconds() / 60 if e.data_entrega and e.status == 'entregue' else None
+        linhas.append({'entrega': e.id, 'encomenda': e.encomenda_id, 'criada': e.data_criacao,
+                       'cliente': _nome(e.encomenda.comprador.user),
+                       'condutor': _nome(e.condutor.utilizador.user) if e.condutor_id else '',
+                       'opcao': e.opcao_entrega.nome if e.opcao_entrega_id else '', 'estado': e.get_status_display(),
+                       'entregue_em': e.data_entrega if e.status == 'entregue' else None,
+                       'minutos': round(minutos) if minutos is not None else None,
+                       'valor': e.encomenda.valor_total})
+    entregues = [l for l in linhas if l['entregue_em']]
+    falhou = sum(1 for l in linhas if l['estado'] == dict(Entrega.STATUS)['falhou'])
+    tempos = [l['minutos'] for l in entregues if l['minutos'] is not None]
+    fechadas = len(entregues) + falhou
+    return {
+        'resumo': [_r('Entregas', len(linhas), 'numero'), _r('Entregues', len(entregues), 'numero'),
+                   _r('Falhadas', falhou, 'numero'),
+                   _r('Taxa de sucesso', round(len(entregues) / fechadas * 100, 1) if fechadas else None, 'percent'),
+                   _r('Tempo médio (minutos)', round(sum(tempos) / len(tempos)) if tempos else None, 'numero')],
+        'colunas': [_col('entrega', 'Entrega', 'numero'), _col('encomenda', 'Encomenda', 'numero'),
+                    _col('criada', 'Atribuída em', 'datahora'), _col('cliente', 'Cliente'), _col('condutor', 'Condutor'),
+                    _col('opcao', 'Opção'), _col('estado', 'Estado'), _col('entregue_em', 'Entregue em', 'datahora'),
+                    _col('minutos', 'Minutos', 'numero'), _col('valor', 'Valor da encomenda', 'dinheiro')],
+        'linhas': linhas, 'totais': _somas(linhas, ['valor']),
+        'notas': ['Pela data em que a entrega foi atribuída. Taxa de sucesso = entregues ÷ (entregues + falhadas). '
+                  'Minutos = da atribuição até ser entregue.'],
+    }
+
+
+# ══════════════════════════════════════════════════════════════
 # EXECUÇÃO
 # ══════════════════════════════════════════════════════════════
 
 def catalogo(ambito='admin', loja_id=None):
-    return [{'id': r.id, 'titulo': r.titulo, 'descricao': r.descricao, 'grupo': r.grupo, 'max_dias': r.max_dias,
+    grupos_loja = {'Plataforma': 'Bendi e impostos'}
+    return [{'id': r.id, 'titulo': r.titulos.get(ambito, r.titulo), 'descricao': r.descricoes.get(ambito, r.descricao),
+             'grupo': grupos_loja.get(r.grupo, r.grupo) if ambito == 'loja' else r.grupo,
+             'max_dias': r.max_dias, 'sem_periodo': r.sem_periodo,
              'filtros': definicoes_filtros(r.filtros, ambito, loja_id)}
             for r in RELATORIOS.values() if ambito in r.ambitos]
 
@@ -766,6 +998,7 @@ def executar(rid, request, ambito='admin', loja_id=None):
     f = Filtros(periodo, request.GET, loja_id=loja_id, ambito=ambito)
     res = r.gerar(f)
     res['truncado'] = len(res['linhas']) >= MAX_LINHAS
+    res['titulo'] = r.titulos.get(ambito, r.titulo)
     res['filtros_aplicados'] = filtros_legiveis(r, request.GET, ambito, loja_id)
     return r, periodo, res
 

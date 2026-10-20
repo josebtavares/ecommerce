@@ -29,7 +29,17 @@
     <template v-if="atual">
       <!-- Filtros -->
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-4">
-        <FiltroPeriodo :padrao="atual.max_dias > 400 ? 'ano' : 'mes'" :key="atual.id" :carregando="carregando" @mudar="mudarPeriodo">
+        <div v-if="atual.sem_periodo" class="flex flex-wrap items-center justify-between gap-3">
+          <p class="text-sm text-zinc-400"><font-awesome-icon :icon="['fas', 'camera']" class="mr-1.5 text-zinc-500" />Situação de hoje (o período não se aplica)</p>
+          <div class="flex gap-1.5">
+            <button v-for="f in FORMATOS" :key="f.id" type="button" @click="exportar(f.id)" :disabled="!!aExportar || !dados"
+                    class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-semibold rounded-xl transition flex items-center gap-2 disabled:opacity-50">
+              <font-awesome-icon :icon="['fas', aExportar === f.id ? 'spinner' : f.icon]" :class="aExportar === f.id ? 'animate-spin' : f.cor" />
+              {{ f.label }}
+            </button>
+          </div>
+        </div>
+        <FiltroPeriodo v-else :padrao="atual.max_dias > 400 ? 'ano' : 'mes'" :key="atual.id" :carregando="carregando" @mudar="mudarPeriodo">
           <div class="flex gap-1.5">
             <button v-for="f in FORMATOS" :key="f.id" type="button" @click="exportar(f.id)" :disabled="!!aExportar || !dados"
                     class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-semibold rounded-xl transition flex items-center gap-2 disabled:opacity-50">
@@ -53,7 +63,7 @@
           <button v-if="temFiltros" type="button" @click="limparFiltros" class="text-xs text-zinc-500 hover:text-zinc-300 pb-2">Limpar filtros</button>
         </div>
         <p class="text-[11px] text-zinc-600">
-          {{ atual.descricao }} Período até {{ atual.max_dias > 400 ? '10 anos' : '1 ano' }}.
+          {{ atual.descricao }}<template v-if="!atual.sem_periodo"> Período até {{ atual.max_dias > 400 ? '10 anos' : '1 ano' }}.</template>
         </p>
       </div>
 
@@ -78,7 +88,7 @@
             <p class="text-sm font-bold text-zinc-300">{{ dados.relatorio.titulo }}
               <span class="text-zinc-500 font-normal">· {{ dados.total_linhas }} {{ dados.total_linhas === 1 ? 'linha' : 'linhas' }}</span>
             </p>
-            <p class="text-xs text-zinc-500">{{ dataCurta(dados.periodo.inicio) }} a {{ dataCurta(dados.periodo.fim) }}</p>
+            <p class="text-xs text-zinc-500">{{ dados.relatorio.sem_periodo ? 'Hoje' : `${dataCurta(dados.periodo.inicio)} a ${dataCurta(dados.periodo.fim)}` }}</p>
           </div>
           <div v-if="!dados.linhas.length" class="px-4 py-10 text-center text-sm text-zinc-600">Sem resultados para estes filtros.</div>
           <div v-else class="overflow-x-auto">
@@ -144,7 +154,7 @@
             <tr v-for="h in listaHistorico" :key="h.id" class="border-t border-zinc-800/80 text-zinc-300">
               <td class="px-4 py-2 whitespace-nowrap">{{ agoraCurto(h.data) }}</td>
               <td class="px-4 py-2">{{ h.titulo }}</td>
-              <td class="px-4 py-2 whitespace-nowrap">{{ dataCurta(h.inicio) }} a {{ dataCurta(h.fim) }}</td>
+              <td class="px-4 py-2 whitespace-nowrap">{{ h.sem_periodo ? '—' : `${dataCurta(h.inicio)} a ${dataCurta(h.fim)}` }}</td>
               <td class="px-4 py-2 uppercase">{{ h.formato }}</td>
               <td class="px-4 py-2 text-right tabular-nums">{{ h.linhas }}</td>
               <td class="px-4 py-2">{{ h.por }}</td>

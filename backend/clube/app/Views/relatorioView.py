@@ -33,7 +33,7 @@ def _consultar(request, rid, ambito, loja=None):
     tipos = {c['chave']: c['tipo'] for c in cols}
     linhas = [{k: exp.json_valor(v, tipos.get(k, 'texto')) for k, v in l.items()} for l in res['linhas'][offset:offset + limit]]
     return Response({
-        'relatorio': {'id': r.id, 'titulo': r.titulo, 'descricao': r.descricao},
+        'relatorio': {'id': r.id, 'titulo': res['titulo'], 'descricao': r.descricoes.get(ambito, r.descricao), 'sem_periodo': r.sem_periodo},
         'periodo': p.payload(),
         'resumo': [{**i, 'valor': exp.json_valor(i['valor'], i['tipo'])} for i in res['resumo']],
         'colunas': cols,
@@ -63,7 +63,7 @@ def _exportar(request, rid, ambito, loja=None):
     meta = {
         'emissor': loja.nome if loja else 'Bendi',
         'nif': (loja.efatura_nif if loja else '') or '',
-        'titulo': r.titulo, 'inicio': p.inicio, 'fim': p.fim,
+        'titulo': res['titulo'], 'inicio': p.inicio, 'fim': p.fim, 'sem_periodo': r.sem_periodo,
         'filtros': res['filtros_aplicados'], 'gerado_em': timezone.now(), 'gerado_por': ut.nome,
     }
     gerar, tipo, ext = exp.FORMATOS[formato]
@@ -82,6 +82,7 @@ def _historico(qs):
     return [{'id': x.id, 'relatorio': x.relatorio,
              'titulo': motor.RELATORIOS[x.relatorio].titulo if x.relatorio in motor.RELATORIOS else x.relatorio,
              'formato': x.formato, 'inicio': x.inicio, 'fim': x.fim, 'linhas': x.linhas, 'filtros': x.filtros,
+             'sem_periodo': motor.RELATORIOS[x.relatorio].sem_periodo if x.relatorio in motor.RELATORIOS else False,
              'por': x.utilizador.nome if x.utilizador_id else '', 'data': x.data_criacao}
             for x in qs.select_related('utilizador__user')[:30]]
 
@@ -125,3 +126,48 @@ def admin_historico(request):
     if request.GET.get('meus') == '1':
         qs = qs.filter(utilizador=request.user.utilizador)
     return Response(_historico(qs.filter(loja__isnull=True)))
+
+
+# ── loja (permissão ver_relatorios: dono, gestor, contabilista) ─────
+
+def _loja_com_permissao(request, loja_id):
+    from .lojaView import _exige_permissao
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'ver_relatorios')
+    return loja, erro
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_catalogo(request, loja_id):
+    """GET /app/loja/<id>/relatorios/catalogo/"""
+    loja, erro = _loja_com_permissao(request, loja_id)
+    if erro: return erro
+    return Response({'relatorios': motor.catalogo('loja', loja.id)})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_relatorio(request, loja_id, rid):
+    """GET /app/loja/<id>/relatorios/r/<rid>/ — sempre só os dados desta loja."""
+    loja, erro = _loja_com_permissao(request, loja_id)
+    if erro: return erro
+    return _consultar(request, rid, 'loja', loja)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_exportar(request, loja_id, rid):
+    """GET /app/loja/<id>/relatorios/r/<rid>/exportar/?formato=csv|xlsx|pdf"""
+    loja, erro = _loja_com_permissao(request, loja_id)
+    if erro: return erro
+    return _exportar(request, rid, 'loja', loja)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_historico(request, loja_id):
+    """GET /app/loja/<id>/relatorios/historico/ — as exportações desta loja."""
+    loja, erro = _loja_com_permissao(request, loja_id)
+    if erro: return erro
+    return Response(_historico(RelatorioGerado.objects.filter(loja=loja)))

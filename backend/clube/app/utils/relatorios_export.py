@@ -77,6 +77,7 @@ def _cabecalho(meta):
     """Linhas de identificação: emissor, período, filtros, quando e por quem."""
     out = [(meta['emissor'], meta.get('nif') and f'NIF {meta["nif"]}' or ''),
            ('Relatório', meta['titulo']),
+           ('Situação em', _local(meta['gerado_em']).strftime('%d/%m/%Y %H:%M')) if meta.get('sem_periodo') else
            ('Período', f'{_data(meta["inicio"], "data")} a {_data(meta["fim"], "data")}')]
     out += [(k, v) for k, v in meta.get('filtros', [])]
     out += [('Gerado em', _local(meta['gerado_em']).strftime('%d/%m/%Y %H:%M')), ('Gerado por', meta['gerado_por'])]

@@ -847,6 +847,9 @@ class ItemEncomenda(models.Model):
     # conjunto: o que levava no momento da compra (para o histórico e para repor o stock)
     # [{"origem": "loja", "produto_id", "variante_id", "nome", "quantidade" (por unidade)}]
     componentes = models.JSONField(default=list, blank=True)
+    # custo unitário (preço de custo do inventário) no momento da venda — a margem dos relatórios não muda
+    # se o custo for alterado depois. Vazio nas vendas antigas e nos menus/conjuntos.
+    custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
 
     def __str__(self):

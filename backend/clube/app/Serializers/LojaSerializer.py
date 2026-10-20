@@ -80,6 +80,11 @@ class LojaSerializer(serializers.ModelSerializer):
             'banner': {'write_only': True, 'required': False},
         }
 
+    def validate_percentagem_iva(self, value):
+        if value is None or value < 0 or value > 100:
+            raise serializers.ValidationError('A taxa de IVA tem de estar entre 0 e 100%.')
+        return value
+
     def get_logo_url(self, obj):
         request = self.context.get('request')
         if obj.logo and request:

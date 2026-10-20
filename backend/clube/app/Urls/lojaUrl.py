@@ -1,5 +1,6 @@
 from django.urls import path
 from ..Views import lojaView, videoView, horarioView, calendarioView
+from ..Views import relatorioView
 
 urlpatterns = [
 
@@ -22,6 +23,10 @@ urlpatterns = [
     path('loja/<int:id>/fechar/',                       lojaView.loja_fechar,           name='loja-fechar'),
     path('loja/<int:id>/reabrir/',                      lojaView.loja_reabrir,          name='loja-reabrir'),
     path('loja/<int:loja_id>/dashboard/',               lojaView.loja_dashboard,        name='loja-dashboard'),
+    path('loja/<int:loja_id>/relatorios/catalogo/',     relatorioView.loja_catalogo,    name='loja-relatorios-catalogo'),
+    path('loja/<int:loja_id>/relatorios/historico/',    relatorioView.loja_historico,   name='loja-relatorios-historico'),
+    path('loja/<int:loja_id>/relatorios/r/<slug:rid>/', relatorioView.loja_relatorio,   name='loja-relatorio'),
+    path('loja/<int:loja_id>/relatorios/r/<slug:rid>/exportar/', relatorioView.loja_exportar, name='loja-relatorio-exportar'),
     path('loja/<int:loja_id>/videos/',                  videoView.videos_estado,        name='loja-videos'),
     path('loja/<int:loja_id>/videos/reprocessar/',      videoView.videos_reprocessar,   name='loja-videos-reprocessar'),
 
