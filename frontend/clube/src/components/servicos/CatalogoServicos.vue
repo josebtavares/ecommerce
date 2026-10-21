@@ -5,7 +5,7 @@
       <p class="text-sm text-zinc-400 flex-1 min-w-[200px]">
         {{ servicos.length ? `${servicos.filter(s => s.ativo).length} serviço(s) activo(s)` : 'Ainda não tens serviços.' }}
       </p>
-      <button v-if="podeGerir && simples.length >= 2" type="button" @click="abrir(null, true)" data-teste="novo-pacote"
+      <button v-if="podeGerir" type="button" @click="abrir(null, true)" data-teste="novo-pacote"
         class="px-4 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-200 text-sm font-bold">+ Novo pacote</button>
       <button v-if="podeGerir" type="button" @click="abrir(null)"
         class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold">+ Novo serviço</button>
@@ -50,6 +50,10 @@
 
         <fieldset v-if="form.e_pacote" data-teste="pacote-servicos">
           <legend class="text-xs text-zinc-500 mb-1">Serviços do pacote <span class="text-zinc-600">(pela ordem em que se fazem)</span></legend>
+          <p v-if="simples.length < 2" class="text-xs text-amber-300 mb-1.5" data-teste="pacote-faltam">
+            Um pacote junta 2 ou mais serviços que já tens no catálogo{{ simples.length ? ` — tens só ${simples.length}` : '' }}.
+            Cria primeiro os serviços (ex.: Manicure, Pedicure); se não os quiseres vender sozinhos, desliga
+            "Mostrar aos clientes sozinho".</p>
           <div class="flex flex-wrap gap-2">
             <button v-for="c in simples" :key="c.id" type="button" @click="alternarComponente(c.id)"
               :aria-pressed="form.componentes.includes(c.id)"
