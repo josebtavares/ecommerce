@@ -17,6 +17,9 @@ import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 import PedirReembolso from './views/reembolsos/PedirReembolso.vue';
 import ReembolsoDetalhe from './views/reembolsos/ReembolsoDetalhe.vue';
 import MeusReembolsos from './views/reembolsos/MeusReembolsos.vue';
+const LojaServicos = () => import('./views/servicos/LojaServicos.vue');
+const MinhasMarcacoes = () => import('./views/servicos/MinhasMarcacoes.vue');
+const MarcacaoCliente = () => import('./views/servicos/MarcacaoCliente.vue');
 
 
 
@@ -47,6 +50,24 @@ const routes = [
         path: '/loja/:id',
         name: 'Loja',
         component: LojaPublica,
+    },
+    {
+        // marcar serviços (público; marcar pede sessão no fim)
+        path: '/loja/:id/servicos',
+        name: 'LojaServicos',
+        component: LojaServicos,
+    },
+    {
+        path: '/minhas-marcacoes',
+        name: 'MinhasMarcacoes',
+        component: MinhasMarcacoes,
+        meta: { requiresAuth: true }
+    },
+    {
+        path: '/minhas-marcacoes/:id',
+        name: 'MarcacaoCliente',
+        component: MarcacaoCliente,
+        meta: { requiresAuth: true }
     },
         {   
         path: '/',

@@ -31,6 +31,14 @@
       @toggle-dark="onToggleDark"
     />
 
+    <!-- a loja vende serviços: atalho para marcar (vale para todos os templates) -->
+    <router-link v-if="templateComponent && !indisponivel && servicos && !$route.query.preview"
+      :to="`/loja/${$route.params.id}/servicos`" data-teste="botao-marcar"
+      class="fixed left-4 bottom-6 z-40 flex items-center gap-2 px-5 py-3 rounded-full text-white text-sm font-bold shadow-lg shadow-black/30 hover:brightness-110 transition"
+      :style="{ backgroundColor: temaActivo?.corPrimaria || '#dc2626' }">
+      <font-awesome-icon :icon="['fas', 'calendar-check']" />Marcar serviço
+    </router-link>
+
     <div v-else class="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-400">
       <p class="text-2xl font-bold mb-2">Loja não encontrada</p>
       <button @click="$router.back()" class="text-red-400 hover:text-red-300 text-sm">← Voltar</button>
@@ -54,6 +62,7 @@ export default {
   setup () {
     const route             = useRoute()
     const loadingTemplate   = ref(true)
+    const servicos          = ref(false)    // a loja aceita marcações de serviços
     const templateComponent = ref(null)
     const temaActivo        = ref(null)
     const indisponivel      = ref(null)   // { fechada, nome } quando a API devolve 404
@@ -182,14 +191,20 @@ export default {
       }
     }
 
+    async function verServicos (lojaId) {
+      servicos.value = false
+      try { servicos.value = !!(await api.get(`/app/lojas/${lojaId}/servicos/publico/`)).data.disponivel } catch { /* sem serviços */ }
+    }
+
     onMounted(() => {
       resolveTemplate(route.params.id)
+      verServicos(route.params.id)
       window.addEventListener('message', onPreviewMessage)
     })
     onUnmounted(() => window.removeEventListener('message', onPreviewMessage))
-    watch(() => route.params.id, id => { if (id) resolveTemplate(id) })
+    watch(() => route.params.id, id => { if (id) { resolveTemplate(id); verServicos(id) } })
 
-    return { loadingTemplate, templateComponent, temaActivo, onToggleDark, indisponivel }
+    return { loadingTemplate, templateComponent, temaActivo, onToggleDark, indisponivel, servicos }
   },
 }
 </script>

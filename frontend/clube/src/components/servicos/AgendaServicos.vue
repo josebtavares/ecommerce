@@ -97,7 +97,7 @@
     <MarcacaoNova v-if="nova" :loja-id="lojaId" :servicos="servicos" :profissionais="profissionaisTodos" :inicial="nova"
       @fechar="nova = null" @criada="aoCriar" />
     <MarcacaoDetalhe v-if="aberta" :loja-id="lojaId" :marcacao-id="aberta" :pode-gerir="podeGerir"
-      @fechar="aberta = null" @alterada="carregar" />
+      @fechar="fecharDetalhe" @alterada="carregar" />
   </div>
 </template>
 
@@ -169,7 +169,11 @@ export default {
     altura () { return (this.minFim - this.minIni) * PX },
     horasEixo () { const out = []; for (let h = this.minIni / 60; h < this.minFim / 60; h++) out.push(h); return out },
   },
-  created () { this.carregar() },
+  created () {
+    this.carregar()
+    const q = Number(this.$route.query.marcacao)
+    if (q) this.aberta = q
+  },
   methods: {
     hora, rotuloDia,
     async carregar () {
@@ -229,6 +233,10 @@ export default {
     novaEm (ini) { this.nova = { dia: ini.dia || this.inicio, hora: ini.hora || '', profissional_id: ini.profissional_id || this.filtroProf || null } },
     aoCriar (m) { this.nova = null; this.carregar(); this.aberta = m.id },
     abrir (m) { this.aberta = m.id },
+    fecharDetalhe () {
+      this.aberta = null
+      if (this.$route.query.marcacao) this.$router.replace({ query: { ...this.$route.query, marcacao: undefined } })
+    },
     doDia (d) { return this.marcacoesVisiveis.filter(m => diaDe(m.inicio) === d).sort((a, b) => a.inicio.localeCompare(b.inicio)) },
   },
 }

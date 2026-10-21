@@ -23,7 +23,9 @@
           <div class="rounded-xl bg-zinc-800/50 px-3 py-2">
             <p class="text-zinc-500">Preço</p>
             <p class="text-zinc-200 font-semibold">{{ m.preco_texto }}</p>
-            <p class="text-zinc-500">{{ m.pagamento === 'antecipado' ? (m.pago ? 'Pago antecipado' : 'Antecipado — por pagar') : 'Paga no local' }}</p>
+            <p class="text-zinc-500">{{ m.pagamento === 'antecipado' ? (m.pago ? `Pago antecipado (${dinheiro(m.valor_pago)})` : 'Antecipado — por pagar') : 'Paga no local' }}</p>
+            <p v-if="faltaPagar > 0" class="text-amber-300">Falta {{ dinheiro(faltaPagar) }} no local</p>
+            <p v-if="Number(m.reembolso_devido) > 0" class="text-green-400">A devolver: {{ dinheiro(m.reembolso_devido) }}</p>
           </div>
         </div>
         <p v-if="m.notas_cliente" class="text-xs text-zinc-300 rounded-xl bg-zinc-800/50 px-3 py-2"><span class="text-zinc-500">Nota do cliente:</span> {{ m.notas_cliente }}</p>
@@ -44,7 +46,7 @@
           <div class="flex flex-wrap gap-2 pt-3" role="group" aria-label="Acções">
             <button v-if="m.estado === 'pendente'" type="button" @click="acao({ acao: 'confirmar' }, 'Marcação confirmada.')" :disabled="aGuardar"
               class="px-3 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-xs font-bold">Confirmar</button>
-            <button v-for="p in PAINEIS" :key="p.k" type="button" @click="abrirPainel(p.k)"
+            <button v-for="p in PAINEIS.filter(x => x.k !== 'preco' || m.pode_conversar)" :key="p.k" type="button" @click="abrirPainel(p.k)"
               :class="['px-3 py-2 rounded-xl text-xs font-semibold border', painel === p.k ? 'border-zinc-300 text-zinc-100' : 'border-zinc-700 text-zinc-300 hover:text-white',
                        p.k === 'cancelar' && 'text-red-300']">{{ p.t }}</button>
           </div>
@@ -80,6 +82,14 @@
               class="w-full px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-bold">Reatribuir</button>
           </div>
 
+          <div v-else-if="painel === 'preco'" class="space-y-2" data-teste="propor-preco">
+            <p class="text-[11px] text-zinc-500">O cliente recebe a proposta na conversa e aceita ou recusa. Agora: {{ m.preco_texto }}.</p>
+            <input v-model="novoPreco" type="number" min="0" step="1" placeholder="Novo preço (CVE)" aria-label="Novo preço" :class="CAMPO" />
+            <input v-model="motivo" maxlength="300" placeholder="Porquê (opcional), ex.: tatuagem maior com sombra" :class="CAMPO" />
+            <button type="button" :disabled="aGuardar || novoPreco === ''" @click="acao({ acao: 'propor_preco', valor: String(novoPreco), motivo }, 'Proposta enviada ao cliente.')"
+              class="w-full px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-bold">Enviar proposta</button>
+          </div>
+
           <div v-else-if="painel === 'cancelar'" class="space-y-2" data-teste="cancelar">
             <input v-model="motivo" maxlength="200" placeholder="Motivo (o cliente vê)" aria-label="Motivo do cancelamento" :class="CAMPO" />
             <button type="button" :disabled="aGuardar || !motivo.trim()" @click="acao({ acao: 'cancelar', motivo }, 'Marcação cancelada.')"
@@ -95,6 +105,8 @@
         </div>
         <p class="text-[11px] text-zinc-600">Criada {{ m.criada_por ? 'por ' + m.criada_por : 'pelo cliente' }}</p>
 
+        <MarcacaoConversa v-if="m.pode_conversar" :marcacao-id="m.id" :is-dark="true" :versao="versao" @mudou="carregar" />
+
         <p v-for="(a, i) in avisos" :key="'a' + i" class="text-sm text-amber-300" role="status">{{ a }}</p>
         <p v-if="ok" class="text-sm text-green-400" role="status">{{ ok }}</p>
         <p v-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
@@ -107,11 +119,15 @@
 <script>
 import api from '@/services/api'
 import { CAMPO, ESTADOS_MARCACAO, diaDe, hora, hojeCV, rotuloDia } from '@/utils/servicos'
+import { formatarDinheiro } from '@/utils/dinheiro'
+import MarcacaoConversa from './MarcacaoConversa.vue'
 
-const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro profissional' }, { k: 'cancelar', t: 'Cancelar' }]
+const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro profissional' }, { k: 'preco', t: 'Propor preço' },
+                 { k: 'cancelar', t: 'Cancelar' }]
 
 export default {
   name: 'MarcacaoDetalhe',
+  components: { MarcacaoConversa },
   props: {
     lojaId: { type: [String, Number], required: true },
     marcacaoId: { type: Number, required: true },
@@ -120,12 +136,16 @@ export default {
   emits: ['fechar', 'alterada'],
   data () {
     return { m: null, notas: '', painel: null, novoDia: '', horas: [], escolhida: null, foraHorario: false, horaLivre: '',
-             livres: [], novoProf: null, motivo: '', erro: '', ok: '', avisos: [], aGuardar: false, hoje: hojeCV(),
+             livres: [], novoProf: null, motivo: '', novoPreco: '', versao: 0, erro: '', ok: '', avisos: [], aGuardar: false, hoje: hojeCV(),
              CAMPO, ESTADOS: ESTADOS_MARCACAO, PAINEIS }
+  },
+  computed: {
+    faltaPagar () { return this.m?.pago && ['pendente', 'confirmada'].includes(this.m.estado) ? Math.max(0, Number(this.m.preco_indicado) - Number(this.m.valor_pago)) : 0 },
   },
   created () { this.carregar() },
   methods: {
     diaDe, hora, rotuloDia,
+    dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     base () { return `/app/loja/${this.lojaId}/servicos/marcacoes/${this.marcacaoId}/` },
     async carregar () {
       try {
@@ -154,6 +174,8 @@ export default {
         this.avisos = data.avisos || []
         this.ok = ok || 'Guardado.'
         this.painel = null
+        this.novoPreco = ''
+        this.versao++
         this.$emit('alterada', data)
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível.'

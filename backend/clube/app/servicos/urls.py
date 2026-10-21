@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import views as v
 from . import views_backoffice as b
+from . import views_cliente as c
 
 L = 'loja/<int:loja_id>/servicos/'
 
@@ -28,4 +29,13 @@ urlpatterns = [
     path(L + 'marcacoes/<int:marcacao_id>/',        b.marcacao_ver,           name='servicos-marcacao'),
     path(L + 'marcacoes/<int:marcacao_id>/acao/',   b.marcacao_acao,          name='servicos-marcacao-acao'),
     path(L + 'marcacoes/<int:marcacao_id>/livres/', b.livres_para_reatribuir, name='servicos-marcacao-livres'),
+    # etapa 3 — cliente (e a conversa, que serve os dois lados)
+    path('lojas/<int:loja_id>/servicos/publico/',   c.publico,     name='servicos-publico'),
+    path('lojas/<int:loja_id>/servicos/horas/',     c.horas,       name='servicos-horas'),
+    path('lojas/<int:loja_id>/servicos/marcar/',    c.marcar,      name='servicos-marcar'),
+    path('marcacoes/',                              c.minhas,      name='marcacoes-minhas'),
+    path('marcacoes/<int:marcacao_id>/',            c.minha,       name='marcacoes-minha'),
+    path('marcacoes/<int:marcacao_id>/acao/',       c.minha_acao,  name='marcacoes-minha-acao'),
+    path('marcacoes/<int:marcacao_id>/mensagens/',  c.mensagens,   name='marcacoes-mensagens'),
+    path('marcacoes/fotos/<int:foto_id>/',          c.foto,        name='marcacoes-foto'),
 ]

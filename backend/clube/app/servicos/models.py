@@ -175,6 +175,13 @@ class Marcacao(models.Model):
     cancelada_por = models.CharField(max_length=100, blank=True, default='')
     cancelada_motivo = models.CharField(max_length=200, blank=True, default='')
     concluida_em  = models.DateTimeField(null=True, blank=True)
+    # pagamento antecipado (simulado): quanto entrou e quanto a loja tem de devolver (cancelamento,
+    # preço novo mais baixo) — o reembolso em si é tratado na etapa 4
+    valor_pago    = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_default=0)
+    reembolso_devido = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_default=0)
+    # conversa: até quando cada lado leu (mensagens por ler)
+    lida_cliente_em = models.DateTimeField(null=True, blank=True)
+    lida_loja_em  = models.DateTimeField(null=True, blank=True)
     # lembretes já enviados ('vespera'…) — o worker não os repete
     avisos        = models.JSONField(default=list, blank=True)
     data_criacao  = models.DateTimeField(auto_now_add=True)
@@ -215,3 +222,58 @@ class ReatribuicaoMarcacao(models.Model):
 
     class Meta:
         ordering = ['data_criacao', 'id']
+
+
+# ══════════════════════════════════════════════════════════════
+# CONVERSA DA MARCAÇÃO (cliente ↔ loja/profissional) E PROPOSTAS DE PREÇO
+# ══════════════════════════════════════════════════════════════
+
+def _armazenamento_privado():
+    # as fotos da conversa são privadas, como as do chat e dos reembolsos
+    from ..chat.imagens import armazenamento_privado
+    return armazenamento_privado()
+
+
+def foto_marcacao_upload(instance, filename):
+    from django.utils.timezone import now
+    return f'marcacoes_privado/{now():%Y/%m}/{filename}'
+
+
+class PropostaPreco(models.Model):
+    """A loja propõe um preço novo; o cliente aceita ou recusa. Uma pendente de cada vez."""
+    ESTADOS = [('pendente', 'À espera do cliente'), ('aceite', 'Aceite'), ('recusada', 'Recusada'), ('anulada', 'Substituída')]
+
+    marcacao     = models.ForeignKey(Marcacao, on_delete=models.CASCADE, related_name='propostas')
+    valor        = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    valor_antes  = models.DecimalField(max_digits=10, decimal_places=2)
+    motivo       = models.CharField(max_length=300, blank=True, default='')
+    estado       = models.CharField(max_length=10, choices=ESTADOS, default='pendente')
+    criada_por   = models.CharField(max_length=100, blank=True, default='')
+    respondida_em = models.DateTimeField(null=True, blank=True)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+
+class MensagemMarcacao(models.Model):
+    PAPEIS = [('cliente', 'Cliente'), ('loja', 'Loja'), ('sistema', 'Sistema')]
+
+    marcacao  = models.ForeignKey(Marcacao, on_delete=models.CASCADE, related_name='mensagens')
+    autor     = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    autor_nome = models.CharField(max_length=100, blank=True, default='')
+    papel     = models.CharField(max_length=10, choices=PAPEIS)
+    texto     = models.TextField(blank=True, default='')
+    proposta  = models.ForeignKey(PropostaPreco, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+
+class FotoMarcacao(models.Model):
+    marcacao  = models.ForeignKey(Marcacao, on_delete=models.CASCADE, related_name='fotos')
+    mensagem  = models.ForeignKey(MensagemMarcacao, on_delete=models.SET_NULL, null=True, blank=True, related_name='fotos')
+    autor     = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    ficheiro  = models.FileField(upload_to=foto_marcacao_upload, storage=_armazenamento_privado)
+    criada_em = models.DateTimeField(auto_now_add=True)

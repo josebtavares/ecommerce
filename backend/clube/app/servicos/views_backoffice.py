@@ -704,7 +704,13 @@ def marcacao_ver(request, loja_id, marcacao_id):
     proprio = getattr(membro, 'profissional', None) if membro else None
     if not membro or not (membro.pode('gerir_marcacoes') or (proprio and proprio.pk == m.profissional_id)):
         return _erro('Sem permissão.', status.HTTP_403_FORBIDDEN)
-    return Response(marcacao_payload(m, completo=True))
+    return Response(_com_conversa(m))
+
+
+def _com_conversa(m):
+    from . import conversa
+    return {**marcacao_payload(m, completo=True), 'pode_conversar': conversa.pode_conversar(m),
+            'por_ler': conversa.por_ler(m, 'loja'), 'propostas': conversa.propostas_payload(m)}
 
 
 @api_view(['POST'])
@@ -717,6 +723,7 @@ def marcacao_acao(request, loja_id, marcacao_id):
       { acao: 'remarcar', inicio, ignorar_horario? }
       { acao: 'reatribuir', profissional_id, motivo?, ignorar_horario? }
       { acao: 'notas', notas_internas }
+      { acao: 'propor_preco', valor, motivo? }   (o cliente aceita ou recusa na conversa)
     """
     loja, membro, erro = _acesso(request, loja_id, 'gerir_marcacoes')
     if erro:
@@ -758,6 +765,18 @@ def marcacao_acao(request, loja_id, marcacao_id):
             if e:
                 return _erro(e)
             m, avisos = ops.reatribuir(m, novo, por, motivo, ign)
+        elif acao == 'propor_preco':
+            valor, e = ler_valor(d.get('valor'), 'O preço')
+            if e:
+                return _erro(e)
+            motivo, e = _texto(d, 'motivo', 300)
+            if e:
+                return _erro(e)
+            from . import conversa
+            try:
+                conversa.propor(m, valor, motivo, por)
+            except conversa.ErroConversa as ex:
+                return _erro(ex.mensagem, ex.status)
         elif acao == 'notas':
             notas, e = _texto(d, 'notas_internas', 500)
             if e:
@@ -769,7 +788,7 @@ def marcacao_acao(request, loja_id, marcacao_id):
     except ErroMarcacao as e:
         return _erro(str(e))
     m = Marcacao.objects.select_related('profissional', 'cliente__user').get(pk=m.pk)
-    return Response({**marcacao_payload(m, completo=True), 'avisos': avisos})
+    return Response({**_com_conversa(m), 'avisos': avisos})
 
 
 @api_view(['GET'])

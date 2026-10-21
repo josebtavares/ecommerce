@@ -165,10 +165,16 @@
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-sm font-bold uppercase tracking-wider"
                   :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Histórico de encomendas</h3>
-              <button type="button" @click="isOpen = false; $router.push('/perfil/reembolsos')"
-                class="text-xs font-semibold text-red-500 hover:text-red-400 flex items-center gap-1">
-                <font-awesome-icon :icon="['fas', 'rotate-left']" /> Reembolsos
-              </button>
+              <div class="flex items-center gap-3">
+                <button type="button" @click="isOpen = false; $router.push('/minhas-marcacoes')" data-teste="link-marcacoes"
+                  class="text-xs font-semibold text-red-500 hover:text-red-400 flex items-center gap-1">
+                  <font-awesome-icon :icon="['fas', 'calendar-check']" /> Marcações
+                </button>
+                <button type="button" @click="isOpen = false; $router.push('/perfil/reembolsos')"
+                  class="text-xs font-semibold text-red-500 hover:text-red-400 flex items-center gap-1">
+                  <font-awesome-icon :icon="['fas', 'rotate-left']" /> Reembolsos
+                </button>
+              </div>
             </div>
 
             <div v-if="loadingEncomendas" class="flex justify-center py-8">
