@@ -20,6 +20,12 @@
         {{ m.estado === 'confirmada' ? 'Marcação feita! Até lá.' : m.pago || m.pagamento === 'local' ? 'Marcação feita — a loja vai confirmar.' : 'Marcação reservada — falta pagar.' }}
       </p>
 
+      <p v-if="m.loja_indisponivel && ativa && !comecou" role="alert" data-teste="loja-fechada"
+         class="rounded-2xl border px-4 py-3 text-sm" :class="isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'">
+        {{ m.loja_nome }} está fechada de momento. A tua marcação mantém-se; se preferires, podes cancelá-la
+        {{ m.pago ? 'com devolução total' : 'sem custos' }}.
+      </p>
+
       <section class="rounded-2xl border p-4 space-y-3" :class="cartao" data-teste="resumo-marcacao">
         <div class="flex items-start gap-3">
           <img v-if="m.loja_logo" :src="m.loja_logo" alt="" class="w-11 h-11 rounded-xl object-cover" />
@@ -53,7 +59,7 @@
       <section v-if="ativa && !comecou" class="rounded-2xl border p-4 space-y-3" :class="cartao">
         <p class="text-xs" :class="suave">
           {{ m.dentro_do_prazo ? `Podes remarcar ou cancelar até ${m.cancelar_horas} h antes.` : `Já passou o prazo para remarcar (${m.cancelar_horas} h antes). Fala com a loja pelas mensagens.` }}
-          <template v-if="m.pago && !m.dentro_do_prazo"> Se cancelares agora, {{ m.reembolso_fora_prazo === 'total' ? 'é-te devolvido tudo' : 'o valor pago não é devolvido' }}.</template>
+          <template v-if="m.pago && !m.dentro_do_prazo"> Se cancelares agora, {{ m.reembolso_fora_prazo === 'total' || m.loja_indisponivel ? 'é-te devolvido tudo' : 'o valor pago não é devolvido' }}.</template>
         </p>
         <div class="flex flex-col sm:flex-row gap-2">
           <button v-if="m.dentro_do_prazo && !porPagar" type="button" @click="abrirRemarcar"

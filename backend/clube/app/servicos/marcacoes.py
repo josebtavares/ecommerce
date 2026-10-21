@@ -300,7 +300,8 @@ def cancelar_cliente(m, motivo=''):
     m.estado, m.cancelada_em = 'cancelada', timezone.now()
     m.cancelada_por, m.cancelada_motivo = 'Cliente', (motivo or '')[:200]
     if m.pago:
-        total = no_prazo or m.loja.config_servicos.reembolso_fora_prazo == 'total'
+        total = (no_prazo or m.loja.config_servicos.reembolso_fora_prazo == 'total'
+                 or not cobranca.disponivel(m.loja))           # a loja fechou: devolve-se tudo
         m.reembolso_devido = m.valor_pago if total else 0
     m.save(update_fields=['estado', 'cancelada_em', 'cancelada_por', 'cancelada_motivo', 'reembolso_devido', 'data_atualizacao'])
     anular_propostas(m)

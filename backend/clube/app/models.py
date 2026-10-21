@@ -321,6 +321,9 @@ class Loja(models.Model):
             self.estado_motivo      = motivo or ''
             self.estado_alterado_em = now()
             self.save(update_fields=['estado', 'estado_motivo', 'estado_alterado_em', 'ativa'])
+            # serviços: os clientes com marcações futuras sabem que a loja fechou (ou voltou)
+            from .servicos.ciclo import sincronizar_depois
+            sincronizar_depois(self)
             return cancelar_pendentes_da_loja(self) if novo != 'ativa' else 0
 
 

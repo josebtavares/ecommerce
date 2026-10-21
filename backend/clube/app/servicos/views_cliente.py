@@ -144,6 +144,7 @@ def _cliente_payload(request, m, completo=False):
               'dentro_do_prazo': ops.dentro_do_prazo(m), 'cancelar_horas': cfg.cancelar_horas,
               'reembolso_fora_prazo': cfg.reembolso_fora_prazo,
               'pode_conversar': conversa.pode_conversar(m),
+              'loja_indisponivel': not cobranca.disponivel(m.loja),
               'por_ler': conversa.por_ler(m, 'cliente')})
     if completo:
         d['mensagens'] = conversa.mensagens_payload(request, m, 'cliente')
