@@ -8,6 +8,8 @@
         <div class="flex items-start gap-3">
           <div class="flex-1 min-w-0">
             <h3 class="text-base font-bold text-zinc-100">{{ m.servico_nome }}</h3>
+            <p v-if="m.componentes && m.componentes.length" class="text-xs text-zinc-400" data-teste="inclui">
+              Inclui: {{ m.componentes.map(c => c.nome).join(' + ') }}</p>
             <p class="text-sm text-zinc-300">{{ rotuloDia(diaDe(m.inicio), true) }} · {{ hora(m.inicio) }}–{{ hora(m.fim) }}</p>
             <p class="text-sm text-zinc-400">com <b class="text-zinc-200">{{ m.profissional_nome }}</b></p>
           </div>

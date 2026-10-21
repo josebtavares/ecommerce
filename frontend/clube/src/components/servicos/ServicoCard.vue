@@ -3,7 +3,8 @@
   <router-link :to="{ path: `/loja/${s.loja.id}`, query: { servico: s.id } }" :data-teste="`servico-card-${s.id}`"
     class="group flex flex-col rounded-2xl border overflow-hidden transition"
     :class="isDark ? 'bg-zinc-900 border-zinc-800 hover:border-red-500/50' : 'bg-white border-stone-200 hover:border-red-400 hover:shadow-md'">
-    <div class="aspect-[4/3] flex items-center justify-center overflow-hidden" :class="isDark ? 'bg-zinc-800' : 'bg-stone-100'">
+    <div class="relative aspect-[4/3] flex items-center justify-center overflow-hidden" :class="isDark ? 'bg-zinc-800' : 'bg-stone-100'">
+      <span v-if="s.e_pacote" class="absolute top-2 left-2 z-[1] px-2 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-bold uppercase">Pacote</span>
       <img v-if="s.imagem" :src="s.imagem" alt="" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition" />
       <font-awesome-icon v-else :icon="['fas', 'calendar-check']" class="text-3xl" :class="isDark ? 'text-zinc-600' : 'text-stone-400'" />
     </div>

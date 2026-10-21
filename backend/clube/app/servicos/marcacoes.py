@@ -108,6 +108,10 @@ def criar(loja, servico, inicio, profissional=None, *, cliente=None, cliente_nom
     exige_disponivel(loja)
     if servico.loja_id != loja.id or not servico.ativo:
         raise ErroMarcacao('Serviço inválido.')
+    from .pacotes import em_falta, snapshot
+    falta = em_falta(servico)
+    if falta:
+        raise ErroMarcacao(f'Este pacote está indisponível: {", ".join(falta)} está inactivo.')
     fim = inicio + timedelta(minutes=servico.duracao_min)
     ocupado_ate = fim + timedelta(minutes=servico.intervalo_min)
     expirar_vencidas(loja=loja)
@@ -128,6 +132,7 @@ def criar(loja, servico, inicio, profissional=None, *, cliente=None, cliente_nom
                 loja=loja, servico=servico, profissional=profissional, cliente=cliente,
                 cliente_nome=cliente_nome[:120], cliente_telefone=cliente_telefone[:30],
                 servico_nome=servico.nome, duracao_min=servico.duracao_min, tipo_preco=servico.tipo_preco,
+                componentes=snapshot(servico),
                 inicio=inicio, fim=fim, ocupado_ate=ocupado_ate, estado=estado,
                 preco_indicado=servico.preco if preco is None else preco, pagamento=pagamento,
                 notas_cliente=notas_cliente[:500], notas_internas=notas_internas[:500], criada_por=por[:100],
@@ -402,6 +407,7 @@ def marcacao_payload(m, completo=False):
     tz = fuso()
     d = {
         'id': m.id, 'servico_id': m.servico_id, 'servico_nome': m.servico_nome, 'duracao_min': m.duracao_min,
+        'componentes': m.componentes or [],
         'profissional_id': m.profissional_id, 'profissional_nome': m.profissional.nome,
         'cliente_id': m.cliente_id,
         'cliente_nome': (m.cliente.nome if m.cliente_id else '') or m.cliente_nome,

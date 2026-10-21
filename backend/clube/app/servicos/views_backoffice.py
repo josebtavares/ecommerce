@@ -23,7 +23,7 @@ from ..utils import limpeza
 from ..utils.dinheiro import formatar, ler_valor
 from ..utils.horarios import fuso
 from ..Views.lojaView import _get_membro
-from . import agenda, cobranca
+from . import agenda, cobranca, pacotes
 from .marcacoes import ErroMarcacao, marcacao_payload
 from . import marcacoes as ops
 from .models import AusenciaProfissional, HorarioProfissional, Marcacao, Profissional, Servico, ServicoImagem
@@ -107,9 +107,18 @@ def servico_payload(s, request):
     return {'id': s.id, 'nome': s.nome, 'descricao': s.descricao, 'categoria': s.categoria,
             'duracao_min': s.duracao_min, 'intervalo_min': s.intervalo_min, 'tipo_preco': s.tipo_preco,
             'preco': str(s.preco), 'preco_texto': ('a partir de ' if s.tipo_preco == 'a_partir' else '') + formatar(s.preco),
-            'pagamento': s.pagamento, 'ativo': s.ativo, 'ordem': s.ordem,
+            'pagamento': s.pagamento, 'ativo': s.ativo, 'ordem': s.ordem, 'visivel': s.visivel,
             'profissionais': [p.id for p in s.profissionais.all()],
-            'imagens': [{'id': i.id, 'url': _url(request, i.ficheiro)} for i in s.imagens.all()]}
+            'imagens': [{'id': i.id, 'url': _url(request, i.ficheiro)} for i in s.imagens.all()],
+            'e_pacote': s.e_pacote, 'preco_auto': s.preco_auto, 'duracao_auto': s.duracao_auto,
+            'componentes': [{'id': c.servico.id, 'nome': c.servico.nome, 'duracao_min': c.servico.duracao_min,
+                             'preco': str(c.servico.preco), 'ativo': c.servico.ativo} for c in s.componentes.all()],
+            # serviços inactivos dentro do pacote (fica indisponível) / pacotes onde este serviço está
+            'em_falta': [c.servico.nome for c in s.componentes.all() if not c.servico.ativo],
+            'em_pacotes': [{'id': c.pacote.id, 'nome': c.pacote.nome} for c in s.em_pacotes.all()]}
+
+
+PREFETCH = ('profissionais', 'imagens', 'componentes__servico', 'em_pacotes__pacote')
 
 
 def _ler_servico(loja, dados, atual=None):
@@ -125,7 +134,14 @@ def _ler_servico(loja, dados, atual=None):
             if e:
                 return None, None, e
             campos[chave] = v
-    if 'duracao_min' in dados or atual is None:
+    pacote = atual.e_pacote if atual is not None else dados.get('e_pacote') is True
+    for chave in ('preco_auto', 'duracao_auto'):
+        if chave in dados:
+            if not isinstance(dados[chave], bool):
+                return None, None, f'{chave} inválido.'
+            campos[chave] = dados[chave] and pacote
+    auto = lambda chave: campos.get(chave, atual is not None and getattr(atual, chave))  # noqa: E731
+    if ('duracao_min' in dados or atual is None) and not auto('duracao_auto'):
         n = _inteiro(dados.get('duracao_min'), 5, 720)
         if n is None:
             return None, None, 'Duração inválida (entre 5 minutos e 12 horas).'
@@ -139,7 +155,7 @@ def _ler_servico(loja, dados, atual=None):
         if dados['tipo_preco'] not in dict(Servico.TIPOS_PRECO):
             return None, None, 'Tipo de preço inválido (fixo ou a_partir).'
         campos['tipo_preco'] = dados['tipo_preco']
-    if 'preco' in dados or atual is None:
+    if ('preco' in dados or atual is None) and not auto('preco_auto'):
         v, e = ler_valor(dados.get('preco'), 'O preço')
         if e:
             return None, None, e
@@ -148,10 +164,11 @@ def _ler_servico(loja, dados, atual=None):
         if dados['pagamento'] not in dict(Servico.PAGAMENTOS):
             return None, None, 'Forma de pagamento inválida.'
         campos['pagamento'] = dados['pagamento']
-    if 'ativo' in dados:
-        if not isinstance(dados['ativo'], bool):
-            return None, None, 'ativo inválido.'
-        campos['ativo'] = dados['ativo']
+    for chave in ('ativo', 'visivel'):
+        if chave in dados:
+            if not isinstance(dados[chave], bool):
+                return None, None, f'{chave} inválido.'
+            campos[chave] = dados[chave]
     if 'ordem' in dados:
         n = _inteiro(dados.get('ordem'), 0, 999)
         if n is None:
@@ -178,12 +195,27 @@ def catalogo(request, loja_id):
         campos, profs, msg = _ler_servico(loja, request.data)
         if msg:
             return _erro(msg)
-        s = Servico.objects.create(loja=loja, **campos)
-        if profs is None:                           # sem lista: todos os profissionais activos
-            profs = list(loja.profissionais.filter(ativo=True))
-        s.profissionais.set(profs)
+        e_pacote = request.data.get('e_pacote') is True
+        comps = None
+        if e_pacote:
+            comps, msg = pacotes.ler_componentes(loja, request.data.get('componentes'))
+            if msg:
+                return _erro(msg)
+        with transaction.atomic():
+            s = Servico(loja=loja, e_pacote=e_pacote, **campos)
+            if e_pacote:
+                pacotes.aplicar_somas(s, comps)
+            s.save()
+            if e_pacote:
+                pacotes.guardar_componentes(s, comps)
+            if profs is None:
+                # sem lista: todos os activos (num pacote, os que fazem todos os serviços dele)
+                profs = (list(loja.profissionais.filter(id__in=pacotes.profissionais_comuns(comps))) if e_pacote
+                         else list(loja.profissionais.filter(ativo=True)))
+            s.profissionais.set(profs)
+        s = Servico.objects.prefetch_related(*PREFETCH).get(pk=s.pk)
         return Response(servico_payload(s, request), status=status.HTTP_201_CREATED)
-    qs = loja.servicos.prefetch_related('profissionais', 'imagens')
+    qs = loja.servicos.prefetch_related(*PREFETCH)
     return Response([servico_payload(s, request) for s in qs])
 
 
@@ -196,6 +228,9 @@ def catalogo_item(request, loja_id, servico_id):
         return erro
     s = get_object_or_404(Servico, id=servico_id, loja=loja)
     if request.method == 'DELETE':
+        nomes = [p.nome for p in pacotes.pacotes_com(s, so_ativos=False)]
+        if nomes:
+            return _erro(f'Este serviço faz parte de {_lista(nomes)} — tira-o de lá primeiro (ou desactiva-o).')
         if s.marcacoes.exists():
             s.ativo = False
             s.save(update_fields=['ativo', 'data_atualizacao'])
@@ -206,12 +241,39 @@ def catalogo_item(request, loja_id, servico_id):
     campos, profs, msg = _ler_servico(loja, request.data, s)
     if msg:
         return _erro(msg)
-    for k, v in campos.items():
-        setattr(s, k, v)
-    s.save()
-    if profs is not None:
-        s.profissionais.set(profs)
+    comps = None
+    if s.e_pacote and 'componentes' in request.data:
+        comps, msg = pacotes.ler_componentes(loja, request.data.get('componentes'), s)
+        if msg:
+            return _erro(msg)
+    # desactivar um serviço que está em pacotes activos deixa-os indisponíveis — pede confirmação
+    if campos.get('ativo') is False and s.ativo and request.GET.get('confirmar') != '1':
+        nomes = [p.nome for p in pacotes.pacotes_com(s)]
+        if nomes:
+            fica = 'esse pacote fica indisponível' if len(nomes) == 1 else 'esses pacotes ficam indisponíveis'
+            return Response({'precisa_confirmar': True, 'pacotes': nomes,
+                             'detail': f'Este serviço faz parte de {_lista(nomes)}. Enquanto estiver inactivo, '
+                                       f'{fica} para os clientes.'}, status=status.HTTP_409_CONFLICT)
+    with transaction.atomic():
+        for k, v in campos.items():
+            setattr(s, k, v)
+        if s.e_pacote:
+            pacotes.aplicar_somas(s, comps)
+        s.save()
+        if comps is not None:
+            pacotes.guardar_componentes(s, comps)
+        if profs is not None:
+            s.profissionais.set(profs)
+        if not s.e_pacote and {'preco', 'duracao_min', 'tipo_preco'} & set(campos):
+            pacotes.atualizar_pacotes_de(s)
+    s = Servico.objects.prefetch_related(*PREFETCH).get(pk=s.pk)
     return Response(servico_payload(s, request))
+
+
+def _lista(nomes):
+    nomes = [f'«{n}»' for n in nomes]
+    return ('o pacote ' if len(nomes) == 1 else 'os pacotes ') + (
+        nomes[0] if len(nomes) == 1 else ', '.join(nomes[:-1]) + ' e ' + nomes[-1])
 
 
 @api_view(['POST'])

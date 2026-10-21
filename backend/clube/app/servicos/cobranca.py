@@ -229,5 +229,6 @@ def lojas_com_servicos():
 def servicos_publicos():
     """Serviços que um cliente pode marcar agora (loja disponível, serviço activo, com profissional activo)."""
     from .models import Servico
-    return (Servico.objects.filter(ativo=True, loja__in=lojas_com_servicos(), profissionais__ativo=True)
+    from .pacotes import marcaveis
+    return (marcaveis(Servico.objects.filter(loja__in=lojas_com_servicos(), profissionais__ativo=True))
             .distinct().select_related('loja').prefetch_related('imagens'))

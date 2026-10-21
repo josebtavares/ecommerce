@@ -7,7 +7,7 @@
       <label class="block"><span class="text-xs text-zinc-500">Serviço</span>
         <select v-model="servicoId" required :class="[CAMPO, 'mt-1']" @change="aoMudar">
           <option :value="null" disabled>Escolhe o serviço</option>
-          <option v-for="s in servicos.filter(s => s.ativo)" :key="s.id" :value="s.id">{{ s.nome }} · {{ duracaoTexto(s.duracao_min) }} · {{ s.preco_texto }}</option>
+          <option v-for="s in servicos.filter(disponivel)" :key="s.id" :value="s.id">{{ s.e_pacote ? 'Pacote: ' : '' }}{{ s.nome }} · {{ duracaoTexto(s.duracao_min) }} · {{ s.preco_texto }}</option>
         </select></label>
       <div class="grid grid-cols-2 gap-3">
         <label class="block"><span class="text-xs text-zinc-500">Profissional</span>
@@ -89,11 +89,13 @@ export default {
     podeCriar () { return this.servicoId && this.dia && (this.foraHorario ? !!this.horaLivre : !!this.escolhida) && this.clienteNome.trim() },
   },
   created () {
-    const activos = this.servicos.filter(s => s.ativo)
+    const activos = this.servicos.filter(this.disponivel)
     const doProf = this.inicial.profissional_id ? activos.filter(s => s.profissionais.includes(this.inicial.profissional_id)) : activos
     if (doProf.length === 1 || (doProf.length && this.inicial.profissional_id)) { this.servicoId = doProf[0].id; this.carregarHoras() }
   },
   methods: {
+    // activo e, num pacote, com todos os serviços activos
+    disponivel (s) { return s.ativo && !(s.em_falta || []).length },
     hora, duracaoTexto,
     aoMudar () {
       if (this.profId && !this.profsDoServico.some(p => p.id === this.profId)) this.profId = null

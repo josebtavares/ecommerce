@@ -34,6 +34,8 @@
             <p class="text-xs text-zinc-500">{{ m.loja_nome }}</p>
             <p class="font-bold text-lg leading-tight">{{ rotuloDia(diaDe(m.inicio), true) }} · {{ hora(m.inicio) }}–{{ hora(m.fim) }}</p>
             <p class="text-sm" :class="suave">{{ m.servico_nome }} com {{ m.profissional_nome }}</p>
+            <p v-if="m.componentes && m.componentes.length" class="text-xs mt-0.5" :class="suave" data-teste="inclui">
+              Inclui: {{ m.componentes.map(c => c.nome).join(' + ') }}</p>
           </div>
           <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" :class="corEstado" data-teste="estado">{{ textoEstado }}</span>
         </div>

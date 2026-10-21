@@ -86,8 +86,10 @@ def _detalhe(f):
     }
 
 
-def _agrupado(f, chave, nome):
-    grupos = defaultdict(lambda: {'marcacoes': 0, 'concluidas': 0, 'canceladas': 0, 'faltas': 0, 'minutos': 0, 'receita': ZERO})
+def _agrupado(f, chave, nome, extra=None):
+    """extra: {chave: (nome, {campo: valor})} — colunas a mais (e linhas só com elas)."""
+    vazio = {'marcacoes': 0, 'concluidas': 0, 'canceladas': 0, 'faltas': 0, 'minutos': 0, 'receita': ZERO}
+    grupos = defaultdict(lambda: dict(vazio))
     nomes = {}
     for m in _base(f).select_related('profissional')[:motor.MAX_LINHAS]:
         k = chave(m)
@@ -102,6 +104,9 @@ def _agrupado(f, chave, nome):
         elif m.estado == 'falta':
             g['faltas'] += 1
         g['receita'] += _receita(m)
+    for k, (n, campos) in (extra or {}).items():
+        nomes.setdefault(k, n)
+        grupos[k].update(campos)
     linhas = []
     for k, g in grupos.items():
         fechadas = g['concluidas'] + g['faltas']
@@ -136,11 +141,26 @@ def _por_profissional(f):
            'Por serviço: marcações, concluídas, faltas e receita.',
            filtros=['loja', 'profissional_servicos'], ambitos=('loja', 'admin'), grupo='Serviços')
 def _por_servico(f):
-    if f.ambito == 'admin':
-        linhas = _agrupado(f, lambda m: (m.loja_id, m.servico_id), lambda m: f'{m.servico_nome} · {m.loja.nome}')
+    admin = f.ambito == 'admin'
+    # cada serviço feito dentro de um pacote concluído (a receita fica no pacote)
+    em_pacotes = {}
+    for m in _base(f).filter(estado='concluida').exclude(componentes=[]).select_related('loja')[:motor.MAX_LINHAS]:
+        for c in m.componentes:
+            k = (m.loja_id, c['id']) if admin else c['id']
+            n, campos = em_pacotes.get(k, (f"{c['nome']} · {m.loja.nome}" if admin else c['nome'], {'em_pacotes': 0}))
+            campos['em_pacotes'] += 1
+            em_pacotes[k] = (n, campos)
+    if admin:
+        linhas = _agrupado(f, lambda m: (m.loja_id, m.servico_id), lambda m: f'{m.servico_nome} · {m.loja.nome}', em_pacotes)
     else:
-        linhas = _agrupado(f, lambda m: m.servico_id, lambda m: m.servico_nome)
+        linhas = _agrupado(f, lambda m: m.servico_id, lambda m: m.servico_nome, em_pacotes)
+    for l in linhas:
+        l.setdefault('em_pacotes', 0)
+    colunas = _colunas_agrupado('Serviço')
+    colunas.insert(3, _col('em_pacotes', 'Feitos em pacotes', 'numero'))
     return {'resumo': [_r('Serviços', len(linhas), 'numero'), _r('Receita', sum((l['receita'] for l in linhas), ZERO))],
-            'colunas': _colunas_agrupado('Serviço'), 'linhas': linhas,
-            'totais': _somas(linhas, ['marcacoes', 'concluidas', 'canceladas', 'faltas', 'horas', 'receita']),
-            'notas': ['Pela data da marcação; o nome é o que o serviço tinha quando foi marcado.']}
+            'colunas': colunas, 'linhas': linhas,
+            'totais': _somas(linhas, ['marcacoes', 'concluidas', 'em_pacotes', 'canceladas', 'faltas', 'horas', 'receita']),
+            'notas': ['Pela data da marcação; o nome é o que o serviço tinha quando foi marcado.',
+                      'Feitos em pacotes = quantas vezes o serviço foi feito dentro de um pacote concluído '
+                      '(a receita conta no pacote).']}

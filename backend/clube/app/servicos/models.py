@@ -111,6 +111,13 @@ class Servico(models.Model):
     pagamento      = models.CharField(max_length=10, choices=PAGAMENTOS, default='ambos')
     profissionais  = models.ManyToManyField(Profissional, related_name='servicos', blank=True)
     ativo          = models.BooleanField(default=True)
+    # False: não aparece sozinho aos clientes — só se marca dentro de pacotes
+    visivel        = models.BooleanField(default=True, db_default=True)
+    # pacote: vários serviços feitos pelo mesmo profissional, numa marcação (ComponentePacote)
+    e_pacote       = models.BooleanField(default=False, db_default=False)
+    # pacote: o preço / a duração seguem a soma dos serviços (actualizados quando eles mudam)
+    preco_auto     = models.BooleanField(default=False, db_default=False)
+    duracao_auto   = models.BooleanField(default=False, db_default=False)
     ordem          = models.PositiveSmallIntegerField(default=0)
     data_criacao   = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
@@ -120,6 +127,17 @@ class Servico(models.Model):
 
     def __str__(self):
         return f'{self.nome} ({self.duracao_min} min) @ {self.loja}'
+
+
+class ComponentePacote(models.Model):
+    pacote  = models.ForeignKey(Servico, on_delete=models.CASCADE, related_name='componentes')
+    # um serviço que está num pacote não se apaga (tira-se do pacote primeiro); RESTRICT deixa apagar a loja inteira
+    servico = models.ForeignKey(Servico, on_delete=models.RESTRICT, related_name='em_pacotes')
+    ordem   = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['ordem', 'id']
+        constraints = [models.UniqueConstraint(fields=['pacote', 'servico'], name='componente_pacote_unico')]
 
 
 class ServicoImagem(models.Model):
@@ -155,6 +173,8 @@ class Marcacao(models.Model):
     servico_nome  = models.CharField(max_length=120)
     duracao_min   = models.PositiveSmallIntegerField()
     tipo_preco    = models.CharField(max_length=8, default='fixo')
+    # pacote: os serviços que incluía quando foi marcado [{id, nome, duracao_min, preco}]
+    componentes   = models.JSONField(default=list, blank=True, db_default=[])
     inicio        = models.DateTimeField(db_index=True)
     fim           = models.DateTimeField()                 # fim do serviço
     ocupado_ate   = models.DateTimeField()                 # fim + intervalo (o que a agenda bloqueia)

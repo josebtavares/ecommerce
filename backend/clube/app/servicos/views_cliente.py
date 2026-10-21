@@ -4,6 +4,7 @@ Serviços — lado do cliente (etapa 3): ver os serviços da loja, horas livres,
 (mensagens, fotos, propostas de preço). A conversa serve também ao backoffice.
 """
 from datetime import timedelta
+from decimal import Decimal
 
 from django.db.models import Q
 from django.http import FileResponse, HttpResponseRedirect
@@ -19,7 +20,7 @@ from rest_framework.response import Response
 from ..models import Loja, Utilizador
 from ..utils.dinheiro import formatar, ler_valor
 from ..utils.horarios import fuso
-from . import agenda, cobranca, conversa
+from . import agenda, cobranca, conversa, pacotes
 from . import marcacoes as ops
 from .marcacoes import ErroMarcacao, marcacao_payload
 from .models import FotoMarcacao, Marcacao, Profissional, Servico
@@ -55,7 +56,7 @@ def publico(request, loja_id):
     if not cobranca.disponivel(loja):
         return Response({'disponivel': False})
     cfg = loja.config_servicos
-    servicos = list(loja.servicos.filter(ativo=True).prefetch_related('imagens', 'profissionais'))
+    servicos = list(pacotes.marcaveis(loja.servicos.all()).prefetch_related('imagens', 'profissionais', 'componentes__servico'))
     ativos = {p.id: p for p in loja.profissionais.filter(ativo=True)}
     return Response({
         'disponivel': True, 'loja': {'id': loja.id, 'nome': loja.nome, 'logo': _url(request, loja.logo)},
@@ -67,6 +68,7 @@ def publico(request, loja_id):
             'tipo_preco': s.tipo_preco, 'preco': str(s.preco),
             'preco_texto': ('a partir de ' if s.tipo_preco == 'a_partir' else '') + formatar(s.preco),
             'pagamento': s.pagamento, 'imagens': [_url(request, i.ficheiro) for i in s.imagens.all()],
+            **_pacote_publico(s),
             'profissionais': [p.id for p in s.profissionais.all() if p.id in ativos] if cfg.cliente_escolhe_profissional else [],
         } for s in servicos if any(p.id in ativos for p in s.profissionais.all())],
         'profissionais': [{'id': p.id, 'nome': p.nome, 'descricao': p.descricao, 'foto': _url(request, p.foto)}
@@ -85,7 +87,7 @@ def horas(request, loja_id):
     sid, dia = request.GET.get('servico') or '', _ler_dia(request.GET.get('dia'))
     if not sid.isdigit() or not dia:
         return _erro('Indica o serviço e o dia.')
-    s = get_object_or_404(Servico, id=int(sid), loja=loja, ativo=True)
+    s = get_object_or_404(pacotes.marcaveis(Servico.objects.all()), id=int(sid), loja=loja)
     desde, ultimo = _limites_cliente(cfg)
     if dia > ultimo:
         return Response({'dia': dia.isoformat(), 'horas': [], 'fora_do_prazo': True})
@@ -103,9 +105,20 @@ def horas(request, loja_id):
         for h in livres]})
 
 
+def _pacote_publico(s):
+    """Num pacote: o que inclui e quanto custaria marcar cada serviço à parte."""
+    if not s.e_pacote:
+        return {'e_pacote': False}
+    comps = [c.servico for c in s.componentes.all()]
+    separado = sum((c.preco for c in comps), Decimal('0'))
+    return {'e_pacote': True, 'componentes': [{'nome': c.nome, 'duracao_min': c.duracao_min} for c in comps],
+            'valor_separado': str(separado), 'valor_separado_texto': formatar(separado),
+            'poupanca_texto': formatar(separado - s.preco) if s.tipo_preco == 'fixo' and separado > s.preco else None}
+
+
 def servico_card(request, s):
     imgs = list(s.imagens.all())
-    return {'id': s.id, 'nome': s.nome, 'categoria': s.categoria, 'duracao_min': s.duracao_min,
+    return {'id': s.id, 'nome': s.nome, 'categoria': s.categoria, 'duracao_min': s.duracao_min, 'e_pacote': s.e_pacote,
             'preco_texto': ('a partir de ' if s.tipo_preco == 'a_partir' else '') + formatar(s.preco),
             'imagem': _url(request, imgs[0].ficheiro) if imgs else None,
             'loja': {'id': s.loja_id, 'nome': s.loja.nome, 'logo': _url(request, s.loja.logo), 'localizacao': s.loja.localizacao}}
@@ -144,7 +157,7 @@ def dias(request, loja_id):
     sid = request.GET.get('servico') or ''
     if not sid.isdigit():
         return _erro('Indica o serviço.')
-    s = get_object_or_404(Servico, id=int(sid), loja=loja, ativo=True)
+    s = get_object_or_404(pacotes.marcaveis(Servico.objects.all()), id=int(sid), loja=loja)
     profs = s.profissionais.filter(ativo=True).prefetch_related('horarios').select_related('loja')
     pid = request.GET.get('profissional')
     if pid and cfg.cliente_escolhe_profissional:
@@ -211,7 +224,7 @@ def marcar(request, loja_id):
     sid = d.get('servico_id')
     if isinstance(sid, bool) or not isinstance(sid, int):
         return _erro('Escolhe o serviço.')
-    s = Servico.objects.filter(loja=loja, id=sid, ativo=True).first()
+    s = pacotes.marcaveis(Servico.objects.filter(loja=loja, id=sid)).first()
     if not s:
         return _erro('Este serviço já não está disponível.')
     prof = None

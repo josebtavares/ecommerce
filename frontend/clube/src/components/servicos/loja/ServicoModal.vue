@@ -72,6 +72,18 @@
           </div>
 
           <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 pb-4 space-y-4" data-teste="servico-info">
+            <div v-if="servico.e_pacote" class="rounded-xl border p-3" :class="isDark ? 'border-zinc-800 bg-zinc-800/40' : 'border-gray-200 bg-gray-50'" data-teste="pacote-inclui">
+              <p class="text-xs font-semibold mb-1.5" :class="suave">O pacote inclui</p>
+              <ul class="space-y-1">
+                <li v-for="(c, i) in servico.componentes" :key="i" class="flex items-center gap-2 text-sm">
+                  <font-awesome-icon :icon="['fas', 'check']" class="text-xs" :style="{ color: cor }" />
+                  <span class="flex-1">{{ c.nome }}</span><span class="text-xs tabular-nums" :class="suave">{{ duracaoTexto(c.duracao_min) }}</span>
+                </li>
+              </ul>
+              <p class="text-[11px] mt-2" :class="suave">Tudo seguido, com o mesmo profissional.
+                <template v-if="servico.poupanca_texto"> Separados custam <s>{{ servico.valor_separado_texto }}</s> —
+                  <b class="text-emerald-500">poupas {{ servico.poupanca_texto }}</b>.</template></p>
+            </div>
             <p v-if="servico.descricao" class="text-sm whitespace-pre-line" :class="suave">{{ servico.descricao }}</p>
             <p v-if="servico.tipo_preco === 'a_partir'" class="text-[11px]" :class="suave">O preço final acerta-se com a loja — depois de marcar podes falar com ela.</p>
 
