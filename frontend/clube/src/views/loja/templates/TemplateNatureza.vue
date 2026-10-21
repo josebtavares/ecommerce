@@ -194,6 +194,9 @@
           </template>
         </section>
 
+        <!-- ══ SERVIÇOS ══ -->
+        <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="nt-sec" />
+
         <!-- ══ CATÁLOGO ══ -->
         <section id="nt-catalogo" class="nt-sec">
           <header class="nt-sec__head">
@@ -344,6 +347,7 @@ import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import SeccaoServicos from '@/components/servicos/loja/SeccaoServicos.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
@@ -355,7 +359,7 @@ const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Tudo' }
 export default {
   name: 'TemplateNatureza',
 
-  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

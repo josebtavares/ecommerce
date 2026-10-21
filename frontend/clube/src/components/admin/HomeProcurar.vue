@@ -3,7 +3,7 @@
   <div class="relative">
     <div v-if="valor && !limpar && !aEditar"
          class="flex items-center gap-2 px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl">
-      <font-awesome-icon :icon="['fas', { loja: 'store', produto: 'box', categoria: 'tags' }[tipo]]" class="text-zinc-500 w-3.5" />
+      <font-awesome-icon :icon="['fas', { loja: 'store', produto: 'box', categoria: 'tags', servico: 'calendar-check' }[tipo]]" class="text-zinc-500 w-3.5" />
       <span class="flex-1 text-sm text-zinc-100 truncate">{{ valor.nome }}</span>
       <button type="button" @click="aEditar = true; $nextTick(() => $refs.input?.focus())"
         class="text-xs font-semibold text-red-400 hover:text-red-300">Mudar</button>
@@ -11,7 +11,7 @@
     <template v-else>
       <input ref="input" v-model="q" @input="agendar" @focus="aberto = true; if (!resultados.length) procurar()"
         @keydown.esc="fechar" @blur="fecharDepois"
-        :placeholder="{ loja: 'Procurar loja…', produto: 'Procurar produto ou loja…', categoria: 'Procurar categoria ou loja…' }[tipo]"
+        :placeholder="{ loja: 'Procurar loja…', produto: 'Procurar produto ou loja…', categoria: 'Procurar categoria ou loja…', servico: 'Procurar serviço ou loja…' }[tipo]"
         class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" />
       <div v-if="aberto" class="absolute z-20 left-0 right-0 mt-1 max-h-72 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl">
         <p v-if="loading" class="px-3 py-3 text-xs text-zinc-500">A procurar…</p>
@@ -40,7 +40,7 @@ import api from '@/services/api'
 export default {
   name: 'HomeProcurar',
   props: {
-    tipo:   { type: String, required: true },       // 'loja' | 'produto' | 'categoria'
+    tipo:   { type: String, required: true },       // 'loja' | 'produto' | 'servico' | 'categoria'
     valor:  { type: Object, default: null },        // escolhido (mostra-se em vez da pesquisa)
     limpar: { type: Boolean, default: false },      // depois de escolher volta a pesquisa vazia (para adicionar vários)
     lojaId: { type: Number, default: null },        // só produtos desta loja

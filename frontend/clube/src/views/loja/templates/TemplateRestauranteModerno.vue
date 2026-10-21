@@ -296,6 +296,9 @@
         <!-- ══════════════════════════════════════════
              CATÁLOGO COMPLETO — pesquisa e filtros em todos os produtos
         ══════════════════════════════════════════ -->
+        <!-- Serviços (marcações) -->
+        <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="rm-section" contido />
+
         <section id="rm-catalogo" class="rm-section rm-section--catalogo">
           <div class="rm-wrap">
             <div class="rm-heading">
@@ -462,6 +465,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import SeccaoServicos from '@/components/servicos/loja/SeccaoServicos.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 
@@ -475,7 +479,7 @@ const LIMITE = 6   // pratos por página em cada grupo
 export default {
   name: 'TemplateRestauranteModerno',
 
-  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
+  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

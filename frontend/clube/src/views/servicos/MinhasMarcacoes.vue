@@ -6,6 +6,7 @@
         <font-awesome-icon :icon="['fas', 'arrow-left']" />
       </button>
       <h1 class="font-bold flex-1">As minhas marcações</h1>
+      <NotificacaoSino :isDark="isDark" />
     </header>
     <main class="max-w-2xl mx-auto px-4 py-5 space-y-4 pb-24">
       <div class="flex gap-1 rounded-xl p-1" :class="isDark ? 'bg-zinc-900' : 'bg-white border border-gray-200'" role="tablist">
@@ -36,18 +37,22 @@
 
 <script>
 import api from '@/services/api'
-import { DIAS_CURTOS, diaDe, diaSemana, hora } from '@/utils/servicos'
+import { DIAS_CURTOS, diaDe, diaSemana, hora, ouvirMarcacoes } from '@/utils/servicos'
+import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
 export default {
   name: 'MinhasMarcacoes',
+  components: { NotificacaoSino },
   data () { return { lista: [], tipo: 'proximas', carregando: true, isDark: localStorage.getItem('theme_preference') !== 'light', DIAS_CURTOS, MESES } },
   created () { this.carregar() },
+  mounted () { this.desligar = ouvirMarcacoes(() => this.carregar(true)) },
+  beforeUnmount () { this.desligar?.() },
   methods: {
     diaDe, diaSemana, hora,
-    async carregar () {
-      this.carregando = true
+    async carregar (silencioso = false) {
+      if (!silencioso) this.carregando = true
       try { this.lista = (await api.get('/app/marcacoes/', { params: { tipo: this.tipo } })).data } finally { this.carregando = false }
     },
     textoEstado (m) {

@@ -6,3 +6,7 @@ class ServicosConfig(AppConfig):
     name = 'app.servicos'
     label = 'servicos'
     verbose_name = 'Serviços e marcações'
+
+    def ready(self):
+        from .tempo_real import ligar
+        ligar()

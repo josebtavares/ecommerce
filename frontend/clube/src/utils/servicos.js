@@ -43,4 +43,15 @@ export function duracaoTexto (min) {
   return h ? `${h} h${m ? ' ' + m + ' min' : ''}` : `${m} min`
 }
 
+// tempo real: o sino de notificações (WebSocket) avisa que uma marcação mudou — { id, loja_id }
+export const EVENTO_MARCACAO = 'bendi:marcacao'
+
+// chama fn(detalhe) quando uma marcação muda (ou o WebSocket volta, sem detalhe); devolve o "desligar"
+export function ouvirMarcacoes (fn) {
+  const aoMudar = (e) => fn(e.detail || null)
+  window.addEventListener(EVENTO_MARCACAO, aoMudar)
+  window.addEventListener('bendi:tempo-real-religado', aoMudar)
+  return () => { window.removeEventListener(EVENTO_MARCACAO, aoMudar); window.removeEventListener('bendi:tempo-real-religado', aoMudar) }
+}
+
 export const CAMPO = 'w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500'

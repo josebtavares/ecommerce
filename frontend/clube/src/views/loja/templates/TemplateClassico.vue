@@ -250,6 +250,9 @@
               </div>
             </template>
 
+            <!-- Serviços (marcações) -->
+            <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="mt-10" />
+
             <div id="catalogo" class="mt-10 mb-4">
               <h2 class="text-xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Catálogo completo</h2>
               <p class="text-sm mt-1" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">Filtra por tipo, categoria ou pesquisa</p>
@@ -346,13 +349,14 @@ import MultiCart         from '@/components/cart/multiCart.vue'
 import ProductSlider     from '@/components/sliders/ProductSlider.vue'
 import Profile           from '@/components/profile/UserProfile.vue'
 import ProductCatalog    from '@/components/catalog/ProductCatalog.vue'
+import SeccaoServicos from '@/components/servicos/loja/SeccaoServicos.vue'
 import BotaoFavorito     from '@/components/favoritos/BotaoFavorito.vue'
 import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja     from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
   name: 'TemplateClassico',
-  components: { BotaoFavorito, EstadoLoja, ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
+  components: { SeccaoServicos, BotaoFavorito, EstadoLoja, ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
   emits: ['toggle-dark'],
 
   props: {

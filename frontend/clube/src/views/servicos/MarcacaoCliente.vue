@@ -6,6 +6,7 @@
         <font-awesome-icon :icon="['fas', 'arrow-left']" />
       </button>
       <h1 class="font-bold truncate flex-1">{{ m ? m.servico_nome : 'Marcação' }}</h1>
+      <NotificacaoSino :isDark="isDark" />
     </header>
 
     <div v-if="carregando" class="flex justify-center py-20"><font-awesome-icon :icon="['fas', 'spinner']" spin class="text-2xl text-red-500" /></div>
@@ -103,10 +104,12 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { DIAS_CURTOS, diaDe, diaSemana, hojeCV, hora, rotuloDia, somarDias } from '@/utils/servicos'
 import MarcacaoConversa from '@/components/servicos/MarcacaoConversa.vue'
+import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
+import { ouvirMarcacoes } from '@/utils/servicos'
 
 export default {
   name: 'MarcacaoCliente',
-  components: { MarcacaoConversa },
+  components: { MarcacaoConversa, NotificacaoSino },
   data () {
     return { m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
              novoDia: null, horas: [], novaHora: null, versao: 0, isDark: localStorage.getItem('theme_preference') !== 'light', DIAS_CURTOS }
@@ -132,6 +135,8 @@ export default {
   },
   watch: { '$route.params.id' () { this.carregando = true; this.carregar() } },
   created () { this.carregar() },
+  mounted () { this.desligar = ouvirMarcacoes(d => { if ((!d || String(d.id) === String(this.$route.params.id)) && !this.aEnviar) this.carregar(true) }) },
+  beforeUnmount () { this.desligar?.() },
   methods: {
     diaDe, diaSemana, hora, rotuloDia,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },

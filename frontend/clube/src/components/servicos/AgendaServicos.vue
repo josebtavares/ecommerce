@@ -103,7 +103,7 @@
 
 <script>
 import api from '@/services/api'
-import { ESTADOS_MARCACAO, diaDe, diaSemana, hojeCV, hora, minutosDe, rotuloDia, somarDias } from '@/utils/servicos'
+import { ESTADOS_MARCACAO, diaDe, diaSemana, hojeCV, hora, minutosDe, ouvirMarcacoes, rotuloDia, somarDias } from '@/utils/servicos'
 import MarcacaoNova from './MarcacaoNova.vue'
 import MarcacaoDetalhe from './MarcacaoDetalhe.vue'
 
@@ -169,6 +169,15 @@ export default {
     altura () { return (this.minFim - this.minIni) * PX },
     horasEixo () { const out = []; for (let h = this.minIni / 60; h < this.minFim / 60; h++) out.push(h); return out },
   },
+  mounted () {
+    // uma marcação desta loja mudou (cliente marcou, cancelou, remarcou…): recarrega a agenda (agrupado)
+    this.desligar = ouvirMarcacoes(d => {
+      if (d && String(d.loja_id) !== String(this.lojaId)) return
+      clearTimeout(this.adiado)
+      this.adiado = setTimeout(() => this.carregar(), 400)
+    })
+  },
+  beforeUnmount () { this.desligar?.(); clearTimeout(this.adiado) },
   created () {
     this.carregar()
     const q = Number(this.$route.query.marcacao)

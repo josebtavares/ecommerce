@@ -42,25 +42,34 @@
         </div>
         <p v-else-if="m.notas_internas" class="text-xs text-zinc-400">Notas: {{ m.notas_internas }}</p>
 
-        <!-- fechar: já começou → concluir (preço final) ou falta -->
-        <div v-if="ativa && comecou" class="rounded-xl border border-zinc-700 p-3 space-y-2" data-teste="fechar-marcacao">
-          <p class="text-xs font-semibold text-zinc-300">Como correu?</p>
-          <div class="flex gap-2">
-            <input v-model="precoFinal" type="number" min="0" step="1" :placeholder="`Preço final (${m.preco_texto})`" aria-label="Preço final" :class="CAMPO" />
-            <button type="button" @click="concluir" :disabled="aGuardar" data-teste="concluir"
-              class="px-4 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-bold whitespace-nowrap">Concluir</button>
+        <!-- estado: confirmar · concluir (com preço final) · falta — os dois últimos só a partir da hora marcada -->
+        <div v-if="ativa" class="rounded-xl border border-zinc-700 p-3 space-y-2" data-teste="fechar-marcacao">
+          <p class="text-xs font-semibold text-zinc-300">Estado: {{ m.estado_nome }}</p>
+          <button v-if="m.estado === 'pendente' && podeGerir" type="button" @click="acao({ acao: 'confirmar' }, 'Marcação confirmada.')" :disabled="aGuardar"
+            class="w-full px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-bold" data-teste="confirmar">Confirmar marcação</button>
+          <template v-if="comecou">
+            <p class="text-[11px] text-zinc-500">Como correu?</p>
+            <div class="flex gap-2">
+              <input v-model="precoFinal" type="number" min="0" step="1" :placeholder="`Preço final (${m.preco_texto})`" aria-label="Preço final" :class="CAMPO" />
+              <button type="button" @click="concluir" :disabled="aGuardar" data-teste="concluir"
+                class="px-4 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-bold whitespace-nowrap">Concluir</button>
+            </div>
+            <input v-if="precoFinal !== '' && Number(precoFinal) !== Number(m.preco_indicado)" v-model="motivoPreco" maxlength="200"
+              placeholder="Porquê o preço mudou (o cliente vê)" aria-label="Motivo do preço final" :class="CAMPO" />
+            <button type="button" @click="acao({ acao: 'falta' }, 'Marcada falta.', 'O cliente não veio?')" :disabled="aGuardar" data-teste="falta"
+              class="text-xs text-red-300 hover:text-red-200">O cliente não veio — marcar falta</button>
+          </template>
+          <div v-else class="flex flex-wrap items-center gap-2" data-teste="fechar-depois">
+            <button type="button" disabled class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-500 text-xs font-semibold cursor-not-allowed">Concluir</button>
+            <button type="button" disabled class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-500 text-xs font-semibold cursor-not-allowed">Falta</button>
+            <p class="text-[11px] text-zinc-500 flex-1 min-w-[180px]">Ficam disponíveis a partir da hora marcada ({{ rotuloDia(diaDe(m.inicio)) }} às {{ hora(m.inicio) }}).
+              Antes disso podes remarcar, passar a outro profissional ou cancelar.</p>
           </div>
-          <input v-if="precoFinal !== '' && Number(precoFinal) !== Number(m.preco_indicado)" v-model="motivoPreco" maxlength="200"
-            placeholder="Porquê o preço mudou (o cliente vê)" aria-label="Motivo do preço final" :class="CAMPO" />
-          <button type="button" @click="acao({ acao: 'falta' }, 'Marcada falta.', 'O cliente não veio?')" :disabled="aGuardar" data-teste="falta"
-            class="text-xs text-red-300 hover:text-red-200">O cliente não veio — marcar falta</button>
         </div>
 
         <!-- acções -->
         <div v-if="podeGerir && ['pendente', 'confirmada'].includes(m.estado)" class="space-y-3 pt-1 border-t border-zinc-800">
           <div class="flex flex-wrap gap-2 pt-3" role="group" aria-label="Acções">
-            <button v-if="m.estado === 'pendente'" type="button" @click="acao({ acao: 'confirmar' }, 'Marcação confirmada.')" :disabled="aGuardar"
-              class="px-3 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-xs font-bold">Confirmar</button>
             <button v-for="p in PAINEIS.filter(x => x.k !== 'preco' || m.pode_conversar)" :key="p.k" type="button" @click="abrirPainel(p.k)"
               :class="['px-3 py-2 rounded-xl text-xs font-semibold border', painel === p.k ? 'border-zinc-300 text-zinc-100' : 'border-zinc-700 text-zinc-300 hover:text-white',
                        p.k === 'cancelar' && 'text-red-300']">{{ p.t }}</button>
@@ -133,7 +142,7 @@
 
 <script>
 import api from '@/services/api'
-import { CAMPO, ESTADOS_MARCACAO, diaDe, hora, hojeCV, rotuloDia } from '@/utils/servicos'
+import { CAMPO, ESTADOS_MARCACAO, diaDe, hora, hojeCV, rotuloDia, ouvirMarcacoes } from '@/utils/servicos'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import MarcacaoConversa from './MarcacaoConversa.vue'
 
@@ -159,6 +168,8 @@ export default {
     comecou () { return this.m && Date.now() >= new Date(this.m.inicio).getTime() - 15 * 60 * 1000 },
   },
   created () { this.carregar() },
+  mounted () { this.desligar = ouvirMarcacoes(d => { if ((!d || d.id === this.marcacaoId) && !this.aGuardar) this.carregar() }) },
+  beforeUnmount () { this.desligar?.() },
   methods: {
     diaDe, hora, rotuloDia,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },

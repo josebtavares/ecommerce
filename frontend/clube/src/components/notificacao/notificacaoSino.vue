@@ -343,6 +343,8 @@ export default {
           if (msg.type === 'contador') this.naoLidas = msg.nao_lidas
           // pedido de reembolso mudou (só ids) — quem o está a ver vai buscá-lo (useTempoRealReembolsos)
           if (msg.type === 'reembolso') window.dispatchEvent(new CustomEvent(EVENTO_REEMBOLSO, { detail: msg.reembolso }))
+          // marcação de serviços mudou (utils/servicos.js ouvirMarcacoes)
+          if (msg.type === 'marcacao') window.dispatchEvent(new CustomEvent('bendi:marcacao', { detail: msg.marcacao }))
         } catch (err) { /* silencioso */ }
       }
 

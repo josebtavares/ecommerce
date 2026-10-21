@@ -130,6 +130,40 @@ def pesquisa(request):
                      'next_offset': offset + limit if offset + limit < total else None})
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def dias(request, loja_id):
+    """
+    GET /app/lojas/<id>/servicos/dias/?servico=&profissional= — os próximos dias (até 30, dentro do prazo da loja)
+    com quantas horas livres têm: o cliente vê logo quais estão cheios e abre no primeiro com vagas.
+    """
+    loja = _loja_disponivel(loja_id)
+    if not loja:
+        return _erro('Esta loja não está a aceitar marcações.', status.HTTP_404_NOT_FOUND)
+    cfg = loja.config_servicos
+    sid = request.GET.get('servico') or ''
+    if not sid.isdigit():
+        return _erro('Indica o serviço.')
+    s = get_object_or_404(Servico, id=int(sid), loja=loja, ativo=True)
+    profs = s.profissionais.filter(ativo=True).prefetch_related('horarios').select_related('loja')
+    pid = request.GET.get('profissional')
+    if pid and cfg.cliente_escolhe_profissional:
+        if not pid.isdigit():
+            return _erro('profissional inválido.')
+        profs = profs.filter(pk=int(pid))
+    profs = list(profs)
+    desde, ultimo = _limites_cliente(cfg)
+    ops.expirar_vencidas(loja=loja)
+    hoje = timezone.now().astimezone(fuso()).date()
+    out = []
+    for i in range(min(cfg.dias_max, 30)):
+        dia = hoje + timedelta(days=i)
+        if dia > ultimo:
+            break
+        out.append({'dia': dia.isoformat(), 'livres': len(agenda.horas_livres(s, dia, profs, desde=desde))})
+    return Response({'dias': out, 'primeiro_livre': next((d['dia'] for d in out if d['livres']), None)})
+
+
 # ══════════════════════════════════════════════════════════════
 # CLIENTE
 # ══════════════════════════════════════════════════════════════

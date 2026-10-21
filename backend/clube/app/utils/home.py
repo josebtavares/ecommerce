@@ -39,7 +39,8 @@ CRITERIOS_PRODUTOS = {
 
 CRITERIOS_SERVICOS = {
     'novos':         'Serviços novos',
-    'mais_marcados': 'Mais marcados (últimos 30 dias)',
+    'mais_marcados': 'Mais marcados',
+    'loja':          'De uma loja',
 }
 
 # tipo de secção → o que mostra
@@ -91,7 +92,7 @@ def _dados_seccao(s):
         'inicio': s.inicio.isoformat() if s.inicio else None,
         'fim': s.fim.isoformat() if s.fim else None,
         'fonte': s.fonte, 'criterio': s.criterio, 'parametros': s.parametros or {}, 'limite': s.limite,
-        'itens': [{'loja_id': i.loja_id, 'produto_id': i.produto_id, 'imagem_id': i.imagem_id,
+        'itens': [{'loja_id': i.loja_id, 'produto_id': i.produto_id, 'servico_id': i.servico_id, 'imagem_id': i.imagem_id,
                    'titulo': i.titulo, 'texto': i.texto, 'link': i.link} for i in s.itens.all()],
     }
 
@@ -527,7 +528,9 @@ def resolver(s, request, vistos=None):
         return out if out['categorias'] else None
 
     if tipo == 'servicos':
-        out['servicos'] = servicos_auto(s.get('criterio') or 'novos', min(max(_int(s.get('limite'), 12), 1), LIMITE_MAX), request)
+        from ..servicos.cobranca import servicos_publicos
+        ids = _ids_seccao(s, servicos_publicos(), servicos_auto_qs(s.get('criterio') or 'novos', p), 'servico_id')
+        out['servicos'] = _serializar_servicos(ids, request)
         return out if out['servicos'] else None
 
     if tipo == 'banner':
@@ -541,18 +544,29 @@ def resolver(s, request, vistos=None):
     return None
 
 
-def servicos_auto(criterio, limite, request):
+def servicos_auto_qs(criterio, p):
+    """Serviços automáticos (só de lojas com marcações abertas): novos, mais marcados ou de uma loja."""
     from django.db.models import Count, Q
     from ..servicos.cobranca import servicos_publicos
-    from ..servicos.views_cliente import servico_card
     qs = servicos_publicos()
+    if p.get('categoria_loja'):
+        qs = qs.filter(loja__categoria__iexact=p['categoria_loja'])
+    if criterio == 'loja':
+        return qs.filter(loja_id=_int(p.get('loja_id'), 0)).order_by('ordem', 'nome', 'id')
     if criterio == 'mais_marcados':
-        desde = timezone.now() - timedelta(days=30)
-        qs = qs.annotate(n=Count('marcacoes', filter=Q(marcacoes__data_criacao__gte=desde) & ~Q(marcacoes__estado='expirada'),
-                                 distinct=True)).order_by('-n', '-data_criacao')
-    else:
-        qs = qs.order_by('-data_criacao', 'id')
-    return [servico_card(request, s) for s in qs[:limite]]
+        desde = timezone.now() - timedelta(days=_int(p.get('dias'), 30) or 30)
+        return qs.annotate(n=Count('marcacoes', filter=Q(marcacoes__data_criacao__gte=desde) & ~Q(marcacoes__estado='expirada'),
+                                   distinct=True)).order_by('-n', '-data_criacao')
+    if p.get('dias'):
+        qs = qs.filter(data_criacao__gte=timezone.now() - timedelta(days=_int(p.get('dias'), 30)))
+    return qs.order_by('-data_criacao', 'id')
+
+
+def _serializar_servicos(ids, request):
+    from ..servicos.models import Servico
+    from ..servicos.views_cliente import servico_card
+    por_id = {s.id: s for s in Servico.objects.filter(id__in=ids).select_related('loja').prefetch_related('imagens')}
+    return [servico_card(request, por_id[i]) for i in ids if i in por_id]
 
 
 def categorias_lojas():
@@ -611,11 +625,12 @@ TIPOS_COM_ITENS = {
     'produtos':      ('produto',),
     'loja_destaque': ('produto',),
     'banner':        ('banner',),
+    'servicos':      ('servico',),
 }
 CRITERIOS_POR_TIPO = {
     'hero': CRITERIOS_LOJAS, 'lojas': CRITERIOS_LOJAS, 'produtos': CRITERIOS_PRODUTOS,
     'loja_destaque': CRITERIOS_LOJAS,   # sem loja escolhida: uma das primeiras deste critério, muda todos os dias
-    'servicos': CRITERIOS_SERVICOS,     # só automático
+    'servicos': CRITERIOS_SERVICOS,
 }
 # parâmetro → (tipo, mínimo, máximo) ; str/lista: máximo = comprimento
 PARAMETROS = {
@@ -649,7 +664,8 @@ def _normalizar(s):
         'inicio': s.get('inicio'), 'fim': s.get('fim'), 'fonte': s.get('fonte') or 'auto',
         'criterio': s.get('criterio') or '', 'parametros': s.get('parametros') or {},
         'limite': s.get('limite') or limite_padrao(s.get('tipo')),
-        'itens': [{'loja_id': i.get('loja_id'), 'produto_id': i.get('produto_id'), 'imagem_id': i.get('imagem_id'),
+        'itens': [{'loja_id': i.get('loja_id'), 'produto_id': i.get('produto_id'), 'servico_id': i.get('servico_id'),
+                   'imagem_id': i.get('imagem_id'),
                    'titulo': i.get('titulo') or '', 'texto': i.get('texto') or '', 'link': i.get('link') or ''}
                   for i in s.get('itens') or []],
     }
@@ -673,6 +689,9 @@ def carregar_rascunho(seccoes):
                     .values_list('id', flat=True))
         prods = set(Produto.objects.filter(id__in=[i['produto_id'] for i in todos if i.get('produto_id')])
                     .values_list('id', flat=True))
+        from ..servicos.models import Servico
+        servs = set(Servico.objects.filter(id__in=[i['servico_id'] for i in todos if i.get('servico_id')])
+                    .values_list('id', flat=True))
         imagens = set(HomeImagem.objects.filter(id__in=[i['imagem_id'] for i in todos if i.get('imagem_id')])
                       .values_list('id', flat=True))
         for ordem, s in enumerate(seccoes):
@@ -684,9 +703,10 @@ def carregar_rascunho(seccoes):
                 fonte=n['fonte'], criterio=n['criterio'], parametros=n['parametros'], limite=n['limite'])
             itens = []
             for o, i in enumerate(n['itens']):
-                if (i['loja_id'] and i['loja_id'] not in lojas) or (i['produto_id'] and i['produto_id'] not in prods):
+                if (i['loja_id'] and i['loja_id'] not in lojas) or (i['produto_id'] and i['produto_id'] not in prods)                         or (i['servico_id'] and i['servico_id'] not in servs):
                     continue
                 itens.append(HomeItem(seccao=sec, ordem=o, loja_id=i['loja_id'], produto_id=i['produto_id'],
+                                      servico_id=i['servico_id'],
                                       imagem_id=i['imagem_id'] if i['imagem_id'] in imagens else None,
                                       titulo=i['titulo'], texto=i['texto'], link=i['link']))
             HomeItem.objects.bulk_create(itens)
@@ -835,6 +855,7 @@ def _validar_parametros(p):
 
 def _validar_itens(lista, tipo, params):
     from ..models import Loja, Produto, HomeImagem
+    from ..servicos.models import Servico
     if not isinstance(lista, list) or len(lista) > MAX_ITENS:
         return None, f'Itens inválidos (máximo {MAX_ITENS}).'
     aceites = TIPOS_COM_ITENS.get(tipo, ())
@@ -843,14 +864,15 @@ def _validar_itens(lista, tipo, params):
         if not isinstance(i, dict):
             return None, 'Item inválido.'
         loja_id, produto_id, imagem_id = _int(i.get('loja_id')), _int(i.get('produto_id')), _int(i.get('imagem_id'))
+        servico_id = _int(i.get('servico_id'))
         titulo, texto, link = (i.get('titulo') or ''), (i.get('texto') or ''), (i.get('link') or '')
         if not all(isinstance(x, str) for x in (titulo, texto, link)):
             return None, 'Item inválido.'
         if len(titulo) > 120 or len(texto) > 300 or len(link) > 300:
             return None, 'Texto do item demasiado longo.'
-        if loja_id and produto_id:
-            return None, 'Cada item é uma loja, um produto ou um banner.'
-        genero = 'loja' if loja_id else 'produto' if produto_id else 'banner'
+        if sum(bool(x) for x in (loja_id, produto_id, servico_id)) > 1:
+            return None, 'Cada item é uma loja, um produto, um serviço ou um banner.'
+        genero = 'loja' if loja_id else 'produto' if produto_id else 'servico' if servico_id else 'banner'
         if genero not in aceites:
             return None, f'Esta secção não aceita itens do tipo {genero}.'
         if genero == 'banner' and not titulo.strip() and not imagem_id:
@@ -859,7 +881,7 @@ def _validar_itens(lista, tipo, params):
             return None, 'Só os banners têm imagem própria.'
         if not _link_valido(link.strip()):
             return None, 'Link inválido: usa um caminho do site (ex.: /loja/12) ou um endereço http(s).'
-        itens.append({'loja_id': loja_id, 'produto_id': produto_id, 'imagem_id': imagem_id,
+        itens.append({'loja_id': loja_id, 'produto_id': produto_id, 'servico_id': servico_id, 'imagem_id': imagem_id,
                       'titulo': titulo.strip(), 'texto': texto.strip(), 'link': link.strip()})
     lojas = {x['loja_id'] for x in itens if x['loja_id']}
     prods = {x['produto_id'] for x in itens if x['produto_id']}
@@ -867,6 +889,9 @@ def _validar_itens(lista, tipo, params):
         return None, 'Uma das lojas escolhidas não existe.'
     if prods and Produto.objects.filter(id__in=prods).count() != len(prods):
         return None, 'Um dos produtos escolhidos não existe.'
+    servs = {x['servico_id'] for x in itens if x['servico_id']}
+    if servs and Servico.objects.filter(id__in=servs).count() != len(servs):
+        return None, 'Um dos serviços escolhidos não existe.'
     imagens = {x['imagem_id'] for x in itens if x['imagem_id']}
     if imagens and HomeImagem.objects.filter(id__in=imagens).count() != len(imagens):
         return None, 'Uma das imagens já não existe: carrega-a de novo.'
@@ -944,8 +969,6 @@ def validar(dados, atual=None):
     crit = campos.get('criterio', atual.criterio if atual else '')
     params = campos.get('parametros', atual.parametros if atual else {}) or {}
     # a loja em destaque pode ser criada sem loja nem critério (o admin escolhe a seguir; avisos_seccao avisa)
-    if tipo == 'servicos' and fonte != 'auto':
-        return None, None, 'A secção de serviços é sempre automática.'
     if fonte in ('auto', 'misto') and tipo in CRITERIOS_POR_TIPO and tipo != 'loja_destaque':
         if not crit:
             return None, None, 'Escolhe o critério automático.'

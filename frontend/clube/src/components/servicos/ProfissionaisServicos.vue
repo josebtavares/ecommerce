@@ -42,12 +42,12 @@
 
         <!-- ficha -->
         <form v-if="aba === 'ficha'" @submit.prevent="guardar" class="space-y-4">
-          <div v-if="form.id" class="flex items-center gap-3">
-            <img v-if="form.foto" :src="form.foto" alt="" class="w-14 h-14 rounded-full object-cover" />
+          <div class="flex items-center gap-3">
+            <img v-if="form.foto || fotoNova" :src="form.foto || fotoNova.url" alt="" class="w-14 h-14 rounded-full object-cover" />
             <div v-else class="w-14 h-14 rounded-full bg-zinc-800"></div>
             <label class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 cursor-pointer">
-              {{ form.foto ? 'Mudar foto' : 'Pôr foto' }}<input type="file" accept="image/*" class="sr-only" @change="enviarFoto" /></label>
-            <button v-if="form.foto" type="button" @click="tirarFoto" class="text-xs text-zinc-500 hover:text-zinc-300">Tirar</button>
+              {{ form.foto || fotoNova ? 'Mudar foto' : 'Pôr foto' }}<input type="file" accept="image/*" class="sr-only" @change="enviarFoto" aria-label="Foto" /></label>
+            <button v-if="form.foto || fotoNova" type="button" @click="tirarFoto" class="text-xs text-zinc-500 hover:text-zinc-300">Tirar</button>
           </div>
           <label class="block"><span class="text-xs text-zinc-500">Nome (o que os clientes vêem)</span>
             <input v-model="form.nome" maxlength="100" required :class="[CAMPO, 'mt-1']" /></label>
@@ -153,7 +153,7 @@ export default {
   },
   emits: ['alterado'],
   data () {
-    return { form: null, aba: 'ficha', erro: '', okMsg: '', aGuardar: false, conflitos: [], blocos: [], seguirLoja: true,
+    return { fotoNova: null, form: null, aba: 'ficha', erro: '', okMsg: '', aGuardar: false, conflitos: [], blocos: [], seguirLoja: true,
              foraHorario: [], ausencias: [], afetadas: [], novaAus: { de: '', ate: '', motivo: '' }, CAMPO, DIAS, ABAS }
   },
   computed: {
@@ -167,6 +167,8 @@ export default {
       return dias.map(d => `${DIAS[d].slice(0, 3)} ${p.horario.filter(h => h.dia_semana === d).map(h => `${h.inicio}–${h.fim}`).join(', ')}`).join(' · ')
     },
     abrir (p) {
+      if (this.fotoNova) URL.revokeObjectURL(this.fotoNova.url)
+      this.fotoNova = null
       this.erro = ''; this.okMsg = ''; this.aba = 'ficha'; this.conflitos = []; this.foraHorario = []; this.afetadas = []
       this.form = p
         ? { ...p, membro_id: p.membro?.id || null, membro_original: p.membro?.id || null, servicos: [...p.servicos] }
@@ -188,8 +190,18 @@ export default {
           Object.assign(this.form, { ...data, membro_id: data.membro?.id || null, membro_original: data.membro?.id || null })
           this.okMsg = 'Guardado.'
         } else {
-          const { data } = await api.post(this.base(), corpo)
+          let { data } = await api.post(this.base(), corpo)
+          // a foto escolhida ao criar vai logo a seguir
+          if (this.fotoNova) {
+            const fd = new FormData()
+            fd.append('ficheiro', this.fotoNova.ficheiro)
+            try { data = (await api.post(`${this.base()}${data.id}/foto/`, fd)).data } catch (e) {
+              this.erro = `Profissional criado, mas a foto falhou: ${e.response?.data?.detail || 'erro'}`
+            }
+          }
+          const erroFoto = this.erro
           this.abrir(data)
+          this.erro = erroFoto
           this.aba = 'horario'
         }
         this.$emit('alterado')
@@ -215,6 +227,11 @@ export default {
       const f = ev.target.files?.[0]
       ev.target.value = ''
       if (!f) return
+      if (!this.form.id) {             // ainda não criado: guarda e envia ao criar
+        if (this.fotoNova) URL.revokeObjectURL(this.fotoNova.url)
+        this.fotoNova = { ficheiro: f, url: URL.createObjectURL(f) }
+        return
+      }
       const fd = new FormData()
       fd.append('ficheiro', f)
       try {
@@ -224,6 +241,7 @@ export default {
       } catch (e) { this.erro = e.response?.data?.detail || 'Não foi possível enviar a foto.' }
     },
     async tirarFoto () {
+      if (!this.form.id) { URL.revokeObjectURL(this.fotoNova.url); this.fotoNova = null; return }
       const { data } = await api.delete(`${this.base()}${this.form.id}/foto/`)
       this.form.foto = data.foto
       this.$emit('alterado')

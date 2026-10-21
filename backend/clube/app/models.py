@@ -1772,6 +1772,8 @@ class HomeItem(models.Model):
     ordem   = models.PositiveSmallIntegerField(default=0)
     loja    = models.ForeignKey(Loja, on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
+    # secção de serviços escolhidos à mão
+    servico = models.ForeignKey('servicos.Servico', on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
     # banner próprio (sem loja nem produto)
     titulo  = models.CharField(max_length=120, blank=True, default='')
     texto   = models.CharField(max_length=300, blank=True, default='')

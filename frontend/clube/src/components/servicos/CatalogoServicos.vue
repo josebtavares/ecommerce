@@ -93,7 +93,20 @@
             </label>
           </div>
         </div>
-        <p v-else class="text-[11px] text-zinc-500">As imagens adicionam-se depois de criar o serviço.</p>
+        <div v-else>
+          <p class="text-xs text-zinc-500 mb-1">Imagens ({{ novas.length }}/6)</p>
+          <div class="flex flex-wrap gap-2">
+            <div v-for="(n, i) in novas" :key="n.url" class="relative">
+              <img :src="n.url" alt="" class="w-16 h-16 rounded-lg object-cover" />
+              <button type="button" @click="tirarNova(i)" aria-label="Tirar imagem"
+                class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-zinc-950 border border-zinc-700 text-zinc-300 text-[10px]">✕</button>
+            </div>
+            <label v-if="novas.length < 6"
+              class="w-16 h-16 rounded-lg border border-dashed border-zinc-700 flex items-center justify-center text-zinc-500 text-xl cursor-pointer hover:border-zinc-500">
+              +<input type="file" accept="image/*" multiple class="sr-only" @change="escolherNovas" aria-label="Adicionar imagens" />
+            </label>
+          </div>
+        </div>
 
         <label v-if="form.id" class="flex items-center gap-2 text-sm text-zinc-300">
           <input type="checkbox" v-model="form.ativo" class="accent-red-600" /> Activo (os clientes podem marcar)</label>
@@ -127,7 +140,7 @@ export default {
   },
   emits: ['alterado'],
   data () {
-    return { servicos: [], carregando: true, form: null, erro: '', aGuardar: false, CAMPO, DURACOES }
+    return { servicos: [], carregando: true, form: null, erro: '', aGuardar: false, novas: [], CAMPO, DURACOES }
   },
   created () { this.carregar() },
   methods: {
@@ -137,7 +150,15 @@ export default {
     async carregar () {
       try { this.servicos = (await api.get(this.base())).data } finally { this.carregando = false }
     },
+    escolherNovas (ev) {
+      Array.from(ev.target.files || []).slice(0, 6 - this.novas.length)
+        .forEach(f => this.novas.push({ ficheiro: f, url: URL.createObjectURL(f) }))
+      ev.target.value = ''
+    },
+    tirarNova (i) { URL.revokeObjectURL(this.novas[i].url); this.novas.splice(i, 1) },
     abrir (s) {
+      this.novas.forEach(n => URL.revokeObjectURL(n.url))
+      this.novas = []
       this.erro = ''
       this.form = s
         ? { ...s, preco: Number(s.preco), profissionais: [...s.profissionais], imagens: [...s.imagens],
@@ -156,7 +177,19 @@ export default {
       if (f.id) corpo.ativo = f.ativo
       try {
         if (f.id) await api.patch(`${this.base()}${f.id}/`, corpo)
-        else await api.post(this.base(), corpo)
+        else {
+          const { data } = await api.post(this.base(), corpo)
+          // as imagens escolhidas ao criar vão logo a seguir
+          for (const n of this.novas) {
+            const fd = new FormData()
+            fd.append('ficheiro', n.ficheiro)
+            try { await api.post(`${this.base()}${data.id}/imagens/`, fd) } catch (e) {
+              this.erro = `Serviço criado, mas uma imagem falhou: ${e.response?.data?.detail || 'erro'}`
+            }
+          }
+          this.novas = []
+          if (this.erro) { await this.carregar(); this.$emit('alterado'); return }
+        }
         this.form = null
         await this.carregar()
         this.$emit('alterado')

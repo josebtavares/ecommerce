@@ -17,7 +17,6 @@ import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 import PedirReembolso from './views/reembolsos/PedirReembolso.vue';
 import ReembolsoDetalhe from './views/reembolsos/ReembolsoDetalhe.vue';
 import MeusReembolsos from './views/reembolsos/MeusReembolsos.vue';
-const LojaServicos = () => import('./views/servicos/LojaServicos.vue');
 const MinhasMarcacoes = () => import('./views/servicos/MinhasMarcacoes.vue');
 const MarcacaoCliente = () => import('./views/servicos/MarcacaoCliente.vue');
 
@@ -52,10 +51,9 @@ const routes = [
         component: LojaPublica,
     },
     {
-        // marcar serviços (público; marcar pede sessão no fim)
+        // os serviços estão na página da loja (secção Serviços em todos os templates)
         path: '/loja/:id/servicos',
-        name: 'LojaServicos',
-        component: LojaServicos,
+        redirect: to => ({ path: `/loja/${to.params.id}`, query: to.query }),
     },
     {
         path: '/minhas-marcacoes',

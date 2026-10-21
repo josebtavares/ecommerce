@@ -1,6 +1,6 @@
 <template>
-  <!-- Cartão de um serviço (home e pesquisa): abre a página de marcação com o serviço escolhido -->
-  <router-link :to="{ path: `/loja/${s.loja.id}/servicos`, query: { servico: s.id } }" :data-teste="`servico-card-${s.id}`"
+  <!-- Cartão de um serviço (secção da home): abre a página da loja com o serviço aberto para marcar -->
+  <router-link :to="{ path: `/loja/${s.loja.id}`, query: { servico: s.id } }" :data-teste="`servico-card-${s.id}`"
     class="group flex flex-col rounded-2xl border overflow-hidden transition"
     :class="isDark ? 'bg-zinc-900 border-zinc-800 hover:border-red-500/50' : 'bg-white border-stone-200 hover:border-red-400 hover:shadow-md'">
     <div class="aspect-[4/3] flex items-center justify-center overflow-hidden" :class="isDark ? 'bg-zinc-800' : 'bg-stone-100'">

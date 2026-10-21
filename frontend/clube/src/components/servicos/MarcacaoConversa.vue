@@ -65,7 +65,7 @@
 
 <script>
 import api from '@/services/api'
-import { diaDe, hora, rotuloDia, hojeCV } from '@/utils/servicos'
+import { diaDe, hora, rotuloDia, hojeCV, ouvirMarcacoes } from '@/utils/servicos'
 
 export default {
   name: 'MarcacaoConversa',
@@ -83,8 +83,12 @@ export default {
   },
   watch: { versao () { this.carregar() }, marcacaoId () { this.carregar() } },
   created () { this.carregar() },
-  mounted () { this.relogio = setInterval(() => { if (document.visibilityState === 'visible') this.carregar(true) }, 20000) },
-  beforeUnmount () { clearInterval(this.relogio) },
+  mounted () {
+    // tempo real pelo WebSocket das notificações; o relógio fica só como rede de segurança
+    this.desligar = ouvirMarcacoes(d => { if (!d || d.id === this.marcacaoId) this.carregar(true) })
+    this.relogio = setInterval(() => { if (document.visibilityState === 'visible') this.carregar(true) }, 30000)
+  },
+  beforeUnmount () { clearInterval(this.relogio); this.desligar?.() },
   methods: {
     quando (iso) { return (diaDe(iso) === hojeCV() ? '' : rotuloDia(diaDe(iso)) + ' ') + hora(iso) },
     propostaPendente (id) { return this.propostas.some(p => p.id === id && p.estado === 'pendente') },

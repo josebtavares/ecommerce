@@ -40,8 +40,12 @@ def _admin(request):
 
 
 def _item_admin(i, request):
-    d = {'id': i.id, 'loja_id': i.loja_id, 'produto_id': i.produto_id, 'imagem_id': i.imagem_id,
+    d = {'id': i.id, 'loja_id': i.loja_id, 'produto_id': i.produto_id, 'servico_id': i.servico_id, 'imagem_id': i.imagem_id,
          'titulo': i.titulo, 'texto': i.texto, 'link': i.link}
+    if i.servico_id:
+        sv = i.servico
+        d['servico'] = {'id': sv.id, 'nome': sv.nome, 'ativo': sv.ativo, 'loja': sv.loja.nome, 'loja_id': sv.loja_id,
+                        'loja_ativa': sv.loja.ativa}
     if i.imagem_id:
         d['imagem_url'] = request.build_absolute_uri(i.imagem.ficheiro.url)
     if i.loja_id:
@@ -210,7 +214,7 @@ def admin_home_duplicar(request, seccao_id):
         sec.ativa = False
         sec.save()
         HomeItem.objects.bulk_create([HomeItem(seccao=sec, ordem=i.ordem, loja_id=i.loja_id, produto_id=i.produto_id,
-                                               imagem_id=i.imagem_id, titulo=i.titulo, texto=i.texto, link=i.link)
+                                               servico_id=i.servico_id, imagem_id=i.imagem_id, titulo=i.titulo, texto=i.texto, link=i.link)
                                       for i in itens])
     return Response(_resposta_completa(request), status=status.HTTP_201_CREATED)
 
@@ -325,6 +329,14 @@ def admin_home_procurar(request):
         qs = qs.order_by('-ativo', '-loja__ativa', 'nome')[:20]
         return Response([{'id': p.id, 'nome': p.nome, 'preco': str(p.preco), 'ativo': p.ativo, 'loja': p.loja.nome,
                           'loja_id': p.loja_id, 'loja_ativa': p.loja.ativa} for p in qs])
+    if tipo == 'servico':
+        from ..servicos.models import Servico
+        qs = Servico.objects.select_related('loja')
+        if q:
+            qs = qs.filter(Q(nome__icontains=q) | Q(loja__nome__icontains=q) | Q(categoria__icontains=q))
+        qs = qs.order_by('-ativo', '-loja__ativa', 'nome')[:20]
+        return Response([{'id': s.id, 'nome': s.nome, 'preco': str(s.preco), 'ativo': s.ativo, 'loja': s.loja.nome,
+                          'loja_id': s.loja_id, 'loja_ativa': s.loja.ativa} for s in qs])
     if tipo == 'categoria':
         from ..models import CategoriaLoja
         from django.db.models import Count
@@ -334,7 +346,7 @@ def admin_home_procurar(request):
         qs = qs.order_by('-loja__ativa', 'nome', 'loja__nome')[:20]
         return Response([{'id': c.id, 'nome': c.nome, 'loja': c.loja.nome, 'loja_ativa': c.loja.ativa,
                           'total_produtos': c._n} for c in qs])
-    return Response({'detail': 'tipo tem de ser loja, produto ou categoria.'}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'detail': 'tipo tem de ser loja, produto, serviço ou categoria.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 IMAGEM_MAX_MB = 5
