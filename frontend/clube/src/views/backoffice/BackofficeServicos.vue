@@ -1,8 +1,10 @@
 <template>
   <!-- Backoffice → Serviços: ligar o módulo (incluído na subscrição ou com subscrição própria em comissão)
        e as regras das marcações. GET /app/loja/<id>/servicos/ -->
-  <div class="space-y-5 max-w-4xl" data-teste="servicos">
-    <div v-if="carregando" class="h-40 bg-zinc-900 rounded-2xl animate-pulse"></div>
+  <div class="space-y-5" :class="aba === 'agenda' && dados?.ativo ? 'max-w-none' : 'max-w-4xl'" data-teste="servicos">
+    <!-- profissional com conta mas sem gerir_marcacoes: só a sua agenda -->
+    <AgendaServicos v-if="soAgenda" :loja-id="lojaId" :pode-gerir="false" />
+    <div v-else-if="carregando" class="h-40 bg-zinc-900 rounded-2xl animate-pulse"></div>
     <p v-else-if="erro && !dados" class="text-sm text-red-400" role="alert">{{ erro }}</p>
 
     <template v-else-if="dados">
@@ -101,8 +103,26 @@
           </button>
         </div>
 
+        <div class="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 overflow-x-auto" role="tablist" aria-label="Serviços">
+          <button v-for="a in abas" :key="a.k" type="button" role="tab" :aria-selected="aba === a.k" @click="aba = a.k" :data-teste="`aba-${a.k}`"
+            :class="['flex-1 min-w-[90px] px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap', aba === a.k ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400 hover:text-zinc-200']">
+            {{ a.t }}<span v-if="a.n !== undefined" class="ml-1 opacity-60">{{ a.n }}</span></button>
+        </div>
+
+        <!-- primeiros passos -->
+        <div v-if="aba === 'agenda' && (!servicos.length || !profissionais.length)"
+             class="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+          Para receber marcações: {{ !servicos.length ? 'cria os teus serviços' : '' }}{{ !servicos.length && !profissionais.length ? ' e ' : '' }}{{ !profissionais.length ? 'os profissionais' : '' }}
+          <button type="button" class="underline font-semibold ml-1" @click="aba = !servicos.length ? 'servicos' : 'profissionais'">Começar</button>
+        </div>
+
+        <AgendaServicos v-if="aba === 'agenda'" :loja-id="lojaId" :servicos="servicos" :profissionais-todos="profissionais" :pode-gerir="true" />
+        <CatalogoServicos v-else-if="aba === 'servicos'" :loja-id="lojaId" :profissionais="profissionais" :pode-gerir="dados.pode_gerir" @alterado="carregarListas" />
+        <ProfissionaisServicos v-else-if="aba === 'profissionais'" :loja-id="lojaId" :profissionais="profissionais" :equipa="equipa"
+          :limites="dados.limites" :servicos="servicos" :pode-gerir="dados.pode_gerir" @alterado="carregarListas" />
+
         <!-- Regras das marcações -->
-        <form v-if="dados.pode_gerir" @submit.prevent="guardarRegras" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-5"
+        <form v-else-if="aba === 'regras' && dados.pode_gerir" @submit.prevent="guardarRegras" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-5"
               data-teste="regras">
           <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Regras das marcações</p>
 
@@ -174,6 +194,9 @@
 <script>
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
+import AgendaServicos from '@/components/servicos/AgendaServicos.vue'
+import CatalogoServicos from '@/components/servicos/CatalogoServicos.vue'
+import ProfissionaisServicos from '@/components/servicos/ProfissionaisServicos.vue'
 
 const CAMPO = 'w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500'
 const OPCOES_ANTECEDENCIA = [
@@ -187,14 +210,25 @@ const OPCOES_CANCELAR = [
 
 export default {
   name: 'BackofficeServicos',
-  props: { lojaId: { type: [String, Number], required: true } },
+  components: { AgendaServicos, CatalogoServicos, ProfissionaisServicos },
+  props: {
+    lojaId: { type: [String, Number], required: true },
+    soAgenda: { type: Boolean, default: false },      // profissional com conta, sem gerir_marcacoes
+  },
   emits: ['ver-subscricao'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aGuardar: false, guardado: false, regras: {}, CAMPO, OPCOES_ANTECEDENCIA, OPCOES_CANCELAR }
+    return { dados: null, carregando: true, erro: '', aGuardar: false, guardado: false, regras: {}, CAMPO, OPCOES_ANTECEDENCIA, OPCOES_CANCELAR,
+             aba: 'agenda', servicos: [], profissionais: [], equipa: [] }
   },
 
   computed: {
+    abas () {
+      const a = [{ k: 'agenda', t: 'Agenda' }, { k: 'servicos', t: 'Serviços', n: this.servicos.length },
+                 { k: 'profissionais', t: 'Profissionais', n: this.profissionais.length }]
+      if (this.dados?.pode_gerir) a.push({ k: 'regras', t: 'Regras' })
+      return a
+    },
     aguardaPagamento () { return this.dados?.subscricao?.estado === 'aguarda' && !!this.dados.fatura_pendente },
     mudou () { return JSON.stringify(this.regras) !== JSON.stringify(this.dados?.config || {}) },
     resumoCobranca () {
@@ -212,7 +246,7 @@ export default {
     },
   },
 
-  created () { this.carregar() },
+  created () { if (!this.soAgenda) this.carregar() },
 
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
@@ -228,6 +262,14 @@ export default {
       this.dados = data
       // as opções da lista têm de conter o valor guardado (o servidor aceita qualquer número)
       this.regras = { ...data.config }
+      if (data.ativo && !this.servicos.length && !this.profissionais.length) this.carregarListas()
+    },
+    async carregarListas () {
+      const [s, p] = await Promise.all([api.get(`/app/loja/${this.lojaId}/servicos/catalogo/`),
+                                        api.get(`/app/loja/${this.lojaId}/servicos/profissionais/`)])
+      this.servicos = s.data
+      this.profissionais = p.data.profissionais
+      this.equipa = p.data.equipa
     },
     async carregar () {
       try {

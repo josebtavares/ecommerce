@@ -169,6 +169,7 @@
         <BackofficeTemplates     v-else-if="activeSection === 'templates'"     :loja-id="lojaId" />
         <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
         <BackofficeServicos      v-else-if="activeSection === 'servicos'"      :loja-id="lojaId"
+                                 :so-agenda="!permissoes.includes('gerir_marcacoes')"
                                  @ver-subscricao="activeSection = 'subscricao'" />
       </main>
     </div>
@@ -266,7 +267,9 @@ export default {
     lojaId ()      { return this.$route.params.id },
     role ()        { return this.loja?.minha_role || '' },
     permissoes ()  { return PERMISSOES[this.role] || [] },
-    navItems ()    { return SECCOES.filter(s => s.permissao === null ? !!this.role : this.permissoes.includes(s.permissao)) },
+    navItems ()    { return SECCOES.filter(s => this.temPermissao(s.key)) },
+    // um profissional com conta vê a sua agenda mesmo sem gerir_marcacoes
+    meuProfissional () { return !!this.loja?.servicos?.meu_profissional_id },
     naoLidasChat () {
       const c = chat.caixas.find(x => x.tipo === 'loja' && String(x.loja_id) === String(this.lojaId))
       return c ? c.nao_lidas : 0
@@ -338,6 +341,7 @@ export default {
       const seccao = SECCOES.find(s => s.key === seccaoKey)
       if (!seccao) return false
       if (seccao.permissao === null) return !!this.role      // qualquer membro (ex.: mensagens)
+      if (seccao.key === 'servicos' && this.meuProfissional) return true
       return this.permissoes.includes(seccao.permissao)
     },
 
@@ -392,12 +396,11 @@ export default {
         this.fetchDevolucoes()
         // só escolhe a secção inicial na 1.ª carga (ou se a actual deixou de ser permitida) —
         // recarregar a loja depois de guardar não deve mudar de secção
-        const permitidas = PERMISSOES[data.minha_role] || []
         const atual = SECCOES.find(s => s.key === this.activeSection)
-        if (!this.seccaoEscolhida || !atual || !permitidas.includes(atual.permissao)) {
+        if (!this.seccaoEscolhida || !atual || !this.temPermissao(atual.key)) {
           // ?seccao= (links das notificações) manda, se o membro tiver acesso
-          const pedida = SECCOES.find(s => s.key === this.$route.query.seccao && permitidas.includes(s.permissao))
-          const primeira = pedida || SECCOES.find(s => permitidas.includes(s.permissao))
+          const pedida = SECCOES.find(s => s.key === this.$route.query.seccao && this.temPermissao(s.key))
+          const primeira = pedida || SECCOES.find(s => s.permissao !== null && this.temPermissao(s.key))
           if (primeira) this.activeSection = primeira.key
           this.seccaoEscolhida = true
         }

@@ -208,10 +208,16 @@ def loja_create(request):
 def loja_backoffice(request, id):
     """GET /app/loja/<id>/backoffice/"""
     loja = get_object_or_404(Loja, id=id)
-    _, erro = _exige_permissao(request, loja, 'ver_loja')
+    membro, erro = _exige_permissao(request, loja, 'ver_loja')
     if erro:
         return erro
-    return Response(LojaSerializer(loja, context={'request': request}).data)
+    dados = LojaSerializer(loja, context={'request': request}).data
+    # módulo Serviços: o menu mostra "Serviços" a quem gere marcações ou a um profissional com conta
+    cfg = getattr(loja, 'config_servicos', None)
+    proprio = getattr(membro, 'profissional', None)
+    dados['servicos'] = {'ativo': bool(cfg and cfg.ativo),
+                         'meu_profissional_id': proprio.id if proprio and proprio.ativo else None}
+    return Response(dados)
 
 
 @api_view(['PUT', 'PATCH'])

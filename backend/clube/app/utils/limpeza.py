@@ -37,7 +37,7 @@ def campos_ficheiro():
     if 'campos' not in _cache:
         lista = []
         for Modelo in apps.get_models():
-            if Modelo._meta.app_label not in ('app', 'pos'):
+            if Modelo._meta.app_label not in ('app', 'pos', 'servicos'):
                 continue
             for f in Modelo._meta.get_fields():
                 if isinstance(f, models.FileField):
