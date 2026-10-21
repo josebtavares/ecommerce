@@ -83,10 +83,22 @@ def _escolher(servico, inicio, ocupado_ate, ignorar_horario):
     raise ErroMarcacao('Não há nenhum profissional livre a essa hora.')
 
 
+def anular_propostas(m=None):
+    """Propostas de preço à espera numa marcação que já não está activa → 'anulada'."""
+    from .models import PropostaPreco
+    qs = PropostaPreco.objects.filter(estado='pendente').exclude(marcacao__estado__in=Marcacao.ATIVOS)
+    if m is not None:
+        qs = qs.filter(marcacao=m)
+    return qs.update(estado='anulada', respondida_em=timezone.now())
+
+
 def expirar_vencidas(**filtro):
     """Pendentes por pagar cujo prazo passou → 'expirada' (libertam o horário). O worker também o faz."""
-    return Marcacao.objects.filter(estado='pendente', expira_em__lt=timezone.now(), pago=False, **filtro).update(
+    n = Marcacao.objects.filter(estado='pendente', expira_em__lt=timezone.now(), pago=False, **filtro).update(
         estado='expirada', data_atualizacao=timezone.now())
+    if n:
+        anular_propostas()
+    return n
 
 
 @transaction.atomic
@@ -145,9 +157,11 @@ def remarcar(m, inicio, por='', motivo='', ignorar_horario=False, pelo_cliente=F
         raise ErroMarcacao(str(e))
     antes = m.inicio
     m.inicio, m.fim, m.ocupado_ate = inicio, inicio + duracao, inicio + duracao + extra
+    # o lembrete e o "por fechar" eram do horário antigo
+    m.avisos = [a for a in (m.avisos or []) if a not in ('lembrete', 'por_fechar')]
     try:
         with transaction.atomic():
-            m.save(update_fields=['inicio', 'fim', 'ocupado_ate', 'data_atualizacao'])
+            m.save(update_fields=['inicio', 'fim', 'ocupado_ate', 'avisos', 'data_atualizacao'])
     except IntegrityError:
         raise ErroMarcacao(f'{m.profissional.nome} já está ocupado(a) a essa hora.')
     nota = f'{m.servico_nome}: passou de {quando_texto(antes)} para {quando_texto(inicio)}.' + (f' {motivo}' if motivo else '')
@@ -221,6 +235,7 @@ def cancelar(m, por='', motivo='', pela_loja=True):
     if m.pago and pela_loja:
         m.reembolso_devido = m.valor_pago            # a loja cancelou: devolve tudo
     m.save(update_fields=['estado', 'cancelada_em', 'cancelada_por', 'cancelada_motivo', 'reembolso_devido', 'data_atualizacao'])
+    anular_propostas(m)
     reembolsar(m)
     if pela_loja:
         _avisar(m, 'A loja cancelou a tua marcação',
@@ -257,6 +272,9 @@ def _pagar(m):
     m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
     if m.pagamento != 'antecipado' or m.pago:
         raise ErroMarcacao('Esta marcação não tem nada por pagar.')
+    # a loja deixou de aceitar marcações (fechou, suspensa, módulo desligado ou por pagar): não se cobra
+    if not cobranca.disponivel(m.loja):
+        raise ErroMarcacao('A loja deixou de aceitar marcações — esta não pode ser paga e vai expirar sozinha.')
     if m.estado != 'pendente':
         raise ErroMarcacao(f'Esta marcação está {m.get_estado_display().lower()}.')
     m.pago, m.pago_em, m.valor_pago, m.expira_em = True, timezone.now(), m.preco_indicado, None
@@ -276,6 +294,8 @@ def cancelar_cliente(m, motivo=''):
     """
     m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
     _exige_ativa(m)
+    if timezone.now() >= m.inicio:
+        raise ErroMarcacao('A marcação já começou — já não se cancela. Fala com a loja pelas mensagens.')
     no_prazo = dentro_do_prazo(m)
     m.estado, m.cancelada_em = 'cancelada', timezone.now()
     m.cancelada_por, m.cancelada_motivo = 'Cliente', (motivo or '')[:200]
@@ -283,6 +303,7 @@ def cancelar_cliente(m, motivo=''):
         total = no_prazo or m.loja.config_servicos.reembolso_fora_prazo == 'total'
         m.reembolso_devido = m.valor_pago if total else 0
     m.save(update_fields=['estado', 'cancelada_em', 'cancelada_por', 'cancelada_motivo', 'reembolso_devido', 'data_atualizacao'])
+    anular_propostas(m)
     reembolsar(m)
     avisar_loja(m, 'O cliente cancelou uma marcação', f'{m.servico_nome} a {quando_texto(m.inicio)}.'
                 + (f' Motivo: {motivo}' if motivo else '') + (' (fora do prazo)' if not no_prazo else ''))
@@ -340,6 +361,7 @@ def concluir(m, por='', preco_final=None, motivo='', membro=None):
         m.reembolso_devido = max(Decimal('0'), m.valor_pago - m.preco)
     m.save(update_fields=['estado', 'concluida_em', 'expira_em', 'preco_final', 'preco_final_por', 'preco_final_motivo',
                           'reembolso_devido', 'data_atualizacao'])
+    anular_propostas(m)
     if m.cliente_id:
         texto = f'{m.servico_nome} concluído — {formatar(m.preco)}.'
         if m.preco_final is not None and m.preco_final != m.preco_indicado:
@@ -365,6 +387,7 @@ def marcar_falta(m, por=''):
     if m.pago:
         m.reembolso_devido = m.valor_pago if m.loja.config_servicos.reembolso_fora_prazo == 'total' else Decimal('0')
     m.save(update_fields=['estado', 'expira_em', 'cancelada_por', 'reembolso_devido', 'data_atualizacao'])
+    anular_propostas(m)
     reembolsar(m)
     if m.cliente_id:
         from ..Views.notificacaoView import notificar

@@ -148,5 +148,21 @@ def verificar(prof, inicio, ocupado_ate, ignorar_horario=False, excluir=None):
             raise Indisponivel(f'{prof.nome} já está ocupado(a) a essa hora.')
 
 
+def fora_do_horario(loja, maximo=100):
+    """Marcações futuras activas que já não cabem no horário do profissional (para avisar a loja)."""
+    from .marcacoes import marcacao_payload
+    out = []
+    qs = (Marcacao.objects.filter(loja=loja, estado__in=Marcacao.ATIVOS, inicio__gte=timezone.now())
+          .select_related('profissional__loja', 'cliente__user').order_by('inicio'))
+    for m in qs[:500]:
+        try:
+            verificar(m.profissional, m.inicio, m.ocupado_ate, excluir=m.pk)
+        except Indisponivel:
+            out.append(marcacao_payload(m))
+            if len(out) >= maximo:
+                break
+    return out
+
+
 def agora_mais(minutos):
     return timezone.now() + timedelta(minutes=minutos)

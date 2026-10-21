@@ -212,6 +212,8 @@ def resumo(loja):
         'ja_teve_teste': bool(sub),
         'dias_teste': ConfiguracaoPlataforma.atual().subscricao_dias_teste,
         'limites': limites(loja, sub),
+        # mudou para um plano com menos profissionais: os que já estavam continuam, mas o dono sabe
+        'profissionais_a_mais': max(0, loja.profissionais.filter(ativo=True).count() - (limites(loja, sub)['profissionais'] or 10 ** 6)),
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('servicos',))]
         if loja.modelo_cobranca == 'comissao' else [],
     }

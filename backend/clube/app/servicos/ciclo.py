@@ -33,8 +33,7 @@ def processar(agora=None):
     agora = agora or timezone.now()
     r = {'expiradas': 0, 'sem_confirmacao': 0, 'lembretes': 0, 'por_fechar': 0, 'reembolsos': 0}
 
-    r['expiradas'] = Marcacao.objects.filter(estado='pendente', pago=False, expira_em__lt=agora).update(
-        estado='expirada', data_atualizacao=agora)
+    r['expiradas'] = ops.expirar_vencidas()
 
     for pk in Marcacao.objects.filter(estado='pendente', inicio__lte=agora).values_list('pk', flat=True)[:500]:
         with transaction.atomic():
@@ -45,6 +44,7 @@ def processar(agora=None):
             if m.pago:
                 m.reembolso_devido = m.valor_pago
             m.save(update_fields=['estado', 'reembolso_devido', 'data_atualizacao'])
+            ops.anular_propostas(m)
             ops.reembolsar(m)
             if m.cliente_id:
                 notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='A loja não confirmou a marcação',

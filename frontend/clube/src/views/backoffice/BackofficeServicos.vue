@@ -93,6 +93,10 @@
             </p>
             <p class="text-sm text-zinc-400 mt-1">{{ resumoCobranca }}</p>
             <p v-if="limitesTexto" class="text-xs text-zinc-500 mt-1">{{ limitesTexto }}</p>
+            <p v-if="dados.profissionais_a_mais" class="text-xs text-amber-300 mt-1" role="alert">
+              Tens {{ dados.profissionais_a_mais }} profissional(is) activo(s) a mais do que o plano inclui. Os que já existem continuam;
+              para criar ou reactivar outros, desactiva algum ou muda de plano.
+            </p>
           </div>
           <span :class="['px-3 py-1 rounded-full text-xs font-bold', dados.disponivel ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-300']">
             {{ dados.disponivel ? 'Disponível' : 'Parado' }}

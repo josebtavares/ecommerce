@@ -151,6 +151,13 @@ def _cliente_payload(request, m, completo=False):
     return d
 
 
+def _hora_proposta(servico, inicio, prof, desde):
+    """A hora está entre as que se mostram ao cliente (para este profissional ou para algum do serviço)."""
+    profs = [prof] if prof else list(servico.profissionais.filter(ativo=True).prefetch_related('horarios').select_related('loja'))
+    dia = inicio.astimezone(fuso()).date()
+    return any(h['inicio'] == inicio for h in agenda.horas_livres(servico, dia, profs, desde=desde))
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def marcar(request, loja_id):
@@ -197,6 +204,8 @@ def marcar(request, loja_id):
     ativas = Marcacao.objects.filter(loja=loja, cliente=u, estado__in=Marcacao.ATIVOS, inicio__gte=timezone.now()).count()
     if ativas >= MAX_ATIVAS_POR_LOJA:
         return _erro(f'Já tens {ativas} marcações nesta loja. Cancela ou espera por uma antes de marcar outra.')
+    if not _hora_proposta(s, inicio, prof, desde):
+        return _erro('Essa hora já não está livre — escolhe outra.')
     if pagamento == 'antecipado':
         estado, expira = 'pendente', timezone.now() + timedelta(minutes=MINUTOS_PARA_PAGAR)
     else:
@@ -269,6 +278,8 @@ def minha_acao(request, marcacao_id):
                 return _erro(e)
             m = ops.cancelar_cliente(m, motivo)
         elif acao == 'remarcar':
+            if timezone.now() >= m.inicio:
+                return _erro('A marcação já começou — já não se remarca.')
             if not ops.dentro_do_prazo(m):
                 return _erro(f'Só podes remarcar até {m.loja.config_servicos.cancelar_horas} h antes. Fala com a loja pelas mensagens.')
             if m.pagamento == 'antecipado' and not m.pago:
@@ -279,6 +290,8 @@ def minha_acao(request, marcacao_id):
             desde, ultimo = _limites_cliente(m.loja.config_servicos)
             if inicio < desde or inicio.astimezone(fuso()).date() > ultimo:
                 return _erro('Essa hora não pode ser marcada — escolhe outra.')
+            if inicio.minute % 15 or inicio.second:
+                return _erro('Escolhe uma das horas propostas.')
             m = ops.remarcar(m, inicio, por='Cliente', pelo_cliente=True)
         elif acao in ('aceitar_proposta', 'recusar_proposta'):
             pid = d.get('proposta_id')

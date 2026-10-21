@@ -50,7 +50,7 @@
       </section>
 
       <!-- remarcar / cancelar -->
-      <section v-if="ativa" class="rounded-2xl border p-4 space-y-3" :class="cartao">
+      <section v-if="ativa && !comecou" class="rounded-2xl border p-4 space-y-3" :class="cartao">
         <p class="text-xs" :class="suave">
           {{ m.dentro_do_prazo ? `Podes remarcar ou cancelar até ${m.cancelar_horas} h antes.` : `Já passou o prazo para remarcar (${m.cancelar_horas} h antes). Fala com a loja pelas mensagens.` }}
           <template v-if="m.pago && !m.dentro_do_prazo"> Se cancelares agora, {{ m.reembolso_fora_prazo === 'total' ? 'é-te devolvido tudo' : 'o valor pago não é devolvido' }}.</template>
@@ -110,6 +110,8 @@ export default {
     suave () { return this.isDark ? 'text-zinc-400' : 'text-zinc-500' },
     botaoSec () { return this.isDark ? 'border-zinc-700 text-zinc-200 hover:border-zinc-500' : 'border-gray-300 text-zinc-700 hover:border-gray-400' },
     ativa () { return ['pendente', 'confirmada'].includes(this.m?.estado) },
+    // depois de começar já não se cancela nem remarca (o servidor também recusa)
+    comecou () { return this.m && Date.now() >= new Date(this.m.inicio).getTime() },
     porPagar () { return this.m?.estado === 'pendente' && this.m.pagamento === 'antecipado' && !this.m.pago },
     textoEstado () {
       if (this.porPagar) return 'Por pagar'
