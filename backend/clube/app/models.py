@@ -1726,6 +1726,7 @@ class HomeSeccao(models.Model):
         ('lojas_por_categoria',          'Lojas por categoria'),
         ('produtos_por_tipo',            'Produtos por tipo'),
         ('produtos_categorias_destaque', 'Produtos das categorias em destaque'),
+        ('servicos',      'Serviços (marcações)'),
     ]
     FONTES = [
         ('manual', 'Escolhidos à mão'),

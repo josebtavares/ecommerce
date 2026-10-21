@@ -6,6 +6,7 @@ a agenda, e a restrição de exclusão da base de dados é a última barreira (I
 "já está ocupado"). Nunca se apaga uma marcação: cancela-se.
 """
 from datetime import timedelta
+from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -220,6 +221,7 @@ def cancelar(m, por='', motivo='', pela_loja=True):
     if m.pago and pela_loja:
         m.reembolso_devido = m.valor_pago            # a loja cancelou: devolve tudo
     m.save(update_fields=['estado', 'cancelada_em', 'cancelada_por', 'cancelada_motivo', 'reembolso_devido', 'data_atualizacao'])
+    reembolsar(m)
     if pela_loja:
         _avisar(m, 'A loja cancelou a tua marcação',
                 f'{m.servico_nome} a {quando_texto(m.inicio)}.' + (f' Motivo: {motivo}' if motivo else ''), profissional=True)
@@ -281,8 +283,94 @@ def cancelar_cliente(m, motivo=''):
         total = no_prazo or m.loja.config_servicos.reembolso_fora_prazo == 'total'
         m.reembolso_devido = m.valor_pago if total else 0
     m.save(update_fields=['estado', 'cancelada_em', 'cancelada_por', 'cancelada_motivo', 'reembolso_devido', 'data_atualizacao'])
+    reembolsar(m)
     avisar_loja(m, 'O cliente cancelou uma marcação', f'{m.servico_nome} a {quando_texto(m.inicio)}.'
                 + (f' Motivo: {motivo}' if motivo else '') + (' (fora do prazo)' if not no_prazo else ''))
+    return m
+
+
+def reembolsar(m):
+    """
+    Devolve já o que falta devolver (reembolso_devido − valor_reembolsado) para o meio de pagamento
+    usado (simulado, como os pagamentos). Chama-se dentro da transacção de quem mudou o valor devido.
+    """
+    if not m.pago:
+        return Decimal('0')
+    falta = m.reembolso_devido - m.valor_reembolsado
+    if falta <= 0:
+        return Decimal('0')
+    m.valor_reembolsado += falta
+    m.reembolsado_em = timezone.now()
+    Marcacao.objects.filter(pk=m.pk).update(valor_reembolsado=m.valor_reembolsado, reembolsado_em=m.reembolsado_em)
+    texto = f'Devolvemos {formatar(falta)} para o meio de pagamento que usaste (pagamento simulado).'
+    if m.cliente_id:
+        from .models import MensagemMarcacao
+        MensagemMarcacao.objects.create(marcacao=m, papel='sistema', texto=texto)
+        from ..Views.notificacaoView import notificar
+        notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='Reembolso da marcação',
+                  mensagem=f'{m.servico_nome}: {texto}', loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
+    return falta
+
+
+def falta_pagar(m):
+    """O que o cliente ainda paga no local (preço − o que ficou pago antecipado)."""
+    if m.pagamento == 'local' and not m.pago:
+        return m.preco
+    return max(Decimal('0'), m.preco - (m.valor_pago - m.valor_reembolsado))
+
+
+def _pode_preco(membro, m):
+    """O preço final muda-o sempre o dono/gestor; os outros só se a loja o permitir."""
+    return membro.pode('gerir_servicos') or m.loja.config_servicos.profissional_altera_preco
+
+
+@transaction.atomic
+def concluir(m, por='', preco_final=None, motivo='', membro=None):
+    """Serviço feito. Preço final opcional (fica registado quem e porquê); pago a mais → devolve-se."""
+    m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
+    _exige_ativa(m)
+    if timezone.now() < m.inicio - timedelta(minutes=15):
+        raise ErroMarcacao('Só se conclui a partir da hora marcada.')
+    if preco_final is not None and preco_final != m.preco_indicado:
+        if membro is not None and not _pode_preco(membro, m):
+            raise ErroMarcacao('A loja não deixa os profissionais mudarem o preço — fala com o dono ou o gestor.')
+        m.preco_final, m.preco_final_por, m.preco_final_motivo = preco_final, por[:100], (motivo or '')[:200]
+    m.estado, m.concluida_em, m.expira_em = 'concluida', timezone.now(), None
+    if m.pago:
+        m.reembolso_devido = max(Decimal('0'), m.valor_pago - m.preco)
+    m.save(update_fields=['estado', 'concluida_em', 'expira_em', 'preco_final', 'preco_final_por', 'preco_final_motivo',
+                          'reembolso_devido', 'data_atualizacao'])
+    if m.cliente_id:
+        texto = f'{m.servico_nome} concluído — {formatar(m.preco)}.'
+        if m.preco_final is not None and m.preco_final != m.preco_indicado:
+            texto += f' Preço final {formatar(m.preco_final)}' + (f' ({m.preco_final_motivo})' if m.preco_final_motivo else '') + '.'
+        from .models import MensagemMarcacao
+        MensagemMarcacao.objects.create(marcacao=m, papel='sistema', texto=texto)
+        from ..Views.notificacaoView import notificar
+        notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='Serviço concluído', mensagem=texto + ' Obrigado!',
+                  loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
+    reembolsar(m)                       # depois da mensagem de conclusão (a conversa lê-se por ordem)
+    return m
+
+
+@transaction.atomic
+def marcar_falta(m, por=''):
+    """O cliente não veio. Pago antecipado: devolve-se conforme a regra da loja (reembolso_fora_prazo)."""
+    m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
+    _exige_ativa(m)
+    if timezone.now() < m.inicio:
+        raise ErroMarcacao('Só se marca falta depois da hora marcada.')
+    m.estado, m.expira_em = 'falta', None
+    m.cancelada_por = por[:100]
+    if m.pago:
+        m.reembolso_devido = m.valor_pago if m.loja.config_servicos.reembolso_fora_prazo == 'total' else Decimal('0')
+    m.save(update_fields=['estado', 'expira_em', 'cancelada_por', 'reembolso_devido', 'data_atualizacao'])
+    reembolsar(m)
+    if m.cliente_id:
+        from ..Views.notificacaoView import notificar
+        notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='Faltaste à marcação',
+                  mensagem=f'{m.servico_nome} a {quando_texto(m.inicio)}. Se foi engano, fala com a loja.',
+                  loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
     return m
 
 
@@ -303,6 +391,9 @@ def marcacao_payload(m, completo=False):
         'pagamento': m.pagamento, 'pago': m.pago,
         'notas_cliente': m.notas_cliente, 'notas_internas': m.notas_internas, 'criada_por': m.criada_por,
         'valor_pago': str(m.valor_pago), 'reembolso_devido': str(m.reembolso_devido),
+        'valor_reembolsado': str(m.valor_reembolsado), 'falta_pagar': str(falta_pagar(m)),
+        'preco_final_por': m.preco_final_por, 'preco_final_motivo': m.preco_final_motivo,
+        'concluida_em': m.concluida_em.astimezone(tz).isoformat() if m.concluida_em else None,
         'expira_em': m.expira_em.astimezone(tz).isoformat() if m.expira_em else None,
         'cancelada_por': m.cancelada_por, 'cancelada_motivo': m.cancelada_motivo,
     }

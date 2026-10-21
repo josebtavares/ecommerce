@@ -103,6 +103,33 @@ def horas(request, loja_id):
         for h in livres]})
 
 
+def servico_card(request, s):
+    imgs = list(s.imagens.all())
+    return {'id': s.id, 'nome': s.nome, 'categoria': s.categoria, 'duracao_min': s.duracao_min,
+            'preco_texto': ('a partir de ' if s.tipo_preco == 'a_partir' else '') + formatar(s.preco),
+            'imagem': _url(request, imgs[0].ficheiro) if imgs else None,
+            'loja': {'id': s.loja_id, 'nome': s.loja.nome, 'logo': _url(request, s.loja.logo), 'localizacao': s.loja.localizacao}}
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def pesquisa(request):
+    """GET /app/servicos/pesquisa/?q=&offset=&limit= — serviços de todas as lojas (separador "Serviços" da pesquisa)."""
+    qs = cobranca.servicos_publicos()
+    q = (request.GET.get('q') or '').strip()[:80]
+    if q:
+        qs = qs.filter(Q(nome__icontains=q) | Q(categoria__icontains=q) | Q(descricao__icontains=q) | Q(loja__nome__icontains=q))
+    try:
+        offset = max(int(request.GET.get('offset') or 0), 0)
+        limit = min(max(int(request.GET.get('limit') or 24), 1), 60)
+    except ValueError:
+        return _erro('Parâmetros inválidos.')
+    total = qs.count()
+    pagina = list(qs.order_by('-data_criacao', 'id')[offset:offset + limit])
+    return Response({'count': total, 'results': [servico_card(request, s) for s in pagina],
+                     'next_offset': offset + limit if offset + limit < total else None})
+
+
 # ══════════════════════════════════════════════════════════════
 # CLIENTE
 # ══════════════════════════════════════════════════════════════

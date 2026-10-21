@@ -33,6 +33,7 @@ urlpatterns = [
     path('lojas/<int:loja_id>/servicos/publico/',   c.publico,     name='servicos-publico'),
     path('lojas/<int:loja_id>/servicos/horas/',     c.horas,       name='servicos-horas'),
     path('lojas/<int:loja_id>/servicos/marcar/',    c.marcar,      name='servicos-marcar'),
+    path('servicos/pesquisa/',                      c.pesquisa,    name='servicos-pesquisa'),
     path('marcacoes/',                              c.minhas,      name='marcacoes-minhas'),
     path('marcacoes/<int:marcacao_id>/',            c.minha,       name='marcacoes-minha'),
     path('marcacoes/<int:marcacao_id>/acao/',       c.minha_acao,  name='marcacoes-minha-acao'),

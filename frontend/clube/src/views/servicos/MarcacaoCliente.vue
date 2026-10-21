@@ -34,8 +34,9 @@
           <div class="flex justify-between"><span :class="suave">Preço</span><b>{{ m.preco_texto }}</b></div>
           <div class="flex justify-between"><span :class="suave">Pagamento</span>
             <span>{{ m.pagamento === 'local' ? 'No local' : m.pago ? `Pago (${dinheiro(m.valor_pago)})` : 'Antecipado — por pagar' }}</span></div>
-          <div v-if="faltaPagar > 0" class="flex justify-between text-amber-500"><span>Falta pagar no local</span><span>{{ dinheiro(faltaPagar) }}</span></div>
-          <div v-if="Number(m.reembolso_devido) > 0" class="flex justify-between text-green-500"><span>A loja devolve-te</span><span>{{ dinheiro(m.reembolso_devido) }}</span></div>
+          <div v-if="m.pago && ativa && Number(m.falta_pagar) > 0" class="flex justify-between text-amber-500"><span>Falta pagar no local</span><span>{{ dinheiro(m.falta_pagar) }}</span></div>
+          <div v-if="Number(m.valor_reembolsado) > 0" class="flex justify-between text-green-500"><span>Devolvido</span><span>{{ dinheiro(m.valor_reembolsado) }}</span></div>
+          <p v-if="m.preco_final && m.preco_final_motivo" class="text-xs pt-1" :class="suave">Preço final: {{ m.preco_final_motivo }}</p>
           <p v-if="m.notas_cliente" class="text-xs pt-1" :class="suave">A tua nota: {{ m.notas_cliente }}</p>
           <p v-if="m.estado === 'cancelada'" class="text-xs pt-1" :class="suave">Cancelada{{ m.cancelada_por && m.cancelada_por !== 'Cliente' ? ' pela loja' : '' }}{{ m.cancelada_motivo ? ': ' + m.cancelada_motivo : '' }}</p>
         </div>
@@ -110,7 +111,6 @@ export default {
     botaoSec () { return this.isDark ? 'border-zinc-700 text-zinc-200 hover:border-zinc-500' : 'border-gray-300 text-zinc-700 hover:border-gray-400' },
     ativa () { return ['pendente', 'confirmada'].includes(this.m?.estado) },
     porPagar () { return this.m?.estado === 'pendente' && this.m.pagamento === 'antecipado' && !this.m.pago },
-    faltaPagar () { return this.m?.pago && this.ativa ? Math.max(0, Number(this.m.preco_indicado) - Number(this.m.valor_pago)) : 0 },
     textoEstado () {
       if (this.porPagar) return 'Por pagar'
       if (this.m.estado === 'pendente') return 'À espera da loja'

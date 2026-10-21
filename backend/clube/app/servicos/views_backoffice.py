@@ -724,13 +724,18 @@ def marcacao_acao(request, loja_id, marcacao_id):
       { acao: 'reatribuir', profissional_id, motivo?, ignorar_horario? }
       { acao: 'notas', notas_internas }
       { acao: 'propor_preco', valor, motivo? }   (o cliente aceita ou recusa na conversa)
+      { acao: 'concluir', preco_final?, motivo? } · { acao: 'falta' }   (também o profissional da marcação)
     """
-    loja, membro, erro = _acesso(request, loja_id, 'gerir_marcacoes')
-    if erro:
-        return erro
+    loja = get_object_or_404(Loja, id=loja_id)
+    membro = _get_membro(request, loja)
     m = get_object_or_404(Marcacao, id=marcacao_id, loja=loja)
     d = request.data
     acao = d.get('acao')
+    # o profissional (com conta) conclui e marca falta nas suas marcações, mesmo sem gerir_marcacoes
+    proprio = getattr(membro, 'profissional', None) if membro else None
+    if not membro or not (membro.pode('gerir_marcacoes')
+                          or (acao in ('concluir', 'falta') and proprio and proprio.pk == m.profissional_id)):
+        return _erro('Sem permissão: gerir_marcacoes', status.HTTP_403_FORBIDDEN)
     por = _quem(membro)
     ign = d.get('ignorar_horario', False)
     if not isinstance(ign, bool):
@@ -777,6 +782,18 @@ def marcacao_acao(request, loja_id, marcacao_id):
                 conversa.propor(m, valor, motivo, por)
             except conversa.ErroConversa as ex:
                 return _erro(ex.mensagem, ex.status)
+        elif acao == 'concluir':
+            preco = None
+            if d.get('preco_final') not in (None, ''):
+                preco, e = ler_valor(d.get('preco_final'), 'O preço final')
+                if e:
+                    return _erro(e)
+            motivo, e = _texto(d, 'motivo', 200)
+            if e:
+                return _erro(e)
+            m = ops.concluir(m, por, preco, motivo, membro=membro)
+        elif acao == 'falta':
+            m = ops.marcar_falta(m, por)
         elif acao == 'notas':
             notas, e = _texto(d, 'notas_internas', 500)
             if e:

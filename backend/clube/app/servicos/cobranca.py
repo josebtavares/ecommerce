@@ -215,3 +215,17 @@ def resumo(loja):
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('servicos',))]
         if loja.modelo_cobranca == 'comissao' else [],
     }
+
+
+def lojas_com_servicos():
+    """Lojas activas com o módulo ligado e pago (para a pesquisa e a home)."""
+    from django.db.models import Q
+    return Loja.objects.filter(estado='ativa', config_servicos__ativo=True).filter(
+        Q(modelo_cobranca='subscricao') | Q(subscricao_servicos__estado__in=ESTADOS_COM_ACESSO))
+
+
+def servicos_publicos():
+    """Serviços que um cliente pode marcar agora (loja disponível, serviço activo, com profissional activo)."""
+    from .models import Servico
+    return (Servico.objects.filter(ativo=True, loja__in=lojas_com_servicos(), profissionais__ativo=True)
+            .distinct().select_related('loja').prefetch_related('imagens'))

@@ -118,6 +118,13 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(f'  encomendas: expirar falhou: {e}')
         try:
+            from app.servicos.ciclo import processar as ciclo_marcacoes
+            r = ciclo_marcacoes()
+            if any(r.values()):
+                self.stdout.write(f'  marcações: {r}')
+        except Exception as e:
+            self.stderr.write(f'  marcações: ciclo falhou: {e}')
+        try:
             from app.utils.devolucoes import escalar_sem_resposta
             n = escalar_sem_resposta()
             if n:

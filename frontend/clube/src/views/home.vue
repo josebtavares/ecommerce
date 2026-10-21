@@ -305,6 +305,11 @@
               :isDark="isDark" @escolher="filtrarCatalogo" />
           </section>
 
+          <!-- Serviços (marcações) -->
+          <section v-else-if="sec.tipo === 'servicos'" class="py-8 px-6 md:px-12" data-teste="home-servicos">
+            <HomeServicos :titulo="sec.titulo" :subtitulo="sec.subtitulo" :servicos="sec.servicos" :isDark="isDark" />
+          </section>
+
           <!-- Banners -->
           <section v-else-if="sec.tipo === 'banner'" class="py-8 px-6 md:px-12">
             <HomeBanners :banners="sec.banners" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
@@ -316,11 +321,20 @@
         <section :ref="el => { if (el) sectionRefs['catalogo'] = el }"
                  class="py-12 px-6 md:px-12 border-t"
                  :class="isDark ? 'border-zinc-800 bg-zinc-900/20' : 'border-stone-200 bg-stone-50'">
-          <div class="mb-8">
-            <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Explorar Lojas</h2>
-            <p class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Pesquisa e filtra todas as lojas da plataforma</p>
+          <div class="mb-8 flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[220px]">
+              <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ abaCatalogo === 'servicos' ? 'Explorar Serviços' : 'Explorar Lojas' }}</h2>
+              <p class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
+                {{ abaCatalogo === 'servicos' ? 'Cortes, tratamentos, tatuagens… marca a tua hora' : 'Pesquisa e filtra todas as lojas da plataforma' }}</p>
+            </div>
+            <div class="flex gap-1 rounded-xl p-1" :class="isDark ? 'bg-zinc-800' : 'bg-stone-200'" role="tablist" aria-label="Lojas ou serviços">
+              <button v-for="a in [{ k: 'lojas', t: 'Lojas' }, { k: 'servicos', t: 'Serviços' }]" :key="a.k" type="button" role="tab"
+                :aria-selected="abaCatalogo === a.k" @click="abaCatalogo = a.k" :data-teste="`catalogo-${a.k}`"
+                :class="['px-4 py-1.5 rounded-lg text-sm font-semibold', abaCatalogo === a.k ? 'bg-red-600 text-white' : (isDark ? 'text-zinc-400' : 'text-zinc-600')]">{{ a.t }}</button>
+            </div>
           </div>
-          <StoreCatalog ref="catalogo" :isDark="isDark" @store-click="goToStore($event.id)" />
+          <StoreCatalog v-show="abaCatalogo === 'lojas'" ref="catalogo" :isDark="isDark" @store-click="goToStore($event.id)" />
+          <ServicoCatalog v-if="abaCatalogo === 'servicos'" :isDark="isDark" />
         </section>
 
         <!-- ── FOOTER ── -->
@@ -375,6 +389,8 @@ import MultiCart       from '@/components/cart/multiCart.vue'
 import StoreSlider     from '@/components/sliders/StoreSlider.vue'
 import ProductSlider   from '@/components/sliders/ProductSlider.vue'
 import StoreCatalog    from '@/components/catalog/StoreCatalog.vue'
+import ServicoCatalog  from '@/components/catalog/ServicoCatalog.vue'
+import HomeServicos    from '@/components/home/HomeServicos.vue'
 import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
 import HomeCategorias from '@/components/home/HomeCategorias.vue'
@@ -388,12 +404,14 @@ import { iconeCategoria } from '@/utils/icones'
 export default {
   name: 'AppHome',
   components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, PaginaInfoModal,
+    ServicoCatalog, HomeServicos,
                 HomeLojaDestaque, HomeCategorias, HomeBanners },
 
   data () {
     return {
       isDark: true,   // dark por defeito — pode ser lido de localStorage se quiseres
       seccoes: [],              // secções da home (admin → /app/home/)
+      abaCatalogo: 'lojas',     // pesquisa: lojas ou serviços
       categoriasExistentes: [],
       loadingHome: true,
       heroRefs: {},

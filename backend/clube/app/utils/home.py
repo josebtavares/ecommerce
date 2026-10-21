@@ -37,8 +37,14 @@ CRITERIOS_PRODUTOS = {
     'categoria_produto': 'De uma categoria em destaque',
 }
 
+CRITERIOS_SERVICOS = {
+    'novos':         'Serviços novos',
+    'mais_marcados': 'Mais marcados (últimos 30 dias)',
+}
+
 # tipo de secção → o que mostra
 CONTEUDO = {
+    'servicos': 'servicos',
     'hero': 'hero', 'lojas': 'lojas', 'produtos': 'produtos', 'loja_destaque': 'loja_destaque',
     'categorias': 'categorias', 'banner': 'banners', 'cabecalho': 'cabecalho',
     'lojas_por_categoria': 'lojas', 'produtos_por_tipo': 'produtos', 'produtos_categorias_destaque': 'produtos',
@@ -520,6 +526,10 @@ def resolver(s, request, vistos=None):
         out['categorias'] = [{'valor': c, 'nome': rotulo_categoria(c), 'total': contagem[c]} for c in ordem]
         return out if out['categorias'] else None
 
+    if tipo == 'servicos':
+        out['servicos'] = servicos_auto(s.get('criterio') or 'novos', min(max(_int(s.get('limite'), 12), 1), LIMITE_MAX), request)
+        return out if out['servicos'] else None
+
     if tipo == 'banner':
         itens = [i for i in s.get('itens') or [] if i.get('titulo') or i.get('imagem_id')]
         imagens = _urls_imagens([i.get('imagem_id') for i in itens], request)
@@ -529,6 +539,20 @@ def resolver(s, request, vistos=None):
         return out if out['banners'] else None
 
     return None
+
+
+def servicos_auto(criterio, limite, request):
+    from django.db.models import Count, Q
+    from ..servicos.cobranca import servicos_publicos
+    from ..servicos.views_cliente import servico_card
+    qs = servicos_publicos()
+    if criterio == 'mais_marcados':
+        desde = timezone.now() - timedelta(days=30)
+        qs = qs.annotate(n=Count('marcacoes', filter=Q(marcacoes__data_criacao__gte=desde) & ~Q(marcacoes__estado='expirada'),
+                                 distinct=True)).order_by('-n', '-data_criacao')
+    else:
+        qs = qs.order_by('-data_criacao', 'id')
+    return [servico_card(request, s) for s in qs[:limite]]
 
 
 def categorias_lojas():
@@ -591,6 +615,7 @@ TIPOS_COM_ITENS = {
 CRITERIOS_POR_TIPO = {
     'hero': CRITERIOS_LOJAS, 'lojas': CRITERIOS_LOJAS, 'produtos': CRITERIOS_PRODUTOS,
     'loja_destaque': CRITERIOS_LOJAS,   # sem loja escolhida: uma das primeiras deste critério, muda todos os dias
+    'servicos': CRITERIOS_SERVICOS,     # só automático
 }
 # parâmetro → (tipo, mínimo, máximo) ; str/lista: máximo = comprimento
 PARAMETROS = {
@@ -919,6 +944,8 @@ def validar(dados, atual=None):
     crit = campos.get('criterio', atual.criterio if atual else '')
     params = campos.get('parametros', atual.parametros if atual else {}) or {}
     # a loja em destaque pode ser criada sem loja nem critério (o admin escolhe a seguir; avisos_seccao avisa)
+    if tipo == 'servicos' and fonte != 'auto':
+        return None, None, 'A secção de serviços é sempre automática.'
     if fonte in ('auto', 'misto') and tipo in CRITERIOS_POR_TIPO and tipo != 'loja_destaque':
         if not crit:
             return None, None, 'Escolhe o critério automático.'

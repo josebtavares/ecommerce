@@ -1068,3 +1068,4 @@ def filtros_legiveis(r, params, ambito, loja_id, pos_id=None):
 
 # os relatórios do POS registam-se no mesmo catálogo (âmbito 'pos')
 from ..pos import relatorios as _relatorios_pos  # noqa: E402,F401
+from ..servicos import relatorios as _relatorios_servicos  # noqa: E402,F401

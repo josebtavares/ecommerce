@@ -154,6 +154,12 @@ export default {
     try {
       this.dados = (await api.get(`/app/lojas/${this.lojaId}/servicos/publico/`)).data
       this.repor()
+      // veio de um cartão (home / pesquisa) com o serviço escolhido
+      const sid = Number(this.$route.query.servico)
+      if (!this.servico && sid) {
+        const s = (this.dados.servicos || []).find(x => x.id === sid)
+        if (s) this.escolher(s)
+      }
     } finally { this.carregando = false }
   },
   methods: {

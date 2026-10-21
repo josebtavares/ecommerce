@@ -153,6 +153,15 @@
             </div>
           </div>
 
+          <!-- serviços: sempre automático -->
+          <div v-if="form.tipo === 'servicos'" data-teste="home-servicos">
+            <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Que serviços mostrar</label>
+            <select v-model="form.criterio" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+              <option v-for="c in opcoes.criterios_servicos" :key="c.valor" :value="c.valor">{{ c.nome }}</option>
+            </select>
+            <p class="text-[10px] text-zinc-600 mt-1">Só aparecem serviços de lojas com marcações abertas. Sem serviços, a secção não aparece.</p>
+          </div>
+
           <!-- conteúdo: hero / lojas / produtos -->
           <template v-if="TEM_FONTE.includes(form.tipo)">
             <div>
@@ -507,6 +516,7 @@ const NOVA = {
   cabecalho: { titulo: 'Nova secção', parametros: { estilo_titulo: 'titulo' } },
   lojas_por_categoria: {}, produtos_por_tipo: {}, produtos_categorias_destaque: {},
   loja_destaque: {}, categorias: {}, banner: { fonte: 'manual' },
+  servicos: { titulo: 'Marca um serviço', fonte: 'auto', criterio: 'novos' },
 }
 const MAX_SECCOES = 40
 const MAX_ITENS = 50
@@ -532,7 +542,7 @@ export default {
     return {
       ICONES, DESCRICAO_TIPO, DESCRICAO_FONTE, DESCRICAO_GRUPO, TEM_FONTE, GRUPOS, MAX_SECCOES, MAX_ITENS,
       seccoes: [],
-      opcoes: { fontes: [], tipos: [], criterios_lojas: [], criterios_produtos: [], categorias_lojas: [], tipos_produto: [], categorias_destaque: [] },
+      opcoes: { fontes: [], tipos: [], criterios_lojas: [], criterios_produtos: [], criterios_servicos: [], categorias_lojas: [], tipos_produto: [], categorias_destaque: [] },
       publicacao: null,
       temAlteracoes: false,
       selecionadaId: null,
@@ -590,6 +600,8 @@ export default {
         else partes.push(crit || 'Automático')
       } else if (s.tipo === 'loja_destaque' && !s.parametros?.loja_id && s.criterio) {
         partes.push(`Automática: ${this.opcoes.criterios_lojas.find(c => c.valor === s.criterio)?.nome || s.criterio}`)
+      } else if (s.tipo === 'servicos') {
+        partes.push(this.opcoes.criterios_servicos.find(c => c.valor === s.criterio)?.nome || 'Serviços')
       } else partes.push(s.tipo_nome)
       if (s.parametros?.sem_repetidos) partes.push('sem repetidos')
       if (s.parametros?.minimo > 1) partes.push(`mín. ${s.parametros.minimo}`)
@@ -695,7 +707,8 @@ export default {
         titulo: f.titulo || '', subtitulo: f.subtitulo || '', ativa: f.ativa,
         inicio: paraIso(f.inicio), fim: paraIso(f.fim),
         fonte: f.fonte,
-        criterio: (TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual') || (f.tipo === 'loja_destaque' && f.destaqueAuto) ? (f.criterio || '') : '',
+        criterio: (TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual') || (f.tipo === 'loja_destaque' && f.destaqueAuto) || f.tipo === 'servicos'
+          ? (f.criterio || '') : '',
         limite: f.limite, parametros: this.parametrosLimpos(),
         itens: comItens ? f.itens.map(i => ({ loja_id: i.loja_id || null, produto_id: i.produto_id || null,
                                                imagem_id: i.imagem_id || null,

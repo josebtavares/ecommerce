@@ -24,8 +24,9 @@
             <p class="text-zinc-500">Preço</p>
             <p class="text-zinc-200 font-semibold">{{ m.preco_texto }}</p>
             <p class="text-zinc-500">{{ m.pagamento === 'antecipado' ? (m.pago ? `Pago antecipado (${dinheiro(m.valor_pago)})` : 'Antecipado — por pagar') : 'Paga no local' }}</p>
-            <p v-if="faltaPagar > 0" class="text-amber-300">Falta {{ dinheiro(faltaPagar) }} no local</p>
-            <p v-if="Number(m.reembolso_devido) > 0" class="text-green-400">A devolver: {{ dinheiro(m.reembolso_devido) }}</p>
+            <p v-if="m.pago && Number(m.falta_pagar) > 0 && ativa" class="text-amber-300">Falta {{ dinheiro(m.falta_pagar) }} no local</p>
+            <p v-if="Number(m.valor_reembolsado) > 0" class="text-green-400">Devolvido: {{ dinheiro(m.valor_reembolsado) }}</p>
+            <p v-if="m.preco_final && m.preco_final_motivo" class="text-zinc-500">Preço final: {{ m.preco_final_motivo }} ({{ m.preco_final_por }})</p>
           </div>
         </div>
         <p v-if="m.notas_cliente" class="text-xs text-zinc-300 rounded-xl bg-zinc-800/50 px-3 py-2"><span class="text-zinc-500">Nota do cliente:</span> {{ m.notas_cliente }}</p>
@@ -40,6 +41,20 @@
             </div></label>
         </div>
         <p v-else-if="m.notas_internas" class="text-xs text-zinc-400">Notas: {{ m.notas_internas }}</p>
+
+        <!-- fechar: já começou → concluir (preço final) ou falta -->
+        <div v-if="ativa && comecou" class="rounded-xl border border-zinc-700 p-3 space-y-2" data-teste="fechar-marcacao">
+          <p class="text-xs font-semibold text-zinc-300">Como correu?</p>
+          <div class="flex gap-2">
+            <input v-model="precoFinal" type="number" min="0" step="1" :placeholder="`Preço final (${m.preco_texto})`" aria-label="Preço final" :class="CAMPO" />
+            <button type="button" @click="concluir" :disabled="aGuardar" data-teste="concluir"
+              class="px-4 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-bold whitespace-nowrap">Concluir</button>
+          </div>
+          <input v-if="precoFinal !== '' && Number(precoFinal) !== Number(m.preco_indicado)" v-model="motivoPreco" maxlength="200"
+            placeholder="Porquê o preço mudou (o cliente vê)" aria-label="Motivo do preço final" :class="CAMPO" />
+          <button type="button" @click="acao({ acao: 'falta' }, 'Marcada falta.', 'O cliente não veio?')" :disabled="aGuardar" data-teste="falta"
+            class="text-xs text-red-300 hover:text-red-200">O cliente não veio — marcar falta</button>
+        </div>
 
         <!-- acções -->
         <div v-if="podeGerir && ['pendente', 'confirmada'].includes(m.estado)" class="space-y-3 pt-1 border-t border-zinc-800">
@@ -136,11 +151,12 @@ export default {
   emits: ['fechar', 'alterada'],
   data () {
     return { m: null, notas: '', painel: null, novoDia: '', horas: [], escolhida: null, foraHorario: false, horaLivre: '',
-             livres: [], novoProf: null, motivo: '', novoPreco: '', versao: 0, erro: '', ok: '', avisos: [], aGuardar: false, hoje: hojeCV(),
+             livres: [], novoProf: null, motivo: '', novoPreco: '', versao: 0, precoFinal: '', motivoPreco: '', erro: '', ok: '', avisos: [], aGuardar: false, hoje: hojeCV(),
              CAMPO, ESTADOS: ESTADOS_MARCACAO, PAINEIS }
   },
   computed: {
-    faltaPagar () { return this.m?.pago && ['pendente', 'confirmada'].includes(this.m.estado) ? Math.max(0, Number(this.m.preco_indicado) - Number(this.m.valor_pago)) : 0 },
+    ativa () { return ['pendente', 'confirmada'].includes(this.m?.estado) },
+    comecou () { return this.m && Date.now() >= new Date(this.m.inicio).getTime() - 15 * 60 * 1000 },
   },
   created () { this.carregar() },
   methods: {
@@ -165,7 +181,16 @@ export default {
         { params: { servico: this.m.servico_id, dia: this.novoDia, profissional: this.m.profissional_id, excluir: this.m.id } })
       this.horas = data.horas
     },
-    async acao (corpo, ok = '') {
+    concluir () {
+      const corpo = { acao: 'concluir' }
+      if (this.precoFinal !== '' && Number(this.precoFinal) !== Number(this.m.preco_indicado)) {
+        corpo.preco_final = String(this.precoFinal)
+        corpo.motivo = this.motivoPreco
+      }
+      this.acao(corpo, 'Serviço concluído.')
+    },
+    async acao (corpo, ok = '', pergunta = '') {
+      if (pergunta && !confirm(pergunta)) return
       this.erro = ''; this.ok = ''; this.avisos = []; this.aGuardar = true
       try {
         const { data } = await api.post(this.base() + 'acao/', corpo)

@@ -174,14 +174,18 @@ def responder(m, proposta_id, aceitar, u):
             m.reembolso_devido = max(Decimal('0'), m.valor_pago - p.valor)
             campos.append('reembolso_devido')
         m.save(update_fields=campos)
+        from .marcacoes import falta_pagar
         texto = f'O cliente aceitou o preço de {formatar(p.valor)}.'
-        if m.pago and p.valor > m.valor_pago:
-            texto += f' Falta pagar {formatar(p.valor - m.valor_pago)} no local.'
-        elif m.pago and m.reembolso_devido:
-            texto += f' A loja devolve {formatar(m.reembolso_devido)}.'
+        if m.pago and falta_pagar(m) > 0:
+            texto += f' Falta pagar {formatar(falta_pagar(m))} no local.'
+        elif m.pago and m.reembolso_devido > m.valor_reembolsado:
+            texto += f' A loja devolve {formatar(m.reembolso_devido - m.valor_reembolsado)}.'
     else:
         texto = f'O cliente recusou o preço de {formatar(p.valor)}.'
     _sistema(m, texto)
+    if aceitar:
+        from .marcacoes import reembolsar
+        reembolsar(m)
     from ..Views.notificacaoView import notificar_staff
     notificar_staff(loja=m.loja, roles=['dono', 'gestor'], tipo='marcacao_proposta',
                     titulo='Proposta de preço aceite' if aceitar else 'Proposta de preço recusada', mensagem=texto,

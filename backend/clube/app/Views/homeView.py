@@ -103,6 +103,7 @@ def _opcoes():
         'fontes': [{'valor': v, 'nome': n} for v, n in HomeSeccao.FONTES],
         'criterios_lojas': [{'valor': v, 'nome': n} for v, n in H.CRITERIOS_LOJAS.items()],
         'criterios_produtos': [{'valor': v, 'nome': n} for v, n in H.CRITERIOS_PRODUTOS.items()],
+        'criterios_servicos': [{'valor': v, 'nome': n} for v, n in H.CRITERIOS_SERVICOS.items()],
         'categorias_lojas': [{'valor': c, 'nome': H.rotulo_categoria(c)} for c in cats if c],
         'tipos_produto': [{'id': t.id, 'nome': t.nome} for t in
                           TipoProduto.objects.filter(loja__isnull=True, pos__isnull=True, ativo=True).order_by('nome')],
