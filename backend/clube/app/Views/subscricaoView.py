@@ -51,9 +51,14 @@ def planos_publicos(request):
 # ── Backoffice ────────────────────────────────────────────────
 
 def _resumo_loja(loja, membro):
+    from ..servicos import cobranca
     sub = Subscricao.objects.select_related('plano').filter(loja=loja).first()
-    faturas = list(loja.faturas_subscricao.select_related('plano')[:24]) if sub else []
-    pendentes = [f for f in faturas if f.estado == 'pendente']
+    sub_serv = Subscricao.objects.select_related('plano').filter(loja_servicos=loja).first()
+    # as faturas da loja e as da subscrição de Serviços aparecem juntas
+    faturas = list(loja.faturas_subscricao.select_related('plano')[:36]) if (sub or sub_serv) else []
+    pendentes_todas = [f for f in faturas if f.estado == 'pendente']
+    pendentes = [f for f in pendentes_todas if sub and f.subscricao_id == sub.id]
+    pend_serv = [f for f in pendentes_todas if sub_serv and f.subscricao_id == sub_serv.id]
     livre = subs.proxima_troca(loja)
     pedido = None
     if sub and sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao':
@@ -68,7 +73,10 @@ def _resumo_loja(loja, membro):
         'percentagem_comissao': str(loja.percentagem_comissao),
         'subscricao': subs.subscricao_payload(sub),
         'faturas': [subs.fatura_payload(f) for f in faturas],
-        'por_pagar': str(sum((f.valor for f in pendentes), Decimal('0'))),
+        'por_pagar': str(sum((f.valor for f in pendentes_todas), Decimal('0'))),
+        # módulo Serviços: incluído na subscrição ou com subscrição própria (lojas em comissão)
+        'servicos': {**cobranca.resumo(loja),
+                     'aviso': subs.aviso_loja(sub_serv, pend_serv) if sub_serv else None},
         'pode_pagar': membro.pode('pagar_subscricao'),
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos()],
         # os POS do dono ligados a esta loja (o plano Loja + POS inclui-os)
@@ -137,8 +145,17 @@ def _ler_plano(dados, plano=None):
     if 'tipo' in dados or plano is None:
         tipo = dados.get('tipo') or 'loja'
         if tipo not in dict(PlanoSubscricao.TIPOS):
-            return None, 'Tipo inválido (loja, pos ou loja_pos).'
+            return None, 'Tipo inválido (loja, pos, loja_pos ou servicos).'
         campos['tipo'] = tipo
+    for chave, maximo in (('limite_marcacoes_mes', 100000), ('limite_profissionais', 1000)):
+        if chave in dados:
+            v = dados.get(chave)
+            if v in (None, ''):
+                campos[chave] = None
+            elif isinstance(v, bool) or not str(v).strip().isdigit() or not 1 <= int(v) <= maximo:
+                return None, 'Limite inválido (vazio = sem limite).'
+            else:
+                campos[chave] = int(v)
     if 'preco' in dados or plano is None:
         try:
             preco = Decimal(str(dados.get('preco'))).quantize(Decimal('0.01'))
@@ -209,7 +226,8 @@ def admin_subscricoes(request):
     erro = _exige_admin(request, 'gerir_subscricoes')
     if erro:
         return erro
-    qs = Loja.objects.exclude(estado='pendente', modelo_cobranca='comissao').select_related('subscricao__plano')
+    qs = Loja.objects.exclude(estado='pendente', modelo_cobranca='comissao').select_related(
+        'subscricao__plano', 'subscricao_servicos__plano')
     modelo = request.GET.get('modelo')
     if modelo in ('comissao', 'subscricao'):
         qs = qs.filter(modelo_cobranca=modelo)
@@ -226,8 +244,10 @@ def admin_subscricoes(request):
 
     def linha(l):
         sub = getattr(l, 'subscricao', None) if l.modelo_cobranca == 'subscricao' else None
+        serv = getattr(l, 'subscricao_servicos', None)
         return {'loja_id': l.id, 'loja_nome': l.nome, 'loja_estado': l.estado, 'modelo': l.modelo_cobranca,
                 'percentagem_comissao': str(l.percentagem_comissao), 'subscricao': subs.subscricao_payload(sub),
+                'subscricao_servicos': subs.subscricao_payload(serv) if serv and serv.estado != 'cancelada' else None,
                 'faturas_pendentes': l.n_pendentes, 'valor_pendente': str(l.v_pendente or 0)}
     return paginar_lista(request, [linha(l) for l in qs])
 
@@ -245,7 +265,9 @@ def admin_faturas(request):
     if (request.GET.get('pos') or '').isdigit():
         qs = qs.filter(pos_id=int(request.GET['pos']))
     if request.GET.get('tipo') == 'loja':
-        qs = qs.filter(loja__isnull=False)
+        qs = qs.filter(loja__isnull=False, subscricao__loja_servicos__isnull=True)
+    elif request.GET.get('tipo') == 'servicos':
+        qs = qs.filter(subscricao__loja_servicos__isnull=False)
     elif request.GET.get('tipo') == 'pos':
         qs = qs.filter(pos__isnull=False)
     if request.GET.get('estado') in dict(FaturaSubscricao.ESTADOS):
@@ -341,11 +363,14 @@ def loja_subscricao_mudar(request, loja_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def admin_oferecer(request, loja_id):
-    """POST /app/admin/lojas/<id>/subscricao/oferecer/ { meses: 1-12, motivo? }"""
+    """POST /app/admin/lojas/<id>/subscricao/oferecer/ { meses: 1-12, motivo?, servicos? } — servicos: a de Serviços"""
     erro = _exige_admin(request, 'gerir_subscricoes')
     if erro:
         return erro
-    sub = get_object_or_404(Subscricao, loja_id=loja_id)
+    if request.data.get('servicos') is True:
+        sub = get_object_or_404(Subscricao, loja_servicos_id=loja_id)
+    else:
+        sub = get_object_or_404(Subscricao, loja_id=loja_id)
     meses = _inteiro(request.data.get('meses'))
     if not 1 <= meses <= 12:
         return _erro('Oferece entre 1 e 12 meses.')

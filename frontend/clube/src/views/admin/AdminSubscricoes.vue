@@ -41,7 +41,7 @@
             <p class="text-xs text-zinc-500">Subscrições</p>
             <p class="text-2xl font-black text-sky-300 mt-1">{{ euros(resumo.subscricoes.valor) }}</p>
             <p class="text-[11px] text-zinc-500 mt-1">{{ resumo.subscricoes.faturas }} fatura(s) paga(s)<template v-if="resumo.subscricoes.ofertas"> · {{ resumo.subscricoes.ofertas }} oferta(s)</template></p>
-            <p v-if="resumo.por_alvo" class="text-[11px] text-zinc-400 mt-1">Lojas {{ euros(resumo.por_alvo.lojas.valor) }} · POS {{ euros(resumo.por_alvo.pos.valor) }}</p>
+            <p v-if="resumo.por_alvo" class="text-[11px] text-zinc-400 mt-1">Lojas {{ euros(resumo.por_alvo.lojas.valor) }}<template v-if="resumo.por_alvo.servicos"> · Serviços {{ euros(resumo.por_alvo.servicos.valor) }}</template> · POS {{ euros(resumo.por_alvo.pos.valor) }}</p>
           </div>
           <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
             <p class="text-xs text-zinc-500">Comissões</p>
@@ -126,6 +126,11 @@
                 <template v-if="l.subscricao.pago_ate && l.subscricao.pago_ate !== l.subscricao.teste_ate"> · pago até {{ data(l.subscricao.pago_ate) }}</template>
               </template>
             </p>
+            <p v-if="l.subscricao_servicos" class="text-xs text-emerald-300/90">
+              Serviços: {{ l.subscricao_servicos.plano.nome }} · {{ euros(l.subscricao_servicos.preco) }} · {{ ESTADOS[l.subscricao_servicos.estado] }}
+              <template v-if="l.subscricao_servicos.estado === 'teste' && l.subscricao_servicos.teste_ate"> até {{ data(l.subscricao_servicos.teste_ate) }}</template>
+              <template v-if="l.subscricao_servicos.fim_agendado"> · termina a {{ data(l.subscricao_servicos.fim_agendado) }}</template>
+            </p>
           </div>
           <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', l.modelo === 'comissao' ? 'bg-zinc-700 text-zinc-300' : corEstado(l.subscricao?.estado)]">
             {{ l.modelo === 'comissao' ? 'Comissão' : ESTADOS[l.subscricao?.estado] }}
@@ -133,6 +138,8 @@
           <span v-if="l.faturas_pendentes" class="text-xs font-semibold text-amber-300">{{ l.faturas_pendentes }} por pagar · {{ euros(l.valor_pendente) }}</span>
           <button v-if="l.modelo === 'subscricao' && l.subscricao && !['aguarda', 'cancelada'].includes(l.subscricao.estado)" type="button"
             @click="abrirOferta(l)" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-xs text-sky-300">Oferecer meses</button>
+          <button v-if="l.subscricao_servicos && !['aguarda', 'cancelada'].includes(l.subscricao_servicos.estado)" type="button"
+            @click="abrirOferta(l, true)" class="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs text-emerald-300">Oferecer meses (Serviços)</button>
           <button type="button" @click="verFaturas(l)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Faturas</button>
           <button type="button" @click="abrirModelo(l)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Mudar modelo</button>
         </div>
@@ -206,6 +213,7 @@
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Lojas e POS</option>
           <option value="loja">Só lojas</option>
+          <option value="servicos">Só Serviços</option>
           <option value="pos">Só POS</option>
         </select>
         <span v-if="lojaFiltro" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-800 text-xs text-zinc-300">
@@ -265,6 +273,10 @@
           <p class="text-2xl font-black text-zinc-100 mt-2">{{ euros(p.preco) }}</p>
           <p v-if="p.meses > 1" class="text-xs text-zinc-500">{{ euros(p.preco_mes) }}/mês</p>
           <p v-if="p.descricao" class="text-xs text-zinc-400 mt-2">{{ p.descricao }}</p>
+          <p v-if="p.tipo === 'servicos'" class="text-xs text-emerald-300/80 mt-2">
+            {{ p.limite_marcacoes_mes ? p.limite_marcacoes_mes + ' marcações/mês' : 'Marcações sem limite' }} ·
+            {{ p.limite_profissionais ? p.limite_profissionais + ' profissional(is)' : 'profissionais sem limite' }}
+          </p>
           <p class="text-xs text-zinc-500 mt-2">{{ p.lojas }} {{ p.tipo === 'pos' ? 'POS' : 'loja(s)' }} neste plano</p>
         </div>
       </div>
@@ -283,8 +295,18 @@
             <select v-model="modal.form.tipo" :disabled="modal.plano && modal.plano.lojas > 0"
               class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 disabled:opacity-50">
               <option value="loja">Loja online</option><option value="pos">POS</option><option value="loja_pos">Loja + POS</option>
+              <option value="servicos">Serviços (lojas em comissão)</option>
             </select></label>
           <p v-if="modal.form.tipo === 'loja_pos'" class="text-xs text-violet-300">Aparece às lojas: cobre a loja e o POS ligado a ela (o POS deixa de pagar o seu plano).</p>
+          <template v-if="modal.form.tipo === 'servicos'">
+            <p class="text-xs text-emerald-300">Para lojas em comissão activarem os Serviços. Nas lojas em subscrição os Serviços já estão incluídos.</p>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block"><span class="text-xs text-zinc-500">Marcações por mês</span>
+                <input v-model="modal.form.limite_marcacoes_mes" type="number" min="1" step="1" placeholder="Sem limite" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" /></label>
+              <label class="block"><span class="text-xs text-zinc-500">Profissionais</span>
+                <input v-model="modal.form.limite_profissionais" type="number" min="1" step="1" placeholder="Sem limite" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" /></label>
+            </div>
+          </template>
           <div class="grid grid-cols-2 gap-3">
             <label class="block"><span class="text-xs text-zinc-500">Periodicidade</span>
               <select v-model="modal.form.periodicidade" :disabled="modal.plano && modal.plano.lojas > 0"
@@ -358,7 +380,7 @@
             <p class="text-sm text-zinc-300">Passar para subscrição — escolhe o plano:</p>
             <select v-model="modal.form.plano_id" aria-label="Plano" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100">
               <option :value="null" disabled>Escolhe um plano</option>
-              <option v-for="p in planos.filter(x => x.ativo && x.tipo !== 'pos')" :key="p.id" :value="p.id">{{ p.nome }}{{ p.tipo === 'loja_pos' ? ' (Loja + POS)' : '' }} — {{ euros(p.preco) }}</option>
+              <option v-for="p in planos.filter(x => x.ativo && ['loja', 'loja_pos'].includes(x.tipo))" :key="p.id" :value="p.id">{{ p.nome }}{{ p.tipo === 'loja_pos' ? ' (Loja + POS)' : '' }} — {{ euros(p.preco) }}</option>
             </select>
             <p class="text-xs text-zinc-500">Sem período de teste: a primeira fatura vence hoje. As encomendas já feitas continuam a pagar comissão.</p>
           </div>
@@ -451,10 +473,12 @@ export default {
 
     abrirPlano (p) {
       this.modal = { tipo: 'plano', plano: p, titulo: p ? `Editar "${p.nome}"` : 'Novo plano', botao: p ? 'Guardar' : 'Criar plano', erro: '', aGuardar: false,
-                     form: p ? { nome: p.nome, tipo: p.tipo, periodicidade: p.periodicidade, preco: p.preco, descricao: p.descricao, ativo: p.ativo }
-                             : { nome: '', tipo: 'loja', periodicidade: 'mensal', preco: '', descricao: '', ativo: true } }
+                     form: p ? { nome: p.nome, tipo: p.tipo, periodicidade: p.periodicidade, preco: p.preco, descricao: p.descricao, ativo: p.ativo,
+                                 limite_marcacoes_mes: p.limite_marcacoes_mes ?? '', limite_profissionais: p.limite_profissionais ?? '' }
+                             : { nome: '', tipo: 'loja', periodicidade: 'mensal', preco: '', descricao: '', ativo: true,
+                                 limite_marcacoes_mes: '', limite_profissionais: '' } }
     },
-    corTipo (t) { return { loja: 'text-zinc-300', pos: 'text-sky-300', loja_pos: 'text-violet-300' }[t] || '' },
+    corTipo (t) { return { loja: 'text-zinc-300', pos: 'text-sky-300', loja_pos: 'text-violet-300', servicos: 'text-emerald-300' }[t] || '' },
     abrirPagar (f) {
       this.modal = { tipo: 'pagar', fatura: f, titulo: `Marcar a fatura #${f.id} como paga`, botao: 'Marcar paga', erro: '', aGuardar: false,
                      form: { metodo: 'transferencia', notas: '' } }
@@ -477,9 +501,11 @@ export default {
         this.resumo = (await api.get('/app/admin/subscricoes/resumo/', { params: { inicio: this.inicio, fim: this.fim } })).data
       })
     },
-    abrirOferta (l) {
-      this.modal = { tipo: 'oferta', loja: l, nome: l.loja_nome, planoNome: l.subscricao.plano.nome,
-                     titulo: `Oferecer meses — ${l.loja_nome}`, botao: 'Oferecer', erro: '', aGuardar: false, form: { meses: 1, motivo: '' } }
+    abrirOferta (l, servicos = false) {
+      const sub = servicos ? l.subscricao_servicos : l.subscricao
+      this.modal = { tipo: 'oferta', loja: l, nome: l.loja_nome, planoNome: sub.plano.nome,
+                     titulo: `Oferecer meses${servicos ? ' de Serviços' : ''} — ${l.loja_nome}`, botao: 'Oferecer', erro: '', aGuardar: false,
+                     form: servicos ? { meses: 1, motivo: '', servicos: true } : { meses: 1, motivo: '' } }
     },
     carregarPos () {
       return this.pedir(async () => {
@@ -516,6 +542,8 @@ export default {
         if (m.tipo === 'plano') {
           const corpo = { ...m.form }
           if (m.plano && m.plano.lojas > 0) { delete corpo.periodicidade; delete corpo.tipo }
+          // os limites só contam nos planos de Serviços (vazio = sem limite)
+          if (m.form.tipo !== 'servicos') { delete corpo.limite_marcacoes_mes; delete corpo.limite_profissionais }
           if (m.plano) await api.patch(`/app/admin/planos/${m.plano.id}/`, corpo)
           else await api.post('/app/admin/planos/', corpo)
           await this.carregarPlanos()

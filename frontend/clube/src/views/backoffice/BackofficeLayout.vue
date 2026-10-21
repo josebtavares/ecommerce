@@ -124,7 +124,7 @@
       </div>
 
       <!-- Subscrição em atraso / a vencer (a loja continua a funcionar) -->
-      <div v-if="avisoSub && avisoSub.tipo !== 'suspensa' && loja?.estado === 'ativa'" role="alert"
+      <div v-if="avisoSub && (avisoSub.tipo !== 'suspensa' || avisoSub.servicos) && loja?.estado === 'ativa'" role="alert"
            :class="['mx-4 lg:mx-6 mt-4 px-4 py-3 rounded-xl border text-sm flex flex-col sm:flex-row sm:items-center gap-3',
                     avisoSub.tipo === 'atraso' ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-200']">
         <font-awesome-icon :icon="['fas', avisoSub.tipo === 'atraso' ? 'triangle-exclamation' : 'clock']" class="w-4 h-4 flex-shrink-0 hidden sm:block" />
@@ -168,6 +168,8 @@
         <BackofficeCategorias    v-else-if="activeSection === 'categorias'"    :loja-id="lojaId" />
         <BackofficeTemplates     v-else-if="activeSection === 'templates'"     :loja-id="lojaId" />
         <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
+        <BackofficeServicos      v-else-if="activeSection === 'servicos'"      :loja-id="lojaId"
+                                 @ver-subscricao="activeSection = 'subscricao'" />
       </main>
     </div>
 
@@ -191,6 +193,7 @@ import BackofficeTemplates       from './BackofficeTemplates.vue'
 import BackofficeMensagens      from './BackofficeMensagens.vue'
 import BackofficeSubscricao     from './BackofficeSubscricao.vue'
 import BackofficeDevolucoes     from './BackofficeDevolucoes.vue'
+import BackofficeServicos       from './BackofficeServicos.vue'
 import ModuloRelatorios         from '@/components/relatorios/ModuloRelatorios.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
@@ -202,15 +205,16 @@ const PERMISSOES = {
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
-    'ver_subscricao','pagar_subscricao',
+    'ver_subscricao','pagar_subscricao','gerir_servicos','gerir_marcacoes',
   ],
   gestor: [
     'ver_loja','editar_loja','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template', 'ver_subscricao',
+    'gerir_servicos','gerir_marcacoes',
   ],
-  staff:        ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas'],
+  staff:        ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas','gerir_marcacoes'],
   contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios','ver_subscricao'],
   condutor:     ['gerir_entregas'],
 }
@@ -227,6 +231,7 @@ const SECCOES = [
   { key: 'categorias',    label: 'Categorias',        icon: 'category',  permissao: 'gerir_produtos'   },
   { key: 'produtos',      label: 'Produtos',          icon: 'box',       permissao: 'gerir_produtos'   },
   { key: 'inventario',    label: 'Inventário',        icon: 'inventory', permissao: 'gerir_inventario' },
+  { key: 'servicos',      label: 'Serviços',          icon: 'calendar',  permissao: 'gerir_marcacoes'  },
   { key: 'staff',         label: 'Staff',             icon: 'staff',     permissao: 'gerir_staff'      },
   { key: 'templates',     label: 'Templates',         icon: 'template',  permissao: 'gerir_template'   },
   { key: 'configuracoes', label: 'Configurações',     icon: 'settings',  permissao: 'editar_loja'      },
@@ -240,7 +245,7 @@ export default {
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
-    BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes,
+    BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes, BackofficeServicos,
   },
 
   data () {
@@ -370,10 +375,11 @@ export default {
 
     async fetchAvisoSub () {
       const perms = PERMISSOES[this.loja?.minha_role] || []
-      if (this.loja?.modelo_cobranca !== 'subscricao' || !perms.includes('ver_subscricao')) { this.avisoSub = null; return }
+      if (!perms.includes('ver_subscricao')) { this.avisoSub = null; return }
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/subscricao/`)
-        this.avisoSub = data.aviso
+        // a da loja manda; senão a da subscrição de Serviços (só o módulo, a loja continua)
+        this.avisoSub = data.aviso || data.servicos?.aviso || null
       } catch (e) { this.avisoSub = null }
     },
 

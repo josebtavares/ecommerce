@@ -43,7 +43,10 @@ def mais_meses(d, n):
 
 def _descricao(plano, inicio, fim):
     ultimo = fim - timedelta(days=1)
-    return f'{plano.nome if plano else "Subscrição"} — {inicio:%d/%m/%Y} a {ultimo:%d/%m/%Y}'
+    nome = plano.nome if plano else 'Subscrição'
+    if plano and plano.tipo == 'servicos' and 'servi' not in nome.lower():
+        nome = f'Serviços · {nome}'
+    return f'{nome} — {inicio:%d/%m/%Y} a {ultimo:%d/%m/%Y}'
 
 
 def emitir_fatura(sub, inicio, vencimento=None):
@@ -54,7 +57,8 @@ def emitir_fatura(sub, inicio, vencimento=None):
     """
     fim = mais_meses(inicio, sub.meses)
     f = FaturaSubscricao.objects.create(
-        loja_id=sub.loja_id, pos_id=sub.pos_id, subscricao=sub, plano=sub.plano, descricao=_descricao(sub.plano, inicio, fim),
+        loja_id=sub.loja_id or sub.loja_servicos_id, pos_id=sub.pos_id, subscricao=sub, plano=sub.plano,
+        descricao=_descricao(sub.plano, inicio, fim),
         periodo_inicio=inicio, periodo_fim=fim, valor=sub.preco, vencimento=vencimento or inicio,
     )
     if not f.valor:
@@ -126,8 +130,10 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
         raise ErroFatura('Esta fatura já não está por pagar.')
     loja = Loja.objects.select_for_update().get(pk=fatura.loja_id) if fatura.loja_id else None
 
-    ativacao = bool(loja) and sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao'
-    if ativacao:
+    # 1.ª fatura de um pedido de mudança para subscrição (a de Serviços não muda o modelo da loja)
+    ativacao = bool(loja) and sub.estado == 'aguarda' and loja.modelo_cobranca == 'comissao' and not sub.servicos
+    ativa_servicos = sub.servicos and sub.estado == 'aguarda'
+    if ativacao or ativa_servicos:
         # o período conta a partir do dia em que paga (não do dia em que pediu)
         fatura.periodo_inicio, fatura.periodo_fim = d, mais_meses(d, sub.meses)
         fatura.descricao = _descricao(sub.plano, fatura.periodo_inicio, fatura.periodo_fim)
@@ -138,8 +144,9 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
 
     if fatura.periodo_fim > sub.pago_ate:
         sub.pago_ate = fatura.periodo_fim
-    if ativacao:
+    if ativacao or ativa_servicos:
         sub.estado = 'ativa'
+    if ativacao:
         loja.modelo_cobranca, loja.modelo_alterado_em = 'subscricao', timezone.now()
         loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
     # pagar durante o teste não o encurta: continua 'teste' até o período pago começar
@@ -149,7 +156,9 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
     reativou = _reavaliar(sub, d)
     if ativacao:
         from .subscricoes_pos import sincronizar_pos_da_loja
+        from ..servicos.cobranca import loja_mudou_modelo
         sincronizar_pos_da_loja(loja.id)           # plano Loja + POS: o POS ligado passa a estar incluído
+        loja_mudou_modelo(loja)                    # os Serviços passam a estar incluídos
     if not avisar:
         return fatura
 
@@ -157,7 +166,9 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
     _avisar_dono(alvo, f'Subscrição paga — {fatura.descricao}',
                  f'{_eur(fatura.valor)} recebidos. Pago até {sub.pago_ate - timedelta(days=1):%d/%m/%Y}.'
                  + (' A loja passou para subscrição — as vendas deixam de pagar comissão.' if ativacao else '')
-                 + ((' A loja foi reactivada.' if loja else ' O POS foi reactivado.') if reativou else ''),
+                 + (' O módulo Serviços está activo.' if ativa_servicos else '')
+                 + ((' O módulo Serviços voltou.' if sub.servicos else ' A loja foi reactivada.' if loja
+                     else ' O POS foi reactivado.') if reativou else ''),
                  tipo='subscricao_paga')
     _avisar_admins(alvo, f'Subscrição paga — {nome_alvo(alvo)}',
                    f'Fatura #{fatura.id} · {_eur(fatura.valor)} · {fatura.get_metodo_display()}.'
@@ -184,6 +195,8 @@ def _reavaliar(sub, d=None):
         if sub.pos_id:
             from ..pos.models import ConfiguracaoPOS
             return era_suspensa and reativar_pos(ConfiguracaoPOS.objects.get(pk=sub.pos_id))
+        if sub.servicos:
+            return era_suspensa                        # só o módulo estava suspenso, a loja nunca
         loja = Loja.objects.get(pk=sub.loja_id)
         if era_suspensa and loja.estado == 'suspensa' and loja.estado_motivo.startswith(MOTIVO_SUSPENSAO):
             loja.mudar_estado('ativa')
@@ -245,7 +258,9 @@ def mudar_modelo(loja, modelo, plano=None):
     else:
         raise ErroFatura('Modelo inválido.')
     from .subscricoes_pos import sincronizar_pos_da_loja
+    from ..servicos.cobranca import loja_mudou_modelo
     sincronizar_pos_da_loja(loja.id)
+    loja_mudou_modelo(loja)
     return loja
 
 
@@ -255,7 +270,8 @@ def plano_payload(p):
     return {'id': p.id, 'nome': p.nome, 'tipo': p.tipo, 'tipo_nome': p.get_tipo_display(),
             'periodicidade': p.periodicidade, 'periodicidade_nome': p.get_periodicidade_display(),
             'meses': p.meses, 'preco': str(p.preco), 'preco_mes': str((p.preco / p.meses).quantize(Decimal('0.01'))),
-            'descricao': p.descricao, 'ativo': p.ativo, 'ordem': p.ordem}
+            'descricao': p.descricao, 'ativo': p.ativo, 'ordem': p.ordem,
+            'limite_marcacoes_mes': p.limite_marcacoes_mes, 'limite_profissionais': p.limite_profissionais}
 
 
 def fatura_payload(f):
@@ -265,7 +281,8 @@ def fatura_payload(f):
             'atrasada': f.estado == 'pendente' and f.vencimento < hoje(),
             'paga_em': f.paga_em.isoformat() if f.paga_em else None, 'metodo': f.metodo,
             'metodo_nome': f.get_metodo_display() if f.metodo else '', 'notas': f.notas, 'loja_id': f.loja_id,
-            'pos_id': f.pos_id, 'loja_nome': nome_alvo(f.alvo), 'paga': f.estado == 'paga'}
+            'pos_id': f.pos_id, 'loja_nome': nome_alvo(f.alvo), 'paga': f.estado == 'paga',
+            'servicos': bool(f.plano_id) and f.plano.tipo == 'servicos'}
 
 
 def plano_em_curso(sub, d=None):
@@ -290,7 +307,7 @@ def subscricao_payload(sub):
             # passa para comissão neste dia (o 1.º já sem subscrição)
             'fim_agendado': sub.fim_agendado.isoformat() if sub.fim_agendado else None,
             'plano_seguinte': plano_payload(sub.plano_seguinte) if sub.plano_seguinte_id else None,
-            'auto_renovar': sub.auto_renovar}
+            'auto_renovar': sub.auto_renovar, 'servicos': sub.servicos}
 
 
 def planos_ativos(tipos=TIPOS_LOJA):
@@ -356,19 +373,26 @@ def processar(quando=None):
     lojas = Subscricao.objects.filter(estado__in=['teste', 'ativa', 'em_atraso'], loja__modelo_cobranca='subscricao')
     # os suspensos também: deixam de o estar se passarem a estar incluídos no plano da loja
     pos = Subscricao.objects.filter(pos__isnull=False, estado__in=['teste', 'ativa', 'em_atraso', 'suspensa'])
-    for pk in [*lojas.order_by('pk').values_list('pk', flat=True), *pos.order_by('pk').values_list('pk', flat=True)]:
+    servicos = Subscricao.objects.filter(loja_servicos__isnull=False, estado__in=['teste', 'ativa', 'em_atraso'])
+    from ..servicos.cobranca import processar as processar_servicos
+    for pk in [*lojas.order_by('pk').values_list('pk', flat=True), *pos.order_by('pk').values_list('pk', flat=True),
+               *servicos.order_by('pk').values_list('pk', flat=True)]:
         try:
             with transaction.atomic():
-                sub = Subscricao.objects.select_for_update(of=('self',)).select_related('loja', 'pos', 'plano').get(pk=pk)
-                (_processar_uma if sub.loja_id else processar_pos)(sub, d, resumo)
+                sub = Subscricao.objects.select_for_update(of=('self',)).select_related(
+                    'loja', 'pos', 'loja_servicos', 'plano').get(pk=pk)
+                (_processar_uma if sub.loja_id else processar_servicos if sub.servicos else processar_pos)(sub, d, resumo)
         except Exception as e:          # uma loja com problemas não pára as outras
             import logging
             logging.getLogger(__name__).exception('subscrição %s: %s', pk, e)
     return resumo
 
 
-def textos(alvo):
-    """As palavras que mudam entre loja e POS nos avisos."""
+def textos(alvo, sub=None):
+    """As palavras que mudam entre loja, POS e o módulo Serviços nos avisos."""
+    if sub is not None and sub.servicos:
+        from ..servicos.cobranca import TEXTOS
+        return {**TEXTOS, 'nome': f'Serviços de {alvo.nome}'}
     if isinstance(alvo, Loja):
         return {'o': 'a loja', 'O': 'A loja', 'suspenso': 'suspensa', 'reactivado': 'reactivada',
                 'onde': 'Backoffice → Subscrição', 'nome': alvo.nome}
@@ -410,6 +434,8 @@ def _processar_uma(sub, d, resumo):
         loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
         _avisar_dono(loja, 'A loja passou para comissão',
                      f'A partir de hoje pagas {loja.percentagem_comissao}% por venda e deixas de ter mensalidade.')
+        from ..servicos.cobranca import loja_mudou_modelo
+        loja_mudou_modelo(loja)
         return
     if ciclo_faturas(sub, loja, d, resumo):
         from .subscricoes_pos import sincronizar_pos_da_loja
@@ -417,8 +443,8 @@ def _processar_uma(sub, d, resumo):
 
 
 def ciclo_faturas(sub, alvo, d, resumo):
-    """Passos 1–6 para uma loja ou um POS com plano. Devolve True se suspendeu."""
-    t = textos(alvo)
+    """Passos 1–6 para uma loja, um POS com plano ou o módulo Serviços. Devolve True se suspendeu a loja/POS."""
+    t = textos(alvo, sub)
 
     # 1. fim do teste
     if sub.estado == 'teste' and sub.teste_ate and d >= sub.teste_ate:
@@ -482,14 +508,16 @@ def ciclo_faturas(sub, alvo, d, resumo):
         if d >= limite and _marcar(f, 'suspensa'):
             sub.estado = 'suspensa'
             sub.save(update_fields=['estado', 'data_atualizacao'])
-            suspender(alvo, f'{MOTIVO_SUSPENSAO} (fatura #{f.id}, {_eur(f.valor)}).')
+            if not sub.servicos:                      # Serviços: o módulo pára (sub suspensa), a loja não
+                suspender(alvo, f'{MOTIVO_SUSPENSAO} (fatura #{f.id}, {_eur(f.valor)}).')
             _avisar_dono(alvo, f'{t["O"]} foi {t["suspenso"]} — subscrição por pagar',
                          f'A fatura de {_eur(f.valor)} venceu a {f.vencimento:%d/%m/%Y}. '
                          f'Paga em {t["onde"]} e {t["o"]} volta logo.')
-            _avisar_admins(alvo, f'{"Loja suspensa" if isinstance(alvo, Loja) else "POS suspenso"} automaticamente — {t["nome"]}',
+            _avisar_admins(alvo, f'{"Serviços suspensos" if sub.servicos else "Loja suspensa" if isinstance(alvo, Loja) else "POS suspenso"}'
+                                 f' automaticamente — {t["nome"]}',
                            f'Subscrição por pagar: fatura #{f.id}, {_eur(f.valor)}, vencida a {f.vencimento:%d/%m/%Y}.')
             resumo['suspensas'] += 1
-            return True
+            return not sub.servicos
     return False
 
 
@@ -502,20 +530,24 @@ def aviso_loja(sub, pendentes, quando=None):
         return None
     d = quando or hoje()
     pend = sorted(pendentes, key=lambda f: f.vencimento)
+    serv = sub.servicos
     if sub.estado == 'suspensa':
-        return {'tipo': 'suspensa', 'suspensao_em': None,
-                'texto': 'A loja está suspensa porque a subscrição não foi paga. Paga a fatura e a loja volta logo.'}
+        return {'tipo': 'suspensa', 'suspensao_em': None, 'servicos': serv,
+                'texto': 'O módulo Serviços está suspenso porque a subscrição não foi paga. Paga a fatura e volta logo.'
+                if serv else 'A loja está suspensa porque a subscrição não foi paga. Paga a fatura e a loja volta logo.'}
     vencidas = [f for f in pend if f.vencimento < d]
     if vencidas:
         limite = suspensao_em(vencidas[0])
-        return {'tipo': 'atraso', 'suspensao_em': limite.isoformat(),
-                'texto': f'Subscrição em atraso ({_eur(sum(f.valor for f in vencidas))}). Paga até {limite - timedelta(days=1):%d/%m/%Y} '
-                         f'— a {limite:%d/%m/%Y} a loja é suspensa.'}
+        return {'tipo': 'atraso', 'suspensao_em': limite.isoformat(), 'servicos': serv,
+                'texto': f'Subscrição {"de Serviços " if serv else ""}em atraso ({_eur(sum(f.valor for f in vencidas))}). '
+                         f'Paga até {limite - timedelta(days=1):%d/%m/%Y} '
+                         f'— a {limite:%d/%m/%Y} {"o módulo Serviços é suspenso" if serv else "a loja é suspensa"}.'}
     breve = [f for f in pend if (f.vencimento - d).days <= 3]
     if breve and not sub.auto_renovar:
         f = breve[0]
         quando_txt = 'hoje' if f.vencimento == d else f'a {f.vencimento:%d/%m/%Y}'
-        return {'tipo': 'vence', 'suspensao_em': None, 'texto': f'A fatura da subscrição ({_eur(f.valor)}) vence {quando_txt}.'}
+        return {'tipo': 'vence', 'suspensao_em': None, 'servicos': serv,
+                'texto': f'A fatura da subscrição {"de Serviços " if serv else ""}({_eur(f.valor)}) vence {quando_txt}.'}
     return None
 
 
@@ -667,7 +699,8 @@ def oferecer(sub, meses, motivo=''):
     inicio = sub.pago_ate if sub.plano_id else max(sub.pago_ate, hoje())
     fim = mais_meses(inicio, meses)
     f = FaturaSubscricao.objects.create(
-        loja_id=sub.loja_id, pos_id=sub.pos_id, subscricao=sub, plano=sub.plano, descricao=f'Oferta — {_descricao(sub.plano, inicio, fim)}',
+        loja_id=sub.loja_id or sub.loja_servicos_id, pos_id=sub.pos_id, subscricao=sub, plano=sub.plano,
+        descricao=f'Oferta — {_descricao(sub.plano, inicio, fim)}',
         periodo_inicio=inicio, periodo_fim=fim, valor=0, estado='paga', vencimento=inicio, paga_em=timezone.now(),
         metodo='oferta', notas=(motivo or 'Oferta da plataforma')[:300], avisos=['emitida'])
     sub.pago_ate = fim
@@ -758,7 +791,10 @@ def resumo_periodo(inicio, fim):
                            .values_list('estado').annotate(n=Count('id'))),
         # lojas vs POS: receita do período e como estão os POS hoje
         'por_alvo': {chave: {'valor': d2(x['v']), 'faturas': x['n']} for chave, x in (
-            ('lojas', pagas.exclude(metodo='oferta').filter(loja__isnull=False).aggregate(v=Sum('valor'), n=Count('id'))),
+            ('lojas', pagas.exclude(metodo='oferta').filter(loja__isnull=False, subscricao__loja_servicos__isnull=True)
+             .aggregate(v=Sum('valor'), n=Count('id'))),
+            ('servicos', pagas.exclude(metodo='oferta').filter(subscricao__loja_servicos__isnull=False)
+             .aggregate(v=Sum('valor'), n=Count('id'))),
             ('pos', pagas.exclude(metodo='oferta').filter(pos__isnull=False).aggregate(v=Sum('valor'), n=Count('id'))))},
         'pos': _resumo_pos(),
     }
