@@ -15,6 +15,10 @@ django-cors-headers==4.9.0
 channels==4.3.2
 channels-redis==4.3.0
 daphne==4.2.3
+# produção: gunicorn gere vários processos uvicorn (HTTP + WebSockets) — ver start_prod.sh no branch prod
+gunicorn==23.0.0
+uvicorn[standard]==0.34.0
+uvicorn-worker==0.3.0
 
 # Redis cache
 django-redis==5.4.0
