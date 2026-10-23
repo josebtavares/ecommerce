@@ -64,10 +64,10 @@
           </ul>
 
           <div class="nt-hero__ctas">
-            <button class="nt-btn nt-btn--cheio" @click="scrollToId(totalDestaques ? 'nt-epoca' : 'nt-bancas')">
-              {{ totalDestaques ? 'Ver o que é da época' : 'Ver produtos' }}
+            <button class="nt-btn nt-btn--cheio" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'nt-epoca' : 'nt-bancas')">
+              {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Ver o que é da época' : 'Ver produtos' }}
             </button>
-            <button class="nt-btn" @click="scrollToId('nt-catalogo')">Catálogo</button>
+            <button v-if="!soServicos" class="nt-btn" @click="scrollToId('nt-catalogo')">Catálogo</button>
           </div>
         </div>
 
@@ -85,7 +85,7 @@
             <text class="nt-selo__texto">
               <textPath href="#nt-circulo" textLength="272" lengthAdjust="spacing">{{ textoSelo }}</textPath>
             </text>
-            <text x="60" y="66" text-anchor="middle" class="nt-selo__num">{{ totalProdutos ?? '' }}</text>
+            <text x="60" y="66" text-anchor="middle" class="nt-selo__num">{{ soServicos ? totalServicos : (totalProdutos ?? '') }}</text>
           </svg>
         </div>
       </section>
@@ -198,7 +198,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="nt-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="nt-catalogo" class="nt-sec">
+        <section v-if="!soServicos" id="nt-catalogo" class="nt-sec">
           <header class="nt-sec__head">
             <div>
               <p class="nt-etiqueta">Pesquisa e filtros</p>
@@ -265,7 +265,7 @@
             <div class="nt-folha nt-folha--b">
               <p class="nt-folha__titulo">Pagamento</p>
               <div v-if="metodosPagamento.length" class="nt-folha__tags">
-                <span v-for="m in metodosPagamento" :key="m.id">{{ m.tipo }}</span>
+                <span v-for="m in metodosPagamento" :key="m.id">{{ m.nome }}</span>
               </div>
               <p v-else>—</p>
             </div>

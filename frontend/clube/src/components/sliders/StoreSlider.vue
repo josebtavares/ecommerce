@@ -1,15 +1,22 @@
 <template>
   <div v-if="lojas.length > 0 || loading" class="mb-10">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-2">
-        <span v-if="icon" class="w-8 h-8 rounded-lg flex items-center justify-center text-red-500" :class="isDark ? 'bg-red-500/10' : 'bg-red-50'"><font-awesome-icon :icon="['fas', icon]" class="w-3.5 h-3.5" /></span>
-        <h2 class="text-lg font-bold transition-colors"
-            :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ title }}</h2>
-        <span v-if="!loading" class="text-xs transition-colors"
-              :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">({{ total }})</span>
+    <div class="flex items-center justify-between mb-4 gap-3">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span v-if="icon" class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center text-red-500" :class="isDark ? 'bg-red-500/10' : 'bg-red-50'"><font-awesome-icon :icon="['fas', icon]" class="w-3.5 h-3.5" /></span>
+          <h2 class="text-lg font-bold truncate transition-colors"
+              :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ title }}</h2>
+          <span v-if="!loading" class="text-xs flex-shrink-0 transition-colors"
+                :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">({{ total }})</span>
+        </div>
+        <p v-if="subtitle" class="mt-0.5 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ subtitle }}</p>
       </div>
-      <slot name="header-right" />
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <slot name="header-right" />
+        <SetasSlider :anterior="podeAnterior" :seguinte="podeSeguinte" :isDark="isDark"
+          @anterior="anterior" @seguinte="seguinte" />
+      </div>
     </div>
 
     <!-- Skeleton -->
@@ -26,8 +33,15 @@
       :slides-per-view="'auto'"
       :space-between="20"
       :modules="swiperModules"
+      :free-mode="true"
+      :watch-overflow="true"
       class="pb-3"
+      @swiper="onSwiper"
       @reach-end="loadMore"
+      @slide-change="atualizarSetas"
+      @from-edge="atualizarSetas"
+      @to-edge="atualizarSetas"
+      @resize="atualizarSetas"
     >
       <swiper-slide v-for="loja in lojas" :key="loja.id" class="!w-64">
         <div
@@ -130,13 +144,15 @@ import 'swiper/css'
 import api from '@/services/api'
 import { DEFAULT_BANNER } from '@/services/media'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import SetasSlider from './SetasSlider.vue'
 
 export default {
   name: 'StoreSlider',
-  components: { Swiper, SwiperSlide, BotaoFavorito },
+  components: { Swiper, SwiperSlide, BotaoFavorito, SetasSlider },
 
   props: {
     title:    { type: String,  required: true },
+    subtitle: { type: String,  default: '' },
     icon:     { type: String,  default: '' },   // nome de ícone Font Awesome (solid)
     params:   { type: Object,  default: () => ({}) },
     endpoint: { type: String,  default: '/app/loja/' },
@@ -151,6 +167,9 @@ export default {
   data () {
     return {
       swiperModules: [FreeMode],
+      swiper: null,
+      podeAnterior: false,
+      podeSeguinte: false,
       lojas: [],
       offset: 0,
       total: 0,
@@ -198,7 +217,28 @@ export default {
       } finally {
         this.loading = false
         this.loadingMore = false
+        this.$nextTick(() => { this.swiper?.update(); this.atualizarSetas() })
       }
+    },
+
+    onSwiper (swiper) {
+      this.swiper = swiper
+      this.$nextTick(this.atualizarSetas)
+    },
+    atualizarSetas () {
+      if (!this.swiper) return
+      this.podeAnterior = !this.swiper.isBeginning
+      this.podeSeguinte = !this.swiper.isEnd || !this.reachedEnd
+    },
+    anterior () {
+      this.swiper?.slidePrev(300)
+      this.$nextTick(this.atualizarSetas)
+    },
+    seguinte () {
+      if (!this.swiper) return
+      if (this.swiper.isEnd) { this.loadMore(); return }
+      this.swiper.slideTo((this.swiper.activeIndex || 0) + 2, 300)
+      this.$nextTick(this.atualizarSetas)
     },
 
     loadMore () {

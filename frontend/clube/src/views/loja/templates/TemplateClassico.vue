@@ -146,11 +146,9 @@
               </button>
             </div>
             <div class="px-3 border-t pt-4" :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
-              <button @click="scrollToId('catalogo'); sidebarAberta = false"
+              <button @click="scrollToId(soServicos ? 'servicos' : 'catalogo'); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition text-left"
-                :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-gray-100'">
-                Catálogo completo
-              </button>
+                :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-gray-100'">{{ soServicos ? 'Serviços' : 'Catálogo completo' }}</button>
               <button @click="scrollToId('avaliacoes'); sidebarAberta = false"
                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition text-left"
                 :class="isDark ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100' : 'text-zinc-600 hover:bg-gray-100'">
@@ -190,7 +188,7 @@
                     <span v-for="m in metodosPagamento" :key="m.id"
                           class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
                           :class="isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-gray-100 text-zinc-600'">
-                      {{ m.tipo }}
+                      {{ m.nome }}
                     </span>
                   </div>
                 </div>
@@ -244,7 +242,7 @@
                 <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
               </div>
               <div v-for="cat in categoriasExistentes" :key="'cat-' + cat.id" :id="'cat-' + cat.id">
-                <ProductSlider :title="cat.nome"
+                <ProductSlider :title="cat.nome.charAt(0).toUpperCase() + cat.nome.slice(1)"
                   :params="{ loja_id: lojaId, categoria_id: cat.id }" :isDark="isDark"
                   @product-click="selectedProduct = $event" />
               </div>
@@ -253,11 +251,13 @@
             <!-- Serviços (marcações) -->
             <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="mt-10" />
 
-            <div id="catalogo" class="mt-10 mb-4">
-              <h2 class="text-xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Catálogo completo</h2>
-              <p class="text-sm mt-1" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">Filtra por tipo, categoria ou pesquisa</p>
-            </div>
-            <ProductCatalog :loja-id="lojaId" :isDark="isDark" @product-click="selectedProduct = $event" />
+            <template v-if="!soServicos">
+              <div id="catalogo" class="mt-10 mb-4">
+                <h2 class="text-xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Catálogo completo</h2>
+                <p class="text-sm mt-1" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">Filtra por tipo, categoria ou pesquisa</p>
+              </div>
+              <ProductCatalog :loja-id="lojaId" :isDark="isDark" @product-click="selectedProduct = $event" />
+            </template>
 
             <div id="avaliacoes" class="mt-10">
               <h2 class="text-xl font-bold mb-5" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Avaliações</h2>

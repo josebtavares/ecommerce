@@ -57,14 +57,14 @@
           <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
           <p v-if="loja.descricao" class="lx-hero__desc">{{ truncate(loja.descricao, 160) }}</p>
           <div class="lx-hero__ctas">
-            <button class="lx-btn lx-btn--ouro" @click="scrollToId(totalDestaques ? 'lx-vitrine' : 'lx-colecoes')">
-              {{ totalDestaques ? 'Descobrir a vitrine' : 'Ver as coleções' }}
+            <button class="lx-btn lx-btn--ouro" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'lx-vitrine' : 'lx-colecoes')">
+              {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Descobrir a vitrine' : 'Ver as coleções' }}
             </button>
-            <button class="lx-btn lx-btn--fino" @click="scrollToId('lx-catalogo')">Catálogo</button>
+            <button v-if="!soServicos" class="lx-btn lx-btn--fino" @click="scrollToId('lx-catalogo')">Catálogo</button>
           </div>
         </div>
 
-        <button class="lx-hero__desce" @click="scrollToId(totalDestaques ? 'lx-vitrine' : 'lx-colecoes')" aria-label="Descer">
+        <button class="lx-hero__desce" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'lx-vitrine' : 'lx-colecoes')" aria-label="Descer">
           <span></span>
         </button>
       </section>
@@ -73,8 +73,8 @@
       <div class="lx-dados">
         <div class="lx-wrap lx-dados__linha">
           <span v-if="loja.rating_medio"><em>{{ rating }}</em> avaliação · {{ loja.total_avaliacoes || 0 }}</span>
-          <span><em>{{ totalProdutos ?? '—' }}</em> peças</span>
-          <span>{{ textoEntrega }}</span>
+          <span><em>{{ soServicos ? totalServicos : (totalProdutos ?? '—') }}</em> {{ soServicos ? 'serviços' : 'peças' }}</span>
+          <span>{{ soServicos ? 'Marcações online' : textoEntrega }}</span>
         </div>
       </div>
 
@@ -186,7 +186,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="lx-sec" contido />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="lx-catalogo" class="lx-sec">
+        <section v-if="!soServicos" id="lx-catalogo" class="lx-sec">
           <div class="lx-wrap">
             <header class="lx-titulo">
               <p class="lx-versal">Todas as peças</p>
@@ -253,7 +253,7 @@
               <div>
                 <span class="lx-concierge__num">II</span>
                 <p class="lx-versal">Pagamento</p>
-                <p v-if="metodosPagamento.length" class="lx-concierge__metodos">{{ metodosPagamento.map(m => m.tipo).join(' · ') }}</p>
+                <p v-if="metodosPagamento.length" class="lx-concierge__metodos">{{ metodosPagamento.map(m => m.nome).join(' · ') }}</p>
                 <p v-else>—</p>
               </div>
               <div>

@@ -130,13 +130,11 @@
               </p>
 
               <div class="editorial-hero__ctas">
-                <button @click="scrollToId('edit-colecao')" class="editorial-btn-primary">
-                  Ver Coleção →
+                <button @click="scrollToId(soServicos ? 'servicos' : 'edit-colecao')" class="editorial-btn-primary">
+                  {{ soServicos ? 'Ver serviços' : 'Ver Coleção' }} →
                 </button>
 
-                <button @click="scrollToId('edit-catalogo')" class="editorial-btn-ghost">
-                  Catálogo
-                </button>
+                <button v-if="!soServicos" @click="scrollToId('edit-catalogo')" class="editorial-btn-ghost">Catálogo</button>
               </div>
             </div>
 
@@ -184,7 +182,7 @@
             Sobre
           </button>
 
-          <button
+          <button v-if="!soServicos"
             class="editorial-nav__item"
             :class="{ 'editorial-nav__item--active': activeSection === 'edit-colecao' }"
             @click="scrollToId('edit-colecao')"
@@ -215,10 +213,8 @@
           <button
             class="editorial-nav__item"
             :class="{ 'editorial-nav__item--active': activeSection === 'edit-catalogo' }"
-            @click="scrollToId('edit-catalogo')"
-          >
-            Catálogo
-          </button>
+            @click="scrollToId(soServicos ? 'servicos' : 'edit-catalogo')"
+          >{{ soServicos ? 'Serviços' : 'Catálogo' }}</button>
 
           <button
             class="editorial-nav__item"
@@ -274,7 +270,7 @@
                         :key="m.id"
                         class="editorial-chip"
                       >
-                        {{ m.tipo }}
+                        {{ m.nome }}
                       </span>
                     </div>
                   </div>
@@ -420,7 +416,7 @@
           <div class="editorial-section__grid">
             <div class="editorial-section__num-col">
               <span class="editorial-section__num editorial-section__num--text">
-                CATALOG
+                {{ soServicos ? 'SERVICES' : 'CATALOG' }}
               </span>
             </div>
 
@@ -428,6 +424,7 @@
               <!-- Serviços (marcações) -->
               <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="mb-12" />
 
+              <template v-if="!soServicos">
               <div class="editorial-section__header">
                 <div>
                   <div class="editorial-section__sub">Full Collection</div>
@@ -459,6 +456,7 @@
                 :show-category-badges="false"
                 @product-click="selectedProduct = $event"
               />
+              </template>
             </div>
           </div>
         </section>

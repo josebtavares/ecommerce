@@ -45,7 +45,7 @@
         <nav class="ts-bar__links">
           <button v-if="totalDestaques" @click="scrollToId('ts-destaques')">Destaques</button>
           <button v-if="grupos.length" @click="scrollToId('ts-explorar')">Explorar</button>
-          <button @click="scrollToId('ts-catalogo')">Catálogo</button>
+          <button @click="scrollToId(soServicos ? 'servicos' : 'ts-catalogo')">{{ soServicos ? 'Serviços' : 'Catálogo' }}</button>
           <button @click="scrollToId('ts-avaliacoes')">Avaliações</button>
         </nav>
       </header>
@@ -72,8 +72,8 @@
                 </dd>
               </div>
               <div>
-                <dt class="ts-mono">Produtos</dt>
-                <dd>{{ totalProdutos ?? '—' }}<span class="ts-specs__nota">{{ grupos.length }} {{ grupos.length === 1 ? 'secção' : 'secções' }}</span></dd>
+                <dt class="ts-mono">{{ soServicos ? 'Serviços' : 'Produtos' }}</dt>
+                <dd>{{ soServicos ? totalServicos : (totalProdutos ?? '—') }}<span v-if="!soServicos" class="ts-specs__nota">{{ grupos.length }} {{ grupos.length === 1 ? 'secção' : 'secções' }}</span></dd>
               </div>
               <div>
                 <dt class="ts-mono">Entrega</dt>
@@ -86,11 +86,11 @@
             </dl>
 
             <div class="ts-hero__ctas">
-              <button class="ts-btn ts-btn--cor" @click="scrollToId(grupos.length ? 'ts-explorar' : 'ts-catalogo')">
-                Explorar produtos
+              <button class="ts-btn ts-btn--cor" @click="scrollToId(soServicos ? 'servicos' : grupos.length ? 'ts-explorar' : 'ts-catalogo')">
+                {{ soServicos ? 'Ver serviços' : 'Explorar produtos' }}
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               </button>
-              <button class="ts-btn" @click="scrollToId('ts-catalogo')">Pesquisar no catálogo</button>
+              <button v-if="!soServicos" class="ts-btn" @click="scrollToId('ts-catalogo')">Pesquisar no catálogo</button>
             </div>
           </div>
 
@@ -243,7 +243,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="ts-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="ts-catalogo" class="ts-sec">
+        <section v-if="!soServicos" id="ts-catalogo" class="ts-sec">
           <header class="ts-sec__head">
             <div>
               <p class="ts-eyebrow ts-mono">Pesquisa e filtros</p>
@@ -310,7 +310,7 @@
             <div class="ts-servico__col">
               <p class="ts-servico__titulo ts-mono">Pagamento</p>
               <div v-if="metodosPagamento.length" class="ts-servico__tags">
-                <span v-for="m in metodosPagamento" :key="m.id" class="ts-mono">{{ m.tipo }}</span>
+                <span v-for="m in metodosPagamento" :key="m.id" class="ts-mono">{{ m.nome }}</span>
               </div>
               <p v-else>—</p>
             </div>

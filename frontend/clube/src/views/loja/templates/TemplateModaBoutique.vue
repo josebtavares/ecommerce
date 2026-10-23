@@ -57,16 +57,16 @@
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
             <div class="bt-montra__ctas">
-              <button class="bt-btn bt-btn--claro" @click="scrollToId(totalDestaques ? 'bt-novidades' : 'bt-provador')">
-                {{ totalDestaques ? 'Ver novidades' : 'Ver coleção' }}
+              <button class="bt-btn bt-btn--claro" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'bt-novidades' : 'bt-provador')">
+                {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Ver novidades' : 'Ver coleção' }}
               </button>
-              <button class="bt-btn bt-btn--vidro" @click="scrollToId('bt-catalogo')">Catálogo</button>
+              <button v-if="!soServicos" class="bt-btn bt-btn--vidro" @click="scrollToId('bt-catalogo')">Catálogo</button>
             </div>
           </div>
 
           <div class="bt-etiqueta bt-etiqueta--grande" aria-hidden="true">
             <span class="bt-etiqueta__topo">Coleção</span>
-            <span class="bt-etiqueta__valor">{{ totalProdutos ?? '—' }} peças</span>
+            <span class="bt-etiqueta__valor">{{ soServicos ? `${totalServicos} serviços` : `${totalProdutos ?? '—'} peças` }}</span>
           </div>
         </div>
 
@@ -194,7 +194,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="bt-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="bt-catalogo" class="bt-sec">
+        <section v-if="!soServicos" id="bt-catalogo" class="bt-sec">
           <header class="bt-titulo">
             <p class="bt-sobre">Todas as peças</p>
             <h2>Catálogo</h2>
@@ -257,7 +257,7 @@
             <div class="bt-costura">
               <p class="bt-costura__titulo">Pagamento</p>
               <div v-if="metodosPagamento.length" class="bt-costura__tags">
-                <span v-for="m in metodosPagamento" :key="m.id">{{ m.tipo }}</span>
+                <span v-for="m in metodosPagamento" :key="m.id">{{ m.nome }}</span>
               </div>
               <p v-else>—</p>
             </div>

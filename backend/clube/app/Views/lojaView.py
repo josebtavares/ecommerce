@@ -112,8 +112,14 @@ def loja_get(request, id):
                 return Response({'detail': 'Esta loja está temporariamente fechada.',
                                  'estado': 'fechada', 'nome': loja.nome}, status=404)
             return Response({'detail': 'Loja não encontrada.'}, status=404)
-    
-    return Response(LojaPublicSerializer(loja, context={'request': request}).data)
+
+    from ..servicos import cobranca as servicos_cobranca
+    dados = LojaPublicSerializer(loja, context={'request': request}).data
+    # serviços que se podem marcar agora (com o total de produtos, os templates escondem o catálogo vazio de uma
+    # loja só de serviços e contam serviços em vez de produtos)
+    dados['total_servicos'] = servicos_cobranca.servicos_publicos().filter(loja=loja).count()
+    dados['tem_servicos'] = dados['total_servicos'] > 0
+    return Response(dados)
 
 
 # ══════════════════════════════════════════════════════════════

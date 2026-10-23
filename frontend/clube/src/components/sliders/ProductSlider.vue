@@ -2,90 +2,22 @@
   <div v-if="produtos.length > 0 || loading" :class="['mb-10', containerClass]">
     <!-- Header -->
     <div class="flex items-center justify-between mb-4 gap-3">
-      <div class="flex items-center gap-2 min-w-0">
-        <!--<span v-if="icon" :class="['text-xl', iconClass]">{{ icon }}</span> -->
-
-        <h2
-          :class="[
-            'font-bold truncate',
-            titleSize,
-            isDark ? 'text-zinc-100' : 'text-zinc-900',
-            titleClass
-          ]"
-        >
-          {{ title }}
-        </h2>
-
-        <span
-          v-if="!loading"
-          :class="[
-            'text-xs flex-shrink-0',
-            isDark ? 'text-zinc-600' : 'text-zinc-400',
-            countClass
-          ]"
-        >
-          ({{ total }})
-        </span>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <h2 :class="['font-bold truncate', titleSize, isDark ? 'text-zinc-100' : 'text-zinc-900', titleClass]">
+            {{ title }}
+          </h2>
+          <span v-if="!loading" :class="['text-xs flex-shrink-0', isDark ? 'text-zinc-600' : 'text-zinc-400', countClass]">
+            ({{ total }})
+          </span>
+        </div>
+        <p v-if="subtitle" class="mt-0.5 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ subtitle }}</p>
       </div>
 
       <div class="flex items-center gap-2 flex-shrink-0">
         <slot name="header-right" />
-
-        <!-- Slider controls -->
-        <div
-          v-if="showControls"
-          class="flex items-center gap-1.5"
-        >
-          <button
-            type="button"
-            class="product-slider-control"
-            :class="[
-              isDark
-                ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
-                : 'bg-white border-gray-200 text-zinc-600 hover:bg-gray-50 hover:text-zinc-900 hover:border-gray-300 shadow-sm',
-              !canSlidePrev ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
-            ]"
-            :disabled="!canSlidePrev"
-            aria-label="Scroll left"
-            @click="slidePrev"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-
-          <button
-            type="button"
-            class="product-slider-control"
-            :class="[
-              isDark
-                ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
-                : 'bg-white border-gray-200 text-zinc-600 hover:bg-gray-50 hover:text-zinc-900 hover:border-gray-300 shadow-sm',
-              !canSlideNext ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
-            ]"
-            :disabled="!canSlideNext"
-            aria-label="Scroll right"
-            @click="slideNext"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
+        <SetasSlider v-if="showControls" :anterior="canSlidePrev" :seguinte="canSlideNext" :isDark="isDark"
+          @anterior="slidePrev" @seguinte="slideNext" />
       </div>
     </div>
 
@@ -233,6 +165,7 @@ import 'swiper/css'
 import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import SetasSlider from './SetasSlider.vue'
 
 export default {
   name: 'ProductSlider',
@@ -241,11 +174,13 @@ export default {
     Swiper,
     SwiperSlide,
     BotaoFavorito,
+    SetasSlider,
   },
 
   props: {
     // Core
     title: { type: String, required: true },
+    subtitle: { type: String, default: '' },
     icon: { type: String, default: '' },
     params: { type: Object, default: () => ({}) },
     endpoint: { type: String, default: '/app/produto/' },
@@ -440,37 +375,5 @@ export default {
 <style scoped>
 .product-slider-swiper {
   overflow: hidden !important;
-}
-
-.product-slider-control {
-  width: 34px;
-  height: 34px;
-  border-width: 1px;
-  border-style: solid;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease,
-    opacity 180ms ease,
-    transform 180ms ease;
-}
-
-.product-slider-control:hover {
-  transform: translateY(-1px);
-}
-
-.product-slider-control:active {
-  transform: translateY(0);
-}
-
-@media (max-width: 520px) {
-  .product-slider-control {
-    width: 32px;
-    height: 32px;
-  }
 }
 </style>
