@@ -279,8 +279,7 @@
 
           <!-- Lojas -->
           <section v-else-if="sec.tipo === 'lojas'" class="py-8 px-6 md:px-12">
-            <p v-if="sec.subtitulo" class="-mb-2 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ sec.subtitulo }}</p>
-            <StoreSlider :title="sec.titulo || 'Lojas'"
+            <StoreSlider :title="sec.titulo || 'Lojas'" :subtitle="sec.subtitulo || ''"
               :inicial="sec.pagina" :endpoint="endpointSeccao(sec.id)"
               :isDark="isDark" @store-click="goToStore($event.id)" />
           </section>
@@ -288,7 +287,7 @@
           <!-- Produtos -->
           <section v-else-if="sec.tipo === 'produtos'" data-produtos class="py-4 px-6 md:px-12"
                    :class="isDark ? 'bg-zinc-900/50' : 'bg-white'">
-            <ProductSlider :title="sec.titulo || 'Produtos'"
+            <ProductSlider :title="sec.titulo || 'Produtos'" :subtitle="sec.subtitulo || ''"
               :inicial="sec.pagina" :endpoint="endpointSeccao(sec.id)"
               :isDark="isDark" @product-click="openProduct($event)" />
           </section>
