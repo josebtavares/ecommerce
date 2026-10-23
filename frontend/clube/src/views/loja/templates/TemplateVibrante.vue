@@ -175,6 +175,9 @@
           </ProdutosPaginados>
         </section>
 
+        <!-- ══ SERVIÇOS ══ -->
+        <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="vb-sec" />
+
         <!-- ══ CATÁLOGO ══ -->
         <section id="vb-catalogo" class="vb-sec">
           <header class="vb-sec__head">
@@ -314,6 +317,7 @@ import ProductInfoCard from '@/components/product/productInfoCard.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import SeccaoServicos from '@/components/servicos/loja/SeccaoServicos.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
@@ -321,7 +325,7 @@ import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 export default {
   name: 'TemplateVibrante',
 
-  components: { ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
+  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

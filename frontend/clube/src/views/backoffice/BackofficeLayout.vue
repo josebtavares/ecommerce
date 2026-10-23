@@ -124,7 +124,7 @@
       </div>
 
       <!-- Subscrição em atraso / a vencer (a loja continua a funcionar) -->
-      <div v-if="avisoSub && avisoSub.tipo !== 'suspensa' && loja?.estado === 'ativa'" role="alert"
+      <div v-if="avisoSub && (avisoSub.tipo !== 'suspensa' || avisoSub.servicos) && loja?.estado === 'ativa'" role="alert"
            :class="['mx-4 lg:mx-6 mt-4 px-4 py-3 rounded-xl border text-sm flex flex-col sm:flex-row sm:items-center gap-3',
                     avisoSub.tipo === 'atraso' ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-200']">
         <font-awesome-icon :icon="['fas', avisoSub.tipo === 'atraso' ? 'triangle-exclamation' : 'clock']" class="w-4 h-4 flex-shrink-0 hidden sm:block" />
@@ -168,6 +168,9 @@
         <BackofficeCategorias    v-else-if="activeSection === 'categorias'"    :loja-id="lojaId" />
         <BackofficeTemplates     v-else-if="activeSection === 'templates'"     :loja-id="lojaId" />
         <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
+        <BackofficeServicos      v-else-if="activeSection === 'servicos'"      :loja-id="lojaId"
+                                 :so-agenda="!permissoes.includes('gerir_marcacoes')"
+                                 @ver-subscricao="activeSection = 'subscricao'" />
       </main>
     </div>
 
@@ -191,6 +194,7 @@ import BackofficeTemplates       from './BackofficeTemplates.vue'
 import BackofficeMensagens      from './BackofficeMensagens.vue'
 import BackofficeSubscricao     from './BackofficeSubscricao.vue'
 import BackofficeDevolucoes     from './BackofficeDevolucoes.vue'
+import BackofficeServicos       from './BackofficeServicos.vue'
 import ModuloRelatorios         from '@/components/relatorios/ModuloRelatorios.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
@@ -202,15 +206,16 @@ const PERMISSOES = {
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
-    'ver_subscricao','pagar_subscricao',
+    'ver_subscricao','pagar_subscricao','gerir_servicos','gerir_marcacoes',
   ],
   gestor: [
     'ver_loja','editar_loja','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template', 'ver_subscricao',
+    'gerir_servicos','gerir_marcacoes',
   ],
-  staff:        ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas'],
+  staff:        ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas','gerir_marcacoes'],
   contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios','ver_subscricao'],
   condutor:     ['gerir_entregas'],
 }
@@ -227,6 +232,7 @@ const SECCOES = [
   { key: 'categorias',    label: 'Categorias',        icon: 'category',  permissao: 'gerir_produtos'   },
   { key: 'produtos',      label: 'Produtos',          icon: 'box',       permissao: 'gerir_produtos'   },
   { key: 'inventario',    label: 'Inventário',        icon: 'inventory', permissao: 'gerir_inventario' },
+  { key: 'servicos',      label: 'Serviços',          icon: 'calendar',  permissao: 'gerir_marcacoes'  },
   { key: 'staff',         label: 'Staff',             icon: 'staff',     permissao: 'gerir_staff'      },
   { key: 'templates',     label: 'Templates',         icon: 'template',  permissao: 'gerir_template'   },
   { key: 'configuracoes', label: 'Configurações',     icon: 'settings',  permissao: 'editar_loja'      },
@@ -240,7 +246,7 @@ export default {
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
-    BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes,
+    BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes, BackofficeServicos,
   },
 
   data () {
@@ -261,7 +267,9 @@ export default {
     lojaId ()      { return this.$route.params.id },
     role ()        { return this.loja?.minha_role || '' },
     permissoes ()  { return PERMISSOES[this.role] || [] },
-    navItems ()    { return SECCOES.filter(s => s.permissao === null ? !!this.role : this.permissoes.includes(s.permissao)) },
+    navItems ()    { return SECCOES.filter(s => this.temPermissao(s.key)) },
+    // um profissional com conta vê a sua agenda mesmo sem gerir_marcacoes
+    meuProfissional () { return !!this.loja?.servicos?.meu_profissional_id },
     naoLidasChat () {
       const c = chat.caixas.find(x => x.tipo === 'loja' && String(x.loja_id) === String(this.lojaId))
       return c ? c.nao_lidas : 0
@@ -333,6 +341,7 @@ export default {
       const seccao = SECCOES.find(s => s.key === seccaoKey)
       if (!seccao) return false
       if (seccao.permissao === null) return !!this.role      // qualquer membro (ex.: mensagens)
+      if (seccao.key === 'servicos' && this.meuProfissional) return true
       return this.permissoes.includes(seccao.permissao)
     },
 
@@ -370,10 +379,11 @@ export default {
 
     async fetchAvisoSub () {
       const perms = PERMISSOES[this.loja?.minha_role] || []
-      if (this.loja?.modelo_cobranca !== 'subscricao' || !perms.includes('ver_subscricao')) { this.avisoSub = null; return }
+      if (!perms.includes('ver_subscricao')) { this.avisoSub = null; return }
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/subscricao/`)
-        this.avisoSub = data.aviso
+        // a da loja manda; senão a da subscrição de Serviços (só o módulo, a loja continua)
+        this.avisoSub = data.aviso || data.servicos?.aviso || null
       } catch (e) { this.avisoSub = null }
     },
 
@@ -386,12 +396,11 @@ export default {
         this.fetchDevolucoes()
         // só escolhe a secção inicial na 1.ª carga (ou se a actual deixou de ser permitida) —
         // recarregar a loja depois de guardar não deve mudar de secção
-        const permitidas = PERMISSOES[data.minha_role] || []
         const atual = SECCOES.find(s => s.key === this.activeSection)
-        if (!this.seccaoEscolhida || !atual || !permitidas.includes(atual.permissao)) {
+        if (!this.seccaoEscolhida || !atual || !this.temPermissao(atual.key)) {
           // ?seccao= (links das notificações) manda, se o membro tiver acesso
-          const pedida = SECCOES.find(s => s.key === this.$route.query.seccao && permitidas.includes(s.permissao))
-          const primeira = pedida || SECCOES.find(s => permitidas.includes(s.permissao))
+          const pedida = SECCOES.find(s => s.key === this.$route.query.seccao && this.temPermissao(s.key))
+          const primeira = pedida || SECCOES.find(s => s.permissao !== null && this.temPermissao(s.key))
           if (primeira) this.activeSection = primeira.key
           this.seccaoEscolhida = true
         }

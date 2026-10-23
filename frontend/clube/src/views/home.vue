@@ -305,6 +305,11 @@
               :isDark="isDark" @escolher="filtrarCatalogo" />
           </section>
 
+          <!-- Serviços (marcações) -->
+          <section v-else-if="sec.tipo === 'servicos'" class="py-8 px-6 md:px-12" data-teste="home-servicos">
+            <HomeServicos :titulo="sec.titulo" :subtitulo="sec.subtitulo" :servicos="sec.servicos" :isDark="isDark" />
+          </section>
+
           <!-- Banners -->
           <section v-else-if="sec.tipo === 'banner'" class="py-8 px-6 md:px-12">
             <HomeBanners :banners="sec.banners" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
@@ -375,6 +380,7 @@ import MultiCart       from '@/components/cart/multiCart.vue'
 import StoreSlider     from '@/components/sliders/StoreSlider.vue'
 import ProductSlider   from '@/components/sliders/ProductSlider.vue'
 import StoreCatalog    from '@/components/catalog/StoreCatalog.vue'
+import HomeServicos    from '@/components/home/HomeServicos.vue'
 import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
 import HomeCategorias from '@/components/home/HomeCategorias.vue'
@@ -388,6 +394,7 @@ import { iconeCategoria } from '@/utils/icones'
 export default {
   name: 'AppHome',
   components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, PaginaInfoModal,
+    HomeServicos,
                 HomeLojaDestaque, HomeCategorias, HomeBanners },
 
   data () {

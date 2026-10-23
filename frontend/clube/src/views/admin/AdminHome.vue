@@ -153,6 +153,10 @@
             </div>
           </div>
 
+          <p v-if="form.tipo === 'servicos'" class="text-[11px] text-zinc-500" data-teste="home-servicos">
+            Só aparecem serviços de lojas com marcações abertas; sem nenhum, a secção não aparece. Cada cartão abre a loja com o serviço pronto a marcar.
+          </p>
+
           <!-- conteúdo: hero / lojas / produtos -->
           <template v-if="TEM_FONTE.includes(form.tipo)">
             <div>
@@ -332,7 +336,7 @@
             <div class="space-y-2">
               <div v-for="(it, k) in form.itens" :key="it._k" class="bg-zinc-800 border border-zinc-700 rounded-xl p-2.5">
                 <div class="flex items-center gap-2">
-                  <font-awesome-icon :icon="['fas', it.loja_id ? 'store' : it.produto_id ? 'box' : 'image']" class="text-zinc-500 w-3.5" />
+                  <font-awesome-icon :icon="['fas', it.loja_id ? 'store' : it.produto_id ? 'box' : it.servico_id ? 'calendar-check' : 'image']" class="text-zinc-500 w-3.5" />
                   <div class="flex-1 min-w-0">
                     <p class="text-sm text-zinc-100 truncate">{{ nomeItem(it) }}</p>
                     <p v-if="avisoItem(it)" class="text-[11px] text-amber-400">{{ avisoItem(it) }}</p>
@@ -341,7 +345,7 @@
                   <button @click="moverItem(k, 1)" :disabled="k === form.itens.length - 1" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition" aria-label="Descer"><font-awesome-icon :icon="['fas', 'chevron-down']" /></button>
                   <button @click="form.itens.splice(k, 1)" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-red-400 disabled:opacity-20 transition" aria-label="Remover"><font-awesome-icon :icon="['fas', 'xmark']" /></button>
                 </div>
-                <div v-if="form.tipo === 'hero' || !it.loja_id && !it.produto_id" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                <div v-if="form.tipo === 'hero' || !it.loja_id && !it.produto_id && !it.servico_id" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                   <input v-model="it.titulo" maxlength="120" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
                          :placeholder="it.loja_id || it.produto_id ? 'Título no hero (opcional)' : 'Título do banner (opcional com imagem)'" />
                   <input v-model="it.texto" maxlength="300" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
@@ -376,7 +380,7 @@
               </button>
               <Procurar v-else class="flex-1" :tipo="generoNovo" :limpar="true"
                 :loja-id="form.tipo === 'loja_destaque' ? form.parametros.loja_id : null"
-                @escolher="x => adicionarItem(generoNovo === 'loja' ? { loja_id: x.id, loja: x } : { produto_id: x.id, produto: x })" />
+                @escolher="x => adicionarItem(generoNovo === 'loja' ? { loja_id: x.id, loja: x } : generoNovo === 'servico' ? { servico_id: x.id, servico: x } : { produto_id: x.id, produto: x })" />
             </div>
           </div>
 
@@ -471,6 +475,7 @@ import { toast } from 'vue3-toastify'
 import Procurar from '@/components/admin/HomeProcurar.vue'
 
 const ICONES = {
+  servicos: 'calendar-check',
   hero: 'panorama', lojas: 'store', produtos: 'box', loja_destaque: 'star', categorias: 'table-cells',
   banner: 'image', cabecalho: 'heading', lojas_por_categoria: 'layer-group', produtos_por_tipo: 'shapes',
   produtos_categorias_destaque: 'fire',
@@ -486,6 +491,7 @@ const DESCRICAO_TIPO = {
   loja_destaque: 'Bloco grande de uma loja com alguns produtos.',
   categorias: 'Grelha de categorias de lojas.',
   banner: 'Faixa promocional com link.',
+  servicos: 'Slider de serviços (marcações): escolhidos ou por critério (novos, mais marcados, de uma loja).',
 }
 const DESCRICAO_FONTE = {
   manual: 'Só os que escolheres, pela tua ordem.',
@@ -497,9 +503,10 @@ const DESCRICAO_GRUPO = {
   produtos_por_tipo: 'Mostra um slider por cada tipo global de produto com produtos visíveis.',
   produtos_categorias_destaque: 'Mostra um slider por cada categoria em Admin → Categorias em Destaque.',
 }
-const TEM_FONTE = ['hero', 'lojas', 'produtos']
+const TEM_FONTE = ['hero', 'lojas', 'produtos', 'servicos']
 const GRUPOS = ['lojas_por_categoria', 'produtos_por_tipo', 'produtos_categorias_destaque']
-const ITENS_POR_TIPO = { hero: ['loja', 'produto', 'banner'], lojas: ['loja'], produtos: ['produto'], loja_destaque: ['produto'], banner: ['banner'] }
+const ITENS_POR_TIPO = { hero: ['loja', 'produto', 'banner'], lojas: ['loja'], produtos: ['produto'], loja_destaque: ['produto'], banner: ['banner'],
+  servicos: ['servico'] }
 const NOVA = {
   hero: { fonte: 'auto', criterio: 'novas' },
   lojas: { titulo: 'Lojas populares', fonte: 'auto', criterio: 'populares' },
@@ -507,6 +514,7 @@ const NOVA = {
   cabecalho: { titulo: 'Nova secção', parametros: { estilo_titulo: 'titulo' } },
   lojas_por_categoria: {}, produtos_por_tipo: {}, produtos_categorias_destaque: {},
   loja_destaque: {}, categorias: {}, banner: { fonte: 'manual' },
+  servicos: { titulo: 'Marca um serviço', fonte: 'auto', criterio: 'novos' },
 }
 const MAX_SECCOES = 40
 const MAX_ITENS = 50
@@ -532,7 +540,7 @@ export default {
     return {
       ICONES, DESCRICAO_TIPO, DESCRICAO_FONTE, DESCRICAO_GRUPO, TEM_FONTE, GRUPOS, MAX_SECCOES, MAX_ITENS,
       seccoes: [],
-      opcoes: { fontes: [], tipos: [], criterios_lojas: [], criterios_produtos: [], categorias_lojas: [], tipos_produto: [], categorias_destaque: [] },
+      opcoes: { fontes: [], tipos: [], criterios_lojas: [], criterios_produtos: [], criterios_servicos: [], categorias_lojas: [], tipos_produto: [], categorias_destaque: [] },
       publicacao: null,
       temAlteracoes: false,
       selecionadaId: null,
@@ -557,7 +565,10 @@ export default {
     selecionada () { return this.seccoes.find(s => s.id === this.selecionadaId) || null },
     formSujo () { return !!this.form && JSON.stringify(this.payload()) !== this.original },
     eLojas () { return this.form && ['hero', 'lojas'].includes(this.form.tipo) },
-    criteriosDoTipo () { return this.eLojas ? this.opcoes.criterios_lojas : this.opcoes.criterios_produtos },
+    criteriosDoTipo () {
+      if (this.form?.tipo === 'servicos') return this.opcoes.criterios_servicos
+      return this.eLojas ? this.opcoes.criterios_lojas : this.opcoes.criterios_produtos
+    },
     generosItens () { return this.form ? (ITENS_POR_TIPO[this.form.tipo] || []) : [] },
     aceitaItens () {
       if (!this.form || !this.generosItens.length) return false
@@ -590,6 +601,8 @@ export default {
         else partes.push(crit || 'Automático')
       } else if (s.tipo === 'loja_destaque' && !s.parametros?.loja_id && s.criterio) {
         partes.push(`Automática: ${this.opcoes.criterios_lojas.find(c => c.valor === s.criterio)?.nome || s.criterio}`)
+      } else if (s.tipo === 'servicos') {
+        partes.push(this.opcoes.criterios_servicos.find(c => c.valor === s.criterio)?.nome || 'Serviços')
       } else partes.push(s.tipo_nome)
       if (s.parametros?.sem_repetidos) partes.push('sem repetidos')
       if (s.parametros?.minimo > 1) partes.push(`mín. ${s.parametros.minimo}`)
@@ -697,7 +710,7 @@ export default {
         fonte: f.fonte,
         criterio: (TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual') || (f.tipo === 'loja_destaque' && f.destaqueAuto) ? (f.criterio || '') : '',
         limite: f.limite, parametros: this.parametrosLimpos(),
-        itens: comItens ? f.itens.map(i => ({ loja_id: i.loja_id || null, produto_id: i.produto_id || null,
+        itens: comItens ? f.itens.map(i => ({ loja_id: i.loja_id || null, produto_id: i.produto_id || null, servico_id: i.servico_id || null,
                                                imagem_id: i.imagem_id || null,
                                                titulo: i.titulo || '', texto: i.texto || '', link: i.link || '' })) : [],
       }
@@ -794,9 +807,10 @@ export default {
 
     adicionarItem (dados) {
       const repetido = (dados.loja_id && this.form.itens.some(i => i.loja_id === dados.loja_id)) ||
-                       (dados.produto_id && this.form.itens.some(i => i.produto_id === dados.produto_id))
+                       (dados.produto_id && this.form.itens.some(i => i.produto_id === dados.produto_id)) ||
+                       (dados.servico_id && this.form.itens.some(i => i.servico_id === dados.servico_id))
       if (repetido) { toast.info('Já está na lista.'); return }
-      this.form.itens.push({ loja_id: null, produto_id: null, imagem_id: null, imagem_url: '', titulo: '', texto: '', link: '', ...dados, _k: ++uid })
+      this.form.itens.push({ loja_id: null, produto_id: null, servico_id: null, imagem_id: null, imagem_url: '', titulo: '', texto: '', link: '', ...dados, _k: ++uid })
     },
 
     moverItem (k, d) {
@@ -846,12 +860,14 @@ export default {
     nomeItem (it) {
       if (it.loja_id) return it.loja?.nome || `Loja #${it.loja_id}`
       if (it.produto_id) return it.produto ? `${it.produto.nome} — ${it.produto.loja}` : `Produto #${it.produto_id}`
+      if (it.servico_id) return it.servico ? `${it.servico.nome} — ${it.servico.loja}` : `Serviço #${it.servico_id}`
       return it.titulo || (it.imagem_id ? 'Banner com imagem' : 'Banner sem título')
     },
 
     avisoItem (it) {
       if (it.loja && !it.loja.ativa) return `Loja ${it.loja.estado}: não aparece na home.`
       if (it.produto && (!it.produto.ativo || !it.produto.loja_ativa)) return 'Produto escondido ou loja não activa: não aparece.'
+      if (it.servico && (!it.servico.ativo || !it.servico.loja_ativa)) return 'Serviço inactivo ou loja não activa: não aparece.'
       return ''
     },
 

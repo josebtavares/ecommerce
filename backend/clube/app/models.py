@@ -321,6 +321,9 @@ class Loja(models.Model):
             self.estado_motivo      = motivo or ''
             self.estado_alterado_em = now()
             self.save(update_fields=['estado', 'estado_motivo', 'estado_alterado_em', 'ativa'])
+            # serviços: os clientes com marcações futuras sabem que a loja fechou (ou voltou)
+            from .servicos.ciclo import sincronizar_depois
+            sincronizar_depois(self)
             return cancelar_pendentes_da_loja(self) if novo != 'ativa' else 0
 
 
@@ -359,6 +362,8 @@ class UtilizadorLoja(models.Model):
             'gerir_metodos_pagamento',
             'gerir_opcoes_entrega',
             'gerir_template',
+            'gerir_servicos',
+            'gerir_marcacoes',
         ],
         'gestor': [
             'ver_loja',
@@ -376,12 +381,15 @@ class UtilizadorLoja(models.Model):
             'gerir_metodos_pagamento',
             'gerir_opcoes_entrega',
             'gerir_template',
+            'gerir_servicos',
+            'gerir_marcacoes',
         ],
         'staff': [
             'ver_loja',
             'gerir_produtos',
             'gerir_inventario',
             'gerir_encomendas',
+            'gerir_marcacoes',
         ],
         'contabilista': [
             'ver_loja',
@@ -1569,7 +1577,7 @@ class PlanoSubscricao(models.Model):
     PERIODICIDADES = [('mensal', 'Mensal'), ('trimestral', 'Trimestral'), ('anual', 'Anual')]
     MESES = {'mensal': 1, 'trimestral': 3, 'anual': 12}
     # o que o plano cobre: a loja online, o POS, ou a loja e o POS ligado a ela
-    TIPOS = [('loja', 'Loja online'), ('pos', 'POS'), ('loja_pos', 'Loja + POS')]
+    TIPOS = [('loja', 'Loja online'), ('pos', 'POS'), ('loja_pos', 'Loja + POS'), ('servicos', 'Serviços')]
 
     nome          = models.CharField(max_length=80)
     tipo          = models.CharField(max_length=10, choices=TIPOS, default='loja', db_default='loja', db_index=True)
@@ -1578,6 +1586,9 @@ class PlanoSubscricao(models.Model):
     descricao     = models.CharField(max_length=300, blank=True, default='')
     ativo         = models.BooleanField(default=True)
     ordem         = models.PositiveSmallIntegerField(default=0)
+    # planos de Serviços (ex.: o plano de entrada): vazio = sem limite
+    limite_marcacoes_mes = models.PositiveIntegerField(null=True, blank=True)
+    limite_profissionais = models.PositiveSmallIntegerField(null=True, blank=True)
     data_criacao  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1611,6 +1622,9 @@ class Subscricao(models.Model):
     # CASCADE: um POS sem faturas apaga-se com a subscrição; com faturas, elas (PROTECT) impedem-no
     pos          = models.OneToOneField('pos.ConfiguracaoPOS', on_delete=models.CASCADE, related_name='subscricao',
                                         null=True, blank=True)
+    # a subscrição do módulo Serviços de uma loja em comissão (as faturas levam loja = esta loja)
+    loja_servicos = models.OneToOneField(Loja, on_delete=models.PROTECT, related_name='subscricao_servicos',
+                                         null=True, blank=True)
     plano        = models.ForeignKey(PlanoSubscricao, on_delete=models.PROTECT, related_name='subscricoes', null=True, blank=True)
     preco        = models.DecimalField(max_digits=10, decimal_places=2)
     meses        = models.PositiveSmallIntegerField()
@@ -1635,13 +1649,21 @@ class Subscricao(models.Model):
 
     class Meta:
         constraints = [models.CheckConstraint(
-            check=models.Q(loja__isnull=False, pos__isnull=True) | models.Q(loja__isnull=True, pos__isnull=False),
-            name='subscricao_loja_ou_pos')]
+            check=models.Q(loja__isnull=False, pos__isnull=True, loja_servicos__isnull=True)
+            | models.Q(loja__isnull=True, pos__isnull=False, loja_servicos__isnull=True)
+            | models.Q(loja__isnull=True, pos__isnull=True, loja_servicos__isnull=False),
+            name='subscricao_loja_pos_ou_servicos')]
 
     @property
     def alvo(self):
-        """A loja ou o POS desta subscrição."""
+        """A loja ou o POS desta subscrição (a loja, na de Serviços)."""
+        if self.loja_servicos_id:
+            return self.loja_servicos
         return self.loja if self.loja_id else self.pos
+
+    @property
+    def servicos(self):
+        return bool(self.loja_servicos_id)
 
     def __str__(self):
         return f'Subscrição {self.alvo} · {self.plano.nome if self.plano_id else "sem plano"} · {self.estado} até {self.pago_ate}'
@@ -1680,6 +1702,11 @@ class FaturaSubscricao(models.Model):
     def alvo(self):
         return self.loja if self.loja_id else self.pos
 
+    @property
+    def servicos(self):
+        """Fatura da subscrição de Serviços (a loja é a mesma, a subscrição é outra)."""
+        return bool(self.subscricao.loja_servicos_id)
+
     def __str__(self):
         return f'Fatura #{self.pk} — {self.alvo} — {self.periodo_inicio}→{self.periodo_fim} — {self.valor} CVE ({self.estado})'
 
@@ -1702,6 +1729,7 @@ class HomeSeccao(models.Model):
         ('lojas_por_categoria',          'Lojas por categoria'),
         ('produtos_por_tipo',            'Produtos por tipo'),
         ('produtos_categorias_destaque', 'Produtos das categorias em destaque'),
+        ('servicos',      'Serviços (marcações)'),
     ]
     FONTES = [
         ('manual', 'Escolhidos à mão'),
@@ -1744,6 +1772,8 @@ class HomeItem(models.Model):
     ordem   = models.PositiveSmallIntegerField(default=0)
     loja    = models.ForeignKey(Loja, on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
+    # secção de serviços escolhidos à mão
+    servico = models.ForeignKey('servicos.Servico', on_delete=models.CASCADE, null=True, blank=True, related_name='itens_home')
     # banner próprio (sem loja nem produto)
     titulo  = models.CharField(max_length=120, blank=True, default='')
     texto   = models.CharField(max_length=300, blank=True, default='')

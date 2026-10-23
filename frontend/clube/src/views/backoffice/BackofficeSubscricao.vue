@@ -139,6 +139,60 @@
         </div>
       </template>
 
+      <!-- ═══ Módulo Serviços ═══ -->
+      <div v-if="serv && (serv.ativo || serv.subscricao)" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4"
+           data-teste="sub-servicos">
+        <p v-if="serv.aviso" role="alert"
+           :class="['rounded-xl border px-4 py-3 text-sm font-semibold',
+                    serv.aviso.tipo === 'vence' ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-red-500/10 border-red-500/30 text-red-300']">
+          {{ serv.aviso.texto }}
+        </p>
+        <div class="flex flex-wrap items-start gap-4">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Serviços e marcações</p>
+            <template v-if="serv.incluido">
+              <p class="text-lg font-black text-zinc-100 mt-2">Incluídos na tua subscrição</p>
+              <p class="text-sm text-zinc-400 mt-1">Não pagas nada a mais pelos Serviços.</p>
+            </template>
+            <template v-else-if="serv.subscricao">
+              <p class="text-lg font-black text-zinc-100 mt-2">{{ serv.subscricao.plano.nome }}
+                <span class="text-sm font-semibold text-zinc-400">· {{ euros(serv.subscricao.preco) }} / {{ serv.subscricao.meses === 1 ? 'mês' : serv.subscricao.meses + ' meses' }}</span>
+              </p>
+              <p class="text-sm text-zinc-400 mt-1">{{ resumoServicos }}</p>
+              <p v-if="limitesTexto" class="text-xs text-zinc-500 mt-1">{{ limitesTexto }}</p>
+            </template>
+          </div>
+          <span v-if="serv.subscricao && !serv.incluido" :class="['px-3 py-1 rounded-full text-xs font-bold', corEstadoDe(serv.subscricao.estado)]">
+            {{ serv.subscricao.estado_nome }}
+          </span>
+        </div>
+        <template v-if="!serv.incluido && serv.subscricao && dados.pode_pagar && ['teste', 'ativa', 'em_atraso'].includes(serv.subscricao.estado)">
+          <div v-if="serv.subscricao.fim_agendado" class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+            A subscrição de Serviços termina a {{ data(serv.subscricao.fim_agendado) }} (fim do período pago).
+          </div>
+          <template v-else>
+            <div class="flex flex-wrap items-center gap-2">
+              <select v-model="novoPlanoServ" aria-label="Novo plano de Serviços"
+                class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500">
+                <option :value="null" disabled>Mudar de plano…</option>
+                <option v-for="p in serv.planos.filter(p => p.id !== (serv.subscricao.plano_seguinte || serv.subscricao.plano).id)" :key="p.id" :value="p.id">
+                  {{ p.nome }} — {{ euros(p.preco) }} / {{ p.periodicidade_nome.toLowerCase() }}
+                </option>
+              </select>
+              <button type="button" @click="mudarPlanoServ" :disabled="!novoPlanoServ || aGuardar"
+                class="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white disabled:opacity-40 text-zinc-900 text-xs font-bold">Mudar de plano</button>
+              <label class="sm:ml-auto flex items-center gap-2 text-xs text-zinc-300">
+                <input type="checkbox" :checked="serv.subscricao.auto_renovar" @change="mudarAutoServ" :disabled="aGuardar" class="accent-red-600" />
+                Pagamento automático
+              </label>
+            </div>
+            <p v-if="serv.subscricao.plano_seguinte" class="text-xs text-sky-300">
+              A partir da próxima renovação: <b>{{ serv.subscricao.plano_seguinte.nome }}</b> ({{ euros(serv.subscricao.plano_seguinte.preco) }}).
+            </p>
+          </template>
+        </template>
+      </div>
+
       <!-- Faturas (também o histórico de uma loja que voltou à comissão) -->
       <div v-if="sub || dados.faturas.length" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
         <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Faturas</p>
@@ -146,7 +200,9 @@
         <div v-else class="divide-y divide-zinc-800">
           <div v-for="f in dados.faturas" :key="f.id" class="px-6 py-4 flex flex-wrap items-center gap-3">
             <div class="flex-1 min-w-[200px]">
-              <p class="text-sm font-semibold text-zinc-200">{{ f.descricao }}</p>
+              <p class="text-sm font-semibold text-zinc-200">
+                <span v-if="f.servicos" class="mr-1.5 px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 text-[10px] font-bold uppercase align-middle">Serviços</span>{{ f.descricao }}
+              </p>
               <p class="text-xs text-zinc-500">
                 <template v-if="f.estado === 'paga'">Paga a {{ data(f.paga_em) }} · {{ f.metodo_nome }}</template>
                 <template v-else-if="f.estado === 'pendente'">Vence a {{ data(f.vencimento) }}<span v-if="f.atrasada" class="text-red-400 font-semibold"> · em atraso</span></template>
@@ -185,12 +241,29 @@ export default {
   emits: ['alterado'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, novoPlano: null }
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, novoPlano: null, novoPlanoServ: null }
   },
 
   computed: {
     posIncluidos () { return (this.dados?.pos_ligados || []).filter(p => p.incluido) },
     sub () { return this.dados?.subscricao },
+    serv () { return this.dados?.servicos },
+    resumoServicos () {
+      const s = this.serv?.subscricao
+      if (!s) return ''
+      if (s.estado === 'aguarda') return 'Começa quando pagares a 1.ª fatura.'
+      if (s.estado === 'teste') return `Período de teste grátis até ${this.data(s.teste_ate)}.`
+      if (s.estado === 'em_atraso') return 'Tens uma fatura de Serviços em atraso — paga para não suspender as marcações.'
+      if (s.estado === 'suspensa') return 'Suspensa: as marcações novas estão paradas até pagares. A loja continua a vender.'
+      return `Pago até ${this.data(s.pago_ate)}.`
+    },
+    limitesTexto () {
+      const l = this.serv?.limites || {}
+      const partes = []
+      if (l.marcacoes_mes) partes.push(`${l.marcacoes_mes} marcações por mês`)
+      if (l.profissionais) partes.push(l.profissionais === 1 ? '1 profissional' : `${l.profissionais} profissionais`)
+      return partes.length ? 'Inclui até ' + partes.join(' e ') + '.' : ''
+    },
     resumoEstado () {
       const s = this.sub
       if (!s) return ''
@@ -200,10 +273,7 @@ export default {
       if (s.estado === 'em_atraso') return 'Tens faturas em atraso — paga para evitar a suspensão da loja.'
       return `Tudo pago até ${this.data(s.pago_ate)}.`
     },
-    corEstado () {
-      return { teste: 'bg-sky-500/15 text-sky-300', ativa: 'bg-green-500/15 text-green-400', em_atraso: 'bg-red-500/15 text-red-400',
-               aguarda: 'bg-zinc-700 text-zinc-300', suspensa: 'bg-red-500/15 text-red-400', cancelada: 'bg-zinc-700 text-zinc-400' }[this.sub?.estado] || ''
-    },
+    corEstado () { return this.corEstadoDe(this.sub?.estado) },
     corEstadoTexto () { return this.sub?.estado === 'em_atraso' ? 'text-red-400' : 'text-zinc-400' },
   },
 
@@ -211,6 +281,34 @@ export default {
 
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
+    corEstadoDe (e) {
+      return { teste: 'bg-sky-500/15 text-sky-300', ativa: 'bg-green-500/15 text-green-400', em_atraso: 'bg-red-500/15 text-red-400',
+               aguarda: 'bg-zinc-700 text-zinc-300', suspensa: 'bg-red-500/15 text-red-400', cancelada: 'bg-zinc-700 text-zinc-400' }[e] || ''
+    },
+    async servicosPedido (fn, ok = '') {
+      this.erro = ''; this.aviso = ''
+      this.aGuardar = true
+      try {
+        await fn()
+        await this.carregar()
+        this.novoPlanoServ = null
+        if (ok) this.aviso = ok
+        this.$emit('alterado')
+      } catch (e) {
+        this.erro = e.response?.data?.detail || 'Não foi possível mudar.'
+      } finally {
+        this.aGuardar = false
+      }
+    },
+    mudarPlanoServ () {
+      const p = this.serv.planos.find(x => x.id === this.novoPlanoServ)
+      if (!p || !confirm(`Mudar os Serviços para o plano ${p.nome} (${this.euros(p.preco)})?\n\nVale a partir da próxima renovação.`)) return
+      this.servicosPedido(() => api.post(`/app/loja/${this.lojaId}/servicos/plano/`, { plano_id: p.id }),
+        'Plano de Serviços mudado — vale a partir da próxima renovação.')
+    },
+    mudarAutoServ () {
+      this.servicosPedido(() => api.patch(`/app/loja/${this.lojaId}/servicos/config/`, { auto_renovar: !this.serv.subscricao.auto_renovar }))
+    },
     data (s) { return s ? new Date(s.length === 10 ? s + 'T12:00:00' : s).toLocaleDateString('pt-PT') : '' },
     corFatura (f) {
       if (f.atrasada) return 'bg-red-500/15 text-red-400'
@@ -261,7 +359,8 @@ export default {
       }
     },
     pedirSubscricao (p) {
-      if (!confirm(`Mudar para o plano ${p.nome} (${this.euros(p.preco)})?\n\nA subscrição começa quando pagares a 1.ª fatura — até lá continuas em comissão. Depois só podes voltar a mudar daqui a 3 meses.`)) return
+      const serv = this.serv?.subscricao ? '\n\nOs Serviços passam a estar incluídos: a subscrição de Serviços termina no fim do período já pago.' : ''
+      if (!confirm(`Mudar para o plano ${p.nome} (${this.euros(p.preco)})?\n\nA subscrição começa quando pagares a 1.ª fatura — até lá continuas em comissão. Depois só podes voltar a mudar daqui a 3 meses.${serv}`)) return
       this.mudar({ acao: 'subscricao', plano_id: p.id }, 'Pedido feito — paga a 1.ª fatura para começar.')
     },
     mudarPlano () {
@@ -270,7 +369,8 @@ export default {
       this.mudar({ acao: 'plano', plano_id: p.id }, 'Plano mudado — vale a partir da próxima renovação.')
     },
     passarComissao () {
-      if (!confirm(`Passar para comissão (${Number(this.dados.percentagem_comissao)}% por venda)?\n\nContinuas em subscrição até ${this.data(this.sub.pago_ate)} (o que já pagaste não é devolvido). Depois só podes voltar a mudar daqui a 3 meses.`)) return
+      const serv = this.serv?.ativo ? '\n\nAtenção: em comissão, o módulo Serviços precisa de uma subscrição própria para continuar a receber marcações.' : ''
+      if (!confirm(`Passar para comissão (${Number(this.dados.percentagem_comissao)}% por venda)?\n\nContinuas em subscrição até ${this.data(this.sub.pago_ate)} (o que já pagaste não é devolvido). Depois só podes voltar a mudar daqui a 3 meses.${serv}`)) return
       this.mudar({ acao: 'comissao' }, 'Agendado: passas para comissão no fim do período pago.')
     },
 

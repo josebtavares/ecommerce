@@ -295,6 +295,9 @@ def _bloqueios_eliminar_loja(loja):
     n = loja.faturas_subscricao.count()
     if n:
         razoes.append(f'{n} fatura(s) de subscrição — registos financeiros nunca são apagados')
+    n = loja.marcacoes.count()
+    if n:
+        razoes.append(f'{n} marcação(ões) de serviços — registos financeiros nunca são apagados')
     n = ItemContaMesa.objects.filter(produto__loja=loja).count()
     if n:
         razoes.append(f'{n} venda(s) no POS com produtos desta loja')
@@ -341,7 +344,7 @@ def admin_loja_eliminar(request, loja_id):
         with transaction.atomic():
             # subscrição que nunca cobrou nada (sem faturas): vai com a loja; com faturas já bloqueou acima
             from ..models import Subscricao
-            Subscricao.objects.filter(loja=loja, faturas__isnull=True).delete()
+            Subscricao.objects.filter(Q(loja=loja) | Q(loja_servicos=loja), faturas__isnull=True).delete()
             loja.delete()
     except (ProtectedError, RestrictedError) as e:
         # RestrictedError: produto usado num menu de outro POS (ComponenteConjuntoPOS)

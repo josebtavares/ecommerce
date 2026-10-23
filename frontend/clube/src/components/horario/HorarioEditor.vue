@@ -228,6 +228,8 @@
           {{ aGuardar ? 'A guardar…' : 'Guardar horário' }}
         </button>
         <span v-if="guardado" class="text-sm text-green-400">Horário guardado.</span>
+        <ListaMarcacoes v-if="foraHorario.length" :marcacoes="foraHorario" class="w-full mt-2" data-teste="marcacoes-fora"
+          titulo="Atenção: estas marcações de serviços ficam fora do novo horário (continuam marcadas — remarca-as ou cancela-as em Serviços):" />
       </div>
     </template>
   </div>
@@ -236,6 +238,7 @@
 <script>
 import api from '@/services/api'
 import PausaLoja from './PausaLoja.vue'
+import ListaMarcacoes from '@/components/servicos/ListaMarcacoes.vue'
 
 const NOMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
 const MAX = 4
@@ -260,14 +263,14 @@ function copia (dias) { return JSON.parse(JSON.stringify(dias)) }
 
 export default {
   name: 'HorarioEditor',
-  components: { PausaLoja },
+  components: { PausaLoja, ListaMarcacoes },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['guardado'],
 
   data () {
     return {
       NOMES, MAX, REGRAS, ANTECEDENCIAS, ULTIMAS, hojeData: '',
-      carregando: true, aGuardar: false, guardado: false, erro: '',
+      carregando: true, aGuardar: false, guardado: false, erro: '', foraHorario: [],
       form: { horario_ativo: false, fora_horario: 'agendar', dias: [], agendamento: { ativo: false, intervalo: 30, dias: 7, antecedencia: 30 }, ultima_encomenda: 0, excecoes: [] },
       original: '', estado: null, fuso: '', agora: '', hoje: null, agendadasFora: [],
     }
@@ -379,6 +382,7 @@ export default {
       this.aGuardar = true
       try {
         const { data } = await api.put(`/app/loja/${this.lojaId}/horario/`, this.form)
+        this.foraHorario = data.marcacoes_fora_do_horario || []
         this.aplicar(data)
         this.$nextTick(() => { this.guardado = true })   // depois do watch do form
         this.$emit('guardado', data)

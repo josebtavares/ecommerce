@@ -425,6 +425,9 @@
             </div>
 
             <div class="editorial-section__body">
+              <!-- Serviços (marcações) -->
+              <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="mb-12" />
+
               <div class="editorial-section__header">
                 <div>
                   <div class="editorial-section__sub">Full Collection</div>
@@ -590,6 +593,7 @@ import MultiCart from '@/components/cart/multiCart.vue'
 import ProductSlider from '@/components/sliders/ProductSlider.vue'
 import Profile from '@/components/profile/UserProfile.vue'
 import ProductCatalog from '@/components/catalog/ProductCatalog.vue'
+import SeccaoServicos from '@/components/servicos/loja/SeccaoServicos.vue'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
 import EstadoLoja from '@/components/horario/EstadoLoja.vue'
 import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
@@ -597,7 +601,7 @@ import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 export default {
   name: 'TemplateModaEditorial',
 
-  components: {
+  components: { SeccaoServicos,
     ProductInfoCard,
     BotaoFavorito, EstadoLoja,
     MultiCart,

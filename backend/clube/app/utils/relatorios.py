@@ -262,13 +262,13 @@ def subscricoes_hoje():
     from ..models import FaturaSubscricao, Loja, Subscricao
     from .subscricoes import _resumo_pos, hoje
     a_contar = (Subscricao.objects.filter(plano__isnull=False, coberta_por__isnull=True)
-                .filter(Q(loja__modelo_cobranca='subscricao') | Q(pos__isnull=False)))
+                .filter(Q(loja__modelo_cobranca='subscricao') | Q(pos__isnull=False) | Q(loja_servicos__isnull=False)))
     mrr = ZERO
     mrr_lojas = ZERO
-    for preco, meses, loja_id, estado in a_contar.values_list('preco', 'meses', 'loja_id', 'estado'):
+    for preco, meses, loja_id, serv_id, estado in a_contar.values_list('preco', 'meses', 'loja_id', 'loja_servicos_id', 'estado'):
         if estado in ('ativa', 'em_atraso') and meses:
             mrr += preco / meses
-            if loja_id:
+            if loja_id or serv_id:               # a subscrição de Serviços também é de uma loja
                 mrr_lojas += preco / meses
     lojas = Loja.objects.exclude(estado='pendente')
     d = hoje()

@@ -2,7 +2,7 @@
   <transition enter-active-class="transition duration-200" enter-from-class="opacity-0"
               leave-active-class="transition duration-150" leave-to-class="opacity-0">
     <div v-if="produto"
-         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         class="fixed inset-0 z-[960] flex items-center justify-center p-4"
          :class="isDark ? 'bg-black/80' : 'bg-black/50'"
          style="backdrop-filter: blur(4px)"
          @click.self="$emit('close')">

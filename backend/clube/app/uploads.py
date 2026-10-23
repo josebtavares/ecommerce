@@ -63,7 +63,7 @@ def ligar():
     """Chamado em AppConfig.ready()."""
     from django.apps import apps
     for modelo in apps.get_models():
-        if modelo._meta.app_label not in ('app', 'pos'):
+        if modelo._meta.app_label not in ('app', 'pos', 'servicos'):
             continue
         if any(isinstance(c, FileField) for c in modelo._meta.concrete_fields):
             pre_save.connect(_antes_de_gravar, sender=modelo, weak=False,

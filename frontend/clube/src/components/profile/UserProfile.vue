@@ -162,13 +162,19 @@
 
           <!-- ═══ TAB: ENCOMENDAS ═══ -->
           <div v-if="activeTab === 'encomendas'">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h3 class="text-sm font-bold uppercase tracking-wider"
                   :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Histórico de encomendas</h3>
-              <button type="button" @click="isOpen = false; $router.push('/perfil/reembolsos')"
-                class="text-xs font-semibold text-red-500 hover:text-red-400 flex items-center gap-1">
-                <font-awesome-icon :icon="['fas', 'rotate-left']" /> Reembolsos
-              </button>
+              <div class="flex items-center gap-2">
+                <button type="button" @click="isOpen = false; $router.push('/minhas-marcacoes')" data-teste="link-marcacoes"
+                  :class="[botaoAtalho, 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors']">
+                  <font-awesome-icon :icon="['fas', 'calendar-check']" class="text-red-500" /> Marcações
+                </button>
+                <button type="button" @click="isOpen = false; $router.push('/perfil/reembolsos')" data-teste="link-reembolsos"
+                  :class="[botaoAtalho, 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors']">
+                  <font-awesome-icon :icon="['fas', 'rotate-left']" class="text-red-500" /> Reembolsos
+                </button>
+              </div>
             </div>
 
             <div v-if="loadingEncomendas" class="flex justify-center py-8">
@@ -482,6 +488,10 @@ const encomendaLimit    = ref(6)
 const encomendaTotal    = ref(0)
 const loadingMais       = ref(false)
 const temMais = computed(() => encomendas.value.length < encomendaTotal.value)
+// atalhos da aba Encomendas (Marcações, Reembolsos) com ar de botão
+const botaoAtalho = computed(() => props.isDark
+  ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600'
+  : 'bg-white border-gray-200 text-zinc-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm')
 
 const lojas       = ref([])
 const loadingLojas = ref(false)

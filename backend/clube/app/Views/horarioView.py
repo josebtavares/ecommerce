@@ -145,7 +145,10 @@ def loja_horario(request, loja_id):
         setattr(loja, campo, valor)
     loja.save(update_fields=['horario_ativo', 'fora_horario', 'data_atualizacao', *agendamento])
     horarios.limpar_cache_fechadas()
-    return Response(_horario_loja(loja))
+    # serviços: marcações futuras que o horário novo (ou um dia especial) deixa fora — continuam marcadas,
+    # a loja é que decide (remarcar, outro profissional ou cancelar)
+    from ..servicos.agenda import fora_do_horario
+    return Response({**_horario_loja(loja), 'marcacoes_fora_do_horario': fora_do_horario(loja)})
 
 
 @api_view(['GET'])

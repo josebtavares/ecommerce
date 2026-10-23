@@ -17,6 +17,8 @@ import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 import PedirReembolso from './views/reembolsos/PedirReembolso.vue';
 import ReembolsoDetalhe from './views/reembolsos/ReembolsoDetalhe.vue';
 import MeusReembolsos from './views/reembolsos/MeusReembolsos.vue';
+const MinhasMarcacoes = () => import('./views/servicos/MinhasMarcacoes.vue');
+const MarcacaoCliente = () => import('./views/servicos/MarcacaoCliente.vue');
 
 
 
@@ -47,6 +49,23 @@ const routes = [
         path: '/loja/:id',
         name: 'Loja',
         component: LojaPublica,
+    },
+    {
+        // os serviços estão na página da loja (secção Serviços em todos os templates)
+        path: '/loja/:id/servicos',
+        redirect: to => ({ path: `/loja/${to.params.id}`, query: to.query }),
+    },
+    {
+        path: '/minhas-marcacoes',
+        name: 'MinhasMarcacoes',
+        component: MinhasMarcacoes,
+        meta: { requiresAuth: true }
+    },
+    {
+        path: '/minhas-marcacoes/:id',
+        name: 'MarcacaoCliente',
+        component: MarcacaoCliente,
+        meta: { requiresAuth: true }
     },
         {   
         path: '/',

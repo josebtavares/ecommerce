@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'app',
     'app.pos', 
     'app.chat',
+    'app.servicos',
 ]
 
 MIDDLEWARE = [

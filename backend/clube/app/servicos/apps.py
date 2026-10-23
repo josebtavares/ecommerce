@@ -1,0 +1,12 @@
+from django.apps import AppConfig
+
+
+class ServicosConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'app.servicos'
+    label = 'servicos'
+    verbose_name = 'Serviços e marcações'
+
+    def ready(self):
+        from .tempo_real import ligar
+        ligar()

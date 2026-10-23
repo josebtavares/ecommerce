@@ -70,7 +70,8 @@ def processar(ficheiro):
         img.load()
     except ImagemInvalida:
         raise
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+    # SyntaxError: o Pillow lança-o num PNG corrompido (checksum errado) — dava erro 500
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError, EOFError, Image.DecompressionBombError):
         raise ImagemInvalida('Ficheiro de imagem inválido.')
 
     img = ImageOps.exif_transpose(img)    # respeita a rotação da câmara antes de largar o EXIF
