@@ -50,11 +50,11 @@
             <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
             <p v-if="loja.descricao" class="dp-hero__desc">{{ truncate(loja.descricao, 170) }}</p>
             <div class="dp-hero__ctas">
-              <button class="dp-btn dp-btn--cor" @click="scrollToId(totalDestaques ? 'dp-top' : 'dp-pistas')">
-                {{ totalDestaques ? 'Ver o top' : 'Ver produtos' }}
+              <button class="dp-btn dp-btn--cor" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'dp-top' : 'dp-pistas')">
+                {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Ver o top' : 'Ver produtos' }}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               </button>
-              <button class="dp-btn" @click="scrollToId('dp-catalogo')">Catálogo</button>
+              <button v-if="!soServicos" class="dp-btn" @click="scrollToId('dp-catalogo')">Catálogo</button>
             </div>
           </div>
 
@@ -187,7 +187,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="dp-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="dp-catalogo" class="dp-sec">
+        <section v-if="!soServicos" id="dp-catalogo" class="dp-sec">
           <header class="dp-sec__head">
             <h2 class="dp-sec__titulo">Catálogo</h2>
           </header>

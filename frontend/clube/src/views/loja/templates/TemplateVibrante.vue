@@ -67,10 +67,10 @@
             </div>
 
             <div class="vb-hero__ctas">
-              <button class="vb-btn vb-btn--branco" @click="scrollToId(totalDestaques ? 'vb-alta' : 'vb-catalogo')">
-                {{ totalDestaques ? 'Ver o que está em alta' : 'Ver produtos' }}
+              <button class="vb-btn vb-btn--branco" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'vb-alta' : 'vb-catalogo')">
+                {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Ver o que está em alta' : 'Ver produtos' }}
               </button>
-              <button class="vb-btn vb-btn--contorno" @click="scrollToId('vb-catalogo')">Catálogo</button>
+              <button v-if="!soServicos" class="vb-btn vb-btn--contorno" @click="scrollToId('vb-catalogo')">Catálogo</button>
             </div>
           </div>
 
@@ -179,7 +179,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="vb-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="vb-catalogo" class="vb-sec">
+        <section v-if="!soServicos" id="vb-catalogo" class="vb-sec">
           <header class="vb-sec__head">
             <h2 class="vb-sec__titulo">Catálogo</h2>
             <p class="vb-sec__sub">Pesquisa e filtra todos os produtos</p>

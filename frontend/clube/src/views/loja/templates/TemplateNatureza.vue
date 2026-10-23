@@ -64,10 +64,10 @@
           </ul>
 
           <div class="nt-hero__ctas">
-            <button class="nt-btn nt-btn--cheio" @click="scrollToId(totalDestaques ? 'nt-epoca' : 'nt-bancas')">
-              {{ totalDestaques ? 'Ver o que é da época' : 'Ver produtos' }}
+            <button class="nt-btn nt-btn--cheio" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'nt-epoca' : 'nt-bancas')">
+              {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Ver o que é da época' : 'Ver produtos' }}
             </button>
-            <button class="nt-btn" @click="scrollToId('nt-catalogo')">Catálogo</button>
+            <button v-if="!soServicos" class="nt-btn" @click="scrollToId('nt-catalogo')">Catálogo</button>
           </div>
         </div>
 
@@ -198,7 +198,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="nt-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="nt-catalogo" class="nt-sec">
+        <section v-if="!soServicos" id="nt-catalogo" class="nt-sec">
           <header class="nt-sec__head">
             <div>
               <p class="nt-etiqueta">Pesquisa e filtros</p>

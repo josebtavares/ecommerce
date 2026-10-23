@@ -63,7 +63,7 @@
 
             <div class="mn-hero__ctas">
               <button v-if="totalDestaques" class="mn-cta" @click="scrollToId('mn-selecao')">Ver a selecção</button>
-              <button class="mn-cta mn-cta--sec" @click="scrollToId('mn-catalogo')">Catálogo completo</button>
+              <button class="mn-cta mn-cta--sec" @click="scrollToId(soServicos ? 'servicos' : 'mn-catalogo')">{{ soServicos ? 'Ver serviços' : 'Catálogo completo' }}</button>
             </div>
           </div>
 
@@ -162,7 +162,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="mn-sec" contido />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="mn-catalogo" class="mn-sec">
+        <section v-if="!soServicos" id="mn-catalogo" class="mn-sec">
           <div class="mn-wrap">
             <header class="mn-sec__head">
               <span class="mn-num">{{ numDe('mn-catalogo') }}</span>
@@ -361,7 +361,8 @@ export default {
       const itens = []
       if (nSelecao.value) itens.push({ id: 'mn-selecao', label: 'Selecção' })
       grupos.value.forEach(g => itens.push({ id: 'mn-g-' + g.key, label: g.nome }))
-      itens.push({ id: 'mn-catalogo', label: 'Catálogo' })
+      // loja só de serviços: no lugar do catálogo de produtos (escondido), os serviços
+      itens.push(lojaData.soServicos.value ? { id: 'servicos', label: 'Serviços' } : { id: 'mn-catalogo', label: 'Catálogo' })
       itens.push({ id: 'mn-info', label: 'Informação' })
       itens.push({ id: 'mn-avaliacoes', label: 'Avaliações' })
       return itens.map((it, i) => ({ ...it, num: String(i + 1).padStart(2, '0') }))

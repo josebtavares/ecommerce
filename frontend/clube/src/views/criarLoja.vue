@@ -193,9 +193,9 @@
 
                 <!-- Overlay hover -->
                 <div class="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center gap-2
-                            opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 pointer-coarse:bg-transparent pointer-coarse:items-end pointer-coarse:justify-end pointer-coarse:p-2 pointer-coarse:backdrop-blur-none transition-opacity duration-200">
                   <button @click.stop="abrirPreview(tpl)"
-                    class="px-3 py-1.5 rounded-lg bg-white/15 border border-white/20 text-white text-xs font-semibold backdrop-blur-md hover:bg-white/25 transition">
+                    class="px-3 py-1.5 rounded-lg bg-white/15 pointer-coarse:bg-black/70 border border-white/20 text-white text-xs font-semibold backdrop-blur-md hover:bg-white/25 transition">
                     Preview
                   </button>
                   <button @click.stop="form.template_id = tpl.id"

@@ -54,8 +54,8 @@
 
         <nav class="rm-bar__links">
           <button v-if="totalDestaques" @click="scrollToId('rm-chef')">Chef</button>
-          <button @click="scrollToId('rm-carta')">Carta</button>
-          <button @click="scrollToId('rm-catalogo')">Catálogo</button>
+          <button v-if="!soServicos" @click="scrollToId('rm-carta')">Carta</button>
+          <button @click="scrollToId(soServicos ? 'servicos' : 'rm-catalogo')">{{ soServicos ? 'Serviços' : 'Catálogo' }}</button>
           <button @click="scrollToId('rm-visite')">Visite-nos</button>
           <button @click="scrollToId('rm-avaliacoes')">Avaliações</button>
         </nav>
@@ -104,8 +104,8 @@
             </p>
 
             <div class="rm-hero__ctas">
-              <button class="rm-btn rm-btn--accent" @click="scrollToId('rm-carta')">
-                Ver a carta
+              <button class="rm-btn rm-btn--accent" @click="scrollToId(soServicos ? 'servicos' : 'rm-carta')">
+                {{ soServicos ? 'Ver serviços' : 'Ver a carta' }}
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
               </button>
               <button v-if="totalDestaques" class="rm-btn rm-btn--glass" @click="scrollToId('rm-chef')">
@@ -220,8 +220,8 @@
                 </button>
               </template>
               <span class="rm-chips__sep"></span>
-              <button class="rm-chip rm-chip--outline" @click="scrollToId('rm-catalogo')">
-                Catálogo completo →
+              <button class="rm-chip rm-chip--outline" @click="scrollToId(soServicos ? 'servicos' : 'rm-catalogo')">
+                {{ soServicos ? 'Serviços' : 'Catálogo completo' }} →
               </button>
             </div>
 
@@ -299,7 +299,7 @@
         <!-- Serviços (marcações) -->
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="rm-section" contido />
 
-        <section id="rm-catalogo" class="rm-section rm-section--catalogo">
+        <section v-if="!soServicos" id="rm-catalogo" class="rm-section rm-section--catalogo">
           <div class="rm-wrap">
             <div class="rm-heading">
               <span class="rm-heading__eyebrow">Todos os produtos</span>

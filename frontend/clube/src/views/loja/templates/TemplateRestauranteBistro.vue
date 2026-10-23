@@ -62,8 +62,8 @@
             </div>
 
             <div class="bs-capa__ctas">
-              <button class="bs-btn bs-btn--cheio" @click="scrollToId('bs-carta')">Ver a carta</button>
-              <button class="bs-btn" @click="scrollToId('bs-catalogo')">Catálogo completo</button>
+              <button class="bs-btn bs-btn--cheio" @click="scrollToId(soServicos ? 'servicos' : 'bs-carta')">{{ soServicos ? 'Ver serviços' : 'Ver a carta' }}</button>
+              <button v-if="!soServicos" class="bs-btn" @click="scrollToId('bs-catalogo')">Catálogo completo</button>
             </div>
           </div>
 
@@ -159,7 +159,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="bs-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="bs-catalogo" class="bs-sec">
+        <section v-if="!soServicos" id="bs-catalogo" class="bs-sec">
           <header class="bs-titulo">
             <p class="bs-versal">Tudo o que servimos</p>
             <h2>Catálogo completo</h2>

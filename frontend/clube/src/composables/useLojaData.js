@@ -29,6 +29,10 @@ export function useLojaData () {
     (tiposExistentes.value.length + categoriasExistentes.value.length) >= 3
   )
 
+  // loja só de serviços: sem produtos activos e a aceitar marcações — os templates escondem o catálogo
+  // de produtos (vazio) e os atalhos para ele apontam para os serviços
+  const soServicos = computed(() => totalProdutos.value === 0 && !!loja.value?.tem_servicos)
+
   const temFooter = computed(() =>
     loja.value?.politica_devolucao ||
     loja.value?.termos_servico ||
@@ -168,7 +172,7 @@ export function useLojaData () {
     tiposExistentes, categoriasExistentes, totalProdutos, totalDestaques,
     selectedProduct, sidebarAberta, modalPolitica,
     // computed
-    temSidebar, temFooter, cssVars, lojaId, gruposProdutos,
+    temSidebar, temFooter, soServicos, cssVars, lojaId, gruposProdutos,
     // helpers
     backendUrl, defaultBanner: DEFAULT_BANNER, formatPrice, tipoIcon, metodoPagamentoIcon,
     scrollToId, onRatingUpdated, logOut,

@@ -57,14 +57,14 @@
           <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
           <p v-if="loja.descricao" class="lx-hero__desc">{{ truncate(loja.descricao, 160) }}</p>
           <div class="lx-hero__ctas">
-            <button class="lx-btn lx-btn--ouro" @click="scrollToId(totalDestaques ? 'lx-vitrine' : 'lx-colecoes')">
-              {{ totalDestaques ? 'Descobrir a vitrine' : 'Ver as coleções' }}
+            <button class="lx-btn lx-btn--ouro" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'lx-vitrine' : 'lx-colecoes')">
+              {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Descobrir a vitrine' : 'Ver as coleções' }}
             </button>
-            <button class="lx-btn lx-btn--fino" @click="scrollToId('lx-catalogo')">Catálogo</button>
+            <button v-if="!soServicos" class="lx-btn lx-btn--fino" @click="scrollToId('lx-catalogo')">Catálogo</button>
           </div>
         </div>
 
-        <button class="lx-hero__desce" @click="scrollToId(totalDestaques ? 'lx-vitrine' : 'lx-colecoes')" aria-label="Descer">
+        <button class="lx-hero__desce" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'lx-vitrine' : 'lx-colecoes')" aria-label="Descer">
           <span></span>
         </button>
       </section>
@@ -186,7 +186,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="lx-sec" contido />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="lx-catalogo" class="lx-sec">
+        <section v-if="!soServicos" id="lx-catalogo" class="lx-sec">
           <div class="lx-wrap">
             <header class="lx-titulo">
               <p class="lx-versal">Todas as peças</p>

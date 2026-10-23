@@ -57,10 +57,10 @@
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
             <div class="bt-montra__ctas">
-              <button class="bt-btn bt-btn--claro" @click="scrollToId(totalDestaques ? 'bt-novidades' : 'bt-provador')">
-                {{ totalDestaques ? 'Ver novidades' : 'Ver coleção' }}
+              <button class="bt-btn bt-btn--claro" @click="scrollToId(soServicos ? 'servicos' : totalDestaques ? 'bt-novidades' : 'bt-provador')">
+                {{ soServicos ? 'Ver serviços' : totalDestaques ? 'Ver novidades' : 'Ver coleção' }}
               </button>
-              <button class="bt-btn bt-btn--vidro" @click="scrollToId('bt-catalogo')">Catálogo</button>
+              <button v-if="!soServicos" class="bt-btn bt-btn--vidro" @click="scrollToId('bt-catalogo')">Catálogo</button>
             </div>
           </div>
 
@@ -194,7 +194,7 @@
         <SeccaoServicos :loja-id="lojaId" :isDark="isDark" :cor="tema?.corPrimaria || '#dc2626'" class="bt-sec" />
 
         <!-- ══ CATÁLOGO ══ -->
-        <section id="bt-catalogo" class="bt-sec">
+        <section v-if="!soServicos" id="bt-catalogo" class="bt-sec">
           <header class="bt-titulo">
             <p class="bt-sobre">Todas as peças</p>
             <h2>Catálogo</h2>
