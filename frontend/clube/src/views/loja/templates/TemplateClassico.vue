@@ -188,7 +188,7 @@
                     <span v-for="m in metodosPagamento" :key="m.id"
                           class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
                           :class="isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-gray-100 text-zinc-600'">
-                      {{ m.tipo }}
+                      {{ m.nome }}
                     </span>
                   </div>
                 </div>
@@ -242,7 +242,7 @@
                 <div class="h-px flex-1" :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
               </div>
               <div v-for="cat in categoriasExistentes" :key="'cat-' + cat.id" :id="'cat-' + cat.id">
-                <ProductSlider :title="cat.nome"
+                <ProductSlider :title="cat.nome.charAt(0).toUpperCase() + cat.nome.slice(1)"
                   :params="{ loja_id: lojaId, categoria_id: cat.id }" :isDark="isDark"
                   @product-click="selectedProduct = $event" />
               </div>

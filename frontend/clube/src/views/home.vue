@@ -325,7 +325,7 @@
             <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Explorar Lojas</h2>
             <p class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Pesquisa e filtra todas as lojas da plataforma</p>
           </div>
-          <StoreCatalog ref="catalogo" :isDark="isDark" @store-click="goToStore($event.id)" />
+          <StoreCatalog ref="catalogo" :isDark="isDark" :categorias="categoriasExistentes" @store-click="goToStore($event.id)" />
         </section>
 
         <!-- ── FOOTER ── -->

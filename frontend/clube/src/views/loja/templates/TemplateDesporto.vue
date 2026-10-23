@@ -75,8 +75,8 @@
               <dd>{{ rating }}<small v-if="loja.rating_medio">/5</small></dd>
             </div>
             <div>
-              <dt>Produtos</dt>
-              <dd>{{ totalProdutos ?? '—' }}</dd>
+              <dt>{{ soServicos ? 'Serviços' : 'Produtos' }}</dt>
+              <dd>{{ soServicos ? totalServicos : (totalProdutos ?? '—') }}</dd>
             </div>
             <div>
               <dt>Modalidades</dt>
@@ -248,7 +248,7 @@
             <div class="dp-info__bloco dp-info__bloco--cor">
               <p class="dp-info__titulo">Pagamento</p>
               <div v-if="metodosPagamento.length" class="dp-info__tags">
-                <span v-for="m in metodosPagamento" :key="m.id">{{ m.tipo }}</span>
+                <span v-for="m in metodosPagamento" :key="m.id">{{ m.nome }}</span>
               </div>
               <p v-else>—</p>
             </div>

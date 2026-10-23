@@ -56,8 +56,8 @@
                 <dd>{{ textoEntrega }}</dd>
               </div>
               <div>
-                <dt>Peças</dt>
-                <dd>{{ totalProdutos ?? '—' }}</dd>
+                <dt>{{ soServicos ? 'Serviços' : 'Peças' }}</dt>
+                <dd>{{ soServicos ? totalServicos : (totalProdutos ?? '—') }}</dd>
               </div>
             </dl>
 
@@ -236,7 +236,7 @@
               <div>
                 <h3 class="mn-info__titulo">Pagamento</h3>
                 <p class="mn-info__texto mn-capital">
-                  {{ metodosPagamento.length ? metodosPagamento.map(m => m.tipo).join(' · ') : '—' }}
+                  {{ metodosPagamento.length ? metodosPagamento.map(m => m.nome).join(' · ') : '—' }}
                 </p>
                 <template v-if="loja.localizacao">
                   <h3 class="mn-info__titulo mn-info__titulo--esp">Morada</h3>

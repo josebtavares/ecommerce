@@ -85,7 +85,7 @@
             <text class="nt-selo__texto">
               <textPath href="#nt-circulo" textLength="272" lengthAdjust="spacing">{{ textoSelo }}</textPath>
             </text>
-            <text x="60" y="66" text-anchor="middle" class="nt-selo__num">{{ totalProdutos ?? '' }}</text>
+            <text x="60" y="66" text-anchor="middle" class="nt-selo__num">{{ soServicos ? totalServicos : (totalProdutos ?? '') }}</text>
           </svg>
         </div>
       </section>
@@ -265,7 +265,7 @@
             <div class="nt-folha nt-folha--b">
               <p class="nt-folha__titulo">Pagamento</p>
               <div v-if="metodosPagamento.length" class="nt-folha__tags">
-                <span v-for="m in metodosPagamento" :key="m.id">{{ m.tipo }}</span>
+                <span v-for="m in metodosPagamento" :key="m.id">{{ m.nome }}</span>
               </div>
               <p v-else>—</p>
             </div>

@@ -66,7 +66,7 @@
 
           <div class="bt-etiqueta bt-etiqueta--grande" aria-hidden="true">
             <span class="bt-etiqueta__topo">Coleção</span>
-            <span class="bt-etiqueta__valor">{{ totalProdutos ?? '—' }} peças</span>
+            <span class="bt-etiqueta__valor">{{ soServicos ? `${totalServicos} serviços` : `${totalProdutos ?? '—'} peças` }}</span>
           </div>
         </div>
 
@@ -257,7 +257,7 @@
             <div class="bt-costura">
               <p class="bt-costura__titulo">Pagamento</p>
               <div v-if="metodosPagamento.length" class="bt-costura__tags">
-                <span v-for="m in metodosPagamento" :key="m.id">{{ m.tipo }}</span>
+                <span v-for="m in metodosPagamento" :key="m.id">{{ m.nome }}</span>
               </div>
               <p v-else>—</p>
             </div>

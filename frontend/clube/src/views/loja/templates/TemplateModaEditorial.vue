@@ -270,7 +270,7 @@
                         :key="m.id"
                         class="editorial-chip"
                       >
-                        {{ m.tipo }}
+                        {{ m.nome }}
                       </span>
                     </div>
                   </div>

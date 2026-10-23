@@ -81,8 +81,8 @@
               <div v-else class="vb-autocolante__vazio">{{ loja.nome.charAt(0) }}</div>
             </div>
             <div class="vb-selo" aria-hidden="true">
-              <span class="vb-selo__num">{{ totalProdutos ?? '—' }}</span>
-              <span class="vb-selo__txt">produtos</span>
+              <span class="vb-selo__num">{{ soServicos ? totalServicos : (totalProdutos ?? '—') }}</span>
+              <span class="vb-selo__txt">{{ soServicos ? 'serviços' : 'produtos' }}</span>
             </div>
           </div>
         </div>
@@ -237,7 +237,7 @@
           <div class="vb-info__cartao vb-info__cartao--b">
             <h3>Pagamento</h3>
             <div class="vb-info__tags">
-              <span v-for="m in metodosPagamento" :key="m.id">{{ m.tipo }}</span>
+              <span v-for="m in metodosPagamento" :key="m.id">{{ m.nome }}</span>
               <span v-if="!metodosPagamento.length">—</span>
             </div>
           </div>

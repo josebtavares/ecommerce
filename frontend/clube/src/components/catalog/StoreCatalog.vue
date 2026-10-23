@@ -10,7 +10,7 @@
                    : isDark ? 'bg-zinc-800 text-zinc-400 hover:text-zinc-200' : 'bg-stone-200 text-zinc-600 hover:text-zinc-900']">
         Todas
       </button>
-      <button v-for="cat in categorias" :key="cat.value" @click="selectCategoria(cat.value)"
+      <button v-for="cat in listaCategorias" :key="cat.value" @click="selectCategoria(cat.value)"
         :class="['px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 flex items-center gap-1.5',
                  activeCategoria === cat.value
                    ? 'bg-red-600 text-white'
@@ -190,12 +190,14 @@ export default {
     endpoint: { type: String,  default: '/app/loja/' },
     limit:    { type: Number,  default: 16 },
     isDark:   { type: Boolean, default: true },
+    // categorias das lojas activas (as do admin, vindas da home); sem elas, a lista genérica abaixo
+    categorias: { type: Array, default: () => [] },
   },
   emits: ['store-click'],
   data () {
     return {
       defaultImg: DEFAULT_BANNER,
-      categorias: [
+      padrao: [
         { value: 'restaurante',  label: 'Restaurante',  icon: iconeCategoria(null, 'restaurante') },
         { value: 'moda',         label: 'Moda',         icon: iconeCategoria(null, 'moda') },
         { value: 'tecnologia',   label: 'Tecnologia',   icon: iconeCategoria(null, 'tecnologia') },
@@ -215,6 +217,7 @@ export default {
     }
   },
   computed: {
+    listaCategorias () { return this.categorias.length ? this.categorias : this.padrao },
     hasActiveFilters () {
       return this.filters.q || this.filters.entrega_ativa || this.filters.levantamento_ativo || this.filters.ordem || this.activeCategoria
     },
@@ -222,7 +225,10 @@ export default {
   async mounted () { await this.resetAndFetch(); this.setupObserver() },
   beforeUnmount () { this.observer?.disconnect(); clearTimeout(this.debounceTimer) },
   methods: {
-    categoriaLabel (val) { return this.categorias.find(c => c.value === val)?.label || val },
+    categoriaLabel (val) {
+      const v = String(val || '').toLowerCase()
+      return this.listaCategorias.find(c => c.value === v)?.label || val
+    },
     selectCategoria (val) { this.activeCategoria = val; this.resetAndFetch() },
     toggleFilter (key) { this.filters[key] = !this.filters[key]; this.resetAndFetch() },
     clearFilters () {

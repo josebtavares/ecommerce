@@ -73,8 +73,8 @@
       <div class="lx-dados">
         <div class="lx-wrap lx-dados__linha">
           <span v-if="loja.rating_medio"><em>{{ rating }}</em> avaliação · {{ loja.total_avaliacoes || 0 }}</span>
-          <span><em>{{ totalProdutos ?? '—' }}</em> peças</span>
-          <span>{{ textoEntrega }}</span>
+          <span><em>{{ soServicos ? totalServicos : (totalProdutos ?? '—') }}</em> {{ soServicos ? 'serviços' : 'peças' }}</span>
+          <span>{{ soServicos ? 'Marcações online' : textoEntrega }}</span>
         </div>
       </div>
 
@@ -253,7 +253,7 @@
               <div>
                 <span class="lx-concierge__num">II</span>
                 <p class="lx-versal">Pagamento</p>
-                <p v-if="metodosPagamento.length" class="lx-concierge__metodos">{{ metodosPagamento.map(m => m.tipo).join(' · ') }}</p>
+                <p v-if="metodosPagamento.length" class="lx-concierge__metodos">{{ metodosPagamento.map(m => m.nome).join(' · ') }}</p>
                 <p v-else>—</p>
               </div>
               <div>

@@ -7,6 +7,11 @@ import api from '@/services/api'
 import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
 import { DEFAULT_BANNER } from '@/services/media'
 
+const NOMES_PAGAMENTO = {
+  cartao: 'Cartão', dinheiro: 'Dinheiro', mbway: 'MB WAY', paypal: 'PayPal', stripe: 'Stripe',
+  flutterwave: 'Flutterwave', transferencia: 'Transferência',
+}
+
 export function useLojaData () {
   const route  = useRoute()
   const router = useRouter()
@@ -32,6 +37,7 @@ export function useLojaData () {
   // loja só de serviços: sem produtos activos e a aceitar marcações — os templates escondem o catálogo
   // de produtos (vazio) e os atalhos para ele apontam para os serviços
   const soServicos = computed(() => totalProdutos.value === 0 && !!loja.value?.tem_servicos)
+  const totalServicos = computed(() => loja.value?.total_servicos || 0)
 
   const temFooter = computed(() =>
     loja.value?.politica_devolucao ||
@@ -88,7 +94,8 @@ export function useLojaData () {
   async function fetchMetodosPagamento (id) {
     try {
       const { data } = await api.get(`/app/loja/${id}/pagamento/metodos/`)
-      metodosPagamento.value = (data.results || data).filter(m => m.ativo)
+      // nome para mostrar ("Cartão", "Transferência"…); o tipo fica para os ícones
+      metodosPagamento.value = (data.results || data).filter(m => m.ativo).map(m => ({ ...m, nome: NOMES_PAGAMENTO[m.tipo] || m.tipo }))
     } catch (e) { console.error(e) }
   }
 
@@ -172,7 +179,7 @@ export function useLojaData () {
     tiposExistentes, categoriasExistentes, totalProdutos, totalDestaques,
     selectedProduct, sidebarAberta, modalPolitica,
     // computed
-    temSidebar, temFooter, soServicos, cssVars, lojaId, gruposProdutos,
+    temSidebar, temFooter, soServicos, totalServicos, cssVars, lojaId, gruposProdutos,
     // helpers
     backendUrl, defaultBanner: DEFAULT_BANNER, formatPrice, tipoIcon, metodoPagamentoIcon,
     scrollToId, onRatingUpdated, logOut,

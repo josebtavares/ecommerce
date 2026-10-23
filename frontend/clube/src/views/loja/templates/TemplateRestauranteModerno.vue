@@ -131,8 +131,8 @@
               </span>
             </div>
             <div class="rm-service__row">
-              <span>Pratos na carta</span>
-              <span>{{ totalProdutos ?? "—" }}</span>
+              <span>{{ soServicos ? 'Serviços' : 'Pratos na carta' }}</span>
+              <span>{{ soServicos ? totalServicos : (totalProdutos ?? "—") }}</span>
             </div>
 
             <div class="rm-service__rating">
@@ -377,7 +377,7 @@
                 <div class="rm-info-block__label">Pagamento</div>
                 <div class="rm-pay">
                   <span v-for="m in metodosPagamento" :key="m.id" class="rm-pay__chip">
-                    {{ m.tipo }}
+                    {{ m.nome }}
                   </span>
                 </div>
               </div>

@@ -76,8 +76,13 @@ export function iconeCategoria (valor, nome) {
   const v = String(valor || '').trim()
   if (POR_CHAVE[v]) return POR_CHAVE[v]
   if (POR_EMOJI[v]) return POR_CHAVE[POR_EMOJI[v]]
-  const chave = POR_NOME[normalizar(nome)] || POR_NOME[normalizar(v)]
+  const chave = POR_NOME[normalizar(nome)] || POR_NOME[normalizar(v)] || porPalavra(nome) || porPalavra(v)
   return chave ? POR_CHAVE[chave] : 'store'
+}
+
+// nomes compostos ("Beleza & Bem-estar", "Casa & Decoração"): a primeira palavra conhecida
+function porPalavra (txt) {
+  return normalizar(txt).split(/[^a-z]+/).map(p => POR_NOME[p]).find(Boolean)
 }
 
 /** Chave da lista para um valor antigo (emoji/nome) — usada ao editar no admin. */

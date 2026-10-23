@@ -72,8 +72,8 @@
                 </dd>
               </div>
               <div>
-                <dt class="ts-mono">Produtos</dt>
-                <dd>{{ totalProdutos ?? '—' }}<span class="ts-specs__nota">{{ grupos.length }} {{ grupos.length === 1 ? 'secção' : 'secções' }}</span></dd>
+                <dt class="ts-mono">{{ soServicos ? 'Serviços' : 'Produtos' }}</dt>
+                <dd>{{ soServicos ? totalServicos : (totalProdutos ?? '—') }}<span v-if="!soServicos" class="ts-specs__nota">{{ grupos.length }} {{ grupos.length === 1 ? 'secção' : 'secções' }}</span></dd>
               </div>
               <div>
                 <dt class="ts-mono">Entrega</dt>
@@ -310,7 +310,7 @@
             <div class="ts-servico__col">
               <p class="ts-servico__titulo ts-mono">Pagamento</p>
               <div v-if="metodosPagamento.length" class="ts-servico__tags">
-                <span v-for="m in metodosPagamento" :key="m.id" class="ts-mono">{{ m.tipo }}</span>
+                <span v-for="m in metodosPagamento" :key="m.id" class="ts-mono">{{ m.nome }}</span>
               </div>
               <p v-else>—</p>
             </div>

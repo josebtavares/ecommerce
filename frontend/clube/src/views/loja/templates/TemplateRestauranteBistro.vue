@@ -218,7 +218,7 @@
             <p class="bs-versal">Pagamento</p>
             <p v-if="metodosPagamento.length" class="bs-info__metodos">
               <template v-for="(m, i) in metodosPagamento" :key="m.id">
-                <span>{{ m.tipo }}</span><i v-if="i < metodosPagamento.length - 1"> · </i>
+                <span>{{ m.nome }}</span><i v-if="i < metodosPagamento.length - 1"> · </i>
               </template>
             </p>
             <p v-else>—</p>

@@ -72,7 +72,10 @@ ROTULOS_CATEGORIA = {
 
 
 def rotulo_categoria(valor):
-    return ROTULOS_CATEGORIA.get(valor) or (valor[:1].upper() + valor[1:])
+    # o nome como o admin o escreveu ("Beleza & Bem-estar"); senão os rótulos antigos
+    from ..models import Categoria
+    nome = Categoria.objects.filter(nome__iexact=valor).values_list('nome', flat=True).first()
+    return nome or ROTULOS_CATEGORIA.get(valor) or (valor[:1].upper() + valor[1:])
 
 
 def _int(v, padrao=None):
