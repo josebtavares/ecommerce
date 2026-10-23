@@ -23,6 +23,8 @@ DEBUG = False
 SECRET_KEY = os.environ['SECRET_KEY']
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+# o health check do Railway chega com este Host (ver /health/ e railway.json)
+ALLOWED_HOSTS.append('healthcheck.railway.app')
 
 # ══════════════════════════════════════════════════════════════
 # BASE DE DADOS
@@ -33,7 +35,10 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
+        # ligações persistentes: cada processo reaproveita as suas (medido com gunicorn + 4 uvicorn:
+        # estabilizam em ~30 no total, longe do limite de 500 do Postgres) e poupa o handshake SSL por pedido
         conn_max_age=600,
+        conn_health_checks=True,     # uma ligação que caiu (ex.: Postgres reiniciou) é renovada em vez de dar erro
         ssl_require=True,
     )
 }
@@ -161,6 +166,7 @@ sentry_sdk.init(
 # HTTPS — Enforcement em produção
 # ══════════════════════════════════════════════════════════════
 SECURE_SSL_REDIRECT             = True
+SECURE_REDIRECT_EXEMPT          = [r'^health/$']   # o health check do Railway chega por HTTP interno
 SESSION_COOKIE_SECURE           = True
 CSRF_COOKIE_SECURE              = True
 SECURE_HSTS_SECONDS             = 31536000      # 1 ano
