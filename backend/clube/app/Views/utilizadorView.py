@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 
+import logging
 import re
 from urllib.parse import urlencode
 
@@ -372,12 +373,16 @@ def password_reset_request(request):
         f"?uid={uid}&token={token}"
     )
 
-    send_mail(
-        subject='Recuperação de palavra-passe',
-        message=f'Clique no link para redefinir a sua palavra-passe:\n\n{reset_link}',
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[django_user.email],
-    )
+    # uma falha do envio fica no log (Sentry) mas a resposta é a mesma: não revela se o email existe
+    try:
+        send_mail(
+            subject='Recuperação de palavra-passe',
+            message=f'Clique no link para redefinir a sua palavra-passe:\n\n{reset_link}',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[django_user.email],
+        )
+    except Exception:
+        logging.getLogger(__name__).exception('recuperar senha: falhou o envio do email')
 
     return Response(status=status.HTTP_200_OK)
 
