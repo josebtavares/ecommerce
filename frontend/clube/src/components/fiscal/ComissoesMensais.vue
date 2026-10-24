@@ -33,6 +33,7 @@
             <font-awesome-icon :icon="['fas', 'file-invoice']" class="mr-1" />Fatura {{ m.fatura.numero }}
           </a>
           <span v-else class="text-[11px] text-zinc-500">Fatura em breve</span>
+          <DiferencaComissoes :item="m" />
         </div>
 
         <!-- vendas do mês -->
@@ -40,7 +41,7 @@
           <div class="flex flex-wrap items-center gap-2 pb-2">
             <input v-model.trim="vq" type="search" @keyup.enter="vendas(0)" @search="vendas(0)" placeholder="Nº da encomenda…" aria-label="Procurar encomenda"
               data-teste="comissoes-vendas-q" class="w-full sm:w-48 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-200 focus:outline-none focus:border-red-500" />
-            <span class="ml-auto text-xs text-zinc-500">{{ v.count }} {{ v.count === 1 ? 'venda' : 'vendas' }} · {{ dinheiro(v.total) }}</span>
+            <span class="ml-auto text-xs text-zinc-500">{{ v.count }} {{ v.count === 1 ? 'venda' : 'vendas' }} · {{ dinheiro(v.total) }}<template v-if="Number(v.creditos)"> · créditos −{{ dinheiro(v.creditos) }}</template></span>
           </div>
           <p v-if="vErro" class="text-sm text-red-400" role="alert">{{ vErro }}</p>
           <p v-else-if="!v.results.length && !vCarregar" class="text-sm text-zinc-500 py-2">Nenhuma venda{{ vq ? ` com "${vq}"` : '' }}.</p>
@@ -56,7 +57,8 @@
                   <td class="px-3 py-2 text-zinc-400">{{ new Date(c.data).toLocaleDateString('pt-PT') }}</td>
                   <td class="px-3 py-2 text-right text-zinc-300 tabular-nums">{{ dinheiro(c.valor_encomenda) }}</td>
                   <td class="px-3 py-2 text-right text-zinc-400 tabular-nums">{{ Number(c.percentagem) }}%</td>
-                  <td class="px-3 py-2 text-right font-semibold text-zinc-100 tabular-nums">{{ dinheiro(c.valor_comissao) }}</td>
+                  <td class="px-3 py-2 text-right font-semibold text-zinc-100 tabular-nums">{{ dinheiro(c.valor_comissao) }}
+                    <span v-if="Number(c.credito)" class="block text-[10px] font-normal text-amber-300" data-teste="comissao-credito">crédito −{{ dinheiro(c.credito) }}</span></td>
                   <td class="px-3 py-2 text-xs text-zinc-400">{{ c.estado_nome }}</td>
                 </tr>
               </tbody>
@@ -76,10 +78,11 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarPdf, urlFicheiro } from '@/utils/documentos'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
+import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
 
 export default {
   name: 'ComissoesMensais',
-  components: { PaginacaoLista },
+  components: { DiferencaComissoes, PaginacaoLista },
   props: { lojaId: { type: [String, Number], required: true } },
   data () {
     return { meses: [], count: 0, anos: [], ano: '', offset: 0, aCarregar: false,

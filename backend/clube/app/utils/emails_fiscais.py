@@ -151,6 +151,28 @@ def enviar_fatura_comissoes(fc):
         anexos)
 
 
+def enviar_fatura_anulada(obj, numero, motivo):
+    """A fatura deixou de valer (anulada com motivo): quem a recebeu por email fica a saber."""
+    from .subscricoes import nome_alvo
+    nome = obj._meta.model_name
+    if nome == 'encomenda':
+        user = obj.comprador.user
+        para, assunto = user.email, f'Fatura {numero} anulada — encomenda #{obj.id} ({obj.loja.nome})'
+        texto = (f'Olá {user.first_name or user.username},\n\n{obj.loja.nome} anulou a fatura {numero} da tua encomenda '
+                 f'#{obj.id}. Motivo: {motivo}\n\nSe a loja emitir outra, recebes-a por email. Encomenda: {_link("/perfil")}')
+    elif nome == 'faturasubscricao':
+        alvo = obj.alvo
+        para, assunto = _dono_email(alvo), f'Fatura {numero} anulada — {obj.descricao}'
+        texto = (f'Olá,\n\nO Bende anulou a fatura {numero} da mensalidade "{obj.descricao}" de {nome_alvo(alvo)}. '
+                 f'Motivo: {motivo}\n\nSubscrição: {_link(_caminho_alvo(alvo, obj.loja_id))}')
+    else:
+        loja = obj.loja
+        para, assunto = _dono_email(loja), f'Fatura {numero} anulada — comissões de {obj.mes:%m/%Y} ({loja.nome})'
+        texto = (f'Olá,\n\nO Bende anulou a fatura {numero} das comissões de {obj.mes:%m/%Y} da loja {loja.nome}. '
+                 f'Motivo: {motivo}\n\nBackoffice: {_link(f"/loja/{loja.id}/backoffice?seccao=subscricao")}')
+    _enviar(para, assunto, texto)
+
+
 def _ao_gravar_fatura_subscricao(sender, instance, **kwargs):
     # mensalidades oferecidas (valor 0) não levam comprovativo
     if instance.estado != 'paga' or instance.comprovativo_enviado_em or not instance.valor:

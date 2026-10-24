@@ -17,9 +17,15 @@
       <a v-if="encomenda.fatura.pdf_url" :href="urlFicheiro(encomenda.fatura.pdf_url)" target="_blank" rel="noopener"
          class="text-red-400 hover:text-red-300 underline">Ver PDF</a>
       <span class="flex-1"></span>
-      <button type="button" @click="abrir('substituir')" data-teste="fatura-substituir" class="text-zinc-400 hover:text-zinc-200 underline">Substituir</button>
+      <button v-if="!cancelada" type="button" @click="abrir('substituir')" data-teste="fatura-substituir" class="text-zinc-400 hover:text-zinc-200 underline">Substituir</button>
       <button type="button" @click="abrir('anular')" data-teste="fatura-anular" class="text-zinc-500 hover:text-red-400 underline">Anular</button>
+      <p v-if="cancelada" class="w-full text-[11px] text-amber-300" data-teste="fatura-cancelada">
+        Venda cancelada depois de faturada: emite a nota de crédito no e-Fatura e anula aqui a fatura (com esse motivo).
+      </p>
     </div>
+
+    <!-- cancelada e com a fatura já anulada: nada para registar -->
+    <p v-else-if="cancelada && !modo" class="text-xs text-zinc-500">Venda cancelada — a fatura foi anulada (fica no histórico).</p>
 
     <!-- por faturar: o botão abre o formulário -->
     <div v-else-if="!modo" class="flex flex-wrap items-center gap-2 text-xs">
@@ -79,6 +85,7 @@ export default {
   },
   computed: {
     pago () { return ['aprovado', 'reembolsado', 'reembolsado_parcial'].includes(this.encomenda.pagamento_status) },
+    cancelada () { return this.encomenda.status === 'cancelado' },
     url () { return `/app/loja/${this.lojaId}/encomendas/${this.encomenda.id}/fatura/` },
     podeGuardar () {
       if (this.modo !== 'registar' && this.motivo.length < 3) return false

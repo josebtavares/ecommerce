@@ -209,6 +209,20 @@ def comissoes_do_mes(loja, mes):
     return qs, qs.aggregate(t=Sum('valor_comissao'))['t'] or 0
 
 
+def creditos_do_mes(loja, mes):
+    """Comissões deste mês devolvidas à loja depois de liquidadas (reembolsos) — [(crédito, comissão)], total."""
+    from ..models import CreditoComissao
+    qs, _ = comissoes_do_mes(loja, mes)
+    cred = CreditoComissao.objects.filter(comissao__in=qs.values('id')).select_related('comissao').order_by('data_criacao')
+    return cred, cred.aggregate(t=Sum('valor'))['t'] or 0
+
+
+def liquido_do_mes(loja, mes):
+    _, total = comissoes_do_mes(loja, mes)
+    _, cred = creditos_do_mes(loja, mes)
+    return total - cred
+
+
 def nome_extrato_comissoes(loja, mes):
     return f'extrato-comissoes-{loja.id}-{mes:%Y-%m}.pdf'
 
@@ -224,5 +238,13 @@ def pdf_extrato_comissoes(loja, mes):
     p.tabela([('Data', 26, 'l'), ('Encomenda', 30, 'l'), ('Valor da venda', 44, 'r'), ('%', 20, 'r'), ('Comissão', 50, 'r')],
              [[_data(c.data_criacao), f'#{c.encomenda_id}', formatar(c.valor_encomenda), f'{c.percentagem:g}%',
                formatar(c.valor_comissao)] for c in qs])
-    p.linha('Total de comissões', formatar(total), destaque=True)
+    cred, total_cred = creditos_do_mes(loja, mes)
+    if total_cred:
+        p.linha('Total de comissões', formatar(total))
+        p.seccao('Créditos à loja (reembolsos depois de a comissão estar liquidada)')
+        p.tabela([('Data', 26, 'l'), ('Encomenda', 30, 'l'), ('Crédito', 50, 'r')],
+                 [[_data(c.data_criacao), f'#{c.comissao.encomenda_id}', '-' + formatar(c.valor)] for c in cred])
+        p.linha('Total líquido', formatar(total - total_cred), destaque=True)
+    else:
+        p.linha('Total de comissões', formatar(total), destaque=True)
     return p.fim('A fatura do Bende relativa a estas comissões é emitida no e-Fatura.')

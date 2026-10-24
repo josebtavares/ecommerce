@@ -9,7 +9,7 @@ ou o seu programa) e regista o número/PDF na encomenda. Aqui fica:
 """
 import re
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 REGIMES = [
@@ -187,11 +187,28 @@ def _anular_em_vigor(obj, user, motivo):
         linha.save(update_fields=['anulada_em', 'anulada_por', 'motivo'])
 
 
+class FaturaAlterada(Exception):
+    """Outro pedido mudou a fatura deste documento entretanto (ex.: dois cliques em Registar)."""
+
+
+def _bloquear(obj):
+    """Tranca o documento até ao fim da transação e confirma que a fatura não mudou desde que foi lido."""
+    if not obj.pk:
+        return
+    atual = type(obj).objects.select_for_update().filter(pk=obj.pk).values_list('fatura_registada_em', flat=True).first()
+    if atual != obj.fatura_registada_em:        # registada/anulada por outro pedido (ou FaturaComissoes apagada)
+        raise FaturaAlterada()
+
+
 def _gravar(obj):
     if obj.pk:
         obj.save(update_fields=['fatura_numero', 'fatura_pdf', 'fatura_registada_em'])
-    else:
-        obj.save()
+        return
+    try:
+        with transaction.atomic():
+            obj.save()
+    except IntegrityError:                      # FaturaComissoes do mesmo mês criada por outro pedido
+        raise FaturaAlterada()
 
 
 def registar_fatura(obj, numero, pdf, user=None, motivo=''):
@@ -201,6 +218,7 @@ def registar_fatura(obj, numero, pdf, user=None, motivo=''):
     Sem PDF novo, a substituta fica com o PDF da anterior (corrigir só o número).
     """
     with transaction.atomic():
+        _bloquear(obj)
         if obj.pk and obj.fatura_registada_em:
             _anular_em_vigor(obj, user, motivo)
         if pdf:
@@ -214,6 +232,7 @@ def registar_fatura(obj, numero, pdf, user=None, motivo=''):
 def anular_fatura(obj, user, motivo):
     """A fatura deixa de estar em vigor (registo errado, fatura anulada no e-Fatura…). Nada se apaga."""
     with transaction.atomic():
+        _bloquear(obj)
         _anular_em_vigor(obj, user, motivo)
         if obj._meta.model_name == 'faturacomissoes':
             obj.delete()     # o PDF continua referido no arquivo → a limpeza não lhe toca
