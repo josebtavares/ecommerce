@@ -110,49 +110,60 @@
         </div>
       </template>
 
-      <!-- ═══ FATURAS DO BENDE ═══ -->
+      <!-- ═══ FATURAS DO BENDE (agrupadas por loja, com os seus POS) ═══ -->
       <template v-else>
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-xs text-zinc-500">Mês</span>
-          <input type="month" v-model="mes" aria-label="Mês" @change="carregarBende"
-            class="px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 [color-scheme:dark]" />
-          <span v-if="bende" class="text-xs text-zinc-500 ml-2">{{ porFaturarBende }} por faturar</span>
-        </div>
+        <form @submit.prevent="carregarBende(0)" class="flex flex-wrap items-end gap-2">
+          <input v-model.trim="fb.q" type="search" placeholder="Loja, POS, NIF ou dono" aria-label="Pesquisar nas faturas do Bende" data-teste="bende-q"
+            class="flex-1 min-w-[200px] px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-red-500" />
+          <label class="text-[11px] text-zinc-500">De <input type="month" v-model="fb.de" @change="carregarBende(0)" aria-label="Mês inicial" data-teste="bende-de"
+            class="ml-1 px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 [color-scheme:dark]" /></label>
+          <label class="text-[11px] text-zinc-500">a <input type="month" v-model="fb.ate" @change="carregarBende(0)" aria-label="Mês final" data-teste="bende-ate"
+            class="ml-1 px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 [color-scheme:dark]" /></label>
+          <label class="flex items-center gap-1.5 text-xs text-zinc-400 px-1">
+            <input type="checkbox" v-model="fb.por_faturar" @change="carregarBende(0)" class="accent-red-600" data-teste="bende-por-faturar" /> Só por faturar
+          </label>
+          <button type="submit" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold">Procurar</button>
+        </form>
+        <p v-if="bende" class="text-xs text-zinc-500" data-teste="bende-totais">
+          {{ bende.totais.grupos }} loja(s)/POS · {{ bende.totais.documentos }} documento(s) · {{ euros(bende.totais.valor) }} ·
+          <span :class="bende.totais.por_faturar ? 'text-amber-300 font-bold' : ''">{{ bende.totais.por_faturar }} por faturar</span>
+        </p>
         <div v-if="carregando && !bende" class="h-40 bg-zinc-900 rounded-2xl animate-pulse"></div>
-        <template v-else-if="bende">
-          <div class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="bende-subscricoes">
-            <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pt-4 pb-3">Mensalidades pagas</p>
-            <p v-if="!bende.subscricoes.length" class="text-sm text-zinc-500 px-5 pb-5">Nenhuma mensalidade paga neste mês.</p>
-            <div v-else class="divide-y divide-zinc-800">
-              <div v-for="f in bende.subscricoes" :key="f.id" class="px-5 py-3 flex flex-wrap items-center gap-3">
-                <div class="flex-1 min-w-[200px]">
-                  <p class="text-sm font-semibold text-zinc-200">{{ f.loja_nome }} <span class="text-zinc-500 font-normal">· {{ f.descricao }}</span></p>
-                  <p class="text-[11px] text-zinc-500">Paga a {{ data(f.paga_em) }} · {{ f.metodo_nome }} · NIF {{ f.nif || '—' }}</p>
+        <div v-else-if="bende" class="space-y-3" data-teste="bende-grupos">
+          <div v-for="g in bende.results" :key="g.tipo + g.id" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" :data-teste="`bende-${g.tipo}-${g.id}`">
+            <div class="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-800">
+              <div class="flex-1 min-w-[200px]">
+                <p class="font-semibold text-zinc-100">{{ g.nome }}</p>
+                <p class="text-[11px] text-zinc-500">{{ g.tipo === 'pos' ? `POS · ${g.codigo_pos}` : 'Loja' }} · NIF {{ g.nif || '—' }} · {{ g.dono.email }}</p>
+              </div>
+              <span class="text-sm font-bold text-zinc-100">{{ euros(g.valor) }}</span>
+              <span :class="['text-xs', g.por_faturar ? 'text-amber-300 font-bold' : 'text-green-400']">{{ g.por_faturar ? `${g.por_faturar} por faturar` : 'Tudo faturado' }}</span>
+              <button type="button" @click="abrirFicha(g.tipo, g.id, 'bende')" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ficha</button>
+            </div>
+            <div class="divide-y divide-zinc-800">
+              <div v-for="d in g.documentos" :key="d.referencia" class="px-5 py-3 flex flex-wrap items-center gap-3" :data-teste="`doc-${d.referencia}`">
+                <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', d.tipo === 'comissoes' ? 'bg-sky-500/15 text-sky-300' : 'bg-violet-500/15 text-violet-300']">
+                  {{ d.tipo === 'comissoes' ? 'Comissões' : 'Mensalidade' }}
+                </span>
+                <div class="flex-1 min-w-[180px]">
+                  <p class="text-sm text-zinc-200">{{ d.titulo }} <span class="text-[11px] text-zinc-500">· {{ d.referencia }}</span></p>
+                  <p class="text-[11px] text-zinc-500">
+                    <template v-if="d.tipo === 'mensalidade'">{{ d.alvo_tipo === 'pos' ? d.alvo + ' · ' : '' }}paga a {{ data(d.data) }} · {{ d.metodo_nome }}</template>
+                    <template v-else>{{ d.comissoes }} venda(s)</template>
+                    <template v-if="d.anuladas"> · <span class="text-red-300">{{ d.anuladas }} anulada(s)</span></template>
+                  </p>
                 </div>
-                <span class="text-sm font-bold text-zinc-100">{{ euros(f.valor) }}</span>
-                <button type="button" @click="comprovativo(f)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
-                <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="d => f.fatura = d.fatura" />
+                <span class="text-sm font-bold text-zinc-100">{{ euros(d.valor) }}</span>
+                <button type="button" @click="d.tipo === 'comissoes' ? extrato(g, d) : comprovativo(d)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">
+                  {{ d.tipo === 'comissoes' ? 'Extrato' : 'Comprovativo' }}
+                </button>
+                <RegistarFaturaBende :fatura="d.fatura" :url="d.url" @atualizado="r => aposFaturaBende(g, d, r)" />
               </div>
             </div>
           </div>
-
-          <div class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="bende-comissoes">
-            <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pt-4 pb-1">Comissões do mês</p>
-            <p class="text-[11px] text-zinc-500 px-5 pb-3">Uma fatura por loja; o extrato vai em anexo no email à loja.</p>
-            <p v-if="!bende.comissoes.length" class="text-sm text-zinc-500 px-5 pb-5">Nenhuma comissão neste mês.</p>
-            <div v-else class="divide-y divide-zinc-800">
-              <div v-for="c in bende.comissoes" :key="c.loja_id" class="px-5 py-3 flex flex-wrap items-center gap-3">
-                <div class="flex-1 min-w-[200px]">
-                  <p class="text-sm font-semibold text-zinc-200">{{ c.loja_nome }}</p>
-                  <p class="text-[11px] text-zinc-500">{{ c.comissoes }} venda(s) · NIF {{ c.nif || '—' }}</p>
-                </div>
-                <span class="text-sm font-bold text-zinc-100">{{ euros(c.total) }}</span>
-                <button type="button" @click="extrato(c)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Extrato</button>
-                <RegistarFaturaBende :fatura="c.fatura" :url="`/app/admin/faturacao/comissoes/${c.loja_id}/${bende.mes}/fatura/`" @atualizado="d => c.fatura = d.fatura" />
-              </div>
-            </div>
-          </div>
-        </template>
+          <p v-if="!bende.results.length" class="text-center py-10 text-sm text-zinc-500 bg-zinc-900 rounded-2xl border border-zinc-800">Nada para faturar neste período.</p>
+          <PaginacaoLista :count="bende.count" :limit="LIMITE" :offset="bOffset" @ir="carregarBende" />
+        </div>
       </template>
     </template>
   </div>
@@ -186,6 +197,7 @@ export default {
   components: { FaturacaoFicha, PaginacaoLista, RegistarFaturaBende },
   data () {
     const hoje = new Date()
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
     return {
       TABS, TIPOS, LIMITE,
       tab: 'vendedores',
@@ -196,17 +208,16 @@ export default {
       offset: 0,
       ficha: null,            // { tipo, id, aba, q }
       pq: '', pRes: null, pOffset: 0,
-      mes: `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`,
-      bende: null,
+      fb: { q: '', de: mesAtual, ate: mesAtual, por_faturar: false },
+      bende: null, bOffset: 0,
     }
   },
-  computed: {
-    porFaturarBende () {
-      if (!this.bende) return 0
-      return this.bende.subscricoes.filter(f => !f.fatura).length + this.bende.comissoes.filter(c => !c.fatura).length
-    },
+  created () {
+    this.carregarVendedores(0)
+    // ?ficha=loja-12&aba=bende (ex.: "Ver na Faturação" em Subscrições → Cobranças)
+    const m = /^(loja|pos)-(\d+)$/.exec(this.$route.query.ficha || '')
+    if (m) this.abrirFicha(m[1], Number(m[2]), this.$route.query.aba || '')
   },
-  created () { this.carregarVendedores(0) },
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
     data (s) { return s ? new Date(s).toLocaleDateString('pt-PT') : '—' },
@@ -250,15 +261,27 @@ export default {
       if (r.tipo === 'mensalidade' || r.tipo === 'comissoes') return this.abrirFicha(v.tipo, v.id, 'bende')
       return this.abrirFicha(v.tipo, v.id)
     },
-    carregarBende () {
+    carregarBende (offset = this.bOffset) {
+      this.bOffset = offset
       return this.carregar(async () => {
-        const { data } = await api.get('/app/admin/faturacao/bende/', { params: { mes: this.mes } })
-        this.bende = data
+        const params = { limit: LIMITE, offset, de: this.fb.de, ate: this.fb.ate }
+        if (this.fb.q) params.q = this.fb.q
+        if (this.fb.por_faturar) params.por_faturar = 1
+        this.bende = (await api.get('/app/admin/faturacao/bende/', { params })).data
       })
     },
-    comprovativo (f) { descarregarComprovativoSubscricao(f) },
-    extrato (c) {
-      descarregarPdf(`/app/admin/faturacao/comissoes/${c.loja_id}/${this.bende.mes}/extrato/`, `extrato-comissoes-${c.loja_id}-${this.bende.mes}.pdf`)
+    // registar / substituir / anular sem recarregar a lista
+    aposFaturaBende (g, d, r) {
+      const tinha = !!d.fatura
+      d.fatura = r.fatura
+      if (tinha) d.anuladas++                       // substituída ou anulada: a anterior fica no histórico
+      const passo = (tinha ? 1 : 0) - (d.fatura ? 1 : 0)   // +1 voltou a "por faturar", -1 ficou faturada
+      g.por_faturar += passo
+      this.bende.totais.por_faturar += passo
+    },
+    comprovativo (d) { descarregarComprovativoSubscricao(d) },
+    extrato (g, d) {
+      descarregarPdf(`/app/admin/faturacao/comissoes/${g.id}/${d.mes}/extrato/`, `extrato-comissoes-${g.id}-${d.mes}.pdf`)
     },
   },
 }

@@ -40,7 +40,7 @@
           <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
             <p class="text-xs text-zinc-500">Subscrições</p>
             <p class="text-2xl font-black text-sky-300 mt-1">{{ euros(resumo.subscricoes.valor) }}</p>
-            <p class="text-[11px] text-zinc-500 mt-1">{{ resumo.subscricoes.faturas }} fatura(s) paga(s)<template v-if="resumo.subscricoes.ofertas"> · {{ resumo.subscricoes.ofertas }} oferta(s)</template></p>
+            <p class="text-[11px] text-zinc-500 mt-1">{{ resumo.subscricoes.faturas }} cobrança(s) paga(s)<template v-if="resumo.subscricoes.ofertas"> · {{ resumo.subscricoes.ofertas }} oferta(s)</template></p>
             <p v-if="resumo.por_alvo" class="text-[11px] text-zinc-400 mt-1">Lojas {{ euros(resumo.por_alvo.lojas.valor) }}<template v-if="resumo.por_alvo.servicos"> · Serviços {{ euros(resumo.por_alvo.servicos.valor) }}</template> · POS {{ euros(resumo.por_alvo.pos.valor) }}</p>
           </div>
           <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
@@ -51,7 +51,7 @@
           <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
             <p class="text-xs text-zinc-500">Em atraso (hoje)</p>
             <p class="text-2xl font-black mt-1" :class="Number(resumo.em_atraso.valor) ? 'text-red-400' : 'text-zinc-100'">{{ euros(resumo.em_atraso.valor) }}</p>
-            <p class="text-[11px] text-zinc-500 mt-1">{{ resumo.em_atraso.faturas }} fatura(s) · {{ euros(resumo.a_receber.valor) }} a vencer no período</p>
+            <p class="text-[11px] text-zinc-500 mt-1">{{ resumo.em_atraso.faturas }} cobrança(s) · {{ euros(resumo.a_receber.valor) }} a vencer no período</p>
           </div>
         </div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -140,7 +140,7 @@
             @click="abrirOferta(l)" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-xs text-sky-300">Oferecer meses</button>
           <button v-if="l.subscricao_servicos && !['aguarda', 'cancelada'].includes(l.subscricao_servicos.estado)" type="button"
             @click="abrirOferta(l, true)" class="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs text-emerald-300">Oferecer meses (Serviços)</button>
-          <button type="button" @click="verFaturas(l)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Faturas</button>
+          <button type="button" @click="verFaturas(l)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Cobranças</button>
           <button type="button" @click="abrirModelo(l)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Mudar modelo</button>
         </div>
       </div>
@@ -194,15 +194,15 @@
             <button type="button" @click="abrirOfertaPos(p)" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-xs text-sky-300">Oferecer meses</button>
             <button type="button" @click="abrirPlanoPos(p)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Plano</button>
           </template>
-          <button type="button" @click="verFaturasPos(p)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Faturas</button>
+          <button type="button" @click="verFaturasPos(p)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Cobranças</button>
         </div>
       </div>
     </template>
 
-    <!-- ═══ FATURAS ═══ -->
+    <!-- ═══ COBRANÇAS (mensalidades: FaturaSubscricao) — a fatura legal do Bende regista-se em Faturação ═══ -->
     <template v-else-if="tab === 'faturas'">
       <div class="flex flex-wrap items-center gap-2">
-        <select v-model="estadoFatura" @change="carregarFaturas" aria-label="Estado da fatura"
+        <select v-model="estadoFatura" @change="carregarFaturas" aria-label="Estado da cobrança"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Todas</option>
           <option value="pendente">Por pagar</option>
@@ -226,7 +226,7 @@
         </span>
       </div>
       <div v-if="carregando" class="space-y-2"><div v-for="n in 4" :key="n" class="h-14 bg-zinc-900 rounded-2xl animate-pulse"></div></div>
-      <div v-else-if="!faturas.length" class="text-center py-12 text-sm text-zinc-500 bg-zinc-900 rounded-2xl border border-zinc-800">Nenhuma fatura.</div>
+      <div v-else-if="!faturas.length" class="text-center py-12 text-sm text-zinc-500 bg-zinc-900 rounded-2xl border border-zinc-800">Nenhuma cobrança.</div>
       <div v-else class="space-y-2">
         <div v-for="f in faturas" :key="f.id" class="bg-zinc-900 rounded-2xl border border-zinc-800 px-4 py-3 flex flex-wrap items-center gap-3">
           <div class="flex-1 min-w-[200px]">
@@ -252,6 +252,9 @@
           <a v-if="f.fatura && f.fatura.pdf_url" :href="urlFicheiro(f.fatura.pdf_url)" target="_blank" rel="noopener"
             class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs">Fatura {{ f.fatura.numero }}</a>
           <span v-else-if="f.fatura" class="text-xs text-green-400">Fatura {{ f.fatura.numero }}</span>
+          <span v-else-if="f.estado === 'paga' && Number(f.valor) > 0" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300" data-teste="cobranca-por-faturar">Fatura do Bende por registar</span>
+          <button v-if="f.estado === 'paga' && Number(f.valor) > 0" type="button" @click="verNaFaturacao(f)" data-teste="ver-na-faturacao"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ver na Faturação →</button>
         </div>
       </div>
     </template>
@@ -344,7 +347,7 @@
             <input v-model.number="modal.form.meses" type="number" min="1" max="12" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100" /></label>
           <label class="block"><span class="text-xs text-zinc-500">Motivo (o dono vê-o na notificação)</span>
             <input v-model="modal.form.motivo" maxlength="300" placeholder="ex.: compensação por falha do site" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100" /></label>
-          <p class="text-xs text-zinc-500">As faturas por pagar deste período ficam anuladas e é registada uma fatura de 0$00 ("Oferta"). Se {{ modal.pos ? "o POS estiver suspenso" : "a loja estiver suspensa" }} por falta de pagamento, volta logo.<template v-if="modal.pos && !modal.pos.subscricao.plano"> Sem plano, os meses contam a partir de hoje.</template></p>
+          <p class="text-xs text-zinc-500">As cobranças por pagar deste período ficam anuladas e é registada uma cobrança de 0$00 ("Oferta"). Se {{ modal.pos ? "o POS estiver suspenso" : "a loja estiver suspensa" }} por falta de pagamento, volta logo.<template v-if="modal.pos && !modal.pos.subscricao.plano"> Sem plano, os meses contam a partir de hoje.</template></p>
         </template>
 
         <!-- plano do POS -->
@@ -356,7 +359,7 @@
           </select>
           <p class="text-xs text-zinc-500">
             <template v-if="modal.pos.subscricao.plano">Como quando o dono muda de plano: vale a partir da próxima renovação.</template>
-            <template v-else>O POS fica com este plano. Se o período grátis já acabou, a primeira fatura é emitida já.</template>
+            <template v-else>O POS fica com este plano. Se o período grátis já acabou, a primeira cobrança é emitida já.</template>
             O dono é avisado.
           </p>
         </template>
@@ -371,9 +374,9 @@
         <!-- anular -->
         <template v-else-if="modal.tipo === 'anular'">
           <p class="text-sm text-zinc-300">{{ modal.fatura.loja_nome }} · {{ modal.fatura.descricao }} · <b>{{ euros(modal.fatura.valor) }}</b></p>
-          <label class="block"><span class="text-xs text-zinc-500">Motivo (fica registado na fatura)</span>
+          <label class="block"><span class="text-xs text-zinc-500">Motivo (fica registado na cobrança)</span>
             <input v-model="modal.form.motivo" maxlength="250" placeholder="ex.: valor errado" class="mt-1 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100" /></label>
-          <p class="text-xs text-zinc-500">A fatura não se apaga. Se o período ficar por cobrir, é emitida uma nova automaticamente.</p>
+          <p class="text-xs text-zinc-500">A cobrança não se apaga. Se o período ficar por cobrir, é emitida uma nova automaticamente.</p>
         </template>
 
         <!-- mudar modelo -->
@@ -385,9 +388,9 @@
               <option :value="null" disabled>Escolhe um plano</option>
               <option v-for="p in planos.filter(x => x.ativo && ['loja', 'loja_pos'].includes(x.tipo))" :key="p.id" :value="p.id">{{ p.nome }}{{ p.tipo === 'loja_pos' ? ' (Loja + POS)' : '' }} — {{ euros(p.preco) }}</option>
             </select>
-            <p class="text-xs text-zinc-500">Sem período de teste: a primeira fatura vence hoje. As encomendas já feitas continuam a pagar comissão.</p>
+            <p class="text-xs text-zinc-500">Sem período de teste: a primeira cobrança vence hoje. As encomendas já feitas continuam a pagar comissão.</p>
           </div>
-          <p v-else class="text-sm text-zinc-300">Passar para <b>comissão ({{ Number(modal.loja.percentagem_comissao) }}%)</b>. A subscrição fica cancelada e as faturas por pagar anuladas (não se apagam).</p>
+          <p v-else class="text-sm text-zinc-300">Passar para <b>comissão ({{ Number(modal.loja.percentagem_comissao) }}%)</b>. A subscrição fica cancelada e as cobranças por pagar anuladas (não se apagam).</p>
         </template>
 
         <p v-if="modal.erro" class="text-sm text-red-400" role="alert">{{ modal.erro }}</p>
@@ -408,7 +411,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 
-const TABS = [{ key: 'resumo', label: 'Resumo' }, { key: 'lojas', label: 'Lojas' }, { key: 'pos', label: 'POS' }, { key: 'faturas', label: 'Faturas' }, { key: 'planos', label: 'Planos' }]
+const TABS = [{ key: 'resumo', label: 'Resumo' }, { key: 'lojas', label: 'Lojas' }, { key: 'pos', label: 'POS' }, { key: 'faturas', label: 'Cobranças' }, { key: 'planos', label: 'Planos' }]
 const PERIODOS = [{ key: 'este_mes', label: 'Este mês' }, { key: 'mes_passado', label: 'Mês passado' },
                   { key: 'ult30', label: 'Últimos 30 dias' }, { key: 'este_ano', label: 'Este ano' }]
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -487,6 +490,10 @@ export default {
                      form: { metodo: 'transferencia', notas: '' } }
     },
     recibo (f) { descarregarComprovativoSubscricao(f) },
+    // a fatura legal do Bende (registar, substituir, anular, histórico) vive em Admin → Faturação, na ficha da loja/POS
+    verNaFaturacao (f) {
+      this.$router.push({ query: { seccao: 'faturacao', ficha: f.loja_id ? `loja-${f.loja_id}` : `pos-${f.pos_id}`, aba: 'bende' } })
+    },
     urlFicheiro,
     escolherPeriodo (k) {
       const h = new Date()

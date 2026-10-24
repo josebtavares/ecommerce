@@ -22,6 +22,18 @@
           <p class="text-lg font-bold tabular-nums text-zinc-100">{{ ficha.nif || '—' }}</p>
           <span :class="['inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold', regimeClasse(ficha)]">{{ regimeNome(ficha) }}</span>
         </div>
+        <!-- pacote para a DNRE: CSVs + comprovativos, extratos e faturas (em vigor e anuladas) do período -->
+        <form @submit.prevent="exportar" class="w-full border-t border-zinc-800 pt-3 flex flex-wrap items-end gap-2" data-teste="exportar-zip">
+          <span class="text-xs text-zinc-400 mr-1">Exportar arquivo (ZIP)</span>
+          <label class="text-[11px] text-zinc-500">De <input type="date" v-model="zip.de" class="ml-1 px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 [color-scheme:dark]" /></label>
+          <label class="text-[11px] text-zinc-500">a <input type="date" v-model="zip.ate" class="ml-1 px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 [color-scheme:dark]" /></label>
+          <button type="submit" :disabled="zip.aExportar" data-teste="exportar-zip-botao"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 text-xs font-semibold">
+            <font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1" />{{ zip.aExportar ? 'A preparar…' : 'Descarregar ZIP' }}
+          </button>
+          <span class="text-[11px] text-zinc-500">{{ zip.de || zip.ate ? '' : 'Sem datas: desde sempre.' }} Dados fiscais, vendas, comprovativos e todas as faturas — para a DNRE.</span>
+          <p v-if="zip.erro" class="w-full text-xs text-red-400" role="alert">{{ zip.erro }}</p>
+        </form>
       </div>
 
       <div v-if="ficha.totais" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -206,6 +218,7 @@ export default {
       fv: { ...vazio(), q: this.qInicial },
       vendas: { count: 0, results: [], totais: null }, offsetVendas: 0, carregandoVendas: false,
       aberto: {}, versao: 0, historicoVenda: '',
+      zip: { de: '', ate: '', aExportar: false, erro: '' },
     }
   },
   computed: {
@@ -279,6 +292,20 @@ export default {
       const de = this.fv.de || '2020-01-01'
       const ate = this.fv.ate || new Date().toISOString().slice(0, 10)
       descarregarPdf('/app/admin/faturacao/vendas.csv', `vendas-${this.id}-${de}-${ate}.csv`, { loja: this.id, de, ate })
+    },
+    async exportar () {
+      this.zip.aExportar = true; this.zip.erro = ''
+      const params = {}
+      if (this.zip.de) params.de = this.zip.de
+      if (this.zip.ate) params.ate = this.zip.ate
+      try {
+        await descarregarPdf(`/app/admin/faturacao/exportar/${this.tipo}/${this.id}/`,
+          `arquivo-fiscal-${this.tipo}-${this.id}-${this.zip.de || 'inicio'}-${this.zip.ate || 'hoje'}.zip`, params)
+      } catch (e) {
+        let msg = 'Não foi possível exportar.'
+        try { msg = JSON.parse(await e.response.data.text()).detail || msg } catch { /* resposta sem JSON */ }
+        this.zip.erro = msg
+      } finally { this.zip.aExportar = false }
     },
     extrato (c) {
       descarregarPdf(`/app/admin/faturacao/comissoes/${this.id}/${c.mes}/extrato/`, `extrato-comissoes-${this.id}-${c.mes}.pdf`)
