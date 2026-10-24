@@ -12,6 +12,7 @@ urlpatterns = [
     path('admin/faturacao/loja/<int:loja_id>/vendas/',          v.admin_loja_vendas,       name='admin-faturacao-loja-vendas'),
     path('admin/faturacao/historico/',                          v.admin_historico,         name='admin-faturacao-historico'),
     path('admin/faturacao/pesquisa/',                           v.admin_pesquisa,          name='admin-faturacao-pesquisa'),
+    path('admin/faturacao/exportar/<str:tipo>/<int:id>/',       v.admin_exportar,          name='admin-faturacao-exportar'),
     path('admin/faturacao/vendas.csv',                          v.admin_vendas_csv,        name='admin-faturacao-vendas'),
     path('admin/faturacao/bende/',                              v.admin_bende,             name='admin-faturacao-bende'),
     path('admin/faturacao/subscricoes/<int:fatura_id>/fatura/', v.admin_fatura_subscricao, name='admin-faturacao-subscricao'),

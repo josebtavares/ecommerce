@@ -14,17 +14,21 @@ Admin (gerir_faturacao):
   GET  /app/admin/faturacao/historico/?ref=E-1|S-1|C-1-202610           faturas registadas e anuladas do documento
   GET  /app/admin/faturacao/pesquisa/?q=                    qualquer documento, fatura, vendedor ou cliente
   GET  /app/admin/faturacao/vendas.csv?loja=&de=&ate=       vendas de uma loja com as faturas (para a DNRE)
-  GET  /app/admin/faturacao/bende/?mes=AAAA-MM              o que o Bende tem de faturar no mês
+  GET  /app/admin/faturacao/bende/?de=AAAA-MM&ate=&q=&por_faturar=   o que o Bende tem de faturar, agrupado por loja (+ POS)
+  GET  /app/admin/faturacao/exportar/<loja|pos>/<id>/?de=&ate=       ZIP para a DNRE (CSVs + todos os PDFs)
   POST/DELETE /app/admin/faturacao/subscricoes/<id>/fatura/            fatura do Bende de uma mensalidade
               (substituir e DELETE pedem {motivo}: a anterior fica anulada no HistoricoFatura, nada se apaga)
   POST/DELETE /app/admin/faturacao/comissoes/<loja>/<AAAA-MM>/fatura/   fatura do Bende das comissões do mês
   GET  /app/admin/faturacao/comissoes/<loja>/<AAAA-MM>/extrato/
 """
 import csv
+import io
 import re
+import zipfile
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+from django.core.files.storage import default_storage
 from django.db.models import Count, F, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -491,6 +495,46 @@ def admin_pesquisa(request):
     return Response({'count': total, 'results': pagina})
 
 
+def _csv(linhas):
+    """[[...], ...] → texto CSV com ; e BOM (o Excel abre com acentos)."""
+    buf = io.StringIO()
+    buf.write('﻿')
+    w = csv.writer(buf, delimiter=';')
+    w.writerows(linhas)
+    return buf.getvalue()
+
+
+def _quando(dt, fmt='%d/%m/%Y %H:%M'):
+    return f'{timezone.localtime(dt):{fmt}}' if dt else ''
+
+
+def _vendas_qs(loja, de, ate):
+    qs = Encomenda.objects.filter(_vendas_filtro(de, ate, ''), loja=loja)
+    return qs.select_related('comprador__user', 'pagamento').order_by('data_criacao')
+
+
+def _linhas_vendas(loja, qs, de, ate, request):
+    anuladas = {}
+    for h in HistoricoFatura.objects.filter(encomenda__in=qs, anulada_em__isnull=False).order_by('anulada_em'):
+        anuladas.setdefault(h.encomenda_id, []).append(f'{h.numero} ({h.motivo})')
+    periodo = f'Período: {de:%d/%m/%Y} a {ate:%d/%m/%Y}' if de and ate else 'Período: desde sempre'
+    linhas = [
+        [f'Loja: {loja.nome}', f'NIF: {loja.nif or "—"}', f'Regime: {loja.get_regime_fiscal_display() or "—"}',
+         f'Declaração aceite: {_quando(loja.dados_fiscais_aceites_em)}' if loja.dados_fiscais_aceites_em else 'Declaração: por aceitar',
+         periodo],
+        ['Encomenda', 'Comprovativo', 'Data', 'Cliente', 'Email do cliente', 'Valor (CVE)', 'Estado',
+         'Fatura nº', 'Fatura registada em', 'PDF da fatura', 'Faturas anuladas (motivo)'],
+    ]
+    for e in qs:
+        fat = fiscal.fatura_resumo(e, request)
+        u = e.comprador.user
+        linhas.append([e.id, f'E-{e.id}', _quando(e.data_criacao), u.get_full_name() or u.username, u.email,
+                       f'{e.valor_devido:.2f}'.replace('.', ','), e.get_status_display(), fat['numero'] if fat else '',
+                       _quando(fat['registada_em'], '%d/%m/%Y') if fat else '', (fat or {}).get('pdf_url') or '',
+                       ' | '.join(anuladas.get(e.id, []))])
+    return linhas
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_vendas_csv(request):
@@ -501,55 +545,235 @@ def admin_vendas_csv(request):
     loja = get_object_or_404(Loja, id=request.GET.get('loja') or 0)
     if not de:
         return Response({'detail': 'Datas inválidas.'}, status=status.HTTP_400_BAD_REQUEST)
-    qs = (Encomenda.objects.filter(loja=loja, status__in=fiscal.ESTADOS_FATURAVEIS,
-                                   data_criacao__date__gte=de, data_criacao__date__lte=ate)
-          .select_related('comprador__user').order_by('data_criacao'))
-    anuladas = {}
-    for h in HistoricoFatura.objects.filter(encomenda__in=qs, anulada_em__isnull=False).order_by('anulada_em'):
-        anuladas.setdefault(h.encomenda_id, []).append(f'{h.numero} ({h.motivo})')
-    r = HttpResponse(content_type='text/csv; charset=utf-8')
+    r = HttpResponse(_csv(_linhas_vendas(loja, _vendas_qs(loja, de, ate), de, ate, request)),
+                     content_type='text/csv; charset=utf-8')
     r['Content-Disposition'] = f'attachment; filename="vendas-{loja.id}-{de}-{ate}.csv"'
-    r.write('﻿')     # Excel abre com acentos
-    w = csv.writer(r, delimiter=';')
-    w.writerow([f'Loja: {loja.nome}', f'NIF: {loja.nif or "—"}', f'Regime: {loja.get_regime_fiscal_display() or "—"}',
-                f'Declaração aceite: {timezone.localtime(loja.dados_fiscais_aceites_em):%d/%m/%Y %H:%M}'
-                if loja.dados_fiscais_aceites_em else 'Declaração: por aceitar',
-                f'Período: {de:%d/%m/%Y} a {ate:%d/%m/%Y}'])
-    w.writerow(['Encomenda', 'Comprovativo', 'Data', 'Cliente', 'Email do cliente', 'Valor (CVE)', 'Estado',
-                'Fatura nº', 'Fatura registada em', 'PDF da fatura', 'Faturas anuladas (motivo)'])
-    for e in qs:
-        fat = fiscal.fatura_resumo(e, request)
-        u = e.comprador.user
-        w.writerow([e.id, f'E-{e.id}', f'{timezone.localtime(e.data_criacao):%d/%m/%Y %H:%M}',
-                    u.get_full_name() or u.username, u.email, f'{e.valor_devido:.2f}'.replace('.', ','),
-                    e.get_status_display(), fat['numero'] if fat else '',
-                    f'{timezone.localtime(fat["registada_em"]):%d/%m/%Y}' if fat else '', (fat or {}).get('pdf_url') or '',
-                    ' | '.join(anuladas.get(e.id, []))])
     return r
+
+
+# ── Faturas do Bende, agrupadas por loja (com os seus POS) ──
+
+def _intervalo_meses(request):
+    """?de=AAAA-MM&ate=AAAA-MM (ou ?mes=) → (primeiro dia, dia 1 do mês seguinte ao último); máx. 24 meses."""
+    ini = _mes(request.GET.get('de') or request.GET.get('mes')) or timezone.localdate().replace(day=1)
+    fim = _mes(request.GET.get('ate') or request.GET.get('mes')) or ini
+    if fim < ini:
+        ini, fim = fim, ini
+    if (fim.year - ini.year) * 12 + fim.month - ini.month >= 24:
+        return None, None
+    return ini, (fim.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+
+def _docs_bende(ini, fim, loja_ids=None, pos_ids=None):
+    """Mensalidades pagas e comissões mensais no intervalo, por grupo ('loja', id) | ('pos', id)."""
+    subs = (FaturaSubscricao.objects.filter(estado='paga', valor__gt=0, paga_em__date__gte=ini, paga_em__date__lt=fim)
+            .select_related('loja', 'pos', 'pos__loja_vinculada', 'plano').order_by('paga_em'))
+    com = Comissao.objects.filter(data_criacao__date__gte=ini, data_criacao__date__lt=fim)
+    if loja_ids is not None:
+        subs = subs.filter(Q(loja_id__in=loja_ids) | Q(pos_id__in=pos_ids or []))
+        com = com.filter(loja_id__in=loja_ids)
+    meses_com = {}
+    for c in com.values('loja_id', 'data_criacao', 'valor_comissao'):
+        mes = timezone.localtime(c['data_criacao']).date().replace(day=1)
+        t = meses_com.setdefault((c['loja_id'], mes), [Decimal('0'), 0])
+        t[0] += c['valor_comissao'] or 0
+        t[1] += 1
+    fcs = {(fc.loja_id, fc.mes): fc for fc in FaturaComissoes.objects.filter(mes__gte=ini, mes__lt=fim)}
+
+    grupos = {}
+    for f in subs:
+        alvo = f.alvo
+        if f.loja_id:
+            chave = ('loja', f.loja_id)
+        elif f.pos and f.pos.loja_vinculada_id:
+            chave = ('loja', f.pos.loja_vinculada_id)
+        else:
+            chave = ('pos', f.pos_id)
+        ref = f'S-{f.id}'
+        grupos.setdefault(chave, []).append({
+            'tipo': 'mensalidade', 'referencia': ref, 'id': f.id, 'titulo': f.descricao, 'alvo': nome_alvo(alvo),
+            'alvo_tipo': 'loja' if f.loja_id else 'pos', 'data': f.paga_em, 'valor': str(f.valor), 'metodo_nome': f.get_metodo_display() if f.metodo else '',
+            'fatura': fiscal.fatura_resumo(f), 'anuladas': 0,
+            'url': f'/app/admin/faturacao/subscricoes/{f.id}/fatura/'})
+    for (loja_id, mes), (total, n) in sorted(meses_com.items(), key=lambda x: x[0][1]):
+        ref = f'C-{loja_id}-{mes:%Y%m}'
+        grupos.setdefault(('loja', loja_id), []).append({
+            'tipo': 'comissoes', 'referencia': ref, 'mes': f'{mes:%Y-%m}', 'titulo': f'Comissões de {mes:%m/%Y}',
+            'data': mes, 'valor': str(total), 'comissoes': n, 'fatura': fiscal.fatura_resumo(fcs.get((loja_id, mes))),
+            'anuladas': 0, 'url': f'/app/admin/faturacao/comissoes/{loja_id}/{mes:%Y-%m}/fatura/'})
+    docs = [d for v in grupos.values() for d in v]
+    anuladas = _contar(HistoricoFatura.objects.filter(referencia__in=[d['referencia'] for d in docs],
+                                                      anulada_em__isnull=False), 'referencia')
+    for d in docs:
+        d['anuladas'] = anuladas.get(d['referencia'], 0)
+    return grupos
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_bende(request):
-    """O que o Bende tem de faturar no mês: mensalidades pagas e comissões por loja."""
+    """
+    O que o Bende tem de faturar: mensalidades pagas e comissões do mês, agrupadas por loja (com os seus POS)
+    e POS sem loja. ?de=AAAA-MM&ate=AAAA-MM (ou ?mes=)  ?q= nome/NIF/código/dono  ?por_faturar=1  ?limit=&offset=
+    """
     erro = _exige_admin(request, 'gerir_faturacao')
     if erro:
         return erro
-    mes = _mes(request.GET.get('mes')) or timezone.localdate().replace(day=1)
-    seguinte = (mes.replace(day=28) + timedelta(days=4)).replace(day=1)
-    subs = (FaturaSubscricao.objects.filter(estado='paga', valor__gt=0, paga_em__date__gte=mes, paga_em__date__lt=seguinte)
-            .select_related('loja', 'pos', 'plano').order_by('paga_em'))
-    com = (Comissao.objects.filter(data_criacao__date__gte=mes, data_criacao__date__lt=seguinte)
-           .values('loja_id', 'loja__nome', 'loja__nif').annotate(total=Sum('valor_comissao'), n=Count('id'))
-           .order_by('loja__nome'))
-    faturas = {fc.loja_id: fc for fc in FaturaComissoes.objects.filter(mes=mes)}
-    return Response({
-        'mes': f'{mes:%Y-%m}',
-        'subscricoes': [{**fatura_payload(f), 'nif': getattr(f.alvo, 'nif', '')} for f in subs],
-        'comissoes': [{'loja_id': c['loja_id'], 'loja_nome': c['loja__nome'], 'nif': c['loja__nif'],
-                       'total': str(c['total']), 'comissoes': c['n'],
-                       'fatura': fiscal.fatura_resumo(faturas.get(c['loja_id']))} for c in com],
-    })
+    ini, fim = _intervalo_meses(request)
+    if not ini:
+        return Response({'detail': 'Escolhe no máximo 24 meses.'}, status=status.HTTP_400_BAD_REQUEST)
+    grupos = _docs_bende(ini, fim)
+    por_faturar = request.GET.get('por_faturar') in ('1', 'true')
+    if por_faturar:
+        grupos = {k: [d for d in v if not d['fatura']] for k, v in grupos.items()}
+        grupos = {k: v for k, v in grupos.items() if v}
+
+    lojas = {l.id: l for l in Loja.objects.filter(id__in=[i for t, i in grupos if t == 'loja']).select_related('dono__user')}
+    poss = {p.id: p for p in ConfiguracaoPOS.objects.filter(id__in=[i for t, i in grupos if t == 'pos']).select_related('dono__user')}
+    q = (request.GET.get('q') or '').strip().lower()
+    itens = []
+    for (t, i), docs in grupos.items():
+        obj = lojas.get(i) if t == 'loja' else poss.get(i)
+        if not obj:
+            continue
+        u = obj.dono.user
+        if q and not any(q in (x or '').lower() for x in (obj.nome, obj.nif, getattr(obj, 'codigo_pos', ''), u.email,
+                                                           u.get_full_name(), *(d.get('alvo', '') for d in docs))):
+            continue
+        itens.append({'tipo': t, 'id': i, 'nome': obj.nome, 'nif': obj.nif, 'regime_fiscal': obj.regime_fiscal,
+                      'codigo_pos': getattr(obj, 'codigo_pos', None), 'dono': _dono(obj), 'documentos': docs,
+                      'por_faturar': sum(1 for d in docs if not d['fatura']),
+                      'valor': str(sum(Decimal(d['valor']) for d in docs))})
+    itens.sort(key=lambda g: g['nome'].lower())
+    totais = {'grupos': len(itens), 'documentos': sum(len(g['documentos']) for g in itens),
+              'por_faturar': sum(g['por_faturar'] for g in itens),
+              'valor': str(sum(Decimal(g['valor']) for g in itens))}
+    pagina, total = _paginar(request, itens)
+    return Response({'de': f'{ini:%Y-%m}', 'ate': f'{(fim - timedelta(days=1)):%Y-%m}', 'count': total,
+                     'results': pagina, 'totais': totais})
+
+
+# ── Exportar (ZIP para a DNRE) ──
+
+MAX_VENDAS_ZIP = 400
+
+
+def _nome_ficheiro(texto):
+    return re.sub(r'[^\w.-]+', '_', texto or '').strip('_')[:60] or 'sem-numero'
+
+
+def _juntar_pdf(zf, caminho, nome_storage, faltas):
+    if not nome_storage:
+        return
+    try:
+        with default_storage.open(nome_storage, 'rb') as f:
+            zf.writestr(caminho, f.read())
+    except Exception:
+        faltas.append(f'{caminho} (ficheiro {nome_storage} não encontrado no armazenamento)')
+
+
+def _juntar_faturas(zf, pasta, obj, faltas):
+    """Fatura em vigor + anuladas do documento."""
+    for h in fiscal.historico_do_documento(obj) if obj else []:
+        if h.pdf:
+            estado = 'anulada' if h.anulada_em else 'fatura'
+            _juntar_pdf(zf, f'{pasta}/{estado}-{_nome_ficheiro(h.numero)}-{h.id}.pdf', h.pdf.name, faltas)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_exportar(request, tipo, id):
+    """
+    ZIP com tudo o que há de uma loja/POS no período (?de=&ate= AAAA-MM-DD; sem datas = desde sempre):
+    dados fiscais (histórico), vendas (CSV + comprovativos + faturas em vigor e anuladas),
+    mensalidades e comissões do Bende (comprovativos/extratos + faturas). Para entregar à DNRE.
+    """
+    erro = _exige_admin(request, 'gerir_faturacao')
+    if erro:
+        return erro
+    de, ate, erro = _datas(request)
+    if erro:
+        return erro
+    if tipo == 'loja':
+        obj = get_object_or_404(Loja, id=id)
+    elif tipo == 'pos':
+        obj = get_object_or_404(ConfiguracaoPOS, id=id)
+    else:
+        return Response({'detail': 'Tipo inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    vendas = _vendas_qs(obj, de, ate) if tipo == 'loja' else Encomenda.objects.none()
+    n = vendas.count()
+    if n > MAX_VENDAS_ZIP:
+        return Response({'detail': f'O período tem {n} vendas — escolhe um período com até {MAX_VENDAS_ZIP}.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    faltas = []
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        hist = fiscal.historico_dados_fiscais(obj)
+        zf.writestr('dados-fiscais.csv', _csv(
+            [[f'{"Loja" if tipo == "loja" else "POS"}: {obj.nome}', f'NIF em vigor: {obj.nif or "—"}'],
+             ['Desde', 'NIF', 'Regime', 'Nome', 'Gravado por', 'Email de quem gravou']] +
+            [[_quando(h['aceites_em']), h['nif'], dict(fiscal.REGIMES).get(h['regime_fiscal'], ''), h['nome'],
+              (h['alterado_por'] or {}).get('nome', ''), (h['alterado_por'] or {}).get('email', '')] for h in hist]))
+
+        if tipo == 'loja':
+            zf.writestr('vendas.csv', _csv(_linhas_vendas(obj, vendas, de, ate, request)))
+            for e in vendas:
+                pasta = f'vendas/E-{e.id}'
+                pag = getattr(e, 'pagamento', None)
+                if pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial'):
+                    zf.writestr(f'{pasta}/comprovativo-E-{e.id}.pdf', documentos.pdf_comprovativo_encomenda(e))
+                _juntar_faturas(zf, pasta, e, faltas)
+
+        # documentos do Bende
+        subs = obj.faturas_subscricao.filter(estado='paga', valor__gt=0).select_related('loja', 'pos', 'plano')
+        if de:
+            subs = subs.filter(paga_em__date__gte=de)
+        if ate:
+            subs = subs.filter(paga_em__date__lte=ate)
+        linhas = [['Documento', 'Tipo', 'Descrição', 'Data', 'Valor (CVE)', 'Fatura do Bende nº', 'Faturas anuladas']]
+        for f in subs.order_by('paga_em'):
+            pasta = f'bende/mensalidades/S-{f.id}'
+            zf.writestr(f'{pasta}/comprovativo-S-{f.id}.pdf', documentos.pdf_comprovativo_subscricao(f))
+            _juntar_faturas(zf, pasta, f, faltas)
+            linhas.append([f'S-{f.id}', 'Mensalidade', f.descricao, _quando(f.paga_em), f'{f.valor:.2f}'.replace('.', ','),
+                           f.fatura_numero, fiscal.historico_do_documento(f).filter(anulada_em__isnull=False).count()])
+        if tipo == 'loja':
+            for m in reversed(_comissoes_por_mes(obj)):
+                mes = _mes(m['mes'])
+                if (de and mes < de.replace(day=1)) or (ate and mes > ate):
+                    continue
+                pasta = f'bende/comissoes/C-{obj.id}-{mes:%Y%m}'
+                zf.writestr(f'{pasta}/extrato-C-{obj.id}-{mes:%Y%m}.pdf', documentos.pdf_extrato_comissoes(obj, mes))
+                fc = FaturaComissoes.objects.filter(loja=obj, mes=mes).first()
+                for h in HistoricoFatura.objects.filter(tipo='comissoes', loja=obj, mes=mes):
+                    if h.pdf:
+                        _juntar_pdf(zf, f'{pasta}/{"anulada" if h.anulada_em else "fatura"}-{_nome_ficheiro(h.numero)}-{h.id}.pdf',
+                                    h.pdf.name, faltas)
+                linhas.append([f'C-{obj.id}-{mes:%Y%m}', 'Comissões do mês', f'{m["comissoes"]} venda(s)', f'{mes:%m/%Y}',
+                               m['total'].replace('.', ','), fc.fatura_numero if fc else '',
+                               HistoricoFatura.objects.filter(tipo='comissoes', loja=obj, mes=mes, anulada_em__isnull=False).count()])
+        zf.writestr('bende/documentos-do-bende.csv', _csv(linhas))
+
+        periodo = f'{de:%d/%m/%Y} a {ate:%d/%m/%Y}' if de and ate else (f'desde {de:%d/%m/%Y}' if de else (f'até {ate:%d/%m/%Y}' if ate else 'desde sempre'))
+        leia = [
+            f'Arquivo fiscal — {obj.nome} ({"loja" if tipo == "loja" else "POS"}), NIF {obj.nif or "por preencher"}',
+            f'Período: {periodo}. Gerado pelo Bende a {_quando(timezone.now())}.', '',
+            'dados-fiscais.csv            NIF e regime declarados ao longo do tempo (quem gravou e quando)',
+            'vendas.csv                   cada venda com o nº da fatura da loja e as faturas anuladas (motivo)',
+            'vendas/E-<nº>/               comprovativo de pagamento (Bende) + fatura(s) da loja (fatura-… em vigor, anulada-…)',
+            'bende/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) do Bende',
+            'bende/comissoes/C-…/         extrato mensal das comissões + fatura(s) do Bende',
+            '', 'Os comprovativos e extratos são documentos internos e não substituem a fatura.',
+        ]
+        if faltas:
+            leia += ['', 'Ficheiros em falta:'] + faltas
+        zf.writestr('LEIA-ME.txt', '\r\n'.join(leia))
+
+    nome = f'arquivo-fiscal-{tipo}-{obj.id}-{de or "inicio"}-{ate or timezone.localdate()}.zip'
+    r = HttpResponse(buf.getvalue(), content_type='application/zip')
+    r['Content-Disposition'] = f'attachment; filename="{nome}"'
+    return r
 
 
 def _registar(request, obj):
