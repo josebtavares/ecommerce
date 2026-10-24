@@ -167,7 +167,7 @@ def loja_create(request):
         banner = request.FILES.get('banner'),
         modelo_cobranca = modelo,
     )
-    aplicar_dados_fiscais(loja, fiscais)
+    aplicar_dados_fiscais(loja, fiscais, request.user)
     if plano:
         from ..utils import subscricoes
         subscricoes.criar_para_loja_nova(loja, plano)     # arranca quando o admin aprovar a loja
@@ -247,7 +247,7 @@ def loja_dados_fiscais(request, loja_id):
     fiscais, erros = validar_dados_fiscais(request.data)
     if erros:
         return Response(erros, status=status.HTTP_400_BAD_REQUEST)
-    aplicar_dados_fiscais(loja, fiscais)
+    aplicar_dados_fiscais(loja, fiscais, request.user)
     return Response(dados_fiscais_payload(loja))
 
 

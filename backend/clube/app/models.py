@@ -1228,7 +1228,62 @@ class FaturaComissoes(models.Model):
 
     def __str__(self):
         return f'Fatura de comissões {self.mes:%Y-%m} — {self.loja} — {self.fatura_numero}'
-    
+
+
+class HistoricoFatura(models.Model):
+    """
+    Arquivo de todas as faturas registadas (vendas das lojas e faturas do Bende) — nada se apaga.
+    Alterar ou remover uma fatura ANULA o registo (quem, quando, motivo) e o PDF fica aqui guardado
+    (limpeza.em_uso vê este FileField, por isso o ficheiro nunca vai para a fila de limpeza).
+    A fatura em vigor continua também nos campos fatura_* do documento (utils/fiscal.py).
+    """
+    TIPOS = [
+        ('encomenda',   'Venda da loja'),
+        ('mensalidade', 'Mensalidade (Bende)'),
+        ('comissoes',   'Comissões do mês (Bende)'),
+    ]
+    tipo         = models.CharField(max_length=12, choices=TIPOS)
+    referencia   = models.CharField(max_length=40, db_index=True)    # E-<id>, S-<id>, C-<loja>-<AAAAMM>
+    loja         = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_faturas')
+    pos          = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='historico_faturas')
+    encomenda    = models.ForeignKey('Encomenda', on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_faturas')
+    fatura_subscricao = models.ForeignKey('FaturaSubscricao', on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='historico_faturas')
+    mes          = models.DateField(null=True, blank=True)            # comissões: dia 1 do mês
+    numero       = models.CharField(max_length=60, db_index=True)
+    pdf          = models.FileField(upload_to=caminho_fatura_bende, blank=True, default='',
+                                    validators=[FileExtensionValidator(['pdf'])])
+    registada_em = models.DateTimeField()
+    registada_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    anulada_em   = models.DateTimeField(null=True, blank=True)
+    anulada_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    motivo       = models.CharField(max_length=300, blank=True, default='')
+
+    class Meta:
+        ordering = ['-registada_em', '-id']
+
+    def __str__(self):
+        return f'{self.referencia} — fatura {self.numero}' + (' (anulada)' if self.anulada_em else '')
+
+
+class HistoricoDadosFiscais(models.Model):
+    """Cada vez que uma loja/POS grava NIF + regime + declaração fica aqui uma linha (o que valia e desde quando)."""
+    loja        = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_fiscal')
+    pos         = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='historico_fiscal')
+    nome        = models.CharField(max_length=200)                  # nome do vendedor nesse momento
+    nif         = models.CharField(max_length=9)
+    regime_fiscal = models.CharField(max_length=12, choices=REGIMES)
+    aceites_em  = models.DateTimeField()
+    alterado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-aceites_em', '-id']
+
+    def __str__(self):
+        return f'{self.nome} — NIF {self.nif} ({self.regime_fiscal}) desde {self.aceites_em:%d/%m/%Y}'
+
     
 class Categoria(models.Model):
     """
