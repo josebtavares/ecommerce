@@ -1,9 +1,11 @@
+import uuid
 from decimal import Decimal
 
 from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
 from django.utils.timezone import now
+from .utils.fiscal import REGIMES
 
 
 # ══════════════════════════════════════════════════════════════
@@ -262,6 +264,13 @@ class Loja(models.Model):
     efatura_nif = models.CharField(max_length=20, blank=True)
     efatura_api_key = models.CharField(max_length=200, blank=True)
 
+    # ── Dados fiscais de quem vende (ver utils/fiscal.py) — só o dono vê/altera, nunca públicos ──
+    nif = models.CharField(max_length=9, blank=True, default='', db_default='')
+    regime_fiscal = models.CharField(max_length=10, blank=True, default='', db_default='',
+                                     choices=REGIMES)
+    # quando o dono aceitou a declaração de responsabilidade fiscal (vazio = lojas antigas, por preencher)
+    dados_fiscais_aceites_em = models.DateTimeField(null=True, blank=True)
+
     # ── Horário (ver utils/horarios.py) ──
     # desligado = aberta 24h (como antes). db_default: o código antigo continua a gravar lojas
     # entre a migração e o deploy.
@@ -350,6 +359,7 @@ class UtilizadorLoja(models.Model):
             'pagar_subscricao',
             'editar_loja',
             'apagar_loja',
+            'gerir_dados_fiscais',     # NIF e regime (utils/fiscal.py) — só o dono
             'gerir_staff',
             'gerir_produtos',
             'gerir_inventario',
@@ -780,6 +790,11 @@ class ItemCarrinho(models.Model):
 # ENCOMENDA
 # ══════════════════════════════════════════════════════════════
 
+def caminho_fatura_encomenda(instance, filename):
+    # nome aleatório: a fatura tem dados do cliente e o armazenamento (R2) serve os ficheiros por URL
+    return f'faturas/{instance.loja_id}/{uuid.uuid4().hex}.pdf'
+
+
 class Encomenda(models.Model):
     TIPO_ENTREGA = [
         ('entrega',      'Entrega ao domicílio'),
@@ -821,6 +836,11 @@ class Encomenda(models.Model):
     modelo_cobranca = models.CharField(max_length=10, blank=True, default='', db_default='')
     # quando passou a "concluido" (entregue/levantada) — conta o prazo para pedir devolução
     data_conclusao  = models.DateTimeField(null=True, blank=True)
+    # fatura emitida pela loja no e-Fatura (ela emite fora do Bende e regista aqui — utils/fiscal.py)
+    fatura_numero   = models.CharField(max_length=60, blank=True, default='', db_default='')
+    fatura_pdf      = models.FileField(upload_to=caminho_fatura_encomenda, blank=True, default='', db_default='',
+                                       validators=[FileExtensionValidator(['pdf'])])
+    fatura_registada_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']

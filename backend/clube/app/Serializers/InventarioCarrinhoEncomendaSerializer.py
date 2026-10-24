@@ -187,6 +187,16 @@ def _receita_liquida(obj):
     return str(obj.valor_total - reemb - com)
 
 
+def _fatura(obj, request):
+    """Fatura que a loja registou (emitida no e-Fatura) — None enquanto estiver por faturar."""
+    if not obj.fatura_registada_em:
+        return None
+    pdf = None
+    if obj.fatura_pdf:
+        pdf = request.build_absolute_uri(obj.fatura_pdf.url) if request else obj.fatura_pdf.url
+    return {'numero': obj.fatura_numero, 'pdf_url': pdf, 'registada_em': obj.fatura_registada_em}
+
+
 def _valor_a_pagar(obj):
     try:
         p = obj.pagamento
@@ -221,6 +231,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
     reembolso          = serializers.SerializerMethodField()
     valor_reembolsado  = serializers.SerializerMethodField()
     valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
+    fatura             = serializers.SerializerMethodField()   # registada pela loja (utils/fiscal.py)
  
     class Meta:
         model  = Encomenda
@@ -246,6 +257,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'agendada_para', 'agendada_texto', 'agendamento_origem',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'reembolso', 'valor_reembolsado', 'valor_a_pagar',
+            'fatura',
         ]
         read_only_fields = [
             'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem',
@@ -260,6 +272,9 @@ class EncomendaSerializer(serializers.ModelSerializer):
 
     def get_valor_a_pagar(self, obj):
         return _valor_a_pagar(obj)
+
+    def get_fatura(self, obj):
+        return _fatura(obj, self.context.get('request'))
 
     def get_agendada_texto(self, obj):
         if not obj.agendada_para:
@@ -351,6 +366,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
     reembolso          = serializers.SerializerMethodField()
     valor_reembolsado  = serializers.SerializerMethodField()
     valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
+    fatura             = serializers.SerializerMethodField()   # registada pela loja (utils/fiscal.py)
  
     class Meta:
         model  = Encomenda
@@ -368,6 +384,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'agendada_para', 'agendada_texto', 'agendamento_origem',
             'reembolso', 'valor_reembolsado', 'pagamento_status', 'valor_a_pagar',
+            'fatura',
         ]
  
     def get_pagamento_status(self, obj):
@@ -384,6 +401,9 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
 
     def get_valor_a_pagar(self, obj):
         return _valor_a_pagar(obj)
+
+    def get_fatura(self, obj):
+        return _fatura(obj, self.context.get('request'))
 
     def get_agendada_texto(self, obj):
         if not obj.agendada_para:

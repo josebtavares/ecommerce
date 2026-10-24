@@ -50,6 +50,7 @@ except Exception:
     
 from .stock import reservar_stock, repor_stock_item, cancelar_conta, custo_de_venda
 from ..utils import conjuntos as conj
+from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_fiscais_payload
 
 # prefetch dos componentes dos conjuntos (menus) nas listagens do POS
 PREFETCH_CONJUNTO_POS = ('componentes__produto_pos', 'componentes__variante_pos', 'componentes__produto__inventario',
@@ -424,6 +425,7 @@ def _pos_response(pos):
         'suspenso': pos.suspenso,
         'suspenso_motivo': pos.suspenso_motivo,
         'criado_em': pos.criado_em,
+        'fiscal': dados_fiscais_payload(pos),     # só vai para o dono (todos os usos são do dono)
     }
 
 
@@ -804,12 +806,20 @@ def pos_criar(request):
     if subs.planos_ativos(('pos',)) and not incluido and not plano:
         return Response({'detail': 'Escolhe um plano para o POS.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # dados fiscais obrigatórios; ligado a uma loja que já os tem, pode usar os da loja
+    fiscais, erros = validar_dados_fiscais(request.data)
+    if erros and loja and loja.nif and loja.regime_fiscal and loja.dados_fiscais_aceites_em             and not request.data.get('nif'):
+        fiscais, erros = {'nif': loja.nif, 'regime_fiscal': loja.regime_fiscal}, {}
+    if erros:
+        return Response({'detail': next(iter(erros.values())), 'erros': erros}, status=status.HTTP_400_BAD_REQUEST)
+
     with transaction.atomic():
         # uma conta, um POS (a equipa entra nesse POS com os seus logins)
         Utilizador.objects.select_for_update().get(pk=utilizador.pk)
         if ConfiguracaoPOS.objects.filter(dono=utilizador).exists():
             return Response({'detail': 'Esta conta já tem um POS.'}, status=status.HTTP_400_BAD_REQUEST)
         config = ConfiguracaoPOS.objects.create(nome=nome, dono=utilizador, modo='standalone')
+        aplicar_dados_fiscais(config, fiscais)
         if loja:
             config.conectar_loja(loja, modo='hibrido' if modo == 'hibrido' else 'integrado')
         subs_pos.criar_para_pos_novo(config, plano)
@@ -849,6 +859,18 @@ def pos_detalhe(request, pos_id):
         pos.save()
         return Response(_pos_response(pos))
 
+    return Response(_pos_response(pos))
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def pos_dados_fiscais(request, pos_id):
+    """PATCH /api/pos/<pos_id>/fiscal/  Body: { nif, regime_fiscal, declaracao_fiscal } — só o dono."""
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=request.user.utilizador)
+    fiscais, erros = validar_dados_fiscais(request.data)
+    if erros:
+        return Response({'detail': next(iter(erros.values())), 'erros': erros}, status=status.HTTP_400_BAD_REQUEST)
+    aplicar_dados_fiscais(pos, fiscais)
     return Response(_pos_response(pos))
 
 

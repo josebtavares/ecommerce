@@ -12,6 +12,7 @@ from django.utils import timezone
 from decimal import Decimal, ROUND_HALF_UP
 import uuid
 from django.contrib.auth.hashers import make_password, check_password
+from ..utils.fiscal import REGIMES
 
 class ConfiguracaoPOS(models.Model):
     """
@@ -104,6 +105,12 @@ class ConfiguracaoPOS(models.Model):
         verbose_name='API Key eFatura',
         help_text='Chave de API do eFatura CV'
     )
+
+    # Dados fiscais de quem vende no POS (ver app/utils/fiscal.py) — só o dono vê/altera
+    nif = models.CharField(max_length=9, blank=True, default='', db_default='')
+    regime_fiscal = models.CharField(max_length=10, blank=True, default='', db_default='',
+                                     choices=REGIMES)
+    dados_fiscais_aceites_em = models.DateTimeField(null=True, blank=True)
 
     ativo = models.BooleanField(
         default=True,

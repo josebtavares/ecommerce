@@ -17,6 +17,7 @@ urlpatterns = [
     path('<int:pos_id>/subscricao/faturas/<int:fatura_id>/pagar/', views_subscricao.pos_fatura_pagar, name='pos_fatura_pagar'),
     path('criar/',                           views.pos_criar,           name='pos_criar'),
     path('<int:pos_id>/',                    views.pos_detalhe,         name='pos_detalhe'),
+    path('<int:pos_id>/fiscal/',             views.pos_dados_fiscais,   name='pos_dados_fiscais'),
     path('<int:pos_id>/conectar-loja/',      views.pos_conectar_loja,   name='pos_conectar_loja'),
     path('<int:pos_id>/desconectar-loja/',   views.pos_desconectar_loja,name='pos_desconectar_loja'),
 

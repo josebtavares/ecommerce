@@ -3,7 +3,8 @@ from django.db.models import Q, F
 from django.shortcuts import get_object_or_404
 
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_staff,notificar,notificar_admins
@@ -32,6 +33,7 @@ from ..utils.encomendas import repor_stock, cancelar_anteriores_por_pagar
 from ..utils import conjuntos as conj
 from ..utils import horarios
 from ..utils import devolucoes
+from ..utils import fiscal
 from ..utils.dinheiro import formatar as dinheiro
 
 
@@ -642,6 +644,57 @@ def encomenda_list_loja(request, loja_id):
     if erro:
         return erro
     return response
+
+
+@api_view(['POST', 'DELETE'])
+@parser_classes([MultiPartParser, FormParser])
+@permission_classes([IsAuthenticated])
+def encomenda_fatura(request, loja_id, id):
+    """
+    POST   /app/loja/<loja_id>/encomendas/<id>/fatura/   multipart: numero, pdf (opcional)
+    DELETE /app/loja/<loja_id>/encomendas/<id>/fatura/   remove (registo errado)
+    A loja emite a fatura no e-Fatura (fora do Bende) e regista-a aqui; o cliente vê-a na encomenda.
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_encomendas')
+    if erro:
+        return erro
+    encomenda = get_object_or_404(Encomenda, id=id, loja=loja)
+
+    if request.method == 'DELETE':
+        if encomenda.fatura_pdf:
+            encomenda.fatura_pdf.delete(save=False)
+        encomenda.fatura_numero, encomenda.fatura_pdf, encomenda.fatura_registada_em = '', '', None
+        encomenda.save(update_fields=['fatura_numero', 'fatura_pdf', 'fatura_registada_em'])
+        return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
+
+    if encomenda.status not in fiscal.ESTADOS_FATURAVEIS:
+        return Response({'detail': 'Só se regista a fatura de uma encomenda paga ou já em curso.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    pdf = request.FILES.get('pdf')
+    numero, msg = fiscal.validar_fatura(request.data.get('numero'), pdf)
+    if msg:
+        return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+
+    primeira = not encomenda.fatura_registada_em
+    if pdf:
+        if encomenda.fatura_pdf:
+            encomenda.fatura_pdf.delete(save=False)
+        encomenda.fatura_pdf = pdf
+    encomenda.fatura_numero = numero
+    encomenda.fatura_registada_em = timezone.now()
+    encomenda.save(update_fields=['fatura_numero', 'fatura_pdf', 'fatura_registada_em'])
+
+    if primeira:
+        notificar(
+            utilizador=encomenda.comprador,
+            tipo='encomenda_atualizada',
+            titulo=f'Fatura da encomenda #{encomenda.id}',
+            mensagem=f'{loja.nome} registou a fatura {numero} da tua encomenda.',
+            loja=loja,
+            link='/perfil',
+        )
+    return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
 
 
 @api_view(['PATCH'])
