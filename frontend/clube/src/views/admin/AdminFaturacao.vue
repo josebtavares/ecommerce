@@ -1,16 +1,19 @@
 <template>
-  <!-- Admin → Faturação: arquivo fiscal das lojas/POS (ficha, vendas, histórico), pesquisa de documentos e faturas do Bende
-       (backend faturacaoView.py) -->
+  <!-- Admin → Faturação (como Admin → Comissões): uma aba por loja (e POS sem loja) com a sua vista — ficha, vendas, POS,
+       faturas do Bende, pesquisa; "Todas" = visão geral (vendedores, pesquisa global, faturas do Bende). Backend faturacaoView.py -->
   <div class="space-y-5">
+    <div>
+      <h2 class="text-lg font-bold text-zinc-100">Faturação</h2>
+      <p class="text-xs text-zinc-500 mt-0.5">Arquivo fiscal de todas as lojas e POS — nada se apaga: faturas substituídas ou anuladas ficam no histórico</p>
+    </div>
+    <AbasVendedores :itens="abas" :ativo="abaAtiva" titulo="Documentos por faturar (vendas + faturas do Bende)" @selecionar="selecionar" />
+
     <FaturacaoFicha v-if="ficha" :key="ficha.tipo + ficha.id" :tipo="ficha.tipo" :id="ficha.id" :aba-inicial="ficha.aba" :q-inicial="ficha.q"
-      @fechar="ficha = null" @abrir="(t, i) => abrirFicha(t, i)" />
+      @abrir="abrirFicha" @alterado="carregarAbas" @carregada="f => lojaDoPos = f.tipo === 'pos' && f.loja ? f.loja.id : null" />
 
     <template v-else>
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="text-lg font-bold text-zinc-100">Faturação</h2>
-          <p class="text-xs text-zinc-500 mt-0.5">Arquivo fiscal de todas as lojas e POS — nada se apaga: faturas substituídas ou anuladas ficam no histórico</p>
-        </div>
+        <p class="text-sm font-semibold text-zinc-300">Todas as lojas e POS</p>
         <div class="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 max-w-full overflow-x-auto" role="tablist">
           <button v-for="t in TABS" :key="t.key" type="button" role="tab" :aria-selected="tab === t.key ? 'true' : 'false'" @click="mudarTab(t.key)"
             :class="['px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition', tab === t.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
@@ -90,24 +93,7 @@
           <button type="submit" :disabled="pq.length < 2" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold">Pesquisar</button>
         </form>
         <p class="text-[11px] text-zinc-500">Procura em todas as lojas e POS: faturas em vigor e anuladas, comprovativos (E- encomenda, S- mensalidade), extratos de comissões (C-loja-AAAAMM), vendedores e clientes.</p>
-        <div v-if="pRes" class="space-y-2" data-teste="pesquisa-resultados">
-          <p class="text-xs text-zinc-500">{{ pRes.count }} resultado(s)</p>
-          <div v-for="r in pRes.results" :key="r.tipo + r.referencia"
-            class="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', TIPOS[r.tipo].cor]">{{ TIPOS[r.tipo].nome }}</span>
-            <div class="flex-1 min-w-[200px]">
-              <p class="text-sm font-semibold text-zinc-200">{{ r.titulo }} <span class="text-[11px] text-zinc-500 font-normal">· {{ r.referencia }}</span></p>
-              <p class="text-[11px] text-zinc-500">{{ r.vendedor.nome }}<template v-if="r.detalhe"> · {{ r.detalhe }}</template><template v-if="r.data"> · {{ data(r.data) }}</template></p>
-            </div>
-            <span v-if="r.valor" class="text-sm font-bold text-zinc-100">{{ euros(r.valor) }}</span>
-            <span v-if="r.fatura" class="text-xs text-green-400">Fatura {{ r.fatura.numero }}</span>
-            <span v-else-if="['venda', 'mensalidade', 'comissoes'].includes(r.tipo)" class="text-xs text-amber-300">Por faturar</span>
-            <button v-if="r.vendedor.id" type="button" @click="abrirResultado(r)" data-teste="abrir-resultado"
-              class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold">Abrir</button>
-          </div>
-          <p v-if="!pRes.results.length" class="text-center py-8 text-sm text-zinc-500">Nada encontrado.</p>
-          <PaginacaoLista :count="pRes.count" :limit="LIMITE" :offset="pOffset" @ir="pesquisar" />
-        </div>
+        <ResultadosPesquisa v-if="pRes" :res="pRes" :limit="LIMITE" :offset="pOffset" @ir="pesquisar" @abrir="abrirResultado" />
       </template>
 
       <!-- ═══ FATURAS DO BENDE (agrupadas por loja, com os seus POS) ═══ -->
@@ -174,32 +160,28 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarPdf, descarregarComprovativoSubscricao } from '@/utils/documentos'
 import FaturacaoFicha from './FaturacaoFicha.vue'
+import AbasVendedores from '@/components/fiscal/AbasVendedores.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
+import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
 
 const TABS = [
   { key: 'vendedores', label: 'Vendedores' },
   { key: 'pesquisa',   label: 'Pesquisar documentos' },
   { key: 'bende',      label: 'Faturas do Bende' },
 ]
-const TIPOS = {
-  venda:       { nome: 'Venda',        cor: 'bg-zinc-700 text-zinc-200' },
-  mensalidade: { nome: 'Mensalidade',  cor: 'bg-violet-500/15 text-violet-300' },
-  comissoes:   { nome: 'Comissões',    cor: 'bg-sky-500/15 text-sky-300' },
-  anulada:     { nome: 'Fatura anulada', cor: 'bg-red-500/15 text-red-300' },
-  loja:        { nome: 'Loja',         cor: 'bg-emerald-500/15 text-emerald-300' },
-  pos:         { nome: 'POS',          cor: 'bg-emerald-500/15 text-emerald-300' },
-}
 const LIMITE = 20
 
 export default {
   name: 'AdminFaturacao',
-  components: { FaturacaoFicha, PaginacaoLista, RegistarFaturaBende },
+  components: { AbasVendedores, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   data () {
     const hoje = new Date()
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
     return {
-      TABS, TIPOS, LIMITE,
+      TABS, LIMITE,
+      abas: [],
+      lojaDoPos: null,      // POS de uma loja aberto: a aba ativa é a da loja
       tab: 'vendedores',
       carregando: false,
       erro: '',
@@ -212,7 +194,15 @@ export default {
       bende: null, bOffset: 0,
     }
   },
+  computed: {
+    abaAtiva () {
+      if (!this.ficha) return null
+      if (this.ficha.tipo === 'pos' && this.lojaDoPos) return `loja-${this.lojaDoPos}`
+      return `${this.ficha.tipo}-${this.ficha.id}`
+    },
+  },
   created () {
+    this.carregarAbas()
     this.carregarVendedores(0)
     // ?ficha=loja-12&aba=bende (ex.: "Ver na Faturação" em Subscrições → Cobranças)
     const m = /^(loja|pos)-(\d+)$/.exec(this.$route.query.ficha || '')
@@ -250,7 +240,18 @@ export default {
         this.pRes = (await api.get('/app/admin/faturacao/pesquisa/', { params: { q: this.pq, limit: LIMITE, offset } })).data
       })
     },
+    async carregarAbas () {
+      try {
+        const { data } = await api.get('/app/admin/faturacao/abas/')
+        this.abas = data.itens.map(v => ({ ...v, contador: v.por_faturar }))
+      } catch { /* as abas são um atalho: sem elas fica a visão geral */ }
+    },
+    selecionar (v) {
+      if (v) this.abrirFicha(v.tipo, v.id)
+      else this.ficha = null
+    },
     abrirFicha (tipo, id, aba = '', q = '') {
+      if (tipo !== 'pos') this.lojaDoPos = null
       this.ficha = { tipo, id, aba, q }
       window.scrollTo({ top: 0 })
     },
@@ -278,6 +279,7 @@ export default {
       const passo = (tinha ? 1 : 0) - (d.fatura ? 1 : 0)   // +1 voltou a "por faturar", -1 ficou faturada
       g.por_faturar += passo
       this.bende.totais.por_faturar += passo
+      this.carregarAbas()
     },
     comprovativo (d) { descarregarComprovativoSubscricao(d) },
     extrato (g, d) {

@@ -1,7 +1,8 @@
 <template>
   <!-- Admin → Faturação → ficha fiscal de uma loja ou POS (backend admin_ficha / admin_loja_vendas / admin_historico) -->
   <div class="space-y-5" data-teste="ficha-fiscal">
-    <button type="button" @click="$emit('fechar')" class="text-xs text-zinc-400 hover:text-zinc-200">← Voltar</button>
+    <button v-if="ficha && ficha.tipo === 'pos' && ficha.loja" type="button" @click="$emit('abrir', 'loja', ficha.loja.id, 'pos')"
+      class="text-xs text-zinc-400 hover:text-zinc-200" data-teste="voltar-loja">← {{ ficha.loja.nome }}</button>
 
     <div v-if="carregando && !ficha" class="h-40 bg-zinc-900 rounded-2xl animate-pulse"></div>
     <p v-else-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
@@ -73,16 +74,6 @@
             </tbody>
           </table>
         </div>
-        <div v-if="ficha.tipo === 'loja'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
-          <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">POS desta loja</p>
-          <p v-if="!ficha.pos.length" class="text-sm text-zinc-500">Esta loja não tem POS ligado.</p>
-          <div v-for="p in ficha.pos" :key="p.id" class="flex flex-wrap items-center gap-3 py-2 border-t border-zinc-800 first:border-0">
-            <span class="text-sm text-zinc-200 font-semibold flex-1">{{ p.nome }} <span class="text-zinc-500 font-normal">· {{ p.codigo_pos }}</span></span>
-            <span class="text-xs tabular-nums text-zinc-400">NIF {{ p.nif || '—' }}</span>
-            <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', regimeClasse(p)]">{{ regimeNome(p) }}</span>
-            <button type="button" @click="$emit('abrir', 'pos', p.id)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ficha</button>
-          </div>
-        </div>
       </template>
 
       <!-- ═══ VENDAS ═══ -->
@@ -148,24 +139,44 @@
         <PaginacaoLista :count="vendas.count" :limit="LIMITE" :offset="offsetVendas" @ir="carregarVendas" />
       </template>
 
-      <!-- ═══ DOCUMENTOS DO BENDE ═══ -->
+      <!-- ═══ POS DA LOJA ═══ -->
+      <template v-else-if="aba === 'pos'">
+        <p v-if="!ficha.pos.length" class="text-center py-10 text-sm text-zinc-500 bg-zinc-900 rounded-2xl border border-zinc-800">Esta loja não tem POS ligado.</p>
+        <div v-for="p in ficha.pos" :key="p.id" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" :data-teste="`ficha-pos-${p.id}`">
+          <div class="px-5 py-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div class="flex-1 min-w-[200px]">
+              <p class="font-semibold text-zinc-100">{{ p.nome }} <span class="text-[11px] text-zinc-500 font-normal">· {{ p.codigo_pos }}</span></p>
+              <p class="text-[11px] text-zinc-500">{{ p.dono.nome }} · {{ p.dono.email }}</p>
+            </div>
+            <span class="text-xs tabular-nums text-zinc-300">NIF {{ p.nif || '—' }}</span>
+            <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', regimeClasse(p)]">{{ regimeNome(p) }}</span>
+            <span class="text-[11px] text-zinc-500">Declaração {{ quando(p.aceites_em) }}</span>
+            <button type="button" @click="$emit('abrir', 'pos', p.id)" data-teste="abrir-pos"
+              class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold">Ficha do POS</button>
+          </div>
+          <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pb-2">Mensalidades</p>
+          <ListaMensalidades :mensalidades="ficha.mensalidades.filter(f => f.pos_id === p.id)" :mostrar-alvo="false"
+            vazio="Nenhuma mensalidade paga deste POS." @alterado="$emit('alterado')" />
+        </div>
+      </template>
+
+      <!-- ═══ PESQUISAR (só nesta loja/POS) ═══ -->
+      <template v-else-if="aba === 'pesquisa'">
+        <form @submit.prevent="pesquisar(0)" class="flex flex-wrap gap-2">
+          <input v-model.trim="pq" type="search" :placeholder="tipo === 'loja' ? 'Nº de fatura, E-123, S-45, C-…, nº de encomenda, cliente, POS…' : 'Nº de fatura, S-45…'"
+            aria-label="Pesquisar documentos desta loja" data-teste="ficha-pesquisa-q"
+            class="flex-1 min-w-[220px] px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-red-500" />
+          <button type="submit" :disabled="pq.length < 2" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold">Pesquisar</button>
+        </form>
+        <p class="text-[11px] text-zinc-500">Só nos documentos de {{ ficha.nome }}{{ tipo === 'loja' ? ' e dos seus POS' : '' }}: faturas em vigor e anuladas, comprovativos, extratos e clientes.</p>
+        <ResultadosPesquisa v-if="pRes" :res="pRes" :limit="LIMITE" :offset="pOffset" @ir="pesquisar" @abrir="abrirResultado" />
+      </template>
+
+      <!-- ═══ FATURAS DO BENDE ═══ -->
       <template v-else>
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="ficha-mensalidades">
-          <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pt-4 pb-3">Mensalidades pagas</p>
-          <p v-if="!ficha.mensalidades.length" class="text-sm text-zinc-500 px-5 pb-5">Nenhuma mensalidade paga.</p>
-          <div v-for="f in ficha.mensalidades" :key="f.id" class="px-5 py-3 border-t border-zinc-800 space-y-2">
-            <div class="flex flex-wrap items-center gap-3">
-              <div class="flex-1 min-w-[200px]">
-                <p class="text-sm font-semibold text-zinc-200">{{ f.descricao }} <span class="text-[11px] text-zinc-500 font-normal">· {{ f.referencia }}</span></p>
-                <p class="text-[11px] text-zinc-500">Paga a {{ quando(f.paga_em) }} · {{ f.metodo_nome }}<template v-if="f.anuladas"> · <span class="text-red-300">{{ f.anuladas }} fatura(s) anulada(s)</span></template></p>
-              </div>
-              <span class="text-sm font-bold text-zinc-100">{{ dinheiro(f.valor) }}</span>
-              <button type="button" @click="descarregarComprovativoSubscricao(f)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
-              <button type="button" @click="alternar(f.referencia)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
-              <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="d => atualizado(f, d)" />
-            </div>
-            <HistoricoFatura v-if="aberto[f.referencia]" :key="f.referencia + versao" :referencia="f.referencia" />
-          </div>
+          <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pt-4 pb-3">Mensalidades pagas{{ tipo === 'loja' && ficha.pos.length ? ' (loja e POS)' : '' }}</p>
+          <ListaMensalidades :mensalidades="ficha.mensalidades" @alterado="$emit('alterado')" />
         </div>
         <div v-if="ficha.tipo === 'loja'" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="ficha-comissoes">
           <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pt-4 pb-1">Comissões por mês</p>
@@ -193,24 +204,26 @@
 <script>
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { descarregarPdf, descarregarComprovativoEncomenda, descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
+import { descarregarPdf, descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
+import ListaMensalidades from '@/components/fiscal/ListaMensalidades.vue'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
+import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
 
 const LIMITE = 20
 const vazio = () => ({ q: '', estado: '', de: '', ate: '', min: '', max: '' })
 
 export default {
   name: 'FaturacaoFicha',
-  components: { HistoricoFatura, PaginacaoLista, RegistarFaturaBende },
+  components: { HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   props: {
     tipo: { type: String, required: true },
     id:   { type: [Number, String], required: true },
     abaInicial: { type: String, default: '' },
     qInicial:   { type: String, default: '' },
   },
-  emits: ['fechar', 'abrir'],
+  emits: ['abrir', 'alterado', 'carregada'],
   data () {
     return {
       LIMITE, ficha: null, carregando: false, erro: '',
@@ -219,13 +232,17 @@ export default {
       vendas: { count: 0, results: [], totais: null }, offsetVendas: 0, carregandoVendas: false,
       aberto: {}, versao: 0, historicoVenda: '',
       zip: { de: '', ate: '', aExportar: false, erro: '' },
+      pq: '', pRes: null, pOffset: 0,
     }
   },
   computed: {
     abas () {
-      return this.tipo === 'loja'
-        ? [{ key: 'dados', label: 'Dados fiscais' }, { key: 'vendas', label: 'Vendas e faturas' }, { key: 'bende', label: 'Documentos do Bende' }]
-        : [{ key: 'dados', label: 'Dados fiscais' }, { key: 'bende', label: 'Documentos do Bende' }]
+      if (this.tipo !== 'loja') {
+        return [{ key: 'dados', label: 'Ficha' }, { key: 'bende', label: 'Faturas do Bende' }, { key: 'pesquisa', label: 'Pesquisar' }]
+      }
+      return [{ key: 'dados', label: 'Ficha' }, { key: 'vendas', label: 'Vendas e faturas' },
+        { key: 'pos', label: `POS (${this.ficha ? this.ficha.pos.length : '…'})` },
+        { key: 'bende', label: 'Faturas do Bende' }, { key: 'pesquisa', label: 'Pesquisar' }]
     },
     cartoes () {
       const t = this.ficha.totais
@@ -245,7 +262,6 @@ export default {
   methods: {
     urlFicheiro,
     descarregarComprovativoEncomenda,
-    descarregarComprovativoSubscricao,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     quando (s) { return s ? new Date(s).toLocaleDateString('pt-PT') : '—' },
     nomeMes (m) {
@@ -263,6 +279,7 @@ export default {
       if (!this.abas.some(a => a.key === this.aba)) this.aba = 'dados'
       try {
         this.ficha = (await api.get(`/app/admin/faturacao/ficha/${this.tipo}/${this.id}/`)).data
+        this.$emit('carregada', this.ficha)
         if (this.aba === 'vendas') this.carregarVendas(0)
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível carregar a ficha.'
@@ -284,7 +301,26 @@ export default {
     },
     limparVendas () { this.fv = vazio(); this.carregarVendas(0) },
     alternar (ref) { this.aberto = { ...this.aberto, [ref]: !this.aberto[ref] } },
+    pesquisar (offset = 0) {
+      this.pOffset = offset
+      const params = { q: this.pq, limit: LIMITE, offset, [this.tipo]: this.id }
+      api.get('/app/admin/faturacao/pesquisa/', { params })
+        .then(({ data }) => { this.pRes = data })
+        .catch(e => { this.erro = e.response?.data?.detail || 'Não foi possível pesquisar.' })
+    },
+    // resultado da pesquisa → a aba certa desta loja (ou a ficha do POS)
+    abrirResultado (r) {
+      if (r.tipo === 'pos') return this.$emit('abrir', 'pos', r.vendedor.id)
+      if (r.tipo === 'venda' || (r.tipo === 'anulada' && r.referencia.startsWith('E-'))) {
+        this.fv = { ...vazio(), q: r.referencia }
+        this.aba = 'vendas'
+        return this.carregarVendas(0)
+      }
+      this.aba = 'bende'
+    },
     atualizado (linha, d) {
+      if (linha.fatura) linha.anuladas++
+      this.$emit('alterado')
       linha.fatura = d.fatura
       this.versao++          // o histórico aberto volta a carregar
     },

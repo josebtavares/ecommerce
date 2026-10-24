@@ -12,7 +12,8 @@ Admin (gerir_faturacao):
   GET  /app/admin/faturacao/ficha/<loja|pos>/<id>/          ficha fiscal: dados + histórico, totais, documentos do Bende
   GET  /app/admin/faturacao/loja/<id>/vendas/?de&ate&estado&q&min&max   vendas da loja com comprovativo e fatura
   GET  /app/admin/faturacao/historico/?ref=E-1|S-1|C-1-202610           faturas registadas e anuladas do documento
-  GET  /app/admin/faturacao/pesquisa/?q=                    qualquer documento, fatura, vendedor ou cliente
+  GET  /app/admin/faturacao/pesquisa/?q=&loja=|pos=         qualquer documento, fatura, vendedor ou cliente (opcionalmente de uma loja/POS)
+  GET  /app/admin/faturacao/abas/                          lojas e POS sem loja para as abas, com o nº por faturar
   GET  /app/admin/faturacao/vendas.csv?loja=&de=&ate=       vendas de uma loja com as faturas (para a DNRE)
   GET  /app/admin/faturacao/bende/?de=AAAA-MM&ate=&q=&por_faturar=   o que o Bende tem de faturar, agrupado por loja (+ POS)
   GET  /app/admin/faturacao/exportar/<loja|pos>/<id>/?de=&ate=       ZIP para a DNRE (CSVs + todos os PDFs)
@@ -287,9 +288,50 @@ def admin_vendedores(request):
     return Response({'count': total, 'results': results})
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_abas(request):
+    """
+    Abas da Faturação: todas as lojas (com os seus POS) e os POS sem loja, com o nº de documentos por faturar
+    (vendas da loja + mensalidades pagas e comissões mensais sem fatura do Bende). Pendentes primeiro, depois por nome.
+    """
+    erro = _exige_admin(request, 'gerir_faturacao')
+    if erro:
+        return erro
+    sem_fatura = _vendas_filtro(None, None) & Q(encomendas__fatura_registada_em__isnull=True)
+    lojas = Loja.objects.exclude(estado='pendente').annotate(vendas_por_faturar=Count('encomendas', filter=sem_fatura))
+    pos_loja = dict(ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=False).values_list('id', 'loja_vinculada_id'))
+
+    bende = {}
+    for loja_id, pos_id in (FaturaSubscricao.objects.filter(estado='paga', valor__gt=0, fatura_registada_em__isnull=True)
+                            .values_list('loja_id', 'pos_id')):
+        chave = ('loja', loja_id) if loja_id else (('loja', pos_loja[pos_id]) if pos_id in pos_loja else ('pos', pos_id))
+        bende[chave] = bende.get(chave, 0) + 1
+    faturadas = set(FaturaComissoes.objects.values_list('loja_id', 'mes'))
+    meses = set()
+    for loja_id, dt in Comissao.objects.values_list('loja_id', 'data_criacao'):
+        meses.add((loja_id, timezone.localtime(dt).date().replace(day=1)))
+    for loja_id, mes in meses - faturadas:
+        bende[('loja', loja_id)] = bende.get(('loja', loja_id), 0) + 1
+
+    itens = [{'tipo': 'loja', 'id': l.id, 'nome': l.nome, 'vendas_por_faturar': l.vendas_por_faturar,
+              'bende_por_faturar': bende.get(('loja', l.id), 0)} for l in lojas]
+    itens += [{'tipo': 'pos', 'id': p.id, 'nome': p.nome, 'codigo_pos': p.codigo_pos, 'vendas_por_faturar': 0,
+               'bende_por_faturar': bende.get(('pos', p.id), 0)}
+              for p in ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=True)]
+    for i in itens:
+        i['por_faturar'] = i['vendas_por_faturar'] + i['bende_por_faturar']
+    itens.sort(key=lambda i: (-i['por_faturar'], i['nome'].lower()))
+    return Response({'itens': itens})
+
+
 def _mensalidades(alvo, request):
-    qs = (alvo.faturas_subscricao.filter(estado='paga', valor__gt=0)
-          .select_related('loja', 'pos', 'plano').order_by('-paga_em'))
+    """Mensalidades pagas da loja (e dos seus POS) ou do POS."""
+    if alvo._meta.model_name == 'loja':
+        qs = FaturaSubscricao.objects.filter(Q(loja=alvo) | Q(pos__loja_vinculada=alvo))
+    else:
+        qs = alvo.faturas_subscricao.all()
+    qs = qs.filter(estado='paga', valor__gt=0).select_related('loja', 'pos', 'plano').order_by('-paga_em')
     anul = _contar(HistoricoFatura.objects.filter(fatura_subscricao__in=qs, anulada_em__isnull=False), 'fatura_subscricao_id')
     return [{**fatura_payload(f), 'referencia': f'S-{f.id}', 'fatura': fiscal.fatura_resumo(f, request),
              'anuladas': anul.get(f.id, 0)} for f in qs]
@@ -427,7 +469,7 @@ def _res_comissoes(loja, mes, request):
 @permission_classes([IsAuthenticated])
 def admin_pesquisa(request):
     """
-    Pesquisa em todos os documentos de todas as lojas/POS:
+    Pesquisa em todos os documentos de todas as lojas/POS (ou só de uma: ?loja=<id> inclui os seus POS, ?pos=<id>):
     E-123 / #123 / 123 (encomenda), S-45 (mensalidade), C-12-202610 (comissões), nº de fatura (em vigor ou anulada),
     NIF, nome ou código de loja/POS, email ou nome do cliente.
     """
@@ -441,6 +483,24 @@ def admin_pesquisa(request):
     out = []
     enc = Encomenda.objects.select_related('loja', 'comprador__user')
     subs = FaturaSubscricao.objects.select_related('loja', 'pos', 'plano')
+    fcs = FaturaComissoes.objects.select_related('loja')
+    hist = HistoricoFatura.objects.filter(anulada_em__isnull=False)
+    lojas = Loja.objects.exclude(estado='pendente')
+    poss = ConfiguracaoPOS.objects.all()
+    loja_id = _int(request.GET.get('loja'), None)
+    pos_id = _int(request.GET.get('pos'), None)
+    if loja_id:             # só esta loja e os seus POS
+        enc = enc.filter(loja_id=loja_id)
+        subs = subs.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
+        fcs = fcs.filter(loja_id=loja_id)
+        hist = hist.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
+        lojas = lojas.none()
+        poss = poss.filter(loja_vinculada_id=loja_id)
+    elif pos_id:            # só este POS (mensalidades)
+        enc, fcs, lojas = enc.none(), fcs.none(), lojas.none()
+        subs = subs.filter(pos_id=pos_id)
+        hist = hist.filter(pos_id=pos_id)
+        poss = poss.filter(id=pos_id)
 
     # referências dos documentos
     m = re.fullmatch(r'(?i)(?:e-?|#)?(\d{1,9})', q)
@@ -452,17 +512,16 @@ def admin_pesquisa(request):
     m = re.fullmatch(r'(?i)c-?(\d{1,9})-(\d{4})(\d{2})', q)
     if m and 1 <= int(m.group(3)) <= 12:
         loja = Loja.objects.filter(id=int(m.group(1))).first()
-        if loja:
+        if loja and not pos_id and (not loja_id or loja.id == loja_id):
             out.append(_res_comissoes(loja, date(int(m.group(2)), int(m.group(3)), 1), request))
 
     # nº de fatura em vigor
     out += [_res_venda(e, request) for e in enc.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_mensalidade(f, request) for f in subs.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_comissoes(fc.loja, fc.mes, request)
-            for fc in FaturaComissoes.objects.filter(fatura_numero__icontains=q).select_related('loja')[:LIM]]
+            for fc in fcs.filter(fatura_numero__icontains=q)[:LIM]]
     # nº de fatura anulada
-    for h in (HistoricoFatura.objects.filter(numero__icontains=q, anulada_em__isnull=False)
-              .select_related('loja', 'pos')[:LIM]):
+    for h in hist.filter(numero__icontains=q).select_related('loja', 'pos')[:LIM]:
         alvo = h.loja or h.pos
         out.append({'tipo': 'anulada', 'referencia': h.referencia, 'titulo': f'Fatura {h.numero} (anulada)',
                     'detalhe': f'{h.get_tipo_display()} {h.referencia} · motivo: {h.motivo}', 'data': h.anulada_em,
@@ -472,11 +531,10 @@ def admin_pesquisa(request):
     # vendedores (nome, NIF, código POS, dono)
     pessoa = (Q(dono__user__email__icontains=q) | Q(dono__user__first_name__icontains=q) |
               Q(dono__user__last_name__icontains=q) | Q(dono__telefone__icontains=q))
-    for l in (Loja.objects.filter(Q(nome__icontains=q) | Q(nif__icontains=q) | pessoa)
-              .exclude(estado='pendente')[:LIM]):
+    for l in lojas.filter(Q(nome__icontains=q) | Q(nif__icontains=q) | pessoa)[:LIM]:
         out.append({'tipo': 'loja', 'referencia': f'L-{l.id}', 'titulo': l.nome, 'detalhe': f'Loja · NIF {l.nif or "—"}',
                     'data': None, 'valor': None, 'fatura': None, 'vendedor': {'tipo': 'loja', 'id': l.id, 'nome': l.nome}})
-    for p in ConfiguracaoPOS.objects.filter(Q(nome__icontains=q) | Q(nif__icontains=q) | Q(codigo_pos__icontains=q) | pessoa)[:LIM]:
+    for p in poss.filter(Q(nome__icontains=q) | Q(nif__icontains=q) | Q(codigo_pos__icontains=q) | pessoa)[:LIM]:
         out.append({'tipo': 'pos', 'referencia': f'P-{p.id}', 'titulo': nome_alvo(p), 'detalhe': f'POS · NIF {p.nif or "—"}',
                     'data': None, 'valor': None, 'fatura': None, 'vendedor': {'tipo': 'pos', 'id': p.id, 'nome': p.nome}})
     # cliente (email ou nome) → as suas compras
@@ -726,7 +784,9 @@ def admin_exportar(request, tipo, id):
                 _juntar_faturas(zf, pasta, e, faltas)
 
         # documentos do Bende
-        subs = obj.faturas_subscricao.filter(estado='paga', valor__gt=0).select_related('loja', 'pos', 'plano')
+        subs = (FaturaSubscricao.objects.filter(Q(loja=obj) | Q(pos__loja_vinculada=obj)) if tipo == 'loja'
+                else obj.faturas_subscricao.all())
+        subs = subs.filter(estado='paga', valor__gt=0).select_related('loja', 'pos', 'plano')
         if de:
             subs = subs.filter(paga_em__date__gte=de)
         if ate:
@@ -736,7 +796,7 @@ def admin_exportar(request, tipo, id):
             pasta = f'bende/mensalidades/S-{f.id}'
             zf.writestr(f'{pasta}/comprovativo-S-{f.id}.pdf', documentos.pdf_comprovativo_subscricao(f))
             _juntar_faturas(zf, pasta, f, faltas)
-            linhas.append([f'S-{f.id}', 'Mensalidade', f.descricao, _quando(f.paga_em), f'{f.valor:.2f}'.replace('.', ','),
+            linhas.append([f'S-{f.id}', 'Mensalidade' + (f' ({nome_alvo(f.pos)})' if f.pos_id else ''), f.descricao, _quando(f.paga_em), f'{f.valor:.2f}'.replace('.', ','),
                            f.fatura_numero, fiscal.historico_do_documento(f).filter(anulada_em__isnull=False).count()])
         if tipo == 'loja':
             for m in reversed(_comissoes_por_mes(obj)):
