@@ -884,8 +884,10 @@ def pos_conectar_loja(request, pos_id):
     if not loja_id:
         return Response({'detail': 'loja_id é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # standalone é sem loja (desconectar-loja); antes caía em silêncio para integrado
     if modo not in ['integrado', 'hibrido']:
-        modo = 'integrado'
+        return Response({'detail': 'Com loja, o modo é integrado ou híbrido. Para standalone, desliga a loja.'},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     _bloquear_se_suspenso(pos)

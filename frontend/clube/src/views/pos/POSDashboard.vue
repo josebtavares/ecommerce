@@ -347,13 +347,19 @@
             <label class="mb-2 block text-sm font-black text-slate-700">Loja Bendi</label>
             <select
               v-model="configForm.loja_id"
-              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+              :disabled="configForm.modo === 'standalone'"
+              data-teste="config-loja"
+              class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10 disabled:opacity-50"
             >
               <option value="">Sem loja vinculada</option>
               <option v-for="loja in lojas" :key="loja.id" :value="loja.id">
                 {{ loja.nome }}
               </option>
             </select>
+            <p v-if="configForm.modo === 'standalone' && lojaVinculada" data-teste="config-aviso-standalone" class="mt-2 text-xs font-semibold leading-5 text-amber-700">
+              Em standalone o POS desliga-se de {{ lojaVinculada.nome }} e passa a usar só os seus produtos.
+              Se estava incluído no plano Loja + POS da loja, passa a ter o seu próprio plano.
+            </p>
           </div>
 
           <div>
@@ -875,7 +881,8 @@ export default {
       this.savingConfig = true
 
       try {
-        if (this.configForm.loja_id) {
+        // standalone = sem loja: mesmo com uma loja escolhida, desliga-a
+        if (this.configForm.modo !== 'standalone' && this.configForm.loja_id) {
           const { data } = await api.post(`/api/pos/${this.posId}/conectar-loja/`, {
             loja_id: this.configForm.loja_id,
             modo:    this.configForm.modo
