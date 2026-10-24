@@ -44,4 +44,7 @@ urlpatterns = [
 
     path('loja/<int:loja_id>/encomendas/<int:id>/status/',
          v.encomenda_atualizar_status,           name='encomenda-status'),
+
+    path('loja/<int:loja_id>/encomendas/<int:id>/fatura/',
+         v.encomenda_fatura,                     name='encomenda-fatura'),
 ]

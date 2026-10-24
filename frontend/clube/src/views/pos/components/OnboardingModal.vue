@@ -209,6 +209,13 @@
           </div>
         </div>
 
+        <!-- Dados fiscais (utils/fiscal.js) — obrigatórios para vender -->
+        <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-white p-4">
+          <p class="text-sm font-black text-slate-950">Dados fiscais</p>
+          <p class="mt-1 mb-4 text-xs font-semibold text-slate-500">Só tu e a plataforma veem o NIF.</p>
+          <DadosFiscais v-model="fiscal" tema="claro" />
+        </div>
+
         <!-- Resumo -->
         <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-white p-4">
           <p class="text-sm font-black text-slate-950">Resumo da configuração</p>
@@ -259,11 +266,14 @@
 </template>
 
 <script>
+import DadosFiscais from '@/components/fiscal/DadosFiscais.vue'
+import { dadosFiscaisValidos, corpoDadosFiscais } from '@/utils/fiscal'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 
 export default {
   name: 'OnboardingModal',
+  components: { DadosFiscais },
 
   props: {
     lojas: {
@@ -296,6 +306,7 @@ export default {
         loja_id: '',
         plano_id: null
       },
+      fiscal: { nif: '', regime_fiscal: '', declaracao_fiscal: false },
       planos: [],
       lojasComPosIncluido: [],
       diasTeste: 0,
@@ -355,6 +366,7 @@ export default {
     canConfirm() {
       if (!this.form.nome.trim()) return false
       if (this.carregandoPlanos || (this.planos.length && !this.form.plano_id && !this.incluidoNaLoja)) return false
+      if (!dadosFiscaisValidos(this.fiscal)) return false
       if (['integrado', 'hibrido'].includes(this.form.modo)) return Boolean(this.form.loja_id)
       return true
     }
@@ -416,7 +428,12 @@ export default {
         return
       }
 
-      const payload = { nome: this.form.nome.trim(), modo: this.form.modo }
+      if (!dadosFiscaisValidos(this.fiscal)) {
+        this.error = 'Preenche os dados fiscais (NIF, como vendes e a declaração).'
+        return
+      }
+
+      const payload = { nome: this.form.nome.trim(), modo: this.form.modo, ...corpoDadosFiscais(this.fiscal) }
       // standalone não leva a loja (vinha pré-escolhida e o POS ficava ligado como integrado)
       if (this.form.loja_id && this.form.modo !== 'standalone') payload.loja_id = this.form.loja_id
       if (this.form.plano_id && !this.incluidoNaLoja) payload.plano_id = this.form.plano_id

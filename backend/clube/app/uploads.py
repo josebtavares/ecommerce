@@ -19,6 +19,8 @@ from django.db.models.signals import pre_save
 
 IMAGENS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'}
 VIDEOS = {'mp4', 'webm', 'mov', 'mkv'}
+# só nos campos que o pedem explicitamente (FileExtensionValidator(['pdf']) — ex.: Encomenda.fatura_pdf)
+DOCUMENTOS = {'pdf'}
 MAX_IMAGEM_MB = 10
 MAX_VIDEO_MB = 200
 
@@ -33,10 +35,10 @@ def _novo(valor):
 def validar_ficheiro(campo, ficheiro):
     ext = os.path.splitext(ficheiro.name or '')[1].lower().lstrip('.')
     aceites = IMAGENS if isinstance(campo, ImageField) else IMAGENS | VIDEOS
-    # se o campo tem uma lista própria mais curta (p.ex. o banner), essa manda
+    # se o campo tem uma lista própria (p.ex. o banner, mais curta; a fatura, só PDF), essa manda
     for v in campo.validators:
         if getattr(v, 'allowed_extensions', None):
-            aceites = aceites & {e.lower() for e in v.allowed_extensions}
+            aceites = (aceites | DOCUMENTOS) & {e.lower() for e in v.allowed_extensions}
     if ext not in aceites:
         raise ValidationError(f'Tipo de ficheiro não permitido (.{ext or "?"}). Aceites: '
                               + ', '.join(sorted(aceites)) + '.')

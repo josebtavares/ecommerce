@@ -129,6 +129,7 @@
         <AdminDenuncias    v-else-if="activeSection === 'denuncias'"    @pendentes="n => denunciasPendentes = n" />
         <AdminPlataforma   v-else-if="activeSection === 'plataforma'"   />
         <AdminSubscricoes  v-else-if="activeSection === 'subscricoes'"  />
+        <AdminFaturacao    v-else-if="activeSection === 'faturacao'"    />
       </div>
     </div>
 
@@ -153,6 +154,7 @@ import AdminSuporte      from './AdminSuporte.vue'
 import AdminDenuncias    from './AdminDenuncias.vue'
 import AdminPlataforma   from './AdminPlataforma.vue'
 import AdminSubscricoes  from './AdminSubscricoes.vue'
+import AdminFaturacao    from './AdminFaturacao.vue'
 import AdminDevolucoes   from './AdminDevolucoes.vue'
 import api from '@/services/api'
 import { chat } from '@/services/chat'
@@ -174,6 +176,7 @@ const SECCOES = [
   { key: 'tipos',        label: 'Tipos Globais', icon: 'shapes',        permissao: 'gerir_tipos_globais' },
   { key: 'comissoes',    label: 'Comissões',     icon: 'coins',         permissao: 'gerir_comissoes'     },
   { key: 'subscricoes',  label: 'Subscrições',   icon: 'file-invoice-dollar', permissao: 'gerir_subscricoes' },
+  { key: 'faturacao',    label: 'Faturação',     icon: 'file-invoice',  permissao: 'gerir_faturacao'     },
   { key: 'home',         label: 'Página inicial', icon: 'house',       permissao: 'gerir_home'        },
   { key: 'paginas',      label: 'Páginas & Ajuda', icon: 'file-lines',  permissao: 'gerir_conteudo'    },
   { key: 'pos',          label: 'POS',             icon: 'cash-register', permissao: 'ver_pos'           },
@@ -184,10 +187,10 @@ const SECCOES = [
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_home','gerir_devolucoes'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_faturacao','gerir_home','gerir_devolucoes'],
   moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','moderar_chat'],
   suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','gerir_devolucoes'],
-  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos','gerir_subscricoes'],
+  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos','gerir_subscricoes','gerir_faturacao'],
 }
 
 export default {
@@ -195,7 +198,7 @@ export default {
   components: {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
-    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes,
+    AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes, AdminFaturacao,
     AdminDevolucoes,
   },
 

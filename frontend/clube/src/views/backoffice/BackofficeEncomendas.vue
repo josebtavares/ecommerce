@@ -74,6 +74,10 @@
             </button>
           </div>
           <div class="flex items-center gap-3 flex-shrink-0">
+            <span v-if="porFaturar(enc)" title="Emite a fatura no e-Fatura e regista-a na encomenda"
+                  class="hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300">
+              Por faturar
+            </span>
             <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColor(enc.status)]">
               {{ enc.status }}
             </span>
@@ -204,6 +208,10 @@
                 <span class="text-green-400">{{ formatPrice(detalhes[enc.id].receita_liquida) }}</span>
               </div>
             </div>
+
+            <!-- Fatura emitida pela loja no e-Fatura (components/fiscal/FaturaEncomenda.vue) -->
+            <FaturaEncomenda v-if="faturavel(enc)" :encomenda="detalhes[enc.id]" :loja-id="lojaId"
+                             @atualizada="faturaAtualizada(enc, $event)" />
 
             <!-- Artigo esgotado: reembolsa só esses artigos e o resto segue (backend utils/devolucoes.loja_esgotado) -->
             <div v-if="podeEsgotado(enc)" class="border-t border-zinc-800 pt-3">
@@ -410,6 +418,8 @@ import { iconePagamento } from '@/utils/icones'
 import PausaLoja from '@/components/horario/PausaLoja.vue'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import { ATIVOS } from '@/utils/reembolsos'
+import FaturaEncomenda from '@/components/fiscal/FaturaEncomenda.vue'
+import { ESTADOS_FATURAVEIS } from '@/utils/fiscal'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -424,9 +434,12 @@ const ESTADOS_BLOQUEADOS = ['concluido', 'cancelado', 'enviado']
 
 export default {
   name: 'BackofficeEncomendas',
-  components: { PausaLoja, EstadoReembolso },
+  components: { PausaLoja, EstadoReembolso, FaturaEncomenda },
   emits: ['ver-reembolso'],
-  props: { lojaId: [String, Number] },
+  props: {
+    lojaId: [String, Number],
+    regimeFiscal: { type: String, default: '' },   // 'atividade' → assinala as encomendas por faturar
+  },
 
   data () {
     return {
@@ -480,6 +493,12 @@ export default {
   },
 
   methods: {
+    faturavel (enc) { return ESTADOS_FATURAVEIS.includes(enc.status) },
+    porFaturar (enc) { return this.regimeFiscal === 'atividade' && this.faturavel(enc) && !enc.fatura },
+    faturaAtualizada (enc, data) {
+      this.detalhes = { ...this.detalhes, [enc.id]: data }
+      enc.fatura = data.fatura
+    },
     iconePagamento,
     formatarAtributos, temAtributos,
     formatPrice (val) { return formatarDinheiro(val || 0) },

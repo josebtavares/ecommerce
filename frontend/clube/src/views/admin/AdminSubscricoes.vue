@@ -247,8 +247,11 @@
             <button type="button" @click="abrirAdiar(f)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Adiar</button>
             <button type="button" @click="abrirAnular(f)" class="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs">Anular</button>
           </template>
-          <button v-else-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Recibo da fatura ${f.id}`"
-            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Recibo</button>
+          <button v-else-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Comprovativo do pagamento ${f.id}`"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
+          <a v-if="f.fatura && f.fatura.pdf_url" :href="urlFicheiro(f.fatura.pdf_url)" target="_blank" rel="noopener"
+            class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs">Fatura {{ f.fatura.numero }}</a>
+          <span v-else-if="f.fatura" class="text-xs text-green-400">Fatura {{ f.fatura.numero }}</span>
         </div>
       </div>
     </template>
@@ -403,7 +406,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
-import { gerarReciboSubscricao } from '@/utils/reciboSubscricao'
+import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 
 const TABS = [{ key: 'resumo', label: 'Resumo' }, { key: 'lojas', label: 'Lojas' }, { key: 'pos', label: 'POS' }, { key: 'faturas', label: 'Faturas' }, { key: 'planos', label: 'Planos' }]
 const PERIODOS = [{ key: 'este_mes', label: 'Este mês' }, { key: 'mes_passado', label: 'Mês passado' },
@@ -483,7 +486,8 @@ export default {
       this.modal = { tipo: 'pagar', fatura: f, titulo: `Marcar a fatura #${f.id} como paga`, botao: 'Marcar paga', erro: '', aGuardar: false,
                      form: { metodo: 'transferencia', notas: '' } }
     },
-    recibo (f) { gerarReciboSubscricao(f) },
+    recibo (f) { descarregarComprovativoSubscricao(f) },
+    urlFicheiro,
     escolherPeriodo (k) {
       const h = new Date()
       let a = new Date(h.getFullYear(), h.getMonth(), 1), b = h

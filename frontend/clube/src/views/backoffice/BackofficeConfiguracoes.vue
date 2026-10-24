@@ -247,6 +247,10 @@
       </div>
     </div>
 
+    <!-- Dados fiscais (só o dono) -->
+    <SeccaoDadosFiscais v-if="podeFiscal && loja?.fiscal"
+                        :fiscal="loja.fiscal" :url="`/app/loja/${lojaId}/fiscal/`" @guardado="$emit('updated')" />
+
     <!-- Impostos (mapa de IVA nos Relatórios) -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Impostos</h2>
@@ -356,6 +360,7 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconePagamento } from '@/utils/icones'
 import { criarVigia, emCurso, reprocessarVideo } from '@/utils/videoEstado'
 import HorarioEditor from '@/components/horario/HorarioEditor.vue'
+import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
 
 const TODOS_METODOS = [
   { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
@@ -372,11 +377,12 @@ function isVideo (url) {
 
 export default {
   name: 'BackofficeConfiguracoes',
-  components: { HorarioEditor },
+  components: { HorarioEditor, SeccaoDadosFiscais },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },
     podeFechar: { type: Boolean, default: false },   // permissão apagar_loja (dono)
+    podeFiscal: { type: Boolean, default: false },   // permissão gerir_dados_fiscais (dono)
   },
   emits: ['updated'],
 

@@ -172,9 +172,9 @@
 
       <!-- ═══ Faturas ═══ -->
       <div v-if="!cob || dados.faturas.length" class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white">
-        <p class="px-5 pb-3 pt-5 text-xs font-black uppercase tracking-wider text-slate-400 sm:px-6">Faturas</p>
+        <p class="px-5 pb-3 pt-5 text-xs font-black uppercase tracking-wider text-slate-400 sm:px-6">Mensalidades</p>
         <p v-if="!dados.faturas.length" class="px-5 pb-6 text-sm font-semibold text-slate-500 sm:px-6">
-          Ainda não há faturas.<template v-if="sub.plano && sub.estado === 'teste'"> A primeira chega 7 dias antes de acabar o período grátis.</template>
+          Ainda não há mensalidades.<template v-if="sub.plano && sub.estado === 'teste'"> A primeira chega 7 dias antes de acabar o período grátis.</template>
         </p>
         <div v-else class="divide-y divide-slate-100">
           <div v-for="f in dados.faturas" :key="f.id" class="flex flex-wrap items-center gap-3 px-5 py-4 sm:px-6">
@@ -188,10 +188,16 @@
             </div>
             <span class="text-sm font-black text-slate-950">{{ euros(f.valor) }}</span>
             <span :class="['rounded-full px-2 py-0.5 text-[10px] font-black uppercase', corFatura(f)]">{{ f.atrasada ? 'Em atraso' : f.estado_nome }}</span>
-            <button v-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Recibo da fatura ${f.id}`"
+            <button v-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Comprovativo do pagamento ${f.id}`"
               class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">
-              <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Recibo
+              <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Comprovativo
             </button>
+            <!-- fatura legal do Bende (e-Fatura), registada pelo admin -->
+            <a v-if="f.fatura" :href="f.fatura.pdf_url ? urlFicheiro(f.fatura.pdf_url) : null" target="_blank" rel="noopener"
+              class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+              <font-awesome-icon :icon="['fas', 'file-invoice']" class="mr-1" />Fatura {{ f.fatura.numero }}
+            </a>
+            <span v-else-if="f.estado === 'paga' && Number(f.valor) > 0" class="text-[11px] font-semibold text-slate-400">Fatura em breve</span>
             <button v-if="f.estado === 'pendente'" type="button" @click="pagar(f)" :disabled="aPagar === f.id"
               class="rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50">
               {{ aPagar === f.id ? 'A pagar…' : 'Pagar ' + euros(f.valor) }}
@@ -209,7 +215,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
-import { gerarReciboSubscricao } from '@/utils/reciboSubscricao'
+import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 
 export default {
   name: 'POSSubscricao',
@@ -251,7 +257,8 @@ export default {
       return { paga: 'bg-emerald-50 text-emerald-700', pendente: 'bg-amber-50 text-amber-700', anulada: 'bg-slate-100 text-slate-500' }[f.estado]
     },
     atual (p) { return p.id === (this.sub.plano_seguinte || this.sub.plano)?.id },
-    recibo (f) { gerarReciboSubscricao(f) },
+    recibo (f) { descarregarComprovativoSubscricao(f) },
+    urlFicheiro,
 
     async carregar () {
       try {

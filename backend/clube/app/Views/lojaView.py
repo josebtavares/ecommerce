@@ -23,6 +23,7 @@ from ..Serializers.LojaSerializer import (
     UtilizadorLojaSerializer,
 )
 from ..utils.pagination import paginar, periodo_dias
+from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_fiscais_payload
 from ..utils.password import mensagem_password_fraca
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso
 
@@ -143,6 +144,10 @@ def loja_create(request):
     serializer = LojaSerializer(data=request.data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # NIF, particular/atividade e a declaração de responsabilidade fiscal são obrigatórios
+    fiscais, erros = validar_dados_fiscais(request.data)
+    if erros:
+        return Response(erros, status=status.HTTP_400_BAD_REQUEST)
 
     # como a plataforma vai ganhar com a loja: comissão (por defeito) ou subscrição com um plano
     from ..utils.subscricoes import plano_ativo
@@ -162,6 +167,7 @@ def loja_create(request):
         banner = request.FILES.get('banner'),
         modelo_cobranca = modelo,
     )
+    aplicar_dados_fiscais(loja, fiscais)
     if plano:
         from ..utils import subscricoes
         subscricoes.criar_para_loja_nova(loja, plano)     # arranca quando o admin aprovar a loja
@@ -223,7 +229,26 @@ def loja_backoffice(request, id):
     proprio = getattr(membro, 'profissional', None)
     dados['servicos'] = {'ativo': bool(cfg and cfg.ativo),
                          'meu_profissional_id': proprio.id if proprio and proprio.ativo else None}
+    # avisos de faturação a toda a equipa; o NIF só o dono vê
+    dados['fiscal'] = dados_fiscais_payload(loja)
+    if not membro.pode('gerir_dados_fiscais'):
+        dados['fiscal']['nif'] = ''
     return Response(dados)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def loja_dados_fiscais(request, loja_id):
+    """PATCH /app/loja/<loja_id>/fiscal/  Body: { nif, regime_fiscal, declaracao_fiscal } — só o dono."""
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_dados_fiscais')
+    if erro:
+        return erro
+    fiscais, erros = validar_dados_fiscais(request.data)
+    if erros:
+        return Response(erros, status=status.HTTP_400_BAD_REQUEST)
+    aplicar_dados_fiscais(loja, fiscais)
+    return Response(dados_fiscais_payload(loja))
 
 
 @api_view(['PUT', 'PATCH'])
