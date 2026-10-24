@@ -68,7 +68,12 @@
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-black text-slate-700">Password</label>
+            <div class="mb-2 flex items-center justify-between">
+              <label class="block text-sm font-black text-slate-700">Password</label>
+              <router-link :to="{ name: 'POSRecuperarSenha' }" class="text-xs font-black text-slate-500 underline hover:text-slate-950">
+                Esqueceste?
+              </router-link>
+            </div>
             <div class="relative">
               <input
                 v-model="form.password"
@@ -118,6 +123,7 @@
           <!-- Info contextual -->
           <div class="rounded-xl bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500">
             Usa as credenciais que o teu responsável te deu.
+            Se te esqueceste da password, pede-lhe para a redefinir em Equipa.
           </div>
 
           <div>

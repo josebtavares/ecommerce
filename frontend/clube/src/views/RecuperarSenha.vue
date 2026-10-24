@@ -168,9 +168,8 @@
 
 <script>
 import { useAsyncAction } from '@/composables/useAsyncAction'
-import api from '@/services/api.js'
 import { mediaUrl } from '@/services/media'
-import { passwordValida } from '@/utils/password'
+import { pedirLinkRecuperacao, definirPasswordNova, mensagemErroRecuperacao, erroPasswordNova } from '@/services/recuperarSenha'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
@@ -224,47 +223,29 @@ export default {
   },
 
   methods: {
-    // mensagem do backend: {detail} ou {campo: [erros]}
-    mensagemErro (err, padrao) {
-      const d = err.response?.data
-      if (err.response?.status === 429) return d?.detail || 'Demasiados pedidos. Tenta novamente mais tarde.'
-      if (d?.detail) return d.detail
-      const primeiro = d && typeof d === 'object' ? Object.values(d)[0] : null
-      return (Array.isArray(primeiro) ? primeiro[0] : primeiro) || padrao
-    },
-
     async pedirLink () {
       await this.wrap(async () => {
         this.erro = ''
         try {
-          await api.post('/app/utilizador/recuperar_senha/', { email: this.email })
+          await pedirLinkRecuperacao(this.email)
           this.enviado = true
         } catch (err) {
-          this.erro = this.mensagemErro(err, 'Não foi possível enviar o email. Tenta novamente.')
+          this.erro = mensagemErroRecuperacao(err, 'Não foi possível enviar o email. Tenta novamente.')
         }
       })
     },
 
     async definirPassword () {
       await this.wrap(async () => {
-        this.erro = ''
-        if (!passwordValida(this.password)) {
-          this.erro = 'A password não cumpre todos os requisitos de segurança.'
-          return
-        }
-        if (this.password !== this.passwordConfirm) {
-          this.erro = 'As passwords não coincidem.'
-          return
-        }
+        this.erro = erroPasswordNova(this.password, this.passwordConfirm)
+        if (this.erro) return
         try {
-          await api.post('/app/utilizador/recuperar_senha/confirmar/', {
-            uid: this.uid, token: this.token, new_password: this.password,
-          })
+          await definirPasswordNova(this.uid, this.token, this.password)
           this.alterada = true
           // tira o token do endereço (não fica no histórico)
           this.$router.replace({ query: {} })
         } catch (err) {
-          this.erro = this.mensagemErro(err, 'O link é inválido ou expirou. Pede um novo.')
+          this.erro = mensagemErroRecuperacao(err, 'O link é inválido ou expirou. Pede um novo.')
         }
       })
     },

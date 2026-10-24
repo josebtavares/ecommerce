@@ -346,6 +346,7 @@ def utilizador_delete(request, id):
 def password_reset_request(request):
     """
     POST /app/utilizador/recuperar_senha/
+    Body: { email, destino? }  — destino 'pos' quando o pedido vem do login do POS.
     Envia email com link de recuperação.
     """
     serializer = PasswordResetRequestSerializer(data=request.data)
@@ -368,8 +369,10 @@ def password_reset_request(request):
     uid   = urlsafe_base64_encode(force_bytes(django_user.pk))
     token = token_generator.make_token(django_user)
 
+    # pedido feito no login do POS (conta principal) → o link volta à página do POS
+    pagina = '/pos/recuperar_senha' if request.data.get('destino') == 'pos' else '/recuperar_senha'
     reset_link = (
-        f"{settings.FRONTEND_BASE_URL}/recuperar_senha"
+        f"{settings.FRONTEND_BASE_URL}{pagina}"
         f"?uid={uid}&token={token}"
     )
 

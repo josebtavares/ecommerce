@@ -163,6 +163,13 @@ const routes = [
         meta: { title: 'Login POS' }
     },
     {
+        // "Esqueceste?" da conta principal do POS e destino do link do email (destino 'pos')
+        path: '/pos/recuperar_senha',
+        name: 'POSRecuperarSenha',
+        component: () => import('@/views/pos/POSRecuperarSenha.vue'),
+        meta: { title: 'Recuperar password POS' }
+    },
+    {
         path: '/pos/completar-perfil',
         name: 'POSCompletarPerfil',
         component: CompletarPerfil,
