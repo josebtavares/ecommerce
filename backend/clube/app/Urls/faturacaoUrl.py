@@ -6,6 +6,7 @@ urlpatterns = [
     path('encomenda/<int:id>/comprovativo/',                     v.encomenda_comprovativo,  name='encomenda-comprovativo'),
     path('subscricao/faturas/<int:fatura_id>/comprovativo/',    v.subscricao_comprovativo, name='subscricao-comprovativo'),
     path('loja/<int:loja_id>/comissoes/meses/',                 v.loja_comissoes_meses,    name='loja-comissoes-meses'),
+    path('loja/<int:loja_id>/comissoes/<str:mes>/vendas/',      v.loja_comissoes_vendas,   name='loja-comissoes-vendas'),
     path('loja/<int:loja_id>/comissoes/<str:mes>/extrato/',     v.loja_comissoes_extrato,  name='loja-comissoes-extrato'),
     path('admin/faturacao/vendedores/',                         v.admin_vendedores,        name='admin-faturacao-vendedores'),
     path('admin/faturacao/ficha/<str:tipo>/<int:id>/',           v.admin_ficha,             name='admin-faturacao-ficha'),

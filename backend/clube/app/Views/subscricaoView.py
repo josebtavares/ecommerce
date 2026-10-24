@@ -1,7 +1,7 @@
 """
 Subscrições das lojas (utils/subscricoes.py):
   público     → planos para a criação da loja
-  backoffice  → ver a subscrição/comissão, pagar faturas (simulado), renovação automática
+  backoffice  → ver a subscrição/comissão, mensalidades paginadas, pagar faturas (simulado), renovação automática
   admin       → planos, lista das lojas e faturas, marcar paga à mão, mudar o modelo de uma loja
 """
 from decimal import Decimal, InvalidOperation
@@ -36,6 +36,89 @@ def _inteiro(v):
     return 0
 
 
+# ── Cobranças paginadas (admin, backoffice da loja e do POS) ──
+
+def filtrar_cobrancas(request, qs):
+    """
+    ?estado=pendente|paga|anulada|atraso  ?q= S-12 / 12 / descrição / nº da fatura do Bende / referência / notas
+    ?de=&ate= AAAA-MM-DD (início do período). Devolve (qs, erro).
+    """
+    from datetime import date
+    estado = request.GET.get('estado') or ''
+    if estado == 'atraso':
+        qs = qs.filter(estado='pendente', vencimento__lt=subs.hoje())
+    elif estado in dict(FaturaSubscricao.ESTADOS):
+        qs = qs.filter(estado=estado)
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        num = q.upper().removeprefix('S-').removeprefix('#').strip()
+        filtro = (Q(descricao__icontains=q) | Q(fatura_numero__icontains=q) | Q(referencia__icontains=q) |
+                  Q(notas__icontains=q) | Q(loja__nome__icontains=q) | Q(pos__nome__icontains=q) | Q(pos__codigo_pos__icontains=q))
+        if num.isdigit() and len(num) < 10:
+            filtro |= Q(id=int(num))
+        qs = qs.filter(filtro)
+    try:
+        if request.GET.get('de'):
+            qs = qs.filter(periodo_inicio__gte=date.fromisoformat(request.GET['de']))
+        if request.GET.get('ate'):
+            qs = qs.filter(periodo_inicio__lte=date.fromisoformat(request.GET['ate']))
+    except ValueError:
+        return qs, _erro('Datas inválidas (AAAA-MM-DD).')
+    return qs, None
+
+
+def pagina_cobrancas(request, qs, limite=20):
+    """{count, results} paginado na base de dados (?limit= até 100, ?offset=)."""
+    qs, erro = filtrar_cobrancas(request, qs)
+    if erro:
+        return erro
+    try:
+        limit = min(max(int(request.GET.get('limit') or limite), 1), 100)
+        offset = max(int(request.GET.get('offset') or 0), 0)
+    except ValueError:
+        return _erro('offset/limit inválidos.')
+    qs = qs.select_related('loja', 'pos', 'plano')
+    return Response({'count': qs.count(), 'results': [subs.fatura_payload(f) for f in qs[offset:offset + limit]]})
+
+
+def _lojas_qs():
+    return Loja.objects.exclude(estado='pendente', modelo_cobranca='comissao').select_related(
+        'subscricao__plano', 'subscricao_servicos__plano').annotate(
+        n_pendentes=Count('faturas_subscricao', filter=Q(faturas_subscricao__estado='pendente')),
+        v_pendente=Sum('faturas_subscricao__valor', filter=Q(faturas_subscricao__estado='pendente')))
+
+
+def _linha_loja(l):
+    sub = getattr(l, 'subscricao', None) if l.modelo_cobranca == 'subscricao' else None
+    serv = getattr(l, 'subscricao_servicos', None)
+    return {'loja_id': l.id, 'loja_nome': l.nome, 'loja_estado': l.estado, 'modelo': l.modelo_cobranca,
+            'percentagem_comissao': str(l.percentagem_comissao), 'subscricao': subs.subscricao_payload(sub),
+            'subscricao_servicos': subs.subscricao_payload(serv) if serv and serv.estado != 'cancelada' else None,
+            'faturas_pendentes': l.n_pendentes, 'valor_pendente': str(l.v_pendente or 0)}
+
+
+def _pos_qs():
+    from ..pos.models import ConfiguracaoPOS
+    return ConfiguracaoPOS.objects.select_related(
+        'dono__user', 'loja_vinculada', 'subscricao__plano', 'subscricao__plano_seguinte', 'subscricao__coberta_por__loja',
+        'subscricao__coberta_por__plano').annotate(
+        n_pendentes=Count('faturas_subscricao', filter=Q(faturas_subscricao__estado='pendente')),
+        v_pendente=Sum('faturas_subscricao__valor', filter=Q(faturas_subscricao__estado='pendente')))
+
+
+def _linha_pos(p):
+    sub = getattr(p, 'subscricao', None)
+    cob = sub.coberta_por if sub and sub.coberta_por_id else None
+    return {'pos_id': p.id, 'pos_nome': subs.nome_alvo(p), 'nome': p.nome, 'codigo_pos': p.codigo_pos,
+            'dono': p.dono.user.get_full_name() or p.dono.user.username, 'dono_email': p.dono.user.email,
+            'loja_vinculada': p.loja_vinculada.nome if p.loja_vinculada_id else None,
+            'loja_vinculada_id': p.loja_vinculada_id,
+            'suspenso': p.suspenso, 'suspenso_motivo': p.suspenso_motivo,
+            'subscricao': subs.subscricao_payload(sub),
+            'cobertura': {'loja_id': cob.loja_id, 'loja_nome': cob.loja.nome, 'plano': cob.plano.nome if cob.plano_id else ''} if cob else None,
+            'faturas_pendentes': p.n_pendentes, 'valor_pendente': str(p.v_pendente or 0)}
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def planos_publicos(request):
@@ -55,8 +138,9 @@ def _resumo_loja(loja, membro):
     sub = Subscricao.objects.select_related('plano').filter(loja=loja).first()
     sub_serv = Subscricao.objects.select_related('plano').filter(loja_servicos=loja).first()
     # as faturas da loja e as da subscrição de Serviços aparecem juntas
-    faturas = list(loja.faturas_subscricao.select_related('plano')[:36]) if (sub or sub_serv) else []
-    pendentes_todas = [f for f in faturas if f.estado == 'pendente']
+    # a lista completa (paginada, com pesquisa) é /app/loja/<id>/subscricao/faturas/; aqui só as últimas
+    faturas = list(loja.faturas_subscricao.select_related('plano')[:10]) if (sub or sub_serv) else []
+    pendentes_todas = list(loja.faturas_subscricao.filter(estado='pendente').select_related('plano'))
     pendentes = [f for f in pendentes_todas if sub and f.subscricao_id == sub.id]
     pend_serv = [f for f in pendentes_todas if sub_serv and f.subscricao_id == sub_serv.id]
     livre = subs.proxima_troca(loja)
@@ -84,6 +168,17 @@ def _resumo_loja(loja, membro):
                          'incluido': bool(sub) and getattr(getattr(p, 'subscricao', None), 'coberta_por_id', None) == sub.id}
                         for p in loja.pos_vinculados.filter(dono_id=loja.dono_id).select_related('subscricao')],
     }
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_subscricao_faturas(request, loja_id):
+    """GET /app/loja/<loja_id>/subscricao/faturas/?estado=&q=&de=&ate=&limit=&offset= — todas as mensalidades da loja."""
+    loja = get_object_or_404(Loja, id=loja_id)
+    membro, erro = _exige_permissao(request, loja, 'ver_subscricao')
+    if erro:
+        return erro
+    return pagina_cobrancas(request, loja.faturas_subscricao.all(), limite=10)
 
 
 @api_view(['GET', 'PATCH'])
@@ -226,8 +321,7 @@ def admin_subscricoes(request):
     erro = _exige_admin(request, 'gerir_subscricoes')
     if erro:
         return erro
-    qs = Loja.objects.exclude(estado='pendente', modelo_cobranca='comissao').select_related(
-        'subscricao__plano', 'subscricao_servicos__plano')
+    qs = _lojas_qs()
     modelo = request.GET.get('modelo')
     if modelo in ('comissao', 'subscricao'):
         qs = qs.filter(modelo_cobranca=modelo)
@@ -237,31 +331,23 @@ def admin_subscricoes(request):
     q = (request.GET.get('q') or '').strip()
     if q:
         qs = qs.filter(nome__icontains=q)
-    qs = qs.annotate(
-        n_pendentes=Count('faturas_subscricao', filter=Q(faturas_subscricao__estado='pendente')),
-        v_pendente=Sum('faturas_subscricao__valor', filter=Q(faturas_subscricao__estado='pendente')),
-    ).order_by('-modelo_cobranca', 'nome')
-
-    def linha(l):
-        sub = getattr(l, 'subscricao', None) if l.modelo_cobranca == 'subscricao' else None
-        serv = getattr(l, 'subscricao_servicos', None)
-        return {'loja_id': l.id, 'loja_nome': l.nome, 'loja_estado': l.estado, 'modelo': l.modelo_cobranca,
-                'percentagem_comissao': str(l.percentagem_comissao), 'subscricao': subs.subscricao_payload(sub),
-                'subscricao_servicos': subs.subscricao_payload(serv) if serv and serv.estado != 'cancelada' else None,
-                'faturas_pendentes': l.n_pendentes, 'valor_pendente': str(l.v_pendente or 0)}
-    return paginar_lista(request, [linha(l) for l in qs])
+    return paginar_lista(request, [_linha_loja(l) for l in qs.order_by('-modelo_cobranca', 'nome')])
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_faturas(request):
-    """GET /app/admin/faturas/?loja=<id>&pos=<id>&tipo=loja|pos&estado=pendente|paga|anulada — faturas de subscrição."""
+    """
+    GET /app/admin/faturas/?loja=<id>[&com_pos=1]&pos=<id>&tipo=loja|servicos|pos&estado=pendente|paga|anulada|atraso
+                           &q=&de=&ate=&limit=&offset=   — cobranças (mensalidades), paginadas na base de dados.
+    """
     erro = _exige_admin(request, 'gerir_subscricoes')
     if erro:
         return erro
-    qs = FaturaSubscricao.objects.select_related('loja', 'pos', 'plano')
+    qs = FaturaSubscricao.objects.all()
     if (request.GET.get('loja') or '').isdigit():
-        qs = qs.filter(loja_id=int(request.GET['loja']))
+        loja_id = int(request.GET['loja'])
+        qs = qs.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id)) if request.GET.get('com_pos') == '1' else qs.filter(loja_id=loja_id)
     if (request.GET.get('pos') or '').isdigit():
         qs = qs.filter(pos_id=int(request.GET['pos']))
     if request.GET.get('tipo') == 'loja':
@@ -270,9 +356,65 @@ def admin_faturas(request):
         qs = qs.filter(subscricao__loja_servicos__isnull=False)
     elif request.GET.get('tipo') == 'pos':
         qs = qs.filter(pos__isnull=False)
-    if request.GET.get('estado') in dict(FaturaSubscricao.ESTADOS):
-        qs = qs.filter(estado=request.GET['estado'])
-    return paginar_lista(request, [subs.fatura_payload(f) for f in qs[:500]])
+    return pagina_cobrancas(request, qs)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_subscricoes_abas(request):
+    """
+    GET /app/admin/subscricoes/abas/?q=&limit=&offset=&fixar=loja-12 — abas das Subscrições: lojas e POS sem loja,
+    com as cobranças por pagar (as em atraso primeiro). As de um POS ligado contam na loja.
+    """
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    from ..pos.models import ConfiguracaoPOS
+    from .faturacaoView import abas_resposta, procura_abas
+    lojas = Loja.objects.exclude(estado='pendente', modelo_cobranca='comissao')
+    poss = ConfiguracaoPOS.objects.filter(loja_vinculada__isnull=True)
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        ql, qp = procura_abas(q)
+        lojas, poss = lojas.filter(id__in=Loja.objects.filter(ql).values('id')), poss.filter(qp)
+    pend, atraso = {}, {}
+    hoje = subs.hoje()
+    for loja_id, pos_loja, pos_id, venc in (FaturaSubscricao.objects.filter(estado='pendente').order_by()
+                                            .values_list('loja_id', 'pos__loja_vinculada_id', 'pos_id', 'vencimento')):
+        chave = ('loja', loja_id or pos_loja) if (loja_id or pos_loja) else ('pos', pos_id)
+        pend[chave] = pend.get(chave, 0) + 1
+        if venc < hoje:
+            atraso[chave] = atraso.get(chave, 0) + 1
+    itens = [{'tipo': 'loja', 'id': i, 'nome': n} for i, n in lojas.values_list('id', 'nome')]
+    itens += [{'tipo': 'pos', 'id': i, 'nome': n, 'codigo_pos': c} for i, n, c in poss.values_list('id', 'nome', 'codigo_pos')]
+    for i in itens:
+        k = (i['tipo'], i['id'])
+        i['contador'], i['em_atraso'] = pend.get(k, 0), atraso.get(k, 0)
+        i['alerta'] = bool(i['em_atraso'])
+    return abas_resposta(request, itens, prioridade='em_atraso')
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_subscricao_ficha(request, tipo, id):
+    """GET /app/admin/subscricoes/ficha/<loja|pos>/<id>/ — a loja (com os seus POS) ou o POS: modelo, plano, por pagar."""
+    erro = _exige_admin(request, 'gerir_subscricoes')
+    if erro:
+        return erro
+    from ..pos.models import ConfiguracaoPOS
+    from ..utils import subscricoes_pos as subs_pos
+    if tipo == 'loja':
+        loja = get_object_or_404(_lojas_qs(), id=id)
+        for p in ConfiguracaoPOS.objects.filter(loja_vinculada=loja):
+            subs_pos.garantir(p)          # um POS acabado de ligar sem subscrição
+        pos = _pos_qs().filter(loja_vinculada=loja).order_by('nome', 'id')
+        return Response({'tipo': 'loja', 'loja': _linha_loja(loja), 'pos': [_linha_pos(p) for p in pos]})
+    if tipo == 'pos':
+        subs_pos.garantir(get_object_or_404(ConfiguracaoPOS, id=id))
+        p = get_object_or_404(_pos_qs(), id=id)
+        return Response({'tipo': 'pos', 'pos': _linha_pos(p),
+                         'loja': {'id': p.loja_vinculada_id, 'nome': p.loja_vinculada.nome} if p.loja_vinculada_id else None})
+    return _erro('Tipo inválido.', status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['POST'])
@@ -450,9 +592,7 @@ def admin_subscricoes_pos(request):
     from ..pos.models import ConfiguracaoPOS
     from ..utils import subscricoes_pos as subs_pos
     subs_pos.garantir_todos()               # um POS acabado de criar sem subscrição (o worker ainda não passou)
-    qs = ConfiguracaoPOS.objects.select_related('dono__user', 'loja_vinculada', 'subscricao__plano',
-                                                'subscricao__plano_seguinte', 'subscricao__coberta_por__loja',
-                                                'subscricao__coberta_por__plano')
+    qs = _pos_qs()
     situacao = request.GET.get('situacao')
     if situacao == 'incluido':
         qs = qs.filter(subscricao__coberta_por__isnull=False)
@@ -467,22 +607,7 @@ def admin_subscricoes_pos(request):
     if q:
         qs = qs.filter(Q(nome__icontains=q) | Q(codigo_pos__icontains=q) | Q(dono__user__first_name__icontains=q)
                        | Q(dono__user__email__icontains=q))
-    qs = qs.annotate(
-        n_pendentes=Count('faturas_subscricao', filter=Q(faturas_subscricao__estado='pendente')),
-        v_pendente=Sum('faturas_subscricao__valor', filter=Q(faturas_subscricao__estado='pendente')),
-    ).order_by('nome', 'id')
-
-    def linha(p):
-        sub = getattr(p, 'subscricao', None)
-        cob = sub.coberta_por if sub and sub.coberta_por_id else None
-        return {'pos_id': p.id, 'pos_nome': subs.nome_alvo(p), 'codigo_pos': p.codigo_pos,
-                'dono': p.dono.user.get_full_name() or p.dono.user.username, 'dono_email': p.dono.user.email,
-                'loja_vinculada': p.loja_vinculada.nome if p.loja_vinculada_id else None,
-                'suspenso': p.suspenso, 'suspenso_motivo': p.suspenso_motivo,
-                'subscricao': subs.subscricao_payload(sub),
-                'cobertura': {'loja_id': cob.loja_id, 'loja_nome': cob.loja.nome, 'plano': cob.plano.nome if cob.plano_id else ''} if cob else None,
-                'faturas_pendentes': p.n_pendentes, 'valor_pendente': str(p.v_pendente or 0)}
-    return paginar_lista(request, [linha(p) for p in qs])
+    return paginar_lista(request, [_linha_pos(p) for p in qs.order_by('nome', 'id')])
 
 
 def _sub_do_pos(pos_id):

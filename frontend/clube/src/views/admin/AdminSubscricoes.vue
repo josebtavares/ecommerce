@@ -1,14 +1,23 @@
 <template>
-  <!-- Admin → Subscrições: lojas (comissão/subscrição), faturas e planos (utils/subscricoes.py) -->
+  <!-- Admin → Subscrições (como Admin → Comissões): uma aba por loja (e POS sem loja) com a sua vista — plano, ações,
+       cobranças paginadas, POS (SubscricaoFicha.vue); "Todas" = Resumo, Lojas, POS, Cobranças, Planos (utils/subscricoes.py) -->
   <div class="space-y-5">
+    <div>
+      <h2 class="text-lg font-bold text-zinc-100">Subscrições</h2>
+      <p class="text-xs text-zinc-500 mt-0.5">Como cada loja e cada POS pagam à plataforma — comissão por venda ou mensalidade</p>
+    </div>
+    <AbasVendedores ref="abas" url="/app/admin/subscricoes/abas/" :ativo="abaAtiva" titulo="Cobranças por pagar"
+      titulo-alerta="Cobranças por pagar — há em atraso" @selecionar="selecionar" />
+
+    <SubscricaoFicha v-if="ficha" :key="ficha.tipo + ficha.id" :tipo="ficha.tipo" :id="ficha.id" :aba-inicial="ficha.aba" :versao="versao"
+      @acao="acaoFicha" @abrir="abrirFicha" @carregada="f => lojaDoPos = f.tipo === 'pos' && f.loja ? f.loja.id : null" />
+
+    <template v-else>
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 class="text-lg font-bold text-zinc-100">Subscrições</h2>
-        <p class="text-xs text-zinc-500 mt-0.5">Como cada loja e cada POS pagam à plataforma — comissão por venda ou mensalidade</p>
-      </div>
-      <div class="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1" role="tablist">
+      <p class="text-sm font-semibold text-zinc-300">Todas as lojas e POS</p>
+      <div class="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 max-w-full overflow-x-auto" role="tablist">
         <button v-for="t in TABS" :key="t.key" type="button" role="tab" :aria-selected="tab === t.key ? 'true' : 'false'" @click="tab = t.key"
-          :class="['px-4 py-1.5 rounded-lg text-sm font-semibold transition', tab === t.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+          :class="['px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition', tab === t.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
           {{ t.label }}
         </button>
       </div>
@@ -94,15 +103,15 @@
     <!-- ═══ LOJAS ═══ -->
     <template v-else-if="tab === 'lojas'">
       <div class="flex flex-wrap gap-2">
-        <input v-model="q" @input="debounce(carregarLojas)" placeholder="Procurar loja…" aria-label="Procurar loja"
+        <input v-model="q" @input="debounce(() => carregarLojas(0))" placeholder="Procurar loja…" aria-label="Procurar loja"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 w-56" />
-        <select v-model="modelo" @change="carregarLojas" aria-label="Modelo"
+        <select v-model="modelo" @change="carregarLojas(0)" aria-label="Modelo"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Todos os modelos</option>
           <option value="subscricao">Subscrição</option>
           <option value="comissao">Comissão</option>
         </select>
-        <select v-model="estado" @change="carregarLojas" aria-label="Estado"
+        <select v-model="estado" @change="carregarLojas(0)" aria-label="Estado"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Todos os estados</option>
           <option v-for="(n, k) in ESTADOS" :key="k" :value="k">{{ n }}</option>
@@ -140,25 +149,27 @@
             @click="abrirOferta(l)" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-xs text-sky-300">Oferecer meses</button>
           <button v-if="l.subscricao_servicos && !['aguarda', 'cancelada'].includes(l.subscricao_servicos.estado)" type="button"
             @click="abrirOferta(l, true)" class="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs text-emerald-300">Oferecer meses (Serviços)</button>
-          <button type="button" @click="verFaturas(l)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Cobranças</button>
           <button type="button" @click="abrirModelo(l)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Mudar modelo</button>
+          <button type="button" @click="abrirFicha('loja', l.loja_id)" :data-teste="`abrir-loja-${l.loja_id}`"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Vista da loja →</button>
         </div>
+        <PaginacaoLista :count="lojas.count" :limit="LIMITE" :offset="lOffset" @ir="carregarLojas" />
       </div>
     </template>
 
     <!-- ═══ POS ═══ -->
     <template v-else-if="tab === 'pos'">
       <div class="flex flex-wrap gap-2">
-        <input v-model="qPos" @input="debounce(carregarPos)" placeholder="Procurar POS, código ou dono…" aria-label="Procurar POS"
+        <input v-model="qPos" @input="debounce(() => carregarPos(0))" placeholder="Procurar POS, código ou dono…" aria-label="Procurar POS"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 w-64" />
-        <select v-model="situacaoPos" @change="carregarPos" aria-label="Situação"
+        <select v-model="situacaoPos" @change="carregarPos(0)" aria-label="Situação"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Todos</option>
           <option value="incluido">Incluídos no plano da loja</option>
           <option value="sem_plano">Sem plano</option>
           <option value="suspenso">Suspensos</option>
         </select>
-        <select v-model="estadoPos" @change="carregarPos" aria-label="Estado da subscrição"
+        <select v-model="estadoPos" @change="carregarPos(0)" aria-label="Estado da subscrição"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Todos os estados</option>
           <option v-for="k in ['teste', 'ativa', 'em_atraso', 'suspensa']" :key="k" :value="k">{{ ESTADOS[k] }}</option>
@@ -194,69 +205,30 @@
             <button type="button" @click="abrirOfertaPos(p)" class="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-xs text-sky-300">Oferecer meses</button>
             <button type="button" @click="abrirPlanoPos(p)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Plano</button>
           </template>
-          <button type="button" @click="verFaturasPos(p)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Cobranças</button>
+          <button type="button" @click="abrirFicha('pos', p.pos_id)" :data-teste="`abrir-pos-${p.pos_id}`"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300">Vista do POS →</button>
         </div>
+        <PaginacaoLista :count="posLista.count" :limit="LIMITE" :offset="pOffset" @ir="carregarPos" />
       </div>
     </template>
 
-    <!-- ═══ COBRANÇAS (mensalidades: FaturaSubscricao) — a fatura legal do Bende regista-se em Faturação ═══ -->
+    <!-- ═══ COBRANÇAS (mensalidades: FaturaSubscricao), paginadas no servidor — a fatura legal do Bende regista-se em Faturação ═══ -->
     <template v-else-if="tab === 'faturas'">
       <div class="flex flex-wrap items-center gap-2">
-        <select v-model="estadoFatura" @change="carregarFaturas" aria-label="Estado da cobrança"
-          class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
-          <option value="">Todas</option>
-          <option value="pendente">Por pagar</option>
-          <option value="paga">Pagas</option>
-          <option value="anulada">Anuladas</option>
-        </select>
-        <select v-if="!lojaFiltro && !posFiltro" v-model="tipoFatura" @change="carregarFaturas" aria-label="Lojas ou POS"
+        <select v-model="tipoFatura" aria-label="Lojas ou POS" data-teste="cobrancas-tipo"
           class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Lojas e POS</option>
           <option value="loja">Só lojas</option>
           <option value="servicos">Só Serviços</option>
           <option value="pos">Só POS</option>
         </select>
-        <span v-if="lojaFiltro" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-800 text-xs text-zinc-300">
-          {{ lojaFiltro.loja_nome }}
-          <button type="button" @click="lojaFiltro = null; carregarFaturas()" aria-label="Tirar filtro da loja" class="text-zinc-500 hover:text-zinc-200">×</button>
-        </span>
-        <span v-if="posFiltro" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-800 text-xs text-zinc-300">
-          {{ posFiltro.pos_nome }}
-          <button type="button" @click="posFiltro = null; carregarFaturas()" aria-label="Tirar filtro do POS" class="text-zinc-500 hover:text-zinc-200">×</button>
-        </span>
       </div>
-      <div v-if="carregando" class="space-y-2"><div v-for="n in 4" :key="n" class="h-14 bg-zinc-900 rounded-2xl animate-pulse"></div></div>
-      <div v-else-if="!faturas.length" class="text-center py-12 text-sm text-zinc-500 bg-zinc-900 rounded-2xl border border-zinc-800">Nenhuma cobrança.</div>
-      <div v-else class="space-y-2">
-        <div v-for="f in faturas" :key="f.id" class="bg-zinc-900 rounded-2xl border border-zinc-800 px-4 py-3 flex flex-wrap items-center gap-3">
-          <div class="flex-1 min-w-[200px]">
-            <p class="text-sm font-semibold text-zinc-200">#{{ f.id }} · {{ f.loja_nome }}</p>
-            <p class="text-xs text-zinc-500">{{ f.descricao }} ·
-              <template v-if="f.estado === 'paga'">paga a {{ data(f.paga_em) }} ({{ f.metodo_nome }})</template>
-              <template v-else-if="f.estado === 'pendente'">vence a {{ data(f.vencimento) }}</template>
-              <template v-else>{{ f.notas || 'anulada' }}</template>
-            </p>
-          </div>
-          <span class="text-sm font-bold text-zinc-100">{{ euros(f.valor) }}</span>
-          <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', f.atrasada ? 'bg-red-500/15 text-red-400' : corFatura(f.estado)]">
-            {{ f.atrasada ? 'Em atraso' : f.estado_nome }}
-          </span>
-          <template v-if="f.estado === 'pendente'">
-            <button type="button" @click="abrirPagar(f)"
-              class="px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-300 text-xs font-semibold">Marcar paga</button>
-            <button type="button" @click="abrirAdiar(f)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Adiar</button>
-            <button type="button" @click="abrirAnular(f)" class="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs">Anular</button>
-          </template>
-          <button v-else-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Comprovativo do pagamento ${f.id}`"
-            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
-          <a v-if="f.fatura && f.fatura.pdf_url" :href="urlFicheiro(f.fatura.pdf_url)" target="_blank" rel="noopener"
-            class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs">Fatura {{ f.fatura.numero }}</a>
-          <span v-else-if="f.fatura" class="text-xs text-green-400">Fatura {{ f.fatura.numero }}</span>
-          <span v-else-if="f.estado === 'paga' && Number(f.valor) > 0" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300" data-teste="cobranca-por-faturar">Fatura do Bende por registar</span>
-          <button v-if="f.estado === 'paga' && Number(f.valor) > 0" type="button" @click="verNaFaturacao(f)" data-teste="ver-na-faturacao"
-            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ver na Faturação →</button>
-        </div>
-      </div>
+      <ListaCobrancas url="/app/admin/faturas/" :params="tipoFatura ? { tipo: tipoFatura } : {}" :limite="LIMITE" :versao="versao"
+        estado-inicial="pendente" vazio="Nenhuma cobrança.">
+        <template #default="{ f }">
+          <LinhaCobrancaAdmin :f="f" @acao="acaoFicha" />
+        </template>
+      </ListaCobrancas>
     </template>
 
     <!-- ═══ PLANOS ═══ -->
@@ -286,6 +258,8 @@
           <p class="text-xs text-zinc-500 mt-2">{{ p.lojas }} {{ p.tipo === 'pos' ? 'POS' : 'loja(s)' }} neste plano</p>
         </div>
       </div>
+    </template>
+
     </template>
 
     <!-- ═══ Modais ═══ -->
@@ -410,21 +384,37 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
+import AbasVendedores from '@/components/fiscal/AbasVendedores.vue'
+import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
+import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
+import LinhaCobrancaAdmin from '@/components/subscricao/LinhaCobrancaAdmin.vue'
+import SubscricaoFicha from './SubscricaoFicha.vue'
 
 const TABS = [{ key: 'resumo', label: 'Resumo' }, { key: 'lojas', label: 'Lojas' }, { key: 'pos', label: 'POS' }, { key: 'faturas', label: 'Cobranças' }, { key: 'planos', label: 'Planos' }]
 const PERIODOS = [{ key: 'este_mes', label: 'Este mês' }, { key: 'mes_passado', label: 'Mês passado' },
                   { key: 'ult30', label: 'Últimos 30 dias' }, { key: 'este_ano', label: 'Este ano' }]
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const LIMITE = 20
 const ESTADOS = { aguarda: 'Aguarda aprovação', teste: 'Em teste', ativa: 'Em dia', em_atraso: 'Em atraso', suspensa: 'Suspensa', cancelada: 'Cancelada' }
 
 export default {
   name: 'AdminSubscricoes',
+  components: { AbasVendedores, LinhaCobrancaAdmin, ListaCobrancas, PaginacaoLista, SubscricaoFicha },
   data () {
-    return { TABS, PERIODOS, ESTADOS, tab: 'resumo', carregando: false, erro: '', periodo: 'este_mes', inicio: '', fim: '', resumo: null,
-             lojas: { count: 0, results: [] }, q: '', modelo: '', estado: '',
-             posLista: { count: 0, results: [] }, qPos: '', situacaoPos: '', estadoPos: '',
-             faturas: [], estadoFatura: 'pendente', lojaFiltro: null, posFiltro: null, tipoFatura: '',
+    return { TABS, PERIODOS, ESTADOS, LIMITE, tab: 'resumo', carregando: false, erro: '', periodo: 'este_mes', inicio: '', fim: '', resumo: null,
+             lojas: { count: 0, results: [] }, q: '', modelo: '', estado: '', lOffset: 0,
+             posLista: { count: 0, results: [] }, qPos: '', situacaoPos: '', estadoPos: '', pOffset: 0,
+             tipoFatura: '', versao: 0,
+             ficha: null, lojaDoPos: null,     // aba de uma loja/POS aberta; POS de uma loja → a aba ativa é a da loja
              planos: [], modal: null, t: null }
+  },
+
+  computed: {
+    abaAtiva () {
+      if (!this.ficha) return null
+      if (this.ficha.tipo === 'pos' && this.lojaDoPos) return `loja-${this.lojaDoPos}`
+      return `${this.ficha.tipo}-${this.ficha.id}`
+    },
   },
 
   watch: {
@@ -432,8 +422,7 @@ export default {
       if (t === 'resumo') this.carregarResumo()
       else if (t === 'lojas') this.carregarLojas()
       else if (t === 'pos') this.carregarPos()
-      else if (t === 'faturas') this.carregarFaturas()
-      else this.carregarPlanos()
+      else if (t === 'planos') this.carregarPlanos()
     },
   },
 
@@ -453,29 +442,44 @@ export default {
       this.carregando = true; this.erro = ''
       try { await fn() } catch (e) { this.erro = e.response?.data?.detail || 'Não foi possível carregar.' } finally { this.carregando = false }
     },
-    carregarLojas () {
+    carregarLojas (offset = this.lOffset) {
+      this.lOffset = offset
       return this.pedir(async () => {
-        const params = { limit: 100 }
+        const params = { limit: LIMITE, offset }
         if (this.q.trim()) params.q = this.q.trim()
         if (this.modelo) params.modelo = this.modelo
         if (this.estado) params.estado = this.estado
         this.lojas = (await api.get('/app/admin/subscricoes/', { params })).data
       })
     },
-    carregarFaturas () {
-      return this.pedir(async () => {
-        const params = { limit: 100 }
-        if (this.estadoFatura) params.estado = this.estadoFatura
-        if (this.lojaFiltro) params.loja = this.lojaFiltro.loja_id
-        else if (this.posFiltro) params.pos = this.posFiltro.pos_id
-        else if (this.tipoFatura) params.tipo = this.tipoFatura
-        this.faturas = (await api.get('/app/admin/faturas/', { params })).data.results
-      })
-    },
     carregarPlanos () {
       return this.pedir(async () => { this.planos = (await api.get('/app/admin/planos/')).data })
     },
-    verFaturas (l) { this.posFiltro = null; this.lojaFiltro = l; this.estadoFatura = ''; this.tab === 'faturas' ? this.carregarFaturas() : (this.tab = 'faturas') },
+    selecionar (v) {
+      if (v) return this.abrirFicha(v.tipo, v.id)
+      this.ficha = null
+      // de volta a "Todas": a lista aberta pode ter mudado com as ações feitas na vista da loja
+      if (this.tab === 'lojas') this.carregarLojas()
+      else if (this.tab === 'pos') this.carregarPos()
+      else if (this.tab === 'resumo') this.carregarResumo()
+    },
+    abrirFicha (tipo, id, aba = '') {
+      if (tipo !== 'pos') this.lojaDoPos = null
+      this.ficha = { tipo, id, aba }
+      window.scrollTo({ top: 0 })
+    },
+    // ações pedidas na vista da loja/POS ou numa linha de cobrança → os modais (ou o comprovativo / a Faturação)
+    acaoFicha (tipo, x, extra) {
+      const f = { oferta: () => this.abrirOferta(x, extra), modelo: () => this.abrirModelo(x), ofertaPos: () => this.abrirOfertaPos(x),
+                  planoPos: () => this.abrirPlanoPos(x), pagar: () => this.abrirPagar(x), adiar: () => this.abrirAdiar(x),
+                  anular: () => this.abrirAnular(x), recibo: () => this.recibo(x), faturacao: () => this.verNaFaturacao(x) }[tipo]
+      if (f) f()
+    },
+    // depois de uma ação: as listas (versao), a vista aberta e os contadores das abas
+    alterado () {
+      this.versao++
+      this.$refs.abas?.recarregar()
+    },
 
     abrirPlano (p) {
       this.modal = { tipo: 'plano', plano: p, titulo: p ? `Editar "${p.nome}"` : 'Novo plano', botao: p ? 'Guardar' : 'Criar plano', erro: '', aGuardar: false,
@@ -518,16 +522,16 @@ export default {
                      titulo: `Oferecer meses${servicos ? ' de Serviços' : ''} — ${l.loja_nome}`, botao: 'Oferecer', erro: '', aGuardar: false,
                      form: servicos ? { meses: 1, motivo: '', servicos: true } : { meses: 1, motivo: '' } }
     },
-    carregarPos () {
+    carregarPos (offset = this.pOffset) {
+      this.pOffset = offset
       return this.pedir(async () => {
-        const params = { limit: 100 }
+        const params = { limit: LIMITE, offset }
         if (this.qPos.trim()) params.q = this.qPos.trim()
         if (this.situacaoPos) params.situacao = this.situacaoPos
         if (this.estadoPos) params.estado = this.estadoPos
         this.posLista = (await api.get('/app/admin/subscricoes/pos/', { params })).data
       })
     },
-    verFaturasPos (p) { this.lojaFiltro = null; this.posFiltro = p; this.estadoFatura = ''; this.tab === 'faturas' ? this.carregarFaturas() : (this.tab = 'faturas') },
     abrirOfertaPos (p) {
       this.modal = { tipo: 'oferta', pos: p, nome: p.pos_nome, planoNome: p.subscricao.plano ? p.subscricao.plano.nome : 'sem plano',
                      titulo: `Oferecer meses — ${p.pos_nome}`, botao: 'Oferecer', erro: '', aGuardar: false, form: { meses: 1, motivo: '' } }
@@ -560,25 +564,24 @@ export default {
           await this.carregarPlanos()
         } else if (m.tipo === 'pagar') {
           await api.post(`/app/admin/faturas/${m.fatura.id}/pagar/`, m.form)
-          await this.carregarFaturas()
         } else if (m.tipo === 'adiar' || m.tipo === 'anular') {
           await api.post(`/app/admin/faturas/${m.fatura.id}/${m.tipo}/`, m.form)
-          await this.carregarFaturas()
         } else if (m.tipo === 'oferta' && m.pos) {
           await api.post(`/app/admin/pos/${m.pos.pos_id}/subscricao/oferecer/`, m.form)
-          await this.carregarPos()
+          if (this.tab === 'pos' && !this.ficha) await this.carregarPos()
         } else if (m.tipo === 'oferta') {
           await api.post(`/app/admin/lojas/${m.loja.loja_id}/subscricao/oferecer/`, m.form)
-          await this.carregarLojas()
+          if (this.tab === 'lojas' && !this.ficha) await this.carregarLojas()
         } else if (m.tipo === 'plano_pos') {
           if (!m.form.plano_id) throw { response: { data: { detail: 'Escolhe o plano.' } } }
           await api.post(`/app/admin/pos/${m.pos.pos_id}/subscricao/plano/`, m.form)
-          await this.carregarPos()
+          if (this.tab === 'pos' && !this.ficha) await this.carregarPos()
         } else {
           const corpo = m.loja.modelo === 'comissao' ? { modelo: 'subscricao', plano_id: m.form.plano_id } : { modelo: 'comissao' }
           await api.patch(`/app/admin/lojas/${m.loja.loja_id}/cobranca/`, corpo)
-          await this.carregarLojas()
+          if (this.tab === 'lojas' && !this.ficha) await this.carregarLojas()
         }
+        if (m.tipo !== 'plano') this.alterado()
         this.modal = null
       } catch (e) {
         m.erro = e.response?.data?.detail || 'Não foi possível guardar.'

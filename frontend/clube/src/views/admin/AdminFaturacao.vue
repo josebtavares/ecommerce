@@ -6,7 +6,7 @@
       <h2 class="text-lg font-bold text-zinc-100">Faturação</h2>
       <p class="text-xs text-zinc-500 mt-0.5">Arquivo fiscal de todas as lojas e POS — nada se apaga: faturas substituídas ou anuladas ficam no histórico</p>
     </div>
-    <AbasVendedores :itens="abas" :ativo="abaAtiva" titulo="Documentos por faturar (vendas + faturas do Bende)" @selecionar="selecionar" />
+    <AbasVendedores ref="abas" url="/app/admin/faturacao/abas/" :ativo="abaAtiva" titulo="Documentos por faturar (vendas + faturas do Bende)" @selecionar="selecionar" />
 
     <FaturacaoFicha v-if="ficha" :key="ficha.tipo + ficha.id" :tipo="ficha.tipo" :id="ficha.id" :aba-inicial="ficha.aba" :q-inicial="ficha.q"
       @abrir="abrirFicha" @alterado="carregarAbas" @carregada="f => lojaDoPos = f.tipo === 'pos' && f.loja ? f.loja.id : null" />
@@ -180,7 +180,6 @@ export default {
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
     return {
       TABS, LIMITE,
-      abas: [],
       lojaDoPos: null,      // POS de uma loja aberto: a aba ativa é a da loja
       tab: 'vendedores',
       carregando: false,
@@ -202,7 +201,6 @@ export default {
     },
   },
   created () {
-    this.carregarAbas()
     this.carregarVendedores(0)
     // ?ficha=loja-12&aba=bende (ex.: "Ver na Faturação" em Subscrições → Cobranças)
     const m = /^(loja|pos)-(\d+)$/.exec(this.$route.query.ficha || '')
@@ -240,12 +238,7 @@ export default {
         this.pRes = (await api.get('/app/admin/faturacao/pesquisa/', { params: { q: this.pq, limit: LIMITE, offset } })).data
       })
     },
-    async carregarAbas () {
-      try {
-        const { data } = await api.get('/app/admin/faturacao/abas/')
-        this.abas = data.itens.map(v => ({ ...v, contador: v.por_faturar }))
-      } catch { /* as abas são um atalho: sem elas fica a visão geral */ }
-    },
+    carregarAbas () { this.$refs.abas?.recarregar() },
     selecionar (v) {
       if (v) this.abrirFicha(v.tipo, v.id)
       else this.ficha = null

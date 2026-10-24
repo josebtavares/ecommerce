@@ -199,9 +199,10 @@
       <!-- Faturas (também o histórico de uma loja que voltou à comissão) -->
       <div v-if="sub || dados.faturas.length" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
         <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Mensalidades</p>
-        <p v-if="!dados.faturas.length" class="text-sm text-zinc-500 px-6 pb-6">Ainda não há mensalidades.</p>
-        <div v-else class="divide-y divide-zinc-800">
-          <div v-for="f in dados.faturas" :key="f.id" class="px-6 py-4 flex flex-wrap items-center gap-3">
+        <!-- todas as mensalidades, paginadas e com procura (GET /app/loja/<id>/subscricao/faturas/) -->
+        <ListaCobrancas :url="`/app/loja/${lojaId}/subscricao/faturas/`" :versao="versao" embutida>
+          <template #default="{ f }">
+          <div class="px-6 py-4 flex flex-wrap items-center gap-3" :data-teste="`mensalidade-S-${f.id}`">
             <div class="flex-1 min-w-[200px]">
               <p class="text-sm font-semibold text-zinc-200">
                 <span v-if="f.servicos" class="mr-1.5 px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 text-[10px] font-bold uppercase align-middle">Serviços</span>{{ f.descricao }}
@@ -230,7 +231,8 @@
               {{ aPagar === f.id ? 'A pagar…' : 'Pagar ' + euros(f.valor) }}
             </button>
           </div>
-        </div>
+          </template>
+        </ListaCobrancas>
         <p v-if="!dados.pode_pagar && Number(dados.por_pagar)" class="text-xs text-zinc-500 px-6 pb-4">Só o dono da loja pode pagar.</p>
       </div>
 
@@ -245,15 +247,16 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 import ComissoesMensais from '@/components/fiscal/ComissoesMensais.vue'
+import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 
 export default {
   name: 'BackofficeSubscricao',
-  components: { ComissoesMensais },
+  components: { ComissoesMensais, ListaCobrancas },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['alterado'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, novoPlano: null, novoPlanoServ: null }
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, novoPlano: null, novoPlanoServ: null, versao: 0 }
   },
 
   computed: {
@@ -343,6 +346,7 @@ export default {
       try {
         const { data } = await api.post(`/app/loja/${this.lojaId}/subscricao/faturas/${f.id}/pagar/`)
         this.dados = data
+        this.versao++
         this.aviso = 'Pagamento recebido. Obrigado!'
         this.$emit('alterado')      // o layout volta a ler a loja (pode ter sido reactivada) e a faixa
       } catch (e) {
@@ -362,6 +366,7 @@ export default {
       try {
         const { data } = await api.post(`/app/loja/${this.lojaId}/subscricao/mudar/`, corpo)
         this.dados = data
+        this.versao++
         this.novoPlano = null
         if (ok) this.aviso = ok
         this.$emit('alterado')

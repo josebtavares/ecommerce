@@ -4,7 +4,8 @@ Faturação — documentos internos (comprovativos, extrato de comissões) e as 
 Cliente/loja:
   GET  /app/encomenda/<id>/comprovativo/                    comprovativo da encomenda paga (PDF)
   GET  /app/subscricao/faturas/<id>/comprovativo/           comprovativo da mensalidade paga (PDF)
-  GET  /app/loja/<id>/comissoes/meses/                      comissões por mês + fatura do Bende
+  GET  /app/loja/<id>/comissoes/meses/?ano=&limit=&offset=  comissões por mês + fatura do Bende (paginadas)
+  GET  /app/loja/<id>/comissoes/<AAAA-MM>/vendas/?q=        as vendas do mês com a comissão (paginadas)
   GET  /app/loja/<id>/comissoes/<AAAA-MM>/extrato/          extrato do mês (PDF)
 Admin (gerir_faturacao):
   GET  /app/admin/faturacao/vendedores/?q=&tipo=&regime=&dados=&por_faturar=&de=&ate=&limit=&offset=
@@ -13,7 +14,7 @@ Admin (gerir_faturacao):
   GET  /app/admin/faturacao/loja/<id>/vendas/?de&ate&estado&q&min&max   vendas da loja com comprovativo e fatura
   GET  /app/admin/faturacao/historico/?ref=E-1|S-1|C-1-202610           faturas registadas e anuladas do documento
   GET  /app/admin/faturacao/pesquisa/?q=&loja=|pos=         qualquer documento, fatura, vendedor ou cliente (opcionalmente de uma loja/POS)
-  GET  /app/admin/faturacao/abas/                          lojas e POS sem loja para as abas, com o nº por faturar
+  GET  /app/admin/faturacao/abas/?q=&limit=&offset=&fixar=   lojas e POS sem loja para as abas, com o nº por faturar
   GET  /app/admin/faturacao/vendas.csv?loja=&de=&ate=       vendas de uma loja com as faturas (para a DNRE)
   GET  /app/admin/faturacao/bende/?de=AAAA-MM&ate=&q=&por_faturar=   o que o Bende tem de faturar, agrupado por loja (+ POS)
   GET  /app/admin/faturacao/exportar/<loja|pos>/<id>/?de=&ate=       ZIP para a DNRE (CSVs + todos os PDFs)
@@ -134,7 +135,40 @@ def loja_comissoes_meses(request, loja_id):
     m = _membro(request, loja)
     if not m or not m.pode('ver_subscricao'):
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
-    return Response({'meses': _comissoes_por_mes(loja)})
+    meses = _comissoes_por_mes(loja)
+    anos = sorted({m['mes'][:4] for m in meses}, reverse=True)
+    if (request.GET.get('ano') or '').isdigit():
+        meses = [m for m in meses if m['mes'][:4] == request.GET['ano']]
+    pagina, total = _paginar(request, meses, 12)
+    return Response({'meses': pagina, 'count': total, 'anos': anos})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_comissoes_vendas(request, loja_id, mes):
+    """GET /app/loja/<id>/comissoes/<AAAA-MM>/vendas/?q=&limit=&offset= — as vendas do mês com a comissão de cada uma."""
+    loja = get_object_or_404(Loja, id=loja_id)
+    m = _membro(request, loja)
+    if (not m or not m.pode('ver_subscricao')) and _exige_admin(request, 'gerir_faturacao'):
+        return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+    d = _mes(mes)
+    if not d:
+        return Response({'detail': 'Mês inválido (AAAA-MM).'}, status=status.HTTP_400_BAD_REQUEST)
+    seguinte = (d + timedelta(days=32)).replace(day=1)
+    ini = timezone.make_aware(datetime.combine(d, datetime.min.time()))
+    fim = timezone.make_aware(datetime.combine(seguinte, datetime.min.time()))
+    qs = Comissao.objects.filter(loja=loja, data_criacao__gte=ini, data_criacao__lt=fim)
+    q = (request.GET.get('q') or '').strip().lstrip('#').upper().removeprefix('E-')
+    if q:
+        if not q.isdigit() or len(q) > 9:
+            return Response({'count': 0, 'results': [], 'total': '0'})
+        qs = qs.filter(encomenda_id=int(q))
+    total = qs.aggregate(t=Sum('valor_comissao'))['t'] or 0
+    pagina, n = _paginar(request, qs.order_by('-data_criacao', '-id'), 10)
+    return Response({'count': n, 'total': str(total), 'results': [
+        {'encomenda_id': c.encomenda_id, 'data': c.data_criacao.isoformat(), 'valor_encomenda': str(c.valor_encomenda),
+         'percentagem': str(c.percentagem), 'valor_comissao': str(c.valor_comissao),
+         'estado': c.status, 'estado_nome': c.get_status_display()} for c in pagina]})
 
 
 @api_view(['GET'])
@@ -288,41 +322,75 @@ def admin_vendedores(request):
     return Response({'count': total, 'results': results})
 
 
+def abas_resposta(request, itens, prioridade=None):
+    """
+    Abas de lojas/POS (Faturação, Subscrições): itens [{tipo, id, nome, contador, ...}] já filtrados.
+    Ordena (prioridade desc — ex.: em atraso —, contador desc, nome), pagina com ?limit=&offset= (40 por omissão) e, com ?fixar=loja-12, devolve
+    também esse item em 'fixo' (a aba ativa que ainda não foi carregada).
+    """
+    itens.sort(key=lambda i: (-(i[prioridade] if prioridade else 0), -i['contador'], i['nome'].lower(), i['tipo'], i['id']))
+    pagina, total = _paginar(request, itens, 40)
+    fixo = None
+    alvo = request.GET.get('fixar') or ''
+    if alvo:
+        fixo = next((i for i in itens if f"{i['tipo']}-{i['id']}" == alvo), None)
+    return Response({'count': total, 'results': pagina, 'fixo': fixo})
+
+
+def procura_abas(q):
+    """?q= das abas → (Q das lojas, Q dos POS): nome, NIF, código do POS (uma loja também pelos seus POS)."""
+    pos = Q(nome__icontains=q) | Q(nif__icontains=q) | Q(codigo_pos__icontains=q)
+    ids_pos = ConfiguracaoPOS.objects.filter(pos).values('id')
+    return Q(nome__icontains=q) | Q(nif__icontains=q) | Q(pos_vinculados__id__in=ids_pos), pos
+
+
+def _comissoes_por_faturar():
+    """{loja_id: nº de meses com comissões e sem fatura do Bende} — agregado na base de dados."""
+    from django.db.models.functions import TruncMonth
+    faturadas = set(FaturaComissoes.objects.values_list('loja_id', 'mes'))
+    n = {}
+    for r in (Comissao.objects.order_by().annotate(m=TruncMonth('data_criacao')).values('loja_id', 'm').distinct()):
+        mes = timezone.localtime(r['m']).date() if hasattr(r['m'], 'tzinfo') else r['m']
+        if (r['loja_id'], mes.replace(day=1)) not in faturadas:
+            n[r['loja_id']] = n.get(r['loja_id'], 0) + 1
+    return n
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_abas(request):
     """
-    Abas da Faturação: todas as lojas (com os seus POS) e os POS sem loja, com o nº de documentos por faturar
+    Abas da Faturação: lojas (com os seus POS) e POS sem loja, com o nº de documentos por faturar
     (vendas da loja + mensalidades pagas e comissões mensais sem fatura do Bende). Pendentes primeiro, depois por nome.
+    ?q= nome, NIF ou código do POS  ?limit=&offset=  ?fixar=loja-12
     """
     erro = _exige_admin(request, 'gerir_faturacao')
     if erro:
         return erro
+    q = (request.GET.get('q') or '').strip()
     sem_fatura = _vendas_filtro(None, None) & Q(encomendas__fatura_registada_em__isnull=True)
-    lojas = Loja.objects.exclude(estado='pendente').annotate(vendas_por_faturar=Count('encomendas', filter=sem_fatura))
-    pos_loja = dict(ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=False).values_list('id', 'loja_vinculada_id'))
+    lojas = Loja.objects.exclude(estado='pendente')
+    poss = ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=True)
+    if q:
+        ql, qp = procura_abas(q)
+        lojas, poss = lojas.filter(id__in=Loja.objects.filter(ql).values('id')), poss.filter(qp)
+    lojas = lojas.annotate(vendas_por_faturar=Count('encomendas', filter=sem_fatura))
 
     bende = {}
-    for loja_id, pos_id in (FaturaSubscricao.objects.filter(estado='paga', valor__gt=0, fatura_registada_em__isnull=True)
-                            .values_list('loja_id', 'pos_id')):
-        chave = ('loja', loja_id) if loja_id else (('loja', pos_loja[pos_id]) if pos_id in pos_loja else ('pos', pos_id))
-        bende[chave] = bende.get(chave, 0) + 1
-    faturadas = set(FaturaComissoes.objects.values_list('loja_id', 'mes'))
-    meses = set()
-    for loja_id, dt in Comissao.objects.values_list('loja_id', 'data_criacao'):
-        meses.add((loja_id, timezone.localtime(dt).date().replace(day=1)))
-    for loja_id, mes in meses - faturadas:
-        bende[('loja', loja_id)] = bende.get(('loja', loja_id), 0) + 1
+    for loja_id, pos_loja, pos_id, n in (FaturaSubscricao.objects.filter(estado='paga', valor__gt=0, fatura_registada_em__isnull=True)
+                                         .order_by().values_list('loja_id', 'pos__loja_vinculada_id', 'pos_id').annotate(n=Count('id'))):
+        chave = ('loja', loja_id or pos_loja) if (loja_id or pos_loja) else ('pos', pos_id)
+        bende[chave] = bende.get(chave, 0) + n
+    for loja_id, n in _comissoes_por_faturar().items():
+        bende[('loja', loja_id)] = bende.get(('loja', loja_id), 0) + n
 
-    itens = [{'tipo': 'loja', 'id': l.id, 'nome': l.nome, 'vendas_por_faturar': l.vendas_por_faturar,
-              'bende_por_faturar': bende.get(('loja', l.id), 0)} for l in lojas]
-    itens += [{'tipo': 'pos', 'id': p.id, 'nome': p.nome, 'codigo_pos': p.codigo_pos, 'vendas_por_faturar': 0,
-               'bende_por_faturar': bende.get(('pos', p.id), 0)}
-              for p in ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=True)]
+    itens = [{'tipo': 'loja', 'id': i, 'nome': nome, 'vendas_por_faturar': v, 'bende_por_faturar': bende.get(('loja', i), 0)}
+             for i, nome, v in lojas.values_list('id', 'nome', 'vendas_por_faturar')]
+    itens += [{'tipo': 'pos', 'id': i, 'nome': nome, 'codigo_pos': c, 'vendas_por_faturar': 0, 'bende_por_faturar': bende.get(('pos', i), 0)}
+              for i, nome, c in poss.values_list('id', 'nome', 'codigo_pos')]
     for i in itens:
-        i['por_faturar'] = i['vendas_por_faturar'] + i['bende_por_faturar']
-    itens.sort(key=lambda i: (-i['por_faturar'], i['nome'].lower()))
-    return Response({'itens': itens})
+        i['contador'] = i['por_faturar'] = i['vendas_por_faturar'] + i['bende_por_faturar']
+    return abas_resposta(request, itens)
 
 
 def _mensalidades(alvo, request):
