@@ -377,7 +377,13 @@ def password_reset_request(request):
     try:
         send_mail(
             subject='Recuperação de palavra-passe',
-            message=f'Clique no link para redefinir a sua palavra-passe:\n\n{reset_link}',
+            message=(
+                f'Olá {django_user.username},\n\n'
+                f'Recebemos um pedido para redefinir a password da tua conta Bende.\n'
+                f'Abre este link para escolheres uma password nova:\n\n{reset_link}\n\n'
+                f'O link só pode ser usado uma vez. Se não foste tu a pedir, ignora este email: '
+                f'a tua password não muda.\n\nBende'
+            ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[django_user.email],
         )

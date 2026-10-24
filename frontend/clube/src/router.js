@@ -40,6 +40,12 @@ const routes = [
         component: AppRegister,
     },
     {
+        // "Esqueceste?" do login e destino do link do email (?uid=…&token=…, ver password_reset_request)
+        path: '/recuperar_senha',
+        name: 'RecuperarSenha',
+        component: () => import('@/views/RecuperarSenha.vue'),
+    },
+    {
         path: '/Home',
         name: 'Home',
         component: App,
