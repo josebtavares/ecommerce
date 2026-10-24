@@ -5,6 +5,7 @@ Usa HTTPS em vez de SMTP porque o Railway bloqueia o SMTP de saída nos planos m
 Ativa-se com EMAIL_BACKEND=app.utils.email_resend.ResendBackend e RESEND_API_KEY no ambiente;
 o remetente vem de DEFAULT_FROM_EMAIL (tem de ser de um domínio verificado no Resend, ex.: noreply@bende.store).
 """
+import base64
 import logging
 import os
 
@@ -55,6 +56,16 @@ class ResendBackend(BaseEmailBackend):
         for conteudo, tipo in getattr(msg, 'alternatives', []):
             if tipo == 'text/html':
                 corpo['html'] = conteudo
+        # anexos (filename, content, mimetype) — o Resend recebe o conteúdo em base64
+        anexos = []
+        for a in msg.attachments:
+            if isinstance(a, tuple):
+                nome, conteudo, _ = a
+                if isinstance(conteudo, str):
+                    conteudo = conteudo.encode()
+                anexos.append({'filename': nome, 'content': base64.b64encode(conteudo).decode()})
+        if anexos:
+            corpo['attachments'] = anexos
         resp = requests.post(URL, json=corpo, timeout=TIMEOUT,
                              headers={'Authorization': f'Bearer {self.api_key}'})
         if resp.status_code >= 300:

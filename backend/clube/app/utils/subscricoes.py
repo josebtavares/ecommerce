@@ -21,6 +21,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..models import ConfiguracaoPlataforma, FaturaSubscricao, Loja, PlanoSubscricao, Subscricao
+from .fiscal import fatura_resumo
 
 
 def hoje():
@@ -282,7 +283,9 @@ def fatura_payload(f):
             'paga_em': f.paga_em.isoformat() if f.paga_em else None, 'metodo': f.metodo,
             'metodo_nome': f.get_metodo_display() if f.metodo else '', 'notas': f.notas, 'loja_id': f.loja_id,
             'pos_id': f.pos_id, 'loja_nome': nome_alvo(f.alvo), 'paga': f.estado == 'paga',
-            'servicos': bool(f.plano_id) and f.plano.tipo == 'servicos'}
+            'servicos': bool(f.plano_id) and f.plano.tipo == 'servicos',
+            # fatura legal do Bende registada pelo admin (utils/fiscal.py); o comprovativo é /subscricao/faturas/<id>/comprovativo/
+            'fatura': fatura_resumo(f)}
 
 
 def plano_em_curso(sub, d=None):

@@ -10,3 +10,6 @@ class AppConfig(AppConfig):
         from . import signals, uploads
         signals.ligar_limpeza_ao_apagar()
         uploads.ligar()   # só imagens/vídeos (e com tamanho máximo) em todos os uploads públicos
+        # comprovativos por email quando um pagamento é aprovado (encomendas e mensalidades)
+        from .utils import emails_fiscais
+        emails_fiscais.ligar()

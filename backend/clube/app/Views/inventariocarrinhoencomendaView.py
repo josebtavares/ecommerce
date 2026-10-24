@@ -662,9 +662,7 @@ def encomenda_fatura(request, loja_id, id):
     encomenda = get_object_or_404(Encomenda, id=id, loja=loja)
 
     if request.method == 'DELETE':
-        if encomenda.fatura_pdf:
-            encomenda.fatura_pdf.delete(save=False)
-        encomenda.fatura_numero, encomenda.fatura_pdf, encomenda.fatura_registada_em = '', '', None
+        fiscal.limpar_fatura(encomenda)
         encomenda.save(update_fields=['fatura_numero', 'fatura_pdf', 'fatura_registada_em'])
         return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
 
@@ -677,12 +675,7 @@ def encomenda_fatura(request, loja_id, id):
         return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
     primeira = not encomenda.fatura_registada_em
-    if pdf:
-        if encomenda.fatura_pdf:
-            encomenda.fatura_pdf.delete(save=False)
-        encomenda.fatura_pdf = pdf
-    encomenda.fatura_numero = numero
-    encomenda.fatura_registada_em = timezone.now()
+    fiscal.registar_fatura(encomenda, numero, pdf)
     encomenda.save(update_fields=['fatura_numero', 'fatura_pdf', 'fatura_registada_em'])
 
     if primeira:
@@ -694,6 +687,9 @@ def encomenda_fatura(request, loja_id, id):
             loja=loja,
             link='/perfil',
         )
+    # email ao cliente com a fatura (também quando a loja a corrige)
+    from ..utils.emails_fiscais import enviar_fatura_encomenda
+    enviar_fatura_encomenda(encomenda)
     return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
 
 

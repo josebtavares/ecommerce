@@ -189,12 +189,8 @@ def _receita_liquida(obj):
 
 def _fatura(obj, request):
     """Fatura que a loja registou (emitida no e-Fatura) — None enquanto estiver por faturar."""
-    if not obj.fatura_registada_em:
-        return None
-    pdf = None
-    if obj.fatura_pdf:
-        pdf = request.build_absolute_uri(obj.fatura_pdf.url) if request else obj.fatura_pdf.url
-    return {'numero': obj.fatura_numero, 'pdf_url': pdf, 'registada_em': obj.fatura_registada_em}
+    from ..utils.fiscal import fatura_resumo
+    return fatura_resumo(obj, request)
 
 
 def _valor_a_pagar(obj):

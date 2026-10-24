@@ -58,6 +58,7 @@ class Utilizador(models.Model):
             'moderar_chat',      # chat: denúncias e bloqueios
             'gerir_plataforma',  # definições do site (fuso horário)
             'gerir_subscricoes', # planos, subscrições e faturas das lojas
+            'gerir_faturacao',   # dados fiscais, faturas registadas, faturas do Bende (utils/fiscal.py)
             'gerir_home',        # secções da página inicial
             'gerir_devolucoes',  # reembolsos: disputas e decisões finais
             'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
@@ -85,6 +86,7 @@ class Utilizador(models.Model):
             'gerir_encomendas',
             'ver_pos',
             'gerir_subscricoes',
+            'gerir_faturacao',
             'ver_relatorios',
         ],
     }
@@ -795,6 +797,11 @@ def caminho_fatura_encomenda(instance, filename):
     return f'faturas/{instance.loja_id}/{uuid.uuid4().hex}.pdf'
 
 
+def caminho_fatura_bende(instance, filename):
+    # faturas que o Bende emite às lojas/POS (subscrições e comissões)
+    return f'faturas/bende/{uuid.uuid4().hex}.pdf'
+
+
 class Encomenda(models.Model):
     TIPO_ENTREGA = [
         ('entrega',      'Entrega ao domicílio'),
@@ -841,6 +848,8 @@ class Encomenda(models.Model):
     fatura_pdf      = models.FileField(upload_to=caminho_fatura_encomenda, blank=True, default='', db_default='',
                                        validators=[FileExtensionValidator(['pdf'])])
     fatura_registada_em = models.DateTimeField(null=True, blank=True)
+    # comprovativo (documento interno, utils/documentos.py) enviado por email ao cliente — uma vez, ao pagar
+    comprovativo_enviado_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -1198,6 +1207,27 @@ class Comissao(models.Model):
             }
         )
         return comissao, criada
+
+
+class FaturaComissoes(models.Model):
+    """
+    Fatura legal (e-Fatura) que o Bende emite a uma loja pelas comissões de um mês — uma por loja/mês.
+    O extrato (documento interno com as comissões do mês) é gerado na hora (utils/documentos.py);
+    aqui fica só a fatura que o admin registou.
+    """
+    loja           = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='faturas_comissoes')
+    mes            = models.DateField()     # dia 1 do mês
+    fatura_numero  = models.CharField(max_length=60)
+    fatura_pdf     = models.FileField(upload_to=caminho_fatura_bende, blank=True, default='', db_default='',
+                                      validators=[FileExtensionValidator(['pdf'])])
+    fatura_registada_em = models.DateTimeField()
+
+    class Meta:
+        ordering = ['-mes']
+        constraints = [models.UniqueConstraint(fields=['loja', 'mes'], name='fatura_comissoes_loja_mes')]
+
+    def __str__(self):
+        return f'Fatura de comissões {self.mes:%Y-%m} — {self.loja} — {self.fatura_numero}'
     
     
 class Categoria(models.Model):
@@ -1713,6 +1743,12 @@ class FaturaSubscricao(models.Model):
     # avisos já enviados ('d3', 'd0', 'atraso', 'a7'…, 'suspensa') — o worker não os repete
     avisos         = models.JSONField(default=list, blank=True)
     data_criacao   = models.DateTimeField(auto_now_add=True)
+    # fatura legal do Bende (e-Fatura) registada pelo admin — utils/fiscal.py; o comprovativo é automático
+    fatura_numero  = models.CharField(max_length=60, blank=True, default='', db_default='')
+    fatura_pdf     = models.FileField(upload_to=caminho_fatura_bende, blank=True, default='', db_default='',
+                                      validators=[FileExtensionValidator(['pdf'])])
+    fatura_registada_em = models.DateTimeField(null=True, blank=True)
+    comprovativo_enviado_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-periodo_inicio', '-id']

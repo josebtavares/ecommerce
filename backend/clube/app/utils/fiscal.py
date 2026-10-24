@@ -61,6 +61,32 @@ def dados_fiscais_payload(obj):
     }
 
 
+def fatura_resumo(obj, request=None):
+    """Fatura registada (encomenda, mensalidade ou comissões do mês) — None se ainda não há."""
+    if not obj or not obj.fatura_registada_em:
+        return None
+    pdf = None
+    if obj.fatura_pdf:
+        pdf = request.build_absolute_uri(obj.fatura_pdf.url) if request else obj.fatura_pdf.url
+    return {'numero': obj.fatura_numero, 'pdf_url': pdf, 'registada_em': obj.fatura_registada_em}
+
+
+def registar_fatura(obj, numero, pdf):
+    """Grava nº/PDF numa encomenda, mensalidade ou FaturaComissoes (já validados por validar_fatura)."""
+    if pdf:
+        if obj.fatura_pdf:
+            obj.fatura_pdf.delete(save=False)
+        obj.fatura_pdf = pdf
+    obj.fatura_numero = numero
+    obj.fatura_registada_em = timezone.now()
+
+
+def limpar_fatura(obj):
+    if obj.fatura_pdf:
+        obj.fatura_pdf.delete(save=False)
+    obj.fatura_numero, obj.fatura_pdf, obj.fatura_registada_em = '', '', None
+
+
 def validar_fatura(numero, pdf):
     """Devolve (numero_limpo, erro)."""
     numero = (numero or '').strip()
