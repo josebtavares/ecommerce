@@ -40,6 +40,12 @@ const routes = [
         component: AppRegister,
     },
     {
+        // "Esqueceste?" do login e destino do link do email (?uid=…&token=…, ver password_reset_request)
+        path: '/recuperar_senha',
+        name: 'RecuperarSenha',
+        component: () => import('@/views/RecuperarSenha.vue'),
+    },
+    {
         path: '/Home',
         name: 'Home',
         component: App,
@@ -155,6 +161,13 @@ const routes = [
         name: 'POSLogin',
         component: POSLogin,
         meta: { title: 'Login POS' }
+    },
+    {
+        // "Esqueceste?" da conta principal do POS e destino do link do email (destino 'pos')
+        path: '/pos/recuperar_senha',
+        name: 'POSRecuperarSenha',
+        component: () => import('@/views/pos/POSRecuperarSenha.vue'),
+        meta: { title: 'Recuperar password POS' }
     },
     {
         path: '/pos/completar-perfil',

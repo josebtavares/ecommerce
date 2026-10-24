@@ -74,10 +74,10 @@
             <div class="flex items-center justify-between mb-1.5">
               <label class="text-xs font-medium transition-colors"
                      :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Password</label>
-              <a href="#" class="text-xs transition-colors"
+              <router-link :to="{ name: 'RecuperarSenha' }" class="text-xs transition-colors"
                  :class="isDark ? 'text-red-400 hover:text-red-300' : 'text-orange-500 hover:text-orange-400'">
                 Esqueceste?
-              </a>
+              </router-link>
             </div>
             <div class="relative">
               <input v-model="password" :type="verPassword ? 'text' : 'password'" required autocomplete="current-password"

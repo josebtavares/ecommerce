@@ -346,6 +346,7 @@ def utilizador_delete(request, id):
 def password_reset_request(request):
     """
     POST /app/utilizador/recuperar_senha/
+    Body: { email, destino? }  — destino 'pos' quando o pedido vem do login do POS.
     Envia email com link de recuperação.
     """
     serializer = PasswordResetRequestSerializer(data=request.data)
@@ -368,8 +369,10 @@ def password_reset_request(request):
     uid   = urlsafe_base64_encode(force_bytes(django_user.pk))
     token = token_generator.make_token(django_user)
 
+    # pedido feito no login do POS (conta principal) → o link volta à página do POS
+    pagina = '/pos/recuperar_senha' if request.data.get('destino') == 'pos' else '/recuperar_senha'
     reset_link = (
-        f"{settings.FRONTEND_BASE_URL}/recuperar_senha"
+        f"{settings.FRONTEND_BASE_URL}{pagina}"
         f"?uid={uid}&token={token}"
     )
 
@@ -377,7 +380,13 @@ def password_reset_request(request):
     try:
         send_mail(
             subject='Recuperação de palavra-passe',
-            message=f'Clique no link para redefinir a sua palavra-passe:\n\n{reset_link}',
+            message=(
+                f'Olá {django_user.username},\n\n'
+                f'Recebemos um pedido para redefinir a password da tua conta Bende.\n'
+                f'Abre este link para escolheres uma password nova:\n\n{reset_link}\n\n'
+                f'O link só pode ser usado uma vez. Se não foste tu a pedir, ignora este email: '
+                f'a tua password não muda.\n\nBende'
+            ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[django_user.email],
         )
