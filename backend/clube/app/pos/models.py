@@ -111,6 +111,8 @@ class ConfiguracaoPOS(models.Model):
     regime_fiscal = models.CharField(max_length=10, blank=True, default='', db_default='',
                                      choices=REGIMES)
     dados_fiscais_aceites_em = models.DateTimeField(null=True, blank=True)
+    # ligado a uma loja: usa o NIF/regime dela (copiados para aqui e acertados quando a loja muda — utils/fiscal.py)
+    fiscal_da_loja = models.BooleanField(default=False, db_default=False)
 
     ativo = models.BooleanField(
         default=True,
@@ -167,7 +169,8 @@ class ConfiguracaoPOS(models.Model):
         """
         self.loja_vinculada = None
         self.modo = 'standalone'
-        self.save(update_fields=['loja_vinculada', 'modo', 'atualizado_em'])
+        self.fiscal_da_loja = False          # fica com os últimos dados da loja, agora seus
+        self.save(update_fields=['loja_vinculada', 'modo', 'fiscal_da_loja', 'atualizado_em'])
 
 
 class Mesa(models.Model):

@@ -50,7 +50,7 @@ except Exception:
     
 from .stock import reservar_stock, repor_stock_item, cancelar_conta, custo_de_venda
 from ..utils import conjuntos as conj
-from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_fiscais_payload
+from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_fiscais_payload, ao_ligar_loja, copiar_da_loja, _verdadeiro
 
 # prefetch dos componentes dos conjuntos (menus) nas listagens do POS
 PREFETCH_CONJUNTO_POS = ('componentes__produto_pos', 'componentes__variante_pos', 'componentes__produto__inventario',
@@ -425,7 +425,7 @@ def _pos_response(pos):
         'suspenso': pos.suspenso,
         'suspenso_motivo': pos.suspenso_motivo,
         'criado_em': pos.criado_em,
-        'fiscal': dados_fiscais_payload(pos),     # só vai para o dono (todos os usos são do dono)
+        'fiscal': dados_fiscais_payload(pos, detalhe=True),     # só vai para o dono (todos os usos são do dono)
     }
 
 
@@ -808,8 +808,10 @@ def pos_criar(request):
 
     # dados fiscais obrigatórios; ligado a uma loja que já os tem, pode usar os da loja
     fiscais, erros = validar_dados_fiscais(request.data)
-    if erros and loja and loja.nif and loja.regime_fiscal and loja.dados_fiscais_aceites_em             and not request.data.get('nif'):
-        fiscais, erros = {'nif': loja.nif, 'regime_fiscal': loja.regime_fiscal}, {}
+    da_loja = bool(erros and loja and loja.nif and loja.regime_fiscal and loja.dados_fiscais_aceites_em
+                   and not request.data.get('nif'))
+    if da_loja:
+        fiscais, erros = None, {}
     if erros:
         return Response({'detail': next(iter(erros.values())), 'erros': erros}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -819,9 +821,11 @@ def pos_criar(request):
         if ConfiguracaoPOS.objects.filter(dono=utilizador).exists():
             return Response({'detail': 'Esta conta já tem um POS.'}, status=status.HTTP_400_BAD_REQUEST)
         config = ConfiguracaoPOS.objects.create(nome=nome, dono=utilizador, modo='standalone')
-        aplicar_dados_fiscais(config, fiscais, request.user)
+        if fiscais:
+            aplicar_dados_fiscais(config, fiscais, request.user)
         if loja:
             config.conectar_loja(loja, modo='hibrido' if modo == 'hibrido' else 'integrado')
+            ao_ligar_loja(config, request.user)      # sem NIF próprio (ou o mesmo) → segue a loja
         subs_pos.criar_para_pos_novo(config, plano)
 
     return Response(_pos_response(config), status=status.HTTP_201_CREATED)
@@ -865,11 +869,22 @@ def pos_detalhe(request, pos_id):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def pos_dados_fiscais(request, pos_id):
-    """PATCH /api/pos/<pos_id>/fiscal/  Body: { nif, regime_fiscal, declaracao_fiscal } — só o dono."""
+    """PATCH /api/pos/<pos_id>/fiscal/  Body: { nif, regime_fiscal, declaracao_fiscal } — só o dono.
+    Ligado a uma loja: { da_loja: true } passa a usar os dados dela; gravar dados próprios deixa de os seguir."""
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=request.user.utilizador)
+    if _verdadeiro(request.data.get('da_loja')):
+        if not pos.loja_vinculada_id:
+            return Response({'detail': 'O POS não está ligado a nenhuma loja.'}, status=status.HTTP_400_BAD_REQUEST)
+        pos.fiscal_da_loja = True
+        pos.save(update_fields=['fiscal_da_loja'])
+        copiar_da_loja(pos, request.user)
+        return Response(_pos_response(pos))
     fiscais, erros = validar_dados_fiscais(request.data)
     if erros:
         return Response({'detail': next(iter(erros.values())), 'erros': erros}, status=status.HTTP_400_BAD_REQUEST)
+    if pos.fiscal_da_loja:
+        pos.fiscal_da_loja = False
+        pos.save(update_fields=['fiscal_da_loja'])
     aplicar_dados_fiscais(pos, fiscais, request.user)
     return Response(_pos_response(pos))
 
@@ -906,6 +921,7 @@ def pos_conectar_loja(request, pos_id):
         )
 
     pos.conectar_loja(loja, modo=modo)
+    ao_ligar_loja(pos, request.user)
     from ..utils.subscricoes_pos import sincronizar_pos
     sincronizar_pos(pos)          # a loja tem o plano Loja + POS → o POS passa a estar incluído
     loja.pos_ativo = True
