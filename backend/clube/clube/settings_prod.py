@@ -102,11 +102,12 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 
 # ══════════════════════════════════════════════════════════════
-# EMAIL — console por agora, configurar Resend depois
+# EMAIL — Resend pela API HTTP (app/utils/email_resend.py); o Railway bloqueia SMTP de saída.
+# Sem EMAIL_BACKEND no ambiente fica na consola (nada é enviado).
 # ══════════════════════════════════════════════════════════════
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@nosloja.pt')
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Bende <noreply@bende.store>')
 
 # ══════════════════════════════════════════════════════════════
 # FRONTEND
