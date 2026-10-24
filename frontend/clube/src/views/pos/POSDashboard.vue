@@ -201,6 +201,10 @@
         </button>
       </section>
 
+      <!-- faturação: dados fiscais por preencher / lembrete de faturar (components/fiscal) -->
+      <AvisoFaturacao v-if="posId && !isMembro && currentPOS?.fiscal" class="mb-5" tema="claro"
+                      :fiscal="currentPOS.fiscal" :chave="`pos-${posId}`" :pode-editar="true" @preencher="abrirConfiguracao" />
+
       <!-- POS suspenso pela plataforma (a aba Subscrição continua aberta ao dono, para pagar) -->
       <section
         v-if="posId && currentPOS?.suspenso && !(activeTab === 'subscricao' && !isMembro)"
@@ -393,6 +397,10 @@
               Os preços do POS já incluem IVA. Esta taxa só serve para o Mapa de IVA dos relatórios.
             </p>
           </div>
+
+          <!-- Dados fiscais: guardam-se à parte (PATCH /api/pos/<id>/fiscal/) -->
+          <SeccaoDadosFiscais v-if="currentPOS?.fiscal" tema="claro"
+                              :fiscal="currentPOS.fiscal" :url="`/api/pos/${posId}/fiscal/`" @guardado="fiscalGuardado" />
         </form>
 
         <div class="grid grid-cols-2 gap-3 border-t border-slate-200 bg-slate-50 p-5">
@@ -423,6 +431,8 @@
 </template>
 
 <script>
+import AvisoFaturacao from '@/components/fiscal/AvisoFaturacao.vue'
+import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
 import api, { POS_ACCESS, POS_REFRESH } from '@/services/api'
 
 import POSMesas from './POSMesas.vue'
@@ -439,6 +449,7 @@ export default {
   name: 'POSDashboard',
 
   components: {
+    AvisoFaturacao, SeccaoDadosFiscais,
     POSMesas,
     POSPedidos,
     POSHistorico,
@@ -794,6 +805,7 @@ export default {
         const body = { nome: payload.nome || 'POS Principal', modo: payload.modo || 'standalone' }
         if (payload.loja_id) body.loja_id = payload.loja_id
         if (payload.plano_id) body.plano_id = payload.plano_id
+        for (const k of ['nif', 'regime_fiscal', 'declaracao_fiscal']) if (payload[k]) body[k] = payload[k]
         const { data } = await api.post('/api/pos/criar/', body)
         this.setCurrentPOS(data)
       } catch (error) {
@@ -802,6 +814,11 @@ export default {
       } finally {
         this.creatingPos = false
       }
+    },
+
+    fiscalGuardado (pos) {
+      this.currentPOS = pos
+      localStorage.setItem('pos_selected', JSON.stringify(pos))
     },
 
     // ── CONFIGURAÇÃO ────────────────────────────────────────────────

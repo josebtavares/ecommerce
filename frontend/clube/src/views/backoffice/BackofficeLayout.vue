@@ -135,6 +135,10 @@
         </button>
       </div>
 
+      <!-- Faturação: dados fiscais por preencher / lembrete de faturar (components/fiscal) -->
+      <AvisoFaturacao v-if="loja?.fiscal" class="mx-4 lg:mx-6 mt-4" :fiscal="loja.fiscal" :chave="`loja-${lojaId}`"
+                      :pode-editar="permissoes.includes('gerir_dados_fiscais')" @preencher="activeSection = 'configuracoes'" />
+
       <!-- Sem permissão -->
       <div v-if="!loadingLoja && !temPermissao(activeSection)"
            class="flex-1 flex items-center justify-center text-center p-6">
@@ -153,13 +157,15 @@
         <BackofficeDashboard     v-if="activeSection === 'dashboard'"      :loja-id="lojaId" />
         <ModuloRelatorios        v-else-if="activeSection === 'relatorios'"    :key="'rel' + lojaId"
                                  :base="`/app/loja/${lojaId}/relatorios`" :prefixo="`loja-${lojaId}`" />
-        <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" @ver-reembolso="abrirReembolso" />
+        <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" @ver-reembolso="abrirReembolso"
+                                 :regime-fiscal="loja?.fiscal?.regime_fiscal || ''" />
         <BackofficeDevolucoes    v-else-if="activeSection === 'devolucoes'"    :loja-id="lojaId"
                                  :reembolso-id="$route.query.reembolso || null" @contagem="devolucoesPorResponder = $event" />
         <BackofficeProdutos      v-else-if="activeSection === 'produtos'"      :loja-id="lojaId" />
         <BackofficeInventario    v-else-if="activeSection === 'inventario'"    :loja-id="lojaId" />
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
-                                 :pode-fechar="podeFecharLoja" @updated="fetchLoja" />
+                                 :pode-fechar="podeFecharLoja" :pode-fiscal="permissoes.includes('gerir_dados_fiscais')"
+                                 @updated="fetchLoja" />
         <BackofficeStaff         v-else-if="activeSection === 'staff'"         :loja-id="lojaId" />
         <BackofficeSubscricao    v-else-if="activeSection === 'subscricao'"    :loja-id="lojaId" @alterado="fetchLoja" />
         <BackofficeTipos         v-else-if="activeSection === 'tipos'"         :loja-id="lojaId" />
@@ -198,11 +204,12 @@ import BackofficeServicos       from './BackofficeServicos.vue'
 import ModuloRelatorios         from '@/components/relatorios/ModuloRelatorios.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
+import AvisoFaturacao           from '@/components/fiscal/AvisoFaturacao.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 
 const PERMISSOES = {
   dono: [
-    'ver_loja','editar_loja','apagar_loja','gerir_staff',
+    'ver_loja','editar_loja','apagar_loja','gerir_dados_fiscais','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
@@ -244,7 +251,7 @@ export default {
   components: { BackofficeSubscricao,
     BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas, ModuloRelatorios,
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
-    BackofficeStaff, BackofficeTipos, NotificacaoSino,
+    BackofficeStaff, BackofficeTipos, NotificacaoSino, AvisoFaturacao,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
     BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes, BackofficeServicos,
   },

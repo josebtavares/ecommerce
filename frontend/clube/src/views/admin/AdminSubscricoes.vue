@@ -247,8 +247,8 @@
             <button type="button" @click="abrirAdiar(f)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Adiar</button>
             <button type="button" @click="abrirAnular(f)" class="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs">Anular</button>
           </template>
-          <button v-else-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Recibo da fatura ${f.id}`"
-            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Recibo</button>
+          <button v-else-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Comprovativo do pagamento ${f.id}`"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
         </div>
       </div>
     </template>

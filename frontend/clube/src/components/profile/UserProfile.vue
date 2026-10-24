@@ -292,6 +292,19 @@
                       <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">A pagar na entrega (sem os artigos esgotados)</span>
                       <span class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ formatPrice(detalhesEncomenda[enc.id].valor_a_pagar) }}</span>
                     </div>
+                    <!-- fatura que a loja emitiu no e-Fatura e registou (backend utils/fiscal.py) -->
+                    <div v-if="['pago', 'preparando', 'enviado', 'concluido'].includes(enc.status)" data-teste="fatura-cliente"
+                         class="flex items-center justify-between gap-2 text-xs">
+                      <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Fatura</span>
+                      <span v-if="detalhesEncomenda[enc.id].fatura" class="flex items-center gap-2">
+                        <span class="font-semibold" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ detalhesEncomenda[enc.id].fatura.numero }}</span>
+                        <a v-if="detalhesEncomenda[enc.id].fatura.pdf_url" :href="detalhesEncomenda[enc.id].fatura.pdf_url"
+                           target="_blank" rel="noopener" class="font-semibold text-red-500 hover:text-red-400 underline">
+                          <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Descarregar
+                        </a>
+                      </span>
+                      <span v-else :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">A loja ainda não registou a fatura</span>
+                    </div>
                     <!-- chat: conversa própria desta encomenda (o condutor da entrega também a vê) -->
                     <button type="button" @click="falarSobreEncomenda(enc)"
                       class="w-full py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-2"

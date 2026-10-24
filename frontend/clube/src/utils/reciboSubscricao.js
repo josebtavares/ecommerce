@@ -1,5 +1,6 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
-// Recibo (ou fatura) de uma mensalidade da subscrição, em PDF, gerado no browser (jsPDF).
+// Comprovativo de pagamento (ou nota de cobrança) de uma mensalidade da subscrição, em PDF, gerado no browser (jsPDF).
+// Não é uma fatura: as faturas legais saem do e-Fatura (ver utils/fiscal.js).
 // Fundo branco para poder ser impresso. Dados vêm de fatura_payload (utils/subscricoes.py).
 
 const euros = v => formatarDinheiro(Number(v) || 0)
@@ -11,7 +12,7 @@ export async function gerarReciboSubscricao (f) {
   const pw = doc.internal.pageSize.getWidth()
   const mg = 20
   const paga = f.estado === 'paga'
-  const titulo = paga ? 'Recibo' : f.estado === 'anulada' ? 'Fatura anulada' : 'Fatura'
+  const titulo = paga ? 'Comprovativo de pagamento' : f.estado === 'anulada' ? 'Nota de cobrança anulada' : 'Nota de cobrança'
 
   // cabeçalho
   doc.setFillColor(220, 38, 38)
@@ -53,10 +54,13 @@ export async function gerarReciboSubscricao (f) {
   // rodapé
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(161, 161, 170)
   const rodape = paga
-    ? (f.pos_id ? 'Documento de quitação da mensalidade do POS.' : 'Documento de quitação da mensalidade. As lojas em subscrição não pagam comissão sobre as vendas.')
-    : 'Documento informativo — não serve de recibo.'
-  doc.text(rodape, mg, 280, { maxWidth: pw - mg * 2 })
+    ? (f.pos_id ? 'Comprovativo do pagamento da mensalidade do POS.' : 'Comprovativo do pagamento da mensalidade. As lojas em subscrição não pagam comissão sobre as vendas.')
+    : 'Documento informativo do valor a pagar.'
+  doc.text(rodape, mg, 275, { maxWidth: pw - mg * 2 })
+  doc.setFont('helvetica', 'bold')
+  doc.text('Documento interno — não substitui fatura.', mg, 280)
+  doc.setFont('helvetica', 'normal')
   if (f.metodo === 'simulado') doc.text('Pagamento simulado (ambiente de testes).', mg, 285)
 
-  doc.save(`${paga ? 'recibo' : 'fatura'}-subscricao-${f.id}.pdf`)
+  doc.save(`${paga ? 'comprovativo' : 'nota-cobranca'}-subscricao-${f.id}.pdf`)
 }

@@ -211,9 +211,9 @@
             </div>
             <span class="text-sm font-bold text-zinc-100">{{ euros(f.valor) }}</span>
             <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', corFatura(f)]">{{ f.atrasada ? 'Em atraso' : f.estado_nome }}</span>
-            <button v-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Recibo da fatura ${f.id}`"
+            <button v-if="f.estado === 'paga'" type="button" @click="recibo(f)" :aria-label="`Comprovativo do pagamento ${f.id}`"
               class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold">
-              <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Recibo
+              <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Comprovativo
             </button>
             <button v-if="f.estado === 'pendente' && dados.pode_pagar" type="button" @click="pagar(f)" :disabled="aPagar === f.id"
               class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold">

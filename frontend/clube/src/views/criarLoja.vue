@@ -80,6 +80,15 @@
               class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
           </div>
         </div>
+
+        <!-- Dados fiscais (utils/fiscal.js) — o NIF não aparece na loja pública -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4">
+          <div>
+            <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Dados fiscais</h2>
+            <p class="mt-1 text-xs text-zinc-500">Só tu e a plataforma veem o NIF. Não aparece na tua loja.</p>
+          </div>
+          <DadosFiscais v-model="fiscal" />
+        </div>
       </div>
 
       <!-- ═══ PASSO 2 — VISUAL ═══ -->
@@ -479,6 +488,8 @@ import { TEMPLATES, CATEGORIAS_FILTRO, getTemplatesSugeridos } from '@/config/lo
 import TemplateMiniPreview from '@/components/templates/TemplateMiniPreview.vue'
 import TemplatePreviewFrame from '@/components/templates/TemplatePreviewFrame.vue'
 import EscolherCobranca from '@/components/subscricao/EscolherCobranca.vue'
+import DadosFiscais from '@/components/fiscal/DadosFiscais.vue'
+import { dadosFiscaisValidos, corpoDadosFiscais } from '@/utils/fiscal'
 import { DEMO_ID } from '@/utils/demoLoja'
 
 const TAG_STYLES = {
@@ -496,13 +507,14 @@ const TAG_STYLES = {
 
 export default {
   name: 'CriarLoja',
-  components: { TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca },
+  components: { TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca, DadosFiscais },
 
   data () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
     return {
       step: 1,
       cobranca: { modelo: 'comissao', plano_id: null },   // como a loja paga à plataforma
+      fiscal: { nif: '', regime_fiscal: '', declaracao_fiscal: false },
       loading: false,
       erro: '',
       sucesso: false,
@@ -604,7 +616,7 @@ export default {
     },
 
     podeAvancar () {
-      if (this.step === 1) return this.form.nome.trim() && this.form.categoria
+      if (this.step === 1) return this.form.nome.trim() && this.form.categoria && dadosFiscaisValidos(this.fiscal)
       if (this.step === 2) return true
       return false
     },
@@ -715,6 +727,7 @@ export default {
         if (this.cobranca.plano_id) fd.append('plano_id', this.cobranca.plano_id)
         fd.append('entrega_ativa',      this.form.entrega_ativa)
         fd.append('levantamento_ativo', this.form.levantamento_ativo)
+        Object.entries(corpoDadosFiscais(this.fiscal)).forEach(([k, v]) => fd.append(k, v))
         if (this.form.logo)   fd.append('logo',   this.form.logo)
         if (this.form.banner) fd.append('banner', this.form.banner)
         this.form.metodos_pagamento.forEach(m => fd.append('metodos_pagamento', m))
@@ -726,7 +739,9 @@ export default {
         await api.post('/app/loja/criar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
         this.sucesso = true
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Erro ao criar a loja. Tenta novamente.'
+        const d = e.response?.data
+        // erros de campo ({nif: '...'}) vêm sem detail
+        this.erro = d?.detail || (d && typeof d === 'object' && [].concat(Object.values(d)[0])[0]) || 'Erro ao criar a loja. Tenta novamente.'
       } finally {
         this.loading = false
       }
