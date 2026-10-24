@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_staff,notificar,notificar_admins
@@ -647,12 +647,12 @@ def encomenda_list_loja(request, loja_id):
 
 
 @api_view(['POST', 'DELETE'])
-@parser_classes([MultiPartParser, FormParser])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 @permission_classes([IsAuthenticated])
 def encomenda_fatura(request, loja_id, id):
     """
-    POST   /app/loja/<loja_id>/encomendas/<id>/fatura/   multipart: numero, pdf (opcional)
-    DELETE /app/loja/<loja_id>/encomendas/<id>/fatura/   remove (registo errado)
+    POST   /app/loja/<loja_id>/encomendas/<id>/fatura/   multipart: numero, pdf (opcional), motivo (se já há uma)
+    DELETE /app/loja/<loja_id>/encomendas/<id>/fatura/   {motivo} — anula (o registo e o PDF ficam no histórico)
     A loja emite a fatura no e-Fatura (fora do Bende) e regista-a aqui; o cliente vê-a na encomenda.
     """
     loja = get_object_or_404(Loja, id=loja_id)
@@ -661,9 +661,14 @@ def encomenda_fatura(request, loja_id, id):
         return erro
     encomenda = get_object_or_404(Encomenda, id=id, loja=loja)
 
+    motivo = ''
+    if request.method == 'DELETE' or encomenda.fatura_registada_em:
+        motivo, msg = fiscal.validar_motivo(request.data.get('motivo'))
+        if msg:
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
     if request.method == 'DELETE':
-        fiscal.limpar_fatura(encomenda)
-        encomenda.save(update_fields=['fatura_numero', 'fatura_pdf', 'fatura_registada_em'])
+        if encomenda.fatura_registada_em:
+            fiscal.anular_fatura(encomenda, request.user, motivo)
         return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
 
     if encomenda.status not in fiscal.ESTADOS_FATURAVEIS:
@@ -675,8 +680,7 @@ def encomenda_fatura(request, loja_id, id):
         return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
     primeira = not encomenda.fatura_registada_em
-    fiscal.registar_fatura(encomenda, numero, pdf)
-    encomenda.save(update_fields=['fatura_numero', 'fatura_pdf', 'fatura_registada_em'])
+    fiscal.registar_fatura(encomenda, numero, pdf, request.user, motivo)
 
     if primeira:
         notificar(

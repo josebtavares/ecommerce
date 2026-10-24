@@ -2,7 +2,8 @@
 Subscrição do POS (utils/subscricoes_pos.py) — só a conta principal (o dono) a vê e paga;
 os membros da equipa não. Funciona mesmo com o POS suspenso (é por aqui que se paga).
   GET   /api/pos/planos/                                   planos de POS (criação do POS)
-  GET   /api/pos/<pos_id>/subscricao/                      estado, faturas, planos, aviso
+  GET   /api/pos/<pos_id>/subscricao/                      estado, últimas faturas, planos, aviso
+  GET   /api/pos/<pos_id>/subscricao/faturas/?estado&q&de&ate&limit&offset   todas as mensalidades, paginadas
   PATCH /api/pos/<pos_id>/subscricao/   { auto_renovar }
   POST  /api/pos/<pos_id>/subscricao/plano/   { plano_id }  escolher / mudar de plano
   POST  /api/pos/<pos_id>/subscricao/faturas/<fid>/pagar/  pagamento (simulado)
@@ -69,8 +70,9 @@ def _resumo(pos):
         cob = subs_pos.sincronizar(Subscricao.objects.select_for_update().get(pk=sub.pk))
     sub.refresh_from_db()
     pos.refresh_from_db()
-    faturas = list(sub.faturas.select_related('plano', 'pos')[:24])
-    pendentes = [f for f in faturas if f.estado == 'pendente']
+    # a lista completa (paginada, com pesquisa) é /api/pos/<id>/subscricao/faturas/; aqui só as últimas
+    faturas = list(sub.faturas.select_related('plano', 'pos')[:10])
+    pendentes = list(sub.faturas.filter(estado='pendente'))
     return {
         'pos_id': pos.id,
         'aviso': subs_pos.aviso_pos(sub, pendentes, cob=cob),
@@ -100,6 +102,18 @@ def planos_pos(request):
     return Response({'dias_teste': _dias_teste(),
                      'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('pos',))],
                      'lojas_com_pos_incluido': incluido})
+
+
+@api_view(['GET'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def pos_subscricao_faturas(request, pos_id):
+    """GET /api/pos/<pos_id>/subscricao/faturas/?estado=&q=&de=&ate=&limit=&offset= — todas as mensalidades do POS."""
+    from ..Views.subscricaoView import pagina_cobrancas
+    pos, erro = _pos_do_dono(request, pos_id)
+    if erro:
+        return erro
+    return pagina_cobrancas(request, FaturaSubscricao.objects.filter(pos=pos), limite=10)
 
 
 @api_view(['GET', 'PATCH'])

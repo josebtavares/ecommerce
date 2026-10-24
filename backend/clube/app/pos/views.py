@@ -819,7 +819,7 @@ def pos_criar(request):
         if ConfiguracaoPOS.objects.filter(dono=utilizador).exists():
             return Response({'detail': 'Esta conta já tem um POS.'}, status=status.HTTP_400_BAD_REQUEST)
         config = ConfiguracaoPOS.objects.create(nome=nome, dono=utilizador, modo='standalone')
-        aplicar_dados_fiscais(config, fiscais)
+        aplicar_dados_fiscais(config, fiscais, request.user)
         if loja:
             config.conectar_loja(loja, modo='hibrido' if modo == 'hibrido' else 'integrado')
         subs_pos.criar_para_pos_novo(config, plano)
@@ -870,7 +870,7 @@ def pos_dados_fiscais(request, pos_id):
     fiscais, erros = validar_dados_fiscais(request.data)
     if erros:
         return Response({'detail': next(iter(erros.values())), 'erros': erros}, status=status.HTTP_400_BAD_REQUEST)
-    aplicar_dados_fiscais(pos, fiscais)
+    aplicar_dados_fiscais(pos, fiscais, request.user)
     return Response(_pos_response(pos))
 
 

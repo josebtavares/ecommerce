@@ -173,11 +173,11 @@
       <!-- ═══ Faturas ═══ -->
       <div v-if="!cob || dados.faturas.length" class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white">
         <p class="px-5 pb-3 pt-5 text-xs font-black uppercase tracking-wider text-slate-400 sm:px-6">Mensalidades</p>
-        <p v-if="!dados.faturas.length" class="px-5 pb-6 text-sm font-semibold text-slate-500 sm:px-6">
-          Ainda não há mensalidades.<template v-if="sub.plano && sub.estado === 'teste'"> A primeira chega 7 dias antes de acabar o período grátis.</template>
-        </p>
-        <div v-else class="divide-y divide-slate-100">
-          <div v-for="f in dados.faturas" :key="f.id" class="flex flex-wrap items-center gap-3 px-5 py-4 sm:px-6">
+        <!-- todas as mensalidades, paginadas e com procura (GET /api/pos/<id>/subscricao/faturas/) -->
+        <ListaCobrancas :url="`/api/pos/${posId}/subscricao/faturas/`" :versao="versao" claro
+          :vazio="sub.plano && sub.estado === 'teste' ? 'Ainda não há mensalidades. A primeira chega 7 dias antes de acabar o período grátis.' : 'Ainda não há mensalidades.'">
+          <template #default="{ f }">
+          <div class="flex flex-wrap items-center gap-3 px-5 py-4 sm:px-6" :data-teste="`mensalidade-S-${f.id}`">
             <div class="min-w-[200px] flex-1">
               <p class="text-sm font-bold text-slate-900">{{ f.descricao }}</p>
               <p class="text-xs font-semibold text-slate-500">
@@ -203,7 +203,8 @@
               {{ aPagar === f.id ? 'A pagar…' : 'Pagar ' + euros(f.valor) }}
             </button>
           </div>
-        </div>
+          </template>
+        </ListaCobrancas>
       </div>
 
       <p v-if="erro" class="text-sm font-bold text-red-600" role="alert">{{ erro }}</p>
@@ -216,14 +217,16 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
+import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 
 export default {
   name: 'POSSubscricao',
+  components: { ListaCobrancas },
   props: { posId: { type: [String, Number], required: true } },
   emits: ['alterado'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, separar: { loja: null, pos: null } }
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, separar: { loja: null, pos: null }, versao: 0 }
   },
 
   computed: {
@@ -275,6 +278,7 @@ export default {
       try {
         const { data } = await pedido()
         this.dados = data
+        this.versao++                // a lista das mensalidades volta a ler a página
         if (ok) this.aviso = ok
         this.$emit('alterado', data)
       } catch (e) {
