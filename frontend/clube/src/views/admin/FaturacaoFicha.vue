@@ -192,6 +192,7 @@
               <button type="button" @click="extrato(c)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Extrato</button>
               <button type="button" @click="alternar(c.referencia)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
               <RegistarFaturaBende :fatura="c.fatura" :url="`/app/admin/faturacao/comissoes/${ficha.id}/${c.mes}/fatura/`" @atualizado="d => atualizado(c, d)" />
+              <DiferencaComissoes :item="c" admin />
             </div>
             <HistoricoFatura v-if="aberto[c.referencia]" :key="c.referencia + versao" :referencia="c.referencia" />
           </div>
@@ -209,6 +210,7 @@ import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ListaMensalidades from '@/components/fiscal/ListaMensalidades.vue'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
+import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
 import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
 
 const LIMITE = 20
@@ -216,7 +218,7 @@ const vazio = () => ({ q: '', estado: '', de: '', ate: '', min: '', max: '' })
 
 export default {
   name: 'FaturacaoFicha',
-  components: { HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { DiferencaComissoes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   props: {
     tipo: { type: String, required: true },
     id:   { type: [Number, String], required: true },
@@ -322,6 +324,7 @@ export default {
       if (linha.fatura) linha.anuladas++
       this.$emit('alterado')
       linha.fatura = d.fatura
+      for (const k of ['valor_faturado', 'diferenca', 'creditos', 'liquido']) if (k in d) linha[k] = d[k]    // comissões
       this.versao++          // o histórico aberto volta a carregar
     },
     csv () {

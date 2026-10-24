@@ -144,6 +144,7 @@
                   {{ d.tipo === 'comissoes' ? 'Extrato' : 'Comprovativo' }}
                 </button>
                 <RegistarFaturaBende :fatura="d.fatura" :url="d.url" @atualizado="r => aposFaturaBende(g, d, r)" />
+                <DiferencaComissoes v-if="d.tipo === 'comissoes'" :item="d" admin />
               </div>
             </div>
           </div>
@@ -163,6 +164,7 @@ import FaturacaoFicha from './FaturacaoFicha.vue'
 import AbasVendedores from '@/components/fiscal/AbasVendedores.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
+import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
 import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
 
 const TABS = [
@@ -174,7 +176,7 @@ const LIMITE = 20
 
 export default {
   name: 'AdminFaturacao',
-  components: { AbasVendedores, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { AbasVendedores, DiferencaComissoes, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   data () {
     const hoje = new Date()
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
@@ -268,6 +270,7 @@ export default {
     aposFaturaBende (g, d, r) {
       const tinha = !!d.fatura
       d.fatura = r.fatura
+      for (const k of ['valor_faturado', 'diferenca', 'creditos', 'liquido']) if (k in r) d[k] = r[k]    // comissões
       if (tinha) d.anuladas++                       // substituída ou anulada: a anterior fica no histórico
       const passo = (tinha ? 1 : 0) - (d.fatura ? 1 : 0)   // +1 voltou a "por faturar", -1 ficou faturada
       g.por_faturar += passo

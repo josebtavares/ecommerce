@@ -1221,6 +1221,8 @@ class FaturaComissoes(models.Model):
     fatura_pdf     = models.FileField(upload_to=caminho_fatura_bende, blank=True, default='', db_default='',
                                       validators=[FileExtensionValidator(['pdf'])])
     fatura_registada_em = models.DateTimeField()
+    # total das comissões (menos créditos) do mês quando a fatura foi registada: reembolsos depois → diferença à vista
+    valor_faturado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ['-mes']

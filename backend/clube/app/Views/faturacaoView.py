@@ -41,10 +41,11 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import Comissao, Encomenda, FaturaComissoes, FaturaSubscricao, HistoricoFatura, Loja, UtilizadorLoja
+from ..models import (Comissao, CreditoComissao, Encomenda, FaturaComissoes, FaturaSubscricao, HistoricoFatura, Loja,
+                      Reembolso, UtilizadorLoja)
 from ..pos.models import ConfiguracaoPOS
 from ..utils import documentos, fiscal
-from ..utils.emails_fiscais import enviar_fatura_comissoes, enviar_fatura_subscricao
+from ..utils.emails_fiscais import enviar_fatura_anulada, enviar_fatura_comissoes, enviar_fatura_subscricao
 from ..utils.subscricoes import fatura_payload, nome_alvo
 from .adminView import _exige_admin
 
@@ -115,16 +116,46 @@ def subscricao_comprovativo(request, fatura_id):
 
 # ── Comissões (loja) ───────────────────────────────────────────
 
+def _mes_local(m):
+    return timezone.localtime(m).date().replace(day=1) if hasattr(m, 'tzinfo') else m.replace(day=1)
+
+
+def resumo_comissoes(total, creditos, fc):
+    """
+    Campos comuns de um mês de comissões. creditos = comissões devolvidas à loja depois de liquidadas (reembolsos).
+    diferenca: o que a fatura registada cobre a mais do que o mês vale agora (reembolsos depois da fatura →
+    nota de crédito ou substituir a fatura). None quando bate certo ou ainda não há fatura.
+    """
+    liquido = total - creditos
+    faturado = getattr(fc, 'valor_faturado', None)
+    return {'creditos': str(creditos), 'liquido': str(liquido),
+            'valor_faturado': str(faturado) if faturado is not None else None,
+            'diferenca': str(faturado - liquido) if faturado is not None and faturado != liquido else None}
+
+
+def _creditos_por_mes(**filtro):
+    """{(loja_id, mes): créditos} pelo mês da comissão a que dizem respeito."""
+    from django.db.models.functions import TruncMonth
+    out = {}
+    for r in (CreditoComissao.objects.filter(**filtro).annotate(m=TruncMonth('comissao__data_criacao'))
+              .values('loja_id', 'm').annotate(t=Sum('valor'))):
+        out[(r['loja_id'], _mes_local(r['m']))] = r['t'] or Decimal('0')
+    return out
+
+
 def _comissoes_por_mes(loja):
     from django.db.models.functions import TruncMonth
     meses = (Comissao.objects.filter(loja=loja).annotate(m=TruncMonth('data_criacao'))
              .values('m').annotate(total=Sum('valor_comissao'), n=Count('id')).order_by('-m'))
     faturas = {fc.mes: fc for fc in FaturaComissoes.objects.filter(loja=loja)}
+    creditos = _creditos_por_mes(loja=loja)
     out = []
     for r in meses:
-        mes = timezone.localtime(r['m']).date().replace(day=1) if hasattr(r['m'], 'tzinfo') else r['m'].replace(day=1)
+        mes = _mes_local(r['m'])
+        fc = faturas.get(mes)
         out.append({'mes': f'{mes:%Y-%m}', 'total': str(r['total']), 'comissoes': r['n'],
-                    'fatura': fiscal.fatura_resumo(faturas.get(mes))})
+                    'fatura': fiscal.fatura_resumo(fc),
+                    **resumo_comissoes(r['total'] or Decimal('0'), creditos.get((loja.id, mes), Decimal('0')), fc)})
     return out
 
 
@@ -157,17 +188,18 @@ def loja_comissoes_vendas(request, loja_id, mes):
     seguinte = (d + timedelta(days=32)).replace(day=1)
     ini = timezone.make_aware(datetime.combine(d, datetime.min.time()))
     fim = timezone.make_aware(datetime.combine(seguinte, datetime.min.time()))
-    qs = Comissao.objects.filter(loja=loja, data_criacao__gte=ini, data_criacao__lt=fim)
+    qs = Comissao.objects.filter(loja=loja, data_criacao__gte=ini, data_criacao__lt=fim).annotate(cred=Sum('creditos__valor'))
     q = (request.GET.get('q') or '').strip().lstrip('#').upper().removeprefix('E-')
     if q:
         if not q.isdigit() or len(q) > 9:
             return Response({'count': 0, 'results': [], 'total': '0'})
         qs = qs.filter(encomenda_id=int(q))
-    total = qs.aggregate(t=Sum('valor_comissao'))['t'] or 0
+    total = Comissao.objects.filter(id__in=qs.values('id')).aggregate(t=Sum('valor_comissao'))['t'] or 0
+    creditos = CreditoComissao.objects.filter(comissao__in=qs.values('id')).aggregate(t=Sum('valor'))['t'] or 0
     pagina, n = _paginar(request, qs.order_by('-data_criacao', '-id'), 10)
-    return Response({'count': n, 'total': str(total), 'results': [
+    return Response({'count': n, 'total': str(total), 'creditos': str(creditos), 'results': [
         {'encomenda_id': c.encomenda_id, 'data': c.data_criacao.isoformat(), 'valor_encomenda': str(c.valor_encomenda),
-         'percentagem': str(c.percentagem), 'valor_comissao': str(c.valor_comissao),
+         'percentagem': str(c.percentagem), 'valor_comissao': str(c.valor_comissao), 'credito': str(c.cred or 0),
          'estado': c.status, 'estado_nome': c.get_status_display()} for c in pagina]})
 
 
@@ -232,12 +264,27 @@ def _vendedor_base(obj, tipo):
 
 
 def _vendas_filtro(de, ate, prefixo='encomendas__'):
-    f = Q(**{f'{prefixo}status__in': fiscal.ESTADOS_FATURAVEIS})
+    """Vendas faturáveis + as que tiveram fatura registada (canceladas depois: o documento não pode sumir do arquivo)."""
+    com_fatura = HistoricoFatura.objects.filter(tipo='encomenda', encomenda__isnull=False).values('encomenda_id')
+    f = Q(**{f'{prefixo}status__in': fiscal.ESTADOS_FATURAVEIS}) | Q(**{f'{prefixo}id__in': com_fatura})
     if de:
         f &= Q(**{f'{prefixo}data_criacao__date__gte': de})
     if ate:
         f &= Q(**{f'{prefixo}data_criacao__date__lte': ate})
     return f
+
+
+def _por_faturar(prefixo='encomendas__'):
+    """Faturável e sem fatura em vigor (uma venda cancelada não fica por faturar)."""
+    return Q(**{f'{prefixo}status__in': fiscal.ESTADOS_FATURAVEIS, f'{prefixo}fatura_registada_em__isnull': True})
+
+
+def _valor_vendas(qs):
+    """Soma do que os clientes pagaram (valor_devido: sem os artigos esgotados abatidos antes de pagar)."""
+    total = qs.aggregate(t=Sum('valor_total'))['t'] or Decimal('0')
+    abatido = (Reembolso.objects.filter(encomenda__in=qs.values('id'), estado='reembolsado', metodo='abatido')
+               .aggregate(t=Sum('valor_aprovado'))['t'] or Decimal('0'))
+    return total - abatido
 
 
 def _contar(qs, campo):
@@ -270,7 +317,8 @@ def admin_vendedores(request):
     vendas = _vendas_filtro(de, ate)
     lojas = (Loja.objects.exclude(estado='pendente')
              .annotate(vendas=Count('encomendas', filter=vendas),
-                       faturadas=Count('encomendas', filter=vendas & Q(encomendas__fatura_registada_em__isnull=False))))
+                       faturadas=Count('encomendas', filter=vendas & Q(encomendas__fatura_registada_em__isnull=False)),
+                       n_por_faturar=Count('encomendas', filter=vendas & _por_faturar())))
     poss = ConfiguracaoPOS.objects.filter(ativo=True)
     if q:
         pessoa = (Q(dono__user__email__icontains=q) | Q(dono__user__username__icontains=q) |
@@ -290,7 +338,7 @@ def admin_vendedores(request):
     elif dados == 'completos':
         lojas, poss = lojas.exclude(_incompletos()), poss.exclude(_incompletos())
     if por_faturar:
-        lojas = lojas.filter(vendas__gt=F('faturadas'))
+        lojas = lojas.filter(n_por_faturar__gt=0)
 
     if tipo == 'pos':                       # todos os POS (cada um diz a loja a que pertence)
         chaves = [(n.lower(), 'pos', i) for i, n in poss.values_list('id', 'nome')]
@@ -316,7 +364,7 @@ def admin_vendedores(request):
         if t == 'loja':
             l = lojas_pg[i]
             results.append({**_vendedor_base(l, 'loja'), 'vendas': l.vendas, 'faturadas': l.faturadas,
-                            'por_faturar': l.vendas - l.faturadas, 'pos': pos_das_lojas.get(i, [])})
+                            'por_faturar': l.n_por_faturar, 'pos': pos_das_lojas.get(i, [])})
         else:
             results.append(_vendedor_base(pos_pg[i], 'pos'))
     return Response({'count': total, 'results': results})
@@ -368,7 +416,7 @@ def admin_abas(request):
     if erro:
         return erro
     q = (request.GET.get('q') or '').strip()
-    sem_fatura = _vendas_filtro(None, None) & Q(encomendas__fatura_registada_em__isnull=True)
+    sem_fatura = _por_faturar()
     lojas = Loja.objects.exclude(estado='pendente')
     poss = ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=True)
     if q:
@@ -415,16 +463,16 @@ def admin_ficha(request, tipo, id):
     if tipo == 'loja':
         obj = get_object_or_404(Loja.objects.select_related('dono__user'), id=id)
         enc = Encomenda.objects.filter(_vendas_filtro(None, None, ''), loja=obj)
-        n, fat = enc.count(), enc.filter(fatura_registada_em__isnull=False).count()
+        n, fat, pf = enc.count(), enc.filter(fatura_registada_em__isnull=False).count(), enc.filter(_por_faturar('')).count()
         anul_com = {f'{m:%Y-%m}': c for m, c in _contar(
             HistoricoFatura.objects.filter(tipo='comissoes', loja=obj, anulada_em__isnull=False), 'mes').items()}
         dados = {
             **_vendedor_base(obj, 'loja'),
             'pos': [_vendedor_base(p, 'pos') for p in
                     obj.pos_vinculados.filter(ativo=True).select_related('dono__user', 'loja_vinculada')],
-            'totais': {'vendas': n, 'faturadas': fat, 'por_faturar': n - fat,
+            'totais': {'vendas': n, 'faturadas': fat, 'por_faturar': pf,
                        'anuladas': HistoricoFatura.objects.filter(tipo='encomenda', loja=obj, anulada_em__isnull=False).count(),
-                       'valor': str(enc.aggregate(t=Sum('valor_total'))['t'] or 0)},
+                       'valor': str(_valor_vendas(enc))},
             'comissoes': [{**m, 'referencia': f"C-{obj.id}-{m['mes'].replace('-', '')}", 'anuladas': anul_com.get(m['mes'], 0)}
                           for m in _comissoes_por_mes(obj)],
         }
@@ -457,7 +505,7 @@ def admin_loja_vendas(request, loja_id):
     if estado == 'faturada':
         qs = qs.filter(fatura_registada_em__isnull=False)
     elif estado == 'por_faturar':
-        qs = qs.filter(fatura_registada_em__isnull=True)
+        qs = qs.filter(_por_faturar(''))
     elif estado == 'com_anuladas':
         qs = qs.filter(id__in=HistoricoFatura.objects.filter(loja=loja, anulada_em__isnull=False).values('encomenda_id'))
     q = (request.GET.get('q') or '').strip().lstrip('#')
@@ -477,8 +525,8 @@ def admin_loja_vendas(request, loja_id):
         except InvalidOperation:
             return Response({'detail': 'Valor inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    totais = qs.aggregate(valor=Sum('valor_total'), n=Count('id'),
-                          faturadas=Count('id', filter=Q(fatura_registada_em__isnull=False)))
+    totais = qs.aggregate(n=Count('id'), faturadas=Count('id', filter=Q(fatura_registada_em__isnull=False)),
+                          por_faturar=Count('id', filter=_por_faturar('')))
     pagina, total = _paginar(request, qs.select_related('comprador__user', 'pagamento').order_by('-data_criacao'))
     pagina = list(pagina)
     anul = _contar(HistoricoFatura.objects.filter(encomenda__in=[e.id for e in pagina], anulada_em__isnull=False), 'encomenda_id')
@@ -492,8 +540,8 @@ def admin_loja_vendas(request, loja_id):
                         'comprovativo': bool(pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial')),
                         'fatura': fiscal.fatura_resumo(e, request), 'anuladas': anul.get(e.id, 0)})
     return Response({'count': total, 'results': results,
-                     'totais': {'vendas': totais['n'], 'valor': str(totais['valor'] or 0),
-                                'faturadas': totais['faturadas'], 'por_faturar': totais['n'] - totais['faturadas']}})
+                     'totais': {'vendas': totais['n'], 'valor': str(_valor_vendas(qs)),
+                                'faturadas': totais['faturadas'], 'por_faturar': totais['por_faturar']}})
 
 
 @api_view(['GET'])
@@ -705,6 +753,8 @@ def _docs_bende(ini, fim, loja_ids=None, pos_ids=None):
         t[0] += c['valor_comissao'] or 0
         t[1] += 1
     fcs = {(fc.loja_id, fc.mes): fc for fc in FaturaComissoes.objects.filter(mes__gte=ini, mes__lt=fim)}
+    creditos = _creditos_por_mes(comissao__data_criacao__date__gte=ini, comissao__data_criacao__date__lt=fim,
+                                 **({'loja_id__in': loja_ids} if loja_ids is not None else {}))
 
     grupos = {}
     for f in subs:
@@ -726,6 +776,7 @@ def _docs_bende(ini, fim, loja_ids=None, pos_ids=None):
         grupos.setdefault(('loja', loja_id), []).append({
             'tipo': 'comissoes', 'referencia': ref, 'mes': f'{mes:%Y-%m}', 'titulo': f'Comissões de {mes:%m/%Y}',
             'data': mes, 'valor': str(total), 'comissoes': n, 'fatura': fiscal.fatura_resumo(fcs.get((loja_id, mes))),
+            **resumo_comissoes(total, creditos.get((loja_id, mes), Decimal('0')), fcs.get((loja_id, mes))),
             'anuladas': 0, 'url': f'/app/admin/faturacao/comissoes/{loja_id}/{mes:%Y-%m}/fatura/'})
     docs = [d for v in grupos.values() for d in v]
     anuladas = _contar(HistoricoFatura.objects.filter(referencia__in=[d['referencia'] for d in docs],
@@ -750,8 +801,8 @@ def admin_bende(request):
         return Response({'detail': 'Escolhe no máximo 24 meses.'}, status=status.HTTP_400_BAD_REQUEST)
     grupos = _docs_bende(ini, fim)
     por_faturar = request.GET.get('por_faturar') in ('1', 'true')
-    if por_faturar:
-        grupos = {k: [d for d in v if not d['fatura']] for k, v in grupos.items()}
+    if por_faturar:       # por faturar: sem fatura, ou com fatura que já não bate certo (reembolsos depois)
+        grupos = {k: [d for d in v if not d['fatura'] or d.get('diferenca')] for k, v in grupos.items()}
         grupos = {k: v for k, v in grupos.items() if v}
 
     lojas = {l.id: l for l in Loja.objects.filter(id__in=[i for t, i in grupos if t == 'loja']).select_related('dono__user')}
@@ -914,15 +965,20 @@ def _registar(request, obj):
         motivo, msg = fiscal.validar_motivo(request.data.get('motivo'))
         if msg:
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
-    if request.method == 'DELETE':
-        if obj.fatura_registada_em:
-            fiscal.anular_fatura(obj, request.user, motivo)
-        return None
-    pdf = request.FILES.get('pdf')
-    numero, msg = fiscal.validar_fatura(request.data.get('numero'), pdf)
-    if msg:
-        return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
-    fiscal.registar_fatura(obj, numero, pdf, request.user, motivo)
+    try:
+        if request.method == 'DELETE':
+            if obj.fatura_registada_em:
+                numero = obj.fatura_numero
+                fiscal.anular_fatura(obj, request.user, motivo)
+                enviar_fatura_anulada(obj, numero, motivo)
+            return None
+        pdf = request.FILES.get('pdf')
+        numero, msg = fiscal.validar_fatura(request.data.get('numero'), pdf)
+        if msg:
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+        fiscal.registar_fatura(obj, numero, pdf, request.user, motivo)
+    except fiscal.FaturaAlterada:
+        return Response({'detail': 'A fatura foi alterada entretanto (outro pedido). Recarrega a página e tenta de novo.'}, status=status.HTTP_409_CONFLICT)
     return None
 
 
@@ -958,7 +1014,7 @@ def admin_fatura_comissoes(request, loja_id, mes):
     fc = FaturaComissoes.objects.filter(loja=loja, mes=d).first()
     if not fc:
         if request.method == 'DELETE':
-            return Response({'fatura': None})
+            return Response({'fatura': None, **_resumo_mes(loja, d, None)})
         _, total = documentos.comissoes_do_mes(loja, d)
         if not total:
             return Response({'detail': 'Esta loja não tem comissões nesse mês.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -967,9 +1023,18 @@ def admin_fatura_comissoes(request, loja_id, mes):
     if erro:
         return erro
     if request.method == 'DELETE':
-        return Response({'fatura': None})
+        return Response({'fatura': None, **_resumo_mes(loja, d, None)})
+    # o que esta fatura cobre: se depois houver reembolsos, a diferença fica à vista (nota de crédito)
+    fc.valor_faturado = documentos.liquido_do_mes(loja, d)
+    FaturaComissoes.objects.filter(pk=fc.pk).update(valor_faturado=fc.valor_faturado)
     enviar_fatura_comissoes(fc)
-    return Response({'fatura': fiscal.fatura_resumo(fc)})
+    return Response({'fatura': fiscal.fatura_resumo(fc), **_resumo_mes(loja, d, fc)})
+
+
+def _resumo_mes(loja, mes, fc):
+    _, total = documentos.comissoes_do_mes(loja, mes)
+    _, cred = documentos.creditos_do_mes(loja, mes)
+    return resumo_comissoes(Decimal(total), Decimal(cred), fc)
 
 
 @api_view(['GET'])

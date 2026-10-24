@@ -210,7 +210,8 @@
             </div>
 
             <!-- Fatura emitida pela loja no e-Fatura (components/fiscal/FaturaEncomenda.vue) -->
-            <FaturaEncomenda v-if="faturavel(enc)" :encomenda="detalhes[enc.id]" :loja-id="lojaId"
+            <!-- cancelada depois de faturada: continua visível para a loja anular a fatura (nota de crédito no e-Fatura) -->
+            <FaturaEncomenda v-if="faturavel(enc) || enc.fatura" :encomenda="detalhes[enc.id]" :loja-id="lojaId"
                              @atualizada="faturaAtualizada(enc, $event)" />
 
             <!-- Artigo esgotado: reembolsa só esses artigos e o resto segue (backend utils/devolucoes.loja_esgotado) -->

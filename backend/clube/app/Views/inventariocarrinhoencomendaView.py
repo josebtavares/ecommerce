@@ -668,7 +668,21 @@ def encomenda_fatura(request, loja_id, id):
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
     if request.method == 'DELETE':
         if encomenda.fatura_registada_em:
-            fiscal.anular_fatura(encomenda, request.user, motivo)
+            numero = encomenda.fatura_numero
+            try:
+                fiscal.anular_fatura(encomenda, request.user, motivo)
+            except fiscal.FaturaAlterada:
+                return Response({'detail': 'A fatura foi alterada entretanto (outro pedido). Recarrega a página e tenta de novo.'}, status=status.HTTP_409_CONFLICT)
+            notificar(
+                utilizador=encomenda.comprador,
+                tipo='encomenda_atualizada',
+                titulo=f'Fatura da encomenda #{encomenda.id} anulada',
+                mensagem=f'{loja.nome} anulou a fatura {numero}. Motivo: {motivo}',
+                loja=loja,
+                link='/perfil',
+            )
+            from ..utils.emails_fiscais import enviar_fatura_anulada
+            enviar_fatura_anulada(encomenda, numero, motivo)
         return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
 
     if encomenda.status not in fiscal.ESTADOS_FATURAVEIS:
@@ -680,7 +694,10 @@ def encomenda_fatura(request, loja_id, id):
         return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
     primeira = not encomenda.fatura_registada_em
-    fiscal.registar_fatura(encomenda, numero, pdf, request.user, motivo)
+    try:
+        fiscal.registar_fatura(encomenda, numero, pdf, request.user, motivo)
+    except fiscal.FaturaAlterada:
+        return Response({'detail': 'A fatura foi alterada entretanto (outro pedido). Recarrega a página e tenta de novo.'}, status=status.HTTP_409_CONFLICT)
 
     if primeira:
         notificar(
