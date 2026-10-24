@@ -230,7 +230,7 @@ def loja_backoffice(request, id):
     dados['servicos'] = {'ativo': bool(cfg and cfg.ativo),
                          'meu_profissional_id': proprio.id if proprio and proprio.ativo else None}
     # avisos de faturação a toda a equipa; o NIF só o dono vê
-    dados['fiscal'] = dados_fiscais_payload(loja)
+    dados['fiscal'] = dados_fiscais_payload(loja, detalhe=True)
     if not membro.pode('gerir_dados_fiscais'):
         dados['fiscal']['nif'] = ''
     return Response(dados)
@@ -248,7 +248,7 @@ def loja_dados_fiscais(request, loja_id):
     if erros:
         return Response(erros, status=status.HTTP_400_BAD_REQUEST)
     aplicar_dados_fiscais(loja, fiscais, request.user)
-    return Response(dados_fiscais_payload(loja))
+    return Response(dados_fiscais_payload(loja, detalhe=True))
 
 
 @api_view(['PUT', 'PATCH'])

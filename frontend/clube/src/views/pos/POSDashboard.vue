@@ -318,7 +318,7 @@
           </button>
         </header>
 
-        <form class="max-h-[65vh] space-y-5 overflow-y-auto p-5 sm:max-h-none" @submit.prevent="guardarConfiguracao">
+        <form class="max-h-[65vh] space-y-5 overflow-y-auto p-5 sm:max-h-[calc(100vh-14rem)]" @submit.prevent="guardarConfiguracao">
           <div
             v-if="configError"
             class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
@@ -347,6 +347,7 @@
             <label class="mb-2 block text-sm font-black text-slate-700">Loja Bendi</label>
             <select
               v-model="configForm.loja_id"
+              data-teste="config-loja"
               class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
             >
               <option value="">Sem loja vinculada</option>
@@ -354,6 +355,10 @@
                 {{ loja.nome }}
               </option>
             </select>
+            <p v-if="configForm.modo === 'standalone' && lojaVinculada" data-teste="config-aviso-standalone" class="mt-2 text-xs font-semibold leading-5 text-amber-700">
+              Em standalone o POS desliga-se de {{ lojaVinculada.nome }} e passa a usar só os seus produtos.
+              Se estava incluído no plano Loja + POS da loja, passa a ter o seu próprio plano.
+            </p>
           </div>
 
           <div>
@@ -608,6 +613,13 @@ export default {
   watch: {
     activeTab(aba) {
       try { localStorage.setItem('pos_aba', aba) } catch { /* sem storage */ }
+    },
+    // standalone = sem loja: escolher uma loja passa a integrado; escolher standalone tira a loja
+    'configForm.loja_id'(id) {
+      if (id && this.configForm.modo === 'standalone') this.configForm.modo = 'integrado'
+    },
+    'configForm.modo'(modo) {
+      if (modo === 'standalone') this.configForm.loja_id = ''
     },
   },
 
@@ -875,7 +887,8 @@ export default {
       this.savingConfig = true
 
       try {
-        if (this.configForm.loja_id) {
+        // standalone = sem loja: mesmo com uma loja escolhida, desliga-a
+        if (this.configForm.modo !== 'standalone' && this.configForm.loja_id) {
           const { data } = await api.post(`/api/pos/${this.posId}/conectar-loja/`, {
             loja_id: this.configForm.loja_id,
             modo:    this.configForm.modo

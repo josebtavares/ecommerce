@@ -44,12 +44,13 @@ def validar_dados_fiscais(data):
     return {'nif': nif, 'regime_fiscal': regime}, {}
 
 
-def aplicar_dados_fiscais(obj, dados, user=None):
-    """Grava NIF/regime na Loja ou ConfiguracaoPOS; a data da declaração é a deste momento. Fica no histórico."""
+def aplicar_dados_fiscais(obj, dados, user=None, aceites_em=None):
+    """Grava NIF/regime na Loja ou ConfiguracaoPOS; a data da declaração é a deste momento (ou a da loja, num
+    POS que segue a loja). Fica no histórico. Numa loja, os POS ligados que seguem a loja acompanham."""
     from ..models import HistoricoDadosFiscais
     obj.nif = dados['nif']
     obj.regime_fiscal = dados['regime_fiscal']
-    obj.dados_fiscais_aceites_em = timezone.now()
+    obj.dados_fiscais_aceites_em = aceites_em or timezone.now()
     with transaction.atomic():
         obj.save(update_fields=['nif', 'regime_fiscal', 'dados_fiscais_aceites_em'])
         e_loja = obj._meta.model_name == 'loja'
@@ -57,6 +58,41 @@ def aplicar_dados_fiscais(obj, dados, user=None):
             loja=obj if e_loja else None, pos=None if e_loja else obj, nome=obj.nome[:200],
             nif=obj.nif, regime_fiscal=obj.regime_fiscal, aceites_em=obj.dados_fiscais_aceites_em,
             alterado_por=user if getattr(user, 'is_authenticated', False) else None)
+        if e_loja:
+            for pos in obj.pos_vinculados.filter(fiscal_da_loja=True):
+                copiar_da_loja(pos, user)
+
+
+def _completos(obj):
+    return bool(obj and obj.nif and obj.regime_fiscal and obj.dados_fiscais_aceites_em)
+
+
+def pos_segue_loja(pos):
+    return bool(pos.fiscal_da_loja and pos.loja_vinculada_id)
+
+
+def copiar_da_loja(pos, user=None):
+    """POS que segue a loja: copia o NIF/regime dela (se os tiver e forem diferentes dos do POS)."""
+    loja = pos.loja_vinculada
+    if not _completos(loja):
+        return
+    if (pos.nif, pos.regime_fiscal, pos.dados_fiscais_aceites_em) == (loja.nif, loja.regime_fiscal, loja.dados_fiscais_aceites_em):
+        return
+    aplicar_dados_fiscais(pos, {'nif': loja.nif, 'regime_fiscal': loja.regime_fiscal}, user,
+                          aceites_em=loja.dados_fiscais_aceites_em)
+
+
+def ao_ligar_loja(pos, user=None):
+    """Depois de ligar o POS a uma loja: sem dados próprios (ou com o mesmo NIF) passa a seguir a loja.
+    Com outro NIF fica com o seu — o dono pode mudar na configuração."""
+    loja = pos.loja_vinculada
+    if not loja:
+        return
+    if not pos.fiscal_da_loja and (not pos.nif or pos.nif == loja.nif):
+        pos.fiscal_da_loja = True
+        pos.save(update_fields=['fiscal_da_loja'])
+    if pos.fiscal_da_loja:
+        copiar_da_loja(pos, user)
 
 
 def historico_dados_fiscais(obj):
@@ -66,14 +102,25 @@ def historico_dados_fiscais(obj):
              'alterado_por': _quem(h.alterado_por), 'atual': i == 0} for i, h in enumerate(qs)]
 
 
-def dados_fiscais_payload(obj):
-    """Só para o dono/backoffice — o NIF nunca vai nos dados públicos da loja."""
-    return {
+def dados_fiscais_payload(obj, detalhe=False):
+    """Só para o dono/backoffice — o NIF nunca vai nos dados públicos da loja.
+    POS: da_loja (segue a loja ligada). detalhe (configuração): POS + loja {id, nome, completos};
+    loja + nomes dos POS que a seguem."""
+    d = {
         'nif': obj.nif,
         'regime_fiscal': obj.regime_fiscal,
-        'completos': bool(obj.nif and obj.regime_fiscal and obj.dados_fiscais_aceites_em),
+        'completos': _completos(obj),
         'aceites_em': obj.dados_fiscais_aceites_em,
     }
+    e_loja = obj._meta.model_name == 'loja'
+    if not e_loja:
+        d['da_loja'] = pos_segue_loja(obj)
+    if detalhe and e_loja:
+        d['pos_seguem'] = list(obj.pos_vinculados.filter(fiscal_da_loja=True).values_list('nome', flat=True))
+    elif detalhe:
+        loja = obj.loja_vinculada
+        d['loja'] = {'id': loja.id, 'nome': loja.nome, 'completos': _completos(loja)} if loja else None
+    return d
 
 
 def fatura_resumo(obj, request=None):
