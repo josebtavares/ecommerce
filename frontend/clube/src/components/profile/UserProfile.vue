@@ -298,12 +298,21 @@
                       <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Fatura</span>
                       <span v-if="detalhesEncomenda[enc.id].fatura" class="flex items-center gap-2">
                         <span class="font-semibold" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ detalhesEncomenda[enc.id].fatura.numero }}</span>
-                        <a v-if="detalhesEncomenda[enc.id].fatura.pdf_url" :href="detalhesEncomenda[enc.id].fatura.pdf_url"
+                        <a v-if="detalhesEncomenda[enc.id].fatura.pdf_url" :href="urlFicheiro(detalhesEncomenda[enc.id].fatura.pdf_url)"
                            target="_blank" rel="noopener" class="font-semibold text-red-500 hover:text-red-400 underline">
                           <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Descarregar
                         </a>
                       </span>
                       <span v-else :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">A loja ainda não registou a fatura</span>
+                    </div>
+                    <!-- comprovativo do pagamento (documento interno do Bende, também enviado por email) -->
+                    <div v-if="['aprovado', 'reembolsado', 'reembolsado_parcial'].includes(detalhesEncomenda[enc.id].pagamento_status)"
+                         class="flex items-center justify-between gap-2 text-xs" data-teste="comprovativo-cliente">
+                      <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Comprovativo de pagamento</span>
+                      <button type="button" @click="descarregarComprovativoEncomenda(enc.id)"
+                        class="font-semibold text-red-500 hover:text-red-400 underline">
+                        <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Descarregar
+                      </button>
                     </div>
                     <!-- chat: conversa própria desta encomenda (o condutor da entrega também a vê) -->
                     <button type="button" @click="falarSobreEncomenda(enc)"
@@ -450,6 +459,7 @@ import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { contactarLoja, contactarSuporte } from '@/services/chat'
 import { passwordValida } from '@/utils/password'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
+import { descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
 
 const props = defineProps({
   data:   { type: Object,  default: () => ({}) },

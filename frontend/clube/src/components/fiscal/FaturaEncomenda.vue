@@ -2,13 +2,18 @@
      encomenda: detalhe (EncomendaSerializer). Emite 'atualizada' com a encomenda devolvida pelo backend. -->
 <template>
   <div class="border-t border-zinc-800 pt-3" data-teste="fatura-encomenda">
-    <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Fatura</p>
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Fatura</p>
+      <!-- comprovativo do pagamento: o Bende gera-o e envia-o ao cliente; a fatura é da loja -->
+      <button v-if="pago" type="button" @click="descarregarComprovativoEncomenda(encomenda.id)" data-teste="comprovativo-loja"
+        class="text-[11px] text-zinc-400 hover:text-zinc-200 underline">Comprovativo de pagamento</button>
+    </div>
 
     <!-- já registada -->
     <div v-if="encomenda.fatura && !editar" class="flex flex-wrap items-center gap-2 text-xs">
       <span class="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">Faturada</span>
       <span class="text-zinc-200 font-semibold" data-teste="fatura-numero">{{ encomenda.fatura.numero }}</span>
-      <a v-if="encomenda.fatura.pdf_url" :href="encomenda.fatura.pdf_url" target="_blank" rel="noopener"
+      <a v-if="encomenda.fatura.pdf_url" :href="urlFicheiro(encomenda.fatura.pdf_url)" target="_blank" rel="noopener"
          class="text-red-400 hover:text-red-300 underline">Ver PDF</a>
       <span class="flex-1"></span>
       <button type="button" @click="abrirEditar" class="text-zinc-400 hover:text-zinc-200 underline">Alterar</button>
@@ -50,6 +55,7 @@
 
 <script>
 import api from '@/services/api'
+import { descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
 
 export default {
   name: 'FaturaEncomenda',
@@ -62,9 +68,12 @@ export default {
     return { editar: false, numero: '', pdf: null, aGuardar: false, erro: '' }
   },
   computed: {
+    pago () { return ['aprovado', 'reembolsado', 'reembolsado_parcial'].includes(this.encomenda.pagamento_status) },
     url () { return `/app/loja/${this.lojaId}/encomendas/${this.encomenda.id}/fatura/` },
   },
   methods: {
+    urlFicheiro,
+    descarregarComprovativoEncomenda,
     abrirEditar () {
       this.numero = this.encomenda.fatura?.numero || ''
       this.pdf = null; this.erro = ''; this.editar = true

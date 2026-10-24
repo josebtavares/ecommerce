@@ -193,10 +193,13 @@
         </template>
       </div>
 
+      <!-- comissões do Bende por mês: extrato + fatura (components/fiscal) -->
+      <ComissoesMensais :loja-id="lojaId" />
+
       <!-- Faturas (também o histórico de uma loja que voltou à comissão) -->
       <div v-if="sub || dados.faturas.length" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
-        <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Faturas</p>
-        <p v-if="!dados.faturas.length" class="text-sm text-zinc-500 px-6 pb-6">Ainda não há faturas.</p>
+        <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Mensalidades</p>
+        <p v-if="!dados.faturas.length" class="text-sm text-zinc-500 px-6 pb-6">Ainda não há mensalidades.</p>
         <div v-else class="divide-y divide-zinc-800">
           <div v-for="f in dados.faturas" :key="f.id" class="px-6 py-4 flex flex-wrap items-center gap-3">
             <div class="flex-1 min-w-[200px]">
@@ -215,6 +218,13 @@
               class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold">
               <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Comprovativo
             </button>
+            <!-- fatura legal do Bende (e-Fatura), registada pelo admin -->
+            <a v-if="f.fatura" :href="f.fatura.pdf_url ? urlFicheiro(f.fatura.pdf_url) : null" target="_blank" rel="noopener"
+              :title="f.fatura.pdf_url ? 'Descarregar a fatura' : 'Fatura registada sem PDF'"
+              class="px-3 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-400 text-xs font-semibold">
+              <font-awesome-icon :icon="['fas', 'file-invoice']" class="mr-1" />Fatura {{ f.fatura.numero }}
+            </a>
+            <span v-else-if="f.estado === 'paga' && Number(f.valor) > 0" class="text-[11px] text-zinc-500">Fatura em breve</span>
             <button v-if="f.estado === 'pendente' && dados.pode_pagar" type="button" @click="pagar(f)" :disabled="aPagar === f.id"
               class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold">
               {{ aPagar === f.id ? 'A pagar…' : 'Pagar ' + euros(f.valor) }}
@@ -233,10 +243,12 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
-import { gerarReciboSubscricao } from '@/utils/reciboSubscricao'
+import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
+import ComissoesMensais from '@/components/fiscal/ComissoesMensais.vue'
 
 export default {
   name: 'BackofficeSubscricao',
+  components: { ComissoesMensais },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['alterado'],
 
@@ -339,7 +351,8 @@ export default {
         this.aPagar = null
       }
     },
-    recibo (f) { gerarReciboSubscricao(f) },
+    recibo (f) { descarregarComprovativoSubscricao(f) },
+    urlFicheiro,
     diaSeguinte (s) { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) },
 
     // trocas (POST /subscricao/mudar/) — as regras estão no servidor (utils/subscricoes.py)
