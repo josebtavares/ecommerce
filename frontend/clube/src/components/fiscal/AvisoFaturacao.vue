@@ -13,7 +13,7 @@
         <p class="text-xs opacity-80 mt-0.5">
           Tens de emitir uma fatura de cada venda no e-Fatura. O Bende ainda não emite faturas automaticamente:
           podes usar o <a :href="emissorUrl" target="_blank" rel="noopener" class="underline font-semibold">Emissor Público</a>
-          gratuito da DNRE (efatura.cv) e registar o número da fatura em cada encomenda.
+          gratuito da DNRE (efatura.cv) e registar o número da fatura em cada venda (encomenda, marcação ou conta do POS).
         </p>
       </template>
       <template v-else>

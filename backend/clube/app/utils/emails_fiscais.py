@@ -98,6 +98,20 @@ def enviar_fatura_encomenda(enc):
         [(f'fatura-encomenda-{enc.id}.pdf', pdf)] if pdf else [])
 
 
+def enviar_fatura_marcacao(m):
+    """Marcação de um cliente com conta (as feitas ao balcão não têm email)."""
+    if not m.cliente_id:
+        return
+    user = m.cliente.user
+    pdf = _pdf_registado(m.fatura_pdf)
+    _enviar(
+        user.email, f'Fatura {m.fatura_numero} — {m.servico_nome} ({m.loja.nome})',
+        f'Olá {user.first_name or user.username},\n\n'
+        f'{m.loja.nome} emitiu a fatura {m.fatura_numero} da tua marcação #{m.id} ({m.servico_nome}).'
+        + (' Segue em anexo.' if pdf else '') + f'\n\nTambém a encontras na marcação: {_link(f"/minhas-marcacoes/{m.id}")}',
+        [(f'fatura-marcacao-{m.id}.pdf', pdf)] if pdf else [])
+
+
 def _ao_gravar_pagamento(sender, instance, **kwargs):
     if instance.status != 'aprovado':
         return
@@ -160,6 +174,14 @@ def enviar_fatura_anulada(obj, numero, motivo):
         para, assunto = user.email, f'Fatura {numero} anulada — encomenda #{obj.id} ({obj.loja.nome})'
         texto = (f'Olá {user.first_name or user.username},\n\n{obj.loja.nome} anulou a fatura {numero} da tua encomenda '
                  f'#{obj.id}. Motivo: {motivo}\n\nSe a loja emitir outra, recebes-a por email. Encomenda: {_link("/perfil")}')
+    elif nome == 'marcacao':
+        if not obj.cliente_id:
+            return
+        user = obj.cliente.user
+        para, assunto = user.email, f'Fatura {numero} anulada — {obj.servico_nome} ({obj.loja.nome})'
+        texto = (f'Olá {user.first_name or user.username},\n\n{obj.loja.nome} anulou a fatura {numero} da tua marcação '
+                 f'#{obj.id}. Motivo: {motivo}\n\nSe a loja emitir outra, recebes-a por email. '
+                 f'Marcação: {_link(f"/minhas-marcacoes/{obj.id}")}')
     elif nome == 'faturasubscricao':
         alvo = obj.alvo
         para, assunto = _dono_email(alvo), f'Fatura {numero} anulada — {obj.descricao}'

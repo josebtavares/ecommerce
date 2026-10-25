@@ -30,6 +30,17 @@
         </button>
       </div>
 
+      <!-- contas fechadas sem a fatura registada (todas, sem os filtros) -->
+      <button
+        v-if="porFaturar > 0 && filtros.fatura !== 'por_faturar'"
+        type="button"
+        @click="filtros.fatura = 'por_faturar'; carregarHistorico(true)"
+        data-teste="pos-por-faturar"
+        class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+      >
+        {{ porFaturar }} conta{{ porFaturar !== 1 ? 's' : '' }} por faturar — emite a fatura no e-Fatura e regista-a na conta. Ver →
+      </button>
+
       <!-- Erro -->
       <div
         v-if="error"
@@ -40,7 +51,7 @@
 
       <!-- Filtros -->
       <section class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div>
             <label class="mb-2 block text-sm font-black text-slate-700">Data início</label>
             <input
@@ -76,6 +87,20 @@
               <option value="dividida">Dividida</option>
             </select>
           </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-black text-slate-700">Fatura</label>
+            <select
+              v-model="filtros.fatura"
+              @change="carregarHistorico(true)"
+              data-teste="pos-filtro-fatura"
+              class="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10"
+            >
+              <option value="">Todas</option>
+              <option value="por_faturar">Por faturar</option>
+              <option value="faturada">Faturadas</option>
+            </select>
+          </div>
         </div>
       </section>
 
@@ -100,6 +125,7 @@
                 <th class="px-4 py-3 text-left text-xs font-black uppercase text-slate-500">Items</th>
                 <th class="px-4 py-3 text-left text-xs font-black uppercase text-slate-500">Pagamento</th>
                 <th class="px-4 py-3 text-right text-xs font-black uppercase text-slate-500">Total</th>
+                <th class="px-4 py-3 text-left text-xs font-black uppercase text-slate-500">Fatura</th>
                 <th class="px-4 py-3 text-center text-xs font-black uppercase text-slate-500">Ações</th>
               </tr>
             </thead>
@@ -122,6 +148,11 @@
                 </td>
                 <td class="px-4 py-3 text-right text-sm font-black text-slate-950">
                   {{ money(conta.total) }}
+                </td>
+                <td class="px-4 py-3 text-xs">
+                  <span v-if="conta.fatura" class="font-black text-emerald-700">{{ conta.fatura.numero }}</span>
+                  <span v-else-if="conta.faturavel" class="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">Por faturar</span>
+                  <span v-else class="text-slate-400">—</span>
                 </td>
                 <td class="px-4 py-3 text-center">
                   <button
@@ -156,6 +187,8 @@
               <span :class="['rounded-full px-3 py-1 text-xs font-black uppercase', getMetodoBadge(conta.metodo_pagamento)]">
                 {{ getMetodoLabel(conta.metodo_pagamento) }}
               </span>
+              <span v-if="conta.fatura" class="text-xs font-black text-emerald-700">{{ conta.fatura.numero }}</span>
+              <span v-else-if="conta.faturavel" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">Por faturar</span>
               <button
                 type="button"
                 @click="verDetalhes(conta)"
@@ -286,6 +319,19 @@
               <template v-if="contaSelecionada.desconto_por"> · desconto dado por {{ contaSelecionada.desconto_por }}</template>
             </p>
           </div>
+
+          <!-- fatura que o POS emitiu no e-Fatura (o NIF do cliente, se o pediu, está na conta) -->
+          <p v-if="contaSelecionada.nif_cliente" class="mt-4 text-sm font-bold text-slate-700">NIF do cliente: {{ contaSelecionada.nif_cliente }}</p>
+          <FaturaVenda
+            v-if="contaSelecionada.faturavel || contaSelecionada.fatura"
+            class="mt-4"
+            tema="claro"
+            teste="fatura-conta"
+            :documento="contaSelecionada"
+            :url="`/api/pos/${posId}/contas/${contaSelecionada.id}/fatura/`"
+            dica="Emite a fatura no e-Fatura e regista-a aqui."
+            @atualizada="faturaAtualizada"
+          />
         </div>
       </div>
     </div>
@@ -295,9 +341,11 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 
 export default {
   name: 'POSHistorico',
+  components: { FaturaVenda },
 
   props: {
     posId: {
@@ -323,11 +371,13 @@ export default {
       limit: 20,
       totalCount: 0,
       contaSelecionada: null,
+      porFaturar: 0,
 
       filtros: {
         dataInicio:       '',
         dataFim:          '',
-        metodoPagamento:  ''
+        metodoPagamento:  '',
+        fatura:           ''
       }
     }
   },
@@ -379,11 +429,13 @@ export default {
         if (this.filtros.dataInicio)       params.data_inicio = this.filtros.dataInicio
         if (this.filtros.dataFim)          params.data_fim    = this.filtros.dataFim
         if (this.filtros.metodoPagamento)  params.metodo      = this.filtros.metodoPagamento
+        if (this.filtros.fatura)           params.fatura      = this.filtros.fatura
 
         const { data } = await api.get(`/api/pos/${this.posId}/historico/`, { params })
 
         this.historico  = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : [])
         this.totalCount = data.count || this.historico.length
+        this.porFaturar = data.por_faturar || 0
       } catch (err) {
         this.error = err.response?.status === 404
           ? 'Endpoint de histórico não encontrado.'
@@ -395,6 +447,16 @@ export default {
 
     verDetalhes(conta) {
       this.contaSelecionada = conta
+    },
+
+    // fatura registada/substituída/anulada: atualiza a conta aberta, a linha da lista e o contador
+    faturaAtualizada(conta) {
+      const antes = this.contaSelecionada
+      this.contaSelecionada = conta
+      const i = this.historico.findIndex(c => c.id === conta.id)
+      if (i >= 0) this.historico.splice(i, 1, conta)
+      if (!antes.fatura && conta.fatura) this.porFaturar = Math.max(0, this.porFaturar - 1)
+      if (antes.fatura && !conta.fatura) this.porFaturar++
     },
 
     getMetodoBadge(metodo) {

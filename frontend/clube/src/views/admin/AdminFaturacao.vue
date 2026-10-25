@@ -61,7 +61,7 @@
               <div class="text-xs"><span class="text-zinc-500">NIF </span><span class="tabular-nums text-zinc-200">{{ v.nif || '—' }}</span></div>
               <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', regimeClasse(v)]">{{ regimeNome(v) }}</span>
               <span class="text-[11px] text-zinc-500">Declaração {{ v.aceites_em ? data(v.aceites_em) : '—' }}</span>
-              <div v-if="v.tipo === 'loja'" class="text-xs flex gap-3">
+              <div v-if="v.vendas !== undefined" class="text-xs flex gap-3" :title="v.origens ? 'Loja online, marcações e POS ligados' : ''">
                 <span class="text-zinc-400">{{ v.vendas }} vendas</span>
                 <span class="text-green-400">{{ v.faturadas }} faturadas</span>
                 <span :class="v.por_faturar ? 'text-amber-300 font-bold' : 'text-zinc-500'">{{ v.por_faturar }} por faturar</span>
@@ -75,6 +75,7 @@
                 <p class="flex-1 min-w-[180px] text-sm text-zinc-300">↳ {{ p.nome }} <span class="text-[11px] text-zinc-500">· {{ p.codigo_pos }}</span></p>
                 <span class="text-xs tabular-nums text-zinc-400">NIF {{ p.nif || '—' }}</span>
                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', regimeClasse(p)]">{{ regimeNome(p) }}</span>
+                <span v-if="p.vendas" class="text-[11px] text-zinc-500">{{ p.vendas }} vendas<template v-if="p.por_faturar"> · <span class="text-amber-300 font-bold">{{ p.por_faturar }} por faturar</span></template></span>
                 <button type="button" @click="abrirFicha('pos', p.id)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ficha</button>
               </div>
             </div>
@@ -87,7 +88,7 @@
       <!-- ═══ PESQUISAR DOCUMENTOS ═══ -->
       <template v-else-if="tab === 'pesquisa'">
         <form @submit.prevent="pesquisar(0)" class="flex flex-wrap gap-2">
-          <input v-model.trim="pq" type="search" placeholder="Nº de fatura, E-123 / S-45 / C-12-202610, nº de encomenda, NIF, loja, email do cliente…"
+          <input v-model.trim="pq" type="search" placeholder="Nº de fatura, E-123 / M-12 / V-7 / S-45 / C-12-202610, NIF, loja, email do cliente…"
             aria-label="Pesquisar documentos" data-teste="pesquisa-q"
             class="flex-1 min-w-[240px] px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-red-500" />
           <button type="submit" :disabled="pq.length < 2" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold">Pesquisar</button>
@@ -252,8 +253,10 @@ export default {
     },
     abrirResultado (r) {
       const v = r.vendedor
-      if (r.tipo === 'venda') return this.abrirFicha('loja', v.id, 'vendas', r.referencia)
-      if (r.tipo === 'anulada') return this.abrirFicha(v.tipo, v.id, r.referencia.startsWith('E-') ? 'vendas' : 'bende', r.referencia.startsWith('E-') ? r.referencia : '')
+      // vendas (E- encomenda, M- marcação, V- conta do POS): a ficha abre nas vendas, na origem certa
+      if (r.tipo === 'venda') return this.abrirFicha(v.tipo, v.id, 'vendas', r.referencia)
+      const venda = /^[EMV]-/.test(r.referencia)
+      if (r.tipo === 'anulada') return this.abrirFicha(v.tipo, v.id, venda ? 'vendas' : 'bende', venda ? r.referencia : '')
       if (r.tipo === 'mensalidade' || r.tipo === 'comissoes') return this.abrirFicha(v.tipo, v.id, 'bende')
       return this.abrirFicha(v.tipo, v.id)
     },

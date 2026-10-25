@@ -56,6 +56,7 @@ urlpatterns = [
     path('<int:pos_id>/contas/<int:conta_id>/items/<int:item_id>/status/',   views.item_status_atualizar,name='item_status_atualizar'),
     path('<int:pos_id>/contas/<int:conta_id>/fechar/',                       views.conta_fechar,         name='conta_fechar'),
     path('<int:pos_id>/contas/<int:conta_id>/cancelar/',                     views.conta_cancelar,       name='conta_cancelar'),
+    path('<int:pos_id>/contas/<int:conta_id>/fatura/',                       views.conta_fatura,         name='conta_fatura'),
 
     # ── TURNOS ────────────────────────────────────────────────────────
     path('<int:pos_id>/turnos/atual/',                   views.turno_atual,  name='turno_atual'),

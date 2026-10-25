@@ -6,7 +6,7 @@ Suporta modo standalone, integrado e híbrido.
 - hibrido: usa ProdutoPOS + produtos da loja Bendi
 """
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -456,6 +456,11 @@ class OpcaoEscolhaPOS(models.Model):
         return 'pos' if self.produto_pos_id else 'loja'
 
 
+def caminho_fatura_conta(instance, filename):
+    # nome aleatório: a fatura pode ter dados do cliente e o armazenamento serve os ficheiros por URL
+    return f'faturas/pos/{instance.pos_id}/{uuid.uuid4().hex}.pdf'
+
+
 class ContaMesa(models.Model):
     """
     Conta/pedido de uma mesa.
@@ -531,6 +536,11 @@ class ContaMesa(models.Model):
     efatura_processada = models.BooleanField(default=False)
     efatura_codigo = models.CharField(max_length=100, blank=True)
     efatura_url = models.URLField(blank=True)
+    # fatura que o POS emitiu no e-Fatura e registou no Histórico (utils/fiscal.py; o arquivo fica em HistoricoFatura)
+    fatura_numero = models.CharField(max_length=60, blank=True, default='', db_default='')
+    fatura_pdf = models.FileField(upload_to=caminho_fatura_conta, blank=True, default='', db_default='',
+                                  validators=[FileExtensionValidator(['pdf'])])
+    fatura_registada_em = models.DateTimeField(null=True, blank=True)
 
     observacoes = models.TextField(blank=True)
 

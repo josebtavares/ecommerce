@@ -11,6 +11,7 @@ urlpatterns = [
     path('admin/faturacao/vendedores/',                         v.admin_vendedores,        name='admin-faturacao-vendedores'),
     path('admin/faturacao/ficha/<str:tipo>/<int:id>/',           v.admin_ficha,             name='admin-faturacao-ficha'),
     path('admin/faturacao/loja/<int:loja_id>/vendas/',          v.admin_loja_vendas,       name='admin-faturacao-loja-vendas'),
+    path('admin/faturacao/pos/<int:pos_id>/vendas/',            v.admin_pos_vendas,        name='admin-faturacao-pos-vendas'),
     path('admin/faturacao/historico/',                          v.admin_historico,         name='admin-faturacao-historico'),
     path('admin/faturacao/pesquisa/',                           v.admin_pesquisa,          name='admin-faturacao-pesquisa'),
     path('admin/faturacao/exportar/<str:tipo>/<int:id>/',       v.admin_exportar,          name='admin-faturacao-exportar'),

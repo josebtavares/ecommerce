@@ -29,6 +29,7 @@ urlpatterns = [
     path(L + 'marcacoes/<int:marcacao_id>/',        b.marcacao_ver,           name='servicos-marcacao'),
     path(L + 'marcacoes/<int:marcacao_id>/acao/',   b.marcacao_acao,          name='servicos-marcacao-acao'),
     path(L + 'marcacoes/<int:marcacao_id>/livres/', b.livres_para_reatribuir, name='servicos-marcacao-livres'),
+    path(L + 'marcacoes/<int:marcacao_id>/fatura/', b.marcacao_fatura,        name='servicos-marcacao-fatura'),
     # etapa 3 — cliente (e a conversa, que serve os dois lados)
     path('lojas/<int:loja_id>/servicos/publico/',   c.publico,     name='servicos-publico'),
     path('lojas/<int:loja_id>/servicos/horas/',     c.horas,       name='servicos-horas'),

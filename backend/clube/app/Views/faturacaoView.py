@@ -11,11 +11,13 @@ Admin (gerir_faturacao):
   GET  /app/admin/faturacao/vendedores/?q=&tipo=&regime=&dados=&por_faturar=&de=&ate=&limit=&offset=
                                                             lojas (com os seus POS) e POS sem loja, paginados
   GET  /app/admin/faturacao/ficha/<loja|pos>/<id>/          ficha fiscal: dados + histórico, totais, documentos do Bende
-  GET  /app/admin/faturacao/loja/<id>/vendas/?de&ate&estado&q&min&max   vendas da loja com comprovativo e fatura
-  GET  /app/admin/faturacao/historico/?ref=E-1|S-1|C-1-202610           faturas registadas e anuladas do documento
+  GET  /app/admin/faturacao/loja/<id>/vendas/?origem=loja|marcacoes|pos&de&ate&estado&q&min&max
+                                                            vendas da loja (loja online, marcações ou POS ligados) com a fatura
+  GET  /app/admin/faturacao/pos/<id>/vendas/?...            contas fechadas de um POS com a fatura
+  GET  /app/admin/faturacao/historico/?ref=E-1|M-1|V-1|S-1|C-1-202610   faturas registadas e anuladas do documento
   GET  /app/admin/faturacao/pesquisa/?q=&loja=|pos=         qualquer documento, fatura, vendedor ou cliente (opcionalmente de uma loja/POS)
   GET  /app/admin/faturacao/abas/?q=&limit=&offset=&fixar=   lojas e POS sem loja para as abas, com o nº por faturar
-  GET  /app/admin/faturacao/vendas.csv?loja=&de=&ate=       vendas de uma loja com as faturas (para a DNRE)
+  GET  /app/admin/faturacao/vendas.csv?loja=|pos=&origem=&de=&ate=   vendas com as faturas (para a DNRE)
   GET  /app/admin/faturacao/bende/?de=AAAA-MM&ate=&q=&por_faturar=   o que o Bende tem de faturar, agrupado por loja (+ POS)
   GET  /app/admin/faturacao/exportar/<loja|pos>/<id>/?de=&ate=       ZIP para a DNRE (CSVs + todos os PDFs)
   POST/DELETE /app/admin/faturacao/subscricoes/<id>/fatura/            fatura do Bende de uma mensalidade
@@ -28,10 +30,10 @@ import io
 import re
 import zipfile
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from django.core.files.storage import default_storage
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -42,9 +44,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import (Comissao, CreditoComissao, Encomenda, FaturaComissoes, FaturaSubscricao, HistoricoFatura, Loja,
-                      Reembolso, UtilizadorLoja)
+                      UtilizadorLoja)
 from ..pos.models import ConfiguracaoPOS
 from ..utils import documentos, fiscal
+from ..utils import faturas_vendas as fv
 from ..utils.emails_fiscais import enviar_fatura_anulada, enviar_fatura_comissoes, enviar_fatura_subscricao
 from ..utils.subscricoes import fatura_payload, nome_alvo
 from .adminView import _exige_admin
@@ -279,14 +282,6 @@ def _por_faturar(prefixo='encomendas__'):
     return Q(**{f'{prefixo}status__in': fiscal.ESTADOS_FATURAVEIS, f'{prefixo}fatura_registada_em__isnull': True})
 
 
-def _valor_vendas(qs):
-    """Soma do que os clientes pagaram (valor_devido: sem os artigos esgotados abatidos antes de pagar)."""
-    total = qs.aggregate(t=Sum('valor_total'))['t'] or Decimal('0')
-    abatido = (Reembolso.objects.filter(encomenda__in=qs.values('id'), estado='reembolsado', metodo='abatido')
-               .aggregate(t=Sum('valor_aprovado'))['t'] or Decimal('0'))
-    return total - abatido
-
-
 def _contar(qs, campo):
     n = {}
     for v in qs.values_list(campo, flat=True):
@@ -337,14 +332,20 @@ def admin_vendedores(request):
         poss = poss.filter(_incompletos())
     elif dados == 'completos':
         lojas, poss = lojas.exclude(_incompletos()), poss.exclude(_incompletos())
+    # marcações e contas dos POS (as dos POS ligados contam também na loja)
+    marc = fv.contagens('marcacoes', 'loja_id', de=de, ate=ate)
+    pos_loja = fv.contagens('pos', 'pos__loja_vinculada_id', de=de, ate=ate)
+    pos_cont = fv.contagens('pos', 'pos_id', de=de, ate=ate)
     if por_faturar:
-        lojas = lojas.filter(n_por_faturar__gt=0)
+        outras = [i for d in (marc, pos_loja) for i, c in d.items() if i and c['por_faturar']]
+        lojas = lojas.filter(Q(n_por_faturar__gt=0) | Q(id__in=outras))
+        poss = poss.filter(id__in=[i for i, c in pos_cont.items() if c['por_faturar']])
 
     if tipo == 'pos':                       # todos os POS (cada um diz a loja a que pertence)
         chaves = [(n.lower(), 'pos', i) for i, n in poss.values_list('id', 'nome')]
     else:                                   # lojas (com os seus POS) + POS sem loja
         chaves = [(n.lower(), 'loja', i) for i, n in lojas.values_list('id', 'nome')]
-        if tipo != 'loja' and not por_faturar:
+        if tipo != 'loja':
             chaves += [(n.lower(), 'pos', i) for i, n in
                        poss.filter(loja_vinculada__isnull=True).values_list('id', 'nome')]
     chaves.sort()
@@ -354,19 +355,22 @@ def admin_vendedores(request):
     ids_p = [i for _, t, i in pagina if t == 'pos']
     lojas_pg = {l.id: l for l in lojas.filter(id__in=ids_l).select_related('dono__user')}
     pos_pg = {p.id: p for p in ConfiguracaoPOS.objects.filter(id__in=ids_p).select_related('dono__user', 'loja_vinculada')}
+    nada = {'vendas': 0, 'faturadas': 0, 'por_faturar': 0}
     pos_das_lojas = {}
     for p in (ConfiguracaoPOS.objects.filter(loja_vinculada_id__in=ids_l, ativo=True)
               .select_related('dono__user', 'loja_vinculada').order_by('nome')):
-        pos_das_lojas.setdefault(p.loja_vinculada_id, []).append(_vendedor_base(p, 'pos'))
+        pos_das_lojas.setdefault(p.loja_vinculada_id, []).append({**_vendedor_base(p, 'pos'), **pos_cont.get(p.id, nada)})
 
     results = []
     for _, t, i in pagina:
         if t == 'loja':
             l = lojas_pg[i]
-            results.append({**_vendedor_base(l, 'loja'), 'vendas': l.vendas, 'faturadas': l.faturadas,
-                            'por_faturar': l.n_por_faturar, 'pos': pos_das_lojas.get(i, [])})
+            origens = {'loja': {'vendas': l.vendas, 'faturadas': l.faturadas, 'por_faturar': l.n_por_faturar},
+                       'marcacoes': marc.get(i, nada), 'pos': pos_loja.get(i, nada)}
+            results.append({**_vendedor_base(l, 'loja'), **fv.somar(*({0: o} for o in origens.values()))[0],
+                            'origens': origens, 'pos': pos_das_lojas.get(i, [])})
         else:
-            results.append(_vendedor_base(pos_pg[i], 'pos'))
+            results.append({**_vendedor_base(pos_pg[i], 'pos'), **pos_cont.get(i, nada)})
     return Response({'count': total, 'results': results})
 
 
@@ -409,7 +413,8 @@ def _comissoes_por_faturar():
 def admin_abas(request):
     """
     Abas da Faturação: lojas (com os seus POS) e POS sem loja, com o nº de documentos por faturar
-    (vendas da loja + mensalidades pagas e comissões mensais sem fatura do Bende). Pendentes primeiro, depois por nome.
+    (vendas da loja, marcações e contas dos POS + mensalidades pagas e comissões mensais sem fatura do Bende).
+    Pendentes primeiro, depois por nome.
     ?q= nome, NIF ou código do POS  ?limit=&offset=  ?fixar=loja-12
     """
     erro = _exige_admin(request, 'gerir_faturacao')
@@ -432,9 +437,14 @@ def admin_abas(request):
     for loja_id, n in _comissoes_por_faturar().items():
         bende[('loja', loja_id)] = bende.get(('loja', loja_id), 0) + n
 
-    itens = [{'tipo': 'loja', 'id': i, 'nome': nome, 'vendas_por_faturar': v, 'bende_por_faturar': bende.get(('loja', i), 0)}
+    # marcações e contas dos POS por faturar (as de um POS ligado contam na loja)
+    outras = fv.somar(fv.contagens('marcacoes', 'loja_id'), fv.contagens('pos', 'pos__loja_vinculada_id'))
+    pos_pf = fv.contagens('pos', 'pos_id', pos__loja_vinculada__isnull=True)
+    itens = [{'tipo': 'loja', 'id': i, 'nome': nome, 'bende_por_faturar': bende.get(('loja', i), 0),
+              'vendas_por_faturar': v + outras.get(i, {}).get('por_faturar', 0)}
              for i, nome, v in lojas.values_list('id', 'nome', 'vendas_por_faturar')]
-    itens += [{'tipo': 'pos', 'id': i, 'nome': nome, 'codigo_pos': c, 'vendas_por_faturar': 0, 'bende_por_faturar': bende.get(('pos', i), 0)}
+    itens += [{'tipo': 'pos', 'id': i, 'nome': nome, 'codigo_pos': c, 'bende_por_faturar': bende.get(('pos', i), 0),
+               'vendas_por_faturar': pos_pf.get(i, {}).get('por_faturar', 0)}
               for i, nome, c in poss.values_list('id', 'nome', 'codigo_pos')]
     for i in itens:
         i['contador'] = i['por_faturar'] = i['vendas_por_faturar'] + i['bende_por_faturar']
@@ -453,6 +463,23 @@ def _mensalidades(alvo, request):
              'anuladas': anul.get(f.id, 0)} for f in qs]
 
 
+def _origens(obj, tipo):
+    """Totais da ficha por origem: loja → loja online (sempre) + marcações e POS ligados (quando há); POS → as contas."""
+    out = []
+    for origem in (('loja', 'marcacoes', 'pos') if tipo == 'loja' else ('pos',)):
+        qs = fv.vendas(origem, **({'pos': obj} if tipo == 'pos' else {'loja': obj}))
+        n = qs.count()
+        if not n and tipo == 'loja' and origem != 'loja':
+            continue
+        h_tipo, campo = fv.HISTORICO[origem]
+        anul = HistoricoFatura.objects.filter(tipo=h_tipo, anulada_em__isnull=False, **{f'{campo}__in': qs.values('id')})
+        out.append({'origem': origem, 'nome': fv.NOMES[origem], 'vendas': n,
+                    'faturadas': qs.filter(fatura_registada_em__isnull=False).count(),
+                    'por_faturar': qs.filter(fv.q_por_faturar(origem)).count(),
+                    'anuladas': anul.count(), 'valor': str(fv.valor(origem, qs))})
+    return out
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_ficha(request, tipo, id):
@@ -462,17 +489,12 @@ def admin_ficha(request, tipo, id):
         return erro
     if tipo == 'loja':
         obj = get_object_or_404(Loja.objects.select_related('dono__user'), id=id)
-        enc = Encomenda.objects.filter(_vendas_filtro(None, None, ''), loja=obj)
-        n, fat, pf = enc.count(), enc.filter(fatura_registada_em__isnull=False).count(), enc.filter(_por_faturar('')).count()
         anul_com = {f'{m:%Y-%m}': c for m, c in _contar(
             HistoricoFatura.objects.filter(tipo='comissoes', loja=obj, anulada_em__isnull=False), 'mes').items()}
         dados = {
             **_vendedor_base(obj, 'loja'),
             'pos': [_vendedor_base(p, 'pos') for p in
                     obj.pos_vinculados.filter(ativo=True).select_related('dono__user', 'loja_vinculada')],
-            'totais': {'vendas': n, 'faturadas': fat, 'por_faturar': pf,
-                       'anuladas': HistoricoFatura.objects.filter(tipo='encomenda', loja=obj, anulada_em__isnull=False).count(),
-                       'valor': str(_valor_vendas(enc))},
             'comissoes': [{**m, 'referencia': f"C-{obj.id}-{m['mes'].replace('-', '')}", 'anuladas': anul_com.get(m['mes'], 0)}
                           for m in _comissoes_por_mes(obj)],
         }
@@ -481,73 +503,75 @@ def admin_ficha(request, tipo, id):
         dados = {**_vendedor_base(obj, 'pos'), 'comissoes': []}
     else:
         return Response({'detail': 'Tipo inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    dados['origens'] = _origens(obj, tipo)
+    dados['totais'] = {k: sum(o[k] for o in dados['origens']) for k in ('vendas', 'faturadas', 'por_faturar', 'anuladas')}
+    dados['totais']['valor'] = str(sum(Decimal(o['valor']) for o in dados['origens']))
     dados['historico_fiscal'] = fiscal.historico_dados_fiscais(obj)
     dados['mensalidades'] = _mensalidades(obj, request)
     return Response(dados)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def admin_loja_vendas(request, loja_id):
+def _lista_vendas(request, origem, loja=None, pos=None):
     """
-    Vendas de uma loja com comprovativo e fatura, paginadas.
-    ?de=&ate=  ?estado=faturada|por_faturar|com_anuladas  ?q= nº encomenda, nº fatura (também anuladas), cliente  ?min=&max=
+    Vendas (com comprovativo e fatura) paginadas. ?de=&ate=  ?estado=faturada|por_faturar|com_anuladas
+    ?q= nº da venda, nº fatura (também anuladas), cliente  ?min=&max=
     """
-    erro = _exige_admin(request, 'gerir_faturacao')
-    if erro:
-        return erro
-    loja = get_object_or_404(Loja, id=loja_id)
     de, ate, erro = _datas(request)
     if erro:
         return erro
-    qs = Encomenda.objects.filter(_vendas_filtro(de, ate, ''), loja=loja)
+    qs = fv.vendas(origem, loja=loja, pos=pos, de=de, ate=ate)
+    h_tipo, campo = fv.HISTORICO[origem]
     estado = request.GET.get('estado') or ''
     if estado == 'faturada':
         qs = qs.filter(fatura_registada_em__isnull=False)
     elif estado == 'por_faturar':
-        qs = qs.filter(_por_faturar(''))
+        qs = qs.filter(fv.q_por_faturar(origem))
     elif estado == 'com_anuladas':
-        qs = qs.filter(id__in=HistoricoFatura.objects.filter(loja=loja, anulada_em__isnull=False).values('encomenda_id'))
-    q = (request.GET.get('q') or '').strip().lstrip('#')
-    if q:
-        cond = (Q(fatura_numero__icontains=q) |
-                Q(id__in=HistoricoFatura.objects.filter(loja=loja, numero__icontains=q).values('encomenda_id')) |
-                Q(comprador__user__email__icontains=q) | Q(comprador__user__username__icontains=q) |
-                Q(comprador__user__first_name__icontains=q) | Q(comprador__user__last_name__icontains=q))
-        num = re.sub(r'^[eE]-', '', q)
-        if num.isdigit():
-            cond |= Q(id=int(num))
-        qs = qs.filter(cond)
-    for campo, op in (('min', 'gte'), ('max', 'lte')):
-        try:
-            if request.GET.get(campo):
-                qs = qs.filter(**{f'valor_total__{op}': Decimal(request.GET[campo].replace(',', '.'))})
-        except InvalidOperation:
-            return Response({'detail': 'Valor inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+        qs = qs.filter(id__in=HistoricoFatura.objects.filter(tipo=h_tipo, anulada_em__isnull=False).values(campo))
+    qs = fv.filtrar(origem, qs, request.GET.get('q'))
+    qs, msg = fv.filtrar_valor(origem, qs, request.GET.get('min'), request.GET.get('max'))
+    if msg:
+        return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
     totais = qs.aggregate(n=Count('id'), faturadas=Count('id', filter=Q(fatura_registada_em__isnull=False)),
-                          por_faturar=Count('id', filter=_por_faturar('')))
-    pagina, total = _paginar(request, qs.select_related('comprador__user', 'pagamento').order_by('-data_criacao'))
+                          por_faturar=Count('id', filter=fv.q_por_faturar(origem)))
+    pagina, total = _paginar(request, fv.com_relacoes(origem, qs).order_by(f'-{fv.CAMPO_DATA[origem]}', '-id'))
     pagina = list(pagina)
-    anul = _contar(HistoricoFatura.objects.filter(encomenda__in=[e.id for e in pagina], anulada_em__isnull=False), 'encomenda_id')
-    results = []
-    for e in pagina:
-        u = e.comprador.user
-        pag = getattr(e, 'pagamento', None)
-        results.append({'id': e.id, 'referencia': f'E-{e.id}', 'data': e.data_criacao,
-                        'cliente': {'nome': u.get_full_name() or u.username, 'email': u.email},
-                        'valor': str(e.valor_devido), 'status': e.status, 'status_nome': e.get_status_display(),
-                        'comprovativo': bool(pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial')),
-                        'fatura': fiscal.fatura_resumo(e, request), 'anuladas': anul.get(e.id, 0)})
-    return Response({'count': total, 'results': results,
-                     'totais': {'vendas': totais['n'], 'valor': str(_valor_vendas(qs)),
+    anul = fv.anuladas_por(origem, [o.id for o in pagina])
+    return Response({'count': total, 'origem': origem,
+                     'results': [fv.linha(origem, o, request, anul.get(o.id, 0)) for o in pagina],
+                     'totais': {'vendas': totais['n'], 'valor': str(fv.valor(origem, qs)),
                                 'faturadas': totais['faturadas'], 'por_faturar': totais['por_faturar']}})
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def admin_loja_vendas(request, loja_id):
+    """Vendas de uma loja: ?origem=loja (loja online, por omissão) | marcacoes | pos (contas dos POS ligados)."""
+    erro = _exige_admin(request, 'gerir_faturacao')
+    if erro:
+        return erro
+    loja = get_object_or_404(Loja, id=loja_id)
+    origem = request.GET.get('origem') or 'loja'
+    if origem not in fv.ORIGENS:
+        return Response({'detail': 'Origem inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+    return _lista_vendas(request, origem, loja=loja)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_pos_vendas(request, pos_id):
+    """Contas fechadas de um POS com a fatura (os mesmos filtros das vendas da loja)."""
+    erro = _exige_admin(request, 'gerir_faturacao')
+    if erro:
+        return erro
+    return _lista_vendas(request, 'pos', pos=get_object_or_404(ConfiguracaoPOS, id=pos_id))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def admin_historico(request):
-    """?ref=E-<id> | S-<id> | C-<loja>-<AAAAMM> → todas as faturas registadas nesse documento (em vigor e anuladas)."""
+    """?ref=E-<id> | M-<id> | V-<id> | S-<id> | C-<loja>-<AAAAMM> → todas as faturas registadas nesse documento (em vigor e anuladas)."""
     erro = _exige_admin(request, 'gerir_faturacao')
     if erro:
         return erro
@@ -556,12 +580,18 @@ def admin_historico(request):
                      'itens': fiscal.historico_payload(HistoricoFatura.objects.filter(referencia=ref), request)})
 
 
-def _res_venda(e, request):
-    u = e.comprador.user
-    return {'tipo': 'venda', 'referencia': f'E-{e.id}', 'titulo': f'Encomenda #{e.id}',
-            'detalhe': f'{u.get_full_name() or u.username} · {e.get_status_display()}',
-            'data': e.data_criacao, 'valor': str(e.valor_total), 'fatura': fiscal.fatura_resumo(e, request),
-            'vendedor': {'tipo': 'loja', 'id': e.loja_id, 'nome': e.loja.nome}}
+def _res_venda(e, request, origem='loja'):
+    """Encomenda, marcação ou conta do POS (a de um POS ligado abre na loja)."""
+    l = fv.linha(origem, e, request)
+    if origem == 'pos':
+        p = e.pos
+        vend = ({'tipo': 'loja', 'id': p.loja_vinculada_id, 'nome': p.loja_vinculada.nome} if p.loja_vinculada_id
+                else {'tipo': 'pos', 'id': p.id, 'nome': p.nome})
+    else:
+        vend = {'tipo': 'loja', 'id': e.loja_id, 'nome': e.loja.nome}
+    detalhe = f"{l['cliente']['nome']} · {l['status_nome']}" + (f' · {e.pos.nome}' if origem == 'pos' else '')
+    return {'tipo': 'venda', 'origem': origem, 'referencia': l['referencia'], 'titulo': l['titulo'], 'detalhe': detalhe,
+            'data': l['data'], 'valor': l['valor'], 'fatura': l['fatura'], 'vendedor': vend}
 
 
 def _res_mensalidade(f, request):
@@ -586,8 +616,8 @@ def _res_comissoes(loja, mes, request):
 def admin_pesquisa(request):
     """
     Pesquisa em todos os documentos de todas as lojas/POS (ou só de uma: ?loja=<id> inclui os seus POS, ?pos=<id>):
-    E-123 / #123 / 123 (encomenda), S-45 (mensalidade), C-12-202610 (comissões), nº de fatura (em vigor ou anulada),
-    NIF, nome ou código de loja/POS, email ou nome do cliente.
+    E-123 / #123 / 123 (encomenda), M-12 (marcação), V-7 (conta do POS), S-45 (mensalidade), C-12-202610 (comissões),
+    nº de fatura (em vigor ou anulada), NIF, nome ou código de loja/POS, email ou nome do cliente.
     """
     erro = _exige_admin(request, 'gerir_faturacao')
     if erro:
@@ -598,6 +628,8 @@ def admin_pesquisa(request):
     LIM = 100
     out = []
     enc = Encomenda.objects.select_related('loja', 'comprador__user')
+    marc = fv.base('marcacoes').select_related('loja', 'cliente__user')
+    contas = fv.base('pos').select_related('mesa', 'pos__loja_vinculada')
     subs = FaturaSubscricao.objects.select_related('loja', 'pos', 'plano')
     fcs = FaturaComissoes.objects.select_related('loja')
     hist = HistoricoFatura.objects.filter(anulada_em__isnull=False)
@@ -607,13 +639,16 @@ def admin_pesquisa(request):
     pos_id = _int(request.GET.get('pos'), None)
     if loja_id:             # só esta loja e os seus POS
         enc = enc.filter(loja_id=loja_id)
+        marc = marc.filter(loja_id=loja_id)
+        contas = contas.filter(pos__loja_vinculada_id=loja_id)
         subs = subs.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
         fcs = fcs.filter(loja_id=loja_id)
         hist = hist.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
         lojas = lojas.none()
         poss = poss.filter(loja_vinculada_id=loja_id)
     elif pos_id:            # só este POS (mensalidades)
-        enc, fcs, lojas = enc.none(), fcs.none(), lojas.none()
+        enc, marc, fcs, lojas = enc.none(), marc.none(), fcs.none(), lojas.none()
+        contas = contas.filter(pos_id=pos_id)
         subs = subs.filter(pos_id=pos_id)
         hist = hist.filter(pos_id=pos_id)
         poss = poss.filter(id=pos_id)
@@ -622,6 +657,12 @@ def admin_pesquisa(request):
     m = re.fullmatch(r'(?i)(?:e-?|#)?(\d{1,9})', q)
     if m:
         out += [_res_venda(e, request) for e in enc.filter(id=int(m.group(1)))]
+    m = re.fullmatch(r'(?i)m-?(\d{1,9})', q)
+    if m:
+        out += [_res_venda(x, request, 'marcacoes') for x in marc.filter(id=int(m.group(1)))]
+    m = re.fullmatch(r'(?i)v-?(\d{1,9})', q)
+    if m:
+        out += [_res_venda(x, request, 'pos') for x in contas.filter(id=int(m.group(1)))]
     m = re.fullmatch(r'(?i)s-?(\d{1,9})', q)
     if m:
         out += [_res_mensalidade(f, request) for f in subs.filter(id=int(m.group(1)))]
@@ -633,6 +674,8 @@ def admin_pesquisa(request):
 
     # nº de fatura em vigor
     out += [_res_venda(e, request) for e in enc.filter(fatura_numero__icontains=q)[:LIM]]
+    out += [_res_venda(x, request, 'marcacoes') for x in marc.filter(fatura_numero__icontains=q)[:LIM]]
+    out += [_res_venda(x, request, 'pos') for x in contas.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_mensalidade(f, request) for f in subs.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_comissoes(fc.loja, fc.mes, request)
             for fc in fcs.filter(fatura_numero__icontains=q)[:LIM]]
@@ -659,6 +702,10 @@ def admin_pesquisa(request):
                Q(comprador__user__last_name__icontains=q) | Q(comprador__user__username__iexact=q))
         out += [_res_venda(e, request) for e in
                 enc.filter(cli, status__in=fiscal.ESTADOS_FATURAVEIS).order_by('-data_criacao')[:LIM]]
+        cli_m = (Q(cliente_nome__icontains=q) | Q(cliente__user__email__icontains=q) |
+                 Q(cliente__user__first_name__icontains=q) | Q(cliente__user__last_name__icontains=q))
+        out += [_res_venda(x, request, 'marcacoes') for x in
+                marc.filter(cli_m, fv.q_faturavel('marcacoes')).order_by('-inicio')[:LIM]]
 
     vistos, unicos = set(), []
     for r in out:
@@ -682,30 +729,43 @@ def _quando(dt, fmt='%d/%m/%Y %H:%M'):
     return f'{timezone.localtime(dt):{fmt}}' if dt else ''
 
 
-def _vendas_qs(loja, de, ate):
-    qs = Encomenda.objects.filter(_vendas_filtro(de, ate, ''), loja=loja)
-    return qs.select_related('comprador__user', 'pagamento').order_by('data_criacao')
+def _vendas_qs(origem, de, ate, loja=None, pos=None):
+    qs = fv.vendas(origem, loja=loja, pos=pos, de=de, ate=ate)
+    return fv.com_relacoes(origem, qs).order_by(fv.CAMPO_DATA[origem], 'id')
 
 
-def _linhas_vendas(loja, qs, de, ate, request):
+# 1.ª e 2.ª colunas e a do cliente, por origem (as outras são iguais)
+COLUNAS_CSV = {
+    'loja': ['Encomenda', 'Comprovativo', 'Data', 'Cliente', 'Email do cliente'],
+    'marcacoes': ['Marcação', 'Referência', 'Dia do serviço', 'Cliente', 'Email ou telefone do cliente'],
+    'pos': ['Conta', 'Referência', 'Fechada em', 'Cliente', 'Atendente'],
+}
+
+
+def _linhas_vendas(alvo, qs, de, ate, request, origem='loja'):
+    h_tipo, campo = fv.HISTORICO[origem]
     anuladas = {}
-    for h in HistoricoFatura.objects.filter(encomenda__in=qs, anulada_em__isnull=False).order_by('anulada_em'):
-        anuladas.setdefault(h.encomenda_id, []).append(f'{h.numero} ({h.motivo})')
+    for h in HistoricoFatura.objects.filter(tipo=h_tipo, anulada_em__isnull=False,
+                                            **{f'{campo}__in': qs.values('id')}).order_by('anulada_em'):
+        anuladas.setdefault(getattr(h, campo), []).append(f'{h.numero} ({h.motivo})')
     periodo = f'Período: {de:%d/%m/%Y} a {ate:%d/%m/%Y}' if de and ate else 'Período: desde sempre'
+    e_loja = alvo._meta.model_name == 'loja'
     linhas = [
-        [f'Loja: {loja.nome}', f'NIF: {loja.nif or "—"}', f'Regime: {loja.get_regime_fiscal_display() or "—"}',
-         f'Declaração aceite: {_quando(loja.dados_fiscais_aceites_em)}' if loja.dados_fiscais_aceites_em else 'Declaração: por aceitar',
-         periodo],
-        ['Encomenda', 'Comprovativo', 'Data', 'Cliente', 'Email do cliente', 'Valor (CVE)', 'Estado',
-         'Fatura nº', 'Fatura registada em', 'PDF da fatura', 'Faturas anuladas (motivo)'],
+        [f'{"Loja" if e_loja else "POS"}: {alvo.nome}', f'NIF: {alvo.nif or "—"}', f'Regime: {alvo.get_regime_fiscal_display() or "—"}',
+         f'Declaração aceite: {_quando(alvo.dados_fiscais_aceites_em)}' if alvo.dados_fiscais_aceites_em else 'Declaração: por aceitar',
+         periodo] + ([] if origem == 'loja' else [f'Vendas: {fv.NOMES[origem]}']),
+        COLUNAS_CSV[origem] + ['Valor (CVE)', 'Estado', 'Fatura nº', 'Fatura registada em', 'PDF da fatura',
+                               'Faturas anuladas (motivo)'] + (['POS'] if origem == 'pos' else []),
     ]
-    for e in qs:
-        fat = fiscal.fatura_resumo(e, request)
-        u = e.comprador.user
-        linhas.append([e.id, f'E-{e.id}', _quando(e.data_criacao), u.get_full_name() or u.username, u.email,
-                       f'{e.valor_devido:.2f}'.replace('.', ','), e.get_status_display(), fat['numero'] if fat else '',
-                       _quando(fat['registada_em'], '%d/%m/%Y') if fat else '', (fat or {}).get('pdf_url') or '',
-                       ' | '.join(anuladas.get(e.id, []))])
+    for o in qs:
+        fat = fiscal.fatura_resumo(o, request)
+        cli = fv.cliente(origem, o)
+        contacto = (o.atendente_nome or '') if origem == 'pos' else cli['email']
+        linhas.append([o.id, fv.referencia(origem, o), _quando(getattr(o, fv.CAMPO_DATA[origem])), cli['nome'], contacto,
+                       f'{fv.valor_de(origem, o):.2f}'.replace('.', ','), fv.estado_nome(origem, o),
+                       fat['numero'] if fat else '', _quando(fat['registada_em'], '%d/%m/%Y') if fat else '',
+                       (fat or {}).get('pdf_url') or '', ' | '.join(anuladas.get(o.id, []))]
+                      + ([o.pos.nome] if origem == 'pos' else []))
     return linhas
 
 
@@ -716,12 +776,21 @@ def admin_vendas_csv(request):
     if erro:
         return erro
     de, ate = _periodo(request)
-    loja = get_object_or_404(Loja, id=request.GET.get('loja') or 0)
+    origem = request.GET.get('origem') or 'loja'
+    if request.GET.get('pos'):
+        alvo, origem = get_object_or_404(ConfiguracaoPOS, id=request.GET['pos'] if request.GET['pos'].isdigit() else 0), 'pos'
+        filtro = {'pos': alvo}
+    else:
+        alvo = get_object_or_404(Loja, id=request.GET.get('loja') if (request.GET.get('loja') or '').isdigit() else 0)
+        filtro = {'loja': alvo}
     if not de:
         return Response({'detail': 'Datas inválidas.'}, status=status.HTTP_400_BAD_REQUEST)
-    r = HttpResponse(_csv(_linhas_vendas(loja, _vendas_qs(loja, de, ate), de, ate, request)),
+    if origem not in fv.ORIGENS:
+        return Response({'detail': 'Origem inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+    r = HttpResponse(_csv(_linhas_vendas(alvo, _vendas_qs(origem, de, ate, **filtro), de, ate, request, origem)),
                      content_type='text/csv; charset=utf-8')
-    r['Content-Disposition'] = f'attachment; filename="vendas-{loja.id}-{de}-{ate}.csv"'
+    nome = {'loja': 'vendas', 'marcacoes': 'marcacoes', 'pos': 'vendas-pos'}[origem]
+    r['Content-Disposition'] = f'attachment; filename="{nome}-{alvo.id}-{de}-{ate}.csv"'
     return r
 
 
@@ -877,8 +946,10 @@ def admin_exportar(request, tipo, id):
         obj = get_object_or_404(ConfiguracaoPOS, id=id)
     else:
         return Response({'detail': 'Tipo inválido.'}, status=status.HTTP_400_BAD_REQUEST)
-    vendas = _vendas_qs(obj, de, ate) if tipo == 'loja' else Encomenda.objects.none()
-    n = vendas.count()
+    filtro = {'loja': obj} if tipo == 'loja' else {'pos': obj}
+    grupos = [(o, _vendas_qs(o, de, ate, **filtro)) for o in (fv.ORIGENS if tipo == 'loja' else ('pos',))]
+    vendas = grupos[0][1] if tipo == 'loja' else Encomenda.objects.none()
+    n = sum(qs.count() for _, qs in grupos)
     if n > MAX_VENDAS_ZIP:
         return Response({'detail': f'O período tem {n} vendas — escolhe um período com até {MAX_VENDAS_ZIP}.'},
                         status=status.HTTP_400_BAD_REQUEST)
@@ -901,6 +972,14 @@ def admin_exportar(request, tipo, id):
                 if pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial'):
                     zf.writestr(f'{pasta}/comprovativo-E-{e.id}.pdf', documentos.pdf_comprovativo_encomenda(e))
                 _juntar_faturas(zf, pasta, e, faltas)
+        # marcações e contas dos POS (só a fatura: o Bende não gera comprovativo destas vendas)
+        for origem, qs in grupos:
+            if origem == 'loja' or (tipo == 'loja' and not qs.exists()):
+                continue
+            pasta_base = 'marcacoes' if origem == 'marcacoes' else 'vendas-pos'
+            zf.writestr(f'{pasta_base}.csv', _csv(_linhas_vendas(obj, qs, de, ate, request, origem)))
+            for o in qs:
+                _juntar_faturas(zf, f'{pasta_base}/{fv.referencia(origem, o)}', o, faltas)
 
         # documentos do Bende
         subs = (FaturaSubscricao.objects.filter(Q(loja=obj) | Q(pos__loja_vinculada=obj)) if tipo == 'loja'
@@ -941,6 +1020,8 @@ def admin_exportar(request, tipo, id):
             'dados-fiscais.csv            NIF e regime declarados ao longo do tempo (quem gravou e quando)',
             'vendas.csv                   cada venda com o nº da fatura da loja e as faturas anuladas (motivo)',
             'vendas/E-<nº>/               comprovativo de pagamento (Bende) + fatura(s) da loja (fatura-… em vigor, anulada-…)',
+            'marcacoes.csv, marcacoes/M-<nº>/     marcações (serviços) com a fatura da loja (se houver marcações)',
+            'vendas-pos.csv, vendas-pos/V-<nº>/   contas fechadas do POS (os POS ligados, numa loja) com a fatura',
             'bende/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) do Bende',
             'bende/comissoes/C-…/         extrato mensal das comissões + fatura(s) do Bende',
             '', 'Os comprovativos e extratos são documentos internos e não substituem a fatura.',

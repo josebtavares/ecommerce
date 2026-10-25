@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
@@ -50,7 +50,8 @@ except Exception:
     
 from .stock import reservar_stock, repor_stock_item, cancelar_conta, custo_de_venda
 from ..utils import conjuntos as conj
-from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_fiscais_payload, ao_ligar_loja, copiar_da_loja, _verdadeiro
+from ..utils import faturas_vendas
+from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_fiscais_payload, ao_ligar_loja, copiar_da_loja, _verdadeiro, fatura_resumo
 
 # prefetch dos componentes dos conjuntos (menus) nas listagens do POS
 PREFETCH_CONJUNTO_POS = ('componentes__produto_pos', 'componentes__variante_pos', 'componentes__produto__inventario',
@@ -484,6 +485,11 @@ def _conta_payload(conta, request=None):
         'criada_em': conta.criada_em,
         'fechada_em': conta.fechada_em,
         'fechada_por': conta.fechada_por,
+        # fatura que o POS emitiu no e-Fatura e registou aqui (Histórico); faturável = fechada com total > 0
+        'nif_cliente': conta.nif_cliente,
+        'referencia': f'V-{conta.id}',
+        'fatura': fatura_resumo(conta, request),
+        'faturavel': conta.status == 'fechada' and conta.total > 0,
     }
 
 
@@ -1759,6 +1765,11 @@ def pos_historico(request, pos_id):
         return Response({'detail': 'Datas inválidas. Usa AAAA-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
     if metodo:
         contas = contas.filter(metodo_pagamento=metodo)
+    fatura = request.query_params.get('fatura')
+    if fatura == 'por_faturar':
+        contas = contas.filter(faturas_vendas.q_por_faturar('pos'))
+    elif fatura == 'faturada':
+        contas = contas.filter(fatura_registada_em__isnull=False)
 
     contas = contas.order_by('-fechada_em')
     try:
@@ -1768,7 +1779,33 @@ def pos_historico(request, pos_id):
         offset, limit = 0, 20
     total  = contas.count()
 
-    return Response({'count': total, 'results': [_conta_payload(c, request) for c in contas[offset:offset + limit]]})
+    # contas fechadas sem fatura (todas, sem os filtros) — o aviso no topo do Histórico
+    por_faturar = ContaMesa.objects.filter(faturas_vendas.q_por_faturar('pos'), pos=pos).count()
+    return Response({'count': total, 'por_faturar': por_faturar,
+                     'results': [_conta_payload(c, request) for c in contas[offset:offset + limit]]})
+
+
+@api_view(['POST', 'DELETE'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+def conta_fatura(request, pos_id, conta_id):
+    """
+    POST   /api/pos/<pos_id>/contas/<conta_id>/fatura/   multipart: numero, pdf (opcional), motivo (ao substituir)
+    DELETE /api/pos/<pos_id>/contas/<conta_id>/fatura/   {motivo} — anula (o registo e o PDF ficam no histórico)
+    O POS emite a fatura no e-Fatura e regista-a na conta fechada. Quem vê o histórico (gerente) pode registar.
+    """
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
+    erro = _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para registar faturas.')
+    if erro:
+        return erro
+    conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
+    # o arquivo guarda o utilizador da conta principal; um membro da equipa fica sem utilizador (não tem User)
+    _, _, erro = faturas_vendas.pedido(request, conta, 'pos', utilizador.user if utilizador else None)
+    if erro:
+        return erro
+    conta = ContaMesa.objects.select_related('mesa', 'atendente').get(pk=conta.pk)
+    return Response(_conta_payload(conta, request))
 
 
 @api_view(['PATCH'])

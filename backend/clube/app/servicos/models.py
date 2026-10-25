@@ -9,11 +9,11 @@ Serviços e marcações (doc "Serviços e Marcações — Fase 1").
 """
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateTimeRangeField, RangeBoundary, RangeOperators
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Func, Q
 
-from ..models import Loja, UtilizadorLoja, Utilizador
+from ..models import Loja, UtilizadorLoja, Utilizador, caminho_fatura_encomenda
 
 
 class TsTzRange(Func):
@@ -207,6 +207,11 @@ class Marcacao(models.Model):
     lida_loja_em  = models.DateTimeField(null=True, blank=True)
     # lembretes já enviados ('vespera'…) — o worker não os repete
     avisos        = models.JSONField(default=list, blank=True)
+    # fatura que a loja emitiu no e-Fatura e registou na marcação (utils/fiscal.py; arquivo em HistoricoFatura)
+    fatura_numero = models.CharField(max_length=60, blank=True, default='', db_default='')
+    fatura_pdf    = models.FileField(upload_to=caminho_fatura_encomenda, blank=True, default='', db_default='',
+                                     validators=[FileExtensionValidator(['pdf'])])
+    fatura_registada_em = models.DateTimeField(null=True, blank=True)
     data_criacao  = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
