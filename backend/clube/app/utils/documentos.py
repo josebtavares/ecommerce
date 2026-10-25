@@ -1,6 +1,7 @@
 """
 Documentos internos em PDF (reportlab), gerados na hora — não são faturas:
 - comprovativo de pagamento de uma encomenda (cliente);
+- comprovativo de pagamento de uma marcação paga online (cliente) — as pagas no local não passam pelo Bende;
 - comprovativo de pagamento de uma mensalidade da subscrição (dono da loja/POS);
 - extrato mensal das comissões de uma loja.
 As faturas legais saem do e-Fatura e são registadas à parte (utils/fiscal.py).
@@ -171,6 +172,47 @@ def pdf_comprovativo_encomenda(enc):
         p.linha('Pago a', _data(pag.data_pagamento))
     p.linha('Total pago', formatar(enc.valor_devido), destaque=True)
     return p.fim('A fatura legal é emitida pela loja no e-Fatura e fica disponível na encomenda.')
+
+
+# ── Marcação (serviços) ────────────────────────────────────────
+
+def nome_comprovativo_marcacao(m):
+    return f'comprovativo-marcacao-{m.id}.pdf'
+
+
+def pdf_comprovativo_marcacao(m):
+    """Marcação paga online (antecipado). Gerado na hora: mostra também o que já foi devolvido."""
+    loja = m.loja
+    p = _Pdf('Comprovativo de pagamento', f'M-{m.id}', f'Marcação #{m.id} em {loja.nome}')
+    p.seccao('Vendedor')
+    p.linha('Loja', loja.nome)
+    if loja.regime_fiscal == 'atividade' and loja.nif:
+        p.linha('NIF', loja.nif)
+    p.seccao('Cliente')
+    if m.cliente_id:
+        user = m.cliente.user
+        p.linha('Nome', user.get_full_name() or user.username)
+        if user.email:
+            p.linha('Email', user.email)
+    else:
+        p.linha('Nome', m.cliente_nome or '—')
+    p.seccao('Serviço')
+    p.linha('Serviço', m.servico_nome)
+    if m.componentes:
+        p.tabela([('Inclui', 140, 'l'), ('Preço', 30, 'r')],
+                 [[c.get('nome', ''), formatar(c['preco']) if c.get('preco') is not None else ''] for c in m.componentes])
+    if m.profissional_id:
+        p.linha('Profissional', m.profissional.nome)
+    p.linha('Dia', f'{_data(m.inicio)} às {timezone.localtime(m.inicio):%H:%M}')
+    p.linha('Estado', m.get_estado_display())
+    p.linha('Preço', formatar(m.preco))
+    p.seccao('Pagamento')
+    p.linha('Pago a', _data(m.pago_em))
+    p.linha('Valor pago', formatar(m.valor_pago))
+    if m.valor_reembolsado:
+        p.linha('Devolvido', formatar(m.valor_reembolsado) + (f' ({_data(m.reembolsado_em)})' if m.reembolsado_em else ''))
+    p.linha('Total pago', formatar(m.valor_pago - m.valor_reembolsado), destaque=True)
+    return p.fim('Pagamento simulado (ambiente de testes). A fatura legal é emitida pela loja no e-Fatura e fica na marcação.')
 
 
 # ── Subscrição ─────────────────────────────────────────────────

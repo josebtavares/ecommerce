@@ -657,6 +657,8 @@ def encomenda_fatura(request, loja_id, id):
     """
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_encomendas')
+    if erro:                                    # ou quem gere a faturação (ex.: contabilista)
+        _, erro = _exige_permissao(request, loja, 'gerir_faturacao')
     if erro:
         return erro
     encomenda = get_object_or_404(Encomenda, id=id, loja=loja)

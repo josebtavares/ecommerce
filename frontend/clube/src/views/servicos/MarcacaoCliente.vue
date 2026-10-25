@@ -45,6 +45,9 @@
             <span>{{ m.pagamento === 'local' ? 'No local' : m.pago ? `Pago (${dinheiro(m.valor_pago)})` : 'Antecipado — por pagar' }}</span></div>
           <div v-if="m.pago && ativa && Number(m.falta_pagar) > 0" class="flex justify-between text-amber-500"><span>Falta pagar no local</span><span>{{ dinheiro(m.falta_pagar) }}</span></div>
           <div v-if="Number(m.valor_reembolsado) > 0" class="flex justify-between text-green-500"><span>Devolvido</span><span>{{ dinheiro(m.valor_reembolsado) }}</span></div>
+          <!-- pago online: comprovativo do Bende (também chegou por email) -->
+          <div v-if="m.pago" class="flex justify-between gap-3" data-teste="comprovativo-cliente"><span :class="suave">Comprovativo</span>
+            <button type="button" @click="comprovativo" class="text-red-500 underline text-xs font-semibold">Descarregar PDF</button></div>
           <p v-if="m.preco_final && m.preco_final_motivo" class="text-xs pt-1" :class="suave">Preço final: {{ m.preco_final_motivo }}</p>
           <p v-if="m.notas_cliente" class="text-xs pt-1" :class="suave">A tua nota: {{ m.notas_cliente }}</p>
           <!-- a fatura que a loja emitiu e registou (também chega por email) -->
@@ -108,7 +111,7 @@
 import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { urlFicheiro } from '@/utils/documentos'
+import { descarregarComprovativoMarcacao, urlFicheiro } from '@/utils/documentos'
 import { DIAS_CURTOS, diaDe, diaSemana, hojeCV, hora, rotuloDia, somarDias } from '@/utils/servicos'
 import MarcacaoConversa from '@/components/servicos/MarcacaoConversa.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
@@ -145,6 +148,9 @@ export default {
   mounted () { this.desligar = ouvirMarcacoes(d => { if ((!d || String(d.id) === String(this.$route.params.id)) && !this.aEnviar) this.carregar(true) }) },
   beforeUnmount () { this.desligar?.() },
   methods: {
+    comprovativo () {
+      descarregarComprovativoMarcacao(this.m.id).catch(() => toast.error('Não foi possível descarregar o comprovativo.'))
+    },
     diaDe, diaSemana, hora, rotuloDia, urlFicheiro,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     chip (ativo) {

@@ -4,6 +4,7 @@ from ..Views import faturacaoView as v
 # documentos internos e faturas registadas (ver app/Views/faturacaoView.py)
 urlpatterns = [
     path('encomenda/<int:id>/comprovativo/',                     v.encomenda_comprovativo,  name='encomenda-comprovativo'),
+    path('marcacao/<int:id>/comprovativo/',                      v.marcacao_comprovativo,   name='marcacao-comprovativo'),
     path('subscricao/faturas/<int:fatura_id>/comprovativo/',    v.subscricao_comprovativo, name='subscricao-comprovativo'),
     path('loja/<int:loja_id>/comissoes/meses/',                 v.loja_comissoes_meses,    name='loja-comissoes-meses'),
     path('loja/<int:loja_id>/comissoes/<str:mes>/vendas/',      v.loja_comissoes_vendas,   name='loja-comissoes-vendas'),

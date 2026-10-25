@@ -221,16 +221,30 @@ def estado_nome(origem, obj):
     return f'Paga · {obj.get_metodo_pagamento_display() or "—"}' if obj.status == 'fechada' else obj.get_status_display()
 
 
+def _faturavel_linha(origem, obj):
+    """O mesmo que q_faturavel, sem ir à base de dados (o objeto vem de base())."""
+    if origem == 'loja':
+        return obj.status in fiscal.ESTADOS_FATURAVEIS
+    return valor_de(origem, obj) > 0 and (origem == 'marcacoes' or obj.status == 'fechada')
+
+
 def linha(origem, obj, request=None, anuladas=0):
     """Uma venda nas listas do admin (e na pesquisa)."""
     d = {'id': obj.id, 'origem': origem, 'referencia': referencia(origem, obj), 'titulo': titulo(origem, obj),
          'data': getattr(obj, CAMPO_DATA[origem]), 'cliente': cliente(origem, obj),
          'valor': str(valor_de(origem, obj)), 'status': obj.estado if origem == 'marcacoes' else obj.status,
          'status_nome': estado_nome(origem, obj), 'comprovativo': False,
-         'fatura': fiscal.fatura_resumo(obj, request), 'anuladas': anuladas}
+         'fatura': fiscal.fatura_resumo(obj, request), 'anuladas': anuladas, 'faturavel': _faturavel_linha(origem, obj)}
     if origem == 'loja':
         pag = getattr(obj, 'pagamento', None)
         d['comprovativo'] = bool(pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial'))
+        d['comprovativo_url'] = f'/app/encomenda/{obj.id}/comprovativo/' if d['comprovativo'] else None
+    elif origem == 'marcacoes':
+        # só as pagas online (o pagamento passou pelo Bende)
+        d['comprovativo'] = bool(obj.pago)
+        d['comprovativo_url'] = f'/app/marcacao/{obj.id}/comprovativo/' if obj.pago else None
+    else:
+        d['comprovativo_url'] = None
     if origem == 'pos':
         d['pos'] = {'id': obj.pos_id, 'nome': obj.pos.nome}
         d['gorjeta'] = str(obj.gorjeta)

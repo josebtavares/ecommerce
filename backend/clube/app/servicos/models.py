@@ -212,6 +212,8 @@ class Marcacao(models.Model):
     fatura_pdf    = models.FileField(upload_to=caminho_fatura_encomenda, blank=True, default='', db_default='',
                                      validators=[FileExtensionValidator(['pdf'])])
     fatura_registada_em = models.DateTimeField(null=True, blank=True)
+    # comprovativo do pagamento online já enviado ao cliente por email (utils/emails_fiscais.py — uma só vez)
+    comprovativo_enviado_em = models.DateTimeField(null=True, blank=True)
     data_criacao  = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 

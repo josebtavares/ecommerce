@@ -3,6 +3,7 @@ Faturação — documentos internos (comprovativos, extrato de comissões) e as 
 
 Cliente/loja:
   GET  /app/encomenda/<id>/comprovativo/                    comprovativo da encomenda paga (PDF)
+  GET  /app/marcacao/<id>/comprovativo/                     comprovativo da marcação paga online (PDF)
   GET  /app/subscricao/faturas/<id>/comprovativo/           comprovativo da mensalidade paga (PDF)
   GET  /app/loja/<id>/comissoes/meses/?ano=&limit=&offset=  comissões por mês + fatura do Bende (paginadas)
   GET  /app/loja/<id>/comissoes/<AAAA-MM>/vendas/?q=        as vendas do mês com a comissão (paginadas)
@@ -46,6 +47,7 @@ from rest_framework.response import Response
 from ..models import (Comissao, CreditoComissao, Encomenda, FaturaComissoes, FaturaSubscricao, HistoricoFatura, Loja,
                       UtilizadorLoja)
 from ..pos.models import ConfiguracaoPOS
+from ..servicos.models import Marcacao
 from ..utils import documentos, fiscal
 from ..utils import faturas_vendas as fv
 from ..utils.emails_fiscais import enviar_fatura_anulada, enviar_fatura_comissoes, enviar_fatura_subscricao
@@ -98,6 +100,22 @@ def encomenda_comprovativo(request, id):
     if not pag or pag.status not in ('aprovado', 'reembolsado', 'reembolsado_parcial'):
         return Response({'detail': 'A encomenda ainda não está paga.'}, status=status.HTTP_400_BAD_REQUEST)
     return _pdf(documentos.pdf_comprovativo_encomenda(enc), documentos.nome_comprovativo_encomenda(enc))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def marcacao_comprovativo(request, id):
+    """O cliente, a equipa da loja (quem gere marcações ou a faturação) ou o admin (gerir_faturacao)."""
+    m = get_object_or_404(Marcacao.objects.select_related('loja', 'cliente__user', 'profissional'), id=id)
+    eh_cliente = m.cliente_id and getattr(request.user, 'utilizador', None) == m.cliente
+    membro = _membro(request, m.loja)
+    da_loja = membro and (membro.pode('gerir_marcacoes') or membro.pode('gerir_faturacao'))
+    if not eh_cliente and not da_loja and _exige_admin(request, 'gerir_faturacao'):
+        return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+    if not m.pago:
+        return Response({'detail': 'Esta marcação não foi paga online — o comprovativo é só dos pagamentos feitos no Bende.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    return _pdf(documentos.pdf_comprovativo_marcacao(m), documentos.nome_comprovativo_marcacao(m))
 
 
 @api_view(['GET'])
@@ -465,13 +483,16 @@ def _mensalidades(alvo, request):
              'anuladas': anul.get(f.id, 0)} for f in qs]
 
 
-def _origens(obj, tipo):
-    """Totais da ficha por origem: loja → loja online (sempre) + marcações e POS ligados (quando há); POS → as contas."""
+def _origens(obj, tipo, de=None, ate=None, todas=False):
+    """
+    Totais por origem: loja → loja online (sempre) + marcações e POS ligados (quando há; todas=True: sempre);
+    POS → as contas. de/ate: o período (dias).
+    """
     out = []
     for origem in (('loja', 'marcacoes', 'pos') if tipo == 'loja' else ('pos',)):
-        qs = fv.vendas(origem, **({'pos': obj} if tipo == 'pos' else {'loja': obj}))
+        qs = fv.vendas(origem, de=de, ate=ate, **({'pos': obj} if tipo == 'pos' else {'loja': obj}))
         n = qs.count()
-        if not n and tipo == 'loja' and origem != 'loja':
+        if not n and tipo == 'loja' and origem != 'loja' and not todas and not fv.vendas(origem, loja=obj).exists():
             continue
         h_tipo, campo = fv.HISTORICO[origem]
         anul = HistoricoFatura.objects.filter(tipo=h_tipo, anulada_em__isnull=False, **{f'{campo}__in': qs.values('id')})
@@ -513,14 +534,11 @@ def admin_ficha(request, tipo, id):
     return Response(dados)
 
 
-def _lista_vendas(request, origem, loja=None, pos=None):
-    """
-    Vendas (com comprovativo e fatura) paginadas. ?de=&ate=  ?estado=faturada|por_faturar|com_anuladas
-    ?q= nº da venda, nº fatura (também anuladas), cliente  ?min=&max=
-    """
+def vendas_filtradas(request, origem, loja=None, pos=None):
+    """?de=&ate= ?estado=faturada|por_faturar|com_anuladas|com_comprovativo ?q= ?min=&max= → (qs, erro)."""
     de, ate, erro = _datas(request)
     if erro:
-        return erro
+        return None, erro
     qs = fv.vendas(origem, loja=loja, pos=pos, de=de, ate=ate)
     h_tipo, campo = fv.HISTORICO[origem]
     estado = request.GET.get('estado') or ''
@@ -533,8 +551,18 @@ def _lista_vendas(request, origem, loja=None, pos=None):
     qs = fv.filtrar(origem, qs, request.GET.get('q'))
     qs, msg = fv.filtrar_valor(origem, qs, request.GET.get('min'), request.GET.get('max'))
     if msg:
-        return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+        return None, Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+    return qs, None
 
+
+def _lista_vendas(request, origem, loja=None, pos=None):
+    """
+    Vendas (com comprovativo e fatura) paginadas. ?de=&ate=  ?estado=faturada|por_faturar|com_anuladas
+    ?q= nº da venda, nº fatura (também anuladas), cliente  ?min=&max=
+    """
+    qs, erro = vendas_filtradas(request, origem, loja=loja, pos=pos)
+    if erro:
+        return erro
     totais = qs.aggregate(n=Count('id'), faturadas=Count('id', filter=Q(fatura_registada_em__isnull=False)),
                           por_faturar=Count('id', filter=fv.q_por_faturar(origem)))
     pagina, total = _paginar(request, fv.com_relacoes(origem, qs).order_by(f'-{fv.CAMPO_DATA[origem]}', '-id'))
@@ -612,20 +640,8 @@ def _res_comissoes(loja, mes, request):
             'fatura': fiscal.fatura_resumo(fc, request), 'vendedor': {'tipo': 'loja', 'id': loja.id, 'nome': loja.nome}}
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def admin_pesquisa(request):
-    """
-    Pesquisa em todos os documentos de todas as lojas/POS (ou só de uma: ?loja=<id> inclui os seus POS, ?pos=<id>):
-    E-123 / #123 / 123 (encomenda), M-12 (marcação), V-7 (conta do POS), S-45 (mensalidade), C-12-202610 (comissões),
-    nº de fatura (em vigor ou anulada), NIF, nome ou código de loja/POS, email ou nome do cliente.
-    """
-    erro = _exige_admin(request, 'gerir_faturacao')
-    if erro:
-        return erro
-    q = (request.GET.get('q') or '').strip()
-    if len(q) < 2:
-        return Response({'count': 0, 'results': []})
+def pesquisa_documentos(request, q, loja_id=None, pos_id=None):
+    """Os resultados da pesquisa (sem paginar); loja_id: só esta loja e os seus POS; pos_id: só este POS."""
     LIM = 100
     out = []
     enc = Encomenda.objects.select_related('loja', 'comprador__user')
@@ -636,8 +652,6 @@ def admin_pesquisa(request):
     hist = HistoricoFatura.objects.filter(anulada_em__isnull=False)
     lojas = Loja.objects.exclude(estado='pendente')
     poss = ConfiguracaoPOS.objects.all()
-    loja_id = _int(request.GET.get('loja'), None)
-    pos_id = _int(request.GET.get('pos'), None)
     if loja_id:             # só esta loja e os seus POS
         enc = enc.filter(loja_id=loja_id)
         marc = marc.filter(loja_id=loja_id)
@@ -716,6 +730,24 @@ def admin_pesquisa(request):
         if (r['tipo'], r['referencia']) not in vistos:
             vistos.add((r['tipo'], r['referencia']))
             unicos.append(r)
+    return unicos
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_pesquisa(request):
+    """
+    Pesquisa em todos os documentos de todas as lojas/POS (ou só de uma: ?loja=<id> inclui os seus POS, ?pos=<id>):
+    E-123 / #123 / 123 (encomenda), M-12 (marcação), V-7 (conta do POS), S-45 (mensalidade), C-12-202610 (comissões),
+    nº de fatura (em vigor ou anulada), NIF, nome ou código de loja/POS, email ou nome do cliente.
+    """
+    erro = _exige_admin(request, 'gerir_faturacao')
+    if erro:
+        return erro
+    q = (request.GET.get('q') or '').strip()
+    if len(q) < 2:
+        return Response({'count': 0, 'results': []})
+    unicos = pesquisa_documentos(request, q, _int(request.GET.get('loja'), None), _int(request.GET.get('pos'), None))
     pagina, total = _paginar(request, unicos)
     return Response({'count': total, 'results': pagina})
 
@@ -957,6 +989,11 @@ def admin_exportar(request, tipo, id):
         obj = get_object_or_404(ConfiguracaoPOS, id=id)
     else:
         return Response({'detail': 'Tipo inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    return arquivo_zip(request, obj, tipo, de, ate)
+
+
+def arquivo_zip(request, obj, tipo, de, ate):
+    """O ZIP do arquivo fiscal de uma loja/POS no período (admin e a própria loja)."""
     filtro = {'loja': obj} if tipo == 'loja' else {'pos': obj}
     grupos = [(o, _vendas_qs(o, de, ate, **filtro)) for o in (fv.ORIGENS if tipo == 'loja' else ('pos',))]
     vendas = grupos[0][1] if tipo == 'loja' else Encomenda.objects.none()
@@ -983,14 +1020,17 @@ def admin_exportar(request, tipo, id):
                 if pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial'):
                     zf.writestr(f'{pasta}/comprovativo-E-{e.id}.pdf', documentos.pdf_comprovativo_encomenda(e))
                 _juntar_faturas(zf, pasta, e, faltas)
-        # marcações e contas dos POS (só a fatura: o Bende não gera comprovativo destas vendas)
+        # marcações (comprovativo só das pagas online) e contas dos POS (só a fatura: o dinheiro não passa pelo Bende)
         for origem, qs in grupos:
             if origem == 'loja' or (tipo == 'loja' and not qs.exists()):
                 continue
             pasta_base = 'marcacoes' if origem == 'marcacoes' else 'vendas-pos'
             zf.writestr(f'{pasta_base}.csv', _csv(_linhas_vendas(obj, qs, de, ate, request, origem)))
             for o in qs:
-                _juntar_faturas(zf, f'{pasta_base}/{fv.referencia(origem, o)}', o, faltas)
+                pasta = f'{pasta_base}/{fv.referencia(origem, o)}'
+                if origem == 'marcacoes' and o.pago:
+                    zf.writestr(f'{pasta}/comprovativo-M-{o.id}.pdf', documentos.pdf_comprovativo_marcacao(o))
+                _juntar_faturas(zf, pasta, o, faltas)
 
         # documentos do Bende
         subs = (FaturaSubscricao.objects.filter(Q(loja=obj) | Q(pos__loja_vinculada=obj)) if tipo == 'loja'
@@ -1031,7 +1071,7 @@ def admin_exportar(request, tipo, id):
             'dados-fiscais.csv            NIF e regime declarados ao longo do tempo (quem gravou e quando)',
             'vendas.csv                   cada venda com o nº da fatura da loja e as faturas anuladas (motivo)',
             'vendas/E-<nº>/               comprovativo de pagamento (Bende) + fatura(s) da loja (fatura-… em vigor, anulada-…)',
-            'marcacoes.csv, marcacoes/M-<nº>/     marcações (serviços) com a fatura da loja (se houver marcações)',
+            'marcacoes.csv, marcacoes/M-<nº>/     marcações (serviços): comprovativo (as pagas online) + fatura(s) da loja',
             'vendas-pos.csv, vendas-pos/V-<nº>/   contas fechadas do POS (os POS ligados, numa loja) com a fatura',
             'bende/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) do Bende',
             'bende/comissoes/C-…/         extrato mensal das comissões + fatura(s) do Bende',

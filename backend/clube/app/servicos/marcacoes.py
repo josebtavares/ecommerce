@@ -290,6 +290,8 @@ def _pagar(m):
     m.save(update_fields=['pago', 'pago_em', 'valor_pago', 'expira_em', 'estado', 'data_atualizacao'])
     avisar_loja(m, 'Nova marcação paga' if m.estado == 'confirmada' else 'Marcação paga — confirma-a',
                 f'{m.servico_nome} a {quando_texto(m.inicio)} — {formatar(m.valor_pago)} pagos.', tipo='marcacao_nova')
+    from ..utils.emails_fiscais import comprovativo_marcacao_depois_do_commit
+    comprovativo_marcacao_depois_do_commit(m)       # o cliente recebe o comprovativo do Bende por email
     return m
 
 

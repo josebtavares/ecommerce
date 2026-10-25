@@ -1,5 +1,5 @@
-<!-- HistoricoFatura.vue — admin: todas as faturas registadas num documento (E-…, S-…, C-…), em vigor e anuladas.
-     Carrega /app/admin/faturacao/historico/?ref= quando aparece. -->
+<!-- HistoricoFatura.vue — todas as faturas registadas num documento (E-…, M-…, V-…, S-…, C-…), em vigor e anuladas.
+     Carrega <url>?ref= quando aparece (admin por omissão; a loja passa o dela). -->
 <template>
   <div class="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs" data-teste="historico-fatura">
     <p class="font-bold text-zinc-400 mb-2">Histórico de faturas · {{ referencia }}</p>
@@ -27,13 +27,16 @@ import { urlFicheiro } from '@/utils/documentos'
 
 export default {
   name: 'HistoricoFatura',
-  props: { referencia: { type: String, required: true } },
+  props: {
+    referencia: { type: String, required: true },
+    url: { type: String, default: '/app/admin/faturacao/historico/' },
+  },
   data () {
     return { itens: [], carregando: true }
   },
   async created () {
     try {
-      const { data } = await api.get('/app/admin/faturacao/historico/', { params: { ref: this.referencia } })
+      const { data } = await api.get(this.url, { params: { ref: this.referencia } })
       this.itens = data.itens
     } catch { this.itens = [] } finally { this.carregando = false }
   },

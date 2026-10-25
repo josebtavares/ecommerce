@@ -1,6 +1,6 @@
 """
 Emails com os documentos de cada pagamento (PDF anexado + link para o site):
-- ao cliente: comprovativo quando a encomenda é paga; fatura quando a loja a regista;
+- ao cliente: comprovativo quando a encomenda (ou a marcação, paga online) é paga; fatura quando a loja a regista;
 - ao dono da loja/POS: comprovativo da mensalidade paga; fatura do Bende (mensalidade e comissões do mês).
 
 Os comprovativos saem sozinhos (signals em ligar(): qualquer caminho que aprove um pagamento passa
@@ -96,6 +96,29 @@ def enviar_fatura_encomenda(enc):
         f'{enc.loja.nome} emitiu a fatura {enc.fatura_numero} da tua encomenda #{enc.id}.'
         + (' Segue em anexo.' if pdf else '') + f'\n\nTambém a encontras na encomenda: {_link("/perfil")}',
         [(f'fatura-encomenda-{enc.id}.pdf', pdf)] if pdf else [])
+
+
+def enviar_comprovativo_marcacao(m):
+    """Marcação paga online por um cliente com conta. Uma só vez (comprovativo_enviado_em)."""
+    if not m.cliente_id or not m.pago or not _reservar(type(m), m.pk):
+        return
+    user = m.cliente.user
+    ok = _enviar(
+        user.email, f'Comprovativo de pagamento — {m.servico_nome} ({m.loja.nome})',
+        f'Olá {user.first_name or user.username},\n\n'
+        f'O pagamento da tua marcação #{m.id} ({m.servico_nome}) em {m.loja.nome} foi confirmado. '
+        f'Segue em anexo o comprovativo.\n\nA fatura é emitida pela loja e também te chega por email '
+        f'quando estiver disponível. Marcação: {_link(f"/minhas-marcacoes/{m.id}")}',
+        [(documentos.nome_comprovativo_marcacao(m), documentos.pdf_comprovativo_marcacao(m))])
+    if not ok:
+        _libertar(type(m), m.pk)
+
+
+def comprovativo_marcacao_depois_do_commit(m):
+    pk = m.pk
+    from ..servicos.models import Marcacao
+    transaction.on_commit(lambda: enviar_comprovativo_marcacao(
+        Marcacao.objects.select_related('loja', 'cliente__user', 'profissional').get(pk=pk)))
 
 
 def enviar_fatura_marcacao(m):

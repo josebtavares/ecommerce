@@ -28,6 +28,8 @@
             <p class="text-zinc-500">{{ m.pagamento === 'antecipado' ? (m.pago ? `Pago antecipado (${dinheiro(m.valor_pago)})` : 'Antecipado — por pagar') : 'Paga no local' }}</p>
             <p v-if="m.pago && Number(m.falta_pagar) > 0 && ativa" class="text-amber-300">Falta {{ dinheiro(m.falta_pagar) }} no local</p>
             <p v-if="Number(m.valor_reembolsado) > 0" class="text-green-400">Devolvido: {{ dinheiro(m.valor_reembolsado) }}</p>
+            <button v-if="m.pago" type="button" @click="comprovativo" data-teste="comprovativo-marcacao"
+              class="mt-1 text-[11px] text-zinc-400 hover:text-zinc-200 underline">Comprovativo de pagamento</button>
             <p v-if="m.preco_final && m.preco_final_motivo" class="text-zinc-500">Preço final: {{ m.preco_final_motivo }} ({{ m.preco_final_por }})</p>
           </div>
         </div>
@@ -153,6 +155,7 @@ import { CAMPO, ESTADOS_MARCACAO, diaDe, hora, hojeCV, rotuloDia, ouvirMarcacoes
 import { formatarDinheiro } from '@/utils/dinheiro'
 import MarcacaoConversa from './MarcacaoConversa.vue'
 import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
+import { descarregarComprovativoMarcacao } from '@/utils/documentos'
 
 const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro profissional' }, { k: 'preco', t: 'Propor preço' },
                  { k: 'cancelar', t: 'Cancelar' }]
@@ -179,6 +182,9 @@ export default {
   mounted () { this.desligar = ouvirMarcacoes(d => { if ((!d || d.id === this.marcacaoId) && !this.aGuardar) this.carregar() }) },
   beforeUnmount () { this.desligar?.() },
   methods: {
+    comprovativo () {
+      descarregarComprovativoMarcacao(this.m.id).catch(() => { this.erro = 'Não foi possível descarregar o comprovativo.' })
+    },
     diaDe, hora, rotuloDia,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     base () { return `/app/loja/${this.lojaId}/servicos/marcacoes/${this.marcacaoId}/` },
