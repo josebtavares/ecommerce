@@ -48,7 +48,7 @@
       <p class="pb-3 text-xs font-semibold text-slate-500">{{ textoPeriodo }}</p>
       <button type="button" @click="exportar" :disabled="aExportar" data-teste="faturacao-zip"
         class="ml-auto h-11 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-        title="Dados fiscais, vendas do arquivo do POS, faturas e documentos do Bende do período — para o contabilista ou a DNRE">
+        :title="isMembro ? 'Dados fiscais, vendas do arquivo do POS e faturas do período — para o contabilista ou a DNRE' : 'Dados fiscais, vendas do arquivo do POS, faturas e documentos do Bende do período — para o contabilista ou a DNRE'">
         <font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1" />{{ aExportar ? 'A preparar…' : 'Arquivo do POS (ZIP)' }}
       </button>
     </section>
@@ -155,11 +155,11 @@
     <!-- ═══ PESQUISAR DOCUMENTOS (todas as datas) ═══ -->
     <template v-else>
       <form @submit.prevent="pesquisar(0)" class="flex flex-wrap gap-2">
-        <input v-model.trim="pq" type="search" placeholder="Nº de fatura (também anulada), V-123, S-45, NIF do cliente"
+        <input v-model.trim="pq" type="search" :placeholder="isMembro ? 'Nº de fatura (também anulada), V-123, NIF do cliente' : 'Nº de fatura (também anulada), V-123, S-45, NIF do cliente'"
           aria-label="Pesquisar documentos" data-teste="faturacao-pesquisa-q" :class="['min-w-[220px] flex-1', campo]" />
         <button type="submit" :disabled="pq.length < 2" class="h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-50">Pesquisar</button>
       </form>
-      <p class="text-[11px] font-semibold text-slate-500">Em todos os documentos do POS, de sempre: contas, faturas em vigor e anuladas, mensalidades do Bende.</p>
+      <p class="text-[11px] font-semibold text-slate-500">Em todos os documentos do POS, de sempre: contas, faturas em vigor e anuladas<template v-if="!isMembro">, mensalidades do Bende</template>.</p>
       <ResultadosPesquisa v-if="pRes" :res="pRes" :limit="LIMITE" :offset="pOffset" claro @ir="pesquisar" @abrir="abrirResultado" />
     </template>
   </div>
