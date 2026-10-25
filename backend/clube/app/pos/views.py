@@ -1774,7 +1774,8 @@ def pos_historico(request, pos_id):
         contas = contas.filter(metodo_pagamento=metodo)
     fatura = request.query_params.get('fatura')
     if fatura == 'por_faturar':
-        contas = contas.filter(id__in=faturas_vendas.base('pos').filter(faturas_vendas.q_por_faturar('pos'), pos=pos).values('id'))
+        contas = contas.filter(id__in=faturas_vendas.base('pos').filter(faturas_vendas.q_por_faturar('pos'), faturas_vendas.q_pos_fatura(pos),
+                                                                         pos=pos).values('id'))
     elif fatura == 'faturada':
         contas = contas.filter(fatura_registada_em__isnull=False)
 
@@ -1786,8 +1787,9 @@ def pos_historico(request, pos_id):
         offset, limit = 0, 20
     total  = contas.count()
 
-    # contas fechadas sem fatura (todas, sem os filtros) — o aviso no topo do Histórico
-    por_faturar = faturas_vendas.base('pos').filter(faturas_vendas.q_por_faturar('pos'), pos=pos).count()
+    # contas fechadas sem fatura (todas, sem os filtros) — o aviso no topo do Histórico; só as que o POS fatura
+    # (as de uma loja a que já não está ligado faturam-se na Faturação dessa loja)
+    por_faturar = faturas_vendas.base('pos').filter(faturas_vendas.q_por_faturar('pos'), faturas_vendas.q_pos_fatura(pos), pos=pos).count()
     return Response({'count': total, 'por_faturar': por_faturar,
                      'results': [_conta_payload(c, request) for c in contas[offset:offset + limit]]})
 

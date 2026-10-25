@@ -1003,8 +1003,9 @@ def admin_exportar(request, tipo, id):
     return arquivo_zip(request, obj, tipo, de, ate)
 
 
-def arquivo_zip(request, obj, tipo, de, ate):
-    """O ZIP do arquivo fiscal de uma loja/POS no período (admin e a própria loja)."""
+def arquivo_zip(request, obj, tipo, de, ate, com_bende=True):
+    """O ZIP do arquivo fiscal de uma loja/POS no período (admin e a própria loja).
+    com_bende=False: sem os documentos do Bende (a equipa do POS não vê a subscrição do dono)."""
     filtro = {'loja': obj} if tipo == 'loja' else {'pos': obj}
     grupos = [(o, _vendas_qs(o, de, ate, **filtro)) for o in (fv.ORIGENS if tipo == 'loja' else ('pos',))]
     vendas = grupos[0][1] if tipo == 'loja' else Encomenda.objects.none()
@@ -1047,6 +1048,8 @@ def arquivo_zip(request, obj, tipo, de, ate):
         subs = (FaturaSubscricao.objects.filter(Q(loja=obj) | Q(pos__loja_vinculada=obj)) if tipo == 'loja'
                 else obj.faturas_subscricao.all())
         subs = subs.filter(estado='paga', valor__gt=0).select_related('loja', 'pos', 'plano')
+        if not com_bende:
+            subs = subs.none()
         if de:
             subs = subs.filter(paga_em__date__gte=de)
         if ate:
@@ -1073,7 +1076,8 @@ def arquivo_zip(request, obj, tipo, de, ate):
                 linhas.append([f'C-{obj.id}-{mes:%Y%m}', 'Comissões do mês', f'{m["comissoes"]} venda(s)', f'{mes:%m/%Y}',
                                m['total'].replace('.', ','), fc.fatura_numero if fc else '',
                                HistoricoFatura.objects.filter(tipo='comissoes', loja=obj, mes=mes, anulada_em__isnull=False).count()])
-        zf.writestr('bende/documentos-do-bende.csv', _csv(linhas))
+        if com_bende:
+            zf.writestr('bende/documentos-do-bende.csv', _csv(linhas))
 
         periodo = f'{de:%d/%m/%Y} a {ate:%d/%m/%Y}' if de and ate else (f'desde {de:%d/%m/%Y}' if de else (f'até {ate:%d/%m/%Y}' if ate else 'desde sempre'))
         leia = [

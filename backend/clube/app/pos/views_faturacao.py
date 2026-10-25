@@ -31,8 +31,10 @@ TIPOS_PESQUISA = ('venda', 'anulada', 'mensalidade')
 
 
 def _acesso(request, pos_id):
+    """(pos, membro, erro) — membro None na conta principal. A equipa vê as vendas, não a subscrição do dono
+    (mensalidades e documentos do Bende: aba Subscrição, só do dono)."""
     pos, membro, _ = _resolve_pos_request(request, pos_id, permitir_suspenso=True)
-    return pos, _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para ver a faturação.')
+    return pos, membro, _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para ver a faturação.')
 
 
 def _totais(qs, pos):
@@ -49,7 +51,7 @@ def _totais(qs, pos):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def resumo(request, pos_id):
-    pos, erro = _acesso(request, pos_id)
+    pos, membro, erro = _acesso(request, pos_id)
     if erro:
         return erro
     de, ate, erro = fat._datas(request)
@@ -79,7 +81,7 @@ def resumo(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def vendas(request, pos_id):
-    pos, erro = _acesso(request, pos_id)
+    pos, membro, erro = _acesso(request, pos_id)
     if erro:
         return erro
     return fat._lista_vendas(request, 'pos', pos=pos, todas_do_pos=True)
@@ -89,7 +91,7 @@ def vendas(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def vendas_csv(request, pos_id):
-    pos, erro = _acesso(request, pos_id)
+    pos, membro, erro = _acesso(request, pos_id)
     if erro:
         return erro
     qs, erro = fat.vendas_filtradas(request, 'pos', pos=pos, todas_do_pos=True)
@@ -109,26 +111,27 @@ def vendas_csv(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def exportar(request, pos_id):
-    pos, erro = _acesso(request, pos_id)
+    pos, membro, erro = _acesso(request, pos_id)
     if erro:
         return erro
     de, ate, erro = fat._datas(request)
     if erro:
         return erro
-    return fat.arquivo_zip(request, pos, 'pos', de, ate)
+    return fat.arquivo_zip(request, pos, 'pos', de, ate, com_bende=membro is None)
 
 
 @api_view(['GET'])
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def pesquisa(request, pos_id):
-    pos, erro = _acesso(request, pos_id)
+    pos, membro, erro = _acesso(request, pos_id)
     if erro:
         return erro
     q = (request.GET.get('q') or '').strip()
     if len(q) < 2:
         return Response({'count': 0, 'results': []})
-    res = [r for r in fat.pesquisa_documentos(request, q, pos_id=pos.id) if r['tipo'] in TIPOS_PESQUISA]
+    res = [r for r in fat.pesquisa_documentos(request, q, pos_id=pos.id) if r['tipo'] in TIPOS_PESQUISA
+           and (membro is None or (r.get('referencia') or '').startswith('V-'))]
     pagina, total = fat._paginar(request, res)
     return Response({'count': total, 'results': pagina})
 
@@ -137,9 +140,11 @@ def pesquisa(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def historico(request, pos_id):
-    pos, erro = _acesso(request, pos_id)
+    pos, membro, erro = _acesso(request, pos_id)
     if erro:
         return erro
     ref = (request.GET.get('ref') or '').strip().upper()
     qs = HistoricoFatura.objects.filter(pos=pos, referencia=ref)
+    if membro is not None:
+        qs = qs.filter(tipo='venda_pos')
     return Response({'referencia': ref, 'itens': fiscal.historico_payload(qs, request)})
