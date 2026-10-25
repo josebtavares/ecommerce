@@ -174,6 +174,8 @@
         <BackofficeCategorias    v-else-if="activeSection === 'categorias'"    :loja-id="lojaId" />
         <BackofficeTemplates     v-else-if="activeSection === 'templates'"     :loja-id="lojaId" />
         <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
+        <BackofficeFaturacao     v-else-if="activeSection === 'faturacao'"     :loja-id="lojaId"
+                                 @ver-subscricao="activeSection = 'subscricao'" />
         <BackofficeServicos      v-else-if="activeSection === 'servicos'"      :loja-id="lojaId"
                                  :so-agenda="!permissoes.includes('gerir_marcacoes')"
                                  @ver-subscricao="activeSection = 'subscricao'" />
@@ -201,6 +203,7 @@ import BackofficeMensagens      from './BackofficeMensagens.vue'
 import BackofficeSubscricao     from './BackofficeSubscricao.vue'
 import BackofficeDevolucoes     from './BackofficeDevolucoes.vue'
 import BackofficeServicos       from './BackofficeServicos.vue'
+import BackofficeFaturacao      from './BackofficeFaturacao.vue'
 import ModuloRelatorios         from '@/components/relatorios/ModuloRelatorios.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
@@ -213,17 +216,17 @@ const PERMISSOES = {
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
-    'ver_subscricao','pagar_subscricao','gerir_servicos','gerir_marcacoes',
+    'ver_subscricao','pagar_subscricao','gerir_servicos','gerir_marcacoes','gerir_faturacao',
   ],
   gestor: [
     'ver_loja','editar_loja','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template', 'ver_subscricao',
-    'gerir_servicos','gerir_marcacoes',
+    'gerir_servicos','gerir_marcacoes','gerir_faturacao',
   ],
   staff:        ['ver_loja','gerir_produtos','gerir_inventario','gerir_encomendas','gerir_marcacoes'],
-  contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios','ver_subscricao'],
+  contabilista: ['ver_loja','gerir_pagamentos','ver_relatorios','ver_subscricao','gerir_faturacao'],
   condutor:     ['gerir_entregas'],
 }
 
@@ -232,6 +235,7 @@ const SECCOES = [
   { key: 'relatorios',    label: 'Relatórios',        icon: 'report',    permissao: 'ver_relatorios'   },
   { key: 'encomendas',    label: 'Encomendas',        icon: 'order',     permissao: 'gerir_encomendas' },
   { key: 'devolucoes',    label: 'Devoluções',        icon: 'refund',    permissao: 'gerir_devolucoes' },
+  { key: 'faturacao',     label: 'Faturação',         icon: 'invoice',   permissao: 'gerir_faturacao'  },
   { key: 'entregas',      label: 'Entregas',          icon: 'delivery',  permissao: 'gerir_entregas'   },
   { key: 'mensagens',     label: 'Mensagens',         icon: 'chat',      permissao: null               },   // todos os membros (equipa); clientes só quem atende
   { key: 'avaliacoes',    label: 'Avaliações',        icon: 'star',      permissao: 'ver_loja'         },
@@ -253,7 +257,7 @@ export default {
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino, AvisoFaturacao,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
-    BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes, BackofficeServicos,
+    BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes, BackofficeServicos, BackofficeFaturacao,
   },
 
   data () {

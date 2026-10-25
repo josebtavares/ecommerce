@@ -496,6 +496,7 @@ def _conta_payload(conta, request=None):
         'referencia': f'V-{conta.id}',
         'fatura': fatura_resumo(conta, request),
         'faturavel': conta.status == 'fechada' and conta.total > 0,
+        'arquivo': faturas_vendas.arquivo_conta(conta),
     }
 
 
@@ -1752,7 +1753,7 @@ def pos_historico(request, pos_id):
     if erro:
         return erro
 
-    contas = ContaMesa.objects.filter(pos=pos, status='fechada').select_related('mesa', 'atendente').prefetch_related('items')
+    contas = ContaMesa.objects.filter(pos=pos, status='fechada').select_related('mesa', 'atendente', 'loja', 'pos').prefetch_related('items')
 
     data_inicio = request.query_params.get('data_inicio')
     data_fim    = request.query_params.get('data_fim')
@@ -1806,12 +1807,16 @@ def conta_fatura(request, pos_id, conta_id):
     erro = _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para registar faturas.')
     if erro:
         return erro
-    conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
+    conta = get_object_or_404(ContaMesa.objects.select_related('loja', 'pos'), id=conta_id, pos=pos)
+    if faturas_vendas.arquivo_conta(conta)['so_leitura']:
+        return Response({'detail': f'Esta venda é do arquivo fiscal da loja {conta.loja.nome} (o POS estava ligado a ela '
+                                   f'e vendia com o NIF dela): a fatura regista-se na Faturação da loja.'},
+                        status=status.HTTP_403_FORBIDDEN)
     # o arquivo guarda o utilizador da conta principal; um membro da equipa fica sem utilizador (não tem User)
     _, _, erro = faturas_vendas.pedido(request, conta, 'pos', utilizador.user if utilizador else None)
     if erro:
         return erro
-    conta = ContaMesa.objects.select_related('mesa', 'atendente').get(pk=conta.pk)
+    conta = ContaMesa.objects.select_related('mesa', 'atendente', 'loja', 'pos').get(pk=conta.pk)
     return Response(_conta_payload(conta, request))
 
 

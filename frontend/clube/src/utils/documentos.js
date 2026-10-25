@@ -19,6 +19,16 @@ export function descarregarComprovativoEncomenda (id) {
   return descarregarPdf(`/app/encomenda/${id}/comprovativo/`, `comprovativo-encomenda-${id}.pdf`)
 }
 
+// marcação paga online (as pagas no local não têm comprovativo do Bende)
+export function descarregarComprovativoMarcacao (id) {
+  return descarregarPdf(`/app/marcacao/${id}/comprovativo/`, `comprovativo-marcacao-${id}.pdf`)
+}
+
+// linha das listas de vendas (fiscal): o backend diz o URL do comprovativo (E-… ou M-…)
+export function descarregarComprovativoVenda (linha) {
+  return descarregarPdf(linha.comprovativo_url, `comprovativo-${linha.referencia}.pdf`)
+}
+
 // em dev os ficheiros vêm como /media/…; em produção já são URLs completos (R2)
 export function urlFicheiro (u) {
   if (!u) return ''

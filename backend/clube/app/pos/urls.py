@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, views_variantes, views_conjuntos, views_subscricao, views_relatorios
+from . import views, views_variantes, views_conjuntos, views_subscricao, views_relatorios, views_faturacao
 
 urlpatterns = [
     # ── AUTENTICAÇÃO ─────────────────────────────────────────────────
@@ -57,6 +57,13 @@ urlpatterns = [
     path('<int:pos_id>/contas/<int:conta_id>/fechar/',                       views.conta_fechar,         name='conta_fechar'),
     path('<int:pos_id>/contas/<int:conta_id>/cancelar/',                     views.conta_cancelar,       name='conta_cancelar'),
     path('<int:pos_id>/contas/<int:conta_id>/fatura/',                       views.conta_fatura,         name='conta_fatura'),
+    # faturação (views_faturacao.py)
+    path('<int:pos_id>/faturacao/resumo/',     views_faturacao.resumo,     name='pos_faturacao_resumo'),
+    path('<int:pos_id>/faturacao/vendas/',     views_faturacao.vendas,     name='pos_faturacao_vendas'),
+    path('<int:pos_id>/faturacao/vendas.csv',  views_faturacao.vendas_csv, name='pos_faturacao_vendas_csv'),
+    path('<int:pos_id>/faturacao/exportar/',   views_faturacao.exportar,   name='pos_faturacao_exportar'),
+    path('<int:pos_id>/faturacao/pesquisa/',   views_faturacao.pesquisa,   name='pos_faturacao_pesquisa'),
+    path('<int:pos_id>/faturacao/historico/',  views_faturacao.historico,  name='pos_faturacao_historico'),
 
     # ── TURNOS ────────────────────────────────────────────────────────
     path('<int:pos_id>/turnos/atual/',                   views.turno_atual,  name='turno_atual'),

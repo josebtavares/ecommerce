@@ -906,6 +906,8 @@ def marcacao_fatura(request, loja_id, marcacao_id):
     A loja emite a fatura do serviço no e-Fatura e regista-a aqui; o cliente (com conta) vê-a na marcação.
     """
     loja, membro, erro = _acesso(request, loja_id, 'gerir_marcacoes')
+    if erro:                                    # ou quem gere a faturação (ex.: contabilista)
+        loja, membro, erro = _acesso(request, loja_id, 'gerir_faturacao')
     if erro:
         return erro
     m = get_object_or_404(Marcacao, id=marcacao_id, loja=loja)

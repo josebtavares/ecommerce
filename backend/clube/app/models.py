@@ -376,6 +376,7 @@ class UtilizadorLoja(models.Model):
             'gerir_template',
             'gerir_servicos',
             'gerir_marcacoes',
+            'gerir_faturacao',         # aba Faturação: comprovativos e faturas de todas as vendas
         ],
         'gestor': [
             'ver_loja',
@@ -395,6 +396,7 @@ class UtilizadorLoja(models.Model):
             'gerir_template',
             'gerir_servicos',
             'gerir_marcacoes',
+            'gerir_faturacao',         # aba Faturação: comprovativos e faturas de todas as vendas
         ],
         'staff': [
             'ver_loja',
@@ -408,6 +410,7 @@ class UtilizadorLoja(models.Model):
             'ver_subscricao',
             'gerir_pagamentos',
             'ver_relatorios',
+            'gerir_faturacao',
         ],
         'condutor': [
             'ver_loja',

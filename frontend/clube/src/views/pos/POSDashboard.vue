@@ -232,7 +232,11 @@
           </button>
           <button v-if="podeHistorico" type="button" @click="activeTab = 'historico'" data-teste="suspenso-historico"
             class="h-11 rounded-2xl border border-red-200 bg-white px-5 text-sm font-black text-red-800 transition hover:bg-red-100">
-            Histórico e faturas
+            Histórico
+          </button>
+          <button v-if="podeHistorico" type="button" @click="activeTab = 'faturacao'" data-teste="suspenso-faturacao"
+            class="h-11 rounded-2xl border border-red-200 bg-white px-5 text-sm font-black text-red-800 transition hover:bg-red-100">
+            Faturação
           </button>
         </div>
         <p v-if="podeHistorico" class="mt-2 text-[11px] font-semibold text-red-600/70">
@@ -252,6 +256,7 @@
           :permissoes="permissoes"
           :is-membro="isMembro"
           @alterado="onSubscricaoAlterada"
+          @ver-subscricao="activeTab = 'subscricao'"
         />
       </section>
 
@@ -457,6 +462,7 @@ import POSProdutos from './POSProdutos.vue'
 import POSEquipa from './POSEquipa.vue'
 import POSSubscricao from './POSSubscricao.vue'
 import POSPainel from './POSPainel.vue'
+import POSFaturacao from './POSFaturacao.vue'
 import POSRelatorios from './POSRelatorios.vue'
 import OnboardingModal from './components/OnboardingModal.vue'
 
@@ -472,6 +478,7 @@ export default {
     POSEquipa,
     POSSubscricao,
     POSPainel,
+    POSFaturacao,
     POSRelatorios,
     OnboardingModal
   },
@@ -522,6 +529,7 @@ export default {
         { id: 'produtos', label: 'Produtos',  icon: 'box',             apenasNaoMembro: false },
         { id: 'historico',label: 'Histórico', icon: 'clock-rotate-left', apenasNaoMembro: false },
         { id: 'relatorios', label: 'Relatórios', icon: 'file-lines',   apenasNaoMembro: false },
+        { id: 'faturacao', label: 'Faturação', icon: 'file-invoice',   apenasNaoMembro: false },
         { id: 'equipa',   label: 'Equipa',    icon: 'users',           apenasNaoMembro: true  },
         { id: 'subscricao', label: 'Subscrição', icon: 'credit-card',  apenasNaoMembro: true  },
       ],
@@ -574,7 +582,7 @@ export default {
 
         // Filtrar por permissões do membro
         if (this.isMembro && this.permissoes) {
-          if (['historico', 'painel', 'relatorios'].includes(tab.id) && !this.permissoes.pode_ver_relatorios) return false
+          if (['historico', 'painel', 'relatorios', 'faturacao'].includes(tab.id) && !this.permissoes.pode_ver_relatorios) return false
           if (tab.id === 'produtos'  && !this.permissoes.pode_gerir_produtos)  return false
         }
 
@@ -592,6 +600,7 @@ export default {
         relatorios: 'POSRelatorios',
         equipa:   'POSEquipa',
         subscricao: 'POSSubscricao',
+        faturacao: 'POSFaturacao',
       }
       return map[this.activeTab] || 'POSMesas'
     },
@@ -599,9 +608,9 @@ export default {
     podeHistorico() {
       return !this.isMembro || Boolean(this.permissoes?.pode_ver_relatorios)
     },
-    // num POS suspenso só abrem a Subscrição (dono, para pagar) e o Histórico (faturas das vendas já feitas)
+    // num POS suspenso só abrem a Subscrição (dono, para pagar), o Histórico e a Faturação (faturas das vendas já feitas)
     abertaSuspenso() {
-      return (this.activeTab === 'subscricao' && !this.isMembro) || (this.activeTab === 'historico' && this.podeHistorico)
+      return (this.activeTab === 'subscricao' && !this.isMembro) || (['historico', 'faturacao'].includes(this.activeTab) && this.podeHistorico)
     },
 
     // suspenso por falta de pagamento (o dono paga na aba Subscrição e o POS volta logo)

@@ -136,7 +136,7 @@
                     <span v-if="e.anuladas" class="ml-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-bold">{{ e.anuladas }} anulada(s)</span>
                   </td>
                   <td class="px-4 py-3 text-right whitespace-nowrap">
-                    <button v-if="e.comprovativo" type="button" @click="descarregarComprovativoEncomenda(e.id)" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
+                    <button v-if="e.comprovativo_url" type="button" @click="descarregarComprovativoVenda(e)" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
                     <button type="button" @click="historicoVenda = historicoVenda === e.referencia ? '' : e.referencia" :aria-expanded="historicoVenda === e.referencia ? 'true' : 'false'" data-teste="ver-historico"
                       class="ml-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
                   </td>
@@ -215,7 +215,7 @@
 <script>
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { descarregarPdf, descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
+import { descarregarPdf, descarregarComprovativoVenda, urlFicheiro } from '@/utils/documentos'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ListaMensalidades from '@/components/fiscal/ListaMensalidades.vue'
@@ -281,7 +281,7 @@ export default {
   created () { this.carregar() },
   methods: {
     urlFicheiro,
-    descarregarComprovativoEncomenda,
+    descarregarComprovativoVenda,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     quando (s) { return s ? new Date(s).toLocaleDateString('pt-PT') : '—' },
     nomeMes (m) {

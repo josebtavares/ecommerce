@@ -322,8 +322,14 @@
 
           <!-- fatura que o POS emitiu no e-Fatura (o NIF do cliente, se o pediu, está na conta) -->
           <p v-if="contaSelecionada.nif_cliente" class="mt-4 text-sm font-bold text-slate-700">NIF do cliente: {{ contaSelecionada.nif_cliente }}</p>
+          <!-- vendida com o NIF de uma loja a que o POS já não está ligado: fatura-se na Faturação dessa loja -->
+          <p v-if="contaSelecionada.arquivo?.so_leitura" class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600"
+             data-teste="conta-so-leitura">
+            Vendida com o NIF da loja <b>{{ contaSelecionada.arquivo.loja.nome }}</b>, quando o POS lhe estava ligado: a fatura regista-se na
+            Faturação dessa loja.<template v-if="contaSelecionada.fatura"> Fatura em vigor: <b>{{ contaSelecionada.fatura.numero }}</b>.</template>
+          </p>
           <FaturaVenda
-            v-if="contaSelecionada.faturavel || contaSelecionada.fatura"
+            v-else-if="contaSelecionada.faturavel || contaSelecionada.fatura"
             class="mt-4"
             tema="claro"
             teste="fatura-conta"
