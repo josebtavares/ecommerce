@@ -314,7 +314,7 @@ def admin_vendedores(request):
              .annotate(vendas=Count('encomendas', filter=vendas),
                        faturadas=Count('encomendas', filter=vendas & Q(encomendas__fatura_registada_em__isnull=False)),
                        n_por_faturar=Count('encomendas', filter=vendas & _por_faturar())))
-    poss = ConfiguracaoPOS.objects.filter(ativo=True)
+    poss = ConfiguracaoPOS.objects.all()        # inativos também: o arquivo fiscal fica
     if q:
         pessoa = (Q(dono__user__email__icontains=q) | Q(dono__user__username__icontains=q) |
                   Q(dono__user__first_name__icontains=q) | Q(dono__user__last_name__icontains=q) |
@@ -327,7 +327,7 @@ def admin_vendedores(request):
     if regime in fiscal.REGIMES_VALIDOS:
         lojas, poss = lojas.filter(regime_fiscal=regime), poss.filter(regime_fiscal=regime)
     if dados == 'incompletos':      # a loja ou algum dos seus POS
-        pos_inc = ConfiguracaoPOS.objects.filter(_incompletos(), ativo=True, loja_vinculada__isnull=False)
+        pos_inc = ConfiguracaoPOS.objects.filter(_incompletos(), loja_vinculada__isnull=False)
         lojas = lojas.filter(_incompletos() | Q(id__in=pos_inc.values('loja_vinculada_id')))
         poss = poss.filter(_incompletos())
     elif dados == 'completos':
@@ -357,7 +357,7 @@ def admin_vendedores(request):
     pos_pg = {p.id: p for p in ConfiguracaoPOS.objects.filter(id__in=ids_p).select_related('dono__user', 'loja_vinculada')}
     nada = {'vendas': 0, 'faturadas': 0, 'por_faturar': 0}
     pos_das_lojas = {}
-    for p in (ConfiguracaoPOS.objects.filter(loja_vinculada_id__in=ids_l, ativo=True)
+    for p in (ConfiguracaoPOS.objects.filter(loja_vinculada_id__in=ids_l)
               .select_related('dono__user', 'loja_vinculada').order_by('nome')):
         pos_das_lojas.setdefault(p.loja_vinculada_id, []).append({**_vendedor_base(p, 'pos'), **pos_cont.get(p.id, nada)})
 
@@ -423,7 +423,7 @@ def admin_abas(request):
     q = (request.GET.get('q') or '').strip()
     sem_fatura = _por_faturar()
     lojas = Loja.objects.exclude(estado='pendente')
-    poss = ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=True)
+    poss = ConfiguracaoPOS.objects.filter(loja_vinculada__isnull=True)
     if q:
         ql, qp = procura_abas(q)
         lojas, poss = lojas.filter(id__in=Loja.objects.filter(ql).values('id')), poss.filter(qp)
@@ -494,7 +494,7 @@ def admin_ficha(request, tipo, id):
         dados = {
             **_vendedor_base(obj, 'loja'),
             'pos': [_vendedor_base(p, 'pos') for p in
-                    obj.pos_vinculados.filter(ativo=True).select_related('dono__user', 'loja_vinculada')],
+                    obj.pos_vinculados.select_related('dono__user', 'loja_vinculada')],
             'comissoes': [{**m, 'referencia': f"C-{obj.id}-{m['mes'].replace('-', '')}", 'anuladas': anul_com.get(m['mes'], 0)}
                           for m in _comissoes_por_mes(obj)],
         }
@@ -676,6 +676,9 @@ def admin_pesquisa(request):
     out += [_res_venda(e, request) for e in enc.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_venda(x, request, 'marcacoes') for x in marc.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_venda(x, request, 'pos') for x in contas.filter(fatura_numero__icontains=q)[:LIM]]
+    if re.fullmatch(r'\d{9}', q):          # NIF do cliente nas contas do POS
+        out += [_res_venda(x, request, 'pos') for x in
+                contas.filter(fv.q_faturavel('pos'), nif_cliente=q).order_by('-fechada_em')[:LIM]]
     out += [_res_mensalidade(f, request) for f in subs.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_comissoes(fc.loja, fc.mes, request)
             for fc in fcs.filter(fatura_numero__icontains=q)[:LIM]]
@@ -716,12 +719,19 @@ def admin_pesquisa(request):
     return Response({'count': total, 'results': pagina})
 
 
+def _celula(c):
+    """Texto que o Excel leria como fórmula (=, +, -, @ — ex.: um nome de cliente) leva ' à frente; números não."""
+    if isinstance(c, str) and c[:1] in ('=', '+', '-', '@', '\t', '\r') and not re.fullmatch(r'-?[\d.,\s$]+', c):
+        return "'" + c
+    return c
+
+
 def _csv(linhas):
     """[[...], ...] → texto CSV com ; e BOM (o Excel abre com acentos)."""
     buf = io.StringIO()
     buf.write('﻿')
     w = csv.writer(buf, delimiter=';')
-    w.writerows(linhas)
+    w.writerows([[_celula(c) for c in l] for l in linhas])
     return buf.getvalue()
 
 

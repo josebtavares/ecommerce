@@ -45,7 +45,7 @@ def base(origem):
     if origem == 'marcacoes':
         dec = DecimalField(max_digits=12, decimal_places=2)
         qs = qs.annotate(preco_ef=Coalesce('preco_final', 'preco_indicado')).annotate(receita=Case(
-            When(estado='concluida', pago=True, then=F('preco_ef') - F('valor_reembolsado')),
+            # concluída: o preço (o que se devolveu foi só o pago a mais — o cliente pagou o preço)
             When(estado='concluida', then=F('preco_ef')),
             When(estado__in=('falta', 'cancelada'), pago=True, then=F('valor_pago') - F('valor_reembolsado')),
             default=Value(ZERO), output_field=dec))
