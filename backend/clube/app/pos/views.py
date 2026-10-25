@@ -170,8 +170,12 @@ def _get_stock_loja(produto):
     return None
 
 
-def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
-    """Retorna o POS acessível pelo request de conta principal ou membro de equipa."""
+def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False, permitir_suspenso=False):
+    """
+    Retorna o POS acessível pelo request de conta principal ou membro de equipa.
+    permitir_suspenso: o Histórico e as faturas das vendas já feitas continuam abertos num POS suspenso
+    (a obrigação fiscal não pára com a suspensão; o que se bloqueia é vender).
+    """
     membro = get_membro_from_request(request)
 
     if membro:
@@ -181,7 +185,8 @@ def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
         pos = get_object_or_404(query)
         if pos.id != membro.pos.id or require_owner:
             raise Http404()
-        _bloquear_se_suspenso(pos)
+        if not permitir_suspenso:
+            _bloquear_se_suspenso(pos)
         return pos, membro, None
 
     utilizador = request.user.utilizador
@@ -189,7 +194,8 @@ def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False):
     if ativo:
         query = query.filter(ativo=True)
     pos = get_object_or_404(query)
-    _bloquear_se_suspenso(pos)
+    if not permitir_suspenso:
+        _bloquear_se_suspenso(pos)
     return pos, None, utilizador
 
 
@@ -1741,7 +1747,7 @@ def contas_ativas(request, pos_id):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def pos_historico(request, pos_id):
-    pos, membro, _ = _resolve_pos_request(request, pos_id)
+    pos, membro, _ = _resolve_pos_request(request, pos_id, permitir_suspenso=True)
     erro = _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para ver o histórico.')
     if erro:
         return erro
@@ -1767,7 +1773,7 @@ def pos_historico(request, pos_id):
         contas = contas.filter(metodo_pagamento=metodo)
     fatura = request.query_params.get('fatura')
     if fatura == 'por_faturar':
-        contas = contas.filter(faturas_vendas.q_por_faturar('pos'))
+        contas = contas.filter(id__in=faturas_vendas.base('pos').filter(faturas_vendas.q_por_faturar('pos'), pos=pos).values('id'))
     elif fatura == 'faturada':
         contas = contas.filter(fatura_registada_em__isnull=False)
 
@@ -1780,7 +1786,7 @@ def pos_historico(request, pos_id):
     total  = contas.count()
 
     # contas fechadas sem fatura (todas, sem os filtros) — o aviso no topo do Histórico
-    por_faturar = ContaMesa.objects.filter(faturas_vendas.q_por_faturar('pos'), pos=pos).count()
+    por_faturar = faturas_vendas.base('pos').filter(faturas_vendas.q_por_faturar('pos'), pos=pos).count()
     return Response({'count': total, 'por_faturar': por_faturar,
                      'results': [_conta_payload(c, request) for c in contas[offset:offset + limit]]})
 
@@ -1794,8 +1800,9 @@ def conta_fatura(request, pos_id, conta_id):
     POST   /api/pos/<pos_id>/contas/<conta_id>/fatura/   multipart: numero, pdf (opcional), motivo (ao substituir)
     DELETE /api/pos/<pos_id>/contas/<conta_id>/fatura/   {motivo} — anula (o registo e o PDF ficam no histórico)
     O POS emite a fatura no e-Fatura e regista-a na conta fechada. Quem vê o histórico (gerente) pode registar.
+    Também num POS suspenso (são vendas já feitas).
     """
-    pos, membro, utilizador = _resolve_pos_request(request, pos_id)
+    pos, membro, utilizador = _resolve_pos_request(request, pos_id, permitir_suspenso=True)
     erro = _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para registar faturas.')
     if erro:
         return erro

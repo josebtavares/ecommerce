@@ -329,7 +329,9 @@
             teste="fatura-conta"
             :documento="contaSelecionada"
             :url="`/api/pos/${posId}/contas/${contaSelecionada.id}/fatura/`"
-            dica="Emite a fatura no e-Fatura e regista-a aqui."
+            :dica="Number(contaSelecionada.gorjeta) > 0
+              ? `Emite a fatura no e-Fatura e regista-a aqui. Valor a faturar: ${money(contaSelecionada.total - contaSelecionada.gorjeta)} — a gorjeta não entra na fatura.`
+              : 'Emite a fatura no e-Fatura e regista-a aqui.'"
             @atualizada="faturaAtualizada"
           />
         </div>

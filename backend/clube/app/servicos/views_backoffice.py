@@ -685,7 +685,8 @@ def disponibilidade(request, loja_id):
 @permission_classes([IsAuthenticated])
 def marcacoes(request, loja_id):
     """
-    GET  /app/loja/<id>/servicos/marcacoes/?estado=&de=&ate=&q=&fatura=por_faturar  (lista)
+    GET  /app/loja/<id>/servicos/marcacoes/?estado=&de=&ate=&q=&fatura=por_faturar|arquivo  (lista)
+         arquivo = as que renderam dinheiro ou tiveram fatura (o que se fatura, também com os Serviços desligados)
     POST { servico_id, profissional_id?, inicio, cliente_nome, cliente_telefone?, notas_internas?, preco?, ignorar_horario? }
          marcação manual (telefone / balcão): fica confirmada, paga no local.
     """
@@ -698,6 +699,8 @@ def marcacoes(request, loja_id):
             qs = qs.filter(estado=request.GET['estado'])
         if request.GET.get('fatura') == 'por_faturar':     # renderam dinheiro e ainda sem fatura
             qs = qs.filter(id__in=faturas_vendas.base('marcacoes').filter(faturas_vendas.q_por_faturar('marcacoes'), loja=loja).values('id'))
+        elif request.GET.get('fatura') == 'arquivo':
+            qs = qs.filter(id__in=faturas_vendas.vendas('marcacoes', loja=loja).values('id'))
         de, ate = _ler_dia(request.GET.get('de')), _ler_dia(request.GET.get('ate'))
         if de:
             qs = qs.filter(inicio__date__gte=de)

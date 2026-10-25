@@ -4,15 +4,17 @@ Vendas que a loja/POS fatura (emite a fatura no e-Fatura e regista-a no Bende) �
   'marcacoes'  Marcacao (serviços da loja)    M-<id>   data: inicio (o dia do serviço)
   'pos'        ContaMesa (POS)                V-<id>   data: fechada_em
 Faturável: encomenda paga/em curso; marcação que rendeu dinheiro (concluída, ou falta/cancelada paga e não
-devolvida — a mesma receita dos relatórios dos serviços); conta do POS fechada com total > 0.
+devolvida — a mesma receita dos relatórios dos serviços); conta do POS fechada com valor > 0.
+Valor de uma conta do POS = total sem a gorjeta (a gorjeta é dos empregados, não é venda e não vai na fatura).
 Uma venda que teve fatura fica no arquivo mesmo que deixe de ser faturável (ex.: encomenda cancelada depois).
-As contas de um POS ligado contam na loja (aba da loja no admin); as de um POS sem loja, no POS.
+Cada conta do POS fica num só arquivo: o da loja ligada quando fechou (ContaMesa.loja — fica lá mesmo que o POS
+se desligue depois) ou, sem loja, o do próprio POS.
 """
 import re
 from decimal import Decimal, InvalidOperation
 
 from django.db.models import Case, Count, DecimalField, F, Q, Sum, Value, When
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -23,7 +25,7 @@ ORIGENS = ('loja', 'marcacoes', 'pos')
 NOMES = {'loja': 'Loja online', 'marcacoes': 'Marcações', 'pos': 'POS'}
 ZERO = Decimal('0')
 CAMPO_DATA = {'loja': 'data_criacao', 'marcacoes': 'inicio', 'pos': 'fechada_em'}
-CAMPO_VALOR = {'loja': 'valor_total', 'marcacoes': 'receita', 'pos': 'total'}
+CAMPO_VALOR = {'loja': 'valor_total', 'marcacoes': 'receita', 'pos': 'valor_faturavel'}
 HISTORICO = {'loja': ('encomenda', 'encomenda_id'), 'marcacoes': ('marcacao', 'marcacao_id'), 'pos': ('venda_pos', 'conta_id')}
 CONFLITO = 'A fatura foi alterada entretanto (outro pedido). Recarrega a página e tenta de novo.'
 
@@ -49,6 +51,9 @@ def base(origem):
             When(estado='concluida', then=F('preco_ef')),
             When(estado__in=('falta', 'cancelada'), pago=True, then=F('valor_pago') - F('valor_reembolsado')),
             default=Value(ZERO), output_field=dec))
+    elif origem == 'pos':
+        qs = qs.annotate(valor_faturavel=Greatest(F('total') - F('gorjeta'), Value(ZERO),
+                                                  output_field=DecimalField(max_digits=12, decimal_places=2)))
     return qs
 
 
@@ -57,7 +62,7 @@ def q_faturavel(origem):
         return Q(status__in=fiscal.ESTADOS_FATURAVEIS)
     if origem == 'marcacoes':
         return Q(receita__gt=0)
-    return Q(status='fechada', total__gt=0)
+    return Q(status='fechada', valor_faturavel__gt=0)
 
 
 def q_por_faturar(origem):
@@ -73,15 +78,15 @@ def com_fatura(origem):
 
 def vendas(origem, loja=None, pos=None, de=None, ate=None):
     """
-    Vendas faturáveis (e as que tiveram fatura) de uma loja — loja online, marcações ou os POS ligados — ou de um POS.
-    Sem loja nem POS: de todos. de/ate: dias (fuso da plataforma).
+    Vendas faturáveis (e as que tiveram fatura) de uma loja — loja online, marcações ou as contas vendidas com POS
+    ligados a ela — ou de um POS (as contas dele sem loja). Sem loja nem POS: de todos. de/ate: dias (fuso da plataforma).
     """
     qs = base(origem).filter(q_faturavel(origem) | Q(id__in=com_fatura(origem)))
     if origem == 'pos':
         if pos is not None:
-            qs = qs.filter(pos=pos)
+            qs = qs.filter(pos=pos, loja__isnull=True)
         elif loja is not None:
-            qs = qs.filter(pos__loja_vinculada=loja)
+            qs = qs.filter(loja=loja)
     elif loja is not None:
         qs = qs.filter(loja=loja)
     campo = CAMPO_DATA[origem]
@@ -108,7 +113,7 @@ def valor_de(origem, obj):
         return obj.valor_devido
     if origem == 'marcacoes':
         return obj.receita if hasattr(obj, 'receita') else base('marcacoes').get(pk=obj.pk).receita
-    return obj.total
+    return max(obj.total - obj.gorjeta, ZERO)
 
 
 def faturavel(origem, obj):
@@ -116,7 +121,7 @@ def faturavel(origem, obj):
 
 
 def contagens(origem, chave, **filtro):
-    """{valor da chave: {vendas, faturadas, por_faturar}} — ex.: contagens('pos', 'pos__loja_vinculada_id')."""
+    """{valor da chave: {vendas, faturadas, por_faturar}} — ex.: contagens('pos', 'loja_id')."""
     qs = vendas(origem, de=filtro.pop('de', None), ate=filtro.pop('ate', None)).filter(**filtro)
     out = {}
     for r in (qs.order_by().values(chave)
@@ -180,7 +185,7 @@ def com_relacoes(origem, qs):
         return qs.select_related('comprador__user', 'pagamento', 'loja')
     if origem == 'marcacoes':
         return qs.select_related('cliente__user', 'loja')
-    return qs.select_related('mesa', 'pos')
+    return qs.select_related('mesa', 'pos', 'loja')
 
 
 def referencia(origem, obj):
@@ -228,6 +233,7 @@ def linha(origem, obj, request=None, anuladas=0):
         d['comprovativo'] = bool(pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial'))
     if origem == 'pos':
         d['pos'] = {'id': obj.pos_id, 'nome': obj.pos.nome}
+        d['gorjeta'] = str(obj.gorjeta)
     return d
 
 
