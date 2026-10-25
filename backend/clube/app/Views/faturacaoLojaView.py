@@ -137,7 +137,8 @@ def historico(request, loja_id):
     if erro:
         return erro
     ref = (request.GET.get('ref') or '').strip().upper()
-    qs = HistoricoFatura.objects.filter(Q(loja=loja) | Q(pos__loja_vinculada=loja), referencia=ref)
+    # dos POS ligados só as mensalidades: as contas vendidas com NIF próprio são do arquivo do POS
+    qs = HistoricoFatura.objects.filter(Q(loja=loja) | Q(pos__loja_vinculada=loja, tipo='mensalidade'), referencia=ref)
     return Response({'referencia': ref, 'itens': fiscal.historico_payload(qs, request)})
 
 

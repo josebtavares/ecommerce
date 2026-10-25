@@ -148,6 +148,15 @@ class ConfiguracaoPOS(models.Model):
 
         super().save(*args, **kwargs)
 
+    @property
+    def loja_do_arquivo_id(self):
+        """A loja em cujo arquivo fiscal ficam as contas que fecham agora: a ligada, se o POS fatura com o NIF dela
+        (segue os dados fiscais da loja, ou tem o mesmo NIF). Com NIF próprio as vendas são do POS."""
+        loja = self.loja_vinculada
+        if not loja:
+            return None
+        return loja.id if self.fiscal_da_loja or (self.nif and self.nif == loja.nif) else None
+
     def conectar_loja(self, loja, modo='integrado'):
         """
         Conecta o POS a uma loja.
@@ -568,14 +577,25 @@ class ContaMesa(models.Model):
     def __str__(self):
         return f"Conta #{self.id} - {self.mesa.numero} - {self.total} CVE"
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        obj = super().from_db(db, field_names, values)
+        obj._status_lido = obj.__dict__.get('status')
+        return obj
+
     def save(self, *args, **kwargs):
-        # ao fechar fica com a loja ligada nesse momento (qualquer caminho que feche passa por aqui)
-        if self.status == 'fechada' and self.loja_id is None and self.pos_id:
-            self.loja_id = ConfiguracaoPOS.objects.filter(pk=self.pos_id).values_list('loja_vinculada_id', flat=True).first()
+        # ao fechar fica no arquivo da loja ligada nesse momento, se o POS vende com o NIF dela
+        # (qualquer caminho que feche passa por aqui). Só no momento em que fecha: gravar depois uma conta do
+        # arquivo do POS (ex.: registar a fatura) não a passa para a loja a que o POS entretanto se ligou.
+        a_fechar = getattr(self, '_status_lido', None) != 'fechada'
+        if self.status == 'fechada' and a_fechar and self.loja_id is None and self.pos_id:
+            pos = ConfiguracaoPOS.objects.select_related('loja_vinculada').filter(pk=self.pos_id).first()
+            self.loja_id = pos.loja_do_arquivo_id if pos else None
             campos = kwargs.get('update_fields')
             if campos is not None and self.loja_id:
                 kwargs['update_fields'] = list(campos) + ['loja']
         super().save(*args, **kwargs)
+        self._status_lido = self.status
 
     def calcular_totais(self):
         # itens cancelados não são cobrados

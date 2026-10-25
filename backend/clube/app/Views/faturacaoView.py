@@ -534,18 +534,28 @@ def admin_ficha(request, tipo, id):
     return Response(dados)
 
 
-def vendas_filtradas(request, origem, loja=None, pos=None):
-    """?de=&ate= ?estado=faturada|por_faturar|com_anuladas|com_comprovativo ?q= ?min=&max= → (qs, erro)."""
+def vendas_filtradas(request, origem, loja=None, pos=None, todas_do_pos=False):
+    """
+    ?de=&ate= ?estado=faturada|por_faturar|com_anuladas|com_comprovativo ?q= ?min=&max= → (qs, erro).
+    todas_do_pos: as contas do POS dos dois arquivos, com ?arquivo=pos|loja-<id>.
+    """
     de, ate, erro = _datas(request)
     if erro:
         return None, erro
-    qs = fv.vendas(origem, loja=loja, pos=pos, de=de, ate=ate)
+    qs = fv.vendas(origem, loja=loja, pos=pos, de=de, ate=ate, todas_do_pos=todas_do_pos)
+    arquivo = request.GET.get('arquivo') or ''
+    if todas_do_pos and arquivo == 'pos':
+        qs = qs.filter(loja__isnull=True)
+    elif todas_do_pos and arquivo.startswith('loja-') and arquivo[5:].isdigit():
+        qs = qs.filter(loja_id=int(arquivo[5:]))
     h_tipo, campo = fv.HISTORICO[origem]
     estado = request.GET.get('estado') or ''
     if estado == 'faturada':
         qs = qs.filter(fatura_registada_em__isnull=False)
     elif estado == 'por_faturar':
         qs = qs.filter(fv.q_por_faturar(origem))
+        if todas_do_pos:
+            qs = qs.filter(fv.q_pos_fatura(pos))
     elif estado == 'com_anuladas':
         qs = qs.filter(id__in=HistoricoFatura.objects.filter(tipo=h_tipo, anulada_em__isnull=False).values(campo))
     qs = fv.filtrar(origem, qs, request.GET.get('q'))
@@ -555,16 +565,17 @@ def vendas_filtradas(request, origem, loja=None, pos=None):
     return qs, None
 
 
-def _lista_vendas(request, origem, loja=None, pos=None):
+def _lista_vendas(request, origem, loja=None, pos=None, todas_do_pos=False):
     """
     Vendas (com comprovativo e fatura) paginadas. ?de=&ate=  ?estado=faturada|por_faturar|com_anuladas
     ?q= nº da venda, nº fatura (também anuladas), cliente  ?min=&max=
     """
-    qs, erro = vendas_filtradas(request, origem, loja=loja, pos=pos)
+    qs, erro = vendas_filtradas(request, origem, loja=loja, pos=pos, todas_do_pos=todas_do_pos)
     if erro:
         return erro
+    por_faturar = fv.q_por_faturar(origem) & fv.q_pos_fatura(pos) if todas_do_pos else fv.q_por_faturar(origem)
     totais = qs.aggregate(n=Count('id'), faturadas=Count('id', filter=Q(fatura_registada_em__isnull=False)),
-                          por_faturar=Count('id', filter=fv.q_por_faturar(origem)))
+                          por_faturar=Count('id', filter=por_faturar))
     pagina, total = _paginar(request, fv.com_relacoes(origem, qs).order_by(f'-{fv.CAMPO_DATA[origem]}', '-id'))
     pagina = list(pagina)
     anul = fv.anuladas_por(origem, [o.id for o in pagina])
@@ -658,7 +669,7 @@ def pesquisa_documentos(request, q, loja_id=None, pos_id=None):
         contas = contas.filter(loja_id=loja_id)
         subs = subs.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
         fcs = fcs.filter(loja_id=loja_id)
-        hist = hist.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
+        hist = hist.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id, tipo='mensalidade'))
         lojas = lojas.none()
         poss = poss.filter(loja_vinculada_id=loja_id)
     elif pos_id:            # só este POS (mensalidades)

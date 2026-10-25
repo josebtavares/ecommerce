@@ -76,15 +76,16 @@ def com_fatura(origem):
     return HistoricoFatura.objects.filter(tipo=tipo, **{f'{campo}__isnull': False}).values(campo)
 
 
-def vendas(origem, loja=None, pos=None, de=None, ate=None):
+def vendas(origem, loja=None, pos=None, de=None, ate=None, todas_do_pos=False):
     """
     Vendas faturáveis (e as que tiveram fatura) de uma loja — loja online, marcações ou as contas vendidas com POS
-    ligados a ela — ou de um POS (as contas dele sem loja). Sem loja nem POS: de todos. de/ate: dias (fuso da plataforma).
+    ligados a ela — ou de um POS (as contas do arquivo dele: sem loja; todas_do_pos: também as do arquivo de uma loja).
+    Sem loja nem POS: de todos. de/ate: dias (fuso da plataforma).
     """
     qs = base(origem).filter(q_faturavel(origem) | Q(id__in=com_fatura(origem)))
     if origem == 'pos':
         if pos is not None:
-            qs = qs.filter(pos=pos, loja__isnull=True)
+            qs = qs.filter(pos=pos) if todas_do_pos else qs.filter(pos=pos, loja__isnull=True)
         elif loja is not None:
             qs = qs.filter(loja=loja)
     elif loja is not None:
@@ -248,7 +249,26 @@ def linha(origem, obj, request=None, anuladas=0):
     if origem == 'pos':
         d['pos'] = {'id': obj.pos_id, 'nome': obj.pos.nome}
         d['gorjeta'] = str(obj.gorjeta)
+        d['arquivo'] = arquivo_conta(obj)
     return d
+
+
+def q_pos_fatura(pos):
+    """As contas que o POS pode faturar: as do arquivo dele e as da loja a que está ligado agora
+    (as de uma loja a que já não está ligado faturam-se na Faturação dessa loja)."""
+    q = Q(loja__isnull=True)
+    return q | Q(loja_id=pos.loja_vinculada_id) if pos.loja_vinculada_id else q
+
+
+def arquivo_conta(conta):
+    """
+    Arquivo fiscal de uma conta do POS: o do POS, ou o da loja com cujo NIF foi vendida (ContaMesa.loja).
+    so_leitura: o POS já não está ligado a essa loja — a fatura regista-se na Faturação da loja, não no POS.
+    """
+    if not conta.loja_id:
+        return {'tipo': 'pos', 'loja': None, 'so_leitura': False}
+    return {'tipo': 'loja', 'loja': {'id': conta.loja_id, 'nome': conta.loja.nome},
+            'so_leitura': conta.loja_id != conta.pos.loja_vinculada_id}
 
 
 def anuladas_por(origem, ids):

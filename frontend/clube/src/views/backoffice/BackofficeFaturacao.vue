@@ -160,7 +160,7 @@
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarPdf, descarregarComprovativoVenda } from '@/utils/documentos'
-import { hojeCV } from '@/utils/servicos'
+import { PERIODOS, intervalo, textoPeriodo } from '@/utils/periodosFaturacao'
 import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
@@ -173,30 +173,10 @@ const PESQUISA = {
   marcacoes: 'M-…, nº de fatura (também anulada), cliente, serviço',
   pos: 'V-…, nº de fatura (também anulada), NIF do cliente, mesa',
 }
-const PERIODOS = [
-  { v: 'mes', t: 'Este mês' }, { v: 'mes_passado', t: 'Mês passado' }, { v: 'tres_meses', t: 'Últimos 3 meses' },
-  { v: 'ano', t: 'Este ano' }, { v: 'ano_passado', t: 'Ano passado' }, { v: 'todas', t: 'Todas as datas' },
-  { v: 'personalizado', t: 'Personalizado…' },
-]
 const ABAS = [{ key: 'vendas', label: 'Vendas e faturas' }, { key: 'pesquisa', label: 'Pesquisar documentos' }]
 const vazio = () => ({ q: '', estado: '', min: '', max: '' })
-const iso = d => d.toISOString().slice(0, 10)
 // E-… encomenda (loja online), M-… marcação, V-… conta do POS
 const ORIGEM_DO_PREFIXO = { E: 'loja', M: 'marcacoes', V: 'pos' }
-
-function intervalo (p) {
-  const h = new Date(hojeCV() + 'T12:00:00Z')
-  const a = h.getUTCFullYear(), m = h.getUTCMonth()
-  const dia = (y, mm, d) => iso(new Date(Date.UTC(y, mm, d)))
-  return {
-    mes: [dia(a, m, 1), iso(h)],
-    mes_passado: [dia(a, m - 1, 1), dia(a, m, 0)],
-    tres_meses: [dia(a, m - 2, 1), iso(h)],
-    ano: [dia(a, 0, 1), iso(h)],
-    ano_passado: [dia(a - 1, 0, 1), dia(a - 1, 11, 31)],
-    todas: ['', ''],
-  }[p]
-}
 
 export default {
   name: 'BackofficeFaturacao',
@@ -221,13 +201,7 @@ export default {
       if (this.ate) p.ate = this.ate
       return p
     },
-    textoPeriodo () {
-      const f = s => s.split('-').reverse().join('/')
-      if (this.de && this.ate) return `${f(this.de)} a ${f(this.ate)}`
-      if (this.de) return `desde ${f(this.de)}`
-      if (this.ate) return `até ${f(this.ate)}`
-      return 'Desde sempre'
-    },
+    textoPeriodo () { return textoPeriodo(this.de, this.ate) },
     cartoes () {
       const t = this.resumo.totais
       return [
