@@ -10,6 +10,8 @@
     <template v-else-if="dados">
       <!-- ═══ Desligado: activar ═══ -->
       <div v-if="!dados.ativo" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+        <!-- desligado: as marcações já feitas continuam a precisar de fatura (não aparece se não houver) -->
+        <MarcacoesFaturas class="mb-6 -mx-2 sm:mx-0" :loja-id="lojaId" />
         <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Serviços e marcações</p>
         <p class="text-2xl font-black text-zinc-100 mt-2">Vende serviços com marcação online</p>
         <p class="text-sm text-zinc-400 mt-1 max-w-2xl">
@@ -201,6 +203,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import AgendaServicos from '@/components/servicos/AgendaServicos.vue'
 import CatalogoServicos from '@/components/servicos/CatalogoServicos.vue'
 import ProfissionaisServicos from '@/components/servicos/ProfissionaisServicos.vue'
+import MarcacoesFaturas from '@/components/servicos/MarcacoesFaturas.vue'
 
 const CAMPO = 'w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500'
 const OPCOES_ANTECEDENCIA = [
@@ -214,7 +217,7 @@ const OPCOES_CANCELAR = [
 
 export default {
   name: 'BackofficeServicos',
-  components: { AgendaServicos, CatalogoServicos, ProfissionaisServicos },
+  components: { AgendaServicos, CatalogoServicos, ProfissionaisServicos, MarcacoesFaturas },
   props: {
     lojaId: { type: [String, Number], required: true },
     soAgenda: { type: Boolean, default: false },      // profissional com conta, sem gerir_marcacoes

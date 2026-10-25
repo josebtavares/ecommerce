@@ -205,9 +205,10 @@
       <AvisoFaturacao v-if="posId && !isMembro && currentPOS?.fiscal" class="mb-5" tema="claro"
                       :fiscal="currentPOS.fiscal" :chave="`pos-${posId}`" :pode-editar="true" @preencher="abrirConfiguracao" />
 
-      <!-- POS suspenso pela plataforma (a aba Subscrição continua aberta ao dono, para pagar) -->
+      <!-- POS suspenso pela plataforma (a aba Subscrição continua aberta ao dono, para pagar; o Histórico também,
+           para registar as faturas das vendas já feitas) -->
       <section
-        v-if="posId && currentPOS?.suspenso && !(activeTab === 'subscricao' && !isMembro)"
+        v-if="posId && currentPOS?.suspenso && !abertaSuspenso"
         class="rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center shadow-sm"
       >
         <font-awesome-icon :icon="['fas', 'ban']" class="text-3xl text-red-500" />
@@ -224,10 +225,19 @@
         <p v-else class="mt-3 text-xs font-semibold text-red-600/80">
           As vendas, mesas e produtos estão bloqueados até a suspensão ser levantada. Contacta o suporte da plataforma.
         </p>
-        <button v-if="suspensoPorSubscricao && !isMembro" type="button" @click="activeTab = 'subscricao'"
-          class="mt-4 h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800">
-          Pagar subscrição
-        </button>
+        <div class="mt-4 flex flex-wrap justify-center gap-2">
+          <button v-if="suspensoPorSubscricao && !isMembro" type="button" @click="activeTab = 'subscricao'"
+            class="h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800">
+            Pagar subscrição
+          </button>
+          <button v-if="podeHistorico" type="button" @click="activeTab = 'historico'" data-teste="suspenso-historico"
+            class="h-11 rounded-2xl border border-red-200 bg-white px-5 text-sm font-black text-red-800 transition hover:bg-red-100">
+            Histórico e faturas
+          </button>
+        </div>
+        <p v-if="podeHistorico" class="mt-2 text-[11px] font-semibold text-red-600/70">
+          As faturas das vendas já feitas continuam a poder ser registadas.
+        </p>
       </section>
 
       <!-- Área principal -->
@@ -584,6 +594,14 @@ export default {
         subscricao: 'POSSubscricao',
       }
       return map[this.activeTab] || 'POSMesas'
+    },
+
+    podeHistorico() {
+      return !this.isMembro || Boolean(this.permissoes?.pode_ver_relatorios)
+    },
+    // num POS suspenso só abrem a Subscrição (dono, para pagar) e o Histórico (faturas das vendas já feitas)
+    abertaSuspenso() {
+      return (this.activeTab === 'subscricao' && !this.isMembro) || (this.activeTab === 'historico' && this.podeHistorico)
     },
 
     // suspenso por falta de pagamento (o dono paga na aba Subscrição e o POS volta logo)

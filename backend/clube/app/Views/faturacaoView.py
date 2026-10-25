@@ -314,7 +314,7 @@ def admin_vendedores(request):
              .annotate(vendas=Count('encomendas', filter=vendas),
                        faturadas=Count('encomendas', filter=vendas & Q(encomendas__fatura_registada_em__isnull=False)),
                        n_por_faturar=Count('encomendas', filter=vendas & _por_faturar())))
-    poss = ConfiguracaoPOS.objects.filter(ativo=True)
+    poss = ConfiguracaoPOS.objects.all()        # inativos também: o arquivo fiscal fica
     if q:
         pessoa = (Q(dono__user__email__icontains=q) | Q(dono__user__username__icontains=q) |
                   Q(dono__user__first_name__icontains=q) | Q(dono__user__last_name__icontains=q) |
@@ -327,15 +327,16 @@ def admin_vendedores(request):
     if regime in fiscal.REGIMES_VALIDOS:
         lojas, poss = lojas.filter(regime_fiscal=regime), poss.filter(regime_fiscal=regime)
     if dados == 'incompletos':      # a loja ou algum dos seus POS
-        pos_inc = ConfiguracaoPOS.objects.filter(_incompletos(), ativo=True, loja_vinculada__isnull=False)
+        pos_inc = ConfiguracaoPOS.objects.filter(_incompletos(), loja_vinculada__isnull=False)
         lojas = lojas.filter(_incompletos() | Q(id__in=pos_inc.values('loja_vinculada_id')))
         poss = poss.filter(_incompletos())
     elif dados == 'completos':
         lojas, poss = lojas.exclude(_incompletos()), poss.exclude(_incompletos())
     # marcações e contas dos POS (as dos POS ligados contam também na loja)
     marc = fv.contagens('marcacoes', 'loja_id', de=de, ate=ate)
-    pos_loja = fv.contagens('pos', 'pos__loja_vinculada_id', de=de, ate=ate)
-    pos_cont = fv.contagens('pos', 'pos_id', de=de, ate=ate)
+    pos_loja = fv.contagens('pos', 'loja_id', de=de, ate=ate)
+    pos_na_loja = fv.contagens('pos', 'pos_id', de=de, ate=ate, loja__isnull=False)
+    pos_cont = fv.contagens('pos', 'pos_id', de=de, ate=ate, loja__isnull=True)     # as do próprio POS
     if por_faturar:
         outras = [i for d in (marc, pos_loja) for i, c in d.items() if i and c['por_faturar']]
         lojas = lojas.filter(Q(n_por_faturar__gt=0) | Q(id__in=outras))
@@ -357,9 +358,9 @@ def admin_vendedores(request):
     pos_pg = {p.id: p for p in ConfiguracaoPOS.objects.filter(id__in=ids_p).select_related('dono__user', 'loja_vinculada')}
     nada = {'vendas': 0, 'faturadas': 0, 'por_faturar': 0}
     pos_das_lojas = {}
-    for p in (ConfiguracaoPOS.objects.filter(loja_vinculada_id__in=ids_l, ativo=True)
+    for p in (ConfiguracaoPOS.objects.filter(loja_vinculada_id__in=ids_l)
               .select_related('dono__user', 'loja_vinculada').order_by('nome')):
-        pos_das_lojas.setdefault(p.loja_vinculada_id, []).append({**_vendedor_base(p, 'pos'), **pos_cont.get(p.id, nada)})
+        pos_das_lojas.setdefault(p.loja_vinculada_id, []).append({**_vendedor_base(p, 'pos'), **pos_na_loja.get(p.id, nada)})
 
     results = []
     for _, t, i in pagina:
@@ -423,7 +424,9 @@ def admin_abas(request):
     q = (request.GET.get('q') or '').strip()
     sem_fatura = _por_faturar()
     lojas = Loja.objects.exclude(estado='pendente')
-    poss = ConfiguracaoPOS.objects.filter(ativo=True, loja_vinculada__isnull=True)
+    # POS sem loja; um POS ligado só tem aba se tiver vendas dele (sem loja) por faturar
+    pos_pf = fv.contagens('pos', 'pos_id', loja__isnull=True)
+    poss = ConfiguracaoPOS.objects.filter(Q(loja_vinculada__isnull=True) | Q(id__in=[i for i, c in pos_pf.items() if c['por_faturar']]))
     if q:
         ql, qp = procura_abas(q)
         lojas, poss = lojas.filter(id__in=Loja.objects.filter(ql).values('id')), poss.filter(qp)
@@ -437,9 +440,8 @@ def admin_abas(request):
     for loja_id, n in _comissoes_por_faturar().items():
         bende[('loja', loja_id)] = bende.get(('loja', loja_id), 0) + n
 
-    # marcações e contas dos POS por faturar (as de um POS ligado contam na loja)
-    outras = fv.somar(fv.contagens('marcacoes', 'loja_id'), fv.contagens('pos', 'pos__loja_vinculada_id'))
-    pos_pf = fv.contagens('pos', 'pos_id', pos__loja_vinculada__isnull=True)
+    # marcações e contas dos POS por faturar (as vendidas com o POS ligado contam na loja)
+    outras = fv.somar(fv.contagens('marcacoes', 'loja_id'), fv.contagens('pos', 'loja_id'))
     itens = [{'tipo': 'loja', 'id': i, 'nome': nome, 'bende_por_faturar': bende.get(('loja', i), 0),
               'vendas_por_faturar': v + outras.get(i, {}).get('por_faturar', 0)}
              for i, nome, v in lojas.values_list('id', 'nome', 'vendas_por_faturar')]
@@ -494,7 +496,7 @@ def admin_ficha(request, tipo, id):
         dados = {
             **_vendedor_base(obj, 'loja'),
             'pos': [_vendedor_base(p, 'pos') for p in
-                    obj.pos_vinculados.filter(ativo=True).select_related('dono__user', 'loja_vinculada')],
+                    obj.pos_vinculados.select_related('dono__user', 'loja_vinculada')],
             'comissoes': [{**m, 'referencia': f"C-{obj.id}-{m['mes'].replace('-', '')}", 'anuladas': anul_com.get(m['mes'], 0)}
                           for m in _comissoes_por_mes(obj)],
         }
@@ -581,12 +583,11 @@ def admin_historico(request):
 
 
 def _res_venda(e, request, origem='loja'):
-    """Encomenda, marcação ou conta do POS (a de um POS ligado abre na loja)."""
+    """Encomenda, marcação ou conta do POS (a vendida com o POS ligado abre na loja)."""
     l = fv.linha(origem, e, request)
     if origem == 'pos':
-        p = e.pos
-        vend = ({'tipo': 'loja', 'id': p.loja_vinculada_id, 'nome': p.loja_vinculada.nome} if p.loja_vinculada_id
-                else {'tipo': 'pos', 'id': p.id, 'nome': p.nome})
+        vend = ({'tipo': 'loja', 'id': e.loja_id, 'nome': e.loja.nome} if e.loja_id
+                else {'tipo': 'pos', 'id': e.pos_id, 'nome': e.pos.nome})
     else:
         vend = {'tipo': 'loja', 'id': e.loja_id, 'nome': e.loja.nome}
     detalhe = f"{l['cliente']['nome']} · {l['status_nome']}" + (f' · {e.pos.nome}' if origem == 'pos' else '')
@@ -629,7 +630,7 @@ def admin_pesquisa(request):
     out = []
     enc = Encomenda.objects.select_related('loja', 'comprador__user')
     marc = fv.base('marcacoes').select_related('loja', 'cliente__user')
-    contas = fv.base('pos').select_related('mesa', 'pos__loja_vinculada')
+    contas = fv.base('pos').select_related('mesa', 'pos', 'loja')
     subs = FaturaSubscricao.objects.select_related('loja', 'pos', 'plano')
     fcs = FaturaComissoes.objects.select_related('loja')
     hist = HistoricoFatura.objects.filter(anulada_em__isnull=False)
@@ -640,7 +641,7 @@ def admin_pesquisa(request):
     if loja_id:             # só esta loja e os seus POS
         enc = enc.filter(loja_id=loja_id)
         marc = marc.filter(loja_id=loja_id)
-        contas = contas.filter(pos__loja_vinculada_id=loja_id)
+        contas = contas.filter(loja_id=loja_id)
         subs = subs.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
         fcs = fcs.filter(loja_id=loja_id)
         hist = hist.filter(Q(loja_id=loja_id) | Q(pos__loja_vinculada_id=loja_id))
@@ -676,6 +677,9 @@ def admin_pesquisa(request):
     out += [_res_venda(e, request) for e in enc.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_venda(x, request, 'marcacoes') for x in marc.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_venda(x, request, 'pos') for x in contas.filter(fatura_numero__icontains=q)[:LIM]]
+    if re.fullmatch(r'\d{9}', q):          # NIF do cliente nas contas do POS
+        out += [_res_venda(x, request, 'pos') for x in
+                contas.filter(fv.q_faturavel('pos'), nif_cliente=q).order_by('-fechada_em')[:LIM]]
     out += [_res_mensalidade(f, request) for f in subs.filter(fatura_numero__icontains=q)[:LIM]]
     out += [_res_comissoes(fc.loja, fc.mes, request)
             for fc in fcs.filter(fatura_numero__icontains=q)[:LIM]]
@@ -716,12 +720,19 @@ def admin_pesquisa(request):
     return Response({'count': total, 'results': pagina})
 
 
+def _celula(c):
+    """Texto que o Excel leria como fórmula (=, +, -, @ — ex.: um nome de cliente) leva ' à frente; números não."""
+    if isinstance(c, str) and c[:1] in ('=', '+', '-', '@', '\t', '\r') and not re.fullmatch(r'-?[\d.,\s$]+', c):
+        return "'" + c
+    return c
+
+
 def _csv(linhas):
     """[[...], ...] → texto CSV com ; e BOM (o Excel abre com acentos)."""
     buf = io.StringIO()
     buf.write('﻿')
     w = csv.writer(buf, delimiter=';')
-    w.writerows(linhas)
+    w.writerows([[_celula(c) for c in l] for l in linhas])
     return buf.getvalue()
 
 
@@ -755,7 +766,7 @@ def _linhas_vendas(alvo, qs, de, ate, request, origem='loja'):
          f'Declaração aceite: {_quando(alvo.dados_fiscais_aceites_em)}' if alvo.dados_fiscais_aceites_em else 'Declaração: por aceitar',
          periodo] + ([] if origem == 'loja' else [f'Vendas: {fv.NOMES[origem]}']),
         COLUNAS_CSV[origem] + ['Valor (CVE)', 'Estado', 'Fatura nº', 'Fatura registada em', 'PDF da fatura',
-                               'Faturas anuladas (motivo)'] + (['POS'] if origem == 'pos' else []),
+                               'Faturas anuladas (motivo)'] + (['POS', 'Gorjeta (CVE, fora da fatura)'] if origem == 'pos' else []),
     ]
     for o in qs:
         fat = fiscal.fatura_resumo(o, request)
@@ -765,7 +776,7 @@ def _linhas_vendas(alvo, qs, de, ate, request, origem='loja'):
                        f'{fv.valor_de(origem, o):.2f}'.replace('.', ','), fv.estado_nome(origem, o),
                        fat['numero'] if fat else '', _quando(fat['registada_em'], '%d/%m/%Y') if fat else '',
                        (fat or {}).get('pdf_url') or '', ' | '.join(anuladas.get(o.id, []))]
-                      + ([o.pos.nome] if origem == 'pos' else []))
+                      + ([o.pos.nome, f'{o.gorjeta:.2f}'.replace('.', ',')] if origem == 'pos' else []))
     return linhas
 
 

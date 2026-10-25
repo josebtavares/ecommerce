@@ -301,6 +301,9 @@ def _bloqueios_eliminar_loja(loja):
     n = ItemContaMesa.objects.filter(produto__loja=loja).count()
     if n:
         razoes.append(f'{n} venda(s) no POS com produtos desta loja')
+    n = loja.vendas_pos.count()
+    if n:
+        razoes.append(f'{n} conta(s) do POS vendidas em nome desta loja — registos financeiros nunca são apagados')
     pos = list(ConfiguracaoPOS.objects.filter(loja_vinculada=loja).values_list('nome', flat=True))
     if pos:
         razoes.append(f'POS vinculado(s): {", ".join(pos)} — desvincula primeiro')

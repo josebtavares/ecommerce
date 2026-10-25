@@ -42,9 +42,10 @@ def _base(f):
 
 
 def _receita(m):
-    """O que a marcação rendeu à loja: só as concluídas (e o que ficou de uma falta paga sem devolução)."""
+    """O que a marcação rendeu à loja: só as concluídas (e o que ficou de uma falta paga sem devolução).
+    Concluída: o preço — numa paga antecipada só se devolve o pago a mais (valor_pago − preço)."""
     if m.estado == 'concluida':
-        return m.preco - (m.valor_reembolsado if m.pago else ZERO)
+        return m.preco
     if m.estado in ('falta', 'cancelada') and m.pago:
         return m.valor_pago - m.valor_reembolsado
     return ZERO

@@ -493,6 +493,9 @@ class ContaMesa(models.Model):
     membro = models.ForeignKey('UtilizadorPOS', on_delete=models.SET_NULL, null=True, blank=True,
                                related_name='contas_abertas')
     atendente_nome = models.CharField(max_length=100, blank=True, default='', db_default='')
+    # loja ligada ao POS quando a conta fechou: a venda (e a fatura) fica no arquivo dessa loja mesmo que o
+    # POS se desligue depois. Vazio = venda do próprio POS. PROTECT: uma loja com vendas não se apaga.
+    loja = models.ForeignKey('app.Loja', on_delete=models.PROTECT, null=True, blank=True, related_name='vendas_pos')
 
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     taxa_servico_percentagem = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
@@ -564,6 +567,15 @@ class ContaMesa(models.Model):
 
     def __str__(self):
         return f"Conta #{self.id} - {self.mesa.numero} - {self.total} CVE"
+
+    def save(self, *args, **kwargs):
+        # ao fechar fica com a loja ligada nesse momento (qualquer caminho que feche passa por aqui)
+        if self.status == 'fechada' and self.loja_id is None and self.pos_id:
+            self.loja_id = ConfiguracaoPOS.objects.filter(pk=self.pos_id).values_list('loja_vinculada_id', flat=True).first()
+            campos = kwargs.get('update_fields')
+            if campos is not None and self.loja_id:
+                kwargs['update_fields'] = list(campos) + ['loja']
+        super().save(*args, **kwargs)
 
     def calcular_totais(self):
         # itens cancelados não são cobrados
