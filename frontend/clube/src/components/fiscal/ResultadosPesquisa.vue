@@ -5,7 +5,7 @@
     <p class="text-xs text-zinc-500">{{ res.count }} resultado(s)</p>
     <div v-for="r in res.results" :key="r.tipo + r.referencia"
       class="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-      <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', TIPOS[r.tipo].cor]">{{ TIPOS[r.tipo].nome }}</span>
+      <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold', TIPOS[r.tipo].cor]">{{ r.tipo === 'venda' ? ORIGENS[r.origem || 'loja'] : TIPOS[r.tipo].nome }}</span>
       <div class="flex-1 min-w-[200px]">
         <p class="text-sm font-semibold text-zinc-200">{{ r.titulo }} <span class="text-[11px] text-zinc-500 font-normal">· {{ r.referencia }}</span></p>
         <p class="text-[11px] text-zinc-500">{{ r.vendedor.nome }}<template v-if="r.detalhe"> · {{ r.detalhe }}</template><template v-if="r.data"> · {{ data(r.data) }}</template></p>
@@ -25,6 +25,8 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import PaginacaoLista from './PaginacaoLista.vue'
 
+// vendas: encomenda (loja online), marcação ou conta do POS
+const ORIGENS = { loja: 'Venda', marcacoes: 'Marcação', pos: 'Venda POS' }
 const TIPOS = {
   venda:       { nome: 'Venda',          cor: 'bg-zinc-700 text-zinc-200' },
   mensalidade: { nome: 'Mensalidade',    cor: 'bg-violet-500/15 text-violet-300' },
@@ -44,7 +46,7 @@ export default {
   },
   emits: ['abrir', 'ir'],
   data () {
-    return { TIPOS }
+    return { TIPOS, ORIGENS }
   },
   methods: {
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },

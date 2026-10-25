@@ -131,6 +131,11 @@
         </div>
         <p class="text-[11px] text-zinc-600">Criada {{ m.criada_por ? 'por ' + m.criada_por : 'pelo cliente' }}</p>
 
+        <!-- fatura do serviço (só depois de render: concluída, ou falta paga); o cliente com conta vê-a e recebe-a por email -->
+        <FaturaVenda v-if="podeGerir && (m.faturavel || m.fatura)" :documento="m" :url="base() + 'fatura/'" teste="fatura-marcacao"
+          :cancelada="!m.faturavel" :dica="m.cliente_id ? 'Emite a fatura no e-Fatura e regista-a aqui: o cliente vê-a na marcação.' : 'Emite a fatura no e-Fatura e regista-a aqui.'"
+          @atualizada="faturaAtualizada" />
+
         <MarcacaoConversa v-if="m.pode_conversar" :marcacao-id="m.id" :is-dark="true" :versao="versao" @mudou="carregar" />
 
         <p v-for="(a, i) in avisos" :key="'a' + i" class="text-sm text-amber-300" role="status">{{ a }}</p>
@@ -147,13 +152,14 @@ import api from '@/services/api'
 import { CAMPO, ESTADOS_MARCACAO, diaDe, hora, hojeCV, rotuloDia, ouvirMarcacoes } from '@/utils/servicos'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import MarcacaoConversa from './MarcacaoConversa.vue'
+import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 
 const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro profissional' }, { k: 'preco', t: 'Propor preço' },
                  { k: 'cancelar', t: 'Cancelar' }]
 
 export default {
   name: 'MarcacaoDetalhe',
-  components: { MarcacaoConversa },
+  components: { FaturaVenda, MarcacaoConversa },
   props: {
     lojaId: { type: [String, Number], required: true },
     marcacaoId: { type: Number, required: true },
@@ -201,6 +207,11 @@ export default {
         corpo.motivo = this.motivoPreco
       }
       this.acao(corpo, 'Serviço concluído.')
+    },
+    faturaAtualizada (data) {
+      this.m = data
+      this.ok = data.fatura ? `Fatura ${data.fatura.numero} registada.` : 'Fatura anulada.'
+      this.$emit('alterada', data)
     },
     async acao (corpo, ok = '', pergunta = '') {
       if (pergunta && !confirm(pergunta)) return

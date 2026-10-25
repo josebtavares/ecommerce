@@ -1234,7 +1234,7 @@ class FaturaComissoes(models.Model):
 
 class HistoricoFatura(models.Model):
     """
-    Arquivo de todas as faturas registadas (vendas das lojas e faturas do Bende) — nada se apaga.
+    Arquivo de todas as faturas registadas (vendas das lojas, dos POS e marcações, e faturas do Bende) — nada se apaga.
     Alterar ou remover uma fatura ANULA o registo (quem, quando, motivo) e o PDF fica aqui guardado
     (limpeza.em_uso vê este FileField, por isso o ficheiro nunca vai para a fila de limpeza).
     A fatura em vigor continua também nos campos fatura_* do documento (utils/fiscal.py).
@@ -1243,13 +1243,18 @@ class HistoricoFatura(models.Model):
         ('encomenda',   'Venda da loja'),
         ('mensalidade', 'Mensalidade (Bende)'),
         ('comissoes',   'Comissões do mês (Bende)'),
+        ('venda_pos',   'Venda do POS'),
+        ('marcacao',    'Marcação (serviço)'),
     ]
     tipo         = models.CharField(max_length=12, choices=TIPOS)
-    referencia   = models.CharField(max_length=40, db_index=True)    # E-<id>, S-<id>, C-<loja>-<AAAAMM>
+    referencia   = models.CharField(max_length=40, db_index=True)    # E-<id>, S-<id>, C-<loja>-<AAAAMM>, V-<conta>, M-<marcação>
     loja         = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_faturas')
     pos          = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.SET_NULL, null=True, blank=True,
                                      related_name='historico_faturas')
     encomenda    = models.ForeignKey('Encomenda', on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_faturas')
+    conta        = models.ForeignKey('pos.ContaMesa', on_delete=models.SET_NULL, null=True, blank=True, related_name='historico_faturas')
+    marcacao     = models.ForeignKey('servicos.Marcacao', on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='historico_faturas')
     fatura_subscricao = models.ForeignKey('FaturaSubscricao', on_delete=models.SET_NULL, null=True, blank=True,
                                           related_name='historico_faturas')
     mes          = models.DateField(null=True, blank=True)            # comissões: dia 1 do mês

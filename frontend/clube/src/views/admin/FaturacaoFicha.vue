@@ -1,5 +1,6 @@
 <template>
-  <!-- Admin → Faturação → ficha fiscal de uma loja ou POS (backend admin_ficha / admin_loja_vendas / admin_historico) -->
+  <!-- Admin → Faturação → ficha fiscal de uma loja ou POS (backend admin_ficha / admin_loja_vendas / admin_pos_vendas / admin_historico).
+       Vendas de uma loja por origem: loja online (encomendas), marcações e POS ligados; de um POS: as contas fechadas. -->
   <div class="space-y-5" data-teste="ficha-fiscal">
     <button v-if="ficha && ficha.tipo === 'pos' && ficha.loja" type="button" @click="$emit('abrir', 'loja', ficha.loja.id, 'pos')"
       class="text-xs text-zinc-400 hover:text-zinc-200" data-teste="voltar-loja">← {{ ficha.loja.nome }}</button>
@@ -78,8 +79,16 @@
 
       <!-- ═══ VENDAS ═══ -->
       <template v-else-if="aba === 'vendas'">
+        <div v-if="ficha.origens && ficha.origens.length > 1" class="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit max-w-full overflow-x-auto"
+             role="tablist" aria-label="Origem das vendas" data-teste="vendas-origens">
+          <button v-for="o in ficha.origens" :key="o.origem" type="button" role="tab" :aria-selected="origem === o.origem ? 'true' : 'false'"
+            @click="mudarOrigem(o.origem)" :data-teste="`origem-${o.origem}`"
+            :class="['px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap', origem === o.origem ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
+            {{ o.nome }} <span :class="o.por_faturar ? 'text-amber-300' : 'text-zinc-500'">· {{ o.por_faturar ? `${o.por_faturar} por faturar` : o.vendas }}</span>
+          </button>
+        </div>
         <form @submit.prevent="carregarVendas(0)" class="flex flex-wrap items-end gap-2">
-          <input v-model.trim="fv.q" type="search" placeholder="Nº encomenda, nº fatura (também anulada), cliente" aria-label="Pesquisar vendas" data-teste="vendas-q"
+          <input v-model.trim="fv.q" type="search" :placeholder="pesquisaVendas" aria-label="Pesquisar vendas" data-teste="vendas-q"
             class="flex-1 min-w-[220px] px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-red-500" />
           <select v-model="fv.estado" aria-label="Estado da fatura" data-teste="vendas-estado" class="px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200">
             <option value="">Todas</option><option value="por_faturar">Por faturar</option><option value="faturada">Faturadas</option><option value="com_anuladas">Com faturas anuladas</option>
@@ -107,16 +116,17 @@
           <table class="w-full text-sm min-w-[860px]" data-teste="tabela-vendas">
             <thead>
               <tr class="text-left text-[11px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
-                <th class="px-4 py-3">Encomenda</th><th class="px-4 py-3">Data</th><th class="px-4 py-3">Cliente</th><th class="px-4 py-3 text-right">Valor</th>
+                <th class="px-4 py-3">{{ origem === 'loja' ? 'Encomenda' : origem === 'marcacoes' ? 'Marcação' : 'Conta' }}</th><th class="px-4 py-3">Data</th><th class="px-4 py-3">Cliente</th><th class="px-4 py-3 text-right">Valor</th>
                 <th class="px-4 py-3">Estado</th><th class="px-4 py-3">Fatura</th><th class="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-zinc-800">
               <template v-for="e in vendas.results" :key="e.id">
                 <tr>
-                  <td class="px-4 py-3"><p class="font-semibold text-zinc-200">#{{ e.id }}</p><p class="text-[11px] text-zinc-500">{{ e.referencia }}</p></td>
+                  <td class="px-4 py-3"><p class="font-semibold text-zinc-200">{{ e.titulo }}</p>
+                    <p class="text-[11px] text-zinc-500">{{ e.referencia }}<template v-if="e.pos && tipo === 'loja'"> · {{ e.pos.nome }}</template></p></td>
                   <td class="px-4 py-3 text-xs text-zinc-400">{{ quando(e.data) }}</td>
-                  <td class="px-4 py-3"><p class="text-zinc-300">{{ e.cliente.nome }}</p><p class="text-[11px] text-zinc-500">{{ e.cliente.email }}</p></td>
+                  <td class="px-4 py-3"><p class="text-zinc-300">{{ e.cliente.nome }}</p><p v-if="e.cliente.email" class="text-[11px] text-zinc-500">{{ e.cliente.email }}</p></td>
                   <td class="px-4 py-3 text-right text-zinc-200">{{ dinheiro(e.valor) }}</td>
                   <td class="px-4 py-3 text-xs text-zinc-400">{{ e.status_nome }}</td>
                   <td class="px-4 py-3 text-xs">
@@ -163,7 +173,7 @@
       <!-- ═══ PESQUISAR (só nesta loja/POS) ═══ -->
       <template v-else-if="aba === 'pesquisa'">
         <form @submit.prevent="pesquisar(0)" class="flex flex-wrap gap-2">
-          <input v-model.trim="pq" type="search" :placeholder="tipo === 'loja' ? 'Nº de fatura, E-123, S-45, C-…, nº de encomenda, cliente, POS…' : 'Nº de fatura, S-45…'"
+          <input v-model.trim="pq" type="search" :placeholder="tipo === 'loja' ? 'Nº de fatura, E-123, M-12, V-7, S-45, C-…, cliente, POS…' : 'Nº de fatura, V-7, S-45…'"
             aria-label="Pesquisar documentos desta loja" data-teste="ficha-pesquisa-q"
             class="flex-1 min-w-[220px] px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-red-500" />
           <button type="submit" :disabled="pq.length < 2" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold">Pesquisar</button>
@@ -215,6 +225,9 @@ import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
 
 const LIMITE = 20
 const vazio = () => ({ q: '', estado: '', de: '', ate: '', min: '', max: '' })
+// E-… encomenda (loja online), M-… marcação, V-… conta do POS
+const ORIGEM_DO_PREFIXO = { E: 'loja', M: 'marcacoes', V: 'pos' }
+const origemDe = (ref, tipo) => tipo === 'pos' ? 'pos' : (/^[EMV]-/i.test(ref || '') ? ORIGEM_DO_PREFIXO[ref.charAt(0).toUpperCase()] : 'loja')
 
 export default {
   name: 'FaturacaoFicha',
@@ -232,7 +245,7 @@ export default {
       aba: this.abaInicial || 'dados',
       fv: { ...vazio(), q: this.qInicial },
       vendas: { count: 0, results: [], totais: null }, offsetVendas: 0, carregandoVendas: false,
-      aberto: {}, versao: 0, historicoVenda: '',
+      aberto: {}, versao: 0, historicoVenda: '', origem: origemDe(this.qInicial, this.tipo),
       zip: { de: '', ate: '', aExportar: false, erro: '' },
       pq: '', pRes: null, pOffset: 0,
     }
@@ -240,11 +253,16 @@ export default {
   computed: {
     abas () {
       if (this.tipo !== 'loja') {
-        return [{ key: 'dados', label: 'Ficha' }, { key: 'bende', label: 'Faturas do Bende' }, { key: 'pesquisa', label: 'Pesquisar' }]
+        return [{ key: 'dados', label: 'Ficha' }, { key: 'vendas', label: 'Vendas e faturas' }, { key: 'bende', label: 'Faturas do Bende' },
+          { key: 'pesquisa', label: 'Pesquisar' }]
       }
       return [{ key: 'dados', label: 'Ficha' }, { key: 'vendas', label: 'Vendas e faturas' },
         { key: 'pos', label: `POS (${this.ficha ? this.ficha.pos.length : '…'})` },
         { key: 'bende', label: 'Faturas do Bende' }, { key: 'pesquisa', label: 'Pesquisar' }]
+    },
+    pesquisaVendas () {
+      return { loja: 'Nº encomenda, nº fatura (também anulada), cliente', marcacoes: 'M-…, nº fatura (também anulada), cliente, serviço',
+        pos: 'V-…, nº fatura (também anulada), NIF do cliente, mesa' }[this.origem]
     },
     cartoes () {
       const t = this.ficha.totais
@@ -258,7 +276,7 @@ export default {
   },
   watch: {
     id () { this.carregar() },
-    tipo () { this.carregar() },
+    tipo () { this.origem = origemDe('', this.tipo); this.carregar() },
   },
   created () { this.carregar() },
   methods: {
@@ -282,6 +300,12 @@ export default {
       try {
         this.ficha = (await api.get(`/app/admin/faturacao/ficha/${this.tipo}/${this.id}/`)).data
         this.$emit('carregada', this.ficha)
+        // sem uma venda pedida: abre na origem com vendas por faturar (ou com vendas), não numa vazia
+        const atual = (this.ficha.origens || []).find(o => o.origem === this.origem)
+        if (!this.qInicial && atual && !atual.por_faturar) {
+          const outra = this.ficha.origens.find(o => o.por_faturar) || (!atual.vendas && this.ficha.origens.find(o => o.vendas))
+          if (outra) this.origem = outra.origem
+        }
         if (this.aba === 'vendas') this.carregarVendas(0)
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível carregar a ficha.'
@@ -295,13 +319,21 @@ export default {
       this.offsetVendas = offset; this.carregandoVendas = true; this.erro = ''
       const params = { limit: LIMITE, offset }
       for (const [k, v] of Object.entries(this.fv)) if (v) params[k] = v
+      if (this.tipo === 'loja') params.origem = this.origem
+      const url = this.tipo === 'pos' ? `/app/admin/faturacao/pos/${this.id}/vendas/` : `/app/admin/faturacao/loja/${this.id}/vendas/`
       try {
-        this.vendas = (await api.get(`/app/admin/faturacao/loja/${this.id}/vendas/`, { params })).data
+        this.vendas = (await api.get(url, { params })).data
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível carregar as vendas.'
       } finally { this.carregandoVendas = false }
     },
     limparVendas () { this.fv = vazio(); this.carregarVendas(0) },
+    mudarOrigem (o) {
+      if (o === this.origem) return
+      this.origem = o; this.fv = vazio(); this.historicoVenda = ''
+      this.vendas = { count: 0, results: [], totais: null }
+      this.carregarVendas(0)
+    },
     alternar (ref) { this.aberto = { ...this.aberto, [ref]: !this.aberto[ref] } },
     pesquisar (offset = 0) {
       this.pOffset = offset
@@ -313,7 +345,9 @@ export default {
     // resultado da pesquisa → a aba certa desta loja (ou a ficha do POS)
     abrirResultado (r) {
       if (r.tipo === 'pos') return this.$emit('abrir', 'pos', r.vendedor.id)
-      if (r.tipo === 'venda' || (r.tipo === 'anulada' && r.referencia.startsWith('E-'))) {
+      if (r.tipo === 'venda' || (r.tipo === 'anulada' && /^[EMV]-/.test(r.referencia))) {
+        if (r.vendedor.tipo !== this.tipo || String(r.vendedor.id) !== String(this.id)) return this.$emit('abrir', r.vendedor.tipo, r.vendedor.id, 'vendas', r.referencia)
+        this.origem = origemDe(r.referencia, this.tipo)
         this.fv = { ...vazio(), q: r.referencia }
         this.aba = 'vendas'
         return this.carregarVendas(0)
@@ -330,7 +364,9 @@ export default {
     csv () {
       const de = this.fv.de || '2020-01-01'
       const ate = this.fv.ate || new Date().toISOString().slice(0, 10)
-      descarregarPdf('/app/admin/faturacao/vendas.csv', `vendas-${this.id}-${de}-${ate}.csv`, { loja: this.id, de, ate })
+      const alvo = this.tipo === 'pos' ? { pos: this.id } : { loja: this.id, origem: this.origem }
+      const nome = { loja: 'vendas', marcacoes: 'marcacoes', pos: 'vendas-pos' }[this.origem]
+      descarregarPdf('/app/admin/faturacao/vendas.csv', `${nome}-${this.id}-${de}-${ate}.csv`, { ...alvo, de, ate })
     },
     async exportar () {
       this.zip.aExportar = true; this.zip.erro = ''

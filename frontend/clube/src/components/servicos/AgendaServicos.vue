@@ -19,8 +19,22 @@
         <option :value="null">Todos</option>
         <option v-for="p in dados.profissionais" :key="p.id" :value="p.id">{{ p.nome }}</option>
       </select>
+      <!-- serviços feitos (ou faltas pagas) sem a fatura registada -->
+      <button v-if="podeGerir && porFaturar.length" type="button" @click="verPorFaturar = !verPorFaturar" data-teste="marcacoes-por-faturar"
+        :aria-expanded="verPorFaturar ? 'true' : 'false'"
+        class="h-9 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-bold">Por faturar · {{ porFaturar.length }}</button>
       <button v-if="podeGerir" type="button" @click="novaEm({})" data-teste="nova-marcacao"
         class="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold">+ Marcação</button>
+    </div>
+
+    <div v-if="verPorFaturar && porFaturar.length" class="bg-zinc-900 rounded-2xl border border-amber-500/30 overflow-hidden" data-teste="lista-por-faturar">
+      <p class="px-4 py-2 text-xs text-amber-200 border-b border-zinc-800">Emite a fatura no e-Fatura e regista-a em cada marcação.</p>
+      <button v-for="m in porFaturar" :key="m.id" type="button" @click="abrir(m)"
+        class="w-full flex flex-wrap items-center gap-x-3 gap-y-0.5 px-4 py-2.5 border-b border-zinc-800/60 last:border-0 text-left hover:bg-zinc-800/50">
+        <span class="text-xs tabular-nums text-zinc-400 w-24">{{ rotuloDia(diaDe(m.inicio)) }} {{ hora(m.inicio) }}</span>
+        <span class="flex-1 min-w-0 text-sm text-zinc-200 truncate">{{ m.servico_nome }} · {{ m.cliente_nome || '—' }}</span>
+        <span class="text-xs text-zinc-400">{{ ESTADOS[m.estado].nome }} · {{ m.preco_texto }}</span>
+      </button>
     </div>
 
     <p v-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
@@ -120,7 +134,7 @@ export default {
   },
   data () {
     return { dados: null, inicio: hojeCV(), dias: 1, filtroProf: null, erro: '', nova: null, aberta: null,
-             hoje: hojeCV(), PX, ESTADOS: ESTADOS_MARCACAO }
+             hoje: hojeCV(), PX, ESTADOS: ESTADOS_MARCACAO, porFaturar: [], verPorFaturar: false }
   },
   computed: {
     profs () { return (this.dados?.profissionais || []).filter(p => !this.filtroProf || p.id === this.filtroProf) },
@@ -184,13 +198,21 @@ export default {
     if (q) this.aberta = q
   },
   methods: {
-    hora, rotuloDia,
+    diaDe, hora, rotuloDia,
     async carregar () {
       this.erro = ''
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/servicos/agenda/`, { params: { inicio: this.inicio, dias: this.dias } })
         this.dados = data
       } catch (e) { this.erro = e.response?.data?.detail || 'Não foi possível carregar a agenda.' }
+      this.carregarPorFaturar()
+    },
+    async carregarPorFaturar () {
+      if (!this.podeGerir) return
+      try {
+        this.porFaturar = (await api.get(`/app/loja/${this.lojaId}/servicos/marcacoes/`, { params: { fatura: 'por_faturar' } })).data
+        if (!this.porFaturar.length) this.verPorFaturar = false
+      } catch { /* a agenda continua a funcionar sem a lista */ }
     },
     mover (n) { this.inicio = somarDias(this.inicio, n * this.dias); this.carregar() },
     irHoje () { this.inicio = this.dias === 7 ? somarDias(hojeCV(), -diaSemana(hojeCV())) : hojeCV(); this.carregar() },

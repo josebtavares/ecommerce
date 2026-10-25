@@ -12,9 +12,11 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from ..utils.dinheiro import formatar
+from ..utils.fiscal import fatura_resumo
 from ..utils.horarios import fuso
 from . import cobranca
 from .agenda import Indisponivel, verificar
+from .relatorios import _receita
 from .models import Marcacao, Profissional, ReatribuicaoMarcacao
 
 
@@ -426,6 +428,8 @@ def marcacao_payload(m, completo=False):
         'concluida_em': m.concluida_em.astimezone(tz).isoformat() if m.concluida_em else None,
         'expira_em': m.expira_em.astimezone(tz).isoformat() if m.expira_em else None,
         'cancelada_por': m.cancelada_por, 'cancelada_motivo': m.cancelada_motivo,
+        # fatura que a loja registou (o cliente vê-a); faturável = rendeu dinheiro (relatorios._receita)
+        'referencia': f'M-{m.id}', 'fatura': fatura_resumo(m), 'faturavel': _receita(m) > 0,
     }
     if completo:
         d['reatribuicoes'] = [{'de': r.de.nome, 'para': r.para.nome, 'por': r.por, 'motivo': r.motivo,

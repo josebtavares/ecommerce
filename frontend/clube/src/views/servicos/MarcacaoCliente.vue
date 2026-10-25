@@ -47,6 +47,10 @@
           <div v-if="Number(m.valor_reembolsado) > 0" class="flex justify-between text-green-500"><span>Devolvido</span><span>{{ dinheiro(m.valor_reembolsado) }}</span></div>
           <p v-if="m.preco_final && m.preco_final_motivo" class="text-xs pt-1" :class="suave">Preço final: {{ m.preco_final_motivo }}</p>
           <p v-if="m.notas_cliente" class="text-xs pt-1" :class="suave">A tua nota: {{ m.notas_cliente }}</p>
+          <!-- a fatura que a loja emitiu e registou (também chega por email) -->
+          <div v-if="m.fatura" class="flex justify-between gap-3 pt-1" data-teste="fatura-cliente"><span :class="suave">Fatura</span>
+            <span><b>{{ m.fatura.numero }}</b>
+              <a v-if="m.fatura.pdf_url" :href="urlFicheiro(m.fatura.pdf_url)" target="_blank" rel="noopener" class="ml-2 text-red-500 underline text-xs font-semibold">Ver PDF</a></span></div>
           <p v-if="m.estado === 'cancelada'" class="text-xs pt-1" :class="suave">Cancelada{{ m.cancelada_por && m.cancelada_por !== 'Cliente' ? ' pela loja' : '' }}{{ m.cancelada_motivo ? ': ' + m.cancelada_motivo : '' }}</p>
         </div>
 
@@ -104,6 +108,7 @@
 import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
+import { urlFicheiro } from '@/utils/documentos'
 import { DIAS_CURTOS, diaDe, diaSemana, hojeCV, hora, rotuloDia, somarDias } from '@/utils/servicos'
 import MarcacaoConversa from '@/components/servicos/MarcacaoConversa.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
@@ -140,7 +145,7 @@ export default {
   mounted () { this.desligar = ouvirMarcacoes(d => { if ((!d || String(d.id) === String(this.$route.params.id)) && !this.aEnviar) this.carregar(true) }) },
   beforeUnmount () { this.desligar?.() },
   methods: {
-    diaDe, diaSemana, hora, rotuloDia,
+    diaDe, diaSemana, hora, rotuloDia, urlFicheiro,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     chip (ativo) {
       return ['px-3 py-1.5 rounded-xl border text-sm font-semibold',

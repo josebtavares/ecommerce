@@ -19,7 +19,7 @@ from rest_framework.response import Response
 
 from ..models import Loja, UtilizadorLoja
 from ..uploads import validar_ficheiro
-from ..utils import limpeza
+from ..utils import faturas_vendas, limpeza
 from ..utils.dinheiro import formatar, ler_valor
 from ..utils.horarios import fuso
 from ..Views.lojaView import _get_membro
@@ -685,7 +685,7 @@ def disponibilidade(request, loja_id):
 @permission_classes([IsAuthenticated])
 def marcacoes(request, loja_id):
     """
-    GET  /app/loja/<id>/servicos/marcacoes/?estado=&de=&ate=&q=  (lista)
+    GET  /app/loja/<id>/servicos/marcacoes/?estado=&de=&ate=&q=&fatura=por_faturar  (lista)
     POST { servico_id, profissional_id?, inicio, cliente_nome, cliente_telefone?, notas_internas?, preco?, ignorar_horario? }
          marcação manual (telefone / balcão): fica confirmada, paga no local.
     """
@@ -696,6 +696,8 @@ def marcacoes(request, loja_id):
         qs = Marcacao.objects.filter(loja=loja).select_related('profissional', 'cliente__user').order_by('-inicio')
         if request.GET.get('estado') in dict(Marcacao.ESTADOS):
             qs = qs.filter(estado=request.GET['estado'])
+        if request.GET.get('fatura') == 'por_faturar':     # renderam dinheiro e ainda sem fatura
+            qs = qs.filter(id__in=faturas_vendas.base('marcacoes').filter(faturas_vendas.q_por_faturar('marcacoes'), loja=loja).values('id'))
         de, ate = _ler_dia(request.GET.get('de')), _ler_dia(request.GET.get('ate'))
         if de:
             qs = qs.filter(inicio__date__gte=de)
@@ -889,3 +891,36 @@ def livres_para_reatribuir(request, loja_id, marcacao_id):
         out.append({'id': p.id, 'nome': p.nome, 'livre': livre, 'razao': razao, 'faz_o_servico': p.id in faz})
     out.sort(key=lambda x: (not x['livre'], not x['faz_o_servico'], x['nome']))
     return Response(out)
+
+
+@api_view(['POST', 'DELETE'])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+@permission_classes([IsAuthenticated])
+def marcacao_fatura(request, loja_id, marcacao_id):
+    """
+    POST   /app/loja/<id>/servicos/marcacoes/<mid>/fatura/   multipart: numero, pdf (opcional), motivo (ao substituir)
+    DELETE /app/loja/<id>/servicos/marcacoes/<mid>/fatura/   {motivo} — anula (o registo e o PDF ficam no histórico)
+    A loja emite a fatura do serviço no e-Fatura e regista-a aqui; o cliente (com conta) vê-a na marcação.
+    """
+    loja, membro, erro = _acesso(request, loja_id, 'gerir_marcacoes')
+    if erro:
+        return erro
+    m = get_object_or_404(Marcacao, id=marcacao_id, loja=loja)
+    evento, numero, erro = faturas_vendas.pedido(request, m, 'marcacoes', request.user)
+    if erro:
+        return erro
+    if evento and m.cliente_id:
+        from ..Views.notificacaoView import notificar
+        from ..utils.emails_fiscais import enviar_fatura_anulada, enviar_fatura_marcacao
+        if evento == 'anulada':
+            notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo=f'Fatura da marcação #{m.id} anulada',
+                      mensagem=f'{loja.nome} anulou a fatura {numero}.', loja=loja, link=f'/minhas-marcacoes/{m.id}')
+            enviar_fatura_anulada(m, numero, str(request.data.get('motivo') or '').strip()[:300])
+        else:
+            if evento == 'registada':
+                notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo=f'Fatura da marcação #{m.id}',
+                          mensagem=f'{loja.nome} registou a fatura {m.fatura_numero} de {m.servico_nome}.',
+                          loja=loja, link=f'/minhas-marcacoes/{m.id}')
+            enviar_fatura_marcacao(m)      # também quando a loja a corrige
+    m = Marcacao.objects.select_related('profissional', 'cliente__user').get(pk=m.pk)
+    return Response(_com_conversa(m))

@@ -124,7 +124,7 @@ def dados_fiscais_payload(obj, detalhe=False):
 
 
 def fatura_resumo(obj, request=None):
-    """Fatura registada (encomenda, mensalidade ou comissões do mês) — None se ainda não há."""
+    """Fatura registada (encomenda, conta do POS, marcação, mensalidade ou comissões do mês) — None se ainda não há."""
     if not obj or not obj.fatura_registada_em:
         return None
     pdf = None
@@ -148,6 +148,10 @@ def referencia(obj):
         return f'E-{obj.id}'
     if nome == 'faturasubscricao':
         return f'S-{obj.id}'
+    if nome == 'contamesa':
+        return f'V-{obj.id}'
+    if nome == 'marcacao':
+        return f'M-{obj.id}'
     return f'C-{obj.loja_id}-{obj.mes:%Y%m}'
 
 
@@ -158,6 +162,10 @@ def _ligacao(obj):
         return {'tipo': 'encomenda', 'encomenda_id': obj.id}
     if nome == 'faturasubscricao':
         return {'tipo': 'mensalidade', 'fatura_subscricao_id': obj.id}
+    if nome == 'contamesa':
+        return {'tipo': 'venda_pos', 'conta_id': obj.id}
+    if nome == 'marcacao':
+        return {'tipo': 'marcacao', 'marcacao_id': obj.id}
     return {'tipo': 'comissoes', 'loja_id': obj.loja_id, 'mes': obj.mes}
 
 
@@ -170,7 +178,7 @@ def _arquivar(obj, user):
     """Linha em vigor no arquivo para a fatura que está agora no documento."""
     from ..models import HistoricoFatura
     return HistoricoFatura.objects.create(**{
-        'loja_id': obj.loja_id, 'pos_id': getattr(obj, 'pos_id', None), **_ligacao(obj),
+        'loja_id': getattr(obj, 'loja_id', None), 'pos_id': getattr(obj, 'pos_id', None), **_ligacao(obj),
         'referencia': referencia(obj), 'numero': obj.fatura_numero,
         'pdf': obj.fatura_pdf.name if obj.fatura_pdf else '', 'registada_em': obj.fatura_registada_em,
         'registada_por': user if getattr(user, 'is_authenticated', False) else None})
@@ -213,7 +221,7 @@ def _gravar(obj):
 
 def registar_fatura(obj, numero, pdf, user=None, motivo=''):
     """
-    Regista (ou substitui) a fatura de uma encomenda, mensalidade ou FaturaComissoes e grava o documento.
+    Regista (ou substitui) a fatura de uma encomenda, conta do POS, marcação, mensalidade ou FaturaComissoes.
     Substituir anula a anterior com o motivo (validado por quem chama) — o PDF antigo fica no arquivo.
     Sem PDF novo, a substituta fica com o PDF da anterior (corrigir só o número).
     """
