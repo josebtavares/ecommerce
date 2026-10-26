@@ -63,6 +63,7 @@ class Utilizador(models.Model):
             'gerir_devolucoes',  # reembolsos: disputas e decisões finais
             'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
             'gerir_backups',     # backups da base de dados: ver, fazer e descarregar (utils/backups.py)
+            'exportar_lojas',    # exportar os dados de uma loja (ZIP com clientes, vendas...) — utils/exportacao_loja.py
         ],
         'moderador': [
             'ver_stats',
@@ -1398,6 +1399,8 @@ class Notificacao(models.Model):
         ('encomenda_cancelada',      'Encomenda cancelada'),
         # Staff
         ('encomenda_atualizada',     'Encomenda actualizada'),
+        # Dono / admin
+        ('exportacao_pronta',        'Exportação de dados pronta'),
     ]
  
     utilizador   = models.ForeignKey(
@@ -2117,3 +2120,35 @@ class DescargaBackup(models.Model):
 
     class Meta:
         ordering = ['-data_criacao']
+
+
+class ExportacaoLoja(models.Model):
+    """
+    ZIP com os dados de uma loja (CSV legíveis, não é para repor) — utils/exportacao_loja.py.
+    Pedido pelo dono (backoffice) ou pelo admin; gerado pelo worker; o ficheiro vai para o bucket
+    privado dos backups e apaga-se ao fim de DIAS_VALIDADE.
+    """
+    ESTADOS = [('pendente', 'Na fila'), ('a_correr', 'A preparar'), ('ok', 'Pronta'), ('erro', 'Falhou'),
+               ('expirada', 'Expirada')]
+
+    loja        = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='exportacoes')
+    pedido_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='exportacoes_pedidas')
+    pelo_admin  = models.BooleanField(default=False)
+    com_imagens = models.BooleanField(default=False)
+    estado      = models.CharField(max_length=10, choices=ESTADOS, default='pendente', db_index=True)
+    chave       = models.CharField(max_length=255, blank=True, default='')
+    tamanho     = models.BigIntegerField(default=0)
+    erro        = models.TextField(blank=True, default='')
+    avisos      = models.TextField(blank=True, default='')       # ficheiros que faltaram, imagens cortadas pelo limite
+    criado_em   = models.DateTimeField(auto_now_add=True, db_index=True)
+    iniciado_em = models.DateTimeField(null=True, blank=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+    expira_em   = models.DateTimeField(null=True, blank=True)
+    descargas   = models.PositiveIntegerField(default=0)
+    ultima_descarga_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'exportação loja {self.loja_id} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'

@@ -55,6 +55,7 @@ class Command(BaseCommand):
             self._ciclo_subscricoes()
             self._limpar_sessoes()
             self._backup_diario()
+            self._exportacoes()
             try:
                 apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
@@ -116,6 +117,22 @@ class Command(BaseCommand):
                 self.stderr.write(f'  backup: falhou: {b.erro[-300:]}')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  backup: {e}')
+
+    def _exportacoes(self):
+        """De 10 em 10 segundos: gera a próxima exportação de dados de loja pedida; de hora a hora apaga as
+        que passaram do prazo (utils/exportacao_loja.py)."""
+        if time.monotonic() - getattr(self, '_ultima_exportacao', -1e9) < 10:
+            return
+        self._ultima_exportacao = time.monotonic()
+        try:
+            from app.utils import exportacao_loja
+            if time.monotonic() - getattr(self, '_ultima_expiracao', -1e9) >= 3600:
+                self._ultima_expiracao = time.monotonic()
+                exportacao_loja.expirar()
+            if exportacao_loja.processar_fila():
+                self.stdout.write('  exportação de loja gerada')
+        except Exception as e:          # um erro aqui não pode parar os vídeos
+            self.stderr.write(f'  exportação: {e}')
 
     def _limpar_sessoes(self):
         """Uma vez por dia: apaga os tokens de sessão já expirados (lista negra do logout)."""
