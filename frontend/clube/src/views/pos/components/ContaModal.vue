@@ -157,7 +157,7 @@
                     class="group overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <div class="relative aspect-square bg-slate-100">
-                      <img v-if="produto.imagem_url" :src="produto.imagem_url" :alt="produto.nome" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                      <img v-img v-if="produto.imagem_url" :src="$miniatura(produto.imagem_url)" :alt="produto.nome" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                       <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300"><font-awesome-icon :icon="['fas', 'box']" /></div>
                       <span :class="['absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white', produto.origem === 'pos' ? 'bg-purple-600' : 'bg-blue-600']">
                         {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}
@@ -428,7 +428,7 @@
                   class="group overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <div class="relative aspect-square bg-slate-100">
-                    <img v-if="produto.imagem_url" :src="produto.imagem_url" :alt="produto.nome" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                    <img v-img v-if="produto.imagem_url" :src="$miniatura(produto.imagem_url)" :alt="produto.nome" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                     <div v-else class="flex h-full w-full items-center justify-center text-4xl text-slate-300"><font-awesome-icon :icon="['fas', 'box']" /></div>
                     <span :class="['absolute left-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-white', produto.origem === 'pos' ? 'bg-purple-600' : 'bg-blue-600']">
                       {{ produto.origem === 'pos' ? 'POS' : 'Loja' }}

@@ -27,7 +27,7 @@
           :style="{ animationDelay: `${idx * 0.1}s` }"
         >
           <div class="showcase-image">
-            <img :src="item.photo" :alt="item.nome" />
+            <img v-img :src="$miniatura(item.photo)" :alt="item.nome" />
             
           </div>
           
@@ -112,7 +112,7 @@
             :style="{ animationDelay: `${(index % 6) * 0.1}s` }"
           >
             <div class="card-image">
-              <img :src="p.photo" :alt="p.nome" />
+              <img v-img :src="$miniatura(p.photo)" :alt="p.nome" />
               <div class="card-overlay">
                 <div v-if="p.desconto < 1" class="discount-tag">
                   -{{ Math.round((1 - p.desconto) * 100) }}%

@@ -15,6 +15,8 @@ from django.apps import apps
 from django.core.files.storage import default_storage
 from django.db import models, transaction
 
+from . import versoes_media
+
 log = logging.getLogger(__name__)
 
 MAX_TENTATIVAS = 5
@@ -62,6 +64,8 @@ def protegido(nome):
 
 
 def em_uso(nome):
+    # as versões leves (…__600.webp, …__480.mp4) estão em uso enquanto o ficheiro principal estiver
+    nome = versoes_media.principal_de(nome) or nome
     return any(Modelo.objects.filter(**{campo: nome}).exists() for Modelo, campo in campos_ficheiro())
 
 
@@ -102,6 +106,8 @@ def processar_lote(tamanho=50):
                 continue
             try:
                 default_storage.delete(item.nome)   # não existir já não é erro
+                for v in versoes_media.variantes(item.nome):
+                    default_storage.delete(v)
                 item.delete()
                 tratados += 1
             except Exception as e:

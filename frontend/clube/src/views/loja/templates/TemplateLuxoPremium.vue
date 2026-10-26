@@ -41,14 +41,14 @@
 
       <!-- ══ HERO ══ -->
       <section class="lx-hero">
-        <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" class="lx-hero__media" v-video-visivel muted loop playsinline></video>
+        <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" class="lx-hero__media" v-video-visivel="'destaque'" muted loop playsinline></video>
         <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" class="lx-hero__media" />
         <div class="lx-hero__veu"></div>
         <div class="lx-hero__moldura"></div>
 
         <div class="lx-hero__centro">
           <span class="lx-monograma">
-            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" />
+            <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome" />
             <template v-else>{{ loja.nome.charAt(0) }}</template>
           </span>
           <p class="lx-versal">{{ loja.categoria || 'Maison' }}<template v-if="loja.localizacao"> — {{ loja.localizacao }}</template></p>
@@ -95,7 +95,7 @@
                   <div :key="atual(l).id" class="lx-vitrine__peca">
                     <button class="lx-foco" @click="selectedProduct = atual(l)">
                       <BotaoFavorito tipo="produto" :id="atual(l).id" elemento="span" :tamanho="32" class="fav-card" />
-                      <video v-if="isVideo(atual(l).ficheiro_url)" :src="atual(l).ficheiro_url" :poster="atual(l).ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
+                      <video v-if="isVideo(atual(l).ficheiro_url)" :src="atual(l).ficheiro_url" :poster="atual(l).ficheiro_poster_url" muted loop v-video-visivel="'cartao'" playsinline></video>
                       <img v-else-if="atual(l).ficheiro_url" :src="atual(l).ficheiro_url" :alt="atual(l).nome" />
                       <span v-else class="lx-foco__inicial">{{ atual(l).nome.charAt(0) }}</span>
                     </button>
@@ -157,8 +157,8 @@
                 <button v-for="(p, i) in l.itens" :key="p.id" class="lx-peca" @click="selectedProduct = p">
                   <span class="lx-peca__foco">
                     <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
-                    <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
-                    <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                    <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
+                    <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                     <span v-else class="lx-foco__inicial">{{ p.nome.charAt(0) }}</span>
                     <span v-if="esgotado(p)" class="lx-peca__esgotado">Esgotado</span>
                   </span>

@@ -12,13 +12,13 @@
       <button type="button" @click="$emit('store-click', loja)"
         class="relative min-h-[260px] lg:min-h-[380px] text-left group overflow-hidden">
         <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url"
-          class="absolute inset-0 w-full h-full object-cover" v-video-visivel muted loop playsinline></video>
-        <img v-else :src="loja.banner_url || bannerPadrao" :alt="loja.nome"
+          class="absolute inset-0 w-full h-full object-cover" v-video-visivel="'destaque'" muted loop playsinline></video>
+        <img v-else v-img :src="loja.banner_url || bannerPadrao" :alt="loja.nome"
           class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-700" />
         <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent"></div>
         <div class="absolute bottom-0 left-0 right-0 p-6 md:p-8">
           <div class="flex items-center gap-3 mb-3">
-            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
+            <img v-if="loja.logo_url" v-img :src="$miniatura(loja.logo_url)" :alt="loja.nome"
               class="w-14 h-14 rounded-2xl object-cover border-2 border-white/20" />
             <span class="px-2.5 py-1 bg-red-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider">Loja em destaque</span>
           </div>

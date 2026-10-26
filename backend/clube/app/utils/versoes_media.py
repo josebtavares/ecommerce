@@ -1,0 +1,110 @@
+"""
+Versões mais leves dos ficheiros públicos (fotos e vídeos), com nomes derivados do principal.
+
+  fotos   <pasta>/<20 hex>.webp   (máx. 1600 px; banners 1920)  → <pasta>/<20 hex>__600.webp   (cartões e listas)
+  vídeos  <pasta>/<20 hex>.mp4    (1080p)         → __720.mp4 (telemóveis), __480.mp4 (cartões)
+  posters posters/…/<20 hex>.webp (1280 px)       → __600.webp
+
+Só os ficheiros com este nome (feitos pela plataforma) têm versões; o frontend deriva os nomes da mesma
+maneira (src/utils/media.js). As versões não estão em nenhum FileField: a limpeza (utils/limpeza.py) e o
+varrimento de órfãos tratam-nas como parte do ficheiro principal.
+
+As fotos são convertidas no upload (uploads.py → converter_imagem); os vídeos e posters pelo worker
+(utils/video.py); as que já existiam pelo comando manage.py otimizar_media.
+"""
+import io
+import re
+import uuid
+
+from PIL import Image, ImageOps
+
+LADO_FOTO = 1600
+# banners que ocupam a largura toda do ecrã: 1600 px ficava mole num monitor grande
+LADO_POR_CAMPO = {('loja', 'banner'): 1920, ('homeimagem', 'ficheiro'): 1920}
+LADO_MINIATURA = 600
+QUALIDADE = 82
+QUALIDADE_MINIATURA = 78
+MAX_PIXEIS = 250_000_000          # acima disto é quase de certeza uma "bomba" de descompressão
+
+PRINCIPAL = re.compile(r'^(?P<base>(?:.*/)?[0-9a-f]{20})\.(?P<ext>webp|mp4)$')
+VARIANTE = re.compile(r'^(?P<base>(?:.*/)?[0-9a-f]{20})__(?:600|480|720)\.(?P<ext>webp|mp4)$')
+SUFIXOS = {'webp': ('__600',), 'mp4': ('__720', '__480')}
+
+
+class ImagemInvalida(Exception):
+    pass
+
+
+def nome_novo(ext):
+    return f'{uuid.uuid4().hex[:20]}.{ext}'
+
+
+def variantes(nome):
+    """Nomes das versões de um ficheiro principal (vazio se não for um nome da plataforma)."""
+    m = PRINCIPAL.match(nome or '')
+    if not m:
+        return []
+    return [f"{m.group('base')}{s}.{m.group('ext')}" for s in SUFIXOS[m.group('ext')]]
+
+
+def principal_de(nome):
+    """Se `nome` for uma versão, devolve o ficheiro principal; senão None."""
+    m = VARIANTE.match(nome or '')
+    return f"{m.group('base')}.{m.group('ext')}" if m else None
+
+
+def variante(nome, sufixo):
+    m = PRINCIPAL.match(nome or '')
+    return f"{m.group('base')}{sufixo}.{m.group('ext')}" if m else None
+
+
+# ── fotos ──────────────────────────────────────────────────────────
+
+def _abrir(ficheiro, lado=LADO_FOTO):
+    Image.MAX_IMAGE_PIXELS = MAX_PIXEIS
+    try:
+        ficheiro.seek(0)
+    except Exception:
+        pass
+    try:
+        img = Image.open(ficheiro)
+        img.draft('RGB', (lado * 2, lado * 2))     # JPEG: descodifica já reduzido (poupa RAM)
+        img.load()
+    except Image.DecompressionBombError:
+        raise ImagemInvalida('A imagem é demasiado grande (em píxeis) para ser processada.')
+    except Exception:
+        raise ImagemInvalida('O ficheiro não é uma imagem válida ou está danificado.')
+    img = ImageOps.exif_transpose(img)                       # fotos de telemóvel "deitadas"
+    if img.mode not in ('RGB', 'RGBA'):
+        img = img.convert('RGBA' if 'A' in img.getbands() or img.mode == 'P' else 'RGB')
+    return img
+
+
+def _webp(img, lado, qualidade):
+    copia = img.copy()
+    copia.thumbnail((lado, lado), Image.LANCZOS)             # nunca aumenta
+    saida = io.BytesIO()
+    copia.save(saida, 'WEBP', quality=qualidade, method=4)   # sem EXIF (localização, modelo do telemóvel)
+    return saida.getvalue()
+
+
+def lado_de(modelo, campo):
+    return LADO_POR_CAMPO.get((modelo, campo), LADO_FOTO)
+
+
+def converter_imagem(ficheiro, lado=LADO_FOTO):
+    """→ (bytes da foto com no máximo `lado` px, bytes da miniatura 600 px), ambas WebP sem metadados."""
+    img = _abrir(ficheiro, lado)
+    return _webp(img, lado, QUALIDADE), _webp(img, LADO_MINIATURA, QUALIDADE_MINIATURA)
+
+
+def animada(ficheiro):
+    """GIF/WebP animados ficam como estão (converter perdia a animação)."""
+    try:
+        ficheiro.seek(0)
+        img = Image.open(ficheiro)
+        r = getattr(img, 'is_animated', False)
+        ficheiro.seek(0)
+        return r
+    except Exception:
+        return False

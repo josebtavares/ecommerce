@@ -6,7 +6,9 @@ Fluxo:
      que cria uma ConversaoVideo 'pendente' e marca o objeto com <campo>_estado='pendente'.
   2. O worker (`python manage.py processar_videos`) apanha a tarefa, lê o original pelo
      storage do Django (disco local na dev, Cloudflare R2 na prod — o código é o mesmo),
-     converte com FFmpeg para MP4 H.264 leve, gera um poster JPG e troca o ficheiro.
+     converte com FFmpeg para MP4 H.264 leve, gera as versões 720p (telemóveis) e 480p (cartões),
+     um poster WebP (+ miniatura) e troca o ficheiro. Os nomes seguem utils/versoes_media.py
+     (<20 hex>.mp4, …__720.mp4, …__480.mp4) — o frontend deriva as versões a partir do principal.
   3. Até acabar, a loja continua a mostrar o original. Se o ficheiro for trocado entretanto,
      a tarefa é descartada ('substituido') sem tocar no ficheiro novo.
 
@@ -24,8 +26,11 @@ import time
 
 from django.apps import apps
 from django.core.files import File
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
+
+from . import versoes_media
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +44,12 @@ PERFIS = {
     ('galeria', 'ficheiro'): {'lado': 1080, 'crf': 24, 'maxrate': '3M', 'bufsize': '6M'},
 }
 MODELOS = {'loja': 'app.Loja', 'produto': 'app.Produto', 'galeria': 'app.Galeria'}
+# versões mais leves de todos os vídeos (o sufixo tem de bater com versoes_media.SUFIXOS['mp4'])
+VERSOES = (
+    ('__720', {'lado': 1280, 'crf': 26, 'maxrate': '2500k', 'bufsize': '5M'}),   # telemóveis (destaques, página da loja)
+    ('__480', {'lado': 854,  'crf': 28, 'maxrate': '1M',    'bufsize': '2M'}),   # cartões e carrosséis
+)
+LADO_POSTER = 1280
 
 MAX_FPS        = 30
 MAX_TENTATIVAS = 3
@@ -67,12 +78,22 @@ def _conversao():
 
 
 def _apagar_do_storage(storage, nome):
+    """Apaga o ficheiro e as suas versões leves (se tiver)."""
     if not nome:
         return
-    try:
-        storage.delete(nome)
-    except Exception as e:   # um ficheiro órfão não deve estragar a conversão
-        log.warning('[video] não consegui apagar %s: %s', nome, e)
+    for n in (nome, *versoes_media.variantes(nome)):
+        try:
+            storage.delete(n)
+        except Exception as e:   # um ficheiro órfão não deve estragar a conversão
+            log.warning('[video] não consegui apagar %s: %s', n, e)
+
+
+def _guardar_com_nome(storage, nome, conteudo):
+    """Grava no nome exato (as versões derivam do nome do principal)."""
+    gravado = storage.save(nome, conteudo)
+    if gravado != nome:
+        storage.delete(gravado)
+        raise RuntimeError(f'o storage gravou {gravado} em vez de {nome}')
 
 
 # ══════════════════════════════════════════════════════════════
@@ -317,44 +338,56 @@ def _processar(t, pasta):
         shutil.copyfileobj(f, out, 1024 * 1024)
     t.bytes_origem = os.path.getsize(origem)
 
-    # 2. converte e tira o poster
+    # 2. converte, faz as versões leves e tira o poster
     info = sondar(origem)
     converter(origem, destino, info, PERFIS[(t.modelo, t.campo)])
-    extrair_poster(destino, poster, info)
 
     # se o original já era um MP4 H.264 mais pequeno do que o resultado, fica o original
     usar_convertido = not (
         ext == '.mp4' and info['codec'] == 'h264' and os.path.getsize(destino) >= t.bytes_origem
     )
-    t.bytes_final = os.path.getsize(destino) if usar_convertido else t.bytes_origem
+    final = destino if usar_convertido else origem
+    t.bytes_final = os.path.getsize(final)
+    versoes = []
+    for sufixo, perfil in VERSOES:
+        caminho = os.path.join(pasta, f'video{sufixo}.mp4')
+        converter(final, caminho, sondar(final), perfil)
+        versoes.append((sufixo, caminho))
+    extrair_poster(final, poster, info)
+    with open(poster, 'rb') as f:
+        poster_webp, poster_mini = versoes_media.converter_imagem(f, LADO_POSTER)
 
-    # 3. envia os ficheiros novos para o storage
-    base        = os.path.splitext(os.path.basename(t.ficheiro))[0]
+    # 3. envia os ficheiros novos para o storage (nomes da plataforma: <20 hex>.mp4 e versões ao lado)
+    nome        = versoes_media.nome_novo('mp4')
     campo_video = getattr(obj, t.campo)
     campo_poster = getattr(obj, f'{t.campo}_poster')
-    novo_video  = t.ficheiro
-    if usar_convertido:
-        with open(destino, 'rb') as f:
-            campo_video.save(f'{base}.mp4', File(f), save=False)
+    novo_video = novo_poster = None
+    try:
+        with open(final, 'rb') as f:
+            campo_video.save(nome, File(f), save=False)
         novo_video = campo_video.name
-    with open(poster, 'rb') as f:
-        campo_poster.save(f'{base}.jpg', File(f), save=False)
-    novo_poster = campo_poster.name
+        for sufixo, caminho in versoes:
+            with open(caminho, 'rb') as f:
+                _guardar_com_nome(storage, versoes_media.variante(novo_video, sufixo), File(f))
+        campo_poster.save(versoes_media.nome_novo('webp'), ContentFile(poster_webp), save=False)
+        novo_poster = campo_poster.name
+        _guardar_com_nome(storage, versoes_media.variante(novo_poster, '__600'), ContentFile(poster_mini))
+    except Exception:
+        _apagar_do_storage(storage, novo_video)
+        _apagar_do_storage(storage, novo_poster)
+        raise
 
     # 4. troca na BD só se o ficheiro ainda for o mesmo (o utilizador pode ter mudado entretanto)
     trocados = Modelo.objects.filter(pk=t.objeto_id, **{t.campo: t.ficheiro}).update(**{
         t.campo: novo_video, f'{t.campo}_poster': novo_poster, f'{t.campo}_estado': 'pronto',
     })
     if not trocados:
-        # o ficheiro foi trocado entretanto: o que acabámos de enviar não serve a ninguém.
-        # (mesmo que tenha o nome do original — esse já foi apagado ao ser substituído)
-        if usar_convertido:
-            _apagar_do_storage(storage, novo_video)
+        # o ficheiro foi trocado entretanto: o que acabámos de enviar não serve a ninguém
+        _apagar_do_storage(storage, novo_video)
         _apagar_do_storage(storage, novo_poster)
         raise TarefaSubstituida()
 
-    if novo_video != t.ficheiro:
-        _apagar_do_storage(storage, t.ficheiro)    # o original já não é usado
+    _apagar_do_storage(storage, t.ficheiro)    # o original (e as versões dele, se as tinha) já não é usado
 
     log.info('[video] %s: %.1f MB → %.1f MB', t,
              t.bytes_origem / 1e6, (t.bytes_final or 0) / 1e6)

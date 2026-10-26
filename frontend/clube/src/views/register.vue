@@ -251,8 +251,8 @@ import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { passwordValida } from '@/utils/password'
-import logoDefault from '@/assets/img/login/logo_final_4k.png'
-import logoLight from '@/assets/img/login/logo_final_4k_light.png'
+import logoDefault from '@/assets/img/login/logo_final_640.webp'
+import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 
 export default {
   name: 'RegisterView',

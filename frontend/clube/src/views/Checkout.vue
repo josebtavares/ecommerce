@@ -196,7 +196,7 @@
 
           <!-- Loja -->
           <div v-if="loja" class="flex items-center gap-3 mb-4 pb-4 border-b border-zinc-800">
-            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
+            <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome"
                  class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
             <div v-else class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
               <span class="text-sm font-bold text-zinc-400">{{ loja.nome.charAt(0) }}</span>
@@ -210,7 +210,7 @@
           <!-- Itens -->
           <div class="space-y-3 mb-4">
             <div v-for="item in itens" :key="item.id" class="flex items-center gap-3">
-              <img v-if="item.produto?.ficheiro_url" :src="item.produto.ficheiro_url"
+              <img v-img v-if="item.produto?.ficheiro_url" :src="$miniatura(item.produto.ficheiro_url)"
                    class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
               <div v-else class="w-10 h-10 rounded-lg bg-zinc-800 flex-shrink-0"></div>
               <div class="flex-1 min-w-0">

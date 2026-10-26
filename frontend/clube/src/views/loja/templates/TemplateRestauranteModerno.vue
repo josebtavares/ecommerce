@@ -46,7 +46,7 @@
           </button>
 
           <div class="rm-bar__brand">
-            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="rm-bar__logo" />
+            <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome" class="rm-bar__logo" />
             <span v-else class="rm-bar__logo rm-bar__logo--initial">{{ loja.nome.charAt(0) }}</span>
             <span class="rm-bar__name">{{ loja.nome }}</span>
           </div>
@@ -74,7 +74,7 @@
           v-if="isVideo(loja.banner_url)"
           :src="loja.banner_url" :poster="loja.banner_poster_url"
           class="rm-hero__media"
-          v-video-visivel muted loop playsinline
+          v-video-visivel="'destaque'" muted loop playsinline
         ></video>
         <img
           v-else-if="loja.banner_url"
@@ -175,8 +175,8 @@
                 @click="selectedProduct = p"
               >
                 <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
-                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" class="rm-dish__img" muted loop v-video-visivel playsinline></video>
-                <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" class="rm-dish__img" loading="lazy" />
+                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" class="rm-dish__img" muted loop v-video-visivel="'cartao'" playsinline></video>
+                <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" class="rm-dish__img" loading="lazy" />
                 <div v-else class="rm-dish__img rm-dish__img--empty">{{ p.nome.charAt(0) }}</div>
                 <div class="rm-dish__shade"></div>
 
@@ -263,8 +263,8 @@
                       @click="selectedProduct = p"
                     >
                       <div class="rm-item__thumb">
-                        <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
-                        <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                        <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
+                        <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                         <span v-else>{{ p.nome.charAt(0) }}</span>
                       </div>
 

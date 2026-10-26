@@ -49,7 +49,7 @@
              :class="!i.disponivel && 'opacity-50'">
           <input type="checkbox" :disabled="!i.disponivel" :checked="qtd[i.id] > 0"
                  @change="qtd[i.id] = $event.target.checked ? i.disponivel : 0" class="accent-red-600 h-4 w-4" />
-          <img v-if="imagem(i.id)" :src="imagem(i.id)" alt="" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+          <img v-img v-if="imagem(i.id)" :src="$miniatura(imagem(i.id))" alt="" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
           <div class="flex-1 min-w-0">
             <p class="text-sm truncate">{{ i.nome }}</p>
             <p class="text-xs" :class="suave">

@@ -105,16 +105,16 @@
           <video v-if="isVideo(loja.banner_url)"
             :src="loja.banner_url" :poster="loja.banner_poster_url"
             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            v-video-visivel muted loop playsinline></video>
-          <img v-else
-            :src="loja.banner_url || loja.logo_url || defaultImg"
+            v-video-visivel="'cartao'" muted loop playsinline></video>
+          <img v-else v-img
+            :src="$miniatura(loja.banner_url || loja.logo_url) || defaultImg"
             :alt="loja.nome"
             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
         <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent"></div>
 
         <BotaoFavorito tipo="loja" :id="loja.id" :tamanho="34" class="absolute top-3 right-3 z-10" />
         <div class="absolute top-3 left-3">
-          <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
+          <img v-if="loja.logo_url" v-img :src="$miniatura(loja.logo_url)" :alt="loja.nome"
                class="w-10 h-10 rounded-xl object-cover border-2 border-zinc-700 shadow-lg" />
           <div v-else class="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
             <span class="text-sm font-bold text-zinc-400">{{ loja.nome.charAt(0) }}</span>

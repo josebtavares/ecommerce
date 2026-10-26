@@ -15,6 +15,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from ..Views.notificacaoView import notificar_admins, notificar, notificar_staff
+from ..uploads import MAX_IMAGEM_MB
 from ..models import Loja, UtilizadorLoja, Utilizador, User
 from ..Serializers.LojaSerializer import (
     LojaSerializer,
@@ -790,8 +791,8 @@ def staff_criar_utilizador(request, loja_id):
 
     foto = request.FILES.get('foto')
     if foto:
-        if foto.size > 5 * 1024 * 1024:
-            return Response({'detail': 'A foto não pode ter mais de 5 MB.'}, status=400)
+        if foto.size > MAX_IMAGEM_MB * 1024 * 1024:
+            return Response({'detail': f'A foto não pode ter mais de {MAX_IMAGEM_MB} MB.'}, status=400)
         if not (foto.content_type or '').startswith('image/'):
             return Response({'detail': 'A foto tem de ser uma imagem.'}, status=400)
 

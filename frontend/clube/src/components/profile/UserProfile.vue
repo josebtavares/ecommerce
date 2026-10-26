@@ -239,7 +239,7 @@
                       <div class="space-y-2">
                         <div v-for="item in detalhesEncomenda[enc.id].itens" :key="item.id"
                              class="flex items-center gap-3">
-                          <img v-if="item.produto?.ficheiro_url" :src="item.produto.ficheiro_url"
+                          <img v-img v-if="item.produto?.ficheiro_url" :src="$miniatura(item.produto.ficheiro_url)"
                                class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                           <div v-else class="w-10 h-10 rounded-lg flex-shrink-0"
                                :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
@@ -379,7 +379,7 @@
                      : 'bg-gray-50 border-gray-200 hover:border-red-400/50'"
                    @click="goToBackoffice(loja.id)">
                 <div class="flex items-center gap-3 p-3">
-                  <img v-if="loja.logo_url" :src="loja.logo_url" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                  <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                   <div v-else class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
                        :class="isDark ? 'bg-zinc-700' : 'bg-gray-200'">
                     <span class="text-sm font-bold" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ loja.nome.charAt(0) }}</span>

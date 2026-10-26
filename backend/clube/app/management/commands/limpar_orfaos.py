@@ -17,7 +17,7 @@ from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from app.utils import limpeza
+from app.utils import limpeza, versoes_media
 
 
 class Command(BaseCommand):
@@ -38,6 +38,8 @@ class Command(BaseCommand):
         orfaos, total_bytes = [], 0
         for nome in self._listar(''):
             if nome in usados or limpeza.protegido(nome):
+                continue
+            if versoes_media.principal_de(nome) in usados:     # versão leve de um ficheiro em uso
                 continue
             try:
                 if default_storage.get_modified_time(nome) > limite:

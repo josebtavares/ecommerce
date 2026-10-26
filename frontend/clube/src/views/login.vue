@@ -163,8 +163,8 @@ import { mediaUrl } from '@/services/media'
 import { iniciarLoginGoogle } from '@/services/google'
 import { caminhoSeguro } from '@/services/sessao'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
-import logoDefault from '@/assets/img/login/logo_final_4k.png'
-import logoLight from '@/assets/img/login/logo_final_4k_light.png'
+import logoDefault from '@/assets/img/login/logo_final_640.webp'
+import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 
 export default {
   name: 'AppLogin',

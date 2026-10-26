@@ -349,7 +349,7 @@ def admin_home_procurar(request):
     return Response({'detail': 'tipo tem de ser loja, produto, serviço ou categoria.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-IMAGEM_MAX_MB = 5
+IMAGEM_MAX_MB = 20      # o modelo converte para WebP 1600 px (uploads.py)
 
 
 @api_view(['POST'])

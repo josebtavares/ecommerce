@@ -56,9 +56,9 @@
           <video v-if="isVideo(loja.banner_url)"
             :src="loja.banner_url" :poster="loja.banner_poster_url"
             class="w-full h-full object-cover"
-            v-video-visivel muted loop playsinline></video>
-          <img v-else
-            :src="loja.banner_url || loja.logo_url || defaultImg"
+            v-video-visivel="'cartao'" muted loop playsinline></video>
+          <img v-else v-img
+            :src="$miniatura(loja.banner_url || loja.logo_url) || defaultImg"
             :alt="loja.nome"
             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
           <!-- Gradiente overlay — ligeiramente diferente no light para não escurecer tanto -->
@@ -71,7 +71,7 @@
           <BotaoFavorito tipo="loja" :id="loja.id" :tamanho="34" class="absolute top-3 right-3 z-10" />
           <!-- Logo -->
           <div class="absolute top-3 left-3">
-            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
+            <img v-if="loja.logo_url" v-img :src="$miniatura(loja.logo_url)" :alt="loja.nome"
                  class="w-10 h-10 rounded-xl object-cover shadow-lg border-2 transition-colors"
                  :class="isDark ? 'border-zinc-700' : 'border-white/50'" />
             <div v-else
