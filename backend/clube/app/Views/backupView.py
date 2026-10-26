@@ -1,7 +1,8 @@
 """
 Admin → Backups (só quem tem gerir_backups — o super-admin).
 
-  GET  /app/admin/backups/                      → lista, resumo e últimas descargas
+  GET  /app/admin/backups/                      → resumo + lista paginada (?tipo=&estado=&de=&ate=&q=&limit=&offset=)
+  GET  /app/admin/backups/descargas/            → registo de descargas paginado (?de=&ate=&q=&limit=&offset=)
   POST /app/admin/backups/fazer/                → backup manual agora
   POST /app/admin/backups/<id>/descarregar/     → link de 5 minutos (fica registado quem e de onde)
   GET  /app/admin/backups/ficheiro/<token>/     → só na dev (sem R2): entrega o ficheiro do link assinado
@@ -13,7 +14,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core import signing
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from rest_framework import status
@@ -24,6 +25,7 @@ from rest_framework.response import Response
 from ..models import BackupBD, DescargaBackup
 from ..utils import backups
 from .adminView import _exige_admin
+from .faturacaoView import _datas, _paginar
 
 VALIDADE_LINK = 300                 # segundos
 SALT_LINK = 'backup-ficheiro'
@@ -43,19 +45,32 @@ def _item(b):
         'nome': b.chave.rsplit('/', 1)[-1] if b.chave else '',
         'criado_em': b.criado_em, 'pedido_por': _nome(b.pedido_por),
         'disponivel': b.estado == 'ok' and b.apagado_em is None,
+        'apagado_em': b.apagado_em,
         'descargas': getattr(b, 'n_descargas', None),
     }
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def admin_backups(request):
-    erro = _exige_admin(request, 'gerir_backups')
+def _periodo(request, campo):
+    """?de=&ate= (AAAA-MM-DD, dias de Cabo Verde) → (Q, erro)."""
+    de, ate, erro = _datas(request)
     if erro:
-        return erro
-    from django.db.models import Count
-    lista = (BackupBD.objects.filter(apagado_em__isnull=True).select_related('pedido_por')
-             .annotate(n_descargas=Count('descargas')).order_by('-criado_em')[:200])
+        return None, erro
+    if de and ate and de > ate:
+        return None, Response({'detail': 'A data inicial é depois da data final.'}, status=status.HTTP_400_BAD_REQUEST)
+    filtro = Q()
+    if de:
+        filtro &= Q(**{f'{campo}__date__gte': de})
+    if ate:
+        filtro &= Q(**{f'{campo}__date__lte': ate})
+    return filtro, None
+
+
+def _pessoa(prefixo, q):
+    return (Q(**{f'{prefixo}__username__icontains': q}) | Q(**{f'{prefixo}__first_name__icontains': q})
+            | Q(**{f'{prefixo}__last_name__icontains': q}) | Q(**{f'{prefixo}__email__icontains': q}))
+
+
+def _resumo():
     vivos = BackupBD.objects.filter(estado='ok', apagado_em__isnull=True)
     ultimo = vivos.order_by('-criado_em').first()
     agora = timezone.localtime()
@@ -64,23 +79,70 @@ def admin_backups(request):
         proximo = agora + timedelta(minutes=5)      # o worker verifica de 5 em 5 minutos
     elif proximo <= agora:
         proximo += timedelta(days=1)
-    descargas = DescargaBackup.objects.select_related('backup', 'utilizador')[:20]
-    return Response({
-        'backups': [_item(b) for b in lista],
-        'resumo': {
-            'ultimo_ok': ultimo.criado_em if ultimo else None,
-            'guardados': vivos.count(),
-            'espaco': vivos.aggregate(t=Sum('tamanho'))['t'] or 0,
-            'armazenamento': 'Cloudflare R2 (privado)' if settings.BACKUP_R2_BUCKET else 'Disco local (dev)',
-            'proximo_automatico': proximo,
-            'a_correr': BackupBD.objects.filter(estado='a_correr').exists(),
-            'retencao': '7 diários, 4 semanais e 12 mensais; manuais 30 dias',
-        },
-        'descargas': [{
-            'backup': d.backup.chave.rsplit('/', 1)[-1], 'por': _nome(d.utilizador),
-            'ip': d.ip, 'quando': d.data_criacao,
-        } for d in descargas],
-    })
+    return {
+        'ultimo_ok': ultimo.criado_em if ultimo else None,
+        'guardados': vivos.count(),
+        'espaco': vivos.aggregate(t=Sum('tamanho'))['t'] or 0,
+        'armazenamento': 'Cloudflare R2 (privado)' if settings.BACKUP_R2_BUCKET else 'Disco local (dev)',
+        'proximo_automatico': proximo,
+        'a_correr': BackupBD.objects.filter(estado='a_correr').exists(),
+        'retencao': '7 diários, 4 semanais e 12 mensais; manuais 30 dias',
+    }
+
+
+ESTADOS = {
+    'ok': Q(estado='ok', apagado_em__isnull=True),
+    'erro': Q(estado='erro'),
+    'a_correr': Q(estado='a_correr'),
+    'apagado': Q(apagado_em__isnull=False),     # saíram pela retenção: ficam no histórico, sem ficheiro
+}
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_backups(request):
+    erro = _exige_admin(request, 'gerir_backups')
+    if erro:
+        return erro
+    periodo, erro = _periodo(request, 'criado_em')
+    if erro:
+        return erro
+    qs = BackupBD.objects.filter(periodo)
+    estado = request.GET.get('estado', '')
+    if estado in ESTADOS:
+        qs = qs.filter(ESTADOS[estado])
+    elif estado != 'todos':                         # por omissão: os que ainda existem
+        qs = qs.filter(apagado_em__isnull=True)
+    tipo = request.GET.get('tipo', '')
+    if tipo in ('automatico', 'manual'):
+        qs = qs.filter(tipo=tipo)
+    q = request.GET.get('q', '').strip()[:100]
+    if q:
+        qs = qs.filter(Q(chave__icontains=q) | _pessoa('pedido_por', q))
+    qs = qs.select_related('pedido_por').annotate(n_descargas=Count('descargas')).order_by('-criado_em', '-id')
+    pagina, total = _paginar(request, qs)
+    return Response({'resumo': _resumo(), 'count': total, 'results': [_item(b) for b in pagina]})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_backup_descargas(request):
+    erro = _exige_admin(request, 'gerir_backups')
+    if erro:
+        return erro
+    periodo, erro = _periodo(request, 'data_criacao')
+    if erro:
+        return erro
+    qs = DescargaBackup.objects.filter(periodo)
+    q = request.GET.get('q', '').strip()[:100]
+    if q:
+        qs = qs.filter(_pessoa('utilizador', q) | Q(backup__chave__icontains=q) | Q(ip__startswith=q))
+    qs = qs.select_related('backup', 'utilizador').order_by('-data_criacao', '-id')
+    pagina, total = _paginar(request, qs)
+    return Response({'count': total, 'results': [{
+        'id': d.id, 'backup': d.backup.chave.rsplit('/', 1)[-1], 'por': _nome(d.utilizador),
+        'email': d.utilizador.email if d.utilizador else '', 'ip': d.ip, 'quando': d.data_criacao,
+    } for d in pagina]})
 
 
 @api_view(['POST'])

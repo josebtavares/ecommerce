@@ -16,6 +16,7 @@ urlpatterns = [
     path('admin/relatorios/r/<slug:rid>/exportar/', relatorioView.admin_exportar, name='admin-relatorio-exportar'),
     # ── Backups da base de dados (só super-admin) ─────────────
     path('admin/backups/',                              backupView.admin_backups,            name='admin-backups'),
+    path('admin/backups/descargas/',                    backupView.admin_backup_descargas,   name='admin-backup-descargas'),
     path('admin/backups/fazer/',                        backupView.admin_backup_fazer,       name='admin-backup-fazer'),
     path('admin/backups/<int:backup_id>/descarregar/',  backupView.admin_backup_descarregar, name='admin-backup-descarregar'),
     path('admin/backups/ficheiro/<str:token>/',         backupView.admin_backup_ficheiro,    name='admin-backup-ficheiro'),
