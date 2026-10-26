@@ -10,6 +10,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
+from ..autenticacao import sessao_terminada
 from .models import UtilizadorPOS, ConfiguracaoPOS
 
 
@@ -60,6 +61,8 @@ class POSAuthentication(BaseAuthentication):
             token = AccessToken(token_str)
         except (TokenError, InvalidToken):
             raise AuthenticationFailed('Token inválido ou expirado.')
+        if sessao_terminada(token):
+            raise AuthenticationFailed('Sessão terminada.')
 
         # ── Membro de equipa (tem tipo_sessao='membro') ──────────────
         if token.get('tipo_sessao') == 'membro':
