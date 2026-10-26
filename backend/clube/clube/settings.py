@@ -242,6 +242,9 @@ BACKUP_HORA                 = int(os.environ.get('BACKUP_HORA', '3'))     # hora
 # postgres://user:pass@host:port/qualquer — vazio = o mesmo servidor da base (tem de ser Postgres ≥ 18, como o pg_restore)
 BACKUP_ENSAIO_URL           = os.environ.get('BACKUP_ENSAIO_URL', '')
 BACKUP_ENSAIO_DIAS          = int(os.environ.get('BACKUP_ENSAIO_DIAS', '30'))  # de quantos em quantos dias o worker ensaia
+# Cópia das fotos e vídeos (utils/backup_media.py): incremental, todos os dias depois do backup da base.
+BACKUP_MEDIA_APAGADOS_DIAS  = int(os.environ.get('BACKUP_MEDIA_APAGADOS_DIAS', '30'))  # o que a loja apagou fica guardado N dias
+BACKUP_LIMITE_GB            = float(os.environ.get('BACKUP_LIMITE_GB', '8'))  # aviso por email (o R2 dá 10 GB grátis)
 
 
 CACHES = {

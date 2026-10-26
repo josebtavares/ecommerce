@@ -27,8 +27,11 @@ Repor **substitui** os dados — o que entrou depois do backup perde-se (encomen
   temporária para confirmar que serve (**Admin → Backups → Ensaio de reposição**; também `manage.py backup_bd --ensaiar`).
   Escolhe, de preferência, um backup marcado como **reposição testada**.
 
+**Fotos e vídeos** (bucket das lojas e bucket privado do chat/reembolsos/comprovativos): o worker copia-os todos
+os dias, de forma incremental, para o mesmo bucket `bende-backups`, pasta `media/publico/` e `media/privado/`.
+O que as lojas apagam passa para `media-apagados/AAAAMMDD/` e fica lá 30 dias. Ver secção 7.
+
 **O que NÃO está no backup**
-- Fotos e vídeos: vivem no bucket de media do R2 (não são copiados pelos backups da base).
 - Variáveis de ambiente do Railway (chaves, passwords): guarda uma cópia num gestor de passwords.
 - Redis: só cache e mensagens em tempo real — não precisa de backup.
 
@@ -107,7 +110,27 @@ ensaio no Admin → Backups — se a base crescer, é aí que se vê.
    preferência com um script revisto e testado primeiro numa cópia.
 4. Apagar a base temporária: `psql "$DATABASE_PUBLIC_URL" -c "DROP DATABASE bende_ensaio_manual WITH (FORCE)"`.
 
-## 7. Ensaio automático (o que o worker faz)
+## 7. Repor fotos e vídeos
+Os ficheiros não fazem parte do dump da base: a base guarda só o caminho (`produtos/abc.webp`) e o ficheiro vive
+no bucket das lojas. Para os devolver usa-se o comando, que **só repõe ficheiros que faltam — nunca substitui
+nenhum que exista**. Sem `--confirmar` apenas simula e diz quantos faltam.
+
+```bash
+# no serviço worker do Railway (railway ssh --service worker) ou com as variáveis da prod num contentor
+python manage.py backup_media --repor publico                       # simula: quantos faltam
+python manage.py backup_media --repor publico --confirmar           # repõe tudo o que falta
+python manage.py backup_media --repor publico --prefixo lojas/7/ --confirmar   # só uma loja/pasta
+python manage.py backup_media --repor publico --dia 20261026 --confirmar       # ficheiros que a loja apagou nesse dia
+python manage.py backup_media --repor privado --confirmar           # chat, reembolsos, comprovativos
+```
+Depois de repor a base de um backup antigo (secção 4), corre `--repor publico` e `--repor privado`: os ficheiros
+apagados entretanto voltam, desde que tenham sido apagados há menos de 30 dias (usa `--dia`).
+
+Proteção: se o bucket das lojas aparecer vazio, ou se uma passagem fosse tirar da cópia mais de metade dos ficheiros,
+a cópia pára com erro e os super-admins recebem email — a cópia de segurança não é esvaziada por uma credencial ou
+bucket errado. Quando o armazenamento de backups passa dos 8 GB (`BACKUP_LIMITE_GB`) chega um email (no máximo 1 por semana).
+
+## 8. Ensaio automático (o que o worker faz)
 `app/utils/backups.py → ensaiar_reposicao()`: descarrega o backup, cria a base temporária `bende_ensaio_reposicao`
 no mesmo servidor (ou em `BACKUP_ENSAIO_URL`), corre `pg_restore --exit-on-error`, confere que todas as tabelas do
 backup foram repostas e que utilizadores, lojas e migrações não estão vazios, e apaga a base. Nunca toca na base da

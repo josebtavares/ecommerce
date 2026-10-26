@@ -69,6 +69,44 @@
         </button>
       </div>
 
+      <!-- fotos e vídeos: cópia incremental do storage das lojas (utils/backup_media.py) -->
+      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-3" data-teste="backup-media">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <font-awesome-icon :icon="['fas', media.em_curso ? 'spinner' : 'images']" :spin="media.em_curso"
+            :class="['w-5 h-5 shrink-0', media.em_curso || !ultimaCopia ? 'text-zinc-500' : ultimaCopia.estado === 'ok' ? 'text-green-400' : 'text-red-400']" />
+          <div class="min-w-0 flex-1 basis-56">
+            <p class="text-sm font-semibold text-zinc-100">Fotos e vídeos</p>
+            <p v-if="media.em_curso" class="text-xs text-zinc-400 mt-0.5">A copiar o que é novo…</p>
+            <p v-else-if="!ultimaCopia" class="text-xs text-zinc-500 mt-0.5">Ainda não foram copiados.</p>
+            <template v-else>
+              <p class="text-xs text-zinc-400 mt-0.5 break-words">
+                {{ quando(ultimaCopia.quando) }} · na cópia: {{ numero(ultimaCopia.ficheiros) }} ficheiros, {{ tamanho(ultimaCopia.bytes) }}
+                <span class="text-zinc-500">({{ numero(ultimaCopia.copiados) }} novos<template v-if="ultimaCopia.guardados_apagados">, {{ numero(ultimaCopia.guardados_apagados) }} apagados guardados</template>)</span>
+              </p>
+              <p v-if="ultimaCopia.estado === 'erro'" class="text-xs text-red-400 mt-0.5 break-words whitespace-pre-line line-clamp-4">{{ ultimaCopia.erro }}</p>
+            </template>
+          </div>
+          <button type="button" @click="copiarMedia" :disabled="media.em_curso || aCopiar" data-teste="backup-media-copiar"
+            class="w-full sm:w-auto px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-xs font-semibold text-zinc-200 disabled:opacity-40 transition">
+            Copiar agora
+          </button>
+        </div>
+        <div v-if="ultimaCopia" data-teste="backup-espaco">
+          <div class="flex flex-wrap justify-between gap-x-3 text-[11px] text-zinc-500">
+            <span>Espaço dos backups: <b :class="acimaLimite ? 'text-amber-400' : 'text-zinc-300'">{{ tamanho(ultimaCopia.bytes_total) }}</b> de {{ tamanho(media.gratis_bytes) }} grátis</span>
+            <span>aviso por email aos {{ tamanho(media.limite_bytes) }}</span>
+          </div>
+          <div class="mt-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden" role="progressbar" :aria-valuenow="percentagemEspaco" aria-valuemin="0" aria-valuemax="100" aria-label="Espaço usado do limite grátis">
+            <div :class="['h-full rounded-full', acimaLimite ? 'bg-amber-400' : 'bg-green-500']" :style="{ width: Math.max(1, percentagemEspaco) + '%' }"></div>
+          </div>
+        </div>
+        <p class="text-[11px] text-zinc-500">
+          Todos os dias depois do backup da base (próxima {{ quando(media.proxima) }}); só copia o que é novo ou mudou.
+          O que as lojas apagam fica guardado {{ media.apagados_dias }} dias<template v-if="ultimaCopia && ultimaCopia.bytes_apagados"> ({{ tamanho(ultimaCopia.bytes_apagados) }})</template>.
+          Repor ficheiros: <code class="text-zinc-400">manage.py backup_media --repor</code> (docs/REPOR_BACKUP.md).
+        </p>
+      </div>
+
       <!-- filtros da lista -->
       <form @submit.prevent="carregarLista(0)" class="flex flex-wrap items-center gap-2" data-teste="backup-filtros">
         <input v-model.trim="fl.q" type="search" placeholder="Ficheiro ou quem pediu" aria-label="Pesquisar backups" data-teste="backup-q"
@@ -178,7 +216,7 @@ export default {
   data () {
     return {
       loading: true, aCarregar: false, resumo: {}, aFazer: false, aDescarregar: null, mensagem: null,
-      aEnsaiar: false, temporizador: null,
+      aEnsaiar: false, aCopiar: false, temporizador: null,
       lista: { count: 0, results: [] }, offset: 0, fl: FILTROS(), erroLista: '',
       descargas: { count: 0, results: [] }, dOffset: 0, fd: { q: '', de: '', ate: '' }, erroDescargas: '',
       hoje: diaLocal(), LIMITE, ICONE, COR, SELECT, DATA,
@@ -192,6 +230,13 @@ export default {
     comFiltros () { return Object.values(this.fl).some(Boolean) },
     ensaio () { return this.resumo.ensaio || {} },
     ultimoEnsaio () { return this.ensaio.ultimo },
+    media () { return this.resumo.media || {} },
+    ultimaCopia () { return this.media.ultima },
+    percentagemEspaco () {
+      const t = this.ultimaCopia?.bytes_total || 0
+      return Math.min(100, Math.round(t / (this.media.gratis_bytes || 1) * 100))
+    },
+    acimaLimite () { return (this.ultimaCopia?.bytes_total || 0) >= (this.media.limite_bytes || Infinity) },
     ensaioIcone () {
       if (this.ensaio.em_curso) return 'spinner'
       if (!this.ultimoEnsaio) return 'flask'
@@ -216,6 +261,7 @@ export default {
         // a página ficou vazia (ex.: o último da página saiu): volta uma atrás
         if (!data.results.length && offset > 0 && data.count) return this.carregarLista(Math.max(0, offset - LIMITE))
         const estava = this.resumo.ensaio?.em_curso
+        const copiava = this.resumo.media?.em_curso
         this.resumo = data.resumo
         this.lista = { count: data.count, results: data.results }
         this.offset = offset
@@ -224,9 +270,15 @@ export default {
             ? { texto: 'Ensaio de reposição concluído: o backup repõe-se sem erros.' }
             : { erro: true, texto: 'O ensaio de reposição falhou — vê o detalhe abaixo. Os super-admins recebem um email.' }
         }
-        // enquanto o worker ensaia, vai vendo de 5 em 5 segundos
+        if (copiava && !data.resumo.media.em_curso) {
+          const c = data.resumo.media.ultima
+          this.mensagem = c?.estado === 'ok'
+            ? { texto: `Cópia das fotos e vídeos concluída: ${this.numero(c.copiados)} novos.` }
+            : { erro: true, texto: 'A cópia das fotos e vídeos falhou — vê o detalhe abaixo. Os super-admins recebem um email.' }
+        }
+        // enquanto o worker ensaia ou copia, vai vendo de 5 em 5 segundos
         clearTimeout(this.temporizador)
-        if (data.resumo.ensaio.em_curso) this.temporizador = setTimeout(() => this.carregarLista(), 5000)
+        if (data.resumo.ensaio.em_curso || data.resumo.media.em_curso) this.temporizador = setTimeout(() => this.carregarLista(), 5000)
       } catch (e) {
         this.erroLista = e.response?.data?.detail || 'Não foi possível carregar os backups.'
       } finally { this.aCarregar = false }
@@ -251,6 +303,18 @@ export default {
         this.mensagem = { erro: true, texto: e.response?.data?.detail || 'Não foi possível pedir o ensaio.' }
       } finally {
         this.aEnsaiar = false
+        this.carregarLista()
+      }
+    },
+    async copiarMedia () {
+      this.aCopiar = true; this.mensagem = null
+      try {
+        await api.post('/app/admin/backups/media/copiar/')
+        this.mensagem = { texto: 'A copiar as fotos e vídeos novos…' }
+      } catch (e) {
+        this.mensagem = { erro: true, texto: e.response?.data?.detail || 'Não foi possível pedir a cópia.' }
+      } finally {
+        this.aCopiar = false
         this.carregarLista()
       }
     },
@@ -292,6 +356,7 @@ export default {
     },
     tamanho (b) {
       if (!b) return '0 KB'
+      if (b >= 1e9) return `${(b / 1e9).toFixed(1).replace('.', ',')} GB`
       return b >= 1e6 ? `${(b / 1e6).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`
     },
   },

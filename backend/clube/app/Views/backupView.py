@@ -6,6 +6,7 @@ Admin → Backups (só quem tem gerir_backups — o super-admin).
   POST /app/admin/backups/fazer/                → backup manual agora
   POST /app/admin/backups/<id>/descarregar/     → link de 5 minutos (fica registado quem e de onde)
   POST /app/admin/backups/ensaiar/   {id?}     → ensaio de reposição (o worker repõe numa base temporária e confere)
+  POST /app/admin/backups/media/copiar/         → cópia das fotos e vídeos agora (o worker faz; utils/backup_media.py)
   GET  /app/admin/backups/ficheiro/<token>/     → só na dev (sem R2): entrega o ficheiro do link assinado
 
 Repor um backup a sério NÃO se faz aqui: apagava a plataforma num clique. O ensaio só usa uma base
@@ -23,8 +24,8 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import BackupBD, DescargaBackup
-from ..utils import backups
+from ..models import BackupBD, CopiaMedia, DescargaBackup
+from ..utils import backup_media, backups
 from .adminView import _exige_admin
 from .faturacaoView import _datas, _paginar
 
@@ -90,6 +91,39 @@ def _resumo():
         'a_correr': BackupBD.objects.filter(estado='a_correr').exists(),
         'retencao': '7 diários, 4 semanais e 12 mensais; manuais 30 dias',
         'ensaio': _ensaio(),
+        'media': _media(),
+    }
+
+
+def _copia(c):
+    if not c:
+        return None
+    return {
+        'id': c.id, 'tipo': c.tipo, 'estado': c.estado, 'quando': c.criado_em, 'duracao_s': c.duracao_s,
+        'pedido_por': _nome(c.pedido_por), 'copiados': c.copiados, 'bytes_copiados': c.bytes_copiados,
+        'guardados_apagados': c.guardados_apagados, 'purgados': c.purgados, 'falhas': c.falhas,
+        'ficheiros': c.ficheiros, 'bytes': c.bytes, 'bytes_apagados': c.bytes_apagados, 'bytes_total': c.bytes_total,
+        'erro': c.erro[-800:] if c.estado == 'erro' else '',
+    }
+
+
+def _media():
+    ultima = CopiaMedia.objects.exclude(estado='a_correr').select_related('pedido_por').first()
+    ok = CopiaMedia.objects.filter(estado='ok').first()
+    agora = timezone.localtime()
+    proxima = agora.replace(hour=settings.BACKUP_HORA, minute=0, second=0, microsecond=0)
+    if backup_media.devida(agora):
+        proxima = agora + timedelta(minutes=5)
+    elif proxima <= agora:
+        proxima += timedelta(days=1)
+    return {
+        'em_curso': backup_media.em_curso() or CopiaMedia.objects.filter(estado='a_correr').exists(),
+        'ultima': _copia(ultima),
+        'ultima_ok': ok.criado_em if ok else None,
+        'proxima': proxima,
+        'apagados_dias': settings.BACKUP_MEDIA_APAGADOS_DIAS,
+        'limite_bytes': int(settings.BACKUP_LIMITE_GB * 1e9),
+        'gratis_bytes': 10 * 10**9,
     }
 
 
@@ -176,6 +210,19 @@ def admin_backup_ensaiar(request):
     except backups.EnsaioEmCurso as e:
         return Response({'detail': str(e)}, status=status.HTTP_409_CONFLICT)
     return Response({'backup_id': b.id, 'nome': b.chave.rsplit('/', 1)[-1]}, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_backup_media_copiar(request):
+    erro = _exige_admin(request, 'gerir_backups')
+    if erro:
+        return erro
+    try:
+        backup_media.pedir(request.user.id)
+    except backup_media.CopiaEmCurso as e:
+        return Response({'detail': str(e)}, status=status.HTTP_409_CONFLICT)
+    return Response({'pedido': True}, status=status.HTTP_202_ACCEPTED)
 
 
 @api_view(['POST'])
