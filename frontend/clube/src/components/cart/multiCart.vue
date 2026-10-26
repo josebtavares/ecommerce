@@ -70,7 +70,7 @@
                   ? 'border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
                   : 'border-transparent text-zinc-400 hover:text-zinc-700 hover:bg-gray-50'
             ]">
-            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="w-5 h-5 rounded object-cover" />
+            <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome" class="w-5 h-5 rounded object-cover" />
             <span v-else class="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
                   :class="isDark ? 'bg-zinc-700 text-zinc-400' : 'bg-gray-200 text-zinc-500'">
               {{ loja.nome.charAt(0) }}
@@ -110,7 +110,7 @@
           <!-- Info da loja -->
           <div class="px-5 py-3 border-b flex items-center gap-3"
                :class="isDark ? 'bg-zinc-900/50 border-zinc-800/50' : 'bg-gray-50 border-gray-100'">
-            <img v-if="activeLoja.logo_url" :src="activeLoja.logo_url" :alt="activeLoja.nome"
+            <img v-img v-if="activeLoja.logo_url" :src="$miniatura(activeLoja.logo_url)" :alt="activeLoja.nome"
                  class="w-8 h-8 rounded-lg object-cover" />
             <div v-else class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
                  :class="isDark ? 'bg-zinc-700 text-zinc-400' : 'bg-gray-200 text-zinc-500'">
@@ -130,8 +130,8 @@
 
               <div class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0"
                    :class="isDark ? 'bg-zinc-800' : 'bg-gray-100'">
-                <img v-if="item.produto?.ficheiro_url"
-                     :src="item.produto.ficheiro_url" :alt="item.produto?.nome"
+                <img v-img v-if="item.produto?.ficheiro_url"
+                     :src="$miniatura(item.produto.ficheiro_url)" :alt="item.produto?.nome"
                      class="w-full h-full object-cover" />
                 <div v-else class="w-full h-full flex items-center justify-center"
                      :class="isDark ? 'text-zinc-600' : 'text-gray-400'">

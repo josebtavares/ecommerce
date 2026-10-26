@@ -10,7 +10,7 @@
         @click="b.link && $emit('abrir', b.link)"
         class="relative overflow-hidden rounded-3xl text-left group"
         :class="[banners.length === 1 ? 'min-h-[220px] md:min-h-[300px]' : 'min-h-[200px]', b.link ? 'cursor-pointer' : '']">
-        <img v-if="b.imagem_url" :src="b.imagem_url" :alt="b.titulo"
+        <img v-img v-if="b.imagem_url" :src="b.imagem_url" :alt="b.titulo"
           class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-700" />
         <div v-else class="absolute inset-0 bg-gradient-to-br from-red-700 via-red-900 to-zinc-950"></div>
         <div v-if="b.titulo || b.texto" class="absolute inset-0 bg-gradient-to-r from-zinc-950/85 via-zinc-950/40 to-transparent"></div>

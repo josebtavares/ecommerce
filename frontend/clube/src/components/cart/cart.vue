@@ -14,7 +14,7 @@
                 
                     <li class="flex gap-3 p-2 pb-5 h-1/3 border-b border-gray-500 items-center justify-center " v-for="(item, index) in cart_data.filter(cart_item => cart_item.quantidade > 0)" :key="index" ref="listItem">
                        <div class="w-1/2 h-full">
-                           <img class="w-full h-full object-cover" :src="item.photo" alt="">
+                           <img v-img class="w-full h-full object-cover" :src="$miniatura(item.photo)" alt="">
                        </div>
     
                        <div class="flex flex-col gap-1 text-xs w-full">

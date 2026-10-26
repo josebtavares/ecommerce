@@ -33,7 +33,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <span class="vb-bar__marca">
-            <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" />
+            <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome" />
             <span v-else class="vb-bar__inicial">{{ loja.nome.charAt(0) }}</span>
             <span class="vb-bar__nome">{{ loja.nome }}</span>
           </span>
@@ -76,7 +76,7 @@
 
           <div class="vb-hero__media">
             <div class="vb-autocolante">
-              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel muted loop playsinline></video>
+              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel="'destaque'" muted loop playsinline></video>
               <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" />
               <div v-else class="vb-autocolante__vazio">{{ loja.nome.charAt(0) }}</div>
             </div>
@@ -115,8 +115,8 @@
                     @click="selectedProduct = p">
               <div class="vb-cartao__img">
                 <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
-                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
-                <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" muted loop v-video-visivel="'cartao'" playsinline></video>
+                <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                 <span v-else class="vb-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                 <span v-if="esgotado(p)" class="vb-cartao__esgotado">Esgotado</span>
               </div>
@@ -156,8 +156,8 @@
                       :style="{ animationDelay: (i % 12) * 0.03 + 's' }" @click="selectedProduct = p">
                 <div class="vb-cartao__img">
                   <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
-                  <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
+                  <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                   <span v-else class="vb-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                   <span v-if="esgotado(p)" class="vb-cartao__esgotado">Esgotado</span>
                 </div>

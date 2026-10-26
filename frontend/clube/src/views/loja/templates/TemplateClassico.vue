@@ -46,7 +46,7 @@
 
         <!-- nome da loja: aparece quando o banner sai do ecrã -->
         <span class="classico-bar__nome" :class="{ 'classico-bar__nome--on': scrolled }">
-          <img v-if="loja.logo_url" :src="loja.logo_url" alt="" class="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+          <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" alt="" class="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
           <span class="truncate">{{ loja.nome }}</span>
         </span>
       </header>
@@ -56,7 +56,7 @@
         <video v-if="isVideo(loja.banner_url)"
           :src="loja.banner_url" :poster="loja.banner_poster_url"
           class="w-full h-full object-cover"
-          v-video-visivel muted loop playsinline></video>
+          v-video-visivel="'destaque'" muted loop playsinline></video>
         <img v-else
           :src="loja.banner_url || defaultBanner"
           :alt="loja.nome" class="w-full h-full object-cover" />
@@ -66,7 +66,7 @@
              :class="isDark ? 'classico-degrade' : 'from-gray-900/80 via-gray-900/30 to-transparent'"/>
 
         <div class="absolute bottom-0 left-0 p-8 flex items-end gap-5">
-          <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome"
+          <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome"
                class="w-20 h-20 rounded-2xl object-cover border-2 border-white/20 shadow-xl flex-shrink-0" />
           <div v-else class="w-20 h-20 rounded-2xl flex items-center justify-center flex-shrink-0 border-2 border-white/20"
                :style="{ backgroundColor: 'var(--cor-primaria)' }">
@@ -269,7 +269,7 @@
               <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
                 <div>
                   <div class="flex items-center gap-3 mb-3">
-                    <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" class="w-8 h-8 rounded-lg object-cover" />
+                    <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome" class="w-8 h-8 rounded-lg object-cover" />
                     <p class="font-bold" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ loja.nome }}</p>
                   </div>
                   <p class="text-xs leading-relaxed" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">{{ loja.descricao }}</p>

@@ -68,7 +68,7 @@
           </div>
 
           <div class="bs-arco">
-            <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel muted loop playsinline></video>
+            <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel="'destaque'" muted loop playsinline></video>
             <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" />
             <div v-else class="bs-arco__vazio">{{ loja.nome.charAt(0) }}</div>
           </div>
@@ -129,8 +129,8 @@
                 <button v-for="p in l.itens" :key="p.id" class="bs-prato"
                         :class="{ 'bs-prato--esgotado': esgotado(p) }" @click="selectedProduct = p">
                   <span class="bs-prato__foto">
-                    <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
-                    <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                    <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
+                    <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                     <span v-else>{{ p.nome.charAt(0) }}</span>
                   </span>
                   <span class="bs-prato__corpo">

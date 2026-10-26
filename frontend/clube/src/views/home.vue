@@ -130,7 +130,7 @@
                   @click="goToStore(store.id)"
                   class="flex items-center gap-3 p-2 rounded-xl cursor-pointer transition"
                   :class="isDark ? 'hover:bg-zinc-800' : 'hover:bg-stone-100'">
-                <img v-if="store.logo_url" :src="store.logo_url" :alt="store.nome"
+                <img v-if="store.logo_url" v-img :src="$miniatura(store.logo_url)" :alt="store.nome"
                      class="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
                 <div v-else class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                      :class="isDark ? 'bg-zinc-700' : 'bg-stone-200'">
@@ -183,7 +183,7 @@
                     <video v-if="isVideo(slide.loja.banner_url)"
                       :src="slide.loja.banner_url" :poster="slide.loja.banner_poster_url"
                       class="w-full h-full object-cover"
-                      v-video-visivel muted loop playsinline></video>
+                      v-video-visivel="'destaque'" muted loop playsinline></video>
                     <img v-else
                       :src="slide.loja.banner_url || bannerPadrao"
                       :alt="slide.loja.nome"
@@ -384,8 +384,8 @@ import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
 import HomeCategorias from '@/components/home/HomeCategorias.vue'
 import HomeBanners from '@/components/home/HomeBanners.vue'
-import logoDefault from '@/assets/img/login/logo_final_4k.png'
-import logoLight from '@/assets/img/login/logo_final_4k_light.png'
+import logoDefault from '@/assets/img/login/logo_final_640.webp'
+import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import api, { terminarSessao } from '@/services/api'
 import { DEFAULT_BANNER, DEFAULT_PRODUTO } from '@/services/media'
 import { iconeCategoria } from '@/utils/icones'

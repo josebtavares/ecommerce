@@ -1,5 +1,7 @@
 import { createApp } from 'vue';
 import videoVisivel from './directives/videoVisivel';
+import imgDirectiva from './directives/img';
+import { miniatura } from './utils/media';
 import App from './App.vue';
 import { formatarDinheiro } from './utils/dinheiro';
 import router from './router'; // Import the router
@@ -24,6 +26,8 @@ const app = createApp(App);
 
 app.component('font-awesome-icon', FontAwesomeIcon);
 app.directive('video-visivel', videoVisivel); // vídeos só tocam quando visíveis (directives/videoVisivel.js)
+app.directive('img', imgDirectiva); // imagens lazy + volta ao original se faltar a miniatura (directives/img.js)
+app.config.globalProperties.$miniatura = miniatura; // foto de 600 px para cartões e listas (utils/media.js)
 
 app.config.globalProperties.$dinheiro = formatarDinheiro; // 1250 → "1.250$00" em qualquer template
 

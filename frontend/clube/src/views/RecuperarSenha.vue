@@ -172,8 +172,8 @@ import { mediaUrl } from '@/services/media'
 import { pedirLinkRecuperacao, definirPasswordNova, mensagemErroRecuperacao, erroPasswordNova } from '@/services/recuperarSenha'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
-import logoDefault from '@/assets/img/login/logo_final_4k.png'
-import logoLight from '@/assets/img/login/logo_final_4k_light.png'
+import logoDefault from '@/assets/img/login/logo_final_640.webp'
+import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 
 export default {
   name: 'RecuperarSenha',

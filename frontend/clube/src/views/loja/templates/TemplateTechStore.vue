@@ -38,7 +38,7 @@
           <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         </button>
         <span class="ts-bar__marca">
-          <img v-if="loja.logo_url" :src="loja.logo_url" :alt="loja.nome" />
+          <img v-img v-if="loja.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome" />
           <span v-else class="ts-bar__inicial">{{ loja.nome.charAt(0) }}</span>
           <span class="ts-bar__nome">{{ loja.nome }}</span>
         </span>
@@ -100,7 +100,7 @@
             <span class="ts-ecra__marca ts-ecra__marca--c"></span>
             <span class="ts-ecra__marca ts-ecra__marca--d"></span>
             <div class="ts-ecra__vidro">
-              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel muted loop playsinline></video>
+              <video v-if="isVideo(loja.banner_url)" :src="loja.banner_url" :poster="loja.banner_poster_url" v-video-visivel="'destaque'" muted loop playsinline></video>
               <img v-else-if="loja.banner_url" :src="loja.banner_url" :alt="loja.nome" />
               <div v-else class="ts-ecra__vazio">{{ loja.nome.charAt(0) }}</div>
             </div>
@@ -134,8 +134,8 @@
               <button v-for="p in l.itens" :key="p.id" class="ts-cartao" @click="selectedProduct = p">
                 <span class="ts-cartao__img">
                   <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted loop v-video-visivel playsinline></video>
-                  <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" muted loop v-video-visivel="'cartao'" playsinline></video>
+                  <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                   <span v-else class="ts-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                   <span class="ts-badge ts-mono">Destaque</span>
                 </span>
@@ -193,8 +193,8 @@
               <button v-for="p in l.itens" :key="p.id" class="ts-cartao" @click="selectedProduct = p">
                 <span class="ts-cartao__img">
                   <BotaoFavorito tipo="produto" :id="p.id" elemento="span" :tamanho="32" class="fav-card" />
-                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="p.ficheiro_poster_url" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
-                  <img v-else-if="p.ficheiro_url" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                  <video v-if="isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :poster="$miniatura(p.ficheiro_poster_url)" muted playsinline :preload="p.ficheiro_poster_url ? 'none' : 'metadata'"></video>
+                  <img v-img v-else-if="p.ficheiro_url" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                   <span v-else class="ts-cartao__inicial">{{ p.nome.charAt(0) }}</span>
                 </span>
                 <span class="ts-cartao__corpo">
@@ -215,7 +215,7 @@
               </template>
               <button v-for="p in l.itens" :key="p.id" class="ts-linha" @click="selectedProduct = p">
                 <span class="ts-linha__img">
-                  <img v-if="p.ficheiro_url && !isVideo(p.ficheiro_url)" :src="p.ficheiro_url" :alt="p.nome" loading="lazy" />
+                  <img v-img v-if="p.ficheiro_url && !isVideo(p.ficheiro_url)" :src="$miniatura(p.ficheiro_url)" :alt="p.nome" loading="lazy" />
                   <span v-else>{{ p.nome.charAt(0) }}</span>
                 </span>
                 <span class="ts-linha__info">

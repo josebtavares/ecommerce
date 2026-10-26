@@ -19,7 +19,7 @@
             <!-- vídeo do produto: toca com controlos (é o único vídeo no ecrã) -->
             <video v-if="todasImagens[imagemActiva]?.video" :key="todasImagens[imagemActiva].url"
                    :src="todasImagens[imagemActiva].url" :poster="todasImagens[imagemActiva].poster"
-                   class="w-full h-full object-cover" autoplay muted loop playsinline controls></video>
+                   class="w-full h-full object-cover" v-video-visivel="'destaque'" muted loop playsinline controls></video>
             <img v-else :src="todasImagens[imagemActiva]?.url || defaultImg" :alt="produto.nome"
                  class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
 
@@ -90,7 +90,7 @@
               @click.stop="imagemActiva = idx"
               class="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden border-2 transition"
               :class="imagemActiva === idx ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'">
-              <img :src="img.poster || (img.video ? defaultImg : img.url) || defaultImg" :alt="'Imagem ' + (idx+1)" class="w-full h-full object-cover" />
+              <img v-img :src="$miniatura(img.poster || (img.video ? defaultImg : img.url)) || defaultImg" :alt="'Imagem ' + (idx+1)" class="w-full h-full object-cover" />
             </button>
           </div>
 
@@ -110,7 +110,7 @@
           <!-- Header com botão fechar (desktop) -->
           <div class="flex items-center justify-between px-6 pt-5 pb-2 flex-shrink-0">
             <div class="flex items-center gap-2">
-              <img v-if="loja?.logo_url" :src="loja.logo_url" :alt="loja.nome"
+              <img v-img v-if="loja?.logo_url" :src="$miniatura(loja.logo_url)" :alt="loja.nome"
                    class="w-5 h-5 rounded object-cover" />
               <button v-if="mostrarBotaoLoja" @click="visitarLoja"
                 class="text-xs font-medium transition hover:underline underline-offset-2"
@@ -155,7 +155,7 @@
               <p class="text-xs font-semibold uppercase tracking-wider mb-2" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Inclui</p>
               <ul class="space-y-2">
                 <li v-for="c in produto.componentes" :key="c.id" class="flex items-center gap-3">
-                  <img v-if="c.imagem" :src="c.imagem" :alt="c.nome" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                  <img v-img v-if="c.imagem" :src="$miniatura(c.imagem)" :alt="c.nome" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                   <span v-else class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold"
                         :class="isDark ? 'bg-zinc-800 text-zinc-500' : 'bg-gray-200 text-zinc-400'">{{ c.nome.charAt(0) }}</span>
                   <span class="flex-1 min-w-0 text-sm" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">

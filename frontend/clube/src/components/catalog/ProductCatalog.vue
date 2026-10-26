@@ -201,7 +201,7 @@
              cardClass
            ]">
         <div :class="['relative overflow-hidden', imageContainerClass]" :style="{ height: imageHeight }">
-          <img :src="produto.ficheiro_poster_url || produto.ficheiro_url || defaultImg" :alt="produto.nome"
+          <img v-img :src="$miniatura(produto.ficheiro_poster_url || produto.ficheiro_url) || defaultImg" :alt="produto.nome"
                :class="['w-full h-full object-cover transition-transform duration-300', imageHoverEffect]" />
           <BotaoFavorito tipo="produto" :id="produto.id" :tamanho="32" class="absolute top-2 right-2 z-10" />
           <span v-if="produto.destaque && showBadges"

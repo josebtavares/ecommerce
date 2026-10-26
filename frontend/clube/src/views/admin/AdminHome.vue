@@ -844,7 +844,7 @@ export default {
       const ficheiro = e.target.files?.[0]
       e.target.value = ''
       if (!ficheiro) return
-      if (ficheiro.size > 5 * 1024 * 1024) { toast.error('A imagem tem de ter no máximo 5 MB.'); return }
+      if (ficheiro.size > 20 * 1024 * 1024) { toast.error('A imagem tem de ter no máximo 20 MB.'); return }
       it._aCarregar = true
       try {
         const fd = new FormData()

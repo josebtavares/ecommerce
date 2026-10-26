@@ -93,7 +93,7 @@
           v-if="isVideo(loja.banner_url)"
           :src="loja.banner_url" :poster="loja.banner_poster_url"
           class="editorial-hero__img"
-          v-video-visivel
+          v-video-visivel="'destaque'"
           muted
           loop
           playsinline

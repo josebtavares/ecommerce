@@ -15,7 +15,7 @@
     <div v-else class="grid sm:grid-cols-2 gap-3">
       <div v-for="s in servicos" :key="s.id" :data-teste="`servico-${s.id}`"
            :class="['bg-zinc-900 rounded-2xl border border-zinc-800 p-4 flex gap-3', !s.ativo && 'opacity-60']">
-        <img v-if="s.imagens.length" :src="s.imagens[0].url" alt="" class="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
+        <img v-if="s.imagens.length" v-img :src="$miniatura(s.imagens[0].url)" alt="" class="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
         <div v-else class="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-600">
           <font-awesome-icon :icon="['fas', s.e_pacote ? 'layer-group' : 'scissors']" />
         </div>
@@ -131,7 +131,7 @@
           <p class="text-xs text-zinc-500 mb-1">Imagens ({{ form.imagens.length }}/6)</p>
           <div class="flex flex-wrap gap-2">
             <div v-for="i in form.imagens" :key="i.id" class="relative">
-              <img :src="i.url" alt="" class="w-16 h-16 rounded-lg object-cover" />
+              <img v-img :src="$miniatura(i.url)" alt="" class="w-16 h-16 rounded-lg object-cover" />
               <button type="button" @click="apagarImagem(i)" aria-label="Tirar imagem"
                 class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-zinc-950 border border-zinc-700 text-zinc-300 text-[10px]">✕</button>
             </div>

@@ -74,8 +74,8 @@
             :class="['relative overflow-hidden', imageContainerClass]"
             :style="{ height: imageHeight }"
           >
-            <img
-              :src="produto.ficheiro_poster_url || produto.ficheiro_url || defaultImg"
+            <img v-img
+              :src="$miniatura(produto.ficheiro_poster_url || produto.ficheiro_url) || defaultImg"
               :alt="produto.nome"
               :class="[
                 'w-full h-full object-cover transition-transform duration-300',
