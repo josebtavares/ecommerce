@@ -54,6 +54,7 @@ class Command(BaseCommand):
             self._avisos_horario()
             self._ciclo_subscricoes()
             self._limpar_sessoes()
+            self._backup_diario()
             try:
                 apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
@@ -98,6 +99,23 @@ class Command(BaseCommand):
                 self.stdout.write(f'  subscrições: {r}')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  subscrições: ciclo falhou: {e}')
+
+    def _backup_diario(self):
+        """De 5 em 5 minutos vê se já é hora do backup da base de dados (utils/backups.py)."""
+        if time.monotonic() - getattr(self, '_ultima_verificacao_backup', -1e9) < 300:
+            return
+        self._ultima_verificacao_backup = time.monotonic()
+        try:
+            from app.utils import backups
+            if not backups.backup_devido():
+                return
+            b = backups.fazer_backup('automatico')
+            if b.estado == 'ok':
+                self.stdout.write(self.style.SUCCESS(f'  backup: {b.chave} ({b.tamanho / 1e6:.1f} MB em {b.duracao_s}s)'))
+            else:
+                self.stderr.write(f'  backup: falhou: {b.erro[-300:]}')
+        except Exception as e:          # um erro aqui não pode parar os vídeos
+            self.stderr.write(f'  backup: {e}')
 
     def _limpar_sessoes(self):
         """Uma vez por dia: apaga os tokens de sessão já expirados (lista negra do logout)."""

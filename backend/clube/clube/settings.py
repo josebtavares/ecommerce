@@ -227,6 +227,19 @@ MOEDA_COBRANCA = {
 # ══════════════════════════════════════════════════════════════
 # CACHE (Redis)
 # ══════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════
+# BACKUPS DA BASE DE DADOS (utils/backups.py)
+# ══════════════════════════════════════════════════════════════
+# Na prod: bucket R2 PRIVADO só para backups (credenciais próprias, não as das imagens).
+# Sem bucket (dev): os ficheiros ficam em BACKUP_DIR.
+BACKUP_R2_BUCKET            = os.environ.get('BACKUP_R2_BUCKET', '')
+BACKUP_R2_ENDPOINT_URL      = os.environ.get('BACKUP_R2_ENDPOINT_URL', os.environ.get('R2_ENDPOINT_URL', ''))
+BACKUP_R2_ACCESS_KEY_ID     = os.environ.get('BACKUP_R2_ACCESS_KEY_ID', '')
+BACKUP_R2_SECRET_ACCESS_KEY = os.environ.get('BACKUP_R2_SECRET_ACCESS_KEY', '')
+BACKUP_DIR                  = os.environ.get('BACKUP_DIR', str(BASE_DIR / 'backups'))
+BACKUP_HORA                 = int(os.environ.get('BACKUP_HORA', '3'))     # hora de Cabo Verde do backup diário
+
+
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',

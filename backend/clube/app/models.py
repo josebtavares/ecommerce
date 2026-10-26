@@ -2083,3 +2083,25 @@ class RelatorioGerado(models.Model):
 
     def __str__(self):
         return f'{self.relatorio} ({self.formato}) por {self.utilizador_id} em {self.data_criacao:%Y-%m-%d %H:%M}'
+
+
+class BackupBD(models.Model):
+    """Backup completo da base de dados (pg_dump) guardado fora do Railway — utils/backups.py."""
+    TIPOS   = [('automatico', 'Automático'), ('manual', 'Manual')]
+    ESTADOS = [('a_correr', 'A correr'), ('ok', 'Concluído'), ('erro', 'Falhou')]
+
+    tipo       = models.CharField(max_length=12, choices=TIPOS)
+    estado     = models.CharField(max_length=10, choices=ESTADOS, default='a_correr')
+    chave      = models.CharField(max_length=255, blank=True, default='')   # caminho do ficheiro no armazenamento
+    tamanho    = models.BigIntegerField(default=0)                          # bytes
+    duracao_s  = models.FloatField(default=0)
+    erro       = models.TextField(blank=True, default='')
+    pedido_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='backups_pedidos')
+    criado_em  = models.DateTimeField(auto_now_add=True, db_index=True)
+    apagado_em = models.DateTimeField(null=True, blank=True)                # ficheiro removido pela política de retenção
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'backup {self.tipo} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
