@@ -66,6 +66,9 @@ class _Disco:
     def caminho(self, chave):
         return self.raiz / chave
 
+    def descarregar(self, chave, destino):
+        shutil.copyfile(self.raiz / chave, destino)
+
     def url(self, chave, segundos):
         return None             # na dev o ficheiro sai por uma view com link assinado (Views/backupView.py)
 
@@ -96,6 +99,9 @@ class _R2:
 
     def caminho(self, chave):
         return None
+
+    def descarregar(self, chave, destino):
+        self.s3.download_file(self.bucket, chave, str(destino))
 
     def url(self, chave, segundos):
         """Link temporário direto ao bucket privado (expira; não passa pelo servidor)."""
@@ -267,3 +273,173 @@ def aplicar_retencao(agora=None):
     # tentativas falhadas antigas: só ocupam a lista
     BackupBD.objects.filter(estado='erro', criado_em__lt=agora - timedelta(days=DIAS_MANUAIS)).delete()
     return len(sair)
+
+
+# ── ensaio de reposição ────────────────────────────────────────────
+# Um backup só vale se se conseguir repor. De BACKUP_ENSAIO_DIAS em BACKUP_ENSAIO_DIAS (ou a pedido no admin) o
+# worker descarrega o backup mais recente, repõe-no numa base TEMPORÁRIA (BD_ENSAIO, nunca a da plataforma),
+# confere as tabelas e apaga-a. O procedimento para repor a sério está em docs/REPOR_BACKUP.md.
+
+TRANCA_ENSAIO = 'backup_bd:ensaio'
+PEDIDO_ENSAIO = 'backup_bd:ensaio_pedido'      # id do backup pedido no admin (o worker apanha-o)
+BD_ENSAIO = 'bende_ensaio_reposicao'
+TABELAS_CHAVE = ('auth_user', 'app_utilizador', 'app_loja', 'django_migrations')
+SQL_CONTAR = ("SELECT table_name, (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM public.%I', "
+              "table_name), false, true, '')))[1]::text FROM information_schema.tables "
+              "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY 1")
+
+
+class EnsaioEmCurso(Exception):
+    pass
+
+
+def _servidor_ensaio():
+    """(args de ligação sem -d, env, base onde correr CREATE/DROP DATABASE)."""
+    if settings.BACKUP_ENSAIO_URL:
+        from urllib.parse import unquote, urlparse
+        u = urlparse(settings.BACKUP_ENSAIO_URL)
+        env = {**os.environ, 'PGPASSWORD': unquote(u.password or '')}
+        args = ['-h', u.hostname or 'localhost', '-p', str(u.port or 5432), '-U', unquote(u.username or '')]
+        return args, env, (u.path or '/postgres').lstrip('/') or 'postgres'
+    args, env = _ambiente_pg()
+    return args[:-2], env, args[-1]
+
+
+def _psql(args, env, sql, bd):
+    r = subprocess.run(['psql', *args, '-d', bd, '-v', 'ON_ERROR_STOP=1', '-Atc', sql],
+                       env=env, capture_output=True, text=True, timeout=300)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.strip()[-600:])
+    return r.stdout
+
+
+def pedir_ensaio(backup_id):
+    if cache.get(TRANCA_ENSAIO) or cache.get(PEDIDO_ENSAIO):
+        raise EnsaioEmCurso('Já há um ensaio de reposição pedido ou a correr.')
+    cache.set(PEDIDO_ENSAIO, backup_id, 3600)
+
+
+def ensaio_em_curso():
+    return bool(cache.get(TRANCA_ENSAIO) or cache.get(PEDIDO_ENSAIO))
+
+
+def ensaio_devido(agora=None):
+    """O worker ensaia sozinho se não houver um ensaio bem-sucedido nos últimos BACKUP_ENSAIO_DIAS dias
+    (depois do backup diário; se falhar, volta a tentar no dia seguinte)."""
+    agora = timezone.localtime(agora or timezone.now())
+    if agora.hour < settings.BACKUP_HORA + 1:
+        return False
+    ensaios = BackupBD.objects.filter(ensaio_em__isnull=False)
+    if ensaios.filter(ensaio_ok=True, ensaio_em__gte=agora - timedelta(days=settings.BACKUP_ENSAIO_DIAS)).exists():
+        return False
+    if ensaios.filter(ensaio_em__gte=agora - timedelta(hours=24)).exists():
+        return False
+    return BackupBD.objects.filter(estado='ok', apagado_em__isnull=True).exists()
+
+
+def ultimo_ensaio():
+    return BackupBD.objects.filter(ensaio_em__isnull=False).order_by('-ensaio_em').first()
+
+
+def ensaiar_reposicao(backup=None):
+    """Repõe o backup (por omissão o mais recente) numa base temporária e confere-o. Devolve o BackupBD
+    com ensaio_ok / ensaio_detalhe preenchidos. Nunca toca na base da plataforma."""
+    if not cache.add(TRANCA_ENSAIO, 1, LIMITE_S + 600):
+        raise EnsaioEmCurso('Já há um ensaio de reposição a correr.')
+    try:
+        b = backup or BackupBD.objects.filter(estado='ok', apagado_em__isnull=True).order_by('-criado_em').first()
+        if not b or b.estado != 'ok' or b.apagado_em or not b.chave:
+            raise ValueError('Não há nenhum backup disponível para ensaiar.')
+    except Exception:
+        cache.delete(TRANCA_ENSAIO)
+        raise
+    det, ok = {'backup': b.chave.rsplit('/', 1)[-1]}, False
+    inicio = time.monotonic()
+    pasta = tempfile.mkdtemp(prefix='ensaio-')
+    args, env, manutencao = _servidor_ensaio()
+    criada = False
+    try:
+        if BD_ENSAIO == connection.settings_dict.get('NAME'):
+            raise RuntimeError('a base de ensaio não pode ser a da plataforma')
+        ficheiro = Path(pasta) / 'backup.dump'
+        t = time.monotonic()
+        armazenamento().descarregar(b.chave, ficheiro)
+        det['descarregar_s'] = round(time.monotonic() - t, 1)
+        r = subprocess.run(['pg_restore', '-l', str(ficheiro)], capture_output=True, text=True, timeout=300)
+        if r.returncode != 0:
+            raise RuntimeError(f'o ficheiro não se lê: {r.stderr.strip()[-600:]}')
+        no_backup = sum(1 for linha in r.stdout.splitlines() if ' TABLE DATA ' in linha)
+
+        _psql(args, env, f'DROP DATABASE IF EXISTS {BD_ENSAIO} WITH (FORCE)', manutencao)
+        _psql(args, env, f'CREATE DATABASE {BD_ENSAIO}', manutencao)
+        criada = True
+        t = time.monotonic()
+        r = subprocess.run(['pg_restore', '--no-owner', '--no-acl', '--exit-on-error', *args, '-d', BD_ENSAIO, str(ficheiro)],
+                           env=env, capture_output=True, text=True, timeout=LIMITE_S)
+        if r.returncode != 0:
+            raise RuntimeError(f'pg_restore falhou: {r.stderr.strip()[-800:]}')
+        det['repor_s'] = round(time.monotonic() - t, 1)
+
+        contagens = {}
+        for linha in _psql(args, env, SQL_CONTAR, BD_ENSAIO).splitlines():
+            if '|' in linha:
+                nome, n = linha.split('|', 1)
+                contagens[nome] = int(n or 0)
+        det.update(tabelas=len(contagens), tabelas_no_backup=no_backup, linhas=sum(contagens.values()),
+                   utilizadores=contagens.get('auth_user', 0), lojas=contagens.get('app_loja', 0),
+                   encomendas=contagens.get('app_encomenda', 0))
+        det['ultima_migracao'] = _psql(args, env, "SELECT name FROM django_migrations WHERE app = 'app' "
+                                                  "ORDER BY id DESC LIMIT 1", BD_ENSAIO).strip()
+        problemas = []
+        if len(contagens) != no_backup:
+            problemas.append(f'o backup tem {no_backup} tabelas e só foram repostas {len(contagens)}')
+        problemas += [f'a tabela {t} ficou vazia' for t in TABELAS_CHAVE if not contagens.get(t)]
+        if problemas:
+            raise RuntimeError('; '.join(problemas))
+        ok = True
+    except Exception as e:
+        log.exception('ensaio de reposição falhou')
+        det['erro'] = str(e)[:2000]
+    finally:
+        if criada:
+            try:
+                _psql(args, env, f'DROP DATABASE IF EXISTS {BD_ENSAIO} WITH (FORCE)', manutencao)
+            except Exception as e:
+                log.exception('ensaio: não consegui apagar a base temporária')
+                det['aviso'] = f'a base temporária {BD_ENSAIO} não foi apagada: {str(e)[:300]}'
+        shutil.rmtree(pasta, ignore_errors=True)
+        det['total_s'] = round(time.monotonic() - inicio, 1)
+        BackupBD.objects.filter(pk=b.pk).update(ensaio_em=timezone.now(), ensaio_ok=ok, ensaio_detalhe=det)
+        cache.delete(TRANCA_ENSAIO)
+    b.refresh_from_db()
+    if not ok:
+        _avisar_ensaio(b)
+    return b
+
+
+def processar_ensaio():
+    """Chamado pelo worker: faz o ensaio pedido no admin, ou o periódico quando é devido."""
+    pedido = cache.get(PEDIDO_ENSAIO)
+    if pedido is not None:
+        cache.delete(PEDIDO_ENSAIO)
+        b = BackupBD.objects.filter(pk=pedido).first()
+        return ensaiar_reposicao(b) if b else None
+    if ensaio_devido():
+        return ensaiar_reposicao()
+    return None
+
+
+def _avisar_ensaio(b):
+    para = destinatarios_alertas()
+    if not para:
+        return
+    try:
+        EmailMessage(
+            subject='Bende: o ensaio de reposição de um backup falhou',
+            body=(f'O backup {b.chave.rsplit("/", 1)[-1]} foi reposto numa base temporária para confirmar que serve '
+                  f'e o ensaio falhou.\n\nErro: {b.ensaio_detalhe.get("erro", "")[-1500:]}\n\n'
+                  'A base da plataforma não foi tocada. Vê Admin → Backups e o procedimento em docs/REPOR_BACKUP.md.\n\nBende'),
+            from_email=settings.DEFAULT_FROM_EMAIL, to=para,
+        ).send()
+    except Exception:
+        log.exception('ensaio: não consegui enviar o aviso de falha')

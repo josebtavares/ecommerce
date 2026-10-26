@@ -238,6 +238,10 @@ BACKUP_R2_ACCESS_KEY_ID     = os.environ.get('BACKUP_R2_ACCESS_KEY_ID', '')
 BACKUP_R2_SECRET_ACCESS_KEY = os.environ.get('BACKUP_R2_SECRET_ACCESS_KEY', '')
 BACKUP_DIR                  = os.environ.get('BACKUP_DIR', str(BASE_DIR / 'backups'))
 BACKUP_HORA                 = int(os.environ.get('BACKUP_HORA', '3'))     # hora de Cabo Verde do backup diário
+# Ensaio de reposição (utils/backups.ensaiar_reposicao): servidor Postgres onde se repõe uma cópia temporária,
+# postgres://user:pass@host:port/qualquer — vazio = o mesmo servidor da base (tem de ser Postgres ≥ 18, como o pg_restore)
+BACKUP_ENSAIO_URL           = os.environ.get('BACKUP_ENSAIO_URL', '')
+BACKUP_ENSAIO_DIAS          = int(os.environ.get('BACKUP_ENSAIO_DIAS', '30'))  # de quantos em quantos dias o worker ensaia
 
 
 CACHES = {

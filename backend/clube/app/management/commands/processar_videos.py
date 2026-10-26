@@ -56,6 +56,7 @@ class Command(BaseCommand):
             self._limpar_sessoes()
             self._backup_diario()
             self._exportacoes()
+            self._ensaio_reposicao()
             try:
                 apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
@@ -133,6 +134,25 @@ class Command(BaseCommand):
                 self.stdout.write('  exportação de loja gerada')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  exportação: {e}')
+
+    def _ensaio_reposicao(self):
+        """De 10 em 10 segundos: o ensaio de reposição pedido no admin, ou o periódico quando é devido
+        (utils/backups.ensaiar_reposicao — repõe numa base temporária, nunca na da plataforma)."""
+        if time.monotonic() - getattr(self, '_ultimo_ensaio', -1e9) < 10:
+            return
+        self._ultimo_ensaio = time.monotonic()
+        try:
+            from app.utils import backups
+            b = backups.processar_ensaio()
+            if b is not None:
+                d = b.ensaio_detalhe
+                if b.ensaio_ok:
+                    self.stdout.write(self.style.SUCCESS(
+                        f"  ensaio de reposição: {d.get('backup')} ok ({d.get('tabelas')} tabelas, {d.get('total_s')}s)"))
+                else:
+                    self.stderr.write(f"  ensaio de reposição: falhou: {d.get('erro', '')[-300:]}")
+        except Exception as e:          # um erro aqui não pode parar os vídeos
+            self.stderr.write(f'  ensaio de reposição: {e}')
 
     def _limpar_sessoes(self):
         """Uma vez por dia: apaga os tokens de sessão já expirados (lista negra do logout)."""
