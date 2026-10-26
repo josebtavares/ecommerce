@@ -18,6 +18,7 @@ urlpatterns = [
     path('admin/backups/',                              backupView.admin_backups,            name='admin-backups'),
     path('admin/backups/descargas/',                    backupView.admin_backup_descargas,   name='admin-backup-descargas'),
     path('admin/backups/ensaiar/',                      backupView.admin_backup_ensaiar,     name='admin-backup-ensaiar'),
+    path('admin/backups/media/copiar/',                 backupView.admin_backup_media_copiar, name='admin-backup-media-copiar'),
     path('admin/backups/fazer/',                        backupView.admin_backup_fazer,       name='admin-backup-fazer'),
     path('admin/backups/<int:backup_id>/descarregar/',  backupView.admin_backup_descarregar, name='admin-backup-descarregar'),
     path('admin/backups/ficheiro/<str:token>/',         backupView.admin_backup_ficheiro,    name='admin-backup-ficheiro'),

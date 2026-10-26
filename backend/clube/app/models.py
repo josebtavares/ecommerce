@@ -2115,6 +2115,35 @@ class BackupBD(models.Model):
         return f'backup {self.tipo} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
 
 
+class CopiaMedia(models.Model):
+    """Uma passagem da cópia incremental das fotos e vídeos para o armazenamento de backups — utils/backup_media.py."""
+    TIPOS   = BackupBD.TIPOS
+    ESTADOS = BackupBD.ESTADOS
+
+    tipo         = models.CharField(max_length=12, choices=TIPOS)
+    estado       = models.CharField(max_length=10, choices=ESTADOS, default='a_correr')
+    pedido_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='copias_media_pedidas')
+    criado_em    = models.DateTimeField(auto_now_add=True, db_index=True)
+    duracao_s    = models.FloatField(default=0)
+    copiados     = models.IntegerField(default=0)        # ficheiros novos ou alterados copiados nesta passagem
+    bytes_copiados = models.BigIntegerField(default=0)
+    guardados_apagados = models.IntegerField(default=0)  # apagados nas lojas → passaram para media-apagados/
+    purgados     = models.IntegerField(default=0)        # apagados há mais de BACKUP_MEDIA_APAGADOS_DIAS → removidos da cópia
+    falhas       = models.IntegerField(default=0)
+    ficheiros    = models.IntegerField(default=0)        # na cópia, no fim da passagem
+    bytes        = models.BigIntegerField(default=0)
+    bytes_apagados = models.BigIntegerField(default=0)   # media-apagados/
+    bytes_total  = models.BigIntegerField(default=0)     # tudo o que está no armazenamento de backups (base + exportações + media)
+    erro         = models.TextField(blank=True, default='')
+    aviso_espaco = models.BooleanField(default=False)    # foi enviado o email de espaço quase cheio
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'cópia media {self.tipo} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
+
+
 class DescargaBackup(models.Model):
     """Quem descarregou um backup e quando: o ficheiro tem os dados pessoais de toda a gente."""
     backup        = models.ForeignKey(BackupBD, on_delete=models.CASCADE, related_name='descargas')

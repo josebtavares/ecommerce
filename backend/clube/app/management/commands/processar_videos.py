@@ -57,6 +57,7 @@ class Command(BaseCommand):
             self._backup_diario()
             self._exportacoes()
             self._ensaio_reposicao()
+            self._copia_media()
             try:
                 apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
@@ -153,6 +154,28 @@ class Command(BaseCommand):
                     self.stderr.write(f"  ensaio de reposição: falhou: {d.get('erro', '')[-300:]}")
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  ensaio de reposição: {e}')
+
+    def _copia_media(self):
+        """De 10 em 10 segundos: a cópia das fotos e vídeos pedida no admin; de 5 em 5 minutos vê se é hora
+        da diária (utils/backup_media.py — incremental, só transfere o que é novo)."""
+        if time.monotonic() - getattr(self, '_ultima_copia_media', -1e9) < 10:
+            return
+        self._ultima_copia_media = time.monotonic()
+        verificar = time.monotonic() - getattr(self, '_ultima_verificacao_media', -1e9) >= 300
+        if verificar:
+            self._ultima_verificacao_media = time.monotonic()
+        try:
+            from app.utils import backup_media
+            c = backup_media.processar(verificar_devida=verificar)
+            if c is not None:
+                if c.estado == 'ok':
+                    self.stdout.write(self.style.SUCCESS(
+                        f'  cópia media: {c.copiados} copiados ({c.bytes_copiados / 1e6:.1f} MB), '
+                        f'{c.guardados_apagados} apagados guardados, {c.ficheiros} na cópia ({c.duracao_s}s)'))
+                else:
+                    self.stderr.write(f'  cópia media: falhou: {c.erro[-300:]}')
+        except Exception as e:          # um erro aqui não pode parar os vídeos
+            self.stderr.write(f'  cópia media: {e}')
 
     def _limpar_sessoes(self):
         """Uma vez por dia: apaga os tokens de sessão já expirados (lista negra do logout)."""

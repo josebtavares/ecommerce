@@ -72,6 +72,33 @@ class _Disco:
     def url(self, chave, segundos):
         return None             # na dev o ficheiro sai por uma view com link assinado (Views/backupView.py)
 
+    # usados pela cópia das fotos e vídeos (utils/backup_media.py)
+    def listar(self, prefixo=''):
+        """{chave: (tamanho, mtime em segundos)} de tudo o que começa por prefixo."""
+        res = {}
+        base = self.raiz / prefixo if prefixo else self.raiz
+        if not base.exists():
+            return res
+        for p in base.rglob('*'):
+            if p.is_file():
+                st = p.stat()
+                res[p.relative_to(self.raiz).as_posix()] = (st.st_size, st.st_mtime)
+        return res
+
+    def guardar_obj(self, fobj, chave, tipo=None):
+        destino = self.raiz / chave
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        with open(destino, 'wb') as f:
+            shutil.copyfileobj(fobj, f, 1024 * 1024)
+
+    def abrir(self, chave):
+        return open(self.raiz / chave, 'rb'), None
+
+    def mover(self, de, para):
+        destino = self.raiz / para
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(self.raiz / de, destino)
+
 
 class _R2:
     def __init__(self):
@@ -108,6 +135,25 @@ class _R2:
         return self.s3.generate_presigned_url('get_object', ExpiresIn=segundos, Params={
             'Bucket': self.bucket, 'Key': chave,
             'ResponseContentDisposition': f'attachment; filename="{chave.rsplit("/", 1)[-1]}"'})
+
+    def listar(self, prefixo=''):
+        res = {}
+        for pagina in self.s3.get_paginator('list_objects_v2').paginate(Bucket=self.bucket, Prefix=prefixo):
+            for o in pagina.get('Contents', []):
+                res[o['Key']] = (o['Size'], o['LastModified'].timestamp())
+        return res
+
+    def guardar_obj(self, fobj, chave, tipo=None):
+        self.s3.upload_fileobj(fobj, self.bucket, chave,
+                               ExtraArgs={'ContentType': tipo or 'application/octet-stream'})
+
+    def abrir(self, chave):
+        r = self.s3.get_object(Bucket=self.bucket, Key=chave)
+        return r['Body'], r.get('ContentType')
+
+    def mover(self, de, para):
+        self.s3.copy_object(Bucket=self.bucket, Key=para, CopySource={'Bucket': self.bucket, 'Key': de})
+        self.s3.delete_object(Bucket=self.bucket, Key=de)
 
 
 def armazenamento():
