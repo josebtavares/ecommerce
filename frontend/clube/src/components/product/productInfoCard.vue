@@ -20,8 +20,14 @@
             <video v-if="todasImagens[imagemActiva]?.video" :key="todasImagens[imagemActiva].url"
                    :src="todasImagens[imagemActiva].url" :poster="todasImagens[imagemActiva].poster"
                    class="w-full h-full object-cover" v-video-visivel="'destaque'" muted loop playsinline controls></video>
-            <img v-else :src="todasImagens[imagemActiva]?.url || defaultImg" :alt="produto.nome"
-                 class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+            <!-- a foto fica inteira (sem cortar nem esticar) seja qual for o formato; o resto do painel
+                 é preenchido pela mesma foto desfocada -->
+            <template v-else>
+              <img v-img :src="$miniatura(todasImagens[imagemActiva]?.url) || defaultImg" alt="" aria-hidden="true"
+                   class="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-60" />
+              <img :src="todasImagens[imagemActiva]?.url || defaultImg" :alt="produto.nome"
+                   class="relative w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
+            </template>
 
             <!-- Overlay hover -->
             <div v-if="todasImagens[imagemActiva]?.url && !todasImagens[imagemActiva]?.video"
