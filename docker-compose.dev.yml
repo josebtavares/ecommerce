@@ -2,7 +2,7 @@ services:
 
   # Base de dados PostgreSQL
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine          # a mesma versão da produção (os backups são pg_dump 18)
     restart: unless-stopped
     env_file:
       - .env.dev
@@ -11,7 +11,7 @@ services:
       POSTGRES_USER:     ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres18_data:/var/lib/postgresql   # o 18 guarda em /var/lib/postgresql/18/docker
     ports:
       - "5433:5432"
     healthcheck:
@@ -91,5 +91,6 @@ services:
       - backend
 
 volumes:
-  postgres_data:
+  postgres_data:        # o antigo (Postgres 16) — já não é usado; fica para voltar atrás
+  postgres18_data:
   media_data:

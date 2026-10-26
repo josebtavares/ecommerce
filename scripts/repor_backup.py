@@ -22,7 +22,9 @@ com as variáveis da produção. Funciona mesmo que os serviços do Railway este
 Redis é o da dev. Serve para ensaiar o procedimento sem tocar na produção.
 """
 import argparse
+import getpass
 import json
+import platform
 import os
 import shutil
 import subprocess
@@ -45,7 +47,8 @@ def sair(msg):
 
 
 def correr(cmd, **kw):
-    return subprocess.run(cmd, **kw)
+    # no Windows a CLI do Railway (npm) é um .CMD: só se encontra pelo caminho completo
+    return subprocess.run([shutil.which(cmd[0]) or cmd[0], *cmd[1:]], **kw)
 
 
 def tty():
@@ -126,6 +129,7 @@ def reiniciar_servicos():
 
 
 def main():
+    sys.stdout.reconfigure(line_buffering=True)     # as mensagens daqui e as do docker na ordem certa
     p = argparse.ArgumentParser(description='Repor a base de dados da Bende a partir de um backup assinado.')
     alvo = p.add_mutually_exclusive_group(required=True)
     alvo.add_argument('--dev', action='store_true', help='base da dev (Docker)')
@@ -139,7 +143,7 @@ def main():
                    help='continua mesmo sem conseguir guardar o estado atual (só se a base estiver estragada)')
     a = p.parse_args()
 
-    extra = []
+    extra = ['--quem', f'{getpass.getuser()}@{platform.node()}']
     if a.listar:
         extra.append('--listar')
     if a.backup:
