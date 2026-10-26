@@ -20,6 +20,7 @@ from django.contrib import admin
 from django.urls import path, include
 from app.Views.login_token import MyTokenView
 from app.Views.saudeView import saude
+from app.Views.sessaoView import bilhete_ws, terminar_sessao
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,   # /token/  → devolve access+refresh
@@ -32,7 +33,9 @@ urlpatterns = [
     path("api/token/", MyTokenView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/token/verify/",  TokenVerifyView.as_view(),  name="token_verify"),
-    path('admin/', admin.site.urls),
+    path("api/token/logout/",  terminar_sessao,  name="token_logout"),
+    path("api/ws/bilhete/",    bilhete_ws,       name="ws_bilhete"),
+    path(settings.ADMIN_URL, admin.site.urls),
     path('app/', include('app.urls')),
     path('api/pos/', include('app.pos.urls')),
     path('api/chat/', include('app.chat.urls')),

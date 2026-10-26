@@ -14,6 +14,24 @@ from rest_framework_simplejwt.settings import api_settings
 MSG_INATIVA = 'A tua conta não está activa. Contacta o suporte.'
 
 
+# Access de uma sessão terminada (logout): fica no Redis até expirar sozinho.
+def _chave_fim(token):
+    return f'jwt_fim:{token.get(api_settings.JTI_CLAIM)}'
+
+
+def terminar_access(token):
+    from django.core.cache import cache
+    import time
+    restante = int(token.get('exp', 0) - time.time())
+    if restante > 0:
+        cache.set(_chave_fim(token), 1, restante + 5)
+
+
+def sessao_terminada(token):
+    from django.core.cache import cache
+    return bool(cache.get(_chave_fim(token)))
+
+
 def conta_ativa(user):
     """User activo e, se tiver perfil, com status 'ativo'."""
     if user is None or not user.is_active:
@@ -24,6 +42,12 @@ def conta_ativa(user):
 
 
 class JWTContaAtiva(JWTAuthentication):
+    def get_validated_token(self, raw_token):
+        token = super().get_validated_token(raw_token)
+        if sessao_terminada(token):
+            raise InvalidToken('Sessão terminada.')
+        return token
+
     def get_user(self, validated_token):
         user = super().get_user(validated_token)
         if not conta_ativa(user):

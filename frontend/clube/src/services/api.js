@@ -37,6 +37,28 @@ export function urlWebSocket (caminho) {
   return base.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws/' + caminho.replace(/^\/+/, '');
 }
 
+// O JWT não vai no endereço do WebSocket (ficava nos logs): pede-se antes um bilhete de uso
+// único (60 s). Sem bilhete (rede, sessão caída) liga sem ele — o servidor recusa e quem chama
+// segue o caminho normal de religar.
+export async function urlWebSocketComBilhete (caminho) {
+  try {
+    const { data } = await api.post('/api/ws/bilhete/');
+    return urlWebSocket(`${caminho}?bilhete=${encodeURIComponent(data.bilhete)}`);
+  } catch {
+    return urlWebSocket(caminho);
+  }
+}
+
+// Sair a sério: o servidor põe o refresh na lista negra e o access deixa de valer já
+// (Views/sessaoView.py). Lê as chaves antes de quem chama as apagar; não se espera pela resposta.
+export function terminarSessao (chaveAccess, chaveRefresh) {
+  const access = localStorage.getItem(chaveAccess);
+  const refresh = localStorage.getItem(chaveRefresh);
+  if (!access && !refresh) return;
+  axios.post(`${process.env.VUE_APP_URL_BASE}/api/token/logout/`, { refresh },
+    access ? { headers: { Authorization: `Bearer ${access}` } } : {}).catch(() => {});
+}
+
 export const POS_ACCESS  = 'pos_access';
 export const POS_REFRESH = 'pos_refresh';
 

@@ -1,4 +1,4 @@
-"""WebSocket do chat — ws/chat/?token=<jwt>  (ver tempo_real.py)."""
+"""WebSocket do chat — ws/chat/?bilhete=<bilhete de POST /api/ws/bilhete/>  (ver tempo_real.py)."""
 import time
 
 from channels.db import database_sync_to_async

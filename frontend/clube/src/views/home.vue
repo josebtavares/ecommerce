@@ -386,7 +386,7 @@ import HomeCategorias from '@/components/home/HomeCategorias.vue'
 import HomeBanners from '@/components/home/HomeBanners.vue'
 import logoDefault from '@/assets/img/login/logo_final_4k.png'
 import logoLight from '@/assets/img/login/logo_final_4k_light.png'
-import api from '@/services/api'
+import api, { terminarSessao } from '@/services/api'
 import { DEFAULT_BANNER, DEFAULT_PRODUTO } from '@/services/media'
 import { iconeCategoria } from '@/utils/icones'
 
@@ -544,6 +544,7 @@ export default {
     },
 
     log_out () {
+      terminarSessao('access_token', 'refresh_token')
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('user')

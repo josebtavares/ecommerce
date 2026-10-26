@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     # third party
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',   # logout invalida o refresh (Views/sessaoView.py)
     'corsheaders',
     'channels',
     'axes',
@@ -128,6 +129,10 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES'     : ('Bearer',),
     'TOKEN_REFRESH_SERIALIZER': 'app.autenticacao.RefreshContaAtiva',   # renovar também verifica a conta
 }
+
+# Admin do Django num endereço que não se adivinha (na prod vem do ambiente); o painel da
+# plataforma é o /admin do site, este só serve para emergências.
+ADMIN_URL = os.environ.get('ADMIN_URL', 'admin/').strip('/') + '/'
 
 
 # ══════════════════════════════════════════════════════════════

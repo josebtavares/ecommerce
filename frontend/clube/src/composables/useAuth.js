@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { terminarSessao } from '@/services/api'
 
 const user = ref(getUserFromStorage())
 
@@ -16,6 +17,7 @@ export function useAuth () {
   }
 
   function logout () {
+    terminarSessao('access_token', 'refresh_token')
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')

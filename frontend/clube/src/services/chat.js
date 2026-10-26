@@ -3,7 +3,7 @@
 // "Perguntar à loja", "Falar sobre esta encomenda" e "Contactar suporte".
 // O servidor aplica todas as regras; aqui só se mostra o que a API devolve.
 import { reactive } from 'vue'
-import api, { urlWebSocket } from '@/services/api'
+import api, { urlWebSocketComBilhete } from '@/services/api'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 
 export const chat = reactive({
@@ -233,9 +233,6 @@ let ultimoEscrever = 0
 let desligado = false
 let refrescar = null
 
-function urlWs () {
-  return urlWebSocket(`chat/?token=${localStorage.getItem('access_token') || ''}`)
-}
 
 // sem WebSocket (rede, proxy…), o chat aberto vai buscar novidades de 10 em 10 s
 let sondagem = null
@@ -287,10 +284,14 @@ async function aoEvento (ev) {
   }
 }
 
-function ligarWs () {
-  if (desligado || !estaAutenticado()) return
+let aLigar = false
+async function ligarWs () {
+  if (desligado || !estaAutenticado() || aLigar) return
   if (ws && ws.readyState <= WebSocket.OPEN) return
-  const socket = new WebSocket(urlWs())
+  aLigar = true
+  const url = await urlWebSocketComBilhete('chat/').finally(() => { aLigar = false })
+  if (desligado || (ws && ws.readyState <= WebSocket.OPEN)) return
+  const socket = new WebSocket(url)
   ws = socket
   socket.onopen = () => { tentativas = 0 }
   socket.onmessage = (e) => {

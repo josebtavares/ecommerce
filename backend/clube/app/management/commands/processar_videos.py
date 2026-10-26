@@ -53,6 +53,7 @@ class Command(BaseCommand):
             close_old_connections()
             self._avisos_horario()
             self._ciclo_subscricoes()
+            self._limpar_sessoes()
             try:
                 apagados = limpeza.processar_lote()
                 t = video.proxima_tarefa()
@@ -97,6 +98,17 @@ class Command(BaseCommand):
                 self.stdout.write(f'  subscrições: {r}')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  subscrições: ciclo falhou: {e}')
+
+    def _limpar_sessoes(self):
+        """Uma vez por dia: apaga os tokens de sessão já expirados (lista negra do logout)."""
+        if time.monotonic() - getattr(self, '_ultima_limpeza_sessoes', -1e9) < 86400:
+            return
+        self._ultima_limpeza_sessoes = time.monotonic()
+        try:
+            from django.core.management import call_command
+            call_command('flushexpiredtokens', verbosity=0)
+        except Exception as e:          # um erro aqui não pode parar os vídeos
+            self.stderr.write(f'  sessões: limpeza falhou: {e}')
 
     def _avisos_horario(self):
         """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py) e cancela

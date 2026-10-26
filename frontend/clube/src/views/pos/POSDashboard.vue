@@ -453,7 +453,7 @@
 <script>
 import AvisoFaturacao from '@/components/fiscal/AvisoFaturacao.vue'
 import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
-import api, { POS_ACCESS, POS_REFRESH } from '@/services/api'
+import api, { POS_ACCESS, POS_REFRESH, terminarSessao } from '@/services/api'
 
 import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
@@ -963,6 +963,7 @@ export default {
       if (!confirm('Tem a certeza que quer sair?')) return
 
       // sai só do POS (dono ou membro) — a sessão Bendi que exista no browser não é tocada
+      terminarSessao(POS_ACCESS, POS_REFRESH)
       const keys = [
         'tipo_sessao', POS_ACCESS, POS_REFRESH,
         'pos_membro', 'pos_membro_pos', 'pos_membro_permissoes',

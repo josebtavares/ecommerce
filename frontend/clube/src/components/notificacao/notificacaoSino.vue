@@ -160,7 +160,7 @@
 </template>
 
 <script>
-import api, { urlWebSocket } from '@/services/api'
+import api, { urlWebSocketComBilhete } from '@/services/api'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO, marcarLigacao } from '@/composables/useTempoRealReembolsos'
 import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
@@ -219,6 +219,7 @@ export default {
     this.wsTimer = null
     this.pollTimer = null
     this.wsTentativas = 0
+    this.wsALigar = false
     this.destruido = false
   },
 
@@ -310,16 +311,14 @@ export default {
       } catch (e) { /* sem lojas */ }
     },
 
-    wsUrl () {
-      const token = localStorage.getItem('access_token') || ''
-      return urlWebSocket(`notificacoes/?token=${token}`)
-    },
-
-    wsLigar () {
-      if (this.destruido || !localStorage.getItem('access_token')) return
+    async wsLigar () {
+      if (this.destruido || !localStorage.getItem('access_token') || this.wsALigar) return
       if (this.ws && this.ws.readyState <= WebSocket.OPEN) return   // a ligar ou ligado
 
-      const ws = new WebSocket(this.wsUrl())
+      this.wsALigar = true
+      const url = await urlWebSocketComBilhete('notificacoes/').finally(() => { this.wsALigar = false })
+      if (this.destruido || (this.ws && this.ws.readyState <= WebSocket.OPEN)) return
+      const ws = new WebSocket(url)
       this.ws = ws
 
       ws.onopen = () => {

@@ -3,7 +3,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 // Toda a lógica de fetch da loja — partilhada por todos os templates
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import api from '@/services/api'
+import api, { terminarSessao } from '@/services/api'
 import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
 import { DEFAULT_BANNER } from '@/services/media'
 
@@ -150,6 +150,7 @@ export function useLojaData () {
   }
 
   function logOut () {
+    terminarSessao('access_token', 'refresh_token')
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
