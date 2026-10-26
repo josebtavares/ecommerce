@@ -1,6 +1,7 @@
 from django.urls import path
 from ..Views import adminView
 from ..Views import relatorioView
+from ..Views import backupView
 from ..pos import views_admin as pos_admin
 
 urlpatterns = [
@@ -13,6 +14,11 @@ urlpatterns = [
     path('admin/relatorios/historico/',           relatorioView.admin_historico, name='admin-relatorios-historico'),
     path('admin/relatorios/r/<slug:rid>/',        relatorioView.admin_relatorio, name='admin-relatorio'),
     path('admin/relatorios/r/<slug:rid>/exportar/', relatorioView.admin_exportar, name='admin-relatorio-exportar'),
+    # ── Backups da base de dados (só super-admin) ─────────────
+    path('admin/backups/',                              backupView.admin_backups,            name='admin-backups'),
+    path('admin/backups/fazer/',                        backupView.admin_backup_fazer,       name='admin-backup-fazer'),
+    path('admin/backups/<int:backup_id>/descarregar/',  backupView.admin_backup_descarregar, name='admin-backup-descarregar'),
+    path('admin/backups/ficheiro/<str:token>/',         backupView.admin_backup_ficheiro,    name='admin-backup-ficheiro'),
     # ── Lojas ─────────────────────────────────────────────────
     path('admin/lojas/',                        adminView.admin_loja_list,           name='admin-loja-list'),
     path('admin/lojas/<int:loja_id>/',          adminView.admin_loja_gerir,          name='admin-loja-gerir'),
