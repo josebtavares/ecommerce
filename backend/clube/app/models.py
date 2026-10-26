@@ -62,6 +62,7 @@ class Utilizador(models.Model):
             'gerir_home',        # secções da página inicial
             'gerir_devolucoes',  # reembolsos: disputas e decisões finais
             'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
+            'gerir_backups',     # backups da base de dados: ver, fazer e descarregar (utils/backups.py)
         ],
         'moderador': [
             'ver_stats',
@@ -2105,3 +2106,14 @@ class BackupBD(models.Model):
 
     def __str__(self):
         return f'backup {self.tipo} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
+
+
+class DescargaBackup(models.Model):
+    """Quem descarregou um backup e quando: o ficheiro tem os dados pessoais de toda a gente."""
+    backup        = models.ForeignKey(BackupBD, on_delete=models.CASCADE, related_name='descargas')
+    utilizador    = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='backups_descarregados')
+    ip            = models.GenericIPAddressField(null=True, blank=True)
+    data_criacao  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-data_criacao']

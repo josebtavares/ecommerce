@@ -63,6 +63,12 @@ class _Disco:
     def existe(self, chave):
         return (self.raiz / chave).exists()
 
+    def caminho(self, chave):
+        return self.raiz / chave
+
+    def url(self, chave, segundos):
+        return None             # na dev o ficheiro sai por uma view com link assinado (Views/backupView.py)
+
 
 class _R2:
     def __init__(self):
@@ -87,6 +93,15 @@ class _R2:
             return True
         except Exception:
             return False
+
+    def caminho(self, chave):
+        return None
+
+    def url(self, chave, segundos):
+        """Link temporário direto ao bucket privado (expira; não passa pelo servidor)."""
+        return self.s3.generate_presigned_url('get_object', ExpiresIn=segundos, Params={
+            'Bucket': self.bucket, 'Key': chave,
+            'ResponseContentDisposition': f'attachment; filename="{chave.rsplit("/", 1)[-1]}"'})
 
 
 def armazenamento():
@@ -124,8 +139,16 @@ def _dump(destino):
 
 # ── backup ─────────────────────────────────────────────────────────
 
+def destinatarios_alertas():
+    """Super-admins do painel (role superadmin) e superusers do Django, com email."""
+    from django.db.models import Q
+    return sorted(set(User.objects.filter(is_active=True).filter(
+        Q(is_superuser=True) | Q(is_staff=True, utilizador__role_admin='superadmin')
+    ).exclude(email='').values_list('email', flat=True)))
+
+
 def _avisar_falha(b):
-    para = list(User.objects.filter(is_superuser=True, is_active=True).exclude(email='').values_list('email', flat=True))
+    para = destinatarios_alertas()
     if not para:
         return
     seguinte = ('O worker volta a tentar daqui a 30 minutos (até 3 vezes por dia).' if b.tipo == 'automatico'
