@@ -50,3 +50,24 @@ class IPRealMiddleware:
     def __call__(self, request):
         request.META['REMOTE_ADDR'] = ip_do_cliente(request.META)
         return self.get_response(request)
+
+
+class ManutencaoMiddleware:
+    """Durante uma reposição da base (utils/repor_backup.py) o site responde 503 a tudo menos ao health check.
+    O estado está no Redis, partilhado com o comando que repõe; a leitura é guardada 2 s por processo."""
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._lido = (0.0, False)
+
+    def __call__(self, request):
+        import time
+        agora = time.monotonic()
+        if agora - self._lido[0] > 2:
+            from .utils.repor_backup import em_manutencao
+            self._lido = (agora, em_manutencao())
+        if self._lido[1] and not request.path.startswith('/health'):
+            from django.http import JsonResponse
+            r = JsonResponse({'detail': 'A plataforma está em manutenção. Volta daqui a alguns minutos.'}, status=503)
+            r['Retry-After'] = '120'
+            return r
+        return self.get_response(request)

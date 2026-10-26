@@ -17,7 +17,7 @@ from django.db import close_old_connections
 from django.db.utils import OperationalError, ProgrammingError
 
 from app.models import ConversaoVideo, Galeria, Loja, Produto
-from app.utils import horarios, limpeza, subscricoes, video
+from app.utils import horarios, limpeza, repor_backup, subscricoes, video
 
 
 class Command(BaseCommand):
@@ -50,6 +50,9 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Worker de vídeo e limpeza a correr.'))
         while not self.parar:
+            if repor_backup.em_manutencao():      # a base está a ser reposta: não tocar em nada
+                time.sleep(5)
+                continue
             close_old_connections()
             self._avisos_horario()
             self._ciclo_subscricoes()

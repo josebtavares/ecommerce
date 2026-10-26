@@ -9,6 +9,38 @@ Repor **substitui** os dados — o que entrou depois do backup perde-se (encomen
 
 ---
 
+## 0. Como repor (o caminho normal): o script
+
+```bash
+python scripts/repor_backup.py --prod --listar     # ver os backups que há
+python scripts/repor_backup.py --prod              # escolher um e repor na PRODUÇÃO
+python scripts/repor_backup.py --dev               # o mesmo na dev
+```
+Precisa só de: Docker a correr, Git, e a CLI do Railway com sessão iniciada (`railway login`) nesta pasta
+(`railway link`). Não se escreve nenhuma password: o script lê-as do Railway e apaga-as no fim.
+
+O que o script faz (backend/clube/app/utils/repor_backup.py):
+1. **Só aceita backups do bucket de backups** com o nome que a plataforma lhes dá e **com assinatura válida**
+   (sha256 + HMAC com a SECRET_KEY da plataforma). Um ficheiro posto lá por outra pessoa, alterado ou de outra
+   plataforma é recusado. Não há maneira de lhe dar um ficheiro do computador.
+2. Repõe-no primeiro numa base temporária e mostra, tabela a tabela, **o que se perde** (encomendas, pagamentos…).
+3. Pede uma frase escrita: `REPOR PRODUÇÃO` (na dev `REPOR`).
+4. Guarda o estado atual em `bd/antes-de-repor/` (também assinado) — é por aí que se volta atrás:
+   `python scripts/repor_backup.py --prod --backup bende-…-antes-de-repor.dump`.
+5. Põe o site em manutenção (a API responde 503; o worker pára), repõe, confere as contagens com as do ensaio
+   e corre as migrações. **Se algo falhar a meio, volta sozinho ao estado anterior.**
+6. Acerta a lista de backups, tira a manutenção, limpa a cache, avisa os super-admins por email e oferece-se para
+   reiniciar os serviços `ecommerce` e `worker`.
+
+Na produção o script constrói a imagem a partir da **branch `prod`** (o código que está no ar) e corre-a no teu
+computador ligada à base da produção — funciona mesmo que os serviços do Railway estejam em baixo.
+Se a base estiver tão estragada que nem se consegue guardar o estado atual, junta `--sem-copia-atual`.
+
+Os backups feitos antes de 26/10/2026 (sem assinatura) ficam assinados no backup diário seguinte
+(ou já: `manage.py backup_bd --assinar`).
+
+As secções seguintes são o procedimento à mão — para perceber o que o script faz, ou se ele não puder correr.
+
 ## 1. Antes de repor: é mesmo preciso?
 
 | Situação | O que fazer |
@@ -37,13 +69,13 @@ O que as lojas apagam passa para `media-apagados/AAAAMMDD/` e fica lá 30 dias. 
 
 ## 3. Ferramentas
 
-Postgres **18** (`pg_restore` e `psql` da mesma versão do servidor; a produção é 18.x). Num Windows:
+Postgres **18** (`pg_restore` e `psql` da mesma versão do servidor; a produção e a dev são 18.x). Num Windows:
 `C:\Program Files\PostgreSQL\18\bin`. Ou um contentor: `docker run --rm -it -v "$PWD:/r" postgres:18 bash`.
 
 O endereço da base vem do Railway: serviço **Postgres → Variables → `DATABASE_PUBLIC_URL`**
 (`postgresql://postgres:<password>@<host>:<porta>/railway`). Nunca o coloques em chats nem em ficheiros do repositório.
 
-## 4. Repor a plataforma inteira
+## 4. Repor a plataforma inteira (à mão — o script da secção 0 faz isto tudo)
 
 ### 4.1 Parar as escritas
 No Railway, pôr os serviços **`ecommerce`** e **`worker`** em pausa (Settings → *Remove/Stop* da instância, ou
