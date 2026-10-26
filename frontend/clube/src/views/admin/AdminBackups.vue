@@ -45,6 +45,30 @@
         Repor um backup não se faz aqui (apagava os dados atuais): pede-se ao suporte técnico, que o testa primeiro numa cópia.
       </p>
 
+      <!-- ensaio de reposição: o worker repõe um backup numa base temporária e confere-o -->
+      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 flex flex-wrap items-center gap-x-4 gap-y-3" data-teste="backup-ensaio">
+        <font-awesome-icon :icon="['fas', ensaioIcone]" :spin="ensaio.em_curso"
+          :class="['w-5 h-5 shrink-0', ensaio.em_curso ? 'text-zinc-400' : !ultimoEnsaio ? 'text-zinc-500' : ultimoEnsaio.ok ? 'text-green-400' : 'text-red-400']" />
+        <div class="min-w-0 flex-1 basis-56">
+          <p class="text-sm font-semibold text-zinc-100">Ensaio de reposição</p>
+          <p v-if="ensaio.em_curso" class="text-xs text-zinc-400 mt-0.5">A repor o backup numa base temporária e a conferir…</p>
+          <p v-else-if="!ultimoEnsaio" class="text-xs text-zinc-500 mt-0.5">Ainda nenhum backup foi reposto para confirmar que serve.</p>
+          <p v-else class="text-xs mt-0.5 break-words" :class="ultimoEnsaio.ok ? 'text-zinc-400' : 'text-red-400'">
+            {{ quando(ultimoEnsaio.quando) }} · {{ ultimoEnsaio.backup }} ·
+            <template v-if="ultimoEnsaio.ok">reposto e conferido: {{ ultimoEnsaio.tabelas }} tabelas, {{ numero(ultimoEnsaio.linhas) }} linhas, {{ segundos(ultimoEnsaio.total_s) }}</template>
+            <template v-else>falhou: {{ ultimoEnsaio.erro }}</template>
+          </p>
+          <p class="text-[11px] text-zinc-500 mt-0.5">
+            Automático de {{ ensaio.cada_dias }} em {{ ensaio.cada_dias }} dias<template v-if="ensaio.proximo"> (próximo {{ quando(ensaio.proximo) }})</template>.
+            Usa uma base temporária — a da plataforma não é tocada.
+          </p>
+        </div>
+        <button type="button" @click="ensaiar" :disabled="ensaio.em_curso || aEnsaiar || !resumo.guardados" data-teste="backup-ensaiar"
+          class="w-full sm:w-auto px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-xs font-semibold text-zinc-200 disabled:opacity-40 transition">
+          Testar reposição agora
+        </button>
+      </div>
+
       <!-- filtros da lista -->
       <form @submit.prevent="carregarLista(0)" class="flex flex-wrap items-center gap-2" data-teste="backup-filtros">
         <input v-model.trim="fl.q" type="search" placeholder="Ficheiro ou quem pediu" aria-label="Pesquisar backups" data-teste="backup-q"
@@ -89,6 +113,8 @@
               <template v-if="b.pedido_por"> · por {{ b.pedido_por }}</template>
               <template v-if="b.descargas"> · descarregado {{ b.descargas }}×</template>
               <template v-if="b.apagado_em"> · apagado em {{ quando(b.apagado_em) }}</template>
+              <span v-if="b.ensaio_ok === true" class="text-green-400"> · reposição testada</span>
+              <span v-else-if="b.ensaio_ok === false" class="text-red-400"> · o ensaio de reposição falhou</span>
             </p>
           </div>
           <button v-if="b.disponivel" type="button" @click="descarregar(b)" :disabled="aDescarregar === b.id"
@@ -152,6 +178,7 @@ export default {
   data () {
     return {
       loading: true, aCarregar: false, resumo: {}, aFazer: false, aDescarregar: null, mensagem: null,
+      aEnsaiar: false, temporizador: null,
       lista: { count: 0, results: [] }, offset: 0, fl: FILTROS(), erroLista: '',
       descargas: { count: 0, results: [] }, dOffset: 0, fd: { q: '', de: '', ate: '' }, erroDescargas: '',
       hoje: diaLocal(), LIMITE, ICONE, COR, SELECT, DATA,
@@ -163,7 +190,15 @@ export default {
       return !u || Date.now() - new Date(u).getTime() > 26 * 3600 * 1000
     },
     comFiltros () { return Object.values(this.fl).some(Boolean) },
+    ensaio () { return this.resumo.ensaio || {} },
+    ultimoEnsaio () { return this.ensaio.ultimo },
+    ensaioIcone () {
+      if (this.ensaio.em_curso) return 'spinner'
+      if (!this.ultimoEnsaio) return 'flask'
+      return this.ultimoEnsaio.ok ? 'circle-check' : 'circle-xmark'
+    },
   },
+  beforeUnmount () { clearTimeout(this.temporizador) },
   async mounted () {
     await Promise.all([this.carregarLista(0), this.carregarDescargas(0)])
     this.loading = false
@@ -180,9 +215,18 @@ export default {
         const { data } = await api.get('/app/admin/backups/', { params: this.params(this.fl, offset) })
         // a página ficou vazia (ex.: o último da página saiu): volta uma atrás
         if (!data.results.length && offset > 0 && data.count) return this.carregarLista(Math.max(0, offset - LIMITE))
+        const estava = this.resumo.ensaio?.em_curso
         this.resumo = data.resumo
         this.lista = { count: data.count, results: data.results }
         this.offset = offset
+        if (estava && !data.resumo.ensaio.em_curso) {
+          this.mensagem = data.resumo.ensaio.ultimo?.ok
+            ? { texto: 'Ensaio de reposição concluído: o backup repõe-se sem erros.' }
+            : { erro: true, texto: 'O ensaio de reposição falhou — vê o detalhe abaixo. Os super-admins recebem um email.' }
+        }
+        // enquanto o worker ensaia, vai vendo de 5 em 5 segundos
+        clearTimeout(this.temporizador)
+        if (data.resumo.ensaio.em_curso) this.temporizador = setTimeout(() => this.carregarLista(), 5000)
       } catch (e) {
         this.erroLista = e.response?.data?.detail || 'Não foi possível carregar os backups.'
       } finally { this.aCarregar = false }
@@ -198,6 +242,20 @@ export default {
       }
     },
     limpar () { this.fl = FILTROS(); this.carregarLista(0) },
+    async ensaiar () {
+      this.aEnsaiar = true; this.mensagem = null
+      try {
+        const { data } = await api.post('/app/admin/backups/ensaiar/')
+        this.mensagem = { texto: `A testar a reposição de ${data.nome}…` }
+      } catch (e) {
+        this.mensagem = { erro: true, texto: e.response?.data?.detail || 'Não foi possível pedir o ensaio.' }
+      } finally {
+        this.aEnsaiar = false
+        this.carregarLista()
+      }
+    },
+    numero (n) { return (n || 0).toLocaleString('pt-PT') },
+    segundos (s) { return s >= 60 ? `${Math.round(s / 60)} min` : `${String(s).replace('.', ',')} s` },
     limparDescargas () { this.fd = { q: '', de: '', ate: '' }; this.carregarDescargas(0) },
     async fazer () {
       this.aFazer = true; this.mensagem = null

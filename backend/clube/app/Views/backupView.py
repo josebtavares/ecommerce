@@ -5,10 +5,11 @@ Admin → Backups (só quem tem gerir_backups — o super-admin).
   GET  /app/admin/backups/descargas/            → registo de descargas paginado (?de=&ate=&q=&limit=&offset=)
   POST /app/admin/backups/fazer/                → backup manual agora
   POST /app/admin/backups/<id>/descarregar/     → link de 5 minutos (fica registado quem e de onde)
+  POST /app/admin/backups/ensaiar/   {id?}     → ensaio de reposição (o worker repõe numa base temporária e confere)
   GET  /app/admin/backups/ficheiro/<token>/     → só na dev (sem R2): entrega o ficheiro do link assinado
 
-Repor um backup NÃO se faz aqui: apagava a plataforma num clique. Faz-se numa base de ensaio
-primeiro, com o procedimento dos deploys (utils/backups.py).
+Repor um backup a sério NÃO se faz aqui: apagava a plataforma num clique. O ensaio só usa uma base
+temporária; o procedimento para repor está em docs/REPOR_BACKUP.md.
 """
 from datetime import timedelta
 
@@ -47,6 +48,7 @@ def _item(b):
         'disponivel': b.estado == 'ok' and b.apagado_em is None,
         'apagado_em': b.apagado_em,
         'descargas': getattr(b, 'n_descargas', None),
+        'ensaio_em': b.ensaio_em, 'ensaio_ok': b.ensaio_ok,
     }
 
 
@@ -87,6 +89,19 @@ def _resumo():
         'proximo_automatico': proximo,
         'a_correr': BackupBD.objects.filter(estado='a_correr').exists(),
         'retencao': '7 diários, 4 semanais e 12 mensais; manuais 30 dias',
+        'ensaio': _ensaio(),
+    }
+
+
+def _ensaio():
+    u = backups.ultimo_ensaio()
+    ok = BackupBD.objects.filter(ensaio_ok=True).order_by('-ensaio_em').first()
+    proximo = (timezone.localtime(ok.ensaio_em) + timedelta(days=settings.BACKUP_ENSAIO_DIAS)) if ok else None
+    return {
+        'em_curso': backups.ensaio_em_curso(),
+        'ultimo': {'quando': u.ensaio_em, 'ok': u.ensaio_ok, 'backup_id': u.id, **u.ensaio_detalhe} if u else None,
+        'proximo': proximo,
+        'cada_dias': settings.BACKUP_ENSAIO_DIAS,
     }
 
 
@@ -143,6 +158,24 @@ def admin_backup_descargas(request):
         'id': d.id, 'backup': d.backup.chave.rsplit('/', 1)[-1], 'por': _nome(d.utilizador),
         'email': d.utilizador.email if d.utilizador else '', 'ip': d.ip, 'quando': d.data_criacao,
     } for d in pagina]})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_backup_ensaiar(request):
+    erro = _exige_admin(request, 'gerir_backups')
+    if erro:
+        return erro
+    qs = BackupBD.objects.filter(estado='ok', apagado_em__isnull=True)
+    bid = request.data.get('id')
+    b = qs.filter(pk=bid).first() if bid else qs.order_by('-criado_em').first()
+    if not b:
+        return Response({'detail': 'Backup não encontrado ou já não disponível.'}, status=status.HTTP_404_NOT_FOUND)
+    try:
+        backups.pedir_ensaio(b.id)
+    except backups.EnsaioEmCurso as e:
+        return Response({'detail': str(e)}, status=status.HTTP_409_CONFLICT)
+    return Response({'backup_id': b.id, 'nome': b.chave.rsplit('/', 1)[-1]}, status=status.HTTP_202_ACCEPTED)
 
 
 @api_view(['POST'])

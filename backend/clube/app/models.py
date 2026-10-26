@@ -2103,6 +2103,10 @@ class BackupBD(models.Model):
     pedido_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='backups_pedidos')
     criado_em  = models.DateTimeField(auto_now_add=True, db_index=True)
     apagado_em = models.DateTimeField(null=True, blank=True)                # ficheiro removido pela política de retenção
+    # ensaio de reposição: o ficheiro foi reposto numa base temporária e conferido (utils/backups.ensaiar_reposicao)
+    ensaio_em      = models.DateTimeField(null=True, blank=True)
+    ensaio_ok      = models.BooleanField(null=True, blank=True)
+    ensaio_detalhe = models.JSONField(default=dict, blank=True, null=True)   # null: o código antigo continua a gravar durante o deploy
 
     class Meta:
         ordering = ['-criado_em']
