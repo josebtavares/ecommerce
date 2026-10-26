@@ -316,6 +316,14 @@
       {{ loadingSave ? 'A guardar…' : 'Guardar configurações' }}
     </button>
 
+    <!-- Exportar os dados da loja (só o dono) -->
+    <div v-if="podeFiscal" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-exportar">
+      <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">
+        <font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1.5" />Exportar dados da loja
+      </h2>
+      <ExportacoesLoja :base="`/app/loja/${lojaId}/exportacoes/`" />
+    </div>
+
     <!-- Fechar loja (só o dono) — reabre-se no aviso do topo do backoffice -->
     <div v-if="podeFechar && loja?.estado === 'ativa'"
          class="bg-zinc-900 rounded-2xl border border-red-500/20 p-6">
@@ -361,6 +369,7 @@ import { iconePagamento } from '@/utils/icones'
 import { criarVigia, emCurso, reprocessarVideo } from '@/utils/videoEstado'
 import HorarioEditor from '@/components/horario/HorarioEditor.vue'
 import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
+import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 
 const TODOS_METODOS = [
   { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
@@ -377,7 +386,7 @@ function isVideo (url) {
 
 export default {
   name: 'BackofficeConfiguracoes',
-  components: { HorarioEditor, SeccaoDadosFiscais },
+  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },

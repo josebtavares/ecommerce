@@ -224,6 +224,14 @@
             </a>
           </div>
 
+          <!-- Exportar dados (super-admin) -->
+          <div v-if="podeExportar" class="rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-exportar-loja">
+            <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              <font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1.5" />Exportar dados
+            </h3>
+            <ExportacoesLoja :base="`/app/admin/lojas/${lojaDetalhe.id}/exportacoes/`" />
+          </div>
+
           <!-- Eliminar definitivamente -->
           <div class="rounded-xl border border-red-500/20 p-4 space-y-3">
             <h3 class="text-xs font-bold text-red-400 uppercase tracking-wider">
@@ -259,6 +267,7 @@
 
 <script>
 import api from '@/services/api'
+import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 
 // estados da loja (backend: Loja.estado)
 const ESTADOS = {
@@ -277,6 +286,10 @@ const ACOES = {
 
 export default {
   name: 'AdminLojas',
+  components: { ExportacoesLoja },
+  props: {
+    podeExportar: { type: Boolean, default: false },   // permissão exportar_lojas (super-admin)
+  },
   data () {
     return {
       ESTADOS, ACOES,
