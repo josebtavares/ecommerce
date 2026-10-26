@@ -15,6 +15,9 @@ settings.BACKUP_DIR. As fotos e vídeos já vivem no R2 e não entram aqui.
 Retenção dos automáticos: o último de cada um dos últimos 7 dias, de cada uma das últimas 4 semanas
 e de cada um dos últimos 12 meses. Os manuais ficam 30 dias.
 """
+import hashlib
+import hmac
+import json
 import logging
 import os
 import shutil
@@ -30,6 +33,7 @@ from django.core.cache import cache
 from django.core.mail import EmailMessage
 from django.db import connection
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from ..models import BackupBD
 
@@ -52,13 +56,26 @@ class _Disco:
     def __init__(self):
         self.raiz = Path(settings.BACKUP_DIR)
 
-    def guardar(self, origem, chave):
+    def guardar(self, origem, chave, assinatura=None):
         destino = self.raiz / chave
         destino.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(origem, destino)
+        if assinatura:
+            self.assinar(chave, assinatura)
 
     def apagar(self, chave):
         (self.raiz / chave).unlink(missing_ok=True)
+        (self.raiz / (chave + SUFIXO_ASSINATURA)).unlink(missing_ok=True)
+
+    # a assinatura fica num ficheiro ao lado (no R2 vai nos metadados do objeto)
+    def assinar(self, chave, assinatura):
+        (self.raiz / (chave + SUFIXO_ASSINATURA)).write_text(json.dumps(assinatura))
+
+    def assinatura(self, chave):
+        try:
+            return json.loads((self.raiz / (chave + SUFIXO_ASSINATURA)).read_text())
+        except (OSError, ValueError):
+            return None
 
     def existe(self, chave):
         return (self.raiz / chave).exists()
@@ -111,11 +128,25 @@ class _R2:
             aws_secret_access_key=settings.BACKUP_R2_SECRET_ACCESS_KEY,
             region_name='auto', config=Config(signature_version='s3v4', retries={'max_attempts': 5}))
 
-    def guardar(self, origem, chave):
-        self.s3.upload_file(str(origem), self.bucket, chave, ExtraArgs={'ContentType': 'application/octet-stream'})
+    def guardar(self, origem, chave, assinatura=None):
+        extra = {'ContentType': 'application/octet-stream'}
+        if assinatura:
+            extra['Metadata'] = assinatura
+        self.s3.upload_file(str(origem), self.bucket, chave, ExtraArgs=extra)
 
     def apagar(self, chave):
         self.s3.delete_object(Bucket=self.bucket, Key=chave)
+
+    def assinar(self, chave, assinatura):
+        self.s3.copy_object(Bucket=self.bucket, Key=chave, CopySource={'Bucket': self.bucket, 'Key': chave},
+                            Metadata=assinatura, MetadataDirective='REPLACE', ContentType='application/octet-stream')
+
+    def assinatura(self, chave):
+        try:
+            m = self.s3.head_object(Bucket=self.bucket, Key=chave).get('Metadata') or {}
+        except Exception:
+            return None
+        return m if m.get('sha256') and m.get('assinatura') else None
 
     def existe(self, chave):
         try:
@@ -158,6 +189,66 @@ class _R2:
 
 def armazenamento():
     return _R2() if settings.BACKUP_R2_BUCKET else _Disco()
+
+
+# ── assinatura ─────────────────────────────────────────────────────
+# Cada backup leva o sha256 do ficheiro e um HMAC desse sha256 com a SECRET_KEY do servidor. Quem só
+# tiver acesso ao bucket não consegue fazer um ficheiro que passe: o comando de reposição
+# (manage.py repor_backup) recusa ficheiros sem assinatura válida.
+
+SUFIXO_ASSINATURA = '.assinatura'
+SAL_ASSINATURA = 'bende-backup-assinatura'
+
+
+def sha256_ficheiro(caminho):
+    h = hashlib.sha256()
+    with open(caminho, 'rb') as f:
+        for bloco in iter(lambda: f.read(1024 * 1024), b''):
+            h.update(bloco)
+    return h.hexdigest()
+
+
+def assinatura_de(caminho):
+    sha = sha256_ficheiro(caminho)
+    return {'sha256': sha, 'assinatura': salted_hmac(SAL_ASSINATURA, sha, algorithm='sha256').hexdigest()}
+
+
+def assinatura_valida(caminho, assinatura):
+    """(ok, motivo) — o ficheiro descarregado bate certo com a assinatura guardada."""
+    if not assinatura:
+        return False, 'o backup não tem assinatura (não foi feito por esta plataforma, ou é anterior às assinaturas)'
+    sha = sha256_ficheiro(caminho)
+    if not hmac.compare_digest(sha, assinatura.get('sha256', '')):
+        return False, 'o ficheiro foi alterado depois de ser feito (o sha256 não bate certo)'
+    esperado = salted_hmac(SAL_ASSINATURA, sha, algorithm='sha256').hexdigest()
+    if not hmac.compare_digest(esperado, assinatura.get('assinatura', '')):
+        return False, 'a assinatura não é desta plataforma (outra SECRET_KEY, ou foi forjada)'
+    return True, ''
+
+
+def assinar_existentes():
+    """Assina os backups guardados que ainda não têm assinatura (os de antes desta funcionalidade).
+    Só assina ficheiros que o pg_restore consegue ler."""
+    arm = armazenamento()
+    feitos = 0
+    for b in BackupBD.objects.filter(estado='ok', apagado_em__isnull=True).exclude(chave=''):
+        if arm.assinatura(b.chave) or not arm.existe(b.chave):
+            continue
+        pasta = tempfile.mkdtemp(prefix='assinar-')
+        try:
+            ficheiro = Path(pasta) / 'b.dump'
+            arm.descarregar(b.chave, ficheiro)
+            r = subprocess.run(['pg_restore', '-l', str(ficheiro)], capture_output=True, text=True, timeout=300)
+            if r.returncode != 0:
+                log.warning('backup %s não se lê; fica sem assinatura', b.chave)
+                continue
+            arm.assinar(b.chave, assinatura_de(ficheiro))
+            feitos += 1
+        except Exception:
+            log.exception('não consegui assinar o backup %s', b.chave)
+        finally:
+            shutil.rmtree(pasta, ignore_errors=True)
+    return feitos
 
 
 # ── pg_dump ────────────────────────────────────────────────────────
@@ -236,7 +327,7 @@ def fazer_backup(tipo='automatico', user=None):
         ficheiro = Path(pasta) / nome
         _dump(ficheiro)
         chave = f'bd/{local:%Y}/{local:%m}/{nome}'
-        armazenamento().guardar(ficheiro, chave)
+        armazenamento().guardar(ficheiro, chave, assinatura_de(ficheiro))
         b.chave, b.tamanho, b.estado = chave, ficheiro.stat().st_size, 'ok'
     except Exception as e:
         log.exception('backup da base de dados falhou')
@@ -253,6 +344,10 @@ def fazer_backup(tipo='automatico', user=None):
             aplicar_retencao()
         except Exception:
             log.exception('backup: a retenção falhou (o backup ficou feito)')
+        try:
+            assinar_existentes()
+        except Exception:
+            log.exception('backup: não consegui assinar os backups antigos')
     return b
 
 

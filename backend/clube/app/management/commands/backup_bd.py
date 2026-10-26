@@ -3,6 +3,7 @@
   manage.py backup_bd                 backup manual
   manage.py backup_bd --automatico    conta como o backup automático do dia
   manage.py backup_bd --ensaiar [ID]  ensaio de reposição (o mais recente, ou o backup ID) numa base temporária
+  manage.py backup_bd --assinar       assina os backups guardados que ainda não têm assinatura
 """
 from django.core.management.base import BaseCommand, CommandError
 
@@ -17,8 +18,12 @@ class Command(BaseCommand):
         parser.add_argument('--automatico', action='store_true', help='conta como o backup automático do dia')
         parser.add_argument('--ensaiar', nargs='?', const=0, type=int, metavar='ID',
                             help='repõe um backup numa base temporária e confere-o (sem ID: o mais recente)')
+        parser.add_argument('--assinar', action='store_true', help='assina os backups que ainda não têm assinatura')
 
     def handle(self, *args, **opts):
+        if opts['assinar']:
+            n = backups.assinar_existentes()
+            return self.stdout.write(self.style.SUCCESS(f'{n} backup(s) assinados.'))
         if opts['ensaiar'] is not None:
             return self._ensaiar(opts['ensaiar'])
         try:
