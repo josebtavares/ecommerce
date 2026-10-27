@@ -563,7 +563,7 @@ def encomenda_criar(request, loja_id):
                  + (f' Agendada pelo cliente para {horarios.texto_agendada(agendada_para)}.' if origem == 'cliente'
                     else f' Agendada para {horarios.quando_texto(agendada_para)} (feita com a loja fechada).'
                     if agendada_para else ''),
-        link=f'/loja/{loja.id}/backoffice',
+        link=f'/loja/{loja.id}/backoffice/encomendas/{encomenda.id}',
     )
 
 
@@ -620,7 +620,7 @@ def encomenda_get(request, id):
 @permission_classes([IsAuthenticated])
 def encomenda_list_loja(request, loja_id):
     """
-    GET /app/loja/<loja_id>/encomendas/?status=pendente&offset=0&limit=20
+    GET /app/loja/<loja_id>/encomendas/?status=pendente&id=&offset=0&limit=20
     Backoffice — lista encomendas da loja.
     """
     loja = get_object_or_404(Loja, id=loja_id)
@@ -629,6 +629,11 @@ def encomenda_list_loja(request, loja_id):
         return erro
 
     qs = Encomenda.objects.filter(loja=loja).order_by('-data_criacao')
+
+    # ?id= → só essa encomenda (ficha aberta pelo endereço, /backoffice/encomendas/<id>)
+    so_id = request.GET.get('id', '')
+    if so_id:
+        qs = qs.filter(id=so_id) if so_id.isdigit() else qs.none()
 
     s = request.GET.get('status')
     if s:
@@ -795,7 +800,7 @@ def encomenda_atualizar_status(request, loja_id, id):
             titulo=f'Encomenda #{encomenda.id} concluída ✓',
             mensagem=(f'Receita: {dinheiro(encomenda.valor_total)} · Comissão ({_perc}%): {dinheiro(_com)} · Líquido: {dinheiro(_liq)}.' if _com
                       else f'Receita: {dinheiro(encomenda.valor_total)} · Sem comissão (subscrição).'),
-            link=f'/loja/{encomenda.loja_id}/backoffice',
+            link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
         )
  
         # notifica admins se pagamento era dinheiro (comissão registada agora)
@@ -819,7 +824,7 @@ def encomenda_atualizar_status(request, loja_id, id):
             tipo='encomenda_cancelada_loja',
             titulo=f'Encomenda #{encomenda.id} cancelada',
             mensagem='Stock reposto automaticamente.',
-            link=f'/loja/{encomenda.loja_id}/backoffice',
+            link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
         )
  
     return Response(

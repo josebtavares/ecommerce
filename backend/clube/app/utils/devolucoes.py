@@ -228,13 +228,13 @@ def _avisar_loja(r, titulo, texto, tipo='reembolso_atualizado'):
     from ..Views.notificacaoView import notificar_staff
     notificar_staff(loja=r.loja, roles=['dono', 'gestor'], tipo=tipo,
                     titulo=f'{titulo} — Encomenda #{r.encomenda_id}', mensagem=texto,
-                    link=f'/loja/{r.loja_id}/backoffice/devolucoes?reembolso={r.id}')
+                    link=f'/loja/{r.loja_id}/backoffice/devolucoes/{r.id}')
 
 
 def _avisar_admins(r, titulo, texto):
     from ..Views.notificacaoView import notificar_admins
     notificar_admins(tipo='reembolso_disputa', titulo=f'{titulo} — Encomenda #{r.encomenda_id}',
-                     mensagem=texto, loja=r.loja, link=f'/admin/devolucoes?reembolso={r.id}')
+                     mensagem=texto, loja=r.loja, link=f'/admin/devolucoes/{r.id}')
 
 
 # ── criação ──────────────────────────────────────────────────────────
@@ -288,7 +288,7 @@ def cancelar_pelo_cliente(encomenda, utilizador, descricao=''):
         notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_cancelada_loja',
                         titulo=f'Encomenda #{encomenda.id} cancelada pelo cliente',
                         mensagem='Ainda não estava paga. Stock reposto automaticamente.',
-                        link=f'/loja/{encomenda.loja_id}/backoffice')
+                        link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
         return None
 
     r = _criar(encomenda, 'cancelamento', 'cancelado_cliente', 'cliente', valor, valor_entrega(encomenda),

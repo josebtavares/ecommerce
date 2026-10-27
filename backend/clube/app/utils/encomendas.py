@@ -119,7 +119,7 @@ def _cancelar_por_pagar(encomenda, mensagem_cliente=None, avisar_loja=True):
         notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_cancelada_loja',
                         titulo=f'Encomenda #{encomenda.id} cancelada',
                         mensagem='O pagamento não foi concluído a tempo. Stock reposto automaticamente.',
-                        link=f'/loja/{encomenda.loja_id}/backoffice')
+                        link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
 
 
 MSG_EXPIROU = ('O pagamento não foi concluído em {min} minutos e a encomenda foi cancelada. '

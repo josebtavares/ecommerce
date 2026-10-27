@@ -35,7 +35,7 @@
     <div v-else class="space-y-3">
       <div v-for="loja in lojas" :key="loja.id"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 hover:border-zinc-700 transition cursor-pointer group"
-           @click="abrirDetalhe(loja)">
+           @click="irParaFicha($router, $route, loja.id)">
 
         <!-- Row principal -->
         <div class="flex items-center gap-3">
@@ -118,7 +118,7 @@
     <!-- Modal detalhe -->
     <div v-if="lojaDetalhe"
          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
-         @click.self="lojaDetalhe = null">
+         @click.self="irParaFicha($router, $route, null)">
       <div class="bg-zinc-900 border border-zinc-800 w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl rounded-t-2xl sm:rounded-2xl">
 
         <!-- Handle mobile -->
@@ -144,7 +144,7 @@
             <p class="text-xs text-zinc-600 mt-0.5">Dono: {{ lojaDetalhe.dono.username }}</p>
             <p v-if="lojaDetalhe.estado_motivo" class="text-xs text-zinc-500 mt-0.5">Motivo: {{ lojaDetalhe.estado_motivo }}</p>
           </div>
-          <button @click="lojaDetalhe = null"
+          <button @click="irParaFicha($router, $route, null)"
             class="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition flex-shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -268,6 +268,7 @@
 <script>
 import api from '@/services/api'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
+import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 
 // estados da loja (backend: Loja.estado)
 const ESTADOS = {
@@ -283,6 +284,8 @@ const ACOES = {
   suspender: { label: 'Suspender', origens: ['ativa', 'fechada'],   classe: 'bg-red-500/15 text-red-400 hover:bg-red-500/25', motivo: true },
   reativar:  { label: 'Reactivar', origens: ['suspensa'],           classe: 'bg-green-500/15 text-green-400 hover:bg-green-500/25' },
 }
+
+const comComissao = l => ({ ...l, _comissao_edit: l.percentagem_comissao ?? 10 })
 
 export default {
   name: 'AdminLojas',
@@ -321,6 +324,10 @@ export default {
       ]
     },
   },
+  watch: {
+    // a loja aberta vai no endereço (/admin/lojas/<id>): refresh mantém-na, voltar fecha-a
+    '$route.params.ficha': { handler: 'carregarFicha', immediate: true },
+  },
   async created () { await this.fetchLojas() },
   methods: {
     debouncedFetch () {
@@ -335,7 +342,10 @@ export default {
         if (this.filtroEstado) params.estado = this.filtroEstado
         if (this.filtroCategoria) params.categoria = this.filtroCategoria
         const { data } = await api.get('/app/admin/lojas/', { params })
-        this.lojas = (data.results || data).map(l => ({ ...l, _comissao_edit: l.percentagem_comissao ?? 10 }))
+        this.lojas = (data.results || data).map(comComissao)
+        // a ficha aberta passa a ser a mesma loja da lista (as ações atualizam as duas)
+        const naLista = this.lojas.find(l => l.id === this.lojaDetalhe?.id)
+        if (naLista) this.lojaDetalhe = naLista
         this.totalCount = data.count ?? this.lojas.length
         if (pagina === 1 && !this.filtroCategoria && !this.filtroEstado && !this.q) {
           const cats = [...new Set(this.lojas.map(l => l.categoria).filter(Boolean))]
@@ -398,7 +408,7 @@ export default {
       this.aEliminar = true
       try {
         await api.delete(`/app/admin/lojas/${loja.id}/eliminar/`, { data: { confirmacao: this.confirmacaoNome.trim() } })
-        this.lojaDetalhe = null
+        irParaFicha(this.$router, this.$route, null, true)
         await this.fetchLojas()
       } catch (e) {
         const d = e.response?.data
@@ -410,6 +420,21 @@ export default {
       try {
         await api.patch(`/app/admin/lojas/${loja.id}/comissao/editar/`, { percentagem_comissao: loja._comissao_edit })
       } catch (e) { console.error(e) }
+    },
+    irParaFicha,
+    async carregarFicha () {
+      const id = fichaDaRota(this.$route)
+      if (!id) { this.lojaDetalhe = null; return }
+      if (this.lojaDetalhe?.id === id) return
+      let loja = this.lojas.find(l => l.id === id)
+      if (!loja) {
+        try {
+          const { data } = await api.get('/app/admin/lojas/', { params: { id, limit: 1, offset: 0 } })
+          loja = (data.results || data).map(comComissao).find(l => l.id === id)
+        } catch { loja = null }
+      }
+      if (loja && fichaDaRota(this.$route) === id) this.abrirDetalhe(loja)
+      else if (!loja) irParaFicha(this.$router, this.$route, null, true)   // loja que não existe
     },
     async abrirDetalhe (loja) {
       this.lojaDetalhe = loja
