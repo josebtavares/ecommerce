@@ -16,14 +16,15 @@ import io
 import re
 import uuid
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 LADO_FOTO = 1600
 # banners que ocupam a largura toda do ecrã: 1600 px ficava mole num monitor grande
 LADO_POR_CAMPO = {('loja', 'banner'): 1920, ('homeimagem', 'ficheiro'): 1920}
 LADO_MINIATURA = 600
-QUALIDADE = 82
-QUALIDADE_MINIATURA = 78
+# WebP 90/85: quase indistinguível do original nas fotos de comida/produtos (com 82/78 via-se perda nos detalhes)
+QUALIDADE = 90
+QUALIDADE_MINIATURA = 85
 MAX_PIXEIS = 250_000_000          # acima disto é quase de certeza uma "bomba" de descompressão
 
 PRINCIPAL = re.compile(r'^(?P<base>(?:.*/)?[0-9a-f]{20})\.(?P<ext>webp|mp4)$')
@@ -83,8 +84,11 @@ def _abrir(ficheiro, lado=LADO_FOTO):
 def _webp(img, lado, qualidade):
     copia = img.copy()
     copia.thumbnail((lado, lado), Image.LANCZOS)             # nunca aumenta
+    if max(img.size) > max(copia.size) * 1.5:
+        # reduzir muito amacia os contornos: um toque de nitidez devolve o detalhe
+        copia = copia.filter(ImageFilter.UnsharpMask(radius=0.8, percent=50, threshold=2))
     saida = io.BytesIO()
-    copia.save(saida, 'WEBP', quality=qualidade, method=4)   # sem EXIF (localização, modelo do telemóvel)
+    copia.save(saida, 'WEBP', quality=qualidade, method=6)   # sem EXIF (localização, modelo do telemóvel)
     return saida.getvalue()
 
 
@@ -92,10 +96,32 @@ def lado_de(modelo, campo):
     return LADO_POR_CAMPO.get((modelo, campo), LADO_FOTO)
 
 
+def _ja_otimizada(ficheiro, img, lado):
+    """WebP que já cabe no tamanho e não traz metadados: fica tal e qual (comprimir outra vez só piorava
+    a qualidade e muitas vezes até aumentava o ficheiro)."""
+    try:
+        ficheiro.seek(0)
+        original = Image.open(ficheiro)
+        if (original.format != 'WEBP' or max(original.size) > lado or original.info.get('exif')
+                or original.info.get('xmp') or getattr(original, 'is_animated', False)):
+            return None
+        ficheiro.seek(0)
+        dados = ficheiro.read()
+        # nada colado depois da imagem: o tamanho no cabeçalho RIFF tem de bater com o ficheiro
+        if dados[:4] != b'RIFF' or dados[8:12] != b'WEBP' or int.from_bytes(dados[4:8], 'little') + 8 != len(dados):
+            return None
+        return dados
+    except Exception:
+        return None
+
+
 def converter_imagem(ficheiro, lado=LADO_FOTO):
     """→ (bytes da foto com no máximo `lado` px, bytes da miniatura 600 px), ambas WebP sem metadados."""
     img = _abrir(ficheiro, lado)
-    return _webp(img, lado, QUALIDADE), _webp(img, LADO_MINIATURA, QUALIDADE_MINIATURA)
+    foto = _ja_otimizada(ficheiro, img, lado) or _webp(img, lado, QUALIDADE)
+    if max(img.size) <= LADO_MINIATURA:
+        return foto, foto           # foto pequena: a "miniatura" seria a mesma foto com menos qualidade
+    return foto, _webp(img, LADO_MINIATURA, QUALIDADE_MINIATURA)
 
 
 def animada(ficheiro):
