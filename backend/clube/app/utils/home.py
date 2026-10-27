@@ -518,6 +518,11 @@ def resolver(s, request, vistos=None):
             return None
         out['loja'] = _serializar_lojas([loja_id], request)[0]
         out['produtos'] = _serializar_produtos(_ids_loja_destaque(s, loja_id), request)
+        if not out['produtos']:
+            # loja só de serviços (spa, barbearia…): mostra os serviços dela em vez de um bloco vazio
+            limite = min(_int(s.get('limite'), 8) or 8, 20)
+            ids = list(servicos_auto_qs('loja', {'loja_id': loja_id}).values_list('id', flat=True)[:limite])
+            out['servicos'] = _serializar_servicos(ids, request)
         return out
 
     if tipo == 'categorias':

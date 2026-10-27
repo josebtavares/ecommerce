@@ -48,6 +48,9 @@
           :inicial="{ results: produtos, count: produtos.length, next_offset: null }"
           :isDark="isDark" :showStoreName="false" containerClass="!mb-0"
           @product-click="$emit('product-click', $event)" />
+        <!-- loja só de serviços: os serviços dela -->
+        <HomeServicos v-else-if="servicos.length" class="min-w-0" :servicos="servicos"
+          :titulo="`Serviços da ${loja.nome}`" tamanhoTitulo="text-lg" :isDark="isDark" />
         <p v-else class="text-sm text-center py-10" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
           Visita a loja para ver os produtos.
         </p>
@@ -58,14 +61,16 @@
 
 <script>
 import ProductSlider from '@/components/sliders/ProductSlider.vue'
+import HomeServicos from './HomeServicos.vue'
 import { DEFAULT_BANNER } from '@/services/media'
 
 export default {
   name: 'HomeLojaDestaque',
-  components: { ProductSlider },
+  components: { ProductSlider, HomeServicos },
   props: {
     loja:      { type: Object, required: true },
     produtos:  { type: Array,  default: () => [] },
+    servicos:  { type: Array,  default: () => [] },   // só quando a loja não tem produtos
     titulo:    { type: String, default: '' },
     subtitulo: { type: String, default: '' },
     isDark:    { type: Boolean, default: true },
