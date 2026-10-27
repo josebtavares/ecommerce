@@ -9,6 +9,7 @@ import '@/assets/toastify.css';
 import 'vue3-toastify/dist/index.css';
 import '@/assets/tailwind.css';
 import '@/assets/loja-acoes.css';
+import '@/assets/tema-claro.css';
 import '@fortawesome/fontawesome-free/css/all.min.css'   // <-- aqui
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { fas } from '@fortawesome/free-solid-svg-icons';

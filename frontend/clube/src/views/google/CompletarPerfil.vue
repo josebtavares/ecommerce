@@ -110,15 +110,15 @@ import api from '@/services/api'
 import { toast } from 'vue3-toastify'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
 import { criarVerificador } from '@/services/disponibilidade'
+import { temaEscuro } from '@/utils/tema'
 
 export default {
   name: 'CompletarPerfil',
   components: { EstadoDisponibilidade },
 
   data () {
-    const savedTheme = localStorage.getItem('theme_preference')
     return {
-      isDark: savedTheme ? savedTheme === 'dark' : true,
+      isDark: temaEscuro(),
       carregando: true,
       aGuardar: false,
       foto: null,

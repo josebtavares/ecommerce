@@ -11,6 +11,7 @@
       </button>
       <h1 class="text-lg font-bold text-zinc-100">Checkout</h1>
       <span v-if="loja" class="text-sm text-zinc-500">· {{ loja.nome }}</span>
+      <BotaoTema class="ml-auto" :isDark="isDark" @alternar="alternarTema" />
     </div>
 
     <!-- Loading inicial -->
@@ -331,6 +332,8 @@ import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
 import { quandoAbre } from '@/components/horario/horario'
 import EscolherHora from '@/components/horario/EscolherHora.vue'
+import { temaPainel } from '@/utils/tema'
+import BotaoTema from '@/components/BotaoTema.vue'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
@@ -355,7 +358,8 @@ const ENDPOINT_PAGAMENTO = {
 
 export default {
   name: 'CheckoutPage',
-  components: { EscolherHora },
+  mixins: [temaPainel],
+  components: { BotaoTema, EscolherHora },
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()

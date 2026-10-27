@@ -389,6 +389,7 @@ import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import api, { terminarSessao } from '@/services/api'
 import { DEFAULT_BANNER, DEFAULT_PRODUTO } from '@/services/media'
 import { iconeCategoria } from '@/utils/icones'
+import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'AppHome',
@@ -398,7 +399,7 @@ export default {
 
   data () {
     return {
-      isDark: false,   // claro por defeito (quem já escolheu fica com a escolha: home_dark_mode)
+      isDark: temaEscuro(),
       seccoes: [],              // secções da home (admin → /app/home/)
       categoriasExistentes: [],
       loadingHome: true,
@@ -440,9 +441,6 @@ export default {
   async created () {
     const user = localStorage.getItem('user')
     this.user = user ? JSON.parse(user) : {}
-    // Persistir preferência de tema
-    const savedDark = localStorage.getItem('home_dark_mode')
-    if (savedDark !== null) this.isDark = savedDark === 'true'
 
     await Promise.all([
       this.fetchHome(),
@@ -452,7 +450,7 @@ export default {
 
   watch: {
     isDark (val) {
-      localStorage.setItem('home_dark_mode', String(val))
+      guardarTema(val)
     }
   },
 

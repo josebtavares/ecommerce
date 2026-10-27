@@ -49,6 +49,7 @@
 <script>
 import { pedidoLogin, fecharPedidoLogin } from '@/services/sessao'
 import { iniciarLoginGoogle } from '@/services/google'
+import { temaEscuro } from '@/utils/tema'
 
 export default {
   name: 'PedirLogin',
@@ -63,7 +64,7 @@ export default {
       if (aberto) {
         this.aRedirecionar = false
         // o tema lê-se ao abrir (o localStorage não é reactivo)
-        this.isDark = localStorage.getItem('theme_preference') !== 'light'
+        this.isDark = temaEscuro()
         window.addEventListener('keydown', this.onTecla)
       } else {
         window.removeEventListener('keydown', this.onTecla)
@@ -90,7 +91,7 @@ export default {
       } catch {
         this.aRedirecionar = false
         // o tema lê-se ao abrir (o localStorage não é reactivo)
-        this.isDark = localStorage.getItem('theme_preference') !== 'light'
+        this.isDark = temaEscuro()
       }
     },
   },

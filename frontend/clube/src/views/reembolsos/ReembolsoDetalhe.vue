@@ -171,11 +171,12 @@ import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
+import { temaEscuro, guardarTema } from '@/utils/tema'
 
 const route  = useRoute()
 const router = useRouter()
 
-const isDark     = ref(localStorage.getItem('theme_preference') !== 'light')
+const isDark     = ref(temaEscuro())
 const r          = ref(null)
 const carregando = ref(true)
 const erro       = ref('')
@@ -252,7 +253,7 @@ function voltar () {
 
 function alternarTema () {
   isDark.value = !isDark.value
-  localStorage.setItem('theme_preference', isDark.value ? 'dark' : 'light')
+  guardarTema(isDark.value)
 }
 
 // tempo real: a loja (ou a Bendi) mexeu neste pedido

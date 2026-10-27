@@ -174,6 +174,7 @@ import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
 import logoLight from '@/assets/img/login/logo_final_640_light.webp'
+import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'RecuperarSenha',
@@ -185,7 +186,6 @@ export default {
   },
 
   data () {
-    const savedTheme = localStorage.getItem('theme_preference')
     return {
       videoFundo:      mediaUrl('videos/background.mp4'),
       email:           '',
@@ -198,7 +198,7 @@ export default {
       uid:             this.$route.query.uid || '',
       token:           this.$route.query.token || '',
       erro:            '',
-      isDark: savedTheme ? savedTheme === 'dark' : true,
+      isDark: temaEscuro(),
       logoDefault,
       logoLight,
     }
@@ -218,7 +218,7 @@ export default {
 
   watch: {
     isDark (val) {
-      localStorage.setItem('theme_preference', val ? 'dark' : 'light')
+      guardarTema(val)
     }
   },
 

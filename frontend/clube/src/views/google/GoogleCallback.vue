@@ -21,14 +21,14 @@ import { toast } from 'vue3-toastify'
 import { validarStateGoogle, seguinteGoogle } from '@/services/google'
 import { caminhoSeguro } from '@/services/sessao'
 import { guardarSessaoPrincipalPOS, destinoPOS } from '@/services/posSessao'
+import { temaEscuro } from '@/utils/tema'
 
 export default {
   name: 'GoogleCallback',
 
   data () {
-    const savedTheme = localStorage.getItem('theme_preference')
     return {
-      isDark: savedTheme ? savedTheme === 'dark' : true,
+      isDark: temaEscuro(),
       mensagem: 'A autenticar com Google...',
     }
   },
