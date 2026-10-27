@@ -398,7 +398,7 @@ export default {
 
   data () {
     return {
-      isDark: true,   // dark por defeito — pode ser lido de localStorage se quiseres
+      isDark: false,   // claro por defeito (quem já escolheu fica com a escolha: home_dark_mode)
       seccoes: [],              // secções da home (admin → /app/home/)
       categoriasExistentes: [],
       loadingHome: true,

@@ -185,7 +185,7 @@ export default {
       warning:      false,
       warningMsg:   'Credenciais inválidas.',
       loadingGoogle: false,
-      isDark: savedTheme ? savedTheme === 'dark' : true,
+      isDark: savedTheme ? savedTheme === 'dark' : false,   // claro por defeito
       logoDefault,
       logoLight,
     }

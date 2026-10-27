@@ -281,7 +281,7 @@ export default {
       previewUrl:    DEFAULT_UTILIZADOR,
       errors:        [],
       loadingGoogle: false,
-      isDark: savedTheme ? savedTheme === 'dark' : true,
+      isDark: savedTheme ? savedTheme === 'dark' : false,   // claro por defeito
       logoDefault,
       logoLight,
     }
