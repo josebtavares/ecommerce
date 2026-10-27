@@ -32,6 +32,26 @@ def sessao_terminada(token):
     return bool(cache.get(_chave_fim(token)))
 
 
+# Password mudada (perfil ou recuperação): as sessões abertas ANTES deixam de valer — quem tinha
+# um token roubado perdia-o só quando expirasse (o refresh roda e renovava-se para sempre).
+# Guarda-se a hora da troca enquanto um refresh antigo ainda podia ser usado.
+def _chave_desde(user_id):
+    return f'jwt_desde:{user_id}'
+
+
+def terminar_sessoes(user):
+    from django.core.cache import cache
+    import time
+    cache.set(_chave_desde(user.pk), int(time.time()),
+              int(api_settings.REFRESH_TOKEN_LIFETIME.total_seconds()) + 60)
+
+
+def anterior_a_troca(user_id, token):
+    from django.core.cache import cache
+    desde = cache.get(_chave_desde(user_id))
+    return bool(desde) and int(token.get('iat', 0)) < desde
+
+
 def conta_ativa(user):
     """User activo e, se tiver perfil, com status 'ativo'."""
     if user is None or not user.is_active:
@@ -52,6 +72,8 @@ class JWTContaAtiva(JWTAuthentication):
         user = super().get_user(validated_token)
         if not conta_ativa(user):
             raise AuthenticationFailed(MSG_INATIVA, code='conta_inativa')
+        if anterior_a_troca(user.pk, validated_token):
+            raise InvalidToken('Sessão terminada.')
         return user
 
 
@@ -76,4 +98,6 @@ class RefreshContaAtiva(TokenRefreshSerializer):
         user = get_user_model().objects.filter(**{api_settings.USER_ID_FIELD: refresh.get(api_settings.USER_ID_CLAIM)}).first()
         if not conta_ativa(user):
             raise AuthenticationFailed(MSG_INATIVA, code='conta_inativa')
+        if anterior_a_troca(user.pk, refresh):
+            raise InvalidToken('Sessão terminada.')
         return super().validate(attrs)

@@ -2,7 +2,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 
 from ..models import CategoriaLoja, CategoriaDestaque, Produto, Loja, UtilizadorLoja
@@ -187,8 +187,17 @@ def categoria_loja_remover_produto(request, loja_id, cat_id, produto_id):
 # ADMIN — categorias destaque (home)
 # ══════════════════════════════════════════════════════════════
 
+class GereHome(BasePermission):
+    """Os destaques mudam a página inicial: só quem a gere (antes bastava ser staff — moderador,
+    suporte ou contabilista também criavam e apagavam destaques)."""
+
+    def has_permission(self, request, view):
+        u = getattr(request.user, 'utilizador', None)
+        return bool(request.user.is_authenticated and request.user.is_staff and u and u.pode_admin('gerir_home'))
+
+
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([GereHome])
 def categoria_destaque_list_admin(request):
     """
     GET /app/admin/categorias-destaque/
@@ -203,7 +212,7 @@ def categoria_destaque_list_admin(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([GereHome])
 def categoria_destaque_lojas_admin(request):
     """
     GET /app/admin/categorias-destaque/lojas/
@@ -216,7 +225,7 @@ def categoria_destaque_lojas_admin(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([GereHome])
 def categoria_destaque_disponiveis(request):
     """
     GET /app/admin/categorias-destaque/disponiveis/?loja_id=X
@@ -234,7 +243,7 @@ def categoria_destaque_disponiveis(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminUser])
+@permission_classes([GereHome])
 def categoria_destaque_criar(request):
     """
     POST /app/admin/categorias-destaque/criar/
@@ -248,7 +257,7 @@ def categoria_destaque_criar(request):
 
 
 @api_view(['PATCH', 'DELETE'])
-@permission_classes([IsAdminUser])
+@permission_classes([GereHome])
 def categoria_destaque_gerir(request, destaque_id):
     """
     PATCH  /app/admin/categorias-destaque/<destaque_id>/  → editar icone/ordem
@@ -268,7 +277,7 @@ def categoria_destaque_gerir(request, destaque_id):
 
 
 @api_view(['PATCH'])
-@permission_classes([IsAdminUser])
+@permission_classes([GereHome])
 def categoria_destaque_toggle(request, destaque_id):
     """PATCH /app/admin/categorias-destaque/<destaque_id>/toggle/"""
     destaque = get_object_or_404(CategoriaDestaque, id=destaque_id)

@@ -579,8 +579,9 @@ export default {
         this.flwGuardado = true
         setTimeout(() => { this.flwGuardado = false }, 3000)
         this.$emit('updated')
-      } catch (e) { console.error(e) }
-      finally { this.loadingFlw = false }
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível guardar a configuração Flutterwave.')
+      } finally { this.loadingFlw = false }
     },
 
     // ── Loja ──────────────────────────────────────────────────

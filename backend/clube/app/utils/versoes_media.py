@@ -26,6 +26,7 @@ LADO_MINIATURA = 600
 QUALIDADE = 90
 QUALIDADE_MINIATURA = 85
 MAX_PIXEIS = 250_000_000          # acima disto é quase de certeza uma "bomba" de descompressão
+MAX_PIXEIS_SEM_REDUCAO = 50_000_000   # PNG/WebP/GIF (não se descodificam reduzidos): ~200 MB em RGBA
 
 PRINCIPAL = re.compile(r'^(?P<base>(?:.*/)?[0-9a-f]{20})\.(?P<ext>webp|mp4)$')
 VARIANTE = re.compile(r'^(?P<base>(?:.*/)?[0-9a-f]{20})__(?:600|480|720)\.(?P<ext>webp|mp4)$')
@@ -69,6 +70,10 @@ def _abrir(ficheiro, lado=LADO_FOTO):
         pass
     try:
         img = Image.open(ficheiro)
+        # só o JPEG descodifica já reduzido; os outros ocupam 4 bytes por píxel (+ cópias) —
+        # um PNG de 15000×15000 com poucos MB pedia vários GB de RAM ao servidor
+        if img.format != 'JPEG' and img.width * img.height > MAX_PIXEIS_SEM_REDUCAO:
+            raise Image.DecompressionBombError('demasiados píxeis')
         img.draft('RGB', (lado * 2, lado * 2))     # JPEG: descodifica já reduzido (poupa RAM)
         img.load()
     except Image.DecompressionBombError:
