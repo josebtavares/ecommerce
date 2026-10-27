@@ -109,7 +109,7 @@ def processar(agora=None):
         if prof.membro_id and prof.membro.ativo:
             notificar(utilizador=prof.membro.utilizador, tipo='marcacao_lembrete', titulo='Amanhã na tua agenda',
                       mensagem=f'{m.servico_nome} — {ops.quando_texto(m.inicio)} — {m.cliente_nome or (m.cliente.nome if m.cliente_id else "")}.',
-                      loja=m.loja, link=f'/loja/{m.loja_id}/backoffice?seccao=servicos&marcacao={m.id}')
+                      loja=m.loja, link=f'/loja/{m.loja_id}/backoffice/servicos?marcacao={m.id}')
         r['lembretes'] += 1
 
     fechar = Marcacao.objects.filter(estado='confirmada', fim__lte=agora - timedelta(hours=HORAS_POR_FECHAR)).select_related('loja', 'profissional__membro')

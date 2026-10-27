@@ -64,7 +64,7 @@ def _avisar(m, titulo, mensagem, cliente=True, profissional=True, excluir_user=N
     prof = m.profissional
     if profissional and prof.membro_id and prof.membro.ativo and prof.membro.utilizador_id != excluir_user:
         notificar(utilizador=prof.membro.utilizador, tipo='marcacao_atualizada', titulo=titulo, mensagem=mensagem,
-                  loja=m.loja, link=f'/loja/{m.loja_id}/backoffice?seccao=servicos')
+                  loja=m.loja, link=f'/loja/{m.loja_id}/backoffice/servicos')
 
 
 def _escolher(servico, inicio, ocupado_ate, ignorar_horario):
@@ -216,7 +216,7 @@ def reatribuir(m, novo, por='', motivo='', ignorar_horario=False):
                  (novo, f'Nova marcação: {m.servico_nome} a {quando_texto(m.inicio)}.')):
         if p.membro_id and p.membro.ativo:
             notificar(utilizador=p.membro.utilizador, tipo='marcacao_atualizada', titulo='Agenda alterada', mensagem=t,
-                      loja=m.loja, link=f'/loja/{m.loja_id}/backoffice?seccao=servicos')
+                      loja=m.loja, link=f'/loja/{m.loja_id}/backoffice/servicos')
     return m, avisos
 
 
@@ -253,7 +253,7 @@ def cancelar(m, por='', motivo='', pela_loja=True):
 def avisar_loja(m, titulo, mensagem, tipo='marcacao_atualizada'):
     """Dono e gestor, e o profissional desta marcação se tiver conta."""
     from ..Views.notificacaoView import notificar, notificar_staff
-    link = f'/loja/{m.loja_id}/backoffice?seccao=servicos&marcacao={m.id}'
+    link = f'/loja/{m.loja_id}/backoffice/servicos?marcacao={m.id}'
     notificar_staff(loja=m.loja, roles=['dono', 'gestor'], tipo=tipo, titulo=titulo, mensagem=mensagem, link=link)
     prof = m.profissional
     if prof.membro_id and prof.membro.ativo and prof.membro.role not in ('dono', 'gestor'):

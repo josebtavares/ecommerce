@@ -757,7 +757,7 @@ def marcacoes(request, loja_id):
         from ..Views.notificacaoView import notificar
         notificar(utilizador=m.profissional.membro.utilizador, tipo='marcacao_nova', titulo='Nova marcação',
                   mensagem=f'{m.servico_nome} a {ops.quando_texto(m.inicio)} — {nome}.', loja=loja,
-                  link=f'/loja/{loja.id}/backoffice?seccao=servicos')
+                  link=f'/loja/{loja.id}/backoffice/servicos')
     return Response(marcacao_payload(m, completo=True), status=status.HTTP_201_CREATED)
 
 

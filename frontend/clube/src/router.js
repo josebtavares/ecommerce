@@ -5,8 +5,8 @@ import AppRegister from './views/register.vue'; // Import your views as needed
 import LojaPublica from './views/loja/lojaPublica.vue'
 import Checkout       from './views/Checkout.vue'
 import EncomendaSucesso from './views/EncomendaSucesso.vue'
-import Backoffice from './views/backoffice/Index.vue'
-import AdminLayout from '@/views/admin/AdminLayout.vue'
+const Backoffice = () => import('./views/backoffice/Index.vue')
+const AdminLayout = () => import('@/views/admin/AdminLayout.vue')
 import criarLoja from './views/criarLoja.vue';
 import GoogleCallback from './views/google/GoogleCallback.vue';
 import CompletarPerfil from './views/google/CompletarPerfil.vue';
@@ -25,7 +25,7 @@ const MarcacaoCliente = () => import('./views/servicos/MarcacaoCliente.vue');
 // POS Components
 import POSRegister from '@/views/pos/POSRegister.vue'
 import POSLogin from '@/views/pos/POSLogin.vue'
-import POSDashboard from '@/views/pos/POSDashboard.vue'
+const POSDashboard = () => import('@/views/pos/POSDashboard.vue')
 
 
 const routes = [
@@ -87,13 +87,13 @@ const routes = [
         component: EncomendaSucesso, 
         meta: { requiresAuth: true } 
     },
-    { path: '/loja/:id/backoffice', 
+    { path: '/loja/:id/backoffice/:seccao?', 
         name: 'Backoffice', 
         component: Backoffice, 
         meta: { requiresAuth: true } 
     },
     {
-        path: '/admin',
+        path: '/admin/:seccao?',
         name: 'Admin',
         component: AdminLayout,
         meta: { requiresAuth: true }
@@ -176,7 +176,7 @@ const routes = [
         meta: { title: 'Completar perfil', requiresPOSAuth: true }
     },
     {
-        path: '/pos/dashboard',
+        path: '/pos/dashboard/:aba?',
         name: 'POSDashboard',
         component: POSDashboard,
         meta: { 

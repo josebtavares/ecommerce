@@ -117,7 +117,7 @@
           class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-bold transition flex-shrink-0">
           <font-awesome-icon :icon="['fas', 'store']" class="mr-1.5" />Reabrir loja
         </button>
-        <button v-if="suspensaPorSubscricao && permissoes.includes('ver_subscricao')" @click="activeSection = 'subscricao'"
+        <button v-if="suspensaPorSubscricao && permissoes.includes('ver_subscricao')" @click="navegarPara('subscricao')"
           class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex-shrink-0">
           <font-awesome-icon :icon="['fas', 'credit-card']" class="mr-1.5" />Pagar subscrição
         </button>
@@ -129,7 +129,7 @@
                     avisoSub.tipo === 'atraso' ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-200']">
         <font-awesome-icon :icon="['fas', avisoSub.tipo === 'atraso' ? 'triangle-exclamation' : 'clock']" class="w-4 h-4 flex-shrink-0 hidden sm:block" />
         <p class="flex-1 min-w-0">{{ avisoSub.texto }}</p>
-        <button v-if="activeSection !== 'subscricao'" @click="activeSection = 'subscricao'"
+        <button v-if="activeSection !== 'subscricao'" @click="navegarPara('subscricao')"
           class="px-4 py-2 rounded-lg bg-zinc-100 hover:bg-white text-zinc-900 text-xs font-bold transition flex-shrink-0">
           Ver subscrição
         </button>
@@ -137,7 +137,7 @@
 
       <!-- Faturação: dados fiscais por preencher / lembrete de faturar (components/fiscal) -->
       <AvisoFaturacao v-if="loja?.fiscal" class="mx-4 lg:mx-6 mt-4" :fiscal="loja.fiscal" :chave="`loja-${lojaId}`"
-                      :pode-editar="permissoes.includes('gerir_dados_fiscais')" @preencher="activeSection = 'configuracoes'" />
+                      :pode-editar="permissoes.includes('gerir_dados_fiscais')" @preencher="navegarPara('configuracoes')" />
 
       <!-- Sem permissão -->
       <div v-if="!loadingLoja && !temPermissao(activeSection)"
@@ -175,10 +175,10 @@
         <BackofficeTemplates     v-else-if="activeSection === 'templates'"     :loja-id="lojaId" />
         <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
         <BackofficeFaturacao     v-else-if="activeSection === 'faturacao'"     :loja-id="lojaId"
-                                 @ver-subscricao="activeSection = 'subscricao'" />
+                                 @ver-subscricao="navegarPara('subscricao')" />
         <BackofficeServicos      v-else-if="activeSection === 'servicos'"      :loja-id="lojaId"
                                  :so-agenda="!permissoes.includes('gerir_marcacoes')"
-                                 @ver-subscricao="activeSection = 'subscricao'" />
+                                 @ver-subscricao="navegarPara('subscricao')" />
       </main>
     </div>
 
@@ -186,29 +186,32 @@
 </template>
 
 <script>
+import { defineAsyncComponent } from 'vue'
 import api from '@/services/api'
 import BackofficeSidebarItem    from './BackofficeSidebarItem.vue'
-import BackofficeDashboard      from './BackofficeDashboard.vue'
-import BackofficeEncomendas     from './BackofficeEncomendas.vue'
-import BackofficeProdutos       from './BackofficeProdutos.vue'
-import BackofficeInventario     from './BackofficeInventario.vue'
-import BackofficeConfiguracoes  from './BackofficeConfiguracoes.vue'
-import BackofficeStaff          from './BackofficeStaff.vue'
-import BackofficeTipos          from './BackofficeTipos.vue'
-import BackofficeAvaliacoes     from './BackofficeAvaliacoes.vue'
-import BackofficeEntregas       from './BackofficeEntregas.vue'
-import BackofficeCategorias     from './BackofficeCategorias.vue'
-import BackofficeTemplates       from './BackofficeTemplates.vue'
-import BackofficeMensagens      from './BackofficeMensagens.vue'
-import BackofficeSubscricao     from './BackofficeSubscricao.vue'
-import BackofficeDevolucoes     from './BackofficeDevolucoes.vue'
-import BackofficeServicos       from './BackofficeServicos.vue'
-import BackofficeFaturacao      from './BackofficeFaturacao.vue'
-import ModuloRelatorios         from '@/components/relatorios/ModuloRelatorios.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 import AvisoFaturacao           from '@/components/fiscal/AvisoFaturacao.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
+
+// cada módulo é um ficheiro à parte: só se descarrega quando se abre
+const BackofficeDashboard      = defineAsyncComponent(() => import('./BackofficeDashboard.vue'))
+const BackofficeEncomendas     = defineAsyncComponent(() => import('./BackofficeEncomendas.vue'))
+const BackofficeProdutos       = defineAsyncComponent(() => import('./BackofficeProdutos.vue'))
+const BackofficeInventario     = defineAsyncComponent(() => import('./BackofficeInventario.vue'))
+const BackofficeConfiguracoes  = defineAsyncComponent(() => import('./BackofficeConfiguracoes.vue'))
+const BackofficeStaff          = defineAsyncComponent(() => import('./BackofficeStaff.vue'))
+const BackofficeTipos          = defineAsyncComponent(() => import('./BackofficeTipos.vue'))
+const BackofficeAvaliacoes     = defineAsyncComponent(() => import('./BackofficeAvaliacoes.vue'))
+const BackofficeEntregas       = defineAsyncComponent(() => import('./BackofficeEntregas.vue'))
+const BackofficeCategorias     = defineAsyncComponent(() => import('./BackofficeCategorias.vue'))
+const BackofficeTemplates      = defineAsyncComponent(() => import('./BackofficeTemplates.vue'))
+const BackofficeMensagens      = defineAsyncComponent(() => import('./BackofficeMensagens.vue'))
+const BackofficeSubscricao     = defineAsyncComponent(() => import('./BackofficeSubscricao.vue'))
+const BackofficeDevolucoes     = defineAsyncComponent(() => import('./BackofficeDevolucoes.vue'))
+const BackofficeServicos       = defineAsyncComponent(() => import('./BackofficeServicos.vue'))
+const BackofficeFaturacao      = defineAsyncComponent(() => import('./BackofficeFaturacao.vue'))
+const ModuloRelatorios         = defineAsyncComponent(() => import('@/components/relatorios/ModuloRelatorios.vue'))
 
 const PERMISSOES = {
   dono: [
@@ -263,12 +266,10 @@ export default {
   data () {
     return {
       loja:          null,
-      seccaoEscolhida: false,
       aMudarEstado:  false,
       avisoSub:      null,    // faixa da subscrição (em atraso / a vencer)
       devolucoesPorResponder: 0,   // pedidos de reembolso à espera da loja (contador no menu)
       loadingLoja:   true,
-      activeSection: 'dashboard',
       sidebarAberta: false,
       user:          JSON.parse(localStorage.getItem('user') || '{}'),
     }
@@ -276,6 +277,9 @@ export default {
 
   computed: {
     lojaId ()      { return this.$route.params.id },
+    // o módulo vem do endereço (/loja/:id/backoffice/<módulo>): um refresh, o voltar do browser ou um link abrem-no.
+    // Enquanto a loja (e as permissões do membro) carrega mostra-se o pedido; depois acertarEndereco corrige-o.
+    activeSection () { return this.$route.params.seccao || this.$route.query.seccao || 'dashboard' },
     role ()        { return this.loja?.minha_role || '' },
     permissoes ()  { return PERMISSOES[this.role] || [] },
     navItems ()    { return SECCOES.filter(s => this.temPermissao(s.key)) },
@@ -343,8 +347,9 @@ export default {
   },
 
   watch: {
-    // notificação clicada já dentro do backoffice: ?seccao=devolucoes&reembolso=12
-    '$route.query.seccao' (s) { if (s && this.temPermissao(s)) this.activeSection = s },
+    $route () { this.acertarEndereco() },
+    // outra loja no mesmo separador (ex.: o dono de várias lojas)
+    lojaId (novo, antigo) { if (novo && novo !== antigo) this.fetchLoja() },
   },
 
   methods: {
@@ -357,8 +362,7 @@ export default {
     },
 
     abrirReembolso (id) {
-      this.$router.replace({ query: { ...this.$route.query, seccao: 'devolucoes', reembolso: id } })
-      this.activeSection = 'devolucoes'
+      this.$router.push({ path: `/loja/${this.lojaId}/backoffice/devolucoes`, query: { reembolso: id } })
     },
 
     async fetchDevolucoes () {
@@ -370,11 +374,24 @@ export default {
     },
 
     navegarPara (key) {
-      this.activeSection = key
-      // o ?seccao=&reembolso= de uma notificação já foi usado — não reabrir o pedido ao voltar
-      if (this.$route.query.seccao || this.$route.query.reembolso) this.$router.replace({ query: {} })
       // fecha sidebar no mobile após navegar
       this.sidebarAberta = false
+      if (key !== this.$route.params.seccao) this.$router.push(`/loja/${this.lojaId}/backoffice/${key}`)
+    },
+
+    // Só depois de a loja carregar (as permissões dependem do papel do membro):
+    // sem módulo, módulo que não existe ou sem acesso → primeiro módulo permitido;
+    // links antigos (?seccao=devolucoes&reembolso=12, notificações e emails já enviados) → /devolucoes?reembolso=12
+    acertarEndereco () {
+      if (!this.loja || this.$route.name !== 'Backoffice') return
+      const { seccao, ...resto } = this.$route.query
+      const pedida = this.$route.params.seccao || seccao
+      const valida = this.temPermissao(pedida) ? pedida
+        : SECCOES.find(s => s.permissao !== null && this.temPermissao(s.key))?.key
+          || SECCOES.find(s => this.temPermissao(s.key))?.key
+      if (valida && (valida !== this.$route.params.seccao || seccao !== undefined)) {
+        this.$router.replace({ path: `/loja/${this.lojaId}/backoffice/${valida}`, query: valida === pedida ? resto : {} })
+      }
     },
 
     async reabrirLoja () {
@@ -405,16 +422,9 @@ export default {
         this.loja = data
         this.fetchAvisoSub()
         this.fetchDevolucoes()
-        // só escolhe a secção inicial na 1.ª carga (ou se a actual deixou de ser permitida) —
-        // recarregar a loja depois de guardar não deve mudar de secção
-        const atual = SECCOES.find(s => s.key === this.activeSection)
-        if (!this.seccaoEscolhida || !atual || !this.temPermissao(atual.key)) {
-          // ?seccao= (links das notificações) manda, se o membro tiver acesso
-          const pedida = SECCOES.find(s => s.key === this.$route.query.seccao && this.temPermissao(s.key))
-          const primeira = pedida || SECCOES.find(s => s.permissao !== null && this.temPermissao(s.key))
-          if (primeira) this.activeSection = primeira.key
-          this.seccaoEscolhida = true
-        }
+        // recarregar a loja depois de guardar não muda de módulo; só corrige o endereço se o módulo
+        // pedido não existir ou o membro deixar de ter acesso
+        this.acertarEndereco()
       } catch (e) {
         console.error(e)
         this.$router.push('/Home')

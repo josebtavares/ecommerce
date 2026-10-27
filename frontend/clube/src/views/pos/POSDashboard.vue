@@ -93,7 +93,7 @@
             v-for="tab in tabsVisiveis"
             :key="tab.id"
             type="button"
-            @click="activeTab = tab.id"
+            @click="abrirAba(tab.id)"
             :class="[
               'flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black transition',
               activeTab === tab.id
@@ -195,7 +195,7 @@
         <p :class="['min-w-0 flex-1 text-sm font-bold', ['vence', 'sem_plano'].includes(avisoSub.tipo) ? 'text-amber-800' : 'text-red-700']">
           {{ avisoSub.texto }}
         </p>
-        <button type="button" @click="activeTab = 'subscricao'"
+        <button type="button" @click="abrirAba('subscricao')"
           class="h-10 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800">
           {{ avisoSub.tipo === 'sem_plano' ? 'Escolher plano' : 'Ver subscrição' }}
         </button>
@@ -226,15 +226,15 @@
           As vendas, mesas e produtos estão bloqueados até a suspensão ser levantada. Contacta o suporte da plataforma.
         </p>
         <div class="mt-4 flex flex-wrap justify-center gap-2">
-          <button v-if="suspensoPorSubscricao && !isMembro" type="button" @click="activeTab = 'subscricao'"
+          <button v-if="suspensoPorSubscricao && !isMembro" type="button" @click="abrirAba('subscricao')"
             class="h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800">
             Pagar subscrição
           </button>
-          <button v-if="podeHistorico" type="button" @click="activeTab = 'historico'" data-teste="suspenso-historico"
+          <button v-if="podeHistorico" type="button" @click="abrirAba('historico')" data-teste="suspenso-historico"
             class="h-11 rounded-2xl border border-red-200 bg-white px-5 text-sm font-black text-red-800 transition hover:bg-red-100">
             Histórico
           </button>
-          <button v-if="podeHistorico" type="button" @click="activeTab = 'faturacao'" data-teste="suspenso-faturacao"
+          <button v-if="podeHistorico" type="button" @click="abrirAba('faturacao')" data-teste="suspenso-faturacao"
             class="h-11 rounded-2xl border border-red-200 bg-white px-5 text-sm font-black text-red-800 transition hover:bg-red-100">
             Faturação
           </button>
@@ -256,7 +256,7 @@
           :permissoes="permissoes"
           :is-membro="isMembro"
           @alterado="onSubscricaoAlterada"
-          @ver-subscricao="activeTab = 'subscricao'"
+          @ver-subscricao="abrirAba('subscricao')"
         />
       </section>
 
@@ -485,7 +485,7 @@ export default {
 
   data() {
     return {
-      activeTab: 'mesas',
+      abaGuardada: '',     // a última aba usada neste aparelho (abre-se em /pos/dashboard sem aba)
 
       posId: null,
       posNome: '',
@@ -590,6 +590,15 @@ export default {
       })
     },
 
+    // a aba vem do endereço (/pos/dashboard/<aba>): um refresh ou o voltar do browser mantêm-na
+    activeTab() {
+      const visiveis = this.tabsVisiveis.map(t => t.id)
+      const pedida = this.$route.params.aba
+      if (visiveis.includes(pedida)) return pedida
+      if (visiveis.includes(this.abaGuardada)) return this.abaGuardada
+      return !this.isMembro ? 'painel' : 'mesas'
+    },
+
     currentTabComponent() {
       const map = {
         mesas:    'POSMesas',
@@ -641,6 +650,9 @@ export default {
     activeTab(aba) {
       try { localStorage.setItem('pos_aba', aba) } catch { /* sem storage */ }
     },
+    // sem aba, aba que não existe ou que este membro não vê → a aba certa no endereço
+    $route() { this.acertarEndereco() },
+    tabsVisiveis() { this.acertarEndereco() },
     // standalone = sem loja: escolher uma loja passa a integrado; escolher standalone tira a loja
     'configForm.loja_id'(id) {
       if (id && this.configForm.modo === 'standalone') this.configForm.modo = 'integrado'
@@ -705,11 +717,19 @@ export default {
     },
 
     escolherAbaInicial() {
-      let guardada = ''
-      try { guardada = localStorage.getItem('pos_aba') || '' } catch { /* sem storage */ }
-      const visiveis = this.tabsVisiveis.map(t => t.id)
-      if (visiveis.includes(guardada)) this.activeTab = guardada
-      else this.activeTab = !this.isMembro ? 'painel' : 'mesas'
+      try { this.abaGuardada = localStorage.getItem('pos_aba') || '' } catch { /* sem storage */ }
+      this.acertarEndereco()
+    },
+
+    abrirAba(aba) {
+      if (aba !== this.$route.params.aba) this.$router.push({ name: 'POSDashboard', params: { aba } })
+    },
+
+    acertarEndereco() {
+      if (this.$route.name !== 'POSDashboard') return
+      if (this.$route.params.aba !== this.activeTab) {
+        this.$router.replace({ name: 'POSDashboard', params: { aba: this.activeTab }, query: this.$route.query })
+      }
     },
 
     setUtilizador(user) {

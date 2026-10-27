@@ -107,7 +107,7 @@ def _avisar_mensagem(m, papel_, u):
         notificar(utilizador=m.cliente, tipo='marcacao_mensagem', titulo=f'Nova mensagem de {m.loja.nome}', mensagem=texto,
                   loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
     if papel_ == 'cliente':
-        link = f'/loja/{m.loja_id}/backoffice?seccao=servicos&marcacao={m.id}'
+        link = f'/loja/{m.loja_id}/backoffice/servicos?marcacao={m.id}'
         notificar_staff(loja=m.loja, roles=['dono', 'gestor'], tipo='marcacao_mensagem',
                         titulo='Nova mensagem de um cliente', mensagem=texto, link=link)
         prof = m.profissional
@@ -189,7 +189,7 @@ def responder(m, proposta_id, aceitar, u):
     from ..Views.notificacaoView import notificar_staff
     notificar_staff(loja=m.loja, roles=['dono', 'gestor'], tipo='marcacao_proposta',
                     titulo='Proposta de preço aceite' if aceitar else 'Proposta de preço recusada', mensagem=texto,
-                    link=f'/loja/{m.loja_id}/backoffice?seccao=servicos&marcacao={m.id}')
+                    link=f'/loja/{m.loja_id}/backoffice/servicos?marcacao={m.id}')
     return m
 
 
