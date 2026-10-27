@@ -13,6 +13,7 @@
         <h1 class="text-base font-bold text-zinc-100">Criar loja</h1>
         <p class="text-xs text-zinc-500">Passo {{ step }} de 3</p>
       </div>
+      <BotaoTema class="ml-auto" :isDark="isDark" @alternar="alternarTema" />
     </div>
 
     <!-- Utilizador nao verificado -->
@@ -491,6 +492,8 @@ import EscolherCobranca from '@/components/subscricao/EscolherCobranca.vue'
 import DadosFiscais from '@/components/fiscal/DadosFiscais.vue'
 import { dadosFiscaisValidos, corpoDadosFiscais } from '@/utils/fiscal'
 import { DEMO_ID } from '@/utils/demoLoja'
+import { temaPainel } from '@/utils/tema'
+import BotaoTema from '@/components/BotaoTema.vue'
 
 const TAG_STYLES = {
   'Versátil':  { background:'rgba(220,38,38,0.12)',  color:'#f87171', border:'1px solid rgba(220,38,38,0.25)'   },
@@ -507,7 +510,8 @@ const TAG_STYLES = {
 
 export default {
   name: 'CriarLoja',
-  components: { TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca, DadosFiscais },
+  mixins: [temaPainel],
+  components: { BotaoTema, TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca, DadosFiscais },
 
   data () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')

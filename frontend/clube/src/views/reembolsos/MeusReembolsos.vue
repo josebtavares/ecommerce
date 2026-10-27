@@ -53,8 +53,9 @@ import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
+import { temaEscuro } from '@/utils/tema'
 
-const isDark        = ref(localStorage.getItem('theme_preference') !== 'light')
+const isDark        = ref(temaEscuro())
 const lista         = ref([])
 const proximo       = ref(null)
 const carregando    = ref(true)

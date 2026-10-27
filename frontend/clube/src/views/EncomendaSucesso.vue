@@ -63,9 +63,11 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { temaPainel } from '@/utils/tema'
 
 export default {
   name: 'EncomendaSucesso',
+  mixins: [temaPainel],
   data () {
     return { encomenda: null }
   },

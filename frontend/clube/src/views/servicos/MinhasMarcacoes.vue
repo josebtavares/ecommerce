@@ -39,13 +39,14 @@
 import api from '@/services/api'
 import { DIAS_CURTOS, diaDe, diaSemana, hora, ouvirMarcacoes } from '@/utils/servicos'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
+import { temaEscuro } from '@/utils/tema'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
 export default {
   name: 'MinhasMarcacoes',
   components: { NotificacaoSino },
-  data () { return { lista: [], tipo: 'proximas', carregando: true, isDark: localStorage.getItem('theme_preference') !== 'light', DIAS_CURTOS, MESES } },
+  data () { return { lista: [], tipo: 'proximas', carregando: true, isDark: temaEscuro(), DIAS_CURTOS, MESES } },
   created () { this.carregar() },
   mounted () { this.desligar = ouvirMarcacoes(() => this.carregar(true)) },
   beforeUnmount () { this.desligar?.() },

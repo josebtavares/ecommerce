@@ -25,13 +25,14 @@
 <script>
 import ChatPainel from '@/components/chat/ChatPainel.vue'
 import { chat, iniciarChat } from '@/services/chat'
+import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'MensagensPagina',
   components: { ChatPainel },
 
   data () {
-    return { chat, isDark: localStorage.getItem('theme_preference') !== 'light', ecraPequeno: false }
+    return { chat, isDark: temaEscuro(), ecraPequeno: false }
   },
 
   async mounted () {
@@ -52,7 +53,7 @@ export default {
     },
     alternarTema () {
       this.isDark = !this.isDark
-      localStorage.setItem('theme_preference', this.isDark ? 'dark' : 'light')
+      guardarTema(this.isDark)
     },
   },
 }

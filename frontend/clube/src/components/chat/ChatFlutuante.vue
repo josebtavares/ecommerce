@@ -30,6 +30,7 @@
 import ChatPainel from './ChatPainel.vue'
 import { chat, totalNaoLidas, iniciarChat, pararChat, carregarConversas } from '@/services/chat'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
+import { temaEscuro } from '@/utils/tema'
 
 // onde o balão aparece (fora: login/registo, checkout, POS, página /mensagens, pré-visualização de templates)
 const ROTAS = ['Home', 'Loja', 'Backoffice', 'Admin', 'CriarLoja', 'Reembolso', 'Reembolsos']
@@ -59,7 +60,7 @@ export default {
     $route () { this.sincronizarSessao() },
     'chat.aberto' (aberto) {
       if (aberto) {
-        this.isDark = localStorage.getItem('theme_preference') !== 'light'
+        this.isDark = temaEscuro()
         carregarConversas().catch(() => {})
       }
     },

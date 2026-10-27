@@ -47,9 +47,11 @@
 
 <script>
 import api from '@/services/api'
+import { temaPainel } from '@/utils/tema'
 
 export default {
   name: 'FlutterwaveCallback',
+  mixins: [temaPainel],
 
   data () {
     return {

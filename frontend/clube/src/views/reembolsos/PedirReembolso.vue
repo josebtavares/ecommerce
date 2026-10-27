@@ -135,12 +135,13 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { MOTIVOS, MOTIVOS_PROBLEMA, dataHora } from '@/utils/reembolsos'
+import { temaEscuro } from '@/utils/tema'
 
 const MAX_FOTOS = 10
 
 const route  = useRoute()
 const router = useRouter()
-const isDark = ref(localStorage.getItem('theme_preference') !== 'light')
+const isDark = ref(temaEscuro())
 
 const enc        = ref(null)
 const op         = ref(null)

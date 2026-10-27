@@ -97,6 +97,7 @@
           </div>
         </div>
         <div class="flex items-center gap-2 lg:gap-3">
+          <BotaoTema :isDark="isDark" @alternar="alternarTema" />
           <NotificacaoSino />
           <div class="hidden sm:block text-right">
             <p class="text-sm font-semibold text-zinc-200">{{ user?.username }}</p>
@@ -144,6 +145,8 @@ import { chat } from '@/services/chat'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 import { COM_FICHA, enderecoCerto } from '@/utils/ficha'
+import { temaPainel } from '@/utils/tema'
+import BotaoTema from '@/components/BotaoTema.vue'
 
 // cada módulo é um ficheiro à parte: só se descarrega quando se abre
 const AdminDashboard    = defineAsyncComponent(() => import('./AdminDashboard.vue'))
@@ -202,7 +205,8 @@ const PERMISSOES_ADMIN = {
 
 export default {
   name: 'AdminLayout',
-  components: {
+  mixins: [temaPainel],
+  components: { BotaoTema,
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
     AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes, AdminFaturacao,

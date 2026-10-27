@@ -99,6 +99,7 @@
           </div>
         </div>
         <div class="flex items-center gap-2 lg:gap-3">
+          <BotaoTema :isDark="isDark" @alternar="alternarTema" />
           <NotificacaoSino />
           <span class="text-xs text-zinc-600 hidden sm:block">{{ user.username }}</span>
         </div>
@@ -194,6 +195,8 @@ import NotificacaoSino          from '@/components/notificacao/notificacaoSino.v
 import AvisoFaturacao           from '@/components/fiscal/AvisoFaturacao.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 import { COM_FICHA, enderecoCerto } from '@/utils/ficha'
+import { temaPainel } from '@/utils/tema'
+import BotaoTema from '@/components/BotaoTema.vue'
 
 // cada módulo é um ficheiro à parte: só se descarrega quando se abre
 const BackofficeDashboard      = defineAsyncComponent(() => import('./BackofficeDashboard.vue'))
@@ -256,7 +259,8 @@ const SECCOES = [
 
 export default {
   name: 'BackofficeLayout',
-  components: { BackofficeSubscricao,
+  mixins: [temaPainel],
+  components: { BotaoTema, BackofficeSubscricao,
     BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas, ModuloRelatorios,
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
     BackofficeStaff, BackofficeTipos, NotificacaoSino, AvisoFaturacao,

@@ -253,6 +253,7 @@ import { criarVerificador } from '@/services/disponibilidade'
 import { passwordValida } from '@/utils/password'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
 import logoLight from '@/assets/img/login/logo_final_640_light.webp'
+import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'RegisterView',
@@ -264,7 +265,6 @@ export default {
   },
 
   data () {
-    const savedTheme = localStorage.getItem('theme_preference')
     return {
       first_name:    '',
       last_name:     '',
@@ -281,7 +281,7 @@ export default {
       previewUrl:    DEFAULT_UTILIZADOR,
       errors:        [],
       loadingGoogle: false,
-      isDark: savedTheme ? savedTheme === 'dark' : true,
+      isDark: temaEscuro(),
       logoDefault,
       logoLight,
     }
@@ -303,7 +303,7 @@ export default {
 
   watch: {
     isDark (val) {
-      localStorage.setItem('theme_preference', val ? 'dark' : 'light')
+      guardarTema(val)
     }
   },
 

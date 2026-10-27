@@ -116,13 +116,14 @@ import { DIAS_CURTOS, diaDe, diaSemana, hojeCV, hora, rotuloDia, somarDias } fro
 import MarcacaoConversa from '@/components/servicos/MarcacaoConversa.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { ouvirMarcacoes } from '@/utils/servicos'
+import { temaEscuro } from '@/utils/tema'
 
 export default {
   name: 'MarcacaoCliente',
   components: { MarcacaoConversa, NotificacaoSino },
   data () {
     return { m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
-             novoDia: null, horas: [], novaHora: null, versao: 0, isDark: localStorage.getItem('theme_preference') !== 'light', DIAS_CURTOS }
+             novoDia: null, horas: [], novaHora: null, versao: 0, isDark: temaEscuro(), DIAS_CURTOS }
   },
   computed: {
     cartao () { return this.isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200' },
