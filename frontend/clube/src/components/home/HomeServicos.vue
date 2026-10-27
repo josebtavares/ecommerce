@@ -3,7 +3,7 @@
   <div>
     <div class="flex items-center justify-between gap-3 mb-4">
       <div class="min-w-0">
-        <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ titulo || 'Serviços' }}</h2>
+        <h2 class="font-bold" :class="[tamanhoTitulo, isDark ? 'text-zinc-100' : 'text-zinc-900']">{{ titulo || 'Serviços' }}</h2>
         <p v-if="subtitulo" class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ subtitulo }}</p>
       </div>
       <SetasSlider class="flex-shrink-0" :anterior="podeAnterior" :seguinte="podeSeguinte" :isDark="isDark"
@@ -27,6 +27,7 @@ export default {
     servicos:  { type: Array,  default: () => [] },
     titulo:    { type: String, default: '' },
     subtitulo: { type: String, default: '' },
+    tamanhoTitulo: { type: String, default: 'text-2xl md:text-3xl' },   // dentro da "Loja do dia": text-lg
     isDark:    { type: Boolean, default: true },
   },
   data () { return { podeAnterior: false, podeSeguinte: false } },
