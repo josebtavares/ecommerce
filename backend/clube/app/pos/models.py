@@ -975,8 +975,12 @@ class UtilizadorPOS(models.Model):
     # -------------------------------------------------------------------------
 
     def set_password(self, raw_password):
-        """Hash e guarda a password. Retorna a password em texto para mostrar ao dono."""
+        """Hash e guarda a password. Retorna a password em texto para mostrar ao dono.
+        Num membro que já existe, as sessões abertas com a password antiga terminam."""
         self.password_pos = make_password(raw_password)
+        if self.pk:
+            from ..autenticacao import terminar_sessoes
+            terminar_sessoes(membro_id=self.pk)
         return raw_password
 
     def check_password(self, raw_password):

@@ -35,20 +35,21 @@ def sessao_terminada(token):
 # Password mudada (perfil ou recuperação): as sessões abertas ANTES deixam de valer — quem tinha
 # um token roubado perdia-o só quando expirasse (o refresh roda e renovava-se para sempre).
 # Guarda-se a hora da troca enquanto um refresh antigo ainda podia ser usado.
+# Membros da equipa do POS (sem User Django) têm a chave própria: 'membro:<id>'.
 def _chave_desde(user_id):
     return f'jwt_desde:{user_id}'
 
 
-def terminar_sessoes(user):
+def terminar_sessoes(user=None, membro_id=None):
     from django.core.cache import cache
     import time
-    cache.set(_chave_desde(user.pk), int(time.time()),
-              int(api_settings.REFRESH_TOKEN_LIFETIME.total_seconds()) + 60)
+    chave = _chave_desde(f'membro:{membro_id}' if membro_id else user.pk)
+    cache.set(chave, int(time.time()), int(api_settings.REFRESH_TOKEN_LIFETIME.total_seconds()) + 60)
 
 
-def anterior_a_troca(user_id, token):
+def anterior_a_troca(user_id, token, membro_id=None):
     from django.core.cache import cache
-    desde = cache.get(_chave_desde(user_id))
+    desde = cache.get(_chave_desde(f'membro:{membro_id}' if membro_id else user_id))
     return bool(desde) and int(token.get('iat', 0)) < desde
 
 
@@ -94,6 +95,8 @@ class RefreshContaAtiva(TokenRefreshSerializer):
             if not UtilizadorPOS.objects.filter(id=refresh.get('membro_id'), pos_id=refresh.get('pos_id'),
                                                 ativo=True, pos__suspenso=False).exists():
                 raise AuthenticationFailed('Membro não encontrado ou inativo.', code='conta_inativa')
+            if anterior_a_troca(None, refresh, membro_id=refresh.get('membro_id')):
+                raise InvalidToken('Sessão terminada.')
             return super().validate(attrs)
         user = get_user_model().objects.filter(**{api_settings.USER_ID_FIELD: refresh.get(api_settings.USER_ID_CLAIM)}).first()
         if not conta_ativa(user):
