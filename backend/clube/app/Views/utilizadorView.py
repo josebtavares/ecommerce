@@ -23,7 +23,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from ..models import Utilizador, UtilizadorLoja
 from ..utils.auth import autenticar
-from ..autenticacao import terminar_sessoes
+from ..autenticacao import terminar_sessoes, tokens_depois_da_troca
 from ..utils.google_auth import GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, google_obter_utilizador
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso, sugerir_usernames
 from django_ratelimit.core import is_ratelimited
@@ -240,9 +240,8 @@ def utilizador_update_me(request):
     payload = _build_user_payload(utilizador, request)
     if data.get('password'):
         # as outras sessões (outros browsers, um token roubado) terminam; esta continua com tokens novos
-        terminar_sessoes(request.user)
-        refresh = RefreshToken.for_user(request.user)
-        payload.update(access_token=str(refresh.access_token), refresh_token=str(refresh))
+        access, refresh = tokens_depois_da_troca(request.user, terminar_sessoes(request.user))
+        payload.update(access_token=access, refresh_token=refresh)
     return Response(payload, status=status.HTTP_200_OK)
 
 

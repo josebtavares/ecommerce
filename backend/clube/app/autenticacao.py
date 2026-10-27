@@ -41,16 +41,32 @@ def _chave_desde(user_id):
 
 
 def terminar_sessoes(user=None, membro_id=None):
+    """Devolve o instante da troca: o iat do JWT é em segundos inteiros, por isso guarda-se a hora
+    exata e um token do mesmo segundo (emitido antes) também cai. Os tokens entregues a quem fez a
+    troca levam a marca 'troca' com esse instante (ver tokens_depois_da_troca)."""
     from django.core.cache import cache
     import time
+    agora = time.time()
     chave = _chave_desde(f'membro:{membro_id}' if membro_id else user.pk)
-    cache.set(chave, int(time.time()), int(api_settings.REFRESH_TOKEN_LIFETIME.total_seconds()) + 60)
+    cache.set(chave, agora, int(api_settings.REFRESH_TOKEN_LIFETIME.total_seconds()) + 60)
+    return agora
+
+
+def tokens_depois_da_troca(user, desde):
+    """(access, refresh) para a própria resposta da troca. O iat não pode ir para o segundo seguinte
+    (o JWT recusa tokens 'do futuro'): levam a marca da troca, que os deixa passar."""
+    from rest_framework_simplejwt.tokens import RefreshToken
+    refresh = RefreshToken.for_user(user)
+    refresh['troca'] = repr(desde)
+    return str(refresh.access_token), str(refresh)   # o access copia a marca
 
 
 def anterior_a_troca(user_id, token, membro_id=None):
     from django.core.cache import cache
     desde = cache.get(_chave_desde(f'membro:{membro_id}' if membro_id else user_id))
-    return bool(desde) and int(token.get('iat', 0)) < desde
+    if not desde or token.get('troca') == repr(desde):
+        return False
+    return token.get('iat', 0) < desde
 
 
 def conta_ativa(user):
