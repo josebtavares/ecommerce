@@ -294,7 +294,7 @@
 
           <!-- Loja em destaque -->
           <section v-else-if="sec.tipo === 'loja_destaque'" class="py-8 px-6 md:px-12">
-            <HomeLojaDestaque :loja="sec.loja" :produtos="sec.produtos" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
+            <HomeLojaDestaque :loja="sec.loja" :produtos="sec.produtos" :servicos="sec.servicos || []" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
               :isDark="isDark" @store-click="goToStore($event.id)" @product-click="openProduct($event)" />
           </section>
 

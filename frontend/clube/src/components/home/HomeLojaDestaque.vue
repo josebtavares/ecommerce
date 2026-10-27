@@ -48,6 +48,13 @@
           :inicial="{ results: produtos, count: produtos.length, next_offset: null }"
           :isDark="isDark" :showStoreName="false" containerClass="!mb-0"
           @product-click="$emit('product-click', $event)" />
+        <!-- loja só de serviços: os serviços dela -->
+        <div v-else-if="servicos.length" class="min-w-0">
+          <h3 class="text-lg font-bold mb-3" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Serviços da {{ loja.nome }}</h3>
+          <div class="flex gap-3 overflow-x-auto pb-2 snap-x scroll-smooth" style="scrollbar-width: none">
+            <ServicoCard v-for="sv in servicos" :key="sv.id" :s="sv" :isDark="isDark" class="w-44 sm:w-52 flex-shrink-0 snap-start" />
+          </div>
+        </div>
         <p v-else class="text-sm text-center py-10" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
           Visita a loja para ver os produtos.
         </p>
@@ -58,14 +65,16 @@
 
 <script>
 import ProductSlider from '@/components/sliders/ProductSlider.vue'
+import ServicoCard from '@/components/servicos/ServicoCard.vue'
 import { DEFAULT_BANNER } from '@/services/media'
 
 export default {
   name: 'HomeLojaDestaque',
-  components: { ProductSlider },
+  components: { ProductSlider, ServicoCard },
   props: {
     loja:      { type: Object, required: true },
     produtos:  { type: Array,  default: () => [] },
+    servicos:  { type: Array,  default: () => [] },   // só quando a loja não tem produtos
     titulo:    { type: String, default: '' },
     subtitulo: { type: String, default: '' },
     isDark:    { type: Boolean, default: true },
