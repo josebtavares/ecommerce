@@ -10,7 +10,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
-from ..autenticacao import sessao_terminada
+from ..autenticacao import sessao_terminada, anterior_a_troca
 from .models import UtilizadorPOS, ConfiguracaoPOS
 
 
@@ -80,6 +80,9 @@ class POSAuthentication(BaseAuthentication):
                 )
             except UtilizadorPOS.DoesNotExist:
                 raise AuthenticationFailed('Membro não encontrado ou inativo.')
+            # password do membro mudada (dono, gerente ou admin) → as sessões anteriores terminam
+            if anterior_a_troca(None, token, membro_id=membro.id):
+                raise AuthenticationFailed('Sessão terminada.')
 
             user = MembroUser(membro=membro, pos=membro.pos)
             return (user, token)
@@ -98,6 +101,8 @@ class POSAuthentication(BaseAuthentication):
         from app.autenticacao import conta_ativa, MSG_INATIVA
         if not conta_ativa(user):
             raise AuthenticationFailed(MSG_INATIVA)
+        if anterior_a_troca(user.pk, token):           # password da conta principal mudada
+            raise AuthenticationFailed('Sessão terminada.')
 
         return (user, token)
 

@@ -252,6 +252,9 @@ def loja_dados_fiscais(request, loja_id):
     return Response(dados_fiscais_payload(loja, detalhe=True))
 
 
+CAMPOS_RECEBIMENTO = {'flutterwave_subaccount_id', 'aceita_flutterwave'}
+
+
 @api_view(['PUT', 'PATCH'])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([IsAuthenticated])
@@ -262,6 +265,10 @@ def loja_update(request, id):
     _, erro = _exige_permissao(request, loja, 'editar_loja')
     if erro:
         return erro
+    # a conta que recebe os pagamentos só o dono a muda: um gestor (editar_loja) podia pôr a dele
+    if CAMPOS_RECEBIMENTO & set(request.data.keys()) and loja.dono.user_id != request.user.id:
+        return Response({'detail': 'Só o dono da loja pode mudar a conta de recebimentos.'},
+                        status=status.HTTP_403_FORBIDDEN)
 
     serializer = LojaSerializer(loja, data=request.data, partial=True, context={'request': request})
     if not serializer.is_valid():

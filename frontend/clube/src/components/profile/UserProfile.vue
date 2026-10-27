@@ -97,6 +97,13 @@
                 <EstadoDisponibilidade v-if="verificadores[field.key]" :verificador="verificadores[field.key]" :isDark="isDark"
                   @usar="v => { form[field.key] = v; verificarCampo(field.key) }" />
               </div>
+              <!-- mudar o email pede a password actual (com o email trocado, um token roubado tomava a conta) -->
+              <div v-if="mudaEmail">
+                <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Password actual (para mudar o email)</label>
+                <input v-model="passwordEmail" type="password" autocomplete="current-password"
+                  class="w-full px-3 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
+                  :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'" />
+              </div>
               <p v-if="profileError" class="text-xs text-red-400">{{ profileError }}</p>
             </div>
             <button @click="saveProfile" :disabled="loadingProfile"
@@ -641,6 +648,9 @@ function onFileChange(e) {
 const verificadores = { username: criarVerificador('username'), email: criarVerificador('email') }
 const valoresAtuais = ref({ username: '', email: '' })
 const profileError  = ref('')
+const passwordEmail = ref('')
+const mudaEmail = computed(() => temPassword.value && !!form.value.email
+  && form.value.email.trim().toLowerCase() !== (valoresAtuais.value.email || '').toLowerCase())
 
 function verificarCampo(key) {
   verificadores[key]?.verificar(form.value[key], valoresAtuais.value[key])
@@ -650,10 +660,12 @@ async function saveProfile() {
   profileError.value = ''
   const ocupado = Object.values(verificadores).find(v => v.bloqueia)
   if (ocupado) { profileError.value = ocupado.motivo; return }
+  if (mudaEmail.value && !passwordEmail.value) { profileError.value = 'Para mudar o email, introduz a password actual.'; return }
 
   await wrapProfile(async () => {
     const fd = new FormData()
     Object.entries(form.value).forEach(([k, v]) => { if (v) fd.append(k, v) })
+    if (mudaEmail.value) fd.append('password_atual', passwordEmail.value)
     try {
       await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     } catch (e) {
@@ -666,6 +678,7 @@ async function saveProfile() {
     Object.assign(user, form.value)
     localStorage.setItem('user', JSON.stringify(user))
     valoresAtuais.value = { username: form.value.username, email: form.value.email }
+    passwordEmail.value = ''
     Object.values(verificadores).forEach(v => v.verificar(''))
     toast.success('Perfil actualizado!', { autoClose: 1500 })
   })
@@ -682,7 +695,12 @@ async function savePassword() {
     fd.append('password', formPassword.value.password)
     if (temPassword.value) fd.append('password_atual', formPassword.value.atual)
     try {
-      await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const { data } = await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      // trocar a password termina as sessões abertas; esta continua com os tokens novos
+      if (data?.access_token) {
+        localStorage.setItem('access_token', data.access_token)
+        localStorage.setItem('refresh_token', data.refresh_token)
+      }
     } catch (e) {
       const d = e.response?.data
       passwordError.value = (d && (d.password_atual?.[0] || d.password?.[0] || d.detail)) || 'Não foi possível alterar a password.'

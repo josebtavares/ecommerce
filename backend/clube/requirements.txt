@@ -32,7 +32,7 @@ stripe==9.5.0
 python-dotenv==1.2.4
 
 # Utilitarios
-Pillow==12.3.0
+Pillow==13.0.0
 
 # Producao
 gunicorn==23.0.0

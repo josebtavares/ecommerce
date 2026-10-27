@@ -32,6 +32,43 @@ def sessao_terminada(token):
     return bool(cache.get(_chave_fim(token)))
 
 
+# Password mudada (perfil ou recuperação): as sessões abertas ANTES deixam de valer — quem tinha
+# um token roubado perdia-o só quando expirasse (o refresh roda e renovava-se para sempre).
+# Guarda-se a hora da troca enquanto um refresh antigo ainda podia ser usado.
+# Membros da equipa do POS (sem User Django) têm a chave própria: 'membro:<id>'.
+def _chave_desde(user_id):
+    return f'jwt_desde:{user_id}'
+
+
+def terminar_sessoes(user=None, membro_id=None):
+    """Devolve o instante da troca: o iat do JWT é em segundos inteiros, por isso guarda-se a hora
+    exata e um token do mesmo segundo (emitido antes) também cai. Os tokens entregues a quem fez a
+    troca levam a marca 'troca' com esse instante (ver tokens_depois_da_troca)."""
+    from django.core.cache import cache
+    import time
+    agora = time.time()
+    chave = _chave_desde(f'membro:{membro_id}' if membro_id else user.pk)
+    cache.set(chave, agora, int(api_settings.REFRESH_TOKEN_LIFETIME.total_seconds()) + 60)
+    return agora
+
+
+def tokens_depois_da_troca(user, desde):
+    """(access, refresh) para a própria resposta da troca. O iat não pode ir para o segundo seguinte
+    (o JWT recusa tokens 'do futuro'): levam a marca da troca, que os deixa passar."""
+    from rest_framework_simplejwt.tokens import RefreshToken
+    refresh = RefreshToken.for_user(user)
+    refresh['troca'] = repr(desde)
+    return str(refresh.access_token), str(refresh)   # o access copia a marca
+
+
+def anterior_a_troca(user_id, token, membro_id=None):
+    from django.core.cache import cache
+    desde = cache.get(_chave_desde(f'membro:{membro_id}' if membro_id else user_id))
+    if not desde or token.get('troca') == repr(desde):
+        return False
+    return token.get('iat', 0) < desde
+
+
 def conta_ativa(user):
     """User activo e, se tiver perfil, com status 'ativo'."""
     if user is None or not user.is_active:
@@ -52,6 +89,8 @@ class JWTContaAtiva(JWTAuthentication):
         user = super().get_user(validated_token)
         if not conta_ativa(user):
             raise AuthenticationFailed(MSG_INATIVA, code='conta_inativa')
+        if anterior_a_troca(user.pk, validated_token):
+            raise InvalidToken('Sessão terminada.')
         return user
 
 
@@ -72,8 +111,12 @@ class RefreshContaAtiva(TokenRefreshSerializer):
             if not UtilizadorPOS.objects.filter(id=refresh.get('membro_id'), pos_id=refresh.get('pos_id'),
                                                 ativo=True, pos__suspenso=False).exists():
                 raise AuthenticationFailed('Membro não encontrado ou inativo.', code='conta_inativa')
+            if anterior_a_troca(None, refresh, membro_id=refresh.get('membro_id')):
+                raise InvalidToken('Sessão terminada.')
             return super().validate(attrs)
         user = get_user_model().objects.filter(**{api_settings.USER_ID_FIELD: refresh.get(api_settings.USER_ID_CLAIM)}).first()
         if not conta_ativa(user):
             raise AuthenticationFailed(MSG_INATIVA, code='conta_inativa')
+        if anterior_a_troca(user.pk, refresh):
+            raise InvalidToken('Sessão terminada.')
         return super().validate(attrs)

@@ -23,6 +23,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from ..models import Utilizador, UtilizadorLoja
 from ..utils.auth import autenticar
+from ..autenticacao import terminar_sessoes, tokens_depois_da_troca
 from ..utils.google_auth import GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, google_obter_utilizador
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso, sugerir_usernames
 from django_ratelimit.core import is_ratelimited
@@ -203,9 +204,12 @@ def utilizador_update_me(request):
     """
     utilizador = get_object_or_404(Utilizador, user=request.user)
 
-    # mudar a password exige a actual (um token roubado não chega para tomar a conta);
+    # mudar a password ou o email exige a actual (um token roubado não chega para tomar a conta —
+    # com o email trocado bastava depois pedir a recuperação da password);
     # quem entrou só com Google ainda não tem password e pode defini-la directamente
-    if request.data.get('password') and request.user.has_usable_password():
+    email_novo = (request.data.get('email') or '').strip()
+    muda_email = bool(email_novo) and email_novo.lower() != (request.user.email or '').lower()
+    if (request.data.get('password') or muda_email) and request.user.has_usable_password():
         if not request.user.check_password(request.data.get('password_atual') or ''):
             return Response(
                 {'password_atual': ['A password actual está incorrecta.']},
@@ -233,7 +237,12 @@ def utilizador_update_me(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     serializer.save()
-    return Response(_build_user_payload(utilizador, request), status=status.HTTP_200_OK)
+    payload = _build_user_payload(utilizador, request)
+    if data.get('password'):
+        # as outras sessões (outros browsers, um token roubado) terminam; esta continua com tokens novos
+        access, refresh = tokens_depois_da_troca(request.user, terminar_sessoes(request.user))
+        payload.update(access_token=access, refresh_token=refresh)
+    return Response(payload, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
@@ -421,6 +430,7 @@ def password_reset_confirm(request):
 
     django_user.set_password(new_password)
     django_user.save()
+    terminar_sessoes(django_user)       # quem estava dentro com a password antiga sai
 
     return Response({'detail': 'Palavra-passe actualizada com sucesso.'}, status=status.HTTP_200_OK)
 
