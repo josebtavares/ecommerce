@@ -228,13 +228,13 @@ def _avisar_loja(r, titulo, texto, tipo='reembolso_atualizado'):
     from ..Views.notificacaoView import notificar_staff
     notificar_staff(loja=r.loja, roles=['dono', 'gestor'], tipo=tipo,
                     titulo=f'{titulo} — Encomenda #{r.encomenda_id}', mensagem=texto,
-                    link=f'/loja/{r.loja_id}/backoffice?seccao=devolucoes&reembolso={r.id}')
+                    link=f'/loja/{r.loja_id}/backoffice/devolucoes?reembolso={r.id}')
 
 
 def _avisar_admins(r, titulo, texto):
     from ..Views.notificacaoView import notificar_admins
     notificar_admins(tipo='reembolso_disputa', titulo=f'{titulo} — Encomenda #{r.encomenda_id}',
-                     mensagem=texto, loja=r.loja, link=f'/admin?seccao=devolucoes&reembolso={r.id}')
+                     mensagem=texto, loja=r.loja, link=f'/admin/devolucoes?reembolso={r.id}')
 
 
 # ── criação ──────────────────────────────────────────────────────────

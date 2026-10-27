@@ -496,7 +496,7 @@ export default {
     recibo (f) { descarregarComprovativoSubscricao(f) },
     // a fatura legal do Bende (registar, substituir, anular, histórico) vive em Admin → Faturação, na ficha da loja/POS
     verNaFaturacao (f) {
-      this.$router.push({ query: { seccao: 'faturacao', ficha: f.loja_id ? `loja-${f.loja_id}` : `pos-${f.pos_id}`, aba: 'bende' } })
+      this.$router.push({ path: '/admin/faturacao', query: { ficha: f.loja_id ? `loja-${f.loja_id}` : `pos-${f.pos_id}`, aba: 'bende' } })
     },
     urlFicheiro,
     escolherPeriodo (k) {

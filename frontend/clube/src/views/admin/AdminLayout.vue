@@ -138,30 +138,33 @@
 </template>
 
 <script>
-import AdminDashboard    from './AdminDashboard.vue'
-import AdminLojas        from './AdminLojas.vue'
-import AdminUtilizadores from './AdminUtilizadores.vue'
-import AdminProdutos     from './AdminProdutos.vue'
-import AdminEncomendas   from './AdminEncomendas.vue'
-import AdminPagamentos   from './AdminPagamentos.vue'
-import AdminTipos        from './AdminTipos.vue'
-import AdminComissoes    from './AdminComissoes.vue'
-import AdminCategorias   from './AdminCategorias.vue'
-import AdminRelatorios   from './AdminRelatorios.vue'
-import AdminHome         from './AdminHome.vue'
-import AdminPaginas      from './AdminPaginas.vue'
-import AdminPOS          from './AdminPOS.vue'
-import AdminSuporte      from './AdminSuporte.vue'
-import AdminDenuncias    from './AdminDenuncias.vue'
-import AdminPlataforma   from './AdminPlataforma.vue'
-import AdminSubscricoes  from './AdminSubscricoes.vue'
-import AdminFaturacao    from './AdminFaturacao.vue'
-import AdminDevolucoes   from './AdminDevolucoes.vue'
-import AdminBackups      from './AdminBackups.vue'
+import { defineAsyncComponent } from 'vue'
 import api from '@/services/api'
 import { chat } from '@/services/chat'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
+
+// cada módulo é um ficheiro à parte: só se descarrega quando se abre
+const AdminDashboard    = defineAsyncComponent(() => import('./AdminDashboard.vue'))
+const AdminLojas        = defineAsyncComponent(() => import('./AdminLojas.vue'))
+const AdminUtilizadores = defineAsyncComponent(() => import('./AdminUtilizadores.vue'))
+const AdminProdutos     = defineAsyncComponent(() => import('./AdminProdutos.vue'))
+const AdminEncomendas   = defineAsyncComponent(() => import('./AdminEncomendas.vue'))
+const AdminPagamentos   = defineAsyncComponent(() => import('./AdminPagamentos.vue'))
+const AdminTipos        = defineAsyncComponent(() => import('./AdminTipos.vue'))
+const AdminComissoes    = defineAsyncComponent(() => import('./AdminComissoes.vue'))
+const AdminCategorias   = defineAsyncComponent(() => import('./AdminCategorias.vue'))
+const AdminRelatorios   = defineAsyncComponent(() => import('./AdminRelatorios.vue'))
+const AdminHome         = defineAsyncComponent(() => import('./AdminHome.vue'))
+const AdminPaginas      = defineAsyncComponent(() => import('./AdminPaginas.vue'))
+const AdminPOS          = defineAsyncComponent(() => import('./AdminPOS.vue'))
+const AdminSuporte      = defineAsyncComponent(() => import('./AdminSuporte.vue'))
+const AdminDenuncias    = defineAsyncComponent(() => import('./AdminDenuncias.vue'))
+const AdminPlataforma   = defineAsyncComponent(() => import('./AdminPlataforma.vue'))
+const AdminSubscricoes  = defineAsyncComponent(() => import('./AdminSubscricoes.vue'))
+const AdminFaturacao    = defineAsyncComponent(() => import('./AdminFaturacao.vue'))
+const AdminDevolucoes   = defineAsyncComponent(() => import('./AdminDevolucoes.vue'))
+const AdminBackups      = defineAsyncComponent(() => import('./AdminBackups.vue'))
 
 const SECCOES = [
   // icon: nome do ícone Font Awesome (solid)
@@ -215,14 +218,16 @@ export default {
       sidebarAberta:    false,
       user,
       seccoes,
-      // ?seccao=devolucoes&reembolso=12 (links das notificações) abre essa secção
-      activeSection: seccoes.find(s => s.key === this.$route.query.seccao)?.key || seccoes[0]?.key || 'dashboard',
       denunciasPendentes: 0,
       disputasReembolso:  0,
     }
   },
 
   computed: {
+    // o módulo vem do endereço (/admin/<módulo>): um refresh, o voltar do browser ou um link abrem-no
+    activeSection () {
+      return this.seccoes.find(s => s.key === this.$route.params.seccao)?.key || this.seccoes[0]?.key || 'dashboard'
+    },
     secaoActiva () { return this.seccoes.find(s => s.key === this.activeSection) },
     roleLabel () {
       const map = {
@@ -258,8 +263,7 @@ export default {
   },
 
   watch: {
-    // notificação clicada já dentro do painel
-    '$route.query.seccao' (s) { if (this.seccoes.some(x => x.key === s)) this.activeSection = s },
+    $route: { handler: 'acertarEndereco', immediate: true },
   },
 
   beforeUnmount () {
@@ -271,11 +275,21 @@ export default {
 
   methods: {
     // atalhos do dashboard (alertas, "Ver →") — só para as secções que este papel vê
-    irPara (seccao) { if (this.seccoes.some(s => s.key === seccao)) this.activeSection = seccao },
+    irPara (seccao) { if (this.seccoes.some(s => s.key === seccao)) this.navegarPara(seccao) },
     navegarPara (key) {
-      this.activeSection = key
       this.sidebarAberta = false
-      if (this.$route.query.seccao || this.$route.query.reembolso) this.$router.replace({ query: {} })
+      if (key !== this.$route.params.seccao) this.$router.push(`/admin/${key}`)
+    },
+    // /admin, módulo que não existe ou que este papel não vê → primeiro módulo permitido;
+    // links antigos (?seccao=devolucoes&reembolso=12, notificações e emails já enviados) → /admin/devolucoes?reembolso=12
+    acertarEndereco () {
+      if (this.$route.name !== 'Admin') return
+      const { seccao, ...resto } = this.$route.query
+      const pedida = this.$route.params.seccao || seccao
+      const valida = this.seccoes.find(s => s.key === pedida)?.key || this.seccoes[0]?.key
+      if (valida && (valida !== this.$route.params.seccao || seccao !== undefined)) {
+        this.$router.replace({ path: `/admin/${valida}`, query: valida === pedida ? resto : {} })
+      }
     },
     // contadores no menu: mensagens do suporte por ler e denúncias por analisar
     contador (key) {

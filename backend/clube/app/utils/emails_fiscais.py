@@ -67,7 +67,7 @@ def _libertar(modelo, pk):
 
 
 def _caminho_alvo(alvo, loja_id):
-    return f'/loja/{loja_id}/backoffice?seccao=subscricao' if loja_id else '/pos/dashboard'
+    return f'/loja/{loja_id}/backoffice/subscricao' if loja_id else '/pos/dashboard'
 
 
 # ── Encomendas ─────────────────────────────────────────────────
@@ -184,7 +184,7 @@ def enviar_fatura_comissoes(fc):
         _dono_email(loja), f'Fatura {fc.fatura_numero} — comissões de {fc.mes:%m/%Y} ({loja.nome})',
         f'Olá,\n\nO Bende emitiu a fatura {fc.fatura_numero} das comissões de {fc.mes:%m/%Y} da loja {loja.nome}. '
         f'Seguem em anexo a fatura{"" if pdf else " (sem PDF)"} e o extrato das comissões.\n\n'
-        f'Backoffice: {_link(f"/loja/{loja.id}/backoffice?seccao=subscricao")}',
+        f'Backoffice: {_link(f"/loja/{loja.id}/backoffice/subscricao")}',
         anexos)
 
 
@@ -214,7 +214,7 @@ def enviar_fatura_anulada(obj, numero, motivo):
         loja = obj.loja
         para, assunto = _dono_email(loja), f'Fatura {numero} anulada — comissões de {obj.mes:%m/%Y} ({loja.nome})'
         texto = (f'Olá,\n\nO Bende anulou a fatura {numero} das comissões de {obj.mes:%m/%Y} da loja {loja.nome}. '
-                 f'Motivo: {motivo}\n\nBackoffice: {_link(f"/loja/{loja.id}/backoffice?seccao=subscricao")}')
+                 f'Motivo: {motivo}\n\nBackoffice: {_link(f"/loja/{loja.id}/backoffice/subscricao")}')
     _enviar(para, assunto, texto)
 
 

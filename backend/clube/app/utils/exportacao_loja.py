@@ -120,7 +120,7 @@ def _avisar(exp):
     u = getattr(exp.pedido_por, 'utilizador', None) if exp.pedido_por else None
     if not u:
         return
-    link = '/admin?seccao=lojas' if exp.pelo_admin else f'/loja/{exp.loja_id}/backoffice?seccao=configuracoes'
+    link = '/admin/lojas' if exp.pelo_admin else f'/loja/{exp.loja_id}/backoffice/configuracoes'
     ok = exp.estado == 'ok'
     try:
         notificar(u, 'exportacao_pronta',
