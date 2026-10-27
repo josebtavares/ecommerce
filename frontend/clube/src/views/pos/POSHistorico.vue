@@ -34,7 +34,7 @@
       <button
         v-if="porFaturar > 0 && filtros.fatura !== 'por_faturar'"
         type="button"
-        @click="filtros.fatura = 'por_faturar'; carregarHistorico(true)"
+        @click="verPorFaturar"
         data-teste="pos-por-faturar"
         class="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm font-bold text-amber-900 transition hover:bg-amber-100"
       >
@@ -451,6 +451,14 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+
+    // o aviso conta as contas de todas as datas: tira as datas e filtra "por faturar"
+    verPorFaturar() {
+      this.filtros.dataInicio = ''
+      this.filtros.dataFim    = ''
+      this.filtros.fatura     = 'por_faturar'
+      this.carregarHistorico(true)
     },
 
     verDetalhes(conta) {
