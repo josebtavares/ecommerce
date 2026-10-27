@@ -28,14 +28,14 @@
     </div>
 
     <!-- Vazio -->
-    <div v-else-if="encomendas.length === 0"
+    <div v-else-if="lista.length === 0"
          class="text-center py-16 text-zinc-500 text-sm bg-zinc-900 rounded-2xl border border-zinc-800">
       Sem encomendas neste estado.
     </div>
 
     <!-- Lista -->
     <div v-else class="space-y-3">
-      <div v-for="enc in encomendas" :key="enc.id"
+      <div v-for="enc in lista" :key="enc.id"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
 
         <!-- Header -->
@@ -421,6 +421,7 @@ import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import { ATIVOS } from '@/utils/reembolsos'
 import FaturaEncomenda from '@/components/fiscal/FaturaEncomenda.vue'
 import { ESTADOS_FATURAVEIS } from '@/utils/fiscal'
+import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -450,7 +451,7 @@ export default {
       page: 1,
       limit: 10,
       detalhes: {},
-      expandedId: null,
+      fixada: null,             // encomenda aberta pelo endereço que não está nesta página
       esgotadoAberto: null,     // encomenda com o painel "Artigo esgotado" aberto
       esgotadoQtd:    {},       // item_id → unidades esgotadas
       esgotadoNota:   '',
@@ -481,12 +482,21 @@ export default {
   },
 
   computed: {
+    expandedId () { return fichaDaRota(this.$route) },
+    lista () {
+      const f = this.fixada
+      return f && !this.encomendas.some(e => e.id === f.id) ? [f, ...this.encomendas] : this.encomendas
+    },
     totalPages () { return Math.ceil(this.totalCount / this.limit) },
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)
       const end   = Math.min(this.totalPages, this.page + 2)
       return Array.from({ length: end - start + 1 }, (_, i) => start + i)
     },
+  },
+
+  watch: {
+    expandedId: { handler: 'abrirFicha', immediate: true },
   },
 
   async created () {
@@ -525,14 +535,14 @@ export default {
     setFiltro (valor) {
       this.filtroStatus = valor
       this.page = 1
-      this.expandedId = null
+      this.fecharFicha()
       this.fetchEncomendas()
     },
 
     irParaPagina (p) {
       if (p < 1 || p > this.totalPages) return
       this.page = p
-      this.expandedId = null
+      this.fecharFicha()
       this.fetchEncomendas()
     },
 
@@ -565,9 +575,19 @@ export default {
       } catch (e) { console.error(e) }
     },
 
-    async toggleExpand (id) {
-      if (this.expandedId === id) { this.expandedId = null; return }
-      this.expandedId = id
+    // a encomenda aberta vai no endereço (/encomendas/<id>): o watch de expandedId carrega o detalhe
+    toggleExpand (id) { irParaFicha(this.$router, this.$route, this.expandedId === id ? null : id) },
+    fecharFicha () { this.fixada = null; irParaFicha(this.$router, this.$route, null, true) },
+
+    async abrirFicha (id) {
+      if (!id) { this.fixada = null; return }
+      if (!this.encomendas.some(e => e.id === id) && this.fixada?.id !== id) {
+        try {
+          const { data } = await api.get(`/app/loja/${this.lojaId}/encomendas/`, { params: { id, limit: 1, offset: 0 } })
+          this.fixada = (data.results || data).find(e => e.id === id) || null
+        } catch { this.fixada = null }
+        if (!this.fixada) return irParaFicha(this.$router, this.$route, null, true)   // não é desta loja / não existe
+      }
       if (this.detalhes[id]) return
       this.loadingDetalhe = id
       try {
@@ -679,7 +699,7 @@ export default {
         if (this.condutorSelecionado) payload.condutor_id = this.condutorSelecionado
         // criar a entrega já passa a encomenda a "enviado" e avisa o cliente (no servidor)
         await api.post(`/app/loja/${this.lojaId}/encomendas/${encId}/entrega/criar/`, payload)
-        const encReal = this.encomendas.find(e => e.id === encId)
+        const encReal = this.lista.find(e => e.id === encId)
         if (encReal) {
           this.contagem = {
             ...this.contagem,

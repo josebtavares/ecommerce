@@ -23,7 +23,7 @@
     </div>
 
     <div v-else class="space-y-2">
-      <button v-for="r in lista" :key="r.id" type="button" @click="aberto = r.id"
+      <button v-for="r in lista" :key="r.id" type="button" @click="irParaFicha(router, route, r.id)"
         class="w-full text-left rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-600 p-4 flex items-center gap-3 transition">
         <div class="flex-1 min-w-0">
           <p class="text-xs text-zinc-500 truncate">#{{ r.encomenda_id }} · {{ r.cliente_nome }} · {{ dataHora(r.data_criacao) }}</p>
@@ -48,13 +48,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import BackofficeReembolso from './BackofficeReembolso.vue'
+import { irParaFicha } from '@/utils/ficha'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const GRUPOS = [
@@ -78,7 +79,7 @@ const lista      = ref([])
 const contagem   = ref({})
 const proximo    = ref(null)
 const carregando = ref(true)
-const aberto     = ref(props.reembolsoId ? Number(props.reembolsoId) : null)
+const aberto     = computed(() => props.reembolsoId ? Number(props.reembolsoId) : null)   // /devolucoes/<id>
 const agora      = ref(Date.now())
 
 async function carregar (mais = false) {
@@ -99,15 +100,7 @@ function mudarGrupo (g) {
   carregar()
 }
 
-function fechar () {
-  aberto.value = null
-  // tira ?reembolso= do endereço (a notificação já foi aberta)
-  if (route.query.reembolso) {
-    const q = { ...route.query }
-    delete q.reembolso
-    router.replace({ query: q })
-  }
-}
+const fechar = () => irParaFicha(router, route, null)
 
 function tempoRestante (iso) {
   const ms = new Date(iso).getTime() - agora.value
@@ -126,5 +119,4 @@ onMounted(() => {
   relogio = setInterval(() => { agora.value = Date.now() }, 60000)
 })
 onBeforeUnmount(() => clearInterval(relogio))
-watch(() => props.reembolsoId, id => { if (id) aberto.value = Number(id) })
 </script>

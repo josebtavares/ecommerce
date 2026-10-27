@@ -143,6 +143,7 @@ import api from '@/services/api'
 import { chat } from '@/services/chat'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
+import { COM_FICHA, enderecoCerto } from '@/utils/ficha'
 
 // cada módulo é um ficheiro à parte: só se descarrega quando se abre
 const AdminDashboard    = defineAsyncComponent(() => import('./AdminDashboard.vue'))
@@ -278,18 +279,17 @@ export default {
     irPara (seccao) { if (this.seccoes.some(s => s.key === seccao)) this.navegarPara(seccao) },
     navegarPara (key) {
       this.sidebarAberta = false
-      if (key !== this.$route.params.seccao) this.$router.push(`/admin/${key}`)
+      if (key !== this.$route.params.seccao || this.$route.params.ficha) this.$router.push(`/admin/${key}`)
     },
     // /admin, módulo que não existe ou que este papel não vê → primeiro módulo permitido;
-    // links antigos (?seccao=devolucoes&reembolso=12, notificações e emails já enviados) → /admin/devolucoes?reembolso=12
+    // ficha (/admin/<módulo>/<id>) só nos módulos que a têm (utils/ficha.js);
+    // links antigos (?seccao=devolucoes&reembolso=12, /admin/devolucoes?reembolso=12) → /admin/devolucoes/12
     acertarEndereco () {
       if (this.$route.name !== 'Admin') return
-      const { seccao, ...resto } = this.$route.query
-      const pedida = this.$route.params.seccao || seccao
+      const pedida = this.$route.params.seccao || this.$route.query.seccao
       const valida = this.seccoes.find(s => s.key === pedida)?.key || this.seccoes[0]?.key
-      if (valida && (valida !== this.$route.params.seccao || seccao !== undefined)) {
-        this.$router.replace({ path: `/admin/${valida}`, query: valida === pedida ? resto : {} })
-      }
+      const destino = enderecoCerto(this.$route, '/admin', valida, COM_FICHA.admin)
+      if (destino) this.$router.replace(destino)
     },
     // contadores no menu: mensagens do suporte por ler e denúncias por analisar
     contador (key) {

@@ -112,7 +112,7 @@ def admin_stats(request):
 @permission_classes([IsAuthenticated])
 def admin_loja_list(request):
     """
-    GET /app/admin/lojas/?q=&estado=pendente|ativa|fechada|suspensa&offset=0&limit=20
+    GET /app/admin/lojas/?q=&estado=pendente|ativa|fechada|suspensa&id=&offset=0&limit=20
     (?ativa=true|false continua a funcionar)
     """
     erro = _exige_admin(request, 'gerir_lojas')
@@ -137,6 +137,11 @@ def admin_loja_list(request):
     categoria = request.GET.get('categoria')
     if categoria:
         qs = qs.filter(categoria__iexact=categoria)
+
+    # ?id= → só essa loja (ficha aberta pelo endereço, /admin/lojas/<id>)
+    so_id = request.GET.get('id', '')
+    if so_id:
+        qs = qs.filter(id=so_id) if so_id.isdigit() else qs.none()
 
     offset = int(request.GET.get('offset', 0))
     limit  = int(request.GET.get('limit', 20))
@@ -556,7 +561,7 @@ def admin_produto_gerir(request, produto_id):
 @permission_classes([IsAuthenticated])
 def admin_encomenda_list(request):
     """
-    GET /app/admin/encomendas/?status=&loja_id=&offset=0&limit=20
+    GET /app/admin/encomendas/?status=&loja_id=&id=&offset=0&limit=20
     """
     erro = _exige_admin(request, 'gerir_encomendas')
     if erro: return erro
@@ -571,6 +576,11 @@ def admin_encomenda_list(request):
     loja_id = request.GET.get('loja_id')
     if loja_id:
         qs = qs.filter(loja_id=loja_id)
+
+    # ?id= → só essa encomenda (ficha aberta pelo endereço, /admin/encomendas/<id>)
+    so_id = request.GET.get('id', '')
+    if so_id:
+        qs = qs.filter(id=so_id) if so_id.isdigit() else qs.none()
 
     response, erro = paginar(request, qs, EncomendaMiniSerializer)
     if erro: return erro

@@ -41,7 +41,7 @@
     </div>
 
     <div v-else class="space-y-2">
-      <div v-for="enc in encomendas" :key="enc.id"
+      <div v-for="enc in lista" :key="enc.id"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
 
         <button @click="toggleExpand(enc.id)"
@@ -130,7 +130,7 @@
         </div>
       </div>
 
-      <div v-if="encomendas.length === 0" class="text-center py-12 text-zinc-500 text-sm bg-zinc-900 rounded-2xl border border-zinc-800">
+      <div v-if="lista.length === 0" class="text-center py-12 text-zinc-500 text-sm bg-zinc-900 rounded-2xl border border-zinc-800">
         Nenhuma encomenda encontrada.
       </div>
     </div>
@@ -163,6 +163,7 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { iconePagamento } from '@/utils/icones'
+import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 export default {
   name: 'AdminEncomendas',
   data () {
@@ -170,10 +171,16 @@ export default {
       loading: true, encomendas: [], totalCount: 0,
       page: 1, limit: 10,
       filtroStatus: '', filtroLoja: '',
-      lojas: [], expandedId: null,
+      lojas: [],
+      fixada: null,     // encomenda aberta pelo endereço que não está nesta página
     }
   },
   computed: {
+    expandedId () { return fichaDaRota(this.$route) },
+    lista () {
+      const f = this.fixada
+      return f && !this.encomendas.some(e => e.id === f.id) ? [f, ...this.encomendas] : this.encomendas
+    },
     totalPages () { return Math.ceil(this.totalCount / this.limit) },
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)
@@ -181,8 +188,11 @@ export default {
       return Array.from({ length: end - start + 1 }, (_, i) => start + i)
     },
   },
+  watch: {
+    expandedId: { handler: 'abrirFicha', immediate: true },
+  },
   async created () {
-    await Promise.all([this.fetchLojas(), this.fetchEncomendas()])
+    await Promise.all([this.fetchLojas(), this.fetchEncomendas(1, true)])
   },
   methods: {
     iconePagamento,
@@ -193,15 +203,26 @@ export default {
       const map = { pendente: 'bg-yellow-500/15 text-yellow-400', pago: 'bg-blue-500/15 text-blue-400', preparando: 'bg-purple-500/15 text-purple-400', enviado: 'bg-indigo-500/15 text-indigo-400', concluido: 'bg-green-500/15 text-green-400', cancelado: 'bg-red-500/15 text-red-400' }
       return map[s] || 'bg-zinc-500/15 text-zinc-400'
     },
-    toggleExpand (id) { this.expandedId = this.expandedId === id ? null : id },
+    // a encomenda aberta vai no endereço (/admin/encomendas/<id>)
+    toggleExpand (id) { irParaFicha(this.$router, this.$route, this.expandedId === id ? null : id) },
+    async abrirFicha (id) {
+      if (!id) { this.fixada = null; return }
+      if (this.encomendas.some(e => e.id === id) || this.fixada?.id === id) return
+      try {
+        const { data } = await api.get('/app/admin/encomendas/', { params: { id, limit: 1, offset: 0 } })
+        this.fixada = (data.results || data).find(e => e.id === id) || null
+      } catch { this.fixada = null }
+      if (!this.fixada) irParaFicha(this.$router, this.$route, null, true)
+    },
     async fetchLojas () {
       try {
         const { data } = await api.get('/app/admin/lojas/', { params: { limit: 100 } })
         this.lojas = data.results || data
       } catch (e) { console.error(e) }
     },
-    async fetchEncomendas (pagina = this.page) {
-      this.page = pagina; this.loading = true; this.expandedId = null
+    async fetchEncomendas (pagina = this.page, manterFicha = false) {
+      this.page = pagina; this.loading = true
+      if (this.expandedId && !manterFicha) { this.fixada = null; irParaFicha(this.$router, this.$route, null, true) }
       try {
         const params = { offset: (this.page - 1) * this.limit, limit: this.limit }
         if (this.filtroStatus) params.status = this.filtroStatus

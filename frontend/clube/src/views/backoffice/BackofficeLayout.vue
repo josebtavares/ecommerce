@@ -160,7 +160,7 @@
         <BackofficeEncomendas    v-else-if="activeSection === 'encomendas'"    :loja-id="lojaId" @ver-reembolso="abrirReembolso"
                                  :regime-fiscal="loja?.fiscal?.regime_fiscal || ''" />
         <BackofficeDevolucoes    v-else-if="activeSection === 'devolucoes'"    :loja-id="lojaId"
-                                 :reembolso-id="$route.query.reembolso || null" @contagem="devolucoesPorResponder = $event" />
+                                 :reembolso-id="$route.params.ficha || null" @contagem="devolucoesPorResponder = $event" />
         <BackofficeProdutos      v-else-if="activeSection === 'produtos'"      :loja-id="lojaId" />
         <BackofficeInventario    v-else-if="activeSection === 'inventario'"    :loja-id="lojaId" />
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
@@ -193,6 +193,7 @@ import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 import AvisoFaturacao           from '@/components/fiscal/AvisoFaturacao.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
+import { COM_FICHA, enderecoCerto } from '@/utils/ficha'
 
 // cada módulo é um ficheiro à parte: só se descarrega quando se abre
 const BackofficeDashboard      = defineAsyncComponent(() => import('./BackofficeDashboard.vue'))
@@ -362,7 +363,7 @@ export default {
     },
 
     abrirReembolso (id) {
-      this.$router.push({ path: `/loja/${this.lojaId}/backoffice/devolucoes`, query: { reembolso: id } })
+      this.$router.push(`/loja/${this.lojaId}/backoffice/devolucoes/${id}`)
     },
 
     async fetchDevolucoes () {
@@ -376,22 +377,21 @@ export default {
     navegarPara (key) {
       // fecha sidebar no mobile após navegar
       this.sidebarAberta = false
-      if (key !== this.$route.params.seccao) this.$router.push(`/loja/${this.lojaId}/backoffice/${key}`)
+      if (key !== this.$route.params.seccao || this.$route.params.ficha) this.$router.push(`/loja/${this.lojaId}/backoffice/${key}`)
     },
 
     // Só depois de a loja carregar (as permissões dependem do papel do membro):
     // sem módulo, módulo que não existe ou sem acesso → primeiro módulo permitido;
-    // links antigos (?seccao=devolucoes&reembolso=12, notificações e emails já enviados) → /devolucoes?reembolso=12
+    // ficha (/encomendas/<id>) só nos módulos que a têm (utils/ficha.js);
+    // links antigos (?seccao=devolucoes&reembolso=12, /devolucoes?reembolso=12) → /devolucoes/12
     acertarEndereco () {
       if (!this.loja || this.$route.name !== 'Backoffice') return
-      const { seccao, ...resto } = this.$route.query
-      const pedida = this.$route.params.seccao || seccao
+      const pedida = this.$route.params.seccao || this.$route.query.seccao
       const valida = this.temPermissao(pedida) ? pedida
         : SECCOES.find(s => s.permissao !== null && this.temPermissao(s.key))?.key
           || SECCOES.find(s => this.temPermissao(s.key))?.key
-      if (valida && (valida !== this.$route.params.seccao || seccao !== undefined)) {
-        this.$router.replace({ path: `/loja/${this.lojaId}/backoffice/${valida}`, query: valida === pedida ? resto : {} })
-      }
+      const destino = enderecoCerto(this.$route, `/loja/${this.lojaId}/backoffice`, valida, COM_FICHA.backoffice)
+      if (destino) this.$router.replace(destino)
     },
 
     async reabrirLoja () {

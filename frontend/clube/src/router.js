@@ -87,13 +87,13 @@ const routes = [
         component: EncomendaSucesso, 
         meta: { requiresAuth: true } 
     },
-    { path: '/loja/:id/backoffice/:seccao?', 
+    { path: '/loja/:id/backoffice/:seccao?/:ficha?', 
         name: 'Backoffice', 
         component: Backoffice, 
         meta: { requiresAuth: true } 
     },
     {
-        path: '/admin/:seccao?',
+        path: '/admin/:seccao?/:ficha?',
         name: 'Admin',
         component: AdminLayout,
         meta: { requiresAuth: true }
