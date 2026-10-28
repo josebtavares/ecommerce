@@ -151,6 +151,11 @@
         </button>
       </div>
 
+      <!-- Requisitos para a loja ser publicada (barra vermelha → verde; components/loja/BarraProntidao) -->
+      <BarraProntidao v-if="loja && ['pendente', 'ativa'].includes(loja.estado)" class="mx-4 lg:mx-6 mt-4"
+                      :loja-id="lojaId" :estado="loja.estado" :recarregar="`${activeSection}-${versaoLoja}`"
+                      @ir="navegarPara" />
+
       <!-- Faturação: dados fiscais por preencher / lembrete de faturar (components/fiscal) -->
       <AvisoFaturacao v-if="loja?.fiscal" class="mx-4 lg:mx-6 mt-4" :fiscal="loja.fiscal" :chave="`loja-${lojaId}`"
                       :pode-editar="permissoes.includes('gerir_dados_fiscais')" @preencher="navegarPara('configuracoes')" />
@@ -208,6 +213,7 @@ import BackofficeSidebarItem    from './BackofficeSidebarItem.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 import AvisoFaturacao           from '@/components/fiscal/AvisoFaturacao.vue'
+import BarraProntidao           from '@/components/loja/BarraProntidao.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 import { COM_FICHA, enderecoCerto } from '@/utils/ficha'
 import { temaPainel } from '@/utils/tema'
@@ -278,7 +284,7 @@ export default {
   components: { BotaoTema, BackofficeSubscricao,
     BackofficeSidebarItem, BackofficeDashboard, BackofficeEncomendas, ModuloRelatorios,
     BackofficeProdutos, BackofficeInventario, BackofficeConfiguracoes,
-    BackofficeStaff, BackofficeTipos, NotificacaoSino, AvisoFaturacao,
+    BackofficeStaff, BackofficeTipos, NotificacaoSino, AvisoFaturacao, BarraProntidao,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
     BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes, BackofficeServicos, BackofficeFaturacao,
   },
@@ -286,6 +292,7 @@ export default {
   data () {
     return {
       loja:          null,
+      versaoLoja:    0,       // conta as recargas da loja (a barra de requisitos recalcula)
       aMudarEstado:  false,
       avisoSub:      null,    // faixa da subscrição (em atraso / a vencer)
       devolucoesPorResponder: 0,   // pedidos de reembolso à espera da loja (contador no menu)
@@ -318,7 +325,8 @@ export default {
         pendente: {
           icone: 'hourglass-half', classe: 'bg-amber-500/10 border-amber-500/30 text-amber-300',
           titulo: 'Loja à espera de aprovação',
-          texto:  'Podes configurá-la e adicionar produtos. Ainda não aparece no site nem recebe encomendas.',
+          texto:  'Podes configurá-la e adicionar produtos. Ainda não aparece no site nem recebe encomendas — '
+                + 'completa os requisitos abaixo e a plataforma publica-a.',
         },
         fechada: {
           icone: 'door-closed', classe: 'bg-zinc-800 border-zinc-700 text-zinc-300',
@@ -446,6 +454,7 @@ export default {
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/backoffice/`)
         this.loja = data
+        this.versaoLoja++
         this.fetchAvisoSub()
         this.fetchDevolucoes()
         // recarregar a loja depois de guardar não muda de módulo; só corrige o endereço se o módulo
