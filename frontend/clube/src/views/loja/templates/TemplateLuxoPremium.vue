@@ -303,6 +303,7 @@
             <button v-if="loja.termos_servico" @click="modalPolitica = 'termos'">Termos</button>
             <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'">Privacidade</button>
           </nav>
+          <LojaRodapeInfo :loja="loja" :isDark="isDark" />
           <p class="lx-footer__copy">© {{ ano }} {{ loja.nome }}<template v-if="loja.localizacao"> — {{ loja.localizacao }}</template></p>
         </div>
       </footer>
@@ -329,6 +330,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData } from '@/composables/useLojaData'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
@@ -345,7 +347,7 @@ import FimDaLista from '@/components/produtos/FimDaLista.vue'
 export default {
   name: 'TemplateLuxoPremium',
 
-  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

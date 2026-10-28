@@ -81,6 +81,29 @@
       </div>
     </div>
 
+    <!-- Contactos públicos ("Vendido por" na página da loja e no checkout) -->
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="loja-contactos">
+      <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Contactos da loja</h2>
+      <p class="text-xs text-zinc-600 mb-5">
+        Aparecem em "Vendido por", na página da loja e no checkout, com a localização acima e o NIF da Faturação.
+        Vazios não aparecem.
+      </p>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs text-zinc-500 mb-1 block">Email</label>
+          <input v-model="form.contacto_email" type="email" maxlength="254" placeholder="ex.: loja@exemplo.cv"
+            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
+                   focus:outline-none focus:border-red-500 transition" />
+        </div>
+        <div>
+          <label class="text-xs text-zinc-500 mb-1 block">Telefone</label>
+          <input v-model="form.contacto_telefone" type="tel" maxlength="40" placeholder="ex.: +238 900 00 00"
+            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
+                   focus:outline-none focus:border-red-500 transition" />
+        </div>
+      </div>
+    </div>
+
     <!-- Entrega -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-5">Entrega & Takeaway</h2>
@@ -289,6 +312,13 @@
                   focus:outline-none focus:border-red-500 transition resize-none"></textarea>
         </div>
         <div>
+          <label class="text-xs text-zinc-500 mb-1 block">Política de entregas</label>
+          <textarea v-model="form.politica_entregas" rows="4"
+            placeholder="Ex: Entregamos na Praia em 24 horas; noutras ilhas em 3 a 5 dias úteis..."
+            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
+                  focus:outline-none focus:border-red-500 transition resize-none"></textarea>
+        </div>
+        <div>
           <label class="text-xs text-zinc-500 mb-1 block">Termos de serviço</label>
           <textarea v-model="form.termos_servico" rows="4"
             placeholder="Ex: Ao fazer uma encomenda, o cliente aceita..."
@@ -371,6 +401,10 @@ import HorarioEditor from '@/components/horario/HorarioEditor.vue'
 import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 
+// campos de texto que o dono pode apagar (os outros vazios não se enviam)
+const LIMPAVEIS = ['localizacao', 'politica_devolucao', 'termos_servico', 'politica_privacidade', 'politica_entregas',
+                   'contacto_email', 'contacto_telefone']
+
 const TODOS_METODOS = [
   { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
   { tipo: 'flutterwave',   icon: iconePagamento('flutterwave'),   label: 'Flutterwave',        descricao: 'Cartão Visa/Mastercard, Mobile Money' },
@@ -405,7 +439,8 @@ export default {
       form: {
         nome: '', descricao: '', categoria: '', localizacao: '',
         entrega_ativa: false, levantamento_ativo: false,
-        politica_devolucao: '', termos_servico: '', politica_privacidade: '',
+        politica_devolucao: '', termos_servico: '', politica_privacidade: '', politica_entregas: '',
+        contacto_email: '', contacto_telefone: '',
         prazo_devolucao_dias: 14,
         percentagem_iva: 0,
       },
@@ -484,6 +519,9 @@ export default {
         politica_devolucao:   l.politica_devolucao  || '',
         termos_servico:       l.termos_servico      || '',
         politica_privacidade: l.politica_privacidade|| '',
+        politica_entregas:    l.politica_entregas   || '',
+        contacto_email:       l.contacto_email      || '',
+        contacto_telefone:    l.contacto_telefone   || '',
         prazo_devolucao_dias: l.prazo_devolucao_dias ?? 14,
         percentagem_iva: Number(l.percentagem_iva ?? 0),
       }
@@ -601,13 +639,20 @@ export default {
         const fd = new FormData()
         Object.entries(this.form).forEach(([k, v]) => {
           if (typeof v === 'boolean') fd.append(k, v ? 'true' : 'false')
-          else if (v !== '' && v !== null) fd.append(k, v)
+          else if (v !== null && (v !== '' || LIMPAVEIS.includes(k))) fd.append(k, v)   // estes podem ficar vazios
         })
         if (this.logoFicheiro)   fd.append('logo',   this.logoFicheiro)
         if (this.bannerFicheiro) fd.append('banner', this.bannerFicheiro)
-        const { data } = await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        })
+        let data
+        try {
+          ({ data } = await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          }))
+        } catch (e) {
+          const d = e.response?.data
+          alert(d?.detail || Object.values(d || {}).flat()[0] || 'Não foi possível guardar.')
+          return
+        }
         if (this.bannerFicheiro) {
           // o vídeo novo entra na fila de otimização; o estado aparece no banner
           this.bannerFicheiro = null

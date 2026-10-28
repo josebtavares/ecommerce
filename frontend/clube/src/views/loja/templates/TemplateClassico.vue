@@ -292,6 +292,7 @@
                   </button>
                 </div>
               </div>
+              <LojaRodapeInfo :loja="loja" :isDark="isDark" />
               <div class="text-center text-xs pt-4 border-t"
                    :class="isDark ? 'text-zinc-700 border-zinc-900' : 'text-zinc-400 border-gray-200'">
                 © {{ new Date().getFullYear() }} {{ loja.nome }}
@@ -342,6 +343,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData }   from '@/composables/useLojaData'
 import ProductInfoCard   from '@/components/product/productInfoCard.vue'
@@ -356,7 +358,7 @@ import AvaliacaoLoja     from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
   name: 'TemplateClassico',
-  components: { SeccaoServicos, BotaoFavorito, EstadoLoja, ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
+  components: { LojaRodapeInfo, SeccaoServicos, BotaoFavorito, EstadoLoja, ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
   emits: ['toggle-dark'],
 
   props: {

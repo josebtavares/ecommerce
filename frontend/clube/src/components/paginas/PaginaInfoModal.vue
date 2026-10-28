@@ -1,4 +1,4 @@
-<!-- PaginaInfoModal.vue — popup das páginas institucionais (Ajuda, Contacto, FAQ, Termos, Privacidade)
+<!-- PaginaInfoModal.vue — popup das páginas institucionais (Ajuda, Contacto, FAQ, Termos, Privacidade, …)
      Uso:
        <PaginaInfoModal :slug="paginaAberta" :isDark="isDark" @close="paginaAberta = null" />
      ou, para pré-visualizar sem pedir à API (admin):
@@ -47,66 +47,7 @@
             </p>
 
             <template v-else-if="dados">
-              <!-- Texto livre -->
-              <div v-if="blocos.length" class="pim-texto space-y-3 text-sm leading-relaxed"
-                   :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">
-                <template v-for="(b, i) in blocos" :key="i">
-                  <h3 v-if="b.tipo === 'titulo'" class="text-base font-bold pt-2"
-                      :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ b.texto }}</h3>
-                  <ul v-else-if="b.tipo === 'lista'" class="space-y-1.5 pl-1">
-                    <li v-for="(item, j) in b.itens" :key="j" class="flex gap-2.5">
-                      <span class="mt-2 w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
-                      <span>{{ item }}</span>
-                    </li>
-                  </ul>
-                  <p v-else class="whitespace-pre-line">{{ b.texto }}</p>
-                </template>
-              </div>
-
-              <!-- Contacto -->
-              <div v-if="dados.slug === 'contacto' && contactos.length"
-                   class="grid grid-cols-1 sm:grid-cols-2 gap-3" :class="blocos.length ? 'mt-6' : ''">
-                <component :is="c.href ? 'a' : 'div'" v-for="c in contactos" :key="c.chave"
-                   :href="c.href" :target="c.externo ? '_blank' : null" rel="noopener"
-                   class="flex items-start gap-3 p-4 rounded-2xl border transition"
-                   :class="[
-                     isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-stone-50 border-stone-200',
-                     c.href && (isDark ? 'hover:border-red-500/50' : 'hover:border-red-300'),
-                   ]">
-                  <span class="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-red-500/10 text-red-500"><font-awesome-icon :icon="['fas', c.icone]" class="w-4 h-4" /></span>
-                  <span class="min-w-0">
-                    <span class="block text-[11px] uppercase tracking-wider font-semibold"
-                          :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ c.label }}</span>
-                    <span class="block text-sm font-semibold break-words">{{ c.valor }}</span>
-                  </span>
-                </component>
-              </div>
-
-              <!-- FAQ -->
-              <div v-if="dados.slug === 'faq'" class="space-y-2" :class="blocos.length ? 'mt-6' : ''">
-                <p v-if="!perguntas.length" class="text-sm text-center py-6" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-                  Ainda não há perguntas frequentes.
-                </p>
-                <div v-for="(q, i) in perguntas" :key="i"
-                     class="rounded-2xl border overflow-hidden transition"
-                     :class="[
-                       isDark ? 'border-zinc-800' : 'border-stone-200',
-                       faqAberta === i && (isDark ? 'bg-zinc-950/50' : 'bg-stone-50'),
-                     ]">
-                  <button @click="faqAberta = faqAberta === i ? null : i"
-                    class="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left text-sm font-semibold"
-                    :aria-expanded="faqAberta === i">
-                    <span>{{ q.pergunta }}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0 transition-transform duration-200"
-                         :class="[faqAberta === i && 'rotate-180', isDark ? 'text-zinc-500' : 'text-zinc-400']"
-                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <p v-if="faqAberta === i" class="px-4 pb-4 -mt-1 text-sm leading-relaxed whitespace-pre-line"
-                     :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">{{ q.resposta }}</p>
-                </div>
-              </div>
+              <PaginaConteudo :pagina="dados" :isDark="isDark" />
             </template>
           </div>
 
@@ -124,40 +65,11 @@
 
 <script>
 import api from '@/services/api'
-
-/** Converte o texto livre em blocos: "## Título", linhas "- item" e parágrafos. */
-function parseConteudo (texto) {
-  const blocos = []
-  String(texto || '').replace(/\r\n/g, '\n').split(/\n{2,}/).forEach(par => {
-    const linhas = par.split('\n').map(l => l.trimEnd()).filter(l => l.trim())
-    if (!linhas.length) return
-    let paragrafo = []
-    const fecharParagrafo = () => {
-      if (paragrafo.length) blocos.push({ tipo: 'paragrafo', texto: paragrafo.join('\n') })
-      paragrafo = []
-    }
-    linhas.forEach(l => {
-      const t = l.trim()
-      if (/^#{1,3}\s+/.test(t)) {
-        fecharParagrafo()
-        blocos.push({ tipo: 'titulo', texto: t.replace(/^#{1,3}\s+/, '') })
-      } else if (/^[-*•]\s+/.test(t)) {
-        fecharParagrafo()
-        const item = t.replace(/^[-*•]\s+/, '')
-        const ultimo = blocos[blocos.length - 1]
-        if (ultimo?.tipo === 'lista') ultimo.itens.push(item)
-        else blocos.push({ tipo: 'lista', itens: [item] })
-      } else {
-        paragrafo.push(t)
-      }
-    })
-    fecharParagrafo()
-  })
-  return blocos
-}
+import PaginaConteudo from './PaginaConteudo.vue'
 
 export default {
   name: 'PaginaInfoModal',
+  components: { PaginaConteudo },
 
   props: {
     slug:   { type: String, default: null },   // carrega da API
@@ -168,26 +80,12 @@ export default {
   emits: ['close'],
 
   data () {
-    return { carregada: null, loading: false, erro: '', faqAberta: null }
+    return { carregada: null, loading: false, erro: '' }
   },
 
   computed: {
     aberto () { return !!(this.slug || this.pagina) },
     dados ()  { return this.pagina || this.carregada },
-    blocos () { return parseConteudo(this.dados?.conteudo) },
-    perguntas () { return this.dados?.dados?.perguntas || [] },
-
-    contactos () {
-      const d = this.dados?.dados || {}
-      const so = v => String(v || '').replace(/[^\d+]/g, '')
-      return [
-        d.email    && { chave: 'email',    icone: 'envelope', label: 'Email',    valor: d.email,    href: `mailto:${d.email}` },
-        d.telefone && { chave: 'telefone', icone: 'phone', label: 'Telefone', valor: d.telefone, href: `tel:${so(d.telefone)}` },
-        d.whatsapp && { chave: 'whatsapp', icone: 'comment-dots', label: 'WhatsApp', valor: d.whatsapp, href: `https://wa.me/${so(d.whatsapp).replace('+', '')}`, externo: true },
-        d.morada   && { chave: 'morada',   icone: 'location-dot', label: 'Morada',   valor: d.morada,   href: `https://maps.google.com/?q=${encodeURIComponent(d.morada)}`, externo: true },
-        d.horario  && { chave: 'horario',  icone: 'clock', label: 'Horário',  valor: d.horario },
-      ].filter(Boolean)
-    },
   },
 
   watch: {
@@ -215,7 +113,6 @@ export default {
     async carregar (slug) {
       this.loading = true
       this.erro = ''
-      this.faqAberta = null
       this.carregada = null
       try {
         const { data } = await api.get(`/app/paginas/${slug}/`)

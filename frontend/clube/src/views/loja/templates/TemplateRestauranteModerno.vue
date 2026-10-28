@@ -434,6 +434,7 @@
               <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'">Privacidade</button>
             </div>
           </div>
+          <LojaRodapeInfo :loja="loja" :isDark="isDark" />
         </div>
       </footer>
 
@@ -457,6 +458,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import { useLojaData } from '@/composables/useLojaData'
@@ -479,7 +481,7 @@ const LIMITE = 6   // pratos por página em cada grupo
 export default {
   name: 'TemplateRestauranteModerno',
 
-  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
+  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 
