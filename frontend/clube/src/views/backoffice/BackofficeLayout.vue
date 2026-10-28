@@ -105,6 +105,21 @@
         </div>
       </header>
 
+      <!-- Admin a ver a loja (Admin → Lojas → Ver backoffice): o servidor recusa qualquer alteração -->
+      <div v-if="modoAdmin || verAdminExpirou" data-teste="banner-ver-admin" role="status"
+           class="mx-4 lg:mx-6 mt-4 px-4 py-3 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-300 text-sm flex items-center gap-3">
+        <font-awesome-icon :icon="['fas', 'eye']" class="w-4 h-4 flex-shrink-0" />
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold">Estás a ver como admin — só leitura</p>
+          <p v-if="verAdminExpirou" class="text-xs opacity-80 mt-0.5" data-teste="ver-admin-expirou">
+            A sessão de leitura terminou. Abre outra vez a loja a partir do Admin → Lojas.
+          </p>
+          <p v-else class="text-xs opacity-80 mt-0.5">
+            Vês o backoffice como o dono o vê. Nada pode ser alterado daqui; este acesso fica registado.
+          </p>
+        </div>
+      </div>
+
       <!-- Estado da loja (pendente / fechada / suspensa) -->
       <div v-if="loja && loja.estado && loja.estado !== 'ativa'"
            :class="['mx-4 lg:mx-6 mt-4 px-4 py-3 rounded-xl border text-sm flex flex-col sm:flex-row sm:items-center gap-3', avisoEstado.classe]">
@@ -188,7 +203,7 @@
 
 <script>
 import { defineAsyncComponent } from 'vue'
-import api from '@/services/api'
+import api, { capturarVerAdmin, verAdmin, EVENTO_VER_ADMIN_EXPIROU } from '@/services/api'
 import BackofficeSidebarItem    from './BackofficeSidebarItem.vue'
 import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
@@ -277,6 +292,7 @@ export default {
       loadingLoja:   true,
       sidebarAberta: false,
       user:          JSON.parse(localStorage.getItem('user') || '{}'),
+      verAdminExpirou: false,
     }
   },
 
@@ -286,6 +302,8 @@ export default {
     // Enquanto a loja (e as permissões do membro) carrega mostra-se o pedido; depois acertarEndereco corrige-o.
     activeSection () { return this.$route.params.seccao || this.$route.query.seccao || 'dashboard' },
     role ()        { return this.loja?.minha_role || '' },
+    // admin a ver esta loja só para leitura (services/api.js)
+    modoAdmin ()   { return !!verAdmin(this.lojaId) },
     permissoes ()  { return PERMISSOES[this.role] || [] },
     navItems ()    { return SECCOES.filter(s => this.temPermissao(s.key)) },
     // um profissional com conta vê a sua agenda mesmo sem gerir_marcacoes
@@ -336,6 +354,7 @@ export default {
   },
 
   async created () {
+    capturarVerAdmin()
     await this.fetchLoja()
   },
 
@@ -344,11 +363,14 @@ export default {
     this.aoReembolso = (e) => { if (!e.detail || String(e.detail.loja_id) === String(this.lojaId)) this.fetchDevolucoes() }
     window.addEventListener(EVENTO_REEMBOLSO, this.aoReembolso)
     window.addEventListener(EVENTO_RELIGADO, this.aoReembolso)
+    this.aoExpirarVer = () => { this.verAdminExpirou = true }
+    window.addEventListener(EVENTO_VER_ADMIN_EXPIROU, this.aoExpirarVer)
   },
 
   beforeUnmount () {
     window.removeEventListener(EVENTO_REEMBOLSO, this.aoReembolso)
     window.removeEventListener(EVENTO_RELIGADO, this.aoReembolso)
+    window.removeEventListener(EVENTO_VER_ADMIN_EXPIROU, this.aoExpirarVer)
   },
 
   watch: {
@@ -431,7 +453,8 @@ export default {
         this.acertarEndereco()
       } catch (e) {
         console.error(e)
-        this.$router.push('/Home')
+        // modo de leitura que expirou: fica cá, com a faixa a explicar
+        if (!this.verAdminExpirou) this.$router.push('/Home')
       } finally {
         this.loadingLoja = false
       }

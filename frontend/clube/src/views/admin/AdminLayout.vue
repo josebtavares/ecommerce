@@ -113,7 +113,8 @@
       <!-- pb-24: espaço para o balão do chat (canto inferior direito) não tapar o fim do conteúdo -->
       <div class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
         <AdminDashboard    v-if="activeSection === 'dashboard'"    @ir="irPara" />
-        <AdminLojas        v-else-if="activeSection === 'lojas'"        :pode-exportar="permissoes.includes('exportar_lojas')" />
+        <AdminLojas        v-else-if="activeSection === 'lojas'"        :pode-exportar="permissoes.includes('exportar_lojas')"
+                           :pode-ver-backoffice="permissoes.includes('ver_backoffice_lojas')" />
         <AdminUtilizadores v-else-if="activeSection === 'utilizadores'" />
         <AdminProdutos     v-else-if="activeSection === 'produtos'"     />
         <AdminEncomendas   v-else-if="activeSection === 'encomendas'"   />
@@ -197,7 +198,7 @@ const SECCOES = [
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_faturacao','gerir_home','gerir_devolucoes','gerir_backups','exportar_lojas'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_faturacao','gerir_home','gerir_devolucoes','gerir_backups','exportar_lojas','ver_backoffice_lojas'],
   moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','moderar_chat'],
   suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','gerir_devolucoes'],
   contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos','gerir_subscricoes','gerir_faturacao'],

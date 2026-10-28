@@ -931,7 +931,7 @@ def papel(utilizador, r):
     from ..models import UtilizadorLoja
     if r.comprador_id == utilizador.id:
         return 'cliente'
-    membro = UtilizadorLoja.objects.filter(loja_id=r.loja_id, utilizador=utilizador, ativo=True).first()
+    membro = UtilizadorLoja.obter_membro(r.loja_id, utilizador)
     if membro and membro.pode('gerir_devolucoes'):
         return 'loja'
     if utilizador.pode_admin('gerir_devolucoes'):

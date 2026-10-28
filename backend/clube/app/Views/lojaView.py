@@ -34,12 +34,7 @@ from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso
 # ══════════════════════════════════════════════════════════════
 
 def _get_membro(request, loja):
-    try:
-        return UtilizadorLoja.objects.get(
-            loja=loja, utilizador=request.user.utilizador, ativo=True
-        )
-    except UtilizadorLoja.DoesNotExist:
-        return None
+    return UtilizadorLoja.obter_membro(loja, request.user.utilizador)
 
 
 def _exige_permissao(request, loja, permissao):

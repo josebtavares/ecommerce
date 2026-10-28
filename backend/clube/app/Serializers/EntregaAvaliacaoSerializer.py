@@ -245,10 +245,12 @@ class AvaliacaoLojaSerializer(serializers.ModelSerializer):
 
 
 class AvaliacaoMiniSerializer(serializers.ModelSerializer):
-    utilizador_username = serializers.CharField(
-        source='utilizador.user.username', read_only=True
-    )
+    utilizador_username = serializers.SerializerMethodField()
     utilizador_foto = serializers.SerializerMethodField()
+
+    def get_utilizador_username(self, obj):
+        # conta apagada (utils/eliminacao.py): a avaliação fica e conta na nota, sem o nome
+        return 'Utilizador eliminado' if obj.utilizador.status == 'eliminado' else obj.utilizador.user.username
  
     class Meta:
         model  = AvaliacaoLoja

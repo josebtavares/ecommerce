@@ -165,6 +165,55 @@
               </svg>
               {{ loadingPassword ? 'A guardar…' : 'Alterar password' }}
             </button>
+
+            <!-- Apagar a conta (backend utils/eliminacao.py): 30 dias para mudar de ideias -->
+            <div class="mt-8 pt-5 border-t" :class="isDark ? 'border-zinc-800' : 'border-gray-200'" data-teste="apagar-conta">
+              <h3 class="text-sm font-bold uppercase tracking-wider mb-2 text-red-500">Apagar a minha conta</h3>
+              <button v-if="!apagar.aberto" type="button" @click="abrirApagar" data-teste="btn-apagar-conta"
+                class="text-xs font-semibold text-red-500 hover:text-red-400 transition">
+                Quero apagar a minha conta…
+              </button>
+              <div v-else class="space-y-3 text-xs" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">
+                <p v-if="!apagar.info">A verificar…</p>
+                <template v-else-if="apagar.info.pendentes.length">
+                  <p class="font-semibold" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">Ainda não podes apagar a conta:</p>
+                  <ul class="list-disc pl-5 space-y-0.5" data-teste="apagar-pendentes">
+                    <li v-for="r in apagar.info.pendentes" :key="r">{{ r }}</li>
+                  </ul>
+                </template>
+                <template v-else>
+                  <p>
+                    A conta é apagada daqui a <b>{{ apagar.info.dias }} dias</b>. Até lá, se mudares de ideias, basta
+                    entrares outra vez. Apagamos o teu nome, email, telefone, morada e foto. As encomendas, faturas e
+                    pagamentos ficam guardados sem o teu nome, como a lei obriga. As tuas avaliações e mensagens ficam
+                    como "Utilizador eliminado".
+                  </p>
+                  <p v-if="apagar.info.lojas.length || apagar.info.pos.length" class="text-red-500" data-teste="apagar-lojas">
+                    Vão ser suspensos já e não voltam a abrir:
+                    {{ [...apagar.info.lojas.map(n => `loja ${n}`), ...apagar.info.pos.map(n => `POS ${n}`)].join(', ') }}.
+                  </p>
+                  <input v-if="apagar.info.tem_password" v-model="apagar.password" type="password" autocomplete="current-password"
+                    placeholder="A tua password" data-teste="apagar-password"
+                    class="w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-red-500 transition"
+                    :class="isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300 text-zinc-900'" />
+                  <input v-else v-model="apagar.password" type="text" :placeholder="`Escreve o teu username (${data.username})`"
+                    data-teste="apagar-password"
+                    class="w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-red-500 transition"
+                    :class="isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300 text-zinc-900'" />
+                </template>
+                <p v-if="apagar.erro" class="text-red-400" data-teste="apagar-erro">{{ apagar.erro }}</p>
+                <div class="flex gap-2">
+                  <button type="button" @click="apagar.aberto = false"
+                    class="px-4 py-2 rounded-xl border text-xs font-semibold transition"
+                    :class="isDark ? 'border-zinc-700 text-zinc-400 hover:text-zinc-200' : 'border-gray-300 text-zinc-500 hover:text-zinc-800'">Cancelar</button>
+                  <button v-if="apagar.info && !apagar.info.pendentes.length" type="button" @click="confirmarApagar"
+                    :disabled="!apagar.password || apagar.aGuardar" data-teste="confirmar-apagar"
+                    class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition disabled:opacity-40">
+                    {{ apagar.aGuardar ? 'A apagar…' : 'Apagar a minha conta' }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- ═══ TAB: ENCOMENDAS ═══ -->
@@ -472,7 +521,7 @@ const props = defineProps({
   data:   { type: Object,  default: () => ({}) },
   isDark: { type: Boolean, default: true },       // ← prop nova, default true = comportamento original
 })
-defineEmits(['log_out'])
+const emit = defineEmits(['log_out'])
 
 const router     = useRouter()
 const route      = useRoute()
@@ -504,6 +553,32 @@ const verPassword  = ref(false)
 // contas Google sem password não têm "password actual" — o servidor diz (tem_password)
 const temPassword  = ref(props.data?.tem_password !== false)
 const passwordError = ref('')
+
+// apagar a conta: o servidor diz o que falta resolver e a pessoa confirma com a password
+const apagar = ref({ aberto: false, info: null, password: '', erro: '', aGuardar: false })
+async function abrirApagar() {
+  apagar.value = { aberto: true, info: null, password: '', erro: '', aGuardar: false }
+  try {
+    const { data } = await api.get('/app/utilizador/conta/eliminar/')
+    apagar.value.info = data
+  } catch (e) {
+    apagar.value.erro = e.response?.data?.detail || 'Não foi possível verificar a conta.'
+  }
+}
+async function confirmarApagar() {
+  const a = apagar.value
+  a.erro = ''; a.aGuardar = true
+  try {
+    const corpo = a.info.tem_password ? { password: a.password } : { confirmacao: a.password.trim() }
+    const { data } = await api.post('/app/utilizador/conta/eliminar/', corpo)
+    toast.info(data.detail, { autoClose: 8000 })
+    emit('log_out')      // o servidor já terminou as sessões
+  } catch (e) {
+    const d = e.response?.data
+    if (d?.razoes) a.info = { ...a.info, pendentes: d.razoes }
+    a.erro = d?.detail || 'Não foi possível apagar a conta.'
+  } finally { a.aGuardar = false }
+}
 
 const { loading: loadingProfile,  wrap: wrapProfile  } = useAsyncAction()
 const { loading: loadingPassword, wrap: wrapPassword } = useAsyncAction()

@@ -224,6 +224,16 @@ class Command(BaseCommand):
                 self.stdout.write(f'  devoluções: {n} pedido(s) sem resposta da loja enviado(s) à Bendi')
         except Exception as e:
             self.stderr.write(f'  devoluções: escalar falhou: {e}')
+        try:
+            # suspensões que acabaram (as lojas suspensas com a conta voltam a horas) e contas
+            # cujo prazo para apagar acabou (utils/moderacao.py, utils/eliminacao.py)
+            from app.utils.moderacao import levantar_expiradas
+            from app.utils.eliminacao import eliminar_vencidas
+            n, m = levantar_expiradas(), eliminar_vencidas()
+            if n or m:
+                self.stdout.write(f'  contas: {n} suspensão(ões) terminada(s), {m} conta(s) apagada(s)')
+        except Exception as e:
+            self.stderr.write(f'  contas: falhou: {e}')
 
     def _sinal(self, *_):
         # termina a conversão em curso e sai

@@ -23,6 +23,7 @@
         <option value="ativo">Activos</option>
         <option value="banido">Banidos</option>
         <option value="suspenso">Suspensos</option>
+        <option value="eliminado">Apagados</option>
       </select>
       <p class="text-xs text-zinc-500 ml-auto">{{ totalCount }} utilizadores</p>
     </div>
@@ -34,8 +35,8 @@
 
     <!-- Lista -->
     <div v-else class="space-y-2">
-      <div v-for="u in utilizadores" :key="u.id"
-           class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 flex items-center gap-4 group">
+      <div v-for="u in utilizadores" :key="u.id" @click="irParaFicha($router, $route, u.id)" data-teste="linha-utilizador"
+           class="bg-zinc-900 rounded-2xl border border-zinc-800 hover:border-zinc-700 p-4 flex items-center gap-4 group cursor-pointer transition">
 
         <img v-if="u.foto_url" :src="u.foto_url" :alt="u.username"
              class="w-10 h-10 rounded-full object-cover flex-shrink-0" />
@@ -49,21 +50,23 @@
             <span v-if="u.verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold inline-flex items-center gap-1"><font-awesome-icon :icon="['fas', 'circle-check']" /> Verificado</span>
             <span v-if="u.is_staff" class="px-1.5 py-0.5 bg-red-500/15 text-red-400 text-[10px] rounded font-bold">Staff</span>
             <span v-if="u.role_admin" class="px-1.5 py-0.5 bg-purple-500/15 text-purple-400 text-[10px] rounded font-bold capitalize">{{ u.role_admin }}</span>
-            <span v-if="u.status !== 'ativo'" :class="['px-1.5 py-0.5 text-[10px] rounded font-bold', u.status === 'banido' ? 'bg-red-500/15 text-red-400' : 'bg-yellow-500/15 text-yellow-400']">
-              {{ u.status }}
+            <span v-if="u.eliminar_em_txt" class="px-1.5 py-0.5 text-[10px] rounded font-bold bg-red-500/15 text-red-400">A apagar a {{ u.eliminar_em_txt }}</span>
+            <span v-if="u.status !== 'ativo'" :class="['px-1.5 py-0.5 text-[10px] rounded font-bold', u.status === 'banido' ? 'bg-red-500/15 text-red-400' : u.status === 'eliminado' ? 'bg-zinc-700 text-zinc-300' : 'bg-yellow-500/15 text-yellow-400']">
+              {{ u.status === 'banido' ? 'Banido' : u.status === 'eliminado' ? 'Apagado' : (u.suspenso_ate ? `Suspenso até ${u.suspenso_ate_txt}` : 'Suspenso') }}
             </span>
           </div>
           <p class="text-xs text-zinc-500">{{ u.email }} · {{ u.total_lojas }} lojas · desde {{ u.data_criacao }}</p>
         </div>
 
         <!-- contas da equipa de admin e permissões: só o Super Admin mexe (o servidor também recusa) -->
-        <div v-if="souSuperadmin || !u.is_staff" class="flex gap-2 flex-shrink-0 opacity-100 group-hover:opacity-100 transition">
+        <div v-if="souSuperadmin || !u.is_staff" class="flex gap-2 flex-shrink-0 opacity-100 group-hover:opacity-100 transition" @click.stop>
           <button @click="toggleVerificado(u)" :title="u.verificado ? 'Remover verificacao' : 'Verificar'"
             :class="['w-8 h-8 rounded-lg flex items-center justify-center transition text-xs',
                      u.verificado ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-green-400']"><font-awesome-icon :icon="['fas', 'check']" /></button>
-          <button @click="toggleBan(u)" :title="u.status === 'banido' ? 'Remover ban' : 'Banir'"
+          <!-- suspender/banir: na ficha (pede motivo e fica no histórico) -->
+          <button @click="irParaFicha($router, $route, u.id)" title="Suspender / banir"
             :class="['w-8 h-8 rounded-lg flex items-center justify-center transition text-xs',
-                     u.status === 'banido' ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-red-400']"><font-awesome-icon :icon="['fas', 'ban']" /></button>
+                     u.status !== 'ativo' ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-zinc-800 text-zinc-500 hover:text-red-400']"><font-awesome-icon :icon="['fas', 'ban']" /></button>
           <button v-if="souSuperadmin" @click="abrirEditarRole(u)" title="Permissões"
             class="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-500 hover:text-purple-400 flex items-center justify-center transition text-xs"><font-awesome-icon :icon="['fas', 'gear']" /></button>
         </div>
@@ -95,6 +98,12 @@
         </button>
       </div>
     </div>
+
+    <!-- ficha do utilizador: vai no endereço (/admin/utilizadores/<id>) -->
+    <UtilizadorFicha v-if="fichaId" :id="fichaId"
+      @fechar="irParaFicha($router, $route, null)"
+      @naoExiste="irParaFicha($router, $route, null, true)"
+      @mudou="atualizarLinha" />
 
     <!-- Modal editar role -->
     <div v-if="editandoRole"
@@ -131,8 +140,11 @@
 
 <script>
 import api from '@/services/api'
+import { fichaDaRota, irParaFicha } from '@/utils/ficha'
+import UtilizadorFicha from '@/components/admin/UtilizadorFicha.vue'
 export default {
   name: 'AdminUtilizadores',
+  components: { UtilizadorFicha },
   data () {
     return {
       loading: true, utilizadores: [], totalCount: 0,
@@ -145,6 +157,7 @@ export default {
   },
   computed: {
     totalPages () { return Math.ceil(this.totalCount / this.limit) },
+    fichaId () { return fichaDaRota(this.$route) },
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)
       const end   = Math.min(this.totalPages, this.page + 2)
@@ -173,9 +186,12 @@ export default {
     async toggleVerificado (u) {
       try { const { data } = await api.patch(`/app/admin/utilizadores/${u.id}/`, { verificado: !u.verificado }); u.verificado = data.verificado } catch (e) { console.error(e) }
     },
-    async toggleBan (u) {
-      const novoStatus = u.status === 'banido' ? 'ativo' : 'banido'
-      try { const { data } = await api.patch(`/app/admin/utilizadores/${u.id}/`, { status: novoStatus }); u.status = data.status } catch (e) { console.error(e) }
+    irParaFicha,
+    // a ficha mudou o estado: a linha da lista acompanha
+    atualizarLinha (f) {
+      const u = this.utilizadores.find(x => x.id === f.id)
+      if (u) Object.assign(u, { status: f.status, suspenso_ate: f.suspenso_ate, suspenso_ate_txt: f.suspenso_ate_txt, motivo_estado: f.motivo_estado,
+                                eliminar_em_txt: f.eliminar_em_txt, username: f.username, email: f.email, nome: f.nome })
     },
     abrirEditarRole (u) { this.editandoRole = u; this.novaRole = u.role_admin || '' },
     async guardarRole () {

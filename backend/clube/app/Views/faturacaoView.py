@@ -82,7 +82,7 @@ def _periodo(request):
 
 def _membro(request, loja):
     try:
-        return UtilizadorLoja.objects.get(loja=loja, utilizador=request.user.utilizador, ativo=True)
+        return UtilizadorLoja.obter_membro(loja, request.user.utilizador)
     except Exception:
         return None
 
