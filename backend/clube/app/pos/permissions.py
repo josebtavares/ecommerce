@@ -50,6 +50,8 @@ class POSAuthentication(BaseAuthentication):
     """
 
     def authenticate(self, request):
+        from ..utils import ver_loja
+        ver_loja.definir()      # nunca herda o modo de leitura de outro pedido
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
 
         if not auth_header.startswith('Bearer '):
@@ -103,6 +105,8 @@ class POSAuthentication(BaseAuthentication):
             raise AuthenticationFailed(MSG_INATIVA)
         if anterior_a_troca(user.pk, token):           # password da conta principal mudada
             raise AuthenticationFailed('Sessão terminada.')
+        # admin a ver um POS (utils/ver_loja.py): só leitura, e só enquanto tiver a permissão
+        ver_loja.validar(request, user, token)
 
         return (user, token)
 
@@ -149,6 +153,20 @@ def get_utilizador_from_request(request):
     Levanta AttributeError se for membro.
     """
     return request.user.utilizador
+
+
+def conta_principal(request):
+    """
+    Utilizador da conta principal (dono). Com o token de leitura do admin (utils/ver_loja.py),
+    o dono do POS que está a ver: o dashboard abre como o dono o vê (escrever, o token não deixa).
+    """
+    from ..utils.ver_loja import pos_a_ver
+    utilizador = getattr(request.user, 'utilizador', None)
+    pos_id = pos_a_ver(utilizador)
+    if pos_id:
+        pos = ConfiguracaoPOS.objects.select_related('dono__user').filter(id=pos_id).first()
+        return pos.dono if pos else None
+    return utilizador
 
 
 def get_membro_from_request(request):

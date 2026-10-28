@@ -73,6 +73,7 @@ urlpatterns = [
     path('admin/pos/<int:pos_id>/desligar-loja/',         pos_admin.admin_pos_desligar_loja,  name='admin-pos-desligar-loja'),
     path('admin/pos/<int:pos_id>/contas/<int:conta_id>/cancelar/', pos_admin.admin_pos_cancelar_conta, name='admin-pos-cancelar-conta'),
     path('admin/pos/<int:pos_id>/membros/<int:membro_id>/password/', pos_admin.admin_pos_membro_password, name='admin-pos-membro-password'),
+    path('admin/pos/<int:pos_id>/ver/',                   pos_admin.admin_pos_ver,            name='admin-pos-ver'),
 ]
 
    

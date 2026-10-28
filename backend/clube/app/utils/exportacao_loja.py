@@ -1,7 +1,8 @@
 """
-Exportação dos dados de uma loja: um ZIP com CSV legíveis (abrem no Excel) — não serve para repor.
+Exportação dos dados de uma loja — ou de um POS (escrever_zip_pos; também os que não têm loja) —
+num ZIP com CSV legíveis (abrem no Excel). Não serve para repor.
 
-  pedir(loja, user, com_imagens, pelo_admin) → ExportacaoLoja na fila (ou ExportacaoEmCurso / LimiteExportacoes)
+  pedir(loja|pos, user, com_imagens, pelo_admin) → ExportacaoLoja na fila (ou ExportacaoEmCurso / LimiteExportacoes)
   processar_fila()                           → o worker (manage.py processar_videos) gera a próxima da fila
   expirar()                                  → apaga os ficheiros com mais de DIAS_VALIDADE dias
 
@@ -30,7 +31,7 @@ from . import backups
 log = logging.getLogger(__name__)
 
 DIAS_VALIDADE = 7
-MAX_POR_DIA = 5                       # por loja
+MAX_POR_DIA = 5                       # por loja / POS
 LIMITE_MEDIA = 2 * 1024 ** 3          # imagens/vídeos: acima disto o resto fica de fora (e diz-se no LEIA-ME)
 ENCRAVADA = timedelta(hours=2)
 
@@ -45,15 +46,24 @@ class LimiteExportacoes(Exception):
 
 # ── pedir ──────────────────────────────────────────────────────────
 
-def pedir(loja, user, com_imagens=False, pelo_admin=False):
+def de(alvo):
+    """Filtro das exportações de uma loja ou de um POS."""
+    from ..pos.models import ConfiguracaoPOS
+    return {'pos': alvo} if isinstance(alvo, ConfiguracaoPOS) else {'loja': alvo}
+
+
+def pedir(alvo, user, com_imagens=False, pelo_admin=False):
+    """alvo: a Loja ou o ConfiguracaoPOS."""
+    filtro = de(alvo)
+    loja = 'loja' in filtro
     with transaction.atomic():
-        ativas = ExportacaoLoja.objects.select_for_update().filter(loja=loja, estado__in=('pendente', 'a_correr'))
+        ativas = ExportacaoLoja.objects.select_for_update().filter(**filtro, estado__in=('pendente', 'a_correr'))
         if ativas.exists():
-            raise ExportacaoEmCurso('Já há uma exportação desta loja a ser preparada.')
-        hoje = ExportacaoLoja.objects.filter(loja=loja, criado_em__gte=timezone.now() - timedelta(days=1)).count()
+            raise ExportacaoEmCurso(f'Já há uma exportação {"desta loja" if loja else "deste POS"} a ser preparada.')
+        hoje = ExportacaoLoja.objects.filter(**filtro, criado_em__gte=timezone.now() - timedelta(days=1)).count()
         if hoje >= MAX_POR_DIA:
-            raise LimiteExportacoes(f'Esta loja já fez {MAX_POR_DIA} exportações nas últimas 24 horas.')
-        return ExportacaoLoja.objects.create(loja=loja, pedido_por=user, com_imagens=bool(com_imagens),
+            raise LimiteExportacoes(f'{"Esta loja" if loja else "Este POS"} já fez {MAX_POR_DIA} exportações nas últimas 24 horas.')
+        return ExportacaoLoja.objects.create(**filtro, pedido_por=user, com_imagens=bool(com_imagens),
                                              pelo_admin=pelo_admin)
 
 
@@ -93,18 +103,18 @@ def expirar(agora=None):
 def gerar(exp):
     pasta = tempfile.mkdtemp(prefix='exportacao-')
     try:
-        loja = exp.loja
+        alvo, tipo = (exp.pos, 'pos') if exp.pos_id else (exp.loja, 'loja')
         local = timezone.localtime(exp.iniciado_em or timezone.now())
-        nome = f'bende-loja-{loja.id}-{_slug(loja.nome)}-{local:%Y%m%d-%H%M%S}.zip'
+        nome = f'bende-{tipo}-{alvo.id}-{_slug(alvo.nome)}-{local:%Y%m%d-%H%M%S}.zip'
         ficheiro = Path(pasta) / nome
-        avisos = escrever_zip(ficheiro, exp)
-        chave = f'exportacoes/loja-{loja.id}/{nome}'
+        avisos = (escrever_zip_pos if exp.pos_id else escrever_zip)(ficheiro, exp)
+        chave = f'exportacoes/{tipo}-{alvo.id}/{nome}'
         backups.armazenamento().guardar(ficheiro, chave)
         exp.chave, exp.tamanho, exp.estado = chave, ficheiro.stat().st_size, 'ok'
         exp.avisos = '\n'.join(avisos)[:20000]
         exp.expira_em = timezone.now() + timedelta(days=DIAS_VALIDADE)
     except Exception as e:
-        log.exception('exportação da loja %s falhou', exp.loja_id)
+        log.exception('%s falhou', exp)
         exp.estado, exp.erro = 'erro', str(e)[:4000]
     finally:
         shutil.rmtree(pasta, ignore_errors=True)
@@ -120,11 +130,15 @@ def _avisar(exp):
     u = getattr(exp.pedido_por, 'utilizador', None) if exp.pedido_por else None
     if not u:
         return
-    link = f'/admin/lojas/{exp.loja_id}' if exp.pelo_admin else f'/loja/{exp.loja_id}/backoffice/configuracoes'
+    if exp.pos_id:      # só o admin exporta um POS
+        link, nome = f'/admin/pos/{exp.pos_id}', f'POS {exp.pos.nome}'
+    else:
+        link = f'/admin/lojas/{exp.loja_id}' if exp.pelo_admin else f'/loja/{exp.loja_id}/backoffice/configuracoes'
+        nome = exp.loja.nome
     ok = exp.estado == 'ok'
     try:
         notificar(u, 'exportacao_pronta',
-                  f'Exportação de «{exp.loja.nome}» ' + ('pronta' if ok else 'falhou'),
+                  f'Exportação de «{nome}» ' + ('pronta' if ok else 'falhou'),
                   (f'O ficheiro fica disponível {DIAS_VALIDADE} dias.' if ok else 'Tenta outra vez; se voltar a falhar, fala com o suporte.'),
                   loja=exp.loja, link=link)
     except Exception:
@@ -262,25 +276,8 @@ def escrever_zip(destino, exp):
 
         # POS ligados à loja
         from ..pos.models import ContaMesa, ItemContaMesa, TurnoPOS
-        contas = ContaMesa.objects.filter(loja=loja).select_related('pos', 'mesa').order_by('criada_em')
-        if contas.exists():
-            csv('pos/contas.csv', ['Conta', 'POS', 'Mesa', 'Aberta em', 'Fechada em', 'Estado', 'Atendente',
-                                   'Subtotal (CVE)', 'Taxa de serviço (CVE)', 'Desconto (CVE)', 'Motivo do desconto',
-                                   'Gorjeta (CVE)', 'Total (CVE)', 'Pagamento', 'NIF do cliente', 'Fatura nº'],
-                [[f'V-{c.id}', c.pos.nome, c.mesa.numero if c.mesa_id else '',
-                  _quando(c.criada_em), _quando(c.fechada_em), c.get_status_display(), c.atendente_nome,
-                  _v(c.subtotal), _v(c.taxa_servico_valor), _v(c.desconto_valor), c.desconto_motivo, _v(c.gorjeta),
-                  _v(c.total), c.get_metodo_pagamento_display() if c.metodo_pagamento else '', c.nif_cliente, c.fatura_numero]
-                 for c in contas])
-            csv('pos/contas-itens.csv', ['Conta', 'Produto', 'Quantidade', 'Preço unitário (CVE)', 'Total (CVE)'],
-                [[f'V-{i.conta_id}', i.nome, i.quantidade, _v(i.preco_unitario), _v(i.preco_total)]
-                 for i in ItemContaMesa.objects.filter(conta__loja=loja).order_by('conta_id', 'id')])
-        turnos = TurnoPOS.objects.filter(pos__loja_vinculada=loja).select_related('pos').order_by('aberto_em')
-        if turnos.exists():
-            csv('pos/turnos.csv', ['POS', 'Operador', 'Aberto em', 'Fechado em', 'Fechado por', 'Abertura (CVE)',
-                                   'Fecho (CVE)', 'Diferença (CVE)', 'Observações'],
-                [[t.pos.nome, t.operador_nome, _quando(t.aberto_em), _quando(t.fechado_em), t.fechado_por,
-                  _v(t.valor_abertura), _v(t.valor_fecho), _v(t.diferenca), t.observacoes] for t in turnos])
+        _contas_pos(lambda nome, *resto: csv(f'pos/{nome}', *resto), ContaMesa.objects.filter(loja=loja),
+                    ItemContaMesa.objects.filter(conta__loja=loja), TurnoPOS.objects.filter(pos__loja_vinculada=loja))
 
         # clientes (quem comprou ou marcou nesta loja)
         clientes = {}
@@ -340,6 +337,114 @@ def escrever_zip(destino, exp):
     return avisos
 
 
+def _contas_pos(csv, contas, itens, turnos):
+    """contas.csv, contas-itens.csv e turnos.csv (os POS ligados a uma loja e o ZIP de um POS)."""
+    from ..Views.faturacaoView import _quando
+    if contas.exists():
+        csv('contas.csv', ['Conta', 'POS', 'Mesa', 'Aberta em', 'Fechada em', 'Estado', 'Atendente',
+                           'Subtotal (CVE)', 'Taxa de serviço (CVE)', 'Desconto (CVE)', 'Motivo do desconto',
+                           'Gorjeta (CVE)', 'Total (CVE)', 'Pagamento', 'NIF do cliente', 'Fatura nº'],
+            [[f'V-{c.id}', c.pos.nome, c.mesa.numero if c.mesa_id else '',
+              _quando(c.criada_em), _quando(c.fechada_em), c.get_status_display(), c.atendente_nome,
+              _v(c.subtotal), _v(c.taxa_servico_valor), _v(c.desconto_valor), c.desconto_motivo, _v(c.gorjeta),
+              _v(c.total), c.get_metodo_pagamento_display() if c.metodo_pagamento else '', c.nif_cliente, c.fatura_numero]
+             for c in contas.select_related('pos', 'mesa').order_by('criada_em')])
+        csv('contas-itens.csv', ['Conta', 'Produto', 'Quantidade', 'Preço unitário (CVE)', 'Total (CVE)'],
+            [[f'V-{i.conta_id}', i.nome, i.quantidade, _v(i.preco_unitario), _v(i.preco_total)]
+             for i in itens.order_by('conta_id', 'id')])
+    if turnos.exists():
+        csv('turnos.csv', ['POS', 'Operador', 'Aberto em', 'Fechado em', 'Fechado por', 'Abertura (CVE)',
+                           'Fecho (CVE)', 'Diferença (CVE)', 'Observações'],
+            [[t.pos.nome, t.operador_nome, _quando(t.aberto_em), _quando(t.fechado_em), t.fechado_por,
+              _v(t.valor_abertura), _v(t.valor_fecho), _v(t.diferenca), t.observacoes]
+             for t in turnos.select_related('pos').order_by('aberto_em')])
+
+
+def escrever_zip_pos(destino, exp):
+    """O ZIP de um POS: configuração, equipa, mesas, produtos próprios, vendas, turnos e arquivo fiscal."""
+    from ..Views.faturacaoView import _csv, _quando, escrever_arquivo
+    from ..pos.models import ContaMesa, ItemContaMesa, Mesa, ProdutoPOS, TurnoPOS, UtilizadorPOS, VarianteProdutoPOS
+    pos = exp.pos
+    avisos = []
+
+    with zipfile.ZipFile(destino, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+        def csv(nome, cabecalho, linhas):
+            zf.writestr(nome, _csv([cabecalho] + list(linhas)))
+
+        dados = {
+            'id': pos.id, 'nome': pos.nome, 'codigo': pos.codigo_pos, 'modo': pos.get_modo_display(),
+            'criado_em': _quando(pos.criado_em), 'dono': dict(zip(('nome', 'email', 'telefone'), _pessoa(pos.dono))),
+            'loja_ligada': {'id': pos.loja_vinculada_id, 'nome': pos.loja_vinculada.nome} if pos.loja_vinculada_id else None,
+            'estado': 'suspenso' if pos.suspenso else ('ativo' if pos.ativo else 'desativado'),
+            'suspenso_motivo': pos.suspenso_motivo,
+            'nif': pos.nif, 'regime_fiscal': pos.regime_fiscal, 'dados_fiscais_da_loja': pos.fiscal_da_loja,
+            'percentagem_iva': str(pos.percentagem_iva),
+            'taxa_servico': str(pos.taxa_servico_percentagem) if pos.taxa_servico_ativa else None,
+        }
+        zf.writestr('pos.json', json.dumps(dados, ensure_ascii=False, indent=2))
+
+        csv('equipa.csv', ['Nome', 'Utilizador', 'Papel', 'Ativo', 'Desde'],
+            [[m.nome, m.username_pos, m.get_papel_display(), 'sim' if m.ativo else 'não', _quando(m.criado_em)]
+             for m in UtilizadorPOS.objects.filter(pos=pos).order_by('nome')])
+        csv('mesas.csv', ['Mesa', 'Capacidade', 'Ativa'],
+            [[m.numero, m.capacidade, 'sim' if m.ativa else 'não'] for m in Mesa.objects.filter(pos=pos).order_by('id')])
+
+        produtos = (ProdutoPOS.objects.filter(pos=pos).select_related('tipo')
+                    .prefetch_related('componentes__produto', 'componentes__produto_pos').order_by('id'))
+        csv('produtos.csv', ['ID', 'Nome', 'Categoria', 'Tipo', 'Preço (CVE)', 'Custo (CVE)', 'Stock', 'Ativo', 'No POS',
+                             'Conjunto (componentes)', 'Atributos', 'Descrição', 'Criado em'],
+            [[p.id, p.nome, p.categoria, getattr(p.tipo, 'nome', ''), _v(p.preco), _v(p.preco_custo),
+              'por variante' if p.stock_por_variante else (p.stock if p.controlar_stock else 'sem controlo'),
+              'sim' if p.ativo else 'não', 'sim' if p.disponivel_pos else 'não',
+              ' + '.join(f'{c.quantidade}× {(c.produto_pos or c.produto).nome}' for c in p.componentes.all())
+              if p.e_conjunto else '',
+              json.dumps(p.atributos, ensure_ascii=False) if p.atributos else '', p.descricao, _quando(p.criado_em)]
+             for p in produtos])
+        csv('variantes.csv', ['ID', 'Produto ID', 'Produto', 'Variante', 'SKU', 'Preço (CVE)', 'Stock', 'Ativa'],
+            [[v.id, v.produto_id, v.produto.nome, v.descricao(), v.sku,
+              _v(v.preco if v.preco is not None else v.produto.preco), v.quantidade, 'sim' if v.ativo else 'não']
+             for v in VarianteProdutoPOS.objects.filter(produto__pos=pos).select_related('produto').order_by('produto_id', 'id')])
+
+        _contas_pos(csv, ContaMesa.objects.filter(pos=pos), ItemContaMesa.objects.filter(conta__pos=pos),
+                    TurnoPOS.objects.filter(pos=pos))
+
+        try:
+            avisos += [f'faturacao/{f}' for f in escrever_arquivo(zf, pos, 'pos', None, None, prefixo='faturacao/')]
+        except Exception as e:
+            log.exception('exportação: arquivo fiscal do POS %s', pos.id)
+            avisos.append(f'faturacao/: não foi possível juntar o arquivo fiscal ({e})')
+
+        n_media = 0
+        if exp.com_imagens:
+            ficheiros = [(f'imagens/produtos/{p.id}-{_slug(p.nome)}{Path(p.imagem.name).suffix.lower()}', p.imagem.name)
+                         for p in produtos if p.imagem and getattr(p.imagem, 'name', '')]
+            n_media, cortadas = _copiar_media(zf, ficheiros, avisos)
+            if cortadas:
+                avisos.append(f'imagens/: {cortadas} ficheiro(s) ficaram de fora — o ZIP passava de '
+                              f'{LIMITE_MEDIA // 1024 ** 3} GB.')
+
+        leia = [
+            f'Dados do POS «{pos.nome}» (id {pos.id}) — exportados pelo Bende a {_quando(timezone.now())}.',
+            'Ficheiros CSV separados por ; (abrem no Excel). Valores em escudos (CVE). Datas na hora de Cabo Verde.',
+            'Este ZIP serve para consultar e guardar os dados; não se importa de volta para o Bende.', '',
+            'pos.json                  configuração do POS, dono, loja ligada e dados fiscais',
+            'equipa.csv                membros da equipa (sem passwords) e papel',
+            'mesas.csv                 mesas',
+            'produtos.csv              produtos próprios do POS; variantes.csv as variantes com o stock',
+            'contas.csv                vendas; contas-itens.csv os artigos de cada uma (se houver)',
+            'turnos.csv                aberturas e fechos de caixa (se houver)',
+            'faturacao/                arquivo fiscal: faturas das vendas e documentos do Bende (tem o seu LEIA-ME)',
+            f'imagens/                  imagens dos produtos ({n_media} ficheiros)'
+            if exp.com_imagens else 'imagens/                  (não incluídas — escolhe «com imagens» ao exportar)',
+        ]
+        if pos.loja_vinculada_id:
+            leia.append('Os produtos da loja ligada não estão aqui — estão na exportação da loja.')
+        if avisos:
+            leia += ['', 'Avisos:'] + avisos
+        zf.writestr('LEIA-ME.txt', '\r\n'.join(leia))
+    return avisos
+
+
 def _juntar_media(zf, loja, avisos):
     from ..servicos.models import Profissional, ServicoImagem
     from ..models import ProdutoImagem
@@ -362,6 +467,11 @@ def _juntar_media(zf, loja, avisos):
     for p in Profissional.objects.filter(loja=loja):
         junta('profissionais', p.foto, f'{p.id}-{_slug(p.nome)}')
 
+    return _copiar_media(zf, ficheiros, avisos)
+
+
+def _copiar_media(zf, ficheiros, avisos):
+    """Copia [(caminho no ZIP, nome no armazenamento)] até LIMITE_MEDIA. Devolve (copiados, cortados)."""
     total = n = cortadas = 0
     for caminho, nome in ficheiros:
         try:

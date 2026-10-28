@@ -11,7 +11,7 @@ import criarLoja from './views/criarLoja.vue';
 import GoogleCallback from './views/google/GoogleCallback.vue';
 import CompletarPerfil from './views/google/CompletarPerfil.vue';
 import MensagensPagina from './views/Mensagens.vue';
-import { POS_ACCESS } from './services/api';
+import { POS_ACCESS, verAdminPOS } from './services/api';
 import { estaAutenticado } from './services/sessao';
 import FlutterwaveCallback from './views/flutterwave/FlutterwaveCallback.vue';
 import PedirReembolso from './views/reembolsos/PedirReembolso.vue';
@@ -203,7 +203,8 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
     // Páginas do POS: precisam da sessão do POS (dono ou membro) — independente da Bendi
     if (to.matched.some(record => record.meta.requiresPOSAuth)) {
-        const sessao = localStorage.getItem(POS_ACCESS)
+        // (ou o admin a ver este POS em modo de leitura — services/api.js verAdminPOS)
+        const sessao = localStorage.getItem(POS_ACCESS) || verAdminPOS()
         return sessao ? next() : next({ name: 'POSLogin' })
     }
     if (to.matched.some(record => record.meta.requiresAuth)) {

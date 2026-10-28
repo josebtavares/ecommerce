@@ -126,7 +126,8 @@
         <AdminRelatorios   v-else-if="activeSection === 'relatorios'"   />
         <AdminHome         v-else-if="activeSection === 'home'"         />
         <AdminPaginas      v-else-if="activeSection === 'paginas'"      />
-        <AdminPOS          v-else-if="activeSection === 'pos'"          />
+        <AdminPOS          v-else-if="activeSection === 'pos'"          :pode-exportar="permissoes.includes('exportar_lojas')"
+                           :pode-ver-pos="permissoes.includes('ver_backoffice_lojas')" />
         <AdminSuporte      v-else-if="activeSection === 'suporte_chat'" />
         <AdminDenuncias    v-else-if="activeSection === 'denuncias'"    @pendentes="n => denunciasPendentes = n" />
         <AdminPlataforma   v-else-if="activeSection === 'plataforma'"   />
