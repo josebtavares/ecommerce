@@ -2,6 +2,7 @@ from django.urls import path
 from ..Views import adminView
 from ..Views import relatorioView
 from ..Views import backupView
+from ..Views import registoView
 from ..pos import views_admin as pos_admin
 
 urlpatterns = [
@@ -25,6 +26,10 @@ urlpatterns = [
     # ── Lojas ─────────────────────────────────────────────────
     path('admin/lojas/',                        adminView.admin_loja_list,           name='admin-loja-list'),
     path('admin/lojas/<int:loja_id>/',          adminView.admin_loja_gerir,          name='admin-loja-gerir'),
+    path('admin/lojas/<int:loja_id>/banco/',    registoView.admin_loja_banco,        name='admin-loja-banco'),
+    path('admin/registo/',                      registoView.admin_registo,           name='admin-registo'),
+    path('admin/registo/exportar/',             registoView.admin_registo_exportar,  name='admin-registo-exportar'),
+    path('admin/registo/verificar/',            registoView.admin_registo_verificar, name='admin-registo-verificar'),
     path('admin/lojas/<int:loja_id>/eliminar/', adminView.admin_loja_eliminar,       name='admin-loja-eliminar'),
     path('admin/lojas/<int:loja_id>/ver-backoffice/', adminView.admin_loja_ver_backoffice, name='admin-loja-ver-backoffice'),
 

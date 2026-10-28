@@ -70,6 +70,7 @@ class Utilizador(models.Model):
             'gerir_backups',     # backups da base de dados: ver, fazer e descarregar (utils/backups.py)
             'exportar_lojas',    # exportar os dados de uma loja ou POS (ZIP com clientes, vendas...) — utils/exportacao_loja.py
             'ver_backoffice_lojas',  # abrir o backoffice de uma loja ou o dashboard de um POS só para leitura — utils/ver_loja.py
+            'ver_registo_transacoes',  # registo das transações (só de acrescentar) — utils/registo.py
         ],
         'moderador': [
             'ver_stats',
@@ -96,6 +97,7 @@ class Utilizador(models.Model):
             'gerir_subscricoes',
             'gerir_faturacao',
             'ver_relatorios',
+            'ver_registo_transacoes',
         ],
     }
  
@@ -378,6 +380,7 @@ class UtilizadorLoja(models.Model):
             'editar_loja',
             'apagar_loja',
             'gerir_dados_fiscais',     # NIF e regime (utils/fiscal.py) — só o dono
+            'gerir_dados_bancarios',   # conta para receber as vendas (utils/banco.py) — só o dono
             'gerir_staff',
             'gerir_produtos',
             'gerir_inventario',
@@ -1412,6 +1415,7 @@ class Notificacao(models.Model):
         ('loja_aprovada',            'Loja aprovada'),
         ('loja_rejeitada',           'Loja rejeitada'),
         ('loja_suspensa',            'Loja suspensa'),
+        ('dados_bancarios',          'Dados bancários alterados'),
         ('loja_reativada',           'Loja reactivada'),
         ('loja_fechada',             'Loja fechada pelo dono'),
         ('nova_encomenda',           'Nova encomenda'),
@@ -2277,3 +2281,55 @@ class ModeracaoUtilizador(models.Model):
 
     class Meta:
         ordering = ['-criado_em', '-id']
+
+
+class DadosBancarios(models.Model):
+    """Conta para onde vai o dinheiro das vendas da loja (utils/banco.py). Só o dono vê e altera;
+    cada alteração fica no registo de transações (utils/registo.py) e o dono recebe um email."""
+    loja          = models.OneToOneField(Loja, on_delete=models.CASCADE, related_name='dados_bancarios')
+    banco         = models.CharField(max_length=60)
+    nib           = models.CharField(max_length=21)          # 21 dígitos; o IBAN é CV64 + NIB
+    titular       = models.CharField(max_length=120)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    atualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'Dados bancários de {self.loja_id}'
+
+
+class RegistoTransacao(models.Model):
+    """Registo das transações — só se acrescenta: a base de dados recusa UPDATE, DELETE e TRUNCATE
+    (trigger na migração 0073) e cada linha leva o hash da anterior (utils/registo.py verifica a cadeia).
+    Sem chaves estrangeiras: apagar uma loja ou anonimizar uma conta não toca no registo.
+    Nunca guarda dados de cartão; o NIB vai mascarado."""
+    TIPOS = [
+        ('encomenda',  'Pagamento de encomenda'),
+        ('reembolso',  'Reembolso'),
+        ('marcacao',   'Marcação'),
+        ('subscricao', 'Fatura de subscrição'),
+        ('banco',      'Dados bancários'),
+    ]
+    criado_em      = models.DateTimeField(db_index=True)
+    tipo           = models.CharField(max_length=12, choices=TIPOS, db_index=True)
+    evento         = models.CharField(max_length=40)
+    objeto_id      = models.BigIntegerField(null=True, blank=True)       # Pagamento, Reembolso, Marcação, Fatura ou Loja
+    loja_id        = models.BigIntegerField(null=True, blank=True, db_index=True)
+    pos_id         = models.BigIntegerField(null=True, blank=True)
+    encomenda_id   = models.BigIntegerField(null=True, blank=True, db_index=True)
+    valor          = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    estado_anterior = models.CharField(max_length=20, blank=True, default='')
+    estado_novo    = models.CharField(max_length=20, blank=True, default='')
+    metodo         = models.CharField(max_length=30, blank=True, default='')
+    referencia     = models.CharField(max_length=255, blank=True, default='')
+    ator_id        = models.BigIntegerField(null=True, blank=True)       # auth User; vazio = sistema (worker, prazos)
+    ip             = models.CharField(max_length=45, blank=True, default='')
+    pedido_id      = models.CharField(max_length=64, blank=True, default='')
+    dados          = models.JSONField(default=dict, blank=True)
+    hash_anterior  = models.CharField(max_length=64, blank=True, default='')
+    hash           = models.CharField(max_length=64, unique=True)
+
+    class Meta:
+        ordering = ['-id']
+
+    def __str__(self):
+        return f'#{self.pk} {self.tipo}/{self.evento}'

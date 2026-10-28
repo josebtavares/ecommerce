@@ -758,6 +758,10 @@ def loja_esgotado(encomenda, utilizador, itens, nota=''):
         p = Pagamento.objects.select_for_update().get(pk=p.pk)
         valor = min(valor, p.valor)
         Pagamento.objects.filter(pk=p.pk).update(valor=F('valor') - valor)
+        from .registo import registar
+        registar('encomenda', 'valor_alterado', objeto_id=p.pk, loja_id=encomenda.loja_id, encomenda_id=encomenda.id,
+                 valor=p.valor - valor, estado_novo=p.status, referencia=p.referencia_transacao,
+                 dados={'valor_anterior': f'{p.valor:.2f}', 'motivo': 'artigo esgotado, abatido no valor a pagar'})
     r.estado = 'reembolsado'
     r.valor_aprovado = valor
     r.metodo = 'abatido'

@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from ..models import ConfiguracaoPlataforma, Loja, Subscricao, UtilizadorLoja
 from ..utils import subscricoes as subs
+from ..utils.registo import anular_faturas
 from .models import ConfigServicos, Marcacao, Profissional
 
 ESTADOS_COM_ACESSO = ('teste', 'ativa', 'em_atraso')
@@ -144,13 +145,13 @@ def desativar(loja):
 def _terminar(sub, nota):
     """Sem renovação: 'aguarda' cancela já; activa acaba no fim do período pago."""
     if sub.estado == 'aguarda':
-        sub.faturas.filter(estado='pendente').update(estado='anulada', notas=nota)
+        anular_faturas(sub.faturas.filter(estado='pendente'), estado='anulada', notas=nota)
         sub.estado = 'cancelada'
         sub.save(update_fields=['estado', 'data_atualizacao'])
     elif sub.estado in ESTADOS_COM_ACESSO and not sub.fim_agendado:
         sub.fim_agendado, sub.plano_seguinte = sub.pago_ate, None
         sub.save(update_fields=['fim_agendado', 'plano_seguinte', 'data_atualizacao'])
-        sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate).update(estado='anulada', notas=nota)
+        anular_faturas(sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate), estado='anulada', notas=nota)
 
 
 def loja_mudou_modelo(loja):
@@ -162,8 +163,8 @@ def loja_mudou_modelo(loja):
     if loja.modelo_cobranca == 'subscricao':
         if sub:
             # as faturas em atraso também deixam de ser devidas: os Serviços já vêm na subscrição
-            sub.faturas.filter(estado='pendente', vencimento__lt=subs.hoje()).update(
-                estado='anulada', notas='Anulada: os Serviços passaram a estar incluídos na subscrição da loja.')
+            anular_faturas(sub.faturas.filter(estado='pendente', vencimento__lt=subs.hoje()),
+                           estado='anulada', notas='Anulada: os Serviços passaram a estar incluídos na subscrição da loja.')
             if sub.estado == 'suspensa':
                 sub.estado = 'cancelada'
                 sub.save(update_fields=['estado', 'data_atualizacao'])
@@ -184,7 +185,7 @@ def processar(sub, d, resumo):
     if loja.modelo_cobranca == 'subscricao' and not sub.fim_agendado:
         _terminar(sub, 'Anulada: os Serviços passaram a estar incluídos na subscrição da loja.')
     if sub.fim_agendado and d >= sub.fim_agendado:
-        sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: a subscrição de Serviços terminou.')
+        anular_faturas(sub.faturas.filter(estado='pendente'), estado='anulada', notas='Anulada: a subscrição de Serviços terminou.')
         sub.estado, sub.fim_agendado = 'cancelada', None
         sub.save(update_fields=['estado', 'fim_agendado', 'data_atualizacao'])
         if loja.modelo_cobranca == 'subscricao':
