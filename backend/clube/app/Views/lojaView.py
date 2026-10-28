@@ -259,6 +259,75 @@ def loja_dados_fiscais(request, loja_id):
     return Response(dados_fiscais_payload(loja, detalhe=True))
 
 
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def loja_banco(request, loja_id):
+    """
+    GET /app/loja/<loja_id>/banco/  → { dados, bancos }
+    PUT  Body: { banco, nib (ou IBAN), titular, password } — só o dono, com a password
+    (quem entrou só com Google e ainda não definiu password não a tem). Fica no registo das
+    transações (NIB mascarado) e o dono recebe uma notificação e um email: uma conta trocada
+    às escondidas desviava o dinheiro das vendas.
+    """
+    from ..models import DadosBancarios
+    from ..utils import banco
+    from ..utils.registo import registar
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_dados_bancarios')
+    if erro:
+        return erro
+    # admin no backoffice só de leitura (utils/ver_loja.py): os dados bancários vêem-se no Admin → Lojas, registados
+    from ..utils.ver_loja import a_ver
+    if a_ver(loja.id, request.user.utilizador):
+        return Response({'detail': 'Os dados bancários vêem-se no Admin → Lojas (a consulta fica registada).'},
+                        status=status.HTTP_403_FORBIDDEN)
+    atual = DadosBancarios.objects.filter(loja=loja).first()
+    if request.method == 'GET':
+        return Response({'dados': banco.payload(atual), 'bancos': banco.BANCOS,
+                     'pede_password': request.user.has_usable_password()})
+
+    if request.user.has_usable_password():
+        from .utilizadorView import _password_errada
+        erro_password = _password_errada(request, request.data.get('password'))
+        if erro_password:
+            return Response({'password': erro_password}, status=status.HTTP_400_BAD_REQUEST)
+    limpos, erros = banco.validar(request.data)
+    if erros:
+        return Response(erros, status=status.HTTP_400_BAD_REQUEST)
+    if atual and (atual.banco, atual.nib, atual.titular) == (limpos['banco'], limpos['nib'], limpos['titular']):
+        return Response({'dados': banco.payload(atual), 'bancos': banco.BANCOS,
+                     'pede_password': request.user.has_usable_password()})
+
+    with transaction.atomic():
+        antes = banco.mascarado(atual.nib) if atual else ''
+        d, _ = DadosBancarios.objects.update_or_create(loja=loja, defaults={**limpos, 'atualizado_por': request.user})
+        registar('banco', 'alterados' if atual else 'definidos', objeto_id=loja.id, loja_id=loja.id,
+                 dados={'banco': d.banco, 'titular': d.titular, 'conta': banco.mascarado(d.nib), 'conta_anterior': antes})
+        from ..utils.horarios import fuso
+        quando = now().astimezone(fuso()).strftime('%d/%m/%Y %H:%M')
+        texto = (f'A conta bancária da loja "{loja.nome}" passou a ser {banco.mascarado(d.nib)} ({d.banco}), '
+                 f'alterada por {request.user.username} em {quando}. Se não foste tu, muda a tua password e contacta o suporte.')
+        notificar(loja.dono, 'dados_bancarios', 'Dados bancários da loja alterados', texto, loja=loja,
+                  link=f'/loja/{loja.id}/backoffice/configuracoes')
+        email = loja.dono.user.email
+        transaction.on_commit(lambda: _email_banco(email, loja.nome, texto))
+    return Response({'dados': banco.payload(d), 'bancos': banco.BANCOS,
+                     'pede_password': request.user.has_usable_password()})
+
+
+def _email_banco(para, loja_nome, texto):
+    if not para:
+        return
+    import logging
+    from django.conf import settings
+    from django.core.mail import EmailMessage
+    try:
+        EmailMessage(subject=f'Dados bancários alterados — {loja_nome}', body=texto + '\n\nBende',
+                     from_email=settings.DEFAULT_FROM_EMAIL, to=[para]).send()
+    except Exception:
+        logging.getLogger(__name__).exception('email dos dados bancários falhou')
+
+
 CAMPOS_RECEBIMENTO = {'flutterwave_subaccount_id', 'aceita_flutterwave'}
 
 

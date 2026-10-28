@@ -186,6 +186,7 @@
         <BackofficeInventario    v-else-if="activeSection === 'inventario'"    :loja-id="lojaId" />
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
                                  :pode-fechar="podeFecharLoja" :pode-fiscal="permissoes.includes('gerir_dados_fiscais')"
+                                 :pode-banco="permissoes.includes('gerir_dados_bancarios') && !modoAdmin"
                                  @updated="fetchLoja" />
         <BackofficeStaff         v-else-if="activeSection === 'staff'"         :loja-id="lojaId" />
         <BackofficeSubscricao    v-else-if="activeSection === 'subscricao'"    :loja-id="lojaId" @alterado="fetchLoja" />
@@ -240,7 +241,7 @@ const ModuloRelatorios         = defineAsyncComponent(() => import('@/components
 
 const PERMISSOES = {
   dono: [
-    'ver_loja','editar_loja','apagar_loja','gerir_dados_fiscais','gerir_staff',
+    'ver_loja','editar_loja','apagar_loja','gerir_dados_fiscais','gerir_dados_bancarios','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',

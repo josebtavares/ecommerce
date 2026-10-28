@@ -44,6 +44,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'app.middleware.IPRealMiddleware',                         # IP real atrás do proxy do Railway (antes do axes)
+    'app.utils.registo.RegistoPedidoMiddleware',               # quem/IP/pedido no registo das transações
     'app.middleware.ManutencaoMiddleware',                     # 503 enquanto se repõe a base (utils/repor_backup.py)
     'axes.middleware.AxesMiddleware',                          # ← primeiro sempre (depois do IP real)
     'django.middleware.security.SecurityMiddleware',

@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from ..models import ConfiguracaoPlataforma, FaturaSubscricao, Loja, PlanoSubscricao, Subscricao
 from .fiscal import fatura_resumo
+from .registo import anular_faturas
 
 
 def hoje():
@@ -235,7 +236,7 @@ def mudar_modelo(loja, modelo, plano=None):
             raise ErroFatura('A loja já está em subscrição.')
         d = hoje()
         if sub:
-            sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: a plataforma mudou o modelo da loja.')
+            anular_faturas(sub.faturas.filter(estado='pendente'), estado='anulada', notas='Anulada: a plataforma mudou o modelo da loja.')
             sub.plano, sub.preco, sub.meses = plano, plano.preco, plano.meses
             sub.estado, sub.inicio, sub.pago_ate, sub.teste_ate = 'aguarda', d, d, None
             sub.fim_agendado, sub.plano_seguinte = None, None
@@ -253,7 +254,7 @@ def mudar_modelo(loja, modelo, plano=None):
         if sub:
             sub.estado, sub.fim_agendado, sub.plano_seguinte = 'cancelada', None, None
             sub.save(update_fields=['estado', 'fim_agendado', 'plano_seguinte', 'data_atualizacao'])
-            sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: a loja passou para comissão.')
+            anular_faturas(sub.faturas.filter(estado='pendente'), estado='anulada', notas='Anulada: a loja passou para comissão.')
         loja.modelo_cobranca, loja.modelo_alterado_em = 'comissao', timezone.now()
         loja.save(update_fields=['modelo_cobranca', 'modelo_alterado_em', 'data_atualizacao'])
     else:
@@ -430,7 +431,7 @@ def _processar_uma(sub, d, resumo):
 
     # 0. o dono pediu para passar a comissão e o período pago acabou
     if sub.fim_agendado and d >= sub.fim_agendado:
-        sub.faturas.filter(estado='pendente').update(estado='anulada', notas='Anulada: a loja passou para comissão.')
+        anular_faturas(sub.faturas.filter(estado='pendente'), estado='anulada', notas='Anulada: a loja passou para comissão.')
         sub.estado, sub.fim_agendado = 'cancelada', None
         sub.save(update_fields=['estado', 'fim_agendado', 'data_atualizacao'])
         loja.modelo_cobranca, loja.modelo_alterado_em = 'comissao', timezone.now()
@@ -614,7 +615,7 @@ def cancelar_pedido(loja):
     sub = Subscricao.objects.select_for_update().filter(loja=loja, estado='aguarda').first()
     if not sub or loja.modelo_cobranca != 'comissao':
         raise ErroFatura('Não há nenhum pedido de mudança para cancelar.')
-    sub.faturas.filter(estado='pendente').update(estado='anulada', notas=NOTA_PEDIDO_CANCELADO + '.')
+    anular_faturas(sub.faturas.filter(estado='pendente'), estado='anulada', notas=NOTA_PEDIDO_CANCELADO + '.')
     sub.estado = 'cancelada'
     sub.save(update_fields=['estado', 'data_atualizacao'])
 
@@ -634,8 +635,8 @@ def agendar_comissao(loja):
     sub.fim_agendado, sub.plano_seguinte = sub.pago_ate, None
     sub.save(update_fields=['fim_agendado', 'plano_seguinte', 'data_atualizacao'])
     # a renovação já emitida (ainda por pagar) deixa de fazer sentido
-    sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate).update(
-        estado='anulada', notas='Anulada: a loja vai passar para comissão.')
+    anular_faturas(sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate),
+                   estado='anulada', notas='Anulada: a loja vai passar para comissão.')
     return sub
 
 
@@ -694,8 +695,8 @@ def oferecer(sub, meses, motivo=''):
     sub = Subscricao.objects.select_for_update().get(pk=sub.pk)
     if sub.estado in ('aguarda', 'cancelada'):
         raise ErroFatura('Esta subscrição não está activa.')
-    sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate).update(
-        estado='anulada', notas='Anulada: meses oferecidos pela plataforma.')
+    anular_faturas(sub.faturas.filter(estado='pendente', periodo_inicio__gte=sub.pago_ate),
+                   estado='anulada', notas='Anulada: meses oferecidos pela plataforma.')
     if sub.coberta_por_id:
         raise ErroFatura('Este POS está incluído no plano da loja — oferece os meses à loja.')
     # POS sem plano com o período grátis acabado: o tempo sem plano não se cobrou, a oferta conta a partir de hoje

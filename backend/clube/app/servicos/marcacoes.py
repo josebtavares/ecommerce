@@ -333,6 +333,9 @@ def reembolsar(m):
     m.valor_reembolsado += falta
     m.reembolsado_em = timezone.now()
     Marcacao.objects.filter(pk=m.pk).update(valor_reembolsado=m.valor_reembolsado, reembolsado_em=m.reembolsado_em)
+    from ..utils.registo import registar
+    registar('marcacao', 'reembolsada', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
+             metodo=m.pagamento, dados={'total_reembolsado': f'{m.valor_reembolsado:.2f}'})
     texto = f'Devolvemos {formatar(falta)} para o meio de pagamento que usaste (pagamento simulado).'
     if m.cliente_id:
         from .models import MensagemMarcacao
