@@ -128,11 +128,14 @@ def utilizador_login(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    if not utilizador.is_active:
-        return Response(
-            {'detail': 'Conta desactivada.'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+    # suspensa/banida: diz porquê e até quando (só depois de a password estar certa);
+    # uma suspensão que já acabou levanta-se aqui
+    from ..autenticacao import conta_ativa
+    from ..utils.moderacao import mensagem_bloqueio
+    if not conta_ativa(user):
+        return Response({'detail': mensagem_bloqueio(utilizador), 'code': 'conta_inativa'},
+                        status=status.HTTP_403_FORBIDDEN)
+    utilizador.refresh_from_db(fields=['status', 'suspenso_ate', 'motivo_estado'])
 
     return Response(_build_auth_response(utilizador, request), status=status.HTTP_200_OK)
 

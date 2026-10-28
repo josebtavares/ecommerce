@@ -106,7 +106,10 @@ def google_obter_utilizador(code):
     if perfil_novo and dados.get('picture'):
         _guardar_foto(utilizador, dados['picture'], google_id)
 
-    if not utilizador.is_active:
-        return None, None, _erro('Conta desactivada.', status.HTTP_403_FORBIDDEN)
+    from ..autenticacao import conta_ativa
+    if not conta_ativa(utilizador.user):
+        from .moderacao import mensagem_bloqueio
+        return None, None, _erro(mensagem_bloqueio(utilizador), status.HTTP_403_FORBIDDEN)
+    utilizador.refresh_from_db(fields=['status', 'suspenso_ate', 'motivo_estado'])
 
     return utilizador, criado, None

@@ -23,7 +23,9 @@ class MyTokenSerializer(TokenObtainPairSerializer):
                 raise Throttled(detail=erro)
             raise AuthenticationFailed(erro)
         if not conta_ativa(user):
-            raise AuthenticationFailed('Conta desactivada.')
+            from ..utils.moderacao import mensagem_bloqueio
+            perfil = getattr(user, 'utilizador', None)
+            raise AuthenticationFailed(mensagem_bloqueio(perfil) if perfil else 'Conta desactivada.')
         try:
             utilizador = user.utilizador
         except Exception:

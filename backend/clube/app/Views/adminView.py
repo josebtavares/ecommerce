@@ -376,6 +376,8 @@ def admin_utilizador_list(request):
     erro = _exige_admin(request, 'gerir_utilizadores')
     if erro: return erro
 
+    from ..utils.moderacao import levantar_expiradas, data_curta
+    levantar_expiradas()   # suspensões que já acabaram (não há tarefas agendadas)
     qs = Utilizador.objects.select_related('user').order_by('-data_criacao')
 
     q = request.GET.get('q', '').strip()
@@ -414,6 +416,9 @@ def admin_utilizador_list(request):
             'foto_url':   foto_url,
             'verificado': u.verificado,
             'status':     u.status,
+            'suspenso_ate': u.suspenso_ate,
+            'suspenso_ate_txt': data_curta(u.suspenso_ate) if u.suspenso_ate else '',
+            'motivo_estado': u.motivo_estado,
             'is_staff':   u.user.is_staff,
             'role_admin': u.role_admin,
             'data_criacao': u.data_criacao.strftime('%d-%m-%Y %H:%M'),
@@ -427,17 +432,28 @@ def admin_utilizador_list(request):
     })
 
 
-@api_view(['PATCH'])
+@api_view(['GET', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def admin_utilizador_gerir(request, utilizador_id):
     """
+    GET   /app/admin/utilizadores/<id>/ — ficha (dados, lojas, POS, histórico de moderação)
     PATCH /app/admin/utilizadores/<id>/
-    Body: { verificado?, status?, is_staff?, role_admin? }
+    Body: { verificado?, is_staff?, role_admin? } — suspender/banir vai por /moderar/ (pede motivo)
     """
     erro = _exige_admin(request, 'gerir_utilizadores')
     if erro: return erro
 
     utilizador = get_object_or_404(Utilizador, id=utilizador_id)
+
+    if request.method == 'GET':
+        from ..utils.moderacao import levantar_expiradas
+        if levantar_expiradas(Utilizador.objects.filter(pk=utilizador.pk)):
+            utilizador.refresh_from_db()
+        return Response(_ficha_utilizador(utilizador, request))
+
+    if 'status' in request.data:
+        return Response({'detail': 'Para suspender, banir ou reactivar usa /moderar/ (com motivo).'},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     # nao pode editar a si mesmo para evitar acidente
     if utilizador.user == request.user:
@@ -458,11 +474,6 @@ def admin_utilizador_gerir(request, utilizador_id):
 
     if 'verificado' in request.data:
         utilizador.verificado = request.data['verificado'] is True
-
-    if 'status' in request.data:
-        novo_status = request.data['status']
-        if novo_status in ('ativo', 'banido', 'suspenso'):
-            utilizador.status = novo_status
 
     if 'is_staff' in request.data:
         # "false" (texto) era verdadeiro em Python e dava acesso de staff
@@ -491,6 +502,72 @@ def admin_utilizador_gerir(request, utilizador_id):
         'is_staff':   utilizador.user.is_staff,
         'role_admin': utilizador.role_admin,
     })
+
+
+def _ficha_utilizador(u, request):
+    from ..pos.models import ConfiguracaoPOS
+    from ..models import ModeracaoUtilizador
+    from ..utils.moderacao import data_curta
+    foto_url = request.build_absolute_uri(u.foto.url) if u.foto else None
+    return {
+        'id': u.id, 'username': u.user.username, 'email': u.user.email, 'nome': u.nome,
+        'telefone': u.telefone, 'morada': u.morada, 'foto_url': foto_url,
+        'verificado': u.verificado, 'is_staff': u.user.is_staff, 'role_admin': u.role_admin,
+        'status': u.status, 'suspenso_ate': u.suspenso_ate, 'motivo_estado': u.motivo_estado,
+        'suspenso_ate_txt': data_curta(u.suspenso_ate) if u.suspenso_ate else '',
+        'data_criacao': u.data_criacao, 'ultimo_login': u.user.last_login,
+        'total_encomendas': u.encomendas.count(),
+        'lojas': [{'id': l.id, 'nome': l.nome, 'estado': l.estado}
+                  for l in u.lojas.order_by('nome')],
+        'pos': [{'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso}
+                for p in ConfiguracaoPOS.objects.filter(dono=u).order_by('nome')],
+        'moderacoes': [{
+            'id': m.id, 'acao': m.acao, 'acao_nome': m.get_acao_display(), 'motivo': m.motivo,
+            'ate': m.ate, 'ate_txt': data_curta(m.ate) if m.ate else '', 'criado_em': m.criado_em,
+            'feito_por': m.feito_por.username if m.feito_por else None,
+        } for m in ModeracaoUtilizador.objects.filter(utilizador=u).select_related('feito_por')],
+    }
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_utilizador_moderar(request, utilizador_id):
+    """
+    POST /app/admin/utilizadores/<id>/moderar/
+    Body: { acao: suspender|banir|levantar, motivo, ate? (AAAA-MM-DD, só suspender) }
+    Suspender: gerir_utilizadores. Banir e levantar um ban: só o Super Admin.
+    """
+    from ..utils import moderacao
+    erro = _exige_admin(request, 'gerir_utilizadores')
+    if erro: return erro
+
+    alvo = get_object_or_404(Utilizador.objects.select_related('user'), id=utilizador_id)
+    acao = request.data.get('acao')
+    if acao not in moderacao.ACOES:
+        return Response({'detail': 'Acção inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+    recusa = moderacao.pode_moderar(request.user.utilizador, alvo, acao)
+    if recusa:
+        return Response({'detail': recusa}, status=status.HTTP_403_FORBIDDEN)
+
+    motivo = (request.data.get('motivo') or '').strip()
+    if acao != 'levantar' and len(motivo) < 5:
+        return Response({'detail': 'Escreve o motivo (o utilizador recebe-o por email).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if acao == 'levantar' and alvo.status == 'ativo':
+        return Response({'detail': 'A conta já está activa.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    ate = None
+    if acao == 'suspender' and request.data.get('ate'):
+        dia = parse_date(str(request.data.get('ate')))
+        if not dia:
+            return Response({'detail': 'Data inválida. Usa AAAA-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+        ate = moderacao.fim_do_dia(dia)
+        if ate <= now():
+            return Response({'detail': 'A data de fim tem de ser hoje ou depois.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    moderacao.moderar(alvo, acao, request.user, motivo=motivo, ate=ate)
+    alvo.refresh_from_db()
+    return Response(_ficha_utilizador(alvo, request))
 
 
 # ══════════════════════════════════════════════════════════════

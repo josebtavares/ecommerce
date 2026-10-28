@@ -31,6 +31,9 @@ class Utilizador(models.Model):
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
     status          = models.CharField(max_length=20, default='ativo')
+    # moderação (utils/moderacao.py): 'suspenso' pode ter fim; o motivo é o do estado actual
+    suspenso_ate    = models.DateTimeField(null=True, blank=True)
+    motivo_estado   = models.CharField(max_length=500, blank=True, default='')
     google_id       = models.CharField(max_length=100, blank=True, null=True, unique=True)
  
     # ── Role no painel de administração ──────────────────────
@@ -115,6 +118,10 @@ class Utilizador(models.Model):
  
     @property
     def is_active(self):
+        # uma suspensão com data de fim já passada conta como activa (levanta-se em moderacao.levantar_expiradas)
+        if self.status == 'suspenso' and self.suspenso_ate:
+            from django.utils import timezone
+            return self.suspenso_ate <= timezone.now()
         return self.status == 'ativo'
  
     def pode_admin(self, permissao: str) -> bool:
@@ -2185,3 +2192,22 @@ class ExportacaoLoja(models.Model):
 
     def __str__(self):
         return f'exportação loja {self.loja_id} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
+
+
+class ModeracaoUtilizador(models.Model):
+    """Histórico de suspensões e bans de uma conta (quem, quando, porquê). Nunca se apaga."""
+    ACOES = [
+        ('suspender', 'Suspensa'),
+        ('banir',     'Banida'),
+        ('levantar',  'Reactivada'),
+        ('expirou',   'Suspensão terminou'),
+    ]
+    utilizador = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='moderacoes')
+    acao       = models.CharField(max_length=10, choices=ACOES)
+    motivo     = models.CharField(max_length=500, blank=True, default='')
+    ate        = models.DateTimeField(null=True, blank=True)
+    feito_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    criado_em  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-id']

@@ -74,8 +74,14 @@ def conta_ativa(user):
     if user is None or not user.is_active:
         return False
     from .models import Utilizador
-    estado = Utilizador.objects.filter(user_id=user.pk).values_list('status', flat=True).first()
-    return estado in (None, 'ativo')
+    perfil = Utilizador.objects.filter(user_id=user.pk).values('status', 'suspenso_ate').first()
+    if perfil is None or perfil['status'] == 'ativo':
+        return True
+    if perfil['status'] == 'suspenso' and perfil['suspenso_ate']:
+        # a suspensão acabou: levanta-a já (e fica no histórico)
+        from .utils.moderacao import levantar_expiradas
+        return levantar_expiradas(Utilizador.objects.filter(user_id=user.pk)) > 0
+    return False
 
 
 class JWTContaAtiva(JWTAuthentication):
