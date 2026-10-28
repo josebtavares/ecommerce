@@ -27,6 +27,7 @@ from ..utils.pagination import paginar, periodo_dias
 from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_fiscais_payload
 from ..utils.password import mensagem_password_fraca
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso
+from ..utils import prontidao
 
 
 # ══════════════════════════════════════════════════════════════
@@ -230,6 +231,17 @@ def loja_backoffice(request, id):
     if not membro.pode('gerir_dados_fiscais'):
         dados['fiscal']['nif'] = ''
     return Response(dados)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def loja_prontidao(request, id):
+    """GET /app/loja/<id>/prontidao/ — requisitos para a loja ser publicada + produtos incompletos."""
+    loja = get_object_or_404(Loja, id=id)
+    _, erro = _exige_permissao(request, loja, 'ver_loja')
+    if erro:
+        return erro
+    return Response({'estado': loja.estado, **prontidao.avaliar(loja, com_produtos=True)})
 
 
 @api_view(['PATCH'])

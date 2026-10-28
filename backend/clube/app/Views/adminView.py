@@ -25,6 +25,7 @@ from ..models import (
 from ..Serializers.ProdutoSerializer import TipoProdutoSerializer
 from ..utils.pagination import paginar, periodo_dias
 from ..utils.dinheiro import ler_valor
+from ..utils import prontidao
 
 
 # ══════════════════════════════════════════════════════════════
@@ -171,6 +172,7 @@ def admin_loja_list(request):
             'encomendas_pendentes': loja.encomendas.filter(status='pendente').count(),
             'pos_vinculados': [{'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso}
                                for p in loja.pos_vinculados.all()],
+            'prontidao': prontidao.avaliar(loja),
         })
 
     return Response({
@@ -236,6 +238,14 @@ def admin_loja_gerir(request, loja_id):
         else:
             msg = f'Não é possível "{acao}" uma loja no estado "{loja.get_estado_display()}".'
         return Response({'detail': msg, 'estado': loja.estado}, status=status.HTTP_400_BAD_REQUEST)
+
+    # só se publica uma loja com os requisitos mínimos (quem vende, contactos, políticas, 1 produto completo)
+    if acao == 'aprovar':
+        faltam = prontidao.faltam_titulos(loja)
+        if faltam:
+            return Response({'detail': 'A loja ainda não cumpre os requisitos para ser publicada. Falta: '
+                                       + '; '.join(faltam) + '.', 'faltam': faltam, 'codigo': 'incompleta'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     from ..utils.moderacao import recusa_reativar
     recusa = destino == 'ativa' and recusa_reativar(loja.dono_id, loja.estado_motivo)

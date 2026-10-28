@@ -18,6 +18,7 @@ urlpatterns = [
 
     # ── Backoffice ────────────────────────────────────────────
     path('loja/<int:id>/backoffice/',                   lojaView.loja_backoffice,       name='loja-backoffice'),
+    path('loja/<int:id>/prontidao/',                    lojaView.loja_prontidao,        name='loja-prontidao'),
     path('loja/<int:id>/editar/',                       lojaView.loja_update,           name='loja-update'),
     path('loja/<int:loja_id>/fiscal/',                  lojaView.loja_dados_fiscais,    name='loja-fiscal'),
     path('loja/<int:id>/eliminar/',                     lojaView.loja_fechar,           name='loja-delete'),   # compat.: fecha, não apaga
