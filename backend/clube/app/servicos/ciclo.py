@@ -83,11 +83,11 @@ def processar(agora=None):
                 m.reembolso_devido = m.valor_pago
             m.save(update_fields=['estado', 'reembolso_devido', 'data_atualizacao'])
             ops.anular_propostas(m)
-            ops.reembolsar(m)
+            devolvido = ops.reembolsar(m)
             if m.cliente_id:
                 notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='A loja não confirmou a marcação',
                           mensagem=f'{m.servico_nome} a {ops.quando_texto(m.inicio)} ficou sem efeito.'
-                                   + (' O valor pago foi devolvido.' if m.pago else ''),
+                                   + (' O valor pago foi devolvido.' if devolvido else ''),
                           loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
             r['sem_confirmacao'] += 1
 
@@ -124,7 +124,8 @@ def processar(agora=None):
     for loja in Loja.objects.filter(marcacoes__estado__in=Marcacao.ATIVOS, marcacoes__inicio__gt=agora).distinct()[:500]:
         r['avisos_loja'] += sincronizar_loja(loja)
 
-    for pk in Marcacao.objects.filter(pago=True, reembolso_devido__gt=F('valor_reembolsado')).values_list('pk', flat=True)[:200]:
+    # as recusadas pelo fornecedor (reembolso_erro) seguem as esperas de marcacoes.reembolsos_por_concluir
+    for pk in Marcacao.objects.filter(pago=True, reembolso_erro='', reembolso_devido__gt=F('valor_reembolsado')).values_list('pk', flat=True)[:200]:
         with transaction.atomic():
             m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja').get(pk=pk)
             if ops.reembolsar(m):

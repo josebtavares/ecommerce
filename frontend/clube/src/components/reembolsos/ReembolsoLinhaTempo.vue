@@ -97,6 +97,12 @@ const passos = computed(() => {
                texto: dataHora(r.nao_recebido_em) })
     return out
   }
+  if (r.estado === 'por_reembolsar') {               // aceite, mas o pagamento online ainda não devolveu
+    out.push({ chave: 'aceite', estado: 'feito', titulo: `Reembolso aceite: ${formatarDinheiro(r.valor_aprovado)}`, texto: dataHora(r.data_decisao) })
+    out.push({ chave: 'fim', estado: 'atual', titulo: 'A processar a devolução',
+               texto: cliente ? 'Houve um atraso — estamos a tratar disso.' : 'O pagamento online recusou — vamos tentar de novo.' })
+    return out
+  }
   if (r.estado === 'reembolsado') {
     out.push({ chave: 'fim', estado: 'feito', texto: dataHora(r.data_reembolso),
                titulo: Number(r.valor_aprovado) > 0 ? `Reembolsado ${formatarDinheiro(r.valor_aprovado)}` : 'Encomenda cancelada' })

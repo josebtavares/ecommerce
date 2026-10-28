@@ -45,6 +45,11 @@
             <span>{{ m.pagamento === 'local' ? 'No local' : m.pago ? `Pago (${dinheiro(m.valor_pago)})` : 'Antecipado — por pagar' }}</span></div>
           <div v-if="m.pago && ativa && Number(m.falta_pagar) > 0" class="flex justify-between text-amber-500"><span>Falta pagar no local</span><span>{{ dinheiro(m.falta_pagar) }}</span></div>
           <div v-if="Number(m.valor_reembolsado) > 0" class="flex justify-between text-green-500"><span>Devolvido</span><span>{{ dinheiro(m.valor_reembolsado) }}</span></div>
+          <!-- o pagamento online recusou a devolução: está a ser tratado (o motivo técnico não se mostra) -->
+          <div v-if="m.reembolso_por_concluir" class="text-amber-500" data-teste="reembolso-a-processar">
+            <div class="flex justify-between"><span>Devolução a processar</span><span>{{ dinheiro(m.reembolso_por_concluir.valor) }}</span></div>
+            <p class="text-xs" :class="suave">Houve um atraso a processar a devolução. Estamos a tratar disso — não precisas de fazer nada.</p>
+          </div>
           <!-- pago online: comprovativo do Bende (também chegou por email) -->
           <div v-if="m.pago" class="flex justify-between gap-3" data-teste="comprovativo-cliente"><span :class="suave">Comprovativo</span>
             <button type="button" @click="comprovativo" class="text-red-500 underline text-xs font-semibold">Descarregar PDF</button></div>

@@ -34,7 +34,8 @@ from .moderacao import MOTIVO_ELIMINADO
 
 DIAS_PARA_ELIMINAR = 30
 EM_CURSO = ('pago', 'preparando', 'enviado')
-DEVOLUCAO_ABERTA = ('pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver')
+# por_reembolsar: aceite mas o dinheiro ainda não saiu (o pagamento online recusou) — também prende
+DEVOLUCAO_ABERTA = ('pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver', 'por_reembolsar')
 MARCACAO_ABERTA = ('pendente', 'confirmada')
 
 
@@ -49,6 +50,14 @@ def email_bloqueado(email):
 
 def _plural(n, um, varios):
     return f'{n} {um if n == 1 else varios}'
+
+
+def _marcacoes_por_devolver(**filtro):
+    """Marcações pagas com a devolução recusada pelo pagamento online (marcacoes.reembolsar) — ainda por sair."""
+    from django.db.models import F
+    from ..servicos.models import Marcacao
+    return (Marcacao.objects.filter(pago=True, reembolso_devido__gt=F('valor_reembolsado'), **filtro)
+            .exclude(reembolso_erro='').count())
 
 
 def pendentes(alvo):
@@ -69,6 +78,9 @@ def pendentes(alvo):
     n = Marcacao.objects.filter(cliente=alvo, estado__in=MARCACAO_ABERTA, inicio__gte=agora).count()
     if n:
         r.append(f'Tens {_plural(n, "marcação marcada", "marcações marcadas")} — cancela-as primeiro.')
+    n = _marcacoes_por_devolver(cliente=alvo)
+    if n:
+        r.append(f'Tens {_plural(n, "devolução de marcação", "devoluções de marcações")} a processar — espera que termine.')
     for loja in Loja.objects.filter(dono=alvo).order_by('nome'):
         partes = []
         n = Encomenda.objects.filter(loja=loja, status__in=EM_CURSO).count()
@@ -80,6 +92,9 @@ def pendentes(alvo):
         n = Marcacao.objects.filter(loja=loja, estado__in=MARCACAO_ABERTA, inicio__gte=agora).count()
         if n:
             partes.append(_plural(n, 'marcação por fazer', 'marcações por fazer'))
+        n = _marcacoes_por_devolver(loja=loja)
+        if n:
+            partes.append(_plural(n, 'devolução de marcação por concluir', 'devoluções de marcações por concluir'))
         if partes:
             r.append(f'A loja {loja.nome} tem {", ".join(partes)}.')
     for conta in ContaMesa.objects.filter(pos__dono=alvo, status='aberta').values('pos__nome').distinct():
