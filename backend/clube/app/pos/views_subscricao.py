@@ -22,7 +22,7 @@ from app.models import ConfiguracaoPlataforma, FaturaSubscricao, Subscricao
 from ..utils import subscricoes as subs
 from ..utils import subscricoes_pos as subs_pos
 from .models import ConfiguracaoPOS
-from .permissions import IsPOSAuthenticated, POSAuthentication, get_membro_from_request
+from .permissions import IsPOSAuthenticated, POSAuthentication, conta_principal, get_membro_from_request
 
 
 def _erro(msg, codigo=status.HTTP_400_BAD_REQUEST):
@@ -33,7 +33,7 @@ def _pos_do_dono(request, pos_id):
     """(pos, None) ou (None, resposta de erro). Membros da equipa não gerem a subscrição."""
     if get_membro_from_request(request):
         return None, _erro('Só o dono do POS gere a subscrição.', status.HTTP_403_FORBIDDEN)
-    utilizador = getattr(request.user, 'utilizador', None)
+    utilizador = conta_principal(request)
     if not utilizador:
         return None, _erro('Sem permissão.', status.HTTP_403_FORBIDDEN)
     return get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador), None
@@ -93,7 +93,7 @@ def _resumo(pos):
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def planos_pos(request):
-    utilizador = getattr(request.user, 'utilizador', None)
+    utilizador = conta_principal(request)
     # lojas do dono com o plano Loja + POS: um POS ligado a elas não precisa de plano
     incluido = []
     if utilizador and not get_membro_from_request(request):

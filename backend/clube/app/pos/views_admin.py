@@ -350,3 +350,33 @@ def admin_pos_membro_password(request, pos_id, membro_id):
     _notificar_dono(membro.pos, 'pos_admin', 'Password de membro redefinida',
                     f'A plataforma redefiniu a password de {membro.nome} ({membro.username_pos}) no POS "{membro.pos.nome}".')
     return Response({'detail': f'Password de {membro.nome} redefinida.'})
+
+
+# ══════════════════════════════════════════════════════════════
+# VER O POS (SÓ LEITURA)
+# ══════════════════════════════════════════════════════════════
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_pos_ver(request, pos_id):
+    """
+    GET  /app/admin/pos/<pos_id>/ver/  → últimos acessos de admins a este POS
+    POST /app/admin/pos/<pos_id>/ver/  → regista o acesso e devolve o token de leitura
+    O dashboard como o dono o vê, sem a password dele, também com o POS suspenso ou o dono
+    banido (utils/ver_loja.py).
+    """
+    from .models import AcessoAdminPOS
+    from ..utils.ver_loja import emitir_token_pos, DURACAO
+    from ..utils.horarios import fuso
+    erro = _exige_admin(request, 'ver_backoffice_lojas')
+    if erro:
+        return erro
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id)
+    if request.method == 'POST':
+        AcessoAdminPOS.objects.create(pos=pos, pos_nome=pos.nome, admin=request.user,
+                                      admin_nome=request.user.username, ip=request.META.get('REMOTE_ADDR') or None)
+        return Response({'token': emitir_token_pos(request.user, pos), 'pos': pos.id,
+                         'minutos': int(DURACAO.total_seconds() // 60)})
+    acessos = AcessoAdminPOS.objects.filter(pos=pos)[:20]
+    return Response({'acessos': [{'id': a.id, 'admin': a.admin_nome, 'quando': a.criado_em.astimezone(fuso()).strftime('%d/%m/%Y %H:%M')}
+                                 for a in acessos]})

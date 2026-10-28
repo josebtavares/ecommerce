@@ -1080,3 +1080,19 @@ class UtilizadorPOS(models.Model):
             },
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
         }
+
+class AcessoAdminPOS(models.Model):
+    """Cada vez que um admin abre o dashboard de um POS em modo de leitura (utils/ver_loja.py).
+    Nunca se apaga — nem quando o POS é eliminado (fica o nome)."""
+    pos        = models.ForeignKey(ConfiguracaoPOS, on_delete=models.SET_NULL, null=True, blank=True, related_name='acessos_admin')
+    pos_nome   = models.CharField(max_length=200, blank=True, default='')
+    admin      = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    admin_nome = models.CharField(max_length=150, blank=True, default='')
+    ip         = models.GenericIPAddressField(null=True, blank=True)
+    criado_em  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-id']
+
+    def __str__(self):
+        return f'{self.admin_nome} viu o POS {self.pos_nome} em {self.criado_em:%d/%m/%Y %H:%M}'
