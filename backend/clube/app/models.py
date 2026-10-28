@@ -2015,7 +2015,7 @@ class Reembolso(models.Model):
     ORIGENS = [('cliente', 'Cliente'), ('loja', 'Loja'), ('sistema', 'Automático')]
     METODOS = [('gateway', 'Pelo meio de pagamento'), ('manual', 'Em mão pela loja'),
                ('abatido', 'Descontado no valor a pagar'),   # ainda não estava pago (dinheiro na entrega)
-               ('externo', 'Devolvido por fora pela Bendi')]   # o fornecedor não conseguiu: a Bendi devolveu (ex.: transferência)
+               ('externo', 'Devolução confirmada pela Bendi')]   # devolvido por fora (ex.: transferência) ou confirmado no fornecedor
 
     encomenda       = models.ForeignKey(Encomenda, on_delete=models.PROTECT, related_name='reembolsos')
     loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='reembolsos')
@@ -2061,6 +2061,9 @@ class Reembolso(models.Model):
     tentativas      = models.PositiveSmallIntegerField(default=0, db_default=0)
     erro_reembolso  = models.CharField(max_length=255, blank=True, default='', db_default='')
     proxima_tentativa = models.DateTimeField(null=True, blank=True)
+    # o fornecedor não respondeu (ou o dinheiro saiu e não ficou registado): pode já ter devolvido — só a Bendi,
+    # depois de confirmar no painel do fornecedor, volta a tentar ou dá como devolvido (o worker e a loja não)
+    reembolso_incerto = models.BooleanField(default=False, db_default=False)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
 

@@ -161,6 +161,7 @@
 
         <ReembolsoPorConcluir v-else-if="r.estado === 'por_reembolsar' && r.por_concluir" :valor="r.valor_aprovado"
           :erro="r.por_concluir.erro" :tentativas="r.por_concluir.tentativas" :proxima="r.por_concluir.proxima_tentativa"
+          :incerto="r.por_concluir.incerto" :podeTentar="r.por_concluir.pode_tentar"
           :aEnviar="aEnviar" @tentar="acao('tentar_reembolso')" />
 
         <section v-else-if="r.estado === 'a_devolver'" class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
@@ -251,7 +252,7 @@ const aviso = computed(() => {
     reembolsado: Number(x.valor_aprovado) > 0
       ? (x.metodo === 'abatido'
           ? `${formatarDinheiro(x.valor_aprovado)} descontados no valor a cobrar na entrega.`
-          : `Reembolsado ${formatarDinheiro(x.valor_aprovado)}` + (x.metodo === 'manual' ? ' — pagamento em dinheiro: devolve o valor ao cliente em mão.' : (x.metodo === 'externo' ? ' — devolvido pela Bendi por fora do pagamento online.' : ' para o meio de pagamento do cliente.')))
+          : `Reembolsado ${formatarDinheiro(x.valor_aprovado)}` + (x.metodo === 'manual' ? ' — pagamento em dinheiro: devolve o valor ao cliente em mão.' : (x.metodo === 'externo' ? ' — devolução confirmada pela Bendi.' : ' para o meio de pagamento do cliente.')))
       : 'Cancelamento aceite — não havia nada pago.',
     recusado: x.decisao_admin ? 'A equipa da Bendi recusou o pedido.' : 'O pedido foi recusado. O cliente ainda pode pedir à Bendi para analisar.',
     cancelado: 'O cliente desistiu do pedido.',

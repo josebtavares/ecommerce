@@ -10,7 +10,15 @@ from decimal import Decimal
 
 
 class ErroPagamento(Exception):
-    """O fornecedor recusou ou não respondeu. A mensagem pode ser mostrada ao cliente."""
+    """
+    O fornecedor recusou ou não respondeu. A mensagem pode ser mostrada ao cliente.
+    incerto: sem resposta (rede, erro do servidor) — o pedido pode ter sido feito do lado do fornecedor. Num reembolso
+    não se volta a tentar sozinho: a Bendi confirma primeiro no painel do fornecedor (utils/devolucoes).
+    """
+
+    def __init__(self, mensagem='', incerto=False):
+        super().__init__(mensagem)
+        self.incerto = incerto
 
 
 @dataclass

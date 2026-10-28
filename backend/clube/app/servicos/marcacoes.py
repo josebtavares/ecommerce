@@ -337,31 +337,50 @@ def cancelar_cliente(m, motivo=''):
     return m
 
 
-def reembolsar(m):
+CAMPOS_REEMBOLSO = ['valor_reembolsado', 'reembolsado_em', 'reembolso_erro', 'reembolso_tentativas', 'reembolso_proxima',
+                    'reembolso_incerto']
+
+
+def reembolsar(m, confirmado=False):
     """
     Devolve já o que falta devolver (reembolso_devido − valor_reembolsado) para o meio de pagamento
     usado (simulado, como os pagamentos). Chama-se dentro da transacção de quem mudou o valor devido.
+    Incerto (o fornecedor não respondeu — pode já ter devolvido): só a Bendi, com confirmado, volta a pedir.
     """
     if not m.pago:
         return Decimal('0')
     falta = m.reembolso_devido - m.valor_reembolsado
-    if falta <= 0:
+    if falta <= 0 or (m.reembolso_incerto and not confirmado):
         return Decimal('0')
     from ..pagamentos import servico as pagamentos
     from ..pagamentos.base import ErroPagamento
     try:
-        referencia = pagamentos.reembolsar(m.pagamento_fornecedor, m.pagamento_referencia, falta, chave=f'mar{m.pk}')
+        # a mesma chave em todas as tentativas desta devolução; a seguinte (já devolvido maior) tem outra
+        referencia = pagamentos.reembolsar(m.pagamento_fornecedor, m.pagamento_referencia, falta,
+                                           chave=f'mar{m.pk}-{m.valor_reembolsado:.2f}')
     except ErroPagamento as e:
         return _reembolso_falhou(m, falta, e)
-    return _reembolso_feito(m, falta, referencia)
+    try:
+        with transaction.atomic():
+            return _reembolso_feito(m, falta, referencia)
+    except Exception:
+        # o dinheiro saiu mas não ficou registado: não se pede outra vez — fica incerto para a Bendi confirmar
+        import logging
+        logging.getLogger(__name__).exception('marcação #%s: o fornecedor devolveu (%s) mas o acerto falhou',
+                                              m.pk, referencia)
+        m.refresh_from_db(fields=CAMPOS_REEMBOLSO)
+        return _reembolso_falhou(m, falta, ErroPagamento(f'O fornecedor devolveu (referência {referencia}), mas não '
+                                                         f'ficou registado — confirma e dá-o como devolvido.',
+                                                         incerto=True))
 
 
 def _reembolso_feito(m, falta, referencia, texto=''):
     m.valor_reembolsado += falta
     m.reembolsado_em = timezone.now()
-    m.reembolso_erro, m.reembolso_tentativas, m.reembolso_proxima = '', 0, None
+    m.reembolso_erro, m.reembolso_tentativas, m.reembolso_proxima, m.reembolso_incerto = '', 0, None, False
     Marcacao.objects.filter(pk=m.pk).update(valor_reembolsado=m.valor_reembolsado, reembolsado_em=m.reembolsado_em,
-                                            reembolso_erro='', reembolso_tentativas=0, reembolso_proxima=None)
+                                            reembolso_erro='', reembolso_tentativas=0, reembolso_proxima=None,
+                                            reembolso_incerto=False)
     from ..utils.registo import registar
     registar('marcacao', 'reembolsada', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
              metodo=m.pagamento, referencia=referencia, dados={'total_reembolsado': f'{m.valor_reembolsado:.2f}'})
@@ -380,18 +399,23 @@ def _reembolso_falhou(m, falta, erro):
     """
     O fornecedor recusou: nada fica devolvido (falta continua a faltar). Volta-se a tentar depois de cada
     ESPERAS_REEMBOLSO (utils/devolucoes); esgotadas, a Bendi é avisada e o worker pára.
+    Incerto: ninguém volta a tentar sozinho — a Bendi é avisada já (ver ErroPagamento.incerto).
     """
     from ..utils.devolucoes import ESPERAS_REEMBOLSO
     from ..utils.registo import registar
+    from ..Views.notificacaoView import notificar_admins
     primeira = not m.reembolso_erro
+    incerto = getattr(erro, 'incerto', False)
     m.reembolso_tentativas += 1
     m.reembolso_erro = (str(erro) or 'O fornecedor recusou o reembolso.')[:255]
+    m.reembolso_incerto = incerto
     m.reembolso_proxima = (timezone.now() + ESPERAS_REEMBOLSO[m.reembolso_tentativas - 1]
-                           if m.reembolso_tentativas <= len(ESPERAS_REEMBOLSO) else None)
+                           if not incerto and m.reembolso_tentativas <= len(ESPERAS_REEMBOLSO) else None)
     Marcacao.objects.filter(pk=m.pk).update(reembolso_erro=m.reembolso_erro, reembolso_tentativas=m.reembolso_tentativas,
-                                            reembolso_proxima=m.reembolso_proxima)
+                                            reembolso_proxima=m.reembolso_proxima, reembolso_incerto=incerto)
     registar('marcacao', 'reembolso_falhou', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
-             metodo=m.pagamento, dados={'tentativa': m.reembolso_tentativas, 'erro': m.reembolso_erro})
+             metodo=m.pagamento, dados={'tentativa': m.reembolso_tentativas, 'erro': m.reembolso_erro,
+                                        'incerto': incerto})
     if primeira:
         texto = (f'A devolução de {formatar(falta)} está a demorar a ser processada. Estamos a tratar disso — '
                  f'não precisas de fazer nada.')
@@ -401,14 +425,21 @@ def _reembolso_falhou(m, falta, erro):
             from ..Views.notificacaoView import notificar
             notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='Reembolso a processar',
                       mensagem=f'{m.servico_nome}: {texto}', loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
-        avisar_loja(m, 'Reembolso por concluir', f'{m.servico_nome}: o pagamento online não aceitou a devolução de '
-                                                 f'{formatar(falta)} ({m.reembolso_erro}). Vamos tentar de novo sozinhos '
-                                                 f'— ou usa "Tentar de novo" na marcação.')
-    if m.reembolso_tentativas == len(ESPERAS_REEMBOLSO) + 1:
-        from ..Views.notificacaoView import notificar_admins
-        notificar_admins(tipo='pagamento_reembolsar', titulo=f'Reembolso por concluir — Marcação #{m.id}',
-                         mensagem=f'{m.loja.nome} · {formatar(falta)} · {m.reembolso_tentativas} tentativas falhadas: '
-                                  f'{m.reembolso_erro}', loja=m.loja, link='/admin/devolucoes?grupo=por_concluir')
+        if incerto:
+            avisar_loja(m, 'Reembolso por concluir', f'{m.servico_nome}: o pagamento online não respondeu à devolução '
+                                                     f'de {formatar(falta)}. A Bendi vai confirmar se o dinheiro já saiu.')
+        else:
+            avisar_loja(m, 'Reembolso por concluir', f'{m.servico_nome}: o pagamento online não aceitou a devolução de '
+                                                     f'{formatar(falta)} ({m.reembolso_erro}). Vamos tentar de novo '
+                                                     f'sozinhos — ou usa "Tentar de novo" na marcação.')
+    if incerto or m.reembolso_tentativas == len(ESPERAS_REEMBOLSO) + 1:
+        if incerto:
+            titulo, porque = 'confirmar', 'o fornecedor não respondeu — confirma no painel se o dinheiro saiu'
+        else:
+            titulo, porque = 'concluir', f'{m.reembolso_tentativas} tentativas falhadas'
+        notificar_admins(tipo='pagamento_reembolsar', titulo=f'Reembolso por {titulo} — Marcação #{m.id}',
+                         mensagem=f'{m.loja.nome} · {formatar(falta)} · {porque}: {m.reembolso_erro}',
+                         loja=m.loja, link='/admin/devolucoes?grupo=por_concluir')
     return Decimal('0')
 
 
@@ -424,18 +455,26 @@ def _bloqueada(m):
 
 
 @transaction.atomic
-def tentar_reembolso(m):
-    """Loja, Bendi ou worker: volta a pedir ao fornecedor o que falta devolver (bloqueada — nunca duas vezes)."""
+def tentar_reembolso(m, confirmado=False):
+    """
+    Loja, Bendi ou worker: volta a pedir ao fornecedor o que falta devolver (bloqueada — nunca duas vezes).
+    Incerto: só a Bendi, com confirmado (viu no painel do fornecedor que o dinheiro não saiu).
+    """
     m = _bloqueada(m)
     if not por_reembolsar(m):
         raise ErroMarcacao('Esta marcação não tem reembolso por concluir.')
-    reembolsar(m)
+    if m.reembolso_incerto and not confirmado:
+        raise ErroMarcacao('O pagamento online não respondeu e pode já ter devolvido — a Bendi confirma primeiro.')
+    reembolsar(m, confirmado=True)
     return m
 
 
 @transaction.atomic
 def reembolso_por_fora(m, referencia, nota=''):
-    """A Bendi devolveu o que faltava por outro meio (ex.: transferência) — referência obrigatória, fica no registo."""
+    """
+    A Bendi confirma a devolução do que faltava: feita por outro meio (ex.: transferência) ou já feita no
+    fornecedor (incerto). Referência obrigatória, fica no registo.
+    """
     referencia, nota = (referencia or '').strip(), (nota or '').strip()
     m = _bloqueada(m)
     falta = por_reembolsar(m)
@@ -443,7 +482,7 @@ def reembolso_por_fora(m, referencia, nota=''):
         raise ErroMarcacao('Esta marcação não tem reembolso por concluir.')
     if not 3 <= len(referencia) <= 100:
         raise ErroMarcacao('Indica a referência da devolução (ex.: n.º da transferência).')
-    _reembolso_feito(m, falta, referencia, texto=f'A Bendi devolveu-te {formatar(falta)} por fora do pagamento online '
+    _reembolso_feito(m, falta, referencia, texto=f'A Bendi confirmou a devolução de {formatar(falta)} '
                                                  f'(referência {referencia}).' + (f' {nota}' if nota else ''))
     return m
 
@@ -453,12 +492,12 @@ def reembolsos_por_concluir(agora=None, lote=50):
     import logging
     agora = agora or timezone.now()
     n = 0
-    for mid in list(Marcacao.objects.filter(reembolso_proxima__lte=agora).order_by('reembolso_proxima')
-                    .values_list('id', flat=True)[:lote]):
+    for mid in list(Marcacao.objects.filter(reembolso_proxima__lte=agora, reembolso_incerto=False)
+                    .order_by('reembolso_proxima').values_list('id', flat=True)[:lote]):
         try:
             with transaction.atomic():
                 m = (Marcacao.objects.select_for_update(skip_locked=True, of=('self',)).select_related('loja', 'cliente')
-                     .filter(pk=mid, reembolso_proxima__lte=agora).first())
+                     .filter(pk=mid, reembolso_proxima__lte=agora, reembolso_incerto=False).first())
                 if m and por_reembolsar(m):
                     reembolsar(m)
                     n += 1
@@ -561,7 +600,9 @@ def marcacao_payload(m, completo=False):
     }
     falta = por_reembolsar(m)
     # o fornecedor recusou a devolução: a loja vê o erro e pode tentar de novo (acção tentar_reembolso)
+    # incerto: o fornecedor não respondeu — a loja não pode tentar, a Bendi confirma primeiro
     d['reembolso_por_concluir'] = ({'valor': str(falta), 'erro': m.reembolso_erro, 'tentativas': m.reembolso_tentativas,
+                                    'incerto': m.reembolso_incerto,
                                     'proxima_tentativa': m.reembolso_proxima.astimezone(tz).isoformat()
                                     if m.reembolso_proxima else None} if falta else None)
     if completo:

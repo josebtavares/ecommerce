@@ -106,8 +106,9 @@
         <p class="text-xs font-bold uppercase tracking-wider text-zinc-500 pt-2">Marcações</p>
         <div v-for="m in marcacoes" :key="m.id" class="space-y-2">
           <p class="text-xs text-zinc-500">Marcação #{{ m.id }} · {{ m.loja_nome }} · {{ m.cliente_nome }} · {{ m.servico_nome }} · {{ dataHora(m.inicio) }}</p>
-          <ReembolsoPorConcluir :valor="m.valor" :erro="m.erro" :tentativas="m.tentativas" :proxima="m.proxima_tentativa" porFora
-            :aEnviar="aEnviarMarcacao === m.id" @tentar="reembolsoMarcacao(m, 'tentar')" @por-fora="reembolsoMarcacao(m, 'por_fora', $event)" />
+          <ReembolsoPorConcluir :valor="m.valor" :erro="m.erro" :tentativas="m.tentativas" :proxima="m.proxima_tentativa"
+            :incerto="m.incerto" :podeTentar="m.pode_tentar" :porFora="m.pode_por_fora"
+            :aEnviar="aEnviarMarcacao === m.id" @tentar="reembolsoMarcacao(m, 'tentar', $event)" @por-fora="reembolsoMarcacao(m, 'por_fora', $event)" />
         </div>
       </section>
     </template>
@@ -190,7 +191,7 @@ async function reembolsoMarcacao (m, acao, extra = {}) {
   aEnviarMarcacao.value = m.id
   try {
     const { data } = await api.post(`/app/admin/reembolsos/marcacoes/${m.id}/`, { acao, ...extra })
-    if (data.concluido) toast.success(acao === 'por_fora' ? 'Dado como devolvido por fora.' : 'Reembolso feito.')
+    if (data.concluido) toast.success(acao === 'por_fora' ? 'Dado como devolvido.' : 'Reembolso feito.')
     else toast.error('O pagamento online voltou a recusar.')
     carregar()
   } catch (e) {

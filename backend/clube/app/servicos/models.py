@@ -210,6 +210,7 @@ class Marcacao(models.Model):
     reembolso_erro = models.CharField(max_length=255, blank=True, default='', db_default='')
     reembolso_tentativas = models.PositiveSmallIntegerField(default=0, db_default=0)
     reembolso_proxima = models.DateTimeField(null=True, blank=True)
+    reembolso_incerto = models.BooleanField(default=False, db_default=False)   # ver Reembolso.reembolso_incerto
     # conversa: até quando cada lado leu (mensagens por ler)
     lida_cliente_em = models.DateTimeField(null=True, blank=True)
     lida_loja_em  = models.DateTimeField(null=True, blank=True)

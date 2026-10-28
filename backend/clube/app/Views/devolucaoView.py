@@ -141,9 +141,13 @@ def _detalhe(request, r, papel):
         'nao_recebido_em': _data(r.nao_recebido_em),
         'disputa_entrega': r.estado == 'em_disputa' and r.data_reembolso is not None,
         # o fornecedor recusou o reembolso: o cliente só sabe que está a ser tratado; loja e Bendi vêem o erro
+        # incerto (o fornecedor não respondeu — pode ter devolvido): só a Bendi com gerir_pagamentos, depois de confirmar
         'por_concluir': ({'tentativas': r.tentativas, 'proxima_tentativa': _data(r.proxima_tentativa),
                           'erro': r.erro_reembolso if papel in ('loja', 'admin') else '',
-                          'pode_tentar': papel in ('loja', 'admin'), 'pode_por_fora': papel == 'admin'}
+                          'incerto': r.reembolso_incerto and papel in ('loja', 'admin'),
+                          'pode_tentar': (papel == 'loja' and not r.reembolso_incerto)
+                                         or (papel == 'admin' and (not r.reembolso_incerto or _financeiro(request))),
+                          'pode_por_fora': papel == 'admin' and _financeiro(request)}
                          if r.estado == 'por_reembolsar' else None),
         'referencia': r.referencia if papel == 'admin' else '',      # transacção do reembolso (para o admin verificar)
         'pode_escalar': papel == 'cliente' and dev.pode_escalar(r),
@@ -579,25 +583,47 @@ def decidir_admin(request, id):
     return Response(_detalhe(request, r, 'admin'))
 
 
+def _financeiro(request):
+    """Dar dinheiro como devolvido (ou pedir outra vez um reembolso incerto) mexe nas contas: gerir_pagamentos."""
+    return request.user.is_staff and request.user.utilizador.pode_admin('gerir_pagamentos')
+
+
+def _pode_reembolso(request, acao, incerto, confirmado):
+    """None, ou a razão por que esta conta da Bendi não pode (por_fora / tentar um incerto)."""
+    if acao == 'por_fora' and not _financeiro(request):
+        return 'Sem permissão: gerir_pagamentos'
+    if acao == 'tentar' and incerto:
+        if not _financeiro(request):
+            return 'Sem permissão: gerir_pagamentos'
+        if not confirmado:
+            return 'Confirma primeiro no painel do fornecedor que o dinheiro não saiu.'
+    return None
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def reembolso_admin(request, id):
     """
-    POST /app/admin/reembolsos/<id>/reembolso/   { acao: tentar | por_fora, referencia?, nota? }
-    Reembolso por concluir (o fornecedor recusou): tentar de novo, ou dá-lo como devolvido por fora (referência).
+    POST /app/admin/reembolsos/<id>/reembolso/   { acao: tentar | por_fora, referencia?, nota?, confirmado? }
+    Reembolso por concluir (o fornecedor recusou): tentar de novo, ou dá-lo como devolvido (referência).
+    Por fora, ou tentar um incerto (confirmado: true — a Bendi viu no fornecedor que não saiu), pede gerir_pagamentos.
     """
     erro = _admin(request)
     if erro:
         return erro
     d = request.data
+    acao, confirmado = d.get('acao'), d.get('confirmado') is True
     try:
         with transaction.atomic():
             r = _reembolso_bloqueado(id)
-            if d.get('acao') == 'tentar':
+            proibido = _pode_reembolso(request, acao, r.reembolso_incerto, confirmado)
+            if proibido:
+                raise ErroReembolso(proibido, 403 if proibido.startswith('Sem permissão') else 409)
+            if acao == 'tentar':
                 if _limitado(request, 'tentar', '5/m'):
                     raise ErroReembolso('Demasiadas tentativas — espera um minuto.', 429)
-                dev.tentar_de_novo(r, request.user.utilizador, 'admin')
-            elif d.get('acao') == 'por_fora':
+                dev.tentar_de_novo(r, request.user.utilizador, 'admin', confirmado=confirmado)
+            elif acao == 'por_fora':
                 dev.devolvido_por_fora(r, request.user.utilizador, d.get('referencia'), d.get('nota', ''))
             else:
                 raise ErroReembolso('Acção inválida.')
@@ -614,13 +640,14 @@ def _marcacoes_por_concluir():
             .select_related('loja', 'cliente__user'))
 
 
-def _marcacao_por_concluir(m):
+def _marcacao_por_concluir(request, m):
     from ..servicos import marcacoes as ops
     return {'id': m.id, 'loja_id': m.loja_id, 'loja_nome': m.loja.nome, 'servico_nome': m.servico_nome,
             'cliente_nome': (m.cliente.nome if m.cliente_id else '') or m.cliente_nome,
             'inicio': _data(m.inicio), 'estado': m.estado, 'estado_label': m.get_estado_display(),
             'valor': str(ops.por_reembolsar(m)), 'erro': m.reembolso_erro, 'tentativas': m.reembolso_tentativas,
-            'proxima_tentativa': _data(m.reembolso_proxima)}
+            'proxima_tentativa': _data(m.reembolso_proxima), 'incerto': m.reembolso_incerto,
+            'pode_tentar': not m.reembolso_incerto or _financeiro(request), 'pode_por_fora': _financeiro(request)}
 
 
 @api_view(['GET'])
@@ -630,13 +657,14 @@ def marcacoes_por_concluir_admin(request):
     erro = _admin(request)
     if erro:
         return erro
-    return paginar_lista(request, [_marcacao_por_concluir(m) for m in _marcacoes_por_concluir().order_by('id')[:500]])
+    return paginar_lista(request, [_marcacao_por_concluir(request, m)
+                                   for m in _marcacoes_por_concluir().order_by('id')[:500]])
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def marcacao_reembolso_admin(request, id):
-    """POST /app/admin/reembolsos/marcacoes/<id>/   { acao: tentar | por_fora, referencia?, nota? }"""
+    """POST /app/admin/reembolsos/marcacoes/<id>/   { acao: tentar | por_fora, referencia?, nota?, confirmado? }"""
     from ..servicos import marcacoes as ops
     from ..servicos.models import Marcacao
     erro = _admin(request)
@@ -644,16 +672,20 @@ def marcacao_reembolso_admin(request, id):
         return erro
     m = get_object_or_404(Marcacao, id=id)
     d = request.data
+    acao, confirmado = d.get('acao'), d.get('confirmado') is True
+    proibido = _pode_reembolso(request, acao, m.reembolso_incerto, confirmado)
+    if proibido:
+        return Response({'detail': proibido}, status=403 if proibido.startswith('Sem permissão') else 409)
     try:
-        if d.get('acao') == 'tentar':
+        if acao == 'tentar':
             if _limitado(request, 'tentar', '5/m'):
                 return Response({'detail': 'Demasiadas tentativas — espera um minuto.'}, status=429)
-            ops.tentar_reembolso(m)
-        elif d.get('acao') == 'por_fora':
+            ops.tentar_reembolso(m, confirmado=confirmado and _financeiro(request))
+        elif acao == 'por_fora':
             ops.reembolso_por_fora(m, d.get('referencia'), d.get('nota', ''))
         else:
             return Response({'detail': 'Acção inválida.'}, status=status.HTTP_400_BAD_REQUEST)
     except ops.ErroMarcacao as e:
         return Response({'detail': str(e)}, status=status.HTTP_409_CONFLICT)
     m = _marcacoes_por_concluir().filter(id=id).first()
-    return Response({'concluido': m is None, 'marcacao': _marcacao_por_concluir(m) if m else None})
+    return Response({'concluido': m is None, 'marcacao': _marcacao_por_concluir(request, m) if m else None})

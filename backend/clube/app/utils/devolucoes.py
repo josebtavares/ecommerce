@@ -891,11 +891,34 @@ def _concluir(r, valor):
         # endpoint do dinheiro (referência 'dinheiro'), mas o reembolso é para o meio de pagamento usado
         tipo = p.metodo.tipo if p and p.metodo_id else ('dinheiro' if p and p.referencia_transacao == 'dinheiro' else '')
         metodo = 'manual' if tipo == 'dinheiro' else 'gateway'
-        try:
-            r.referencia = _executar_no_gateway(r, valor, metodo, p)
-        except ErroPagamento as e:
-            return _falhou(r, valor, e)
+        if metodo == 'gateway':
+            return _pelo_fornecedor(r, valor, p)
+        r.referencia = _executar_no_gateway(r, valor, metodo, p)
     return _acertar(r, valor, metodo, p)
+
+
+def _pelo_fornecedor(r, valor, p):
+    """
+    Pede o reembolso ao fornecedor e acerta. Recusou → _falhou. O dinheiro saiu mas o acerto rebentou → não se
+    desfaz para 'por decidir' (seria pedido outra vez): fica por concluir e incerto, com a referência, para a Bendi.
+    """
+    from django.db import transaction
+    try:
+        referencia = _executar_no_gateway(r, valor, 'gateway', p)
+    except ErroPagamento as e:
+        return _falhou(r, valor, e)
+    try:
+        with transaction.atomic():
+            r.referencia = referencia
+            return _acertar(r, valor, 'gateway', p)
+    except Exception:
+        logger.exception('reembolso #%s: o fornecedor devolveu (%s) mas o acerto falhou', r.pk, referencia)
+        r.refresh_from_db()
+        _falhou(r, valor, ErroPagamento(f'O fornecedor devolveu (referência {referencia}), mas não ficou registado — '
+                                        f'confirma e dá-o como devolvido.', incerto=True))
+        r.referencia = referencia[:100]
+        r.save(update_fields=['referencia'])
+        return r
 
 
 def _acertar(r, valor, metodo, p):
@@ -907,7 +930,7 @@ def _acertar(r, valor, metodo, p):
     r.metodo = metodo
     r.data_reembolso = timezone.now()
     r.prazo_resposta = r.data_reembolso + timedelta(days=PRAZO_DINHEIRO_DIAS) if metodo == 'manual' else None
-    r.proxima_tentativa = None
+    r.proxima_tentativa, r.reembolso_incerto = None, False
     r.save()
 
     if p and valor > 0:
@@ -928,7 +951,7 @@ def _acertar(r, valor, metodo, p):
                                                      f'e marca "Dinheiro entregue" no pedido.')
         return r
     if metodo == 'externo':
-        txt = f'A Bendi devolveu-te {formatar(valor)} por fora do pagamento online (referência {r.referencia}).'
+        txt = f'A Bendi confirmou a devolução de {formatar(valor)} (referência {r.referencia}).'
     else:
         txt = f'Reembolso de {formatar(valor)} feito para o meio de pagamento usado.'
     mensagem(r, 'sistema', txt)
@@ -941,9 +964,12 @@ def _falhou(r, valor, erro):
     """
     O fornecedor recusou o reembolso: a decisão fica (por_reembolsar), o pagamento e a comissão não mudam.
     Volta-se a tentar depois de cada ESPERAS_REEMBOLSO; esgotadas, a Bendi é avisada e o worker pára.
+    Incerto (sem resposta — pode ter devolvido): ninguém volta a tentar sozinho; a Bendi é avisada já e confirma
+    no painel do fornecedor antes de tentar de novo ou de o dar como devolvido.
     """
     from .registo import registar
     primeira = r.estado != 'por_reembolsar'
+    incerto = getattr(erro, 'incerto', False)
     r.estado = 'por_reembolsar'
     r.valor_aprovado = valor
     r.metodo = 'gateway'
@@ -951,17 +977,27 @@ def _falhou(r, valor, erro):
     r.prazo_resposta = None
     r.tentativas += 1
     r.erro_reembolso = (str(erro) or 'O fornecedor recusou o reembolso.')[:255]
+    r.reembolso_incerto = incerto
     r.proxima_tentativa = (timezone.now() + ESPERAS_REEMBOLSO[r.tentativas - 1]
-                           if r.tentativas <= len(ESPERAS_REEMBOLSO) else None)
+                           if not incerto and r.tentativas <= len(ESPERAS_REEMBOLSO) else None)
     r.save()
     registar('reembolso', 'reembolso_falhou', objeto_id=r.pk, loja_id=r.loja_id, encomenda_id=r.encomenda_id,
              valor=valor, estado_novo=r.estado, metodo=r.metodo,
-             dados={'tentativa': r.tentativas, 'erro': r.erro_reembolso})
+             dados={'tentativa': r.tentativas, 'erro': r.erro_reembolso, 'incerto': incerto})
     if primeira:
         mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite, mas houve um atraso a processá-lo. '
                                f'Estamos a tratar disso — não precisas de fazer nada.')
         _avisar_cliente(r, 'Reembolso a processar', f'O reembolso de {formatar(valor)} foi aceite, mas houve um atraso '
                                                     f'a processá-lo. Estamos a tratar disso.')
+    if incerto:
+        _avisar_admins(r, 'Reembolso por confirmar', f'{r.loja.nome} · {formatar(valor)} · o fornecedor não respondeu '
+                                                     f'— confirma no painel se o dinheiro saiu: {r.erro_reembolso}',
+                       tipo='pagamento_reembolsar')
+        if primeira:
+            _avisar_loja(r, 'Reembolso por concluir', f'O pagamento online não respondeu ao reembolso de {formatar(valor)}. '
+                                                      f'A Bendi vai confirmar se o dinheiro já saiu.')
+        return r
+    if primeira:
         _avisar_loja(r, 'Reembolso por concluir', f'O pagamento online não aceitou o reembolso de {formatar(valor)} '
                                                   f'({r.erro_reembolso}). Vamos tentar de novo sozinhos — ou usa '
                                                   f'"Tentar de novo" no pedido.')
@@ -972,33 +1008,33 @@ def _falhou(r, valor, erro):
     return r
 
 
-def tentar_de_novo(r, utilizador=None, papel_quem='sistema'):
+def tentar_de_novo(r, utilizador=None, papel_quem='sistema', confirmado=False):
     """
     Volta a pedir o reembolso ao fornecedor (a mesma chave: o id do pedido). Espera r e a encomenda bloqueados
     — duas tentativas ao mesmo tempo esperam uma pela outra e a segunda já não o encontra por concluir.
+    Incerto: só com confirmado (a Bendi viu no painel do fornecedor que o dinheiro não saiu).
     """
     if r.estado != 'por_reembolsar':
         raise ErroReembolso('Este reembolso já não está por concluir.', 409)
-    p = pagamento_de(r.encomenda)
-    try:
-        r.referencia = _executar_no_gateway(r, r.valor_aprovado, 'gateway', p)
-    except ErroPagamento as e:
-        _falhou(r, r.valor_aprovado, e)
-        return r
+    if r.reembolso_incerto and not confirmado:
+        raise ErroReembolso('O pagamento online não respondeu e pode já ter devolvido — a Bendi confirma primeiro.', 409)
     if utilizador:
         mensagem(r, papel_quem, 'Tentou de novo o reembolso.', utilizador)
-    return _acertar(r, r.valor_aprovado, 'gateway', p)
+    return _pelo_fornecedor(r, r.valor_aprovado, pagamento_de(r.encomenda))
 
 
 def devolvido_por_fora(r, utilizador, referencia, nota=''):
-    """A Bendi devolveu o dinheiro por outro meio (ex.: transferência) — referência obrigatória, fica no registo."""
+    """
+    A Bendi confirma a devolução: feita por outro meio (ex.: transferência) ou já feita no fornecedor (incerto).
+    Referência obrigatória, fica no registo.
+    """
     referencia, nota = (referencia or '').strip(), (nota or '').strip()
     if r.estado != 'por_reembolsar':
         raise ErroReembolso('Este reembolso já não está por concluir.', 409)
     if not 3 <= len(referencia) <= 100:
         raise ErroReembolso('Indica a referência da devolução (ex.: n.º da transferência).')
     r.referencia = referencia
-    mensagem(r, 'admin', f'A Bendi devolveu o dinheiro por fora (referência {referencia}).' + (f' {nota}' if nota else ''),
+    mensagem(r, 'admin', f'A Bendi confirmou a devolução (referência {referencia}).' + (f' {nota}' if nota else ''),
              utilizador)
     return _acertar(r, r.valor_aprovado, 'externo', pagamento_de(r.encomenda))
 
@@ -1019,7 +1055,8 @@ def reembolsos_por_concluir(agora=None, lote=50):
                     continue
                 r = (Reembolso.objects.select_for_update(of=('self',)).select_related('encomenda', 'loja', 'comprador')
                      .get(id=rid))
-                if r.estado != 'por_reembolsar' or not r.proxima_tentativa or r.proxima_tentativa > agora:
+                if (r.estado != 'por_reembolsar' or r.reembolso_incerto or not r.proxima_tentativa
+                        or r.proxima_tentativa > agora):
                     continue
                 tentar_de_novo(r)
                 n += 1

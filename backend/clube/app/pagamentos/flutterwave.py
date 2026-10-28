@@ -28,7 +28,10 @@ class Flutterwave(Fornecedor):
             resp = requests.request(metodo, BASE + caminho, headers=_headers(), timeout=15, **kw)
             corpo = resp.json()
         except (requests.RequestException, ValueError):
-            raise ErroPagamento('O serviço de pagamentos não respondeu. Tenta outra vez daqui a pouco.')
+            # sem resposta legível: o pedido pode ter sido feito (incerto — ver ErroPagamento)
+            raise ErroPagamento('O serviço de pagamentos não respondeu. Tenta outra vez daqui a pouco.', incerto=True)
+        if resp.status_code >= 500:
+            raise ErroPagamento('O serviço de pagamentos falhou. Tenta outra vez daqui a pouco.', incerto=True)
         if resp.status_code != 200 or corpo.get('status') != 'success':
             raise ErroPagamento('O serviço de pagamentos recusou o pedido.')
         return corpo.get('data') or {}

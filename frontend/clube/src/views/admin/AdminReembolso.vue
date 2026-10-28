@@ -46,9 +46,10 @@
         </section>
 
         <!-- decidido, mas o pagamento online recusou devolver: tentar de novo ou dar como devolvido por fora -->
-        <ReembolsoPorConcluir v-if="r.estado === 'por_reembolsar' && r.por_concluir" :valor="r.valor_aprovado" porFora
+        <ReembolsoPorConcluir v-if="r.estado === 'por_reembolsar' && r.por_concluir" :valor="r.valor_aprovado"
           :erro="r.por_concluir.erro" :tentativas="r.por_concluir.tentativas" :proxima="r.por_concluir.proxima_tentativa"
-          :aEnviar="aEnviar" @tentar="reembolso('tentar')" @por-fora="reembolso('por_fora', $event)" />
+          :incerto="r.por_concluir.incerto" :podeTentar="r.por_concluir.pode_tentar" :porFora="r.por_concluir.pode_por_fora"
+          :aEnviar="aEnviar" @tentar="reembolso('tentar', $event)" @por-fora="reembolso('por_fora', $event)" />
 
         <!-- o valor já está acertado: só se decide se o dinheiro chegou ao cliente -->
         <section v-else-if="decideEntrega" class="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
@@ -184,7 +185,7 @@ async function reembolso (acao, extra = {}) {
     const { data } = await api.post(`/app/admin/reembolsos/${r.value.id}/reembolso/`, { acao, ...extra })
     r.value = data
     if (data.estado === 'por_reembolsar') toast.error('O pagamento online voltou a recusar.')
-    else toast.success(acao === 'por_fora' ? 'Dado como devolvido por fora.' : 'Reembolso feito.')
+    else toast.success(acao === 'por_fora' ? 'Dado como devolvido.' : 'Reembolso feito.')
     emit('alterado')
   } catch (e) {
     toast.error(e.response?.data?.detail || 'Não foi possível concluir.')
