@@ -8,7 +8,7 @@
         <div class="flex-1 min-w-0">
           <h2 class="text-sm font-bold text-zinc-200">Registo das transações</h2>
           <p class="text-xs text-zinc-500 mt-0.5">
-            Pagamentos de encomendas, reembolsos, marcações pagas, faturas de subscrição e dados bancários das lojas.
+            Pagamentos de encomendas, reembolsos, marcações pagas, vendas do POS, comissões, faturas de subscrição e dados bancários das lojas.
             Cada linha fica ligada à anterior e não se pode alterar nem apagar — é a prova em disputas e auditorias.
           </p>
         </div>
@@ -32,18 +32,18 @@
 
       <!-- filtros -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <select v-model="f.tipo" @change="carregar(true)" aria-label="Tipo"
+        <select v-model="f.tipo" @change="carregar(0)" aria-label="Tipo"
           class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-300 focus:outline-none">
           <option value="">Todos os tipos</option>
           <option v-for="t in tipos" :key="t.valor" :value="t.valor">{{ t.label }}</option>
         </select>
-        <input v-model.trim="f.loja" @change="carregar(true)" inputmode="numeric" placeholder="Loja (id)" aria-label="Loja (id)"
+        <input v-model.trim="f.loja" @change="carregar(0)" inputmode="numeric" placeholder="Loja (id)" aria-label="Loja (id)"
           class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none" />
-        <input v-model.trim="f.encomenda" @change="carregar(true)" inputmode="numeric" placeholder="Encomenda (id)" aria-label="Encomenda (id)"
+        <input v-model.trim="f.encomenda" @change="carregar(0)" inputmode="numeric" placeholder="Encomenda (id)" aria-label="Encomenda (id)"
           class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none" />
-        <input v-model="f.de" @change="carregar(true)" type="date" aria-label="De"
+        <input v-model="f.de" @change="carregar(0)" type="date" aria-label="De"
           class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-300 focus:outline-none" />
-        <input v-model="f.ate" @change="carregar(true)" type="date" aria-label="Até"
+        <input v-model="f.ate" @change="carregar(0)" type="date" aria-label="Até"
           class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-300 focus:outline-none" />
         <button type="button" @click="limpar" class="px-3 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-zinc-200 bg-zinc-800/50">
           Limpar filtros
@@ -60,7 +60,8 @@
     </p>
 
     <template v-else>
-      <p class="text-xs text-zinc-500">{{ total }} linha(s)</p>
+      <PaginacaoLista :count="total" :limit="POR_PAGINA" :offset="offset" @ir="carregar" />
+      <p v-if="total <= POR_PAGINA" class="text-xs text-zinc-500">{{ total }} linha(s)</p>
       <div class="space-y-2">
         <div v-for="r in linhas" :key="r.id" data-teste="registo-linha"
              class="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 text-sm">
@@ -83,10 +84,7 @@
           </dl>
         </div>
       </div>
-      <button v-if="proximo !== null" type="button" @click="carregar(false)" :disabled="carregando"
-        class="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold transition disabled:opacity-50">
-        {{ carregando ? 'A carregar…' : 'Ver mais' }}
-      </button>
+      <PaginacaoLista :count="total" :limit="POR_PAGINA" :offset="offset" @ir="carregar" />
     </template>
   </div>
 </template>
@@ -94,41 +92,48 @@
 <script>
 import api from '@/services/api'
 import { descarregarPdf } from '@/utils/documentos'
+import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
+
+const POR_PAGINA = 50
 
 const VAZIO = () => ({ tipo: '', loja: '', encomenda: '', de: '', ate: '' })
 
 export default {
   name: 'AdminRegisto',
+  components: { PaginacaoLista },
 
   data () {
     return {
-      f: VAZIO(), linhas: [], total: 0, proximo: null, tipos: [], carregando: false, erro: '',
+      f: VAZIO(), linhas: [], total: 0, offset: 0, POR_PAGINA, tipos: [], carregando: false, erro: '',
       aberta: null, verificacao: null, aVerificar: false, aExportar: false,
     }
   },
 
-  created () { this.carregar(true) },
+  created () { this.carregar(0) },
 
   methods: {
     params () {
       return Object.fromEntries(Object.entries(this.f).filter(([, v]) => v))
     },
 
-    async carregar (doZero) {
+    // offset da página (0 = a primeira; os filtros recomeçam da primeira)
+    async carregar (offset = 0) {
+      const mudouPagina = offset !== this.offset
       this.carregando = true; this.erro = ''
       try {
-        const offset = doZero ? 0 : this.proximo
-        const { data } = await api.get('/app/admin/registo/', { params: { ...this.params(), offset, limit: 50 } })
-        this.linhas = doZero ? data.results : [...this.linhas, ...data.results]
+        const { data } = await api.get('/app/admin/registo/', { params: { ...this.params(), offset, limit: POR_PAGINA } })
+        this.linhas = data.results
         this.total = data.count
-        this.proximo = data.next_offset
+        this.offset = offset
+        this.aberta = null
+        if (mudouPagina) window.scrollTo({ top: 0, behavior: 'smooth' })
         this.tipos = data.tipos
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível carregar o registo.'
       } finally { this.carregando = false }
     },
 
-    limpar () { this.f = VAZIO(); this.carregar(true) },
+    limpar () { this.f = VAZIO(); this.carregar(0) },
 
     detalhe (r) {
       const d = {

@@ -202,6 +202,9 @@ class Marcacao(models.Model):
     # o que já foi devolvido (simulado, para o meio de pagamento) e quando
     valor_reembolsado = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_default=0)
     reembolsado_em = models.DateTimeField(null=True, blank=True)
+    # quem cobrou o pagamento antecipado e a transacção (pagamentos.servico) — os reembolsos vão por aí
+    pagamento_fornecedor = models.CharField(max_length=20, blank=True, default='', db_default='')
+    pagamento_referencia = models.CharField(max_length=100, blank=True, default='', db_default='')
     # conversa: até quando cada lado leu (mensagens por ler)
     lida_cliente_em = models.DateTimeField(null=True, blank=True)
     lida_loja_em  = models.DateTimeField(null=True, blank=True)
