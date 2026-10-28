@@ -7,8 +7,8 @@ provas) sem a password do dono — também de lojas/POS suspensos ou de donos ba
 
 - POST /app/admin/lojas/<id>/ver-backoffice/ (ou /app/admin/pos/<id>/ver/) regista o acesso
   (AcessoAdminLoja / AcessoAdminPOS) e devolve um token de acesso curto (DURACAO, sem refresh) com
-  ver_loja=<id> ou ver_pos=<id> e so_leitura. O do POS leva também ver_loja da loja vinculada:
-  os produtos da loja aparecem no POS.
+  ver_loja=<id> ou ver_pos=<id> e so_leitura. O do POS não abre o backoffice da loja ligada (os
+  produtos dela chegam pelos endpoints do POS); para a loja há o "Ver backoffice", registado à parte.
 - Com esse token, as duas autenticações (autenticacao.JWTContaAtiva e pos.permissions.POSAuthentication)
   chamam validar(): recusa tudo o que não seja leitura e põe aqui (ContextVar, por pedido) o que o
   admin está a ver.
@@ -78,4 +78,4 @@ def emitir_token(user, loja):
 
 
 def emitir_token_pos(user, pos):
-    return _token(user, ver_pos=pos.id, ver_loja=pos.loja_vinculada_id)
+    return _token(user, ver_pos=pos.id)
