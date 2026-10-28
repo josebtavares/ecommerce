@@ -2299,7 +2299,8 @@ class DadosBancarios(models.Model):
 
 class RegistoTransacao(models.Model):
     """Registo das transações — só se acrescenta: a base de dados recusa UPDATE, DELETE e TRUNCATE
-    (trigger na migração 0073) e cada linha leva o hash da anterior (utils/registo.py verifica a cadeia).
+    (trigger na migração 0073; o único UPDATE aceite é pôr o elo da cadeia numa linha que ainda não o tem)
+    e cada linha fica ligada à anterior por hash (utils/registo.py sela e verifica a cadeia).
     Sem chaves estrangeiras: apagar uma loja ou anonimizar uma conta não toca no registo.
     Nunca guarda dados de cartão; o NIB vai mascarado."""
     TIPOS = [
@@ -2325,8 +2326,11 @@ class RegistoTransacao(models.Model):
     ip             = models.CharField(max_length=45, blank=True, default='')
     pedido_id      = models.CharField(max_length=64, blank=True, default='')
     dados          = models.JSONField(default=dict, blank=True)
+    hash_conteudo  = models.CharField(max_length=64)                     # sha256 do conteúdo, ao gravar
+    # elo da cadeia, posto depois do commit (utils/registo.selar): posição, hash da anterior, hash do elo
+    seq            = models.BigIntegerField(null=True, blank=True, unique=True)
     hash_anterior  = models.CharField(max_length=64, blank=True, default='')
-    hash           = models.CharField(max_length=64, unique=True)
+    hash           = models.CharField(max_length=64, null=True, blank=True, unique=True)
 
     class Meta:
         ordering = ['-id']

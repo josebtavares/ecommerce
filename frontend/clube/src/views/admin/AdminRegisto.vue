@@ -25,7 +25,8 @@
       </div>
       <p v-if="verificacao" data-teste="registo-verificacao"
          :class="['text-xs rounded-lg px-3 py-2 border', verificacao.ok ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400']">
-        <template v-if="verificacao.ok">Íntegro — {{ verificacao.total }} linha(s) verificada(s), nenhuma alterada ou em falta.</template>
+        <template v-if="verificacao.ok">Íntegro — {{ verificacao.total }} linha(s) verificada(s), nenhuma alterada ou em falta.<template
+          v-if="verificacao.por_selar"> {{ verificacao.por_selar }} linha(s) ainda por ligar à cadeia (transações em curso).</template></template>
         <template v-else>Problema na linha #{{ verificacao.primeiro_erro.id }}: {{ verificacao.primeiro_erro.motivo }}.</template>
       </p>
 
@@ -131,12 +132,14 @@ export default {
 
     detalhe (r) {
       const d = {
-        'Linha': '#' + r.id, 'Quando (UTC)': r.criado_em, 'Objeto': r.objeto_id ?? '—', 'POS': r.pos_id ?? '—',
+        'Linha': '#' + r.id, 'N.º na cadeia': r.seq ?? 'por selar', 'Quando (UTC)': r.criado_em, 'Objeto': r.objeto_id ?? '—', 'POS': r.pos_id ?? '—',
         'Método': r.metodo || '—', 'Referência': r.referencia || '—', 'Quem': r.ator, 'IP': r.ip || '—',
         'Pedido': r.pedido_id || '—',
       }
       for (const [k, v] of Object.entries(r.dados || {})) d[k] = v || '—'
-      d.Hash = r.hash
+      d['Hash do conteúdo'] = r.hash_conteudo
+      d['Hash anterior'] = r.hash_anterior || '—'
+      d.Hash = r.hash || 'por selar'
       return d
     },
 
