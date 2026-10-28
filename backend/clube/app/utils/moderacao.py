@@ -29,7 +29,8 @@ log = logging.getLogger(__name__)
 ACOES = ('suspender', 'banir', 'levantar')
 MOTIVO_BAN = 'Conta do dono banida'
 MOTIVO_SUSPENSO = 'Conta do dono suspensa'
-MOTIVOS_DONO = (MOTIVO_BAN, MOTIVO_SUSPENSO)
+MOTIVO_ELIMINADO = 'Conta do dono eliminada'      # utils/eliminacao.py
+MOTIVOS_DONO = (MOTIVO_BAN, MOTIVO_SUSPENSO, MOTIVO_ELIMINADO)
 
 
 def fim_do_dia(dia):
@@ -81,6 +82,8 @@ def recusa_reativar(dono_id, motivo):
     """Razão para o admin não reactivar uma loja/POS por causa da conta do dono, ou None."""
     if dono_banido(dono_id):
         return 'O dono está banido — levanta o ban em Utilizadores e volta ao estado em que estava.'
+    if motivo == MOTIVO_ELIMINADO:
+        return 'O dono apagou a conta (ou pediu para a apagar) — a loja não pode voltar a abrir.'
     if motivo == MOTIVO_SUSPENSO:
         return ('Foi suspensa com a conta do dono — reactiva a conta em Utilizadores e volta ao estado '
                 'em que estava.')
@@ -151,6 +154,8 @@ def pode_moderar(quem, alvo, acao):
     """Devolve a razão para recusar, ou None. `quem` é o Utilizador do admin."""
     if alvo.user_id == quem.user_id:
         return 'Não podes moderar a tua própria conta.'
+    if alvo.status == 'eliminado':
+        return 'Esta conta foi apagada.'
     superadmin = quem.role_admin == 'superadmin'
     if alvo.user.is_staff and not superadmin:
         return 'Só o Super Admin pode moderar contas da equipa de administração.'

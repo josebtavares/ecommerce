@@ -34,6 +34,8 @@ class Utilizador(models.Model):
     # moderação (utils/moderacao.py): 'suspenso' pode ter fim; o motivo é o do estado actual
     suspenso_ate    = models.DateTimeField(null=True, blank=True)
     motivo_estado   = models.CharField(max_length=500, blank=True, default='')
+    # a própria pessoa pediu para apagar a conta: é anonimizada nesta data (utils/eliminacao.py)
+    eliminar_em     = models.DateTimeField(null=True, blank=True)
     google_id       = models.CharField(max_length=100, blank=True, null=True, unique=True)
  
     # ── Role no painel de administração ──────────────────────
@@ -2207,6 +2209,13 @@ class ExportacaoLoja(models.Model):
         return f'exportação loja {self.loja_id} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
 
 
+class EmailBloqueado(models.Model):
+    """Email de uma conta banida que foi apagada: não pode abrir outra conta. Só o hash
+    (utils/eliminacao.hash_email) — o email em si sai com o resto dos dados pessoais."""
+    hash      = models.CharField(max_length=64, unique=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+
 class AcessoAdminLoja(models.Model):
     """Cada vez que um admin abre o backoffice de uma loja em modo de leitura (utils/ver_loja.py).
     Nunca se apaga — nem quando a loja é eliminada (fica o nome)."""
@@ -2231,9 +2240,12 @@ class ModeracaoUtilizador(models.Model):
         ('banir',     'Banida'),
         ('levantar',  'Reactivada'),
         ('expirou',   'Suspensão terminou'),
+        ('pedir_eliminacao',    'Pediu para apagar a conta'),
+        ('cancelar_eliminacao', 'Cancelou o pedido de apagar'),
+        ('eliminar',            'Conta apagada'),
     ]
     utilizador = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='moderacoes')
-    acao       = models.CharField(max_length=10, choices=ACOES)
+    acao       = models.CharField(max_length=20, choices=ACOES)
     motivo     = models.CharField(max_length=500, blank=True, default='')
     ate        = models.DateTimeField(null=True, blank=True)
     feito_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')

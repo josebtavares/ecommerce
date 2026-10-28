@@ -20,6 +20,7 @@ urlpatterns = [
     path('utilizador/pagination/',           utilizadorView.utilizador_list_pagination,name='utilizador-list-pagination'),
     path('utilizador/<int:id>/',             utilizadorView.utilizador_get,            name='utilizador-get'),
     path('utilizador/<int:id>/eliminar/',    utilizadorView.utilizador_delete,         name='utilizador-delete'),
+    path('utilizador/conta/eliminar/',       utilizadorView.conta_eliminar,            name='utilizador-conta-eliminar'),
     path('utilizador/search/', utilizadorView.utilizador_search, name='utilizador-search'),
     
     

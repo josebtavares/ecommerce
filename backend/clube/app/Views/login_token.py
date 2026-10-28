@@ -30,6 +30,8 @@ class MyTokenSerializer(TokenObtainPairSerializer):
             utilizador = user.utilizador
         except Exception:
             raise AuthenticationFailed('Perfil não encontrado.')
+        from ..utils.eliminacao import cancelar_ao_entrar
+        cancelar_ao_entrar(utilizador)      # pediu para apagar a conta e voltou dentro do prazo
 
         refresh = self.get_token(user)
         foto_url = utilizador.foto.url if utilizador.foto else None

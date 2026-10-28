@@ -24,7 +24,10 @@ def email_em_uso(email, excluir=None):
     qs = User.objects.filter(email__iexact=(email or '').strip())
     if excluir is not None:
         qs = qs.exclude(pk=excluir.pk)
-    return qs.exists()
+    if qs.exists():
+        return True
+    from .eliminacao import email_bloqueado      # de uma conta banida já apagada
+    return email_bloqueado(email)
 
 
 def username_livre(base):

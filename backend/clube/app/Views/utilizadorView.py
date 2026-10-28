@@ -135,9 +135,14 @@ def utilizador_login(request):
     if not conta_ativa(user):
         return Response({'detail': mensagem_bloqueio(utilizador), 'code': 'conta_inativa'},
                         status=status.HTTP_403_FORBIDDEN)
-    utilizador.refresh_from_db(fields=['status', 'suspenso_ate', 'motivo_estado'])
+    utilizador.refresh_from_db(fields=['status', 'suspenso_ate', 'motivo_estado', 'eliminar_em'])
 
-    return Response(_build_auth_response(utilizador, request), status=status.HTTP_200_OK)
+    # pediu para apagar a conta e voltou dentro do prazo: o pedido é cancelado (utils/eliminacao.py)
+    from ..utils.eliminacao import cancelar_ao_entrar
+    resposta = _build_auth_response(utilizador, request)
+    if cancelar_ao_entrar(utilizador):
+        resposta['eliminacao_cancelada'] = True
+    return Response(resposta, status=status.HTTP_200_OK)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -323,30 +328,59 @@ def utilizador_list_pagination(request):
 def utilizador_delete(request, id):
     """
     DELETE /app/utilizador/<id>/eliminar/
-    Apenas o superadmin apaga utilizadores (e nunca a própria conta).
+    Apenas o superadmin, nunca a própria conta. Já não apaga as linhas (levava encomendas, avaliações
+    e mensagens em cascata): anonimiza, como Admin → Utilizadores → Apagar conta (utils/eliminacao.py).
     """
     if not _gere_utilizadores(request, superadmin=True):
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
-
-    from django.db import transaction
-    from django.db.models import ProtectedError, RestrictedError
-
+    from ..utils import eliminacao
     utilizador = get_object_or_404(Utilizador, id=id)
     if utilizador.user_id == request.user.id:
         return Response({'detail': 'Não podes eliminar a tua própria conta aqui.'}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        with transaction.atomic():
-            utilizador.user.delete()  # cascade apaga o Utilizador também
-    except (ProtectedError, RestrictedError) as e:
-        # RestrictedError: produto usado num menu de outro POS (ComponenteConjuntoPOS)
-        # encomendas, pagamentos, comissões, vendas e turnos POS (on_delete=PROTECT) nunca são
-        # apagados — um utilizador com esse histórico deve ser banido/suspenso, não eliminado
+    if utilizador.status == 'eliminado':
+        return Response({'detail': 'A conta já foi apagada.'}, status=status.HTTP_400_BAD_REQUEST)
+    razoes = eliminacao.pendentes(utilizador)
+    if razoes:
+        return Response({'detail': 'Há coisas por resolver antes de apagar a conta.', 'razoes': razoes},
+                        status=status.HTTP_409_CONFLICT)
+    eliminacao.anonimizar(utilizador, por=request.user, motivo=(request.data.get('motivo') or '').strip())
+    return Response({'detail': 'Conta apagada (dados pessoais anonimizados).'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def conta_eliminar(request):
+    """
+    GET  /app/utilizador/conta/eliminar/ → { pendentes: [...], lojas: [...], pos: [...], dias }
+    POST /app/utilizador/conta/eliminar/  Body: { password } (contas só com Google: { confirmacao: <username> })
+    A própria pessoa pede para apagar a conta: apagada daqui a 30 dias; entrar antes cancela.
+    """
+    from ..utils import eliminacao
+    from ..pos.models import ConfiguracaoPOS
+    u = request.user.utilizador
+    if request.method == 'GET':
         return Response({
-            'detail': 'Este utilizador tem registos financeiros (encomendas, vendas POS…) e não pode '
-                      'ser eliminado. Bane ou suspende a conta em vez disso.',
-            'razoes': sorted({str(o._meta.verbose_name) for o in getattr(e, 'protected_objects', None) or e.restricted_objects}),
-        }, status=status.HTTP_409_CONFLICT)
-    return Response({'detail': 'Utilizador eliminado.'}, status=status.HTTP_200_OK)
+            'pendentes': eliminacao.pendentes(u),
+            'lojas': list(u.lojas.order_by('nome').values_list('nome', flat=True)),
+            'pos': list(ConfiguracaoPOS.objects.filter(dono=u).order_by('nome').values_list('nome', flat=True)),
+            'dias': eliminacao.DIAS_PARA_ELIMINAR,
+            'tem_password': request.user.has_usable_password(),
+        })
+    if request.user.has_usable_password():
+        if not request.user.check_password(request.data.get('password') or ''):
+            return Response({'detail': 'Password errada.'}, status=status.HTTP_400_BAD_REQUEST)
+    elif (request.data.get('confirmacao') or '').strip() != request.user.username:
+        return Response({'detail': f'Escreve o teu username ({request.user.username}) para confirmar.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    razoes = eliminacao.pendentes(u)
+    if razoes:
+        return Response({'detail': 'Ainda não podes apagar a conta.', 'razoes': razoes}, status=status.HTTP_409_CONFLICT)
+    if u.eliminar_em:
+        return Response({'detail': 'Já pediste para apagar a conta.'}, status=status.HTTP_400_BAD_REQUEST)
+    quando = eliminacao.pedir(u)
+    from ..utils.moderacao import data_curta
+    return Response({'detail': f'A tua conta vai ser apagada a {data_curta(quando)}. Entra antes disso para cancelar.',
+                     'eliminar_em': quando})
 
 
 # ══════════════════════════════════════════════════════════════

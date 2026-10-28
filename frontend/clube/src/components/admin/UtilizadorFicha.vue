@@ -40,10 +40,24 @@
 
         <div class="p-5 space-y-5">
           <!-- estado actual -->
-          <div v-if="u.status !== 'ativo'" data-teste="estado-actual"
+          <div v-if="u.status === 'eliminado'" data-teste="estado-actual"
+               class="rounded-xl border border-zinc-700 bg-zinc-800/60 px-4 py-3 text-sm text-zinc-300">
+            <p class="font-bold">Conta apagada</p>
+            <p class="text-xs mt-0.5 text-zinc-500">Os dados pessoais foram anonimizados. As encomendas, faturas e o arquivo das lojas ficam.</p>
+          </div>
+          <div v-else-if="u.status !== 'ativo'" data-teste="estado-actual"
                :class="['rounded-xl border px-4 py-3 text-sm', u.status === 'banido' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-300']">
             <p class="font-bold">{{ u.status === 'banido' ? 'Conta banida' : (u.suspenso_ate ? `Suspensa até ${u.suspenso_ate_txt}` : 'Suspensa até ser reactivada') }}</p>
             <p v-if="u.motivo_estado" class="text-xs mt-0.5">Motivo: {{ u.motivo_estado }}</p>
+          </div>
+          <div v-if="u.eliminar_em_txt" data-teste="eliminacao-pedida"
+               class="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-center gap-3">
+            <div class="flex-1">
+              <p class="font-bold">Pediu para apagar a conta — apagada a {{ u.eliminar_em_txt }}</p>
+              <p class="text-xs mt-0.5">Se entrar antes disso, o pedido é cancelado.</p>
+            </div>
+            <button v-if="souSuperadmin" @click="cancelarEliminacao" :disabled="aGuardar" data-teste="btn-cancelar-eliminacao"
+              class="px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-900 text-xs font-bold hover:bg-white transition disabled:opacity-50">Cancelar pedido</button>
           </div>
 
           <!-- dados -->
@@ -96,6 +110,8 @@
                 {{ u.status === 'banido' ? 'Levantar ban' : 'Reactivar' }}
               </button>
               <p v-if="u.status === 'banido' && !souSuperadmin" class="text-xs text-zinc-500">Só o Super Admin pode levantar um ban.</p>
+              <button v-if="souSuperadmin" @click="abrir('eliminar')" data-teste="btn-eliminar"
+                class="px-4 py-2 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm font-bold transition sm:ml-auto">Apagar conta</button>
             </div>
 
             <div v-else class="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-3">
@@ -120,8 +136,16 @@
               <div v-if="acao === 'levantar' && lojasPelaConta" class="text-xs text-zinc-500">
                 As lojas e os POS suspensos com a conta voltam ao estado em que estavam.
               </div>
+              <div v-if="acao === 'eliminar' && u.pendentes_eliminacao.length" data-teste="eliminar-pendentes"
+                   class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                Ainda não dá para apagar:
+                <ul class="list-disc pl-5 mt-1"><li v-for="r in u.pendentes_eliminacao" :key="r">{{ r }}</li></ul>
+              </div>
+              <div v-if="acao === 'eliminar' && (u.lojas.length || u.pos.length)" class="text-xs text-red-300">
+                As lojas e os POS ficam suspensos para sempre (o arquivo fiscal fica — vê-o em Lojas → Ver backoffice).
+              </div>
               <div v-if="acao !== 'levantar'">
-                <label class="text-xs text-zinc-500 mb-1 block">Motivo (o utilizador recebe-o por email)</label>
+                <label class="text-xs text-zinc-500 mb-1 block">{{ acao === 'eliminar' ? 'Motivo (fica no histórico; ex.: pedido por email a 12/11)' : 'Motivo (o utilizador recebe-o por email)' }}</label>
                 <textarea v-model="motivo" rows="2" maxlength="500" data-teste="motivo"
                   class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition"></textarea>
               </div>
@@ -133,9 +157,9 @@
               <p v-if="erro" class="text-xs text-red-400" data-teste="erro">{{ erro }}</p>
               <div class="flex gap-2">
                 <button @click="acao = null" class="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">Cancelar</button>
-                <button @click="confirmar" :disabled="aGuardar" data-teste="confirmar"
+                <button @click="confirmar" :disabled="aGuardar || (acao === 'eliminar' && u.pendentes_eliminacao.length > 0)" data-teste="confirmar"
                   :class="['px-4 py-2 rounded-xl text-white text-sm font-bold transition disabled:opacity-50',
-                           acao === 'levantar' ? 'bg-green-600 hover:bg-green-500' : acao === 'banir' ? 'bg-red-600 hover:bg-red-500' : 'bg-amber-600 hover:bg-amber-500']">
+                           acao === 'levantar' ? 'bg-green-600 hover:bg-green-500' : ['banir', 'eliminar'].includes(acao) ? 'bg-red-600 hover:bg-red-500' : 'bg-amber-600 hover:bg-amber-500']">
                   {{ aGuardar ? 'A guardar...' : TITULOS[acao] }}
                 </button>
               </div>
@@ -169,11 +193,12 @@
 <script>
 import api from '@/services/api'
 
-const TITULOS = { suspender: 'Suspender conta', banir: 'Banir conta', levantar: 'Reactivar conta' }
+const TITULOS = { suspender: 'Suspender conta', banir: 'Banir conta', levantar: 'Reactivar conta', eliminar: 'Apagar conta' }
 const AJUDA = {
   suspender: 'A pessoa deixa de conseguir entrar no site e no POS e as sessões abertas terminam.',
   banir: 'Permanente: só o Super Admin levanta. O email fica bloqueado para contas novas.',
   levantar: 'A conta volta a funcionar e a pessoa recebe um email a avisar.',
+  eliminar: 'Apaga já os dados pessoais (nome, email, telefone, morada, foto). Encomendas, faturas, avaliações e mensagens ficam, sem o nome. Não se desfaz.',
 }
 const ESTADO_LOJA = {
   ativa: { label: 'Activa', classe: 'bg-green-500/15 text-green-400' },
@@ -184,6 +209,8 @@ const ESTADO_LOJA = {
 const CORES = {
   suspender: 'bg-amber-500/15 text-amber-400', banir: 'bg-red-500/15 text-red-400',
   levantar: 'bg-green-500/15 text-green-400', expirou: 'bg-zinc-700 text-zinc-300',
+  pedir_eliminacao: 'bg-red-500/15 text-red-400', cancelar_eliminacao: 'bg-green-500/15 text-green-400',
+  eliminar: 'bg-zinc-700 text-zinc-200',
 }
 
 export default {
@@ -202,10 +229,11 @@ export default {
     estado () {
       if (!this.u || this.u.status === 'ativo') return { label: 'Activa', classe: 'bg-green-500/15 text-green-400' }
       if (this.u.status === 'banido') return { label: 'Banida', classe: 'bg-red-500/15 text-red-400' }
+      if (this.u.status === 'eliminado') return { label: 'Apagada', classe: 'bg-zinc-700 text-zinc-300' }
       return { label: this.u.suspenso_ate ? `Suspensa até ${this.u.suspenso_ate_txt}` : 'Suspensa', classe: 'bg-amber-500/15 text-amber-400' }
     },
     // a própria conta e contas da equipa (sem ser superadmin) não se moderam aqui (o servidor também recusa)
-    podeMexer () { return this.u && this.u.id !== this.meuId && (this.souSuperadmin || !this.u.is_staff) },
+    podeMexer () { return this.u && this.u.status !== 'eliminado' && this.u.id !== this.meuId && (this.souSuperadmin || !this.u.is_staff) },
     hoje () { return new Date().toLocaleDateString('sv') },
     temPorResolver () { return this.u.lojas.some(l => this.porResolver(l)) },
     // lojas/POS suspensos por causa da conta (backend utils/moderacao.py MOTIVOS_DONO)
@@ -226,6 +254,16 @@ export default {
         if (e.response?.status === 404) this.$emit('naoExiste')
       }
     },
+    async cancelarEliminacao () {
+      this.aGuardar = true
+      try {
+        const { data } = await api.delete(`/app/admin/utilizadores/${this.id}/eliminar/`)
+        this.u = data
+        this.$emit('mudou', data)
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível cancelar.')
+      } finally { this.aGuardar = false }
+    },
     porResolver (l) {
       const partes = []
       if (l.encomendas_em_curso) partes.push(`${l.encomendas_em_curso} encomenda${l.encomendas_em_curso !== 1 ? 's' : ''} em curso`)
@@ -241,7 +279,10 @@ export default {
         const corpo = { acao: this.acao, motivo: this.motivo.trim() }
         if (this.acao === 'suspender' && this.ate) corpo.ate = this.ate
         if (this.acao === 'suspender' && this.incluirLojas) corpo.incluir_lojas = true
-        const { data } = await api.post(`/app/admin/utilizadores/${this.id}/moderar/`, corpo)
+        if (this.acao === 'eliminar' && !confirm('Apagar a conta? Os dados pessoais saem e não se desfaz.')) return
+        const { data } = this.acao === 'eliminar'
+          ? await api.post(`/app/admin/utilizadores/${this.id}/eliminar/`, { motivo: corpo.motivo })
+          : await api.post(`/app/admin/utilizadores/${this.id}/moderar/`, corpo)
         this.u = data; this.acao = null
         this.$emit('mudou', data)
       } catch (e) {

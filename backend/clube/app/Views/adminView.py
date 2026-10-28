@@ -446,6 +446,7 @@ def admin_utilizador_list(request):
             'status':     u.status,
             'suspenso_ate': u.suspenso_ate,
             'suspenso_ate_txt': data_curta(u.suspenso_ate) if u.suspenso_ate else '',
+            'eliminar_em_txt': data_curta(u.eliminar_em) if u.eliminar_em else '',
             'motivo_estado': u.motivo_estado,
             'is_staff':   u.user.is_staff,
             'role_admin': u.role_admin,
@@ -536,6 +537,7 @@ def _ficha_utilizador(u, request):
     from ..pos.models import ConfiguracaoPOS
     from ..models import ModeracaoUtilizador
     from ..utils.moderacao import data_curta
+    from ..utils.eliminacao import pendentes
     foto_url = request.build_absolute_uri(u.foto.url) if u.foto else None
     return {
         'id': u.id, 'username': u.user.username, 'email': u.user.email, 'nome': u.nome,
@@ -543,6 +545,9 @@ def _ficha_utilizador(u, request):
         'verificado': u.verificado, 'is_staff': u.user.is_staff, 'role_admin': u.role_admin,
         'status': u.status, 'suspenso_ate': u.suspenso_ate, 'motivo_estado': u.motivo_estado,
         'suspenso_ate_txt': data_curta(u.suspenso_ate) if u.suspenso_ate else '',
+        # pediu para apagar a conta (utils/eliminacao.py); o que impede apagá-la já
+        'eliminar_em': u.eliminar_em, 'eliminar_em_txt': data_curta(u.eliminar_em) if u.eliminar_em else '',
+        'pendentes_eliminacao': pendentes(u) if u.status != 'eliminado' else [],
         'data_criacao': u.data_criacao, 'ultimo_login': u.user.last_login,
         'total_encomendas': u.encomendas.count(),
         # em curso: o que fica por resolver quando o dono é banido (as lojas ficam suspensas)
@@ -559,6 +564,40 @@ def _ficha_utilizador(u, request):
             'feito_por': m.feito_por.username if m.feito_por else None,
         } for m in ModeracaoUtilizador.objects.filter(utilizador=u).select_related('feito_por')],
     }
+
+
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_utilizador_eliminar(request, utilizador_id):
+    """
+    POST   /app/admin/utilizadores/<id>/eliminar/  Body: { motivo } → apaga já (anonimiza). Só o Super Admin.
+    DELETE /app/admin/utilizadores/<id>/eliminar/  → cancela um pedido de eliminação da própria pessoa.
+    """
+    from ..utils import eliminacao
+    erro = _exige_admin(request, 'gerir_utilizadores')
+    if erro: return erro
+    alvo = get_object_or_404(Utilizador.objects.select_related('user'), id=utilizador_id)
+    if request.user.utilizador.role_admin != 'superadmin':
+        return Response({'detail': 'Só o Super Admin pode apagar contas.'}, status=status.HTTP_403_FORBIDDEN)
+    if alvo.user_id == request.user.id:
+        return Response({'detail': 'Não podes apagar a tua própria conta aqui.'}, status=status.HTTP_400_BAD_REQUEST)
+    if alvo.status == 'eliminado':
+        return Response({'detail': 'A conta já foi apagada.'}, status=status.HTTP_400_BAD_REQUEST)
+    if request.method == 'DELETE':
+        if not eliminacao.cancelar(alvo, por=request.user):
+            return Response({'detail': 'Não há pedido de eliminação.'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        motivo = (request.data.get('motivo') or '').strip()
+        if len(motivo) < 5:
+            return Response({'detail': 'Escreve o motivo (ex.: pedido por email a 12/11).'}, status=status.HTTP_400_BAD_REQUEST)
+        razoes = eliminacao.pendentes(alvo)
+        if razoes:
+            return Response({'detail': 'Há coisas por resolver antes de apagar a conta.', 'razoes': razoes},
+                            status=status.HTTP_409_CONFLICT)
+        eliminacao.anonimizar(alvo, por=request.user, motivo=motivo)
+    alvo.refresh_from_db()
+    alvo.user.refresh_from_db()
+    return Response(_ficha_utilizador(alvo, request))
 
 
 @api_view(['POST'])

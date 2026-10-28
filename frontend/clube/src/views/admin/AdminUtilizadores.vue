@@ -23,6 +23,7 @@
         <option value="ativo">Activos</option>
         <option value="banido">Banidos</option>
         <option value="suspenso">Suspensos</option>
+        <option value="eliminado">Apagados</option>
       </select>
       <p class="text-xs text-zinc-500 ml-auto">{{ totalCount }} utilizadores</p>
     </div>
@@ -49,8 +50,9 @@
             <span v-if="u.verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold inline-flex items-center gap-1"><font-awesome-icon :icon="['fas', 'circle-check']" /> Verificado</span>
             <span v-if="u.is_staff" class="px-1.5 py-0.5 bg-red-500/15 text-red-400 text-[10px] rounded font-bold">Staff</span>
             <span v-if="u.role_admin" class="px-1.5 py-0.5 bg-purple-500/15 text-purple-400 text-[10px] rounded font-bold capitalize">{{ u.role_admin }}</span>
-            <span v-if="u.status !== 'ativo'" :class="['px-1.5 py-0.5 text-[10px] rounded font-bold', u.status === 'banido' ? 'bg-red-500/15 text-red-400' : 'bg-yellow-500/15 text-yellow-400']">
-              {{ u.status === 'banido' ? 'Banido' : (u.suspenso_ate ? `Suspenso até ${u.suspenso_ate_txt}` : 'Suspenso') }}
+            <span v-if="u.eliminar_em_txt" class="px-1.5 py-0.5 text-[10px] rounded font-bold bg-red-500/15 text-red-400">A apagar a {{ u.eliminar_em_txt }}</span>
+            <span v-if="u.status !== 'ativo'" :class="['px-1.5 py-0.5 text-[10px] rounded font-bold', u.status === 'banido' ? 'bg-red-500/15 text-red-400' : u.status === 'eliminado' ? 'bg-zinc-700 text-zinc-300' : 'bg-yellow-500/15 text-yellow-400']">
+              {{ u.status === 'banido' ? 'Banido' : u.status === 'eliminado' ? 'Apagado' : (u.suspenso_ate ? `Suspenso até ${u.suspenso_ate_txt}` : 'Suspenso') }}
             </span>
           </div>
           <p class="text-xs text-zinc-500">{{ u.email }} · {{ u.total_lojas }} lojas · desde {{ u.data_criacao }}</p>
@@ -188,7 +190,8 @@ export default {
     // a ficha mudou o estado: a linha da lista acompanha
     atualizarLinha (f) {
       const u = this.utilizadores.find(x => x.id === f.id)
-      if (u) Object.assign(u, { status: f.status, suspenso_ate: f.suspenso_ate, suspenso_ate_txt: f.suspenso_ate_txt, motivo_estado: f.motivo_estado })
+      if (u) Object.assign(u, { status: f.status, suspenso_ate: f.suspenso_ate, suspenso_ate_txt: f.suspenso_ate_txt, motivo_estado: f.motivo_estado,
+                                eliminar_em_txt: f.eliminar_em_txt, username: f.username, email: f.email, nome: f.nome })
     },
     abrirEditarRole (u) { this.editandoRole = u; this.novaRole = u.role_admin || '' },
     async guardarRole () {

@@ -32,6 +32,7 @@ urlpatterns = [
     path('admin/utilizadores/',                 adminView.admin_utilizador_list,     name='admin-utilizador-list'),
     path('admin/utilizadores/<int:utilizador_id>/', adminView.admin_utilizador_gerir, name='admin-utilizador-gerir'),
     path('admin/utilizadores/<int:utilizador_id>/moderar/', adminView.admin_utilizador_moderar, name='admin-utilizador-moderar'),
+    path('admin/utilizadores/<int:utilizador_id>/eliminar/', adminView.admin_utilizador_eliminar, name='admin-utilizador-eliminar'),
 
     # ── Produtos ──────────────────────────────────────────────
     path('admin/produtos/',                     adminView.admin_produto_list,        name='admin-produto-list'),

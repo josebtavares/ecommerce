@@ -223,6 +223,12 @@ export default {
           localStorage.setItem('access_token',  access_token)
           localStorage.setItem('refresh_token', refresh_token)
           localStorage.setItem('user',          JSON.stringify(user))
+          if (res.data.eliminacao_cancelada) {
+            // depois de mudar de página: os avisos limpam-se quando o endereço muda
+            await this.$router.replace(this.seguinte)
+            toast.info('Bem-vindo de volta! O pedido para apagar a tua conta foi cancelado.', { autoClose: 8000, clearOnUrlChange: false })
+            return
+          }
           toast.success('Login bem-sucedido!', { autoClose: 2000 })
           this.$router.replace(this.seguinte)
         } catch (err) {

@@ -87,6 +87,9 @@ def google_obter_utilizador(code):
         if utilizador is None:
             user = User.objects.filter(email__iexact=email).order_by('id').first()
             if user is None:
+                from .eliminacao import email_bloqueado
+                if email_bloqueado(email):
+                    return None, None, _erro('Este email não pode ser usado para criar uma conta.', status.HTTP_403_FORBIDDEN)
                 user = User(
                     username=username_livre(email.split('@')[0]),
                     email=email,
@@ -111,5 +114,7 @@ def google_obter_utilizador(code):
         from .moderacao import mensagem_bloqueio
         return None, None, _erro(mensagem_bloqueio(utilizador), status.HTTP_403_FORBIDDEN)
     utilizador.refresh_from_db(fields=['status', 'suspenso_ate', 'motivo_estado'])
+    from .eliminacao import cancelar_ao_entrar
+    cancelar_ao_entrar(utilizador)      # pediu para apagar a conta e voltou dentro do prazo
 
     return utilizador, criado, None
