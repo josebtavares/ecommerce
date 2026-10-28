@@ -224,6 +224,28 @@
             </a>
           </div>
 
+          <!-- Ver o backoffice só para leitura (super-admin) — backend utils/ver_loja.py -->
+          <div v-if="podeVerBackoffice" class="rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-ver-backoffice">
+            <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              <font-awesome-icon :icon="['fas', 'eye']" class="mr-1.5" />Backoffice da loja
+            </h3>
+            <p class="text-xs text-zinc-500">
+              Abre o backoffice como o dono o vê, noutro separador e só para leitura (faturas, encomendas,
+              históricos) — também com a loja suspensa ou o dono banido. Cada acesso fica registado; dura 2 horas.
+            </p>
+            <button @click="verBackoffice(lojaDetalhe)" :disabled="aAbrirBackoffice" data-teste="btn-ver-backoffice"
+              class="w-full py-2.5 rounded-xl text-sm font-bold transition bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 disabled:opacity-50">
+              {{ aAbrirBackoffice ? 'A abrir…' : 'Ver backoffice (só leitura)' }}
+              <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
+            </button>
+            <div v-if="acessosAdmin.length" class="space-y-1">
+              <p class="text-[11px] text-zinc-500">Últimos acessos</p>
+              <p v-for="a in acessosAdmin" :key="a.id" class="text-[11px] text-zinc-400" data-teste="acesso-admin">
+                {{ a.quando }} · {{ a.admin }}
+              </p>
+            </div>
+          </div>
+
           <!-- Exportar dados (super-admin) -->
           <div v-if="podeExportar" class="rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-exportar-loja">
             <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">
@@ -292,11 +314,13 @@ export default {
   components: { ExportacoesLoja },
   props: {
     podeExportar: { type: Boolean, default: false },   // permissão exportar_lojas (super-admin)
+    podeVerBackoffice: { type: Boolean, default: false },   // permissão ver_backoffice_lojas (super-admin)
   },
   data () {
     return {
       ESTADOS, ACOES,
       eliminacao: null, confirmacaoNome: '', aEliminar: false,
+      acessosAdmin: [], aAbrirBackoffice: false,
       loading: true, lojas: [], totalCount: 0,
       page: 1, limit: 20,
       q: '', filtroEstado: '', filtroCategoria: '',
@@ -436,9 +460,33 @@ export default {
       if (loja && fichaDaRota(this.$route) === id) this.abrirDetalhe(loja)
       else if (!loja) irParaFicha(this.$router, this.$route, null, true)   // loja que não existe
     },
+    async carregarAcessos (loja) {
+      this.acessosAdmin = []
+      if (!this.podeVerBackoffice) return
+      try {
+        const { data } = await api.get(`/app/admin/lojas/${loja.id}/ver-backoffice/`)
+        if (this.lojaDetalhe?.id === loja.id) this.acessosAdmin = data.acessos
+      } catch { /* a lista não é essencial */ }
+    },
+    async verBackoffice (loja) {
+      // o separador abre-se já (no clique), senão o browser bloqueia-o como pop-up
+      const separador = window.open('', '_blank')
+      this.aAbrirBackoffice = true
+      try {
+        const { data } = await api.post(`/app/admin/lojas/${loja.id}/ver-backoffice/`)
+        const destino = `/loja/${loja.id}/backoffice#ver_admin=${encodeURIComponent(data.token)}`
+        if (separador) { separador.opener = null; separador.location = destino }
+        else window.location.href = destino
+        this.carregarAcessos(loja)
+      } catch (e) {
+        separador?.close()
+        alert(e.response?.data?.detail || 'Não foi possível abrir o backoffice.')
+      } finally { this.aAbrirBackoffice = false }
+    },
     async abrirDetalhe (loja) {
       this.lojaDetalhe = loja
       this.verificarEliminacao(loja)
+      this.carregarAcessos(loja)
       this.detalheComissoes = null
       this.loadingDetalhe = true
       try {

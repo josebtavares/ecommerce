@@ -31,6 +31,11 @@ class Utilizador(models.Model):
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
     status          = models.CharField(max_length=20, default='ativo')
+    # moderação (utils/moderacao.py): 'suspenso' pode ter fim; o motivo é o do estado actual
+    suspenso_ate    = models.DateTimeField(null=True, blank=True)
+    motivo_estado   = models.CharField(max_length=500, blank=True, default='')
+    # a própria pessoa pediu para apagar a conta: é anonimizada nesta data (utils/eliminacao.py)
+    eliminar_em     = models.DateTimeField(null=True, blank=True)
     google_id       = models.CharField(max_length=100, blank=True, null=True, unique=True)
  
     # ── Role no painel de administração ──────────────────────
@@ -64,6 +69,7 @@ class Utilizador(models.Model):
             'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
             'gerir_backups',     # backups da base de dados: ver, fazer e descarregar (utils/backups.py)
             'exportar_lojas',    # exportar os dados de uma loja (ZIP com clientes, vendas...) — utils/exportacao_loja.py
+            'ver_backoffice_lojas',  # abrir o backoffice de uma loja só para leitura — utils/ver_loja.py
         ],
         'moderador': [
             'ver_stats',
@@ -115,6 +121,10 @@ class Utilizador(models.Model):
  
     @property
     def is_active(self):
+        # uma suspensão com data de fim já passada conta como activa (levanta-se em moderacao.levantar_expiradas)
+        if self.status == 'suspenso' and self.suspenso_ate:
+            from django.utils import timezone
+            return self.suspenso_ate <= timezone.now()
         return self.status == 'ativo'
  
     def pode_admin(self, permissao: str) -> bool:
@@ -448,10 +458,22 @@ class UtilizadorLoja(models.Model):
     @classmethod
     def obter_membro(cls, loja, utilizador):
         """
-        Devolve o UtilizadorLoja activo ou None.
+        Devolve o UtilizadorLoja activo ou None. `loja` pode ser a loja ou o id.
         Uso: membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
+
+        Admin a ver o backoffice desta loja (utils/ver_loja.py): um dono que não é gravado —
+        o pedido só pode ler.
         """
-        return cls.objects.filter(loja=loja, utilizador=utilizador, ativo=True).first()
+        from .utils.ver_loja import a_ver
+        loja_id = getattr(loja, 'pk', loja)
+        if a_ver(loja_id, utilizador):
+            membro = cls(utilizador=utilizador, role='dono', ativo=True)
+            if isinstance(loja, Loja):
+                membro.loja = loja
+            else:
+                membro.loja_id = loja_id
+            return membro
+        return cls.objects.filter(loja_id=loja_id, utilizador=utilizador, ativo=True).first()
 
     @classmethod
     def verificar_permissao(cls, loja, utilizador, permissao: str) -> bool:
@@ -2185,3 +2207,51 @@ class ExportacaoLoja(models.Model):
 
     def __str__(self):
         return f'exportação loja {self.loja_id} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
+
+
+class EmailBloqueado(models.Model):
+    """Email de uma conta banida que foi apagada: não pode abrir outra conta. Só o hash
+    (utils/eliminacao.hash_email) — o email em si sai com o resto dos dados pessoais."""
+    hash      = models.CharField(max_length=64, unique=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+
+class AcessoAdminLoja(models.Model):
+    """Cada vez que um admin abre o backoffice de uma loja em modo de leitura (utils/ver_loja.py).
+    Nunca se apaga — nem quando a loja é eliminada (fica o nome)."""
+    loja       = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='acessos_admin')
+    loja_nome  = models.CharField(max_length=200, blank=True, default='')
+    admin      = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    admin_nome = models.CharField(max_length=150, blank=True, default='')
+    ip         = models.GenericIPAddressField(null=True, blank=True)
+    criado_em  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-id']
+
+    def __str__(self):
+        return f'{self.admin_nome} viu {self.loja_nome} em {self.criado_em:%d/%m/%Y %H:%M}'
+
+
+class ModeracaoUtilizador(models.Model):
+    """Histórico de suspensões e bans de uma conta (quem, quando, porquê). Nunca se apaga."""
+    ACOES = [
+        ('suspender', 'Suspensa'),
+        ('banir',     'Banida'),
+        ('levantar',  'Reactivada'),
+        ('expirou',   'Suspensão terminou'),
+        ('pedir_eliminacao',    'Pediu para apagar a conta'),
+        ('cancelar_eliminacao', 'Cancelou o pedido de apagar'),
+        ('eliminar',            'Conta apagada'),
+    ]
+    utilizador = models.ForeignKey(Utilizador, on_delete=models.CASCADE, related_name='moderacoes')
+    acao       = models.CharField(max_length=20, choices=ACOES)
+    motivo     = models.CharField(max_length=500, blank=True, default='')
+    ate        = models.DateTimeField(null=True, blank=True)
+    feito_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    criado_em  = models.DateTimeField(auto_now_add=True)
+    # ban: as lojas e POS do dono que o ban suspendeu e como estavam antes (levantar o ban repõe-nos)
+    afetados   = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-id']

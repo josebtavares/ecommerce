@@ -196,11 +196,8 @@ def metodos_loja(request, loja_id):
 @permission_classes([IsAuthenticated])
 def metodo_gerir(request, loja_id, tipo):
     loja = get_object_or_404(Loja, id=loja_id)
-    try:
-        membro = UtilizadorLoja.objects.get(loja=loja, utilizador=request.user.utilizador, ativo=True)
-    except UtilizadorLoja.DoesNotExist:
-        return Response({'detail': 'Sem permissao.'}, status=status.HTTP_403_FORBIDDEN)
-    if not membro.pode('gerir_metodos_pagamento'):
+    membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
+    if not membro or not membro.pode('gerir_metodos_pagamento'):
         return Response({'detail': 'Sem permissao.'}, status=status.HTTP_403_FORBIDDEN)
     metodo, _ = MetodoPagamento.objects.get_or_create(loja=loja, tipo=tipo)
     if request.method == 'POST':

@@ -111,14 +111,10 @@ class LojaSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return None
         try:
-            membro = UtilizadorLoja.objects.get(
-                loja=obj,
-                utilizador=request.user.utilizador,
-                ativo=True
-            )
-            return membro.role
-        except UtilizadorLoja.DoesNotExist:
+            membro = UtilizadorLoja.obter_membro(obj, request.user.utilizador)
+        except Exception:      # conta sem perfil
             return None
+        return membro.role if membro else None
 
     def get_meu_chat(self, obj):
         """Acesso à caixa de mensagens da loja (o backoffice mostra os "Clientes" no chat)."""

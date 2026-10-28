@@ -566,6 +566,14 @@ def pos_login(request):
     except Exception:
         return Response({'detail': 'Perfil não encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
+    # conta suspensa/banida: antes entrava e só os pedidos seguintes falhavam
+    from app.autenticacao import conta_ativa
+    if not conta_ativa(user):
+        from app.utils.moderacao import mensagem_bloqueio
+        return Response({'detail': mensagem_bloqueio(utilizador), 'code': 'conta_inativa'}, status=status.HTTP_403_FORBIDDEN)
+    utilizador.refresh_from_db(fields=['status', 'suspenso_ate', 'motivo_estado', 'eliminar_em'])
+    from app.utils.eliminacao import cancelar_ao_entrar
+    cancelar_ao_entrar(utilizador)      # pediu para apagar a conta e voltou dentro do prazo
     return Response(_sessao_principal(utilizador, request))
 
 

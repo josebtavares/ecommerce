@@ -1,7 +1,7 @@
 // A ficha aberta de um módulo vai no endereço (/admin/<módulo>/<id>, /loja/:id/backoffice/<módulo>/<id>):
 // refresh mantém-na aberta, voltar do browser fecha-a e o link pode ser partilhado.
 export const COM_FICHA = {
-  admin:      ['lojas', 'encomendas', 'devolucoes'],
+  admin:      ['lojas', 'encomendas', 'devolucoes', 'utilizadores'],
   backoffice: ['encomendas', 'devolucoes'],
 }
 

@@ -31,12 +31,7 @@ from ..utils import devolucoes
 # ══════════════════════════════════════════════════════════════
 
 def _exige_permissao(request, loja, permissao):
-    try:
-        membro = UtilizadorLoja.objects.get(
-            loja=loja, utilizador=request.user.utilizador, ativo=True
-        )
-    except UtilizadorLoja.DoesNotExist:
-        membro = None
+    membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
 
     if not membro or not membro.pode(permissao):
         return None, Response(
@@ -611,13 +606,10 @@ def entrega_list_loja(request, loja_id):
         qs = qs.filter(status=status_filtro)
 
     # condutor só vê as suas (sem ficha de condutor → nenhuma; antes via todas as da loja)
-    try:
-        membro = UtilizadorLoja.objects.get(loja=loja, utilizador=request.user.utilizador, ativo=True)
-        if membro.role == 'condutor':
-            condutor = Condutor.objects.filter(loja=loja, utilizador=request.user.utilizador).first()
-            qs = qs.filter(condutor=condutor) if condutor else qs.none()
-    except UtilizadorLoja.DoesNotExist:
-        pass
+    membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
+    if membro and membro.role == 'condutor':
+        condutor = Condutor.objects.filter(loja=loja, utilizador=request.user.utilizador).first()
+        qs = qs.filter(condutor=condutor) if condutor else qs.none()
 
     response, erro = paginar(request, qs, EntregaSerializer, limit_default=10)
     if erro:

@@ -23,11 +23,15 @@ class MyTokenSerializer(TokenObtainPairSerializer):
                 raise Throttled(detail=erro)
             raise AuthenticationFailed(erro)
         if not conta_ativa(user):
-            raise AuthenticationFailed('Conta desactivada.')
+            from ..utils.moderacao import mensagem_bloqueio
+            perfil = getattr(user, 'utilizador', None)
+            raise AuthenticationFailed(mensagem_bloqueio(perfil) if perfil else 'Conta desactivada.')
         try:
             utilizador = user.utilizador
         except Exception:
             raise AuthenticationFailed('Perfil não encontrado.')
+        from ..utils.eliminacao import cancelar_ao_entrar
+        cancelar_ao_entrar(utilizador)      # pediu para apagar a conta e voltou dentro do prazo
 
         refresh = self.get_token(user)
         foto_url = utilizador.foto.url if utilizador.foto else None

@@ -26,10 +26,13 @@ urlpatterns = [
     path('admin/lojas/',                        adminView.admin_loja_list,           name='admin-loja-list'),
     path('admin/lojas/<int:loja_id>/',          adminView.admin_loja_gerir,          name='admin-loja-gerir'),
     path('admin/lojas/<int:loja_id>/eliminar/', adminView.admin_loja_eliminar,       name='admin-loja-eliminar'),
+    path('admin/lojas/<int:loja_id>/ver-backoffice/', adminView.admin_loja_ver_backoffice, name='admin-loja-ver-backoffice'),
 
     # ── Utilizadores ──────────────────────────────────────────
     path('admin/utilizadores/',                 adminView.admin_utilizador_list,     name='admin-utilizador-list'),
     path('admin/utilizadores/<int:utilizador_id>/', adminView.admin_utilizador_gerir, name='admin-utilizador-gerir'),
+    path('admin/utilizadores/<int:utilizador_id>/moderar/', adminView.admin_utilizador_moderar, name='admin-utilizador-moderar'),
+    path('admin/utilizadores/<int:utilizador_id>/eliminar/', adminView.admin_utilizador_eliminar, name='admin-utilizador-eliminar'),
 
     # ── Produtos ──────────────────────────────────────────────
     path('admin/produtos/',                     adminView.admin_produto_list,        name='admin-produto-list'),
