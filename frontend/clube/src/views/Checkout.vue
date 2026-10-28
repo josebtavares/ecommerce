@@ -477,6 +477,8 @@ export default {
         // enriquece com ícone e descrição
         this.metodosPagamento = lista
           .filter(m => m.ativo)
+          // métodos antigos de cartão (flutterwave/stripe) não aparecem em duplicado ao lado do "cartao"
+          .filter((m, _, todos) => !(['flutterwave', 'stripe'].includes(m.tipo) && todos.some(o => o.ativo && o.tipo === 'cartao')))
           .map(m => ({
             ...m,
             ...(METODO_INFO[m.tipo] || { label: m.tipo, descricao: '' }),

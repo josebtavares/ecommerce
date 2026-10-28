@@ -67,7 +67,7 @@ class Flutterwave(Fornecedor):
     def ler_webhook(self, request):
         segredo = os.environ.get('FLW_SECRET_HASH', '')
         # sem hash configurado não há forma de validar → recusa
-        if not segredo or not hmac.compare_digest(request.META.get('HTTP_VERIF_HASH', ''), segredo):
+        if not segredo or not hmac.compare_digest(request.META.get('HTTP_VERIF_HASH', '').encode(), segredo.encode()):
             raise ErroPagamento('Assinatura inválida.')
         corpo = request.data if isinstance(request.data, dict) else {}
         dados = corpo.get('data') if isinstance(corpo.get('data'), dict) else {}
