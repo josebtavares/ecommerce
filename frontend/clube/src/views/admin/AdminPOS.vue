@@ -301,6 +301,7 @@ import { toast } from 'vue3-toastify'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import { passwordValida } from '@/utils/password'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
+import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 
 const MODOS = {
   standalone: { label: 'Standalone', cls: 'bg-purple-500/15 text-purple-300' },
@@ -353,7 +354,10 @@ export default {
     maxVenda () { return Math.max(1, ...(this.d?.vendas_por_dia || []).map(v => Number(v.total))) },
   },
 
-  created () { this.fetchLista() },
+  // a ficha aberta vem do endereço (/admin/pos/<id>): refresh, voltar e links das notificações
+  watch: { '$route.params.ficha' () { this.carregarFicha() } },
+
+  created () { this.fetchLista(); this.carregarFicha() },
 
   methods: {
     passwordValida,
@@ -391,7 +395,21 @@ export default {
       }
     },
 
-    async abrir (p) {
+    abrir (p) { irParaFicha(this.$router, this.$route, p.id) },
+
+    async carregarFicha () {
+      const id = fichaDaRota(this.$route)
+      if (!id) { this.aberto = null; this.d = null; return }
+      if (this.aberto?.id === id) return
+      const p = this.lista.find(x => x.id === id)
+      if (p) return this.abrirFicha(p)
+      try {
+        const { data } = await api.get(`/app/admin/pos/${id}/`)
+        if (fichaDaRota(this.$route) === id) this.abrirFicha(data)
+      } catch { irParaFicha(this.$router, this.$route, null, true) }   // POS que não existe
+    },
+
+    async abrirFicha (p) {
       this.aberto = p
       this.aSuspender = false
       this.pwMembro = null
@@ -438,7 +456,7 @@ export default {
       }
     },
 
-    fechar () { this.aberto = null; this.d = null },
+    fechar () { irParaFicha(this.$router, this.$route, null) },
 
     // executa uma acção, recarrega detalhe + lista e mostra o resultado
     async executar (fn, okMsg) {
