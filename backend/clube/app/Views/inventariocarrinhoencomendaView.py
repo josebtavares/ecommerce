@@ -42,12 +42,7 @@ from ..utils.dinheiro import formatar as dinheiro
 # ══════════════════════════════════════════════════════════════
 
 def _exige_permissao(request, loja, permissao):
-    try:
-        membro = UtilizadorLoja.objects.get(
-            loja=loja, utilizador=request.user.utilizador, ativo=True
-        )
-    except UtilizadorLoja.DoesNotExist:
-        membro = None
+    membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
 
     if not membro or not membro.pode(permissao):
         return None, Response(

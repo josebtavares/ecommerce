@@ -37,7 +37,7 @@ TIPOS_PESQUISA = ('venda', 'anulada', 'mensalidade', 'comissoes')
 
 def _acesso(request, loja_id):
     loja = get_object_or_404(Loja, id=loja_id)
-    membro = UtilizadorLoja.objects.filter(loja=loja, utilizador=request.user.utilizador, ativo=True).first()
+    membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
     if not membro or not membro.pode('gerir_faturacao'):
         return None, Response({'detail': 'Sem permissão: gerir_faturacao'}, status=status.HTTP_403_FORBIDDEN)
     return loja, None

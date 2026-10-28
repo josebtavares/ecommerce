@@ -32,7 +32,7 @@ class ErroChat(Exception):
 # ══════════════════════════════════════════════════════════════
 
 def membro_ativo(utilizador, loja_id):
-    return UtilizadorLoja.objects.filter(loja_id=loja_id, utilizador=utilizador, ativo=True).first()
+    return UtilizadorLoja.obter_membro(loja_id, utilizador)
 
 
 def atende_suporte(utilizador):

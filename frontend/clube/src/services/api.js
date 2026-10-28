@@ -100,8 +100,45 @@ try {
   }
 } catch { /* token ilegível — fica como está */ }
 
+// ── Admin a ver o backoffice de uma loja (só leitura — backend utils/ver_loja.py) ──
+// O Admin abre /loja/<id>/backoffice#ver_admin=<token> noutro separador. O token fica só nesse
+// separador (sessionStorage), sai logo do endereço e vai nos pedidos feitos a partir do backoffice
+// dessa loja. Não se renova: quando expira, abre-se outra vez a partir do Admin.
+const VER_ADMIN = 'ver_admin';
+export const EVENTO_VER_ADMIN_EXPIROU = 'ver-admin-expirou';
+const lojaDoBackoffice = () => (window.location.pathname.match(/^\/loja\/(\d+)\/backoffice/i) || [])[1];
+
+export function capturarVerAdmin () {
+  try {
+    const m = window.location.hash.match(/ver_admin=([^&]+)/);
+    const loja = lojaDoBackoffice();
+    if (!m) return;
+    if (loja) sessionStorage.setItem(VER_ADMIN, JSON.stringify({ loja, token: decodeURIComponent(m[1]) }));
+    history.replaceState(history.state, '', window.location.pathname + window.location.search);
+  } catch { /* sessionStorage bloqueado: abre como um utilizador normal (sem acesso) */ }
+}
+capturarVerAdmin();
+
+// token de leitura desta loja, ou null
+export function verAdmin (lojaId) {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VER_ADMIN) || 'null');
+    return v && String(v.loja) === String(lojaId) ? v.token : null;
+  } catch { return null; }
+}
+
+// a sessão do próprio admin (sino, tempo real) continua com o token normal
+const DO_PROPRIO_ADMIN = ['/app/notificacoes/', '/api/ws/bilhete/'];
+
 // Aplica token JWT no cabeçalho Authorization (só em URLs privadas)
 api.interceptors.request.use((config) => {
+  const loja = !naPaginaPOS() && lojaDoBackoffice();
+  const ver = loja && !DO_PROPRIO_ADMIN.some(u => comBarra(config.url).includes(u)) && verAdmin(loja);
+  if (ver) {
+    config.headers.Authorization = `Bearer ${ver}`;
+    config._verAdmin = true;
+    return config;
+  }
   if (!isPublic(config.url)) {
     const access = localStorage.getItem(naPaginaPOS() ? POS_ACCESS : 'access_token');
     if (access) {
@@ -116,6 +153,13 @@ api.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config;
+
+    // modo de leitura do admin: sem refresh — o separador mostra que a sessão de leitura terminou
+    if (originalRequest?._verAdmin && error.response?.status === 401) {
+      try { sessionStorage.removeItem(VER_ADMIN); } catch { /* */ }
+      window.dispatchEvent(new Event(EVENTO_VER_ADMIN_EXPIROU));
+      return Promise.reject(error);
+    }
 
     const pos = naPaginaPOS();
     const [chaveAccess, chaveRefresh] = pos ? [POS_ACCESS, POS_REFRESH] : ['access_token', 'refresh_token'];

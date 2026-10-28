@@ -85,6 +85,27 @@ def conta_ativa(user):
 
 
 class JWTContaAtiva(JWTAuthentication):
+    def authenticate(self, request):
+        from rest_framework.exceptions import PermissionDenied
+        from .utils import ver_loja
+        ver_loja.definir()      # nunca herda o modo de leitura de outro pedido
+        resultado = super().authenticate(request)
+        if resultado is None:
+            return None
+        user, token = resultado
+        loja_id = token.get('ver_loja')
+        if loja_id:
+            # admin a ver o backoffice de uma loja (utils/ver_loja.py): só leitura, e só enquanto
+            # continuar a ter a permissão
+            from .models import Utilizador
+            perfil = Utilizador.objects.filter(user_id=user.pk).first()
+            if not user.is_staff or not perfil or not perfil.pode_admin('ver_backoffice_lojas'):
+                raise InvalidToken('Sem permissão para ver lojas.')
+            if request.method not in ver_loja.METODOS_LEITURA:
+                raise PermissionDenied('Modo só de leitura — estás a ver esta loja como admin.')
+            ver_loja.definir(loja_id, user.pk)
+        return resultado
+
     def get_validated_token(self, raw_token):
         token = super().get_validated_token(raw_token)
         if sessao_terminada(token):

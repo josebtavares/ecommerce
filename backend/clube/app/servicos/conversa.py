@@ -33,7 +33,7 @@ def papel(u, m):
         return None
     if m.cliente_id and m.cliente_id == u.id:
         return 'cliente'
-    membro = UtilizadorLoja.objects.filter(loja_id=m.loja_id, utilizador=u, ativo=True).first()
+    membro = UtilizadorLoja.obter_membro(m.loja_id, u)
     if not membro:
         return None
     if membro.pode('gerir_marcacoes'):

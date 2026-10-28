@@ -380,7 +380,7 @@ def foto(request, id):
 # ══════════════════════════════════════════════════════════════
 
 def _membro(request, loja):
-    membro = UtilizadorLoja.objects.filter(loja=loja, utilizador=request.user.utilizador, ativo=True).first()
+    membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
     if not membro or not membro.pode('gerir_devolucoes'):
         return None
     return membro
@@ -446,7 +446,7 @@ def esgotado_loja(request, loja_id, id):
     Quem gere encomendas (também cancela a encomenda toda, com reembolso).
     """
     loja = get_object_or_404(Loja, id=loja_id)
-    membro = UtilizadorLoja.objects.filter(loja=loja, utilizador=request.user.utilizador, ativo=True).first()
+    membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
     if not membro or not membro.pode('gerir_encomendas'):
         return Response({'detail': 'Sem permissão: gerir_encomendas'}, status=status.HTTP_403_FORBIDDEN)
     try:

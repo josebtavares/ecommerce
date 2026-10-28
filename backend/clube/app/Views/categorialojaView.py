@@ -18,12 +18,7 @@ from ..Serializers.CategoriaLojaSerializer import (
 # ══════════════════════════════════════════════════════════════
 
 def _verificar_membro(request, loja):
-    try:
-        return UtilizadorLoja.objects.get(
-            loja=loja, utilizador=request.user.utilizador, ativo=True
-        )
-    except UtilizadorLoja.DoesNotExist:
-        return None
+    return UtilizadorLoja.obter_membro(loja, request.user.utilizador)
 
 
 # ══════════════════════════════════════════════════════════════

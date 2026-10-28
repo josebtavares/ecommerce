@@ -180,6 +180,29 @@ def admin_loja_list(request):
     })
 
 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_loja_ver_backoffice(request, loja_id):
+    """
+    GET  /app/admin/lojas/<loja_id>/ver-backoffice/  → últimos acessos de admins a esta loja
+    POST /app/admin/lojas/<loja_id>/ver-backoffice/  → regista o acesso e devolve o token de leitura
+    Só leitura, sem a password do dono, também com a loja suspensa ou o dono banido (utils/ver_loja.py).
+    """
+    from ..models import AcessoAdminLoja
+    from ..utils.ver_loja import emitir_token, DURACAO
+    from ..utils.horarios import fuso
+    erro = _exige_admin(request, 'ver_backoffice_lojas')
+    if erro: return erro
+    loja = get_object_or_404(Loja, id=loja_id)
+    if request.method == 'POST':
+        AcessoAdminLoja.objects.create(loja=loja, loja_nome=loja.nome, admin=request.user,
+                                       admin_nome=request.user.username, ip=request.META.get('REMOTE_ADDR') or None)
+        return Response({'token': emitir_token(request.user, loja), 'minutos': int(DURACAO.total_seconds() // 60)})
+    acessos = AcessoAdminLoja.objects.filter(loja=loja)[:20]
+    return Response({'acessos': [{'id': a.id, 'admin': a.admin_nome, 'quando': a.criado_em.astimezone(fuso()).strftime('%d/%m/%Y %H:%M')}
+                                 for a in acessos]})
+
+
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 @transaction.atomic

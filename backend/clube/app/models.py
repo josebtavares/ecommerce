@@ -67,6 +67,7 @@ class Utilizador(models.Model):
             'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
             'gerir_backups',     # backups da base de dados: ver, fazer e descarregar (utils/backups.py)
             'exportar_lojas',    # exportar os dados de uma loja (ZIP com clientes, vendas...) — utils/exportacao_loja.py
+            'ver_backoffice_lojas',  # abrir o backoffice de uma loja só para leitura — utils/ver_loja.py
         ],
         'moderador': [
             'ver_stats',
@@ -455,10 +456,22 @@ class UtilizadorLoja(models.Model):
     @classmethod
     def obter_membro(cls, loja, utilizador):
         """
-        Devolve o UtilizadorLoja activo ou None.
+        Devolve o UtilizadorLoja activo ou None. `loja` pode ser a loja ou o id.
         Uso: membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
+
+        Admin a ver o backoffice desta loja (utils/ver_loja.py): um dono que não é gravado —
+        o pedido só pode ler.
         """
-        return cls.objects.filter(loja=loja, utilizador=utilizador, ativo=True).first()
+        from .utils.ver_loja import a_ver
+        loja_id = getattr(loja, 'pk', loja)
+        if a_ver(loja_id, utilizador):
+            membro = cls(utilizador=utilizador, role='dono', ativo=True)
+            if isinstance(loja, Loja):
+                membro.loja = loja
+            else:
+                membro.loja_id = loja_id
+            return membro
+        return cls.objects.filter(loja_id=loja_id, utilizador=utilizador, ativo=True).first()
 
     @classmethod
     def verificar_permissao(cls, loja, utilizador, permissao: str) -> bool:
@@ -2192,6 +2205,23 @@ class ExportacaoLoja(models.Model):
 
     def __str__(self):
         return f'exportação loja {self.loja_id} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
+
+
+class AcessoAdminLoja(models.Model):
+    """Cada vez que um admin abre o backoffice de uma loja em modo de leitura (utils/ver_loja.py).
+    Nunca se apaga — nem quando a loja é eliminada (fica o nome)."""
+    loja       = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='acessos_admin')
+    loja_nome  = models.CharField(max_length=200, blank=True, default='')
+    admin      = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    admin_nome = models.CharField(max_length=150, blank=True, default='')
+    ip         = models.GenericIPAddressField(null=True, blank=True)
+    criado_em  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-id']
+
+    def __str__(self):
+        return f'{self.admin_nome} viu {self.loja_nome} em {self.criado_em:%d/%m/%Y %H:%M}'
 
 
 class ModeracaoUtilizador(models.Model):
