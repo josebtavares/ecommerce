@@ -125,6 +125,11 @@
               {{ key }}: {{ val }}
             </span>
           </div>
+          <!-- falta foto/descrição/preço: aparece na loja, mas conta para a loja estar completa (utils/prontidao.js) -->
+          <button v-if="faltasProduto(p).length" type="button" @click.stop="abrirEditar(p)" data-teste="produto-incompleto"
+            class="mt-1.5 w-full text-left px-2 py-1 rounded-md bg-amber-500/10 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20 transition">
+            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />Falta {{ faltasProduto(p).join(', ') }}
+          </button>
           <div class="flex items-center justify-between mt-2">
             <span class="text-sm font-bold text-red-400">{{ formatPrice(p.preco) }}</span>
             <span class="text-xs text-zinc-600">{{ p.stock?.quantidade ?? '—' }} un.</span>
@@ -197,6 +202,7 @@ import api from '@/services/api'
 import BackofficeProdutoModal from './BackofficeProdutoModal.vue'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { criarVigia, emCurso, eVideo, reprocessarVideo } from '@/utils/videoEstado'
+import { faltasProduto } from '@/utils/prontidao'
 
 export default {
   name: 'BackofficeProdutos',
@@ -251,7 +257,7 @@ export default {
   },
 
   methods: {
-    formatarAtributos, temAtributos, emCurso, eVideo,
+    formatarAtributos, temAtributos, emCurso, eVideo, faltasProduto,
 
     vigiarVideos () {
       this.vigia?.vigiar(this.produtos.filter(p => emCurso(p.ficheiro_estado)).map(p => p.id))

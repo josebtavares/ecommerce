@@ -3,7 +3,7 @@
      A SISP e o banco revêem estes dados antes de activar o pagamento com cartão.
      Slots: "marca" (coluna da esquerda) e "colunas" (colunas extra, ex.: Explorar na home). -->
 <template>
-  <footer class="border-t py-10 px-6 md:px-12" data-teste="site-rodape"
+  <footer class="border-t pt-10 pb-28 px-6 md:px-12" data-teste="site-rodape"
           :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-200'">
     <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8">
       <div>

@@ -51,6 +51,13 @@
               <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', estadoInfo(loja).classe]">
                 {{ estadoInfo(loja).label }}
               </span>
+              <!-- requisitos para publicar (backend utils/prontidao.py) -->
+              <span v-if="loja.prontidao" data-teste="admin-prontidao"
+                    :title="loja.prontidao.completa ? 'Cumpre os requisitos para ser publicada' : 'Falta: ' + faltam(loja).join('; ')"
+                    :class="['px-1.5 py-0.5 rounded text-[10px] font-bold',
+                             loja.prontidao.completa ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400']">
+                {{ loja.prontidao.completa ? 'Completa' : `Incompleta ${loja.prontidao.percentagem}%` }}
+              </span>
             </div>
             <p class="text-xs text-zinc-500 truncate">
               {{ loja.categoria }} · {{ loja.dono.username }}
@@ -60,7 +67,8 @@
 
           <!-- Acção rápida conforme o estado (loja fechada pelo dono: só o dono reabre) -->
           <button v-if="acaoRapida(loja)" @click.stop="executarAcao(loja, acaoRapida(loja))"
-            :class="['flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition', ACOES[acaoRapida(loja)].classe]">
+            :disabled="bloqueada(loja, acaoRapida(loja))" :title="bloqueada(loja, acaoRapida(loja)) ? 'Loja incompleta — não pode ser publicada' : null"
+            :class="['flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed', ACOES[acaoRapida(loja)].classe]">
             {{ ACOES[acaoRapida(loja)].label }}
           </button>
         </div>
@@ -209,10 +217,41 @@
             </div>
           </template>
 
+          <!-- Requisitos para publicar (backend utils/prontidao.py) — o dono vê os mesmos no backoffice -->
+          <div v-if="lojaDetalhe.prontidao" data-teste="admin-requisitos"
+               class="rounded-xl border p-4 space-y-3"
+               :class="lojaDetalhe.prontidao.completa ? 'border-green-500/30' : 'border-red-500/30'">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Requisitos para publicar</h3>
+              <span class="text-xs font-bold" :class="lojaDetalhe.prontidao.completa ? 'text-green-400' : 'text-red-400'">
+                {{ lojaDetalhe.prontidao.percentagem }}%
+              </span>
+            </div>
+            <div class="h-2 rounded-full bg-zinc-800 overflow-hidden">
+              <div class="h-full rounded-full" :class="lojaDetalhe.prontidao.completa ? 'bg-green-500' : 'bg-red-500'"
+                   :style="{ width: lojaDetalhe.prontidao.percentagem + '%' }"></div>
+            </div>
+            <ul class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              <li v-for="r in lojaDetalhe.prontidao.requisitos" :key="r.chave" class="flex items-center gap-2 text-xs"
+                  :class="r.ok ? 'text-zinc-500' : 'text-zinc-200'">
+                <font-awesome-icon :icon="['fas', r.ok ? 'circle-check' : 'circle-xmark']"
+                  :class="r.ok ? 'text-green-400' : 'text-red-400'" />{{ r.titulo }}
+              </li>
+            </ul>
+            <p v-if="lojaDetalhe.prontidao.produtos_incompletos_total" class="text-[11px] text-zinc-500">
+              {{ lojaDetalhe.prontidao.produtos_incompletos_total }} produto(s) sem foto, preço ou descrição
+              ({{ lojaDetalhe.prontidao.produtos_completos }} completo(s)).
+            </p>
+            <p v-if="lojaDetalhe.estado === 'pendente' && !lojaDetalhe.prontidao.completa" class="text-[11px] text-amber-300">
+              Só se aprova quando estiver completa — o dono vê o que falta no backoffice.
+            </p>
+          </div>
+
           <!-- Acções -->
           <div class="flex flex-col sm:flex-row gap-3 pt-2 border-t border-zinc-800">
             <button v-for="a in acoesDisponiveis(lojaDetalhe)" :key="a" @click="executarAcao(lojaDetalhe, a)"
-              :class="['flex-1 py-2.5 rounded-xl text-sm font-bold transition', ACOES[a].classe]">
+              :disabled="bloqueada(lojaDetalhe, a)"
+              :class="['flex-1 py-2.5 rounded-xl text-sm font-bold transition disabled:opacity-40 disabled:cursor-not-allowed', ACOES[a].classe]">
               {{ ACOES[a].label }} loja
             </button>
             <p v-if="lojaDetalhe.estado === 'fechada'" class="flex-1 py-2.5 text-xs text-zinc-500 text-center self-center">
@@ -384,6 +423,9 @@ export default {
     acoesDisponiveis (loja) {
       return Object.keys(ACOES).filter(a => ACOES[a].origens.includes(loja.estado))
     },
+    // aprovar = publicar: só com os requisitos todos (o backend recusa na mesma)
+    bloqueada (loja, acao) { return acao === 'aprovar' && loja.prontidao && !loja.prontidao.completa },
+    faltam (loja) { return (loja.prontidao?.requisitos || []).filter(r => !r.ok).map(r => r.titulo) },
     acaoRapida (loja) {
       return ({ pendente: 'aprovar', ativa: 'suspender', suspensa: 'reativar' })[loja.estado] || null
     },

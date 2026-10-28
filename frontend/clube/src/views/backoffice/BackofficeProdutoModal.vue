@@ -300,6 +300,14 @@
             :stock-total-antigo="produto && !produto.stock_por_variante ? (produto.stock?.quantidade ?? 0) : null" />
         </div>
 
+        <!-- só aviso: guarda-se na mesma (utils/prontidao.js) -->
+        <p v-if="faltasForm.length" data-teste="produto-faltas"
+           class="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+          Podes guardar assim, mas falta {{ faltasForm.join(', ') }}<template v-if="faltasForm.includes('descrição')">
+          (pelo menos {{ descricaoMin }} caracteres)</template>. Produtos completos vendem melhor e a loja precisa de
+          pelo menos um para ser publicada.
+        </p>
+
         <p v-if="erroGuardar" class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">{{ erroGuardar }}</p>
 
         <!-- ══ ACTIONS ══ -->
@@ -328,6 +336,7 @@ import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconeCategoriaProduto, chaveCategoriaProduto } from '@/utils/icones'
 import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
+import { faltas, DESCRICAO_MIN } from '@/utils/prontidao'
 import ConjuntoEditor, { erroConjunto, gruposDoProduto } from '@/components/conjuntos/ConjuntoEditor.vue'
 import {
   combinacoesDe, mesclarLinhas, linhasDoProduto, linhasParaPayload, grelhaValida,
@@ -349,6 +358,7 @@ export default {
 
   data () {
     return {
+      descricaoMin: DESCRICAO_MIN,
       tipos: [],
       // stock por variação: novo produto → ligado por defeito; existente → como estiver gravado
       grelha: { ativo: !this.produto || !!this.produto.stock_por_variante, linhas: linhasDoProduto(this.produto) },
@@ -385,6 +395,12 @@ export default {
   },
 
   computed: {
+    faltasForm () {
+      return faltas({
+        temFoto: !!(this.previewUrl || this.imagensExistentes.length || this.novasImagens.length),
+        descricao: this.form.descricao, preco: this.form.preco,
+      })
+    },
     tiposGlobais () { return this.tipos.filter(t => t.is_global) },
     tiposLoja    () { return this.tipos.filter(t => !t.is_global) },
 
