@@ -150,7 +150,7 @@ class UtilizadorPublicSerializer(serializers.ModelSerializer):
 
 
 class UtilizadorMiniSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
+    username = serializers.SerializerMethodField()
     email    = serializers.CharField(source='user.email',    read_only=True)
     nome     = serializers.CharField(read_only=True)   # @property do modelo
     foto_url = serializers.SerializerMethodField()
@@ -158,6 +158,10 @@ class UtilizadorMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Utilizador
         fields = ['id', 'username', 'nome', 'email', 'foto_url']
+
+    def get_username(self, obj):
+        # conta apagada (utils/eliminacao.py): comentários e avaliações ficam, sem o nome
+        return 'Utilizador eliminado' if obj.status == 'eliminado' else obj.user.username
 
     def get_foto_url(self, obj):
         request = self.context.get('request')
