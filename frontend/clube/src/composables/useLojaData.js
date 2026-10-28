@@ -9,7 +9,7 @@ import { DEFAULT_BANNER } from '@/services/media'
 
 const NOMES_PAGAMENTO = {
   cartao: 'Cartão', dinheiro: 'Dinheiro', mbway: 'MB WAY', paypal: 'PayPal', stripe: 'Stripe',
-  flutterwave: 'Flutterwave', transferencia: 'Transferência',
+  flutterwave: 'Cartão', transferencia: 'Transferência', mobile_money: 'Mobile Money',
 }
 
 export function useLojaData () {

@@ -14,7 +14,7 @@ Depois de receber (tipo 'devolucao', encomenda concluída):
   sem resposta da loja em 48h, recusa ou proposta rejeitada → a Bendi decide ('em_disputa')
 Dinheiro (concluir): o pagamento passa a 'reembolsado'/'reembolsado_parcial'; a comissão ainda pendente
   é recalculada sobre o que fica, a já liquidada dá um CreditoComissao à loja. O reembolso no meio de
-  pagamento é simulado (como os pagamentos) — ver _executar_no_gateway.
+  pagamento vai pelo fornecedor que cobrou (app/pagamentos; o simulado não devolve nada de verdade).
 
 Todas as funções esperam a encomenda bloqueada (select_for_update) dentro de uma transacção.
 """
@@ -849,15 +849,16 @@ def escalar_sem_resposta(agora=None, lote=200):
 
 # ── dinheiro ─────────────────────────────────────────────────────────
 
-def _executar_no_gateway(r, valor, metodo):
+def _executar_no_gateway(r, valor, metodo, pagamento=None):
     """
-    Devolve o dinheiro e → a referência. Os pagamentos ainda são simulados, por isso o reembolso também.
-    Com gateways reais é aqui que se chama a API de reembolso (Stripe Refund / Flutterwave refunds),
-    sobre a transacção do Pagamento, no valor e moeda cobrados (dinheiro.valor_cobranca).
+    Devolve o dinheiro e → a referência. Online: pelo fornecedor que cobrou (pagamentos.servico.reembolsar —
+    o simulado não devolve nada de verdade), sobre a transacção do Pagamento.
     """
     if metodo == 'manual':
         return 'dinheiro'
-    return f'simulado_{r.id}'
+    from ..pagamentos import servico as pagamentos
+    p = pagamento
+    return pagamentos.reembolsar(p.fornecedor if p else '', p.referencia_transacao if p else '', valor, chave=r.id)
 
 
 def _concluir(r, valor):
@@ -871,7 +872,7 @@ def _concluir(r, valor):
         # endpoint do dinheiro (referência 'dinheiro'), mas o reembolso é para o meio de pagamento usado
         tipo = p.metodo.tipo if p and p.metodo_id else ('dinheiro' if p and p.referencia_transacao == 'dinheiro' else '')
         metodo = 'manual' if tipo == 'dinheiro' else 'gateway'
-        r.referencia = _executar_no_gateway(r, valor, metodo)
+        r.referencia = _executar_no_gateway(r, valor, metodo, p)
     r.estado = 'a_devolver' if metodo == 'manual' else 'reembolsado'
     r.valor_aprovado = valor
     r.metodo = metodo

@@ -166,25 +166,12 @@
                 <p class="text-sm font-semibold text-zinc-200">{{ metodo.label }}</p>
                 <p class="text-xs text-zinc-500">{{ metodo.descricao }}</p>
               </div>
-              <!-- Badge Flutterwave -->
-              <span v-if="metodo.tipo === 'flutterwave'"
+              <!-- pago online pelo fornecedor da plataforma (backend app/pagamentos) -->
+              <span v-if="metodosOnline.includes(metodo.tipo)"
                     class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded font-semibold">
                 Online
               </span>
-              <!-- Badge simulado para outros -->
-              <span v-else class="text-[10px] text-zinc-600 bg-zinc-800 px-2 py-0.5 rounded">Simulado</span>
             </button>
-          </div>
-
-          <!-- Aviso Flutterwave -->
-          <div v-if="metodoPagamento === 'flutterwave'"
-               class="mt-3 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p class="text-xs text-blue-300">
-              Vais ser redireccionado para o Flutterwave para completar o pagamento de forma segura.
-            </p>
           </div>
         </div>
 
@@ -321,7 +308,7 @@
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
               <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
             </svg>
-            <span v-if="loadingConfirmar && metodoPagamento === 'flutterwave'">A redirecionar…</span>
+            <span v-if="loadingConfirmar && redirecionando">A redirecionar…</span>
             <span v-else-if="loadingConfirmar">A processar…</span>
             <span v-else-if="agendarPara">Encomendar para {{ textoAgendada }} · {{ formatPrice(total) }}</span>
             <span v-else-if="lojaFechada && aceitaAgendar">Encomendar para {{ quandoAbre(loja.horario) }} · {{ formatPrice(total) }}</span>
@@ -329,8 +316,7 @@
           </button>
 
           <p class="text-xs text-zinc-600 text-center mt-3">
-            <span v-if="metodoPagamento === 'flutterwave'"><font-awesome-icon :icon="['fas', 'lock']" class="mr-1" />Pagamento seguro via Flutterwave</span>
-            <span v-else>Pagamento simulado para testes</span>
+            Pagamento simulado para testes
           </p>
         </div>
       </div>
@@ -353,27 +339,22 @@ import { temaPainel } from '@/utils/tema'
 import BotaoTema from '@/components/BotaoTema.vue'
 import LojaVendedor from '@/components/loja/LojaVendedor.vue'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
+import { seguirPagamento } from '@/utils/pagamentoOnline'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
   dinheiro:      { label: 'Dinheiro',           descricao: 'Paga ao receber / na loja' },
   mbway:         { label: 'MBWay',              descricao: 'Pagamento via MBWay' },
-  cartao:        { label: 'Cartão',             descricao: 'Cartão de débito/crédito' },
-  flutterwave:   { label: 'Flutterwave',        descricao: 'Visa, Mastercard, Mobile Money' },
+  cartao:        { label: 'Cartão',             descricao: 'Cartão de débito/crédito — pago online' },
+  flutterwave:   { label: 'Cartão',             descricao: 'Visa, Mastercard — pago online' },
   transferencia: { label: 'Transferência',      descricao: 'Transferência bancária' },
   mobile_money:  { label: 'Mobile Money',       descricao: 'Pagamento via telemóvel' },
   paypal:        { label: 'PayPal',             descricao: 'Pagamento via PayPal' },
-  stripe:        { label: 'Stripe',             descricao: 'Cartão via Stripe' },
+  stripe:        { label: 'Cartão',             descricao: 'Visa, Mastercard — pago online' },
 }
 
-// endpoints para métodos não-Flutterwave
-const ENDPOINT_PAGAMENTO = {
-  dinheiro:      '/app/pagamento/dinheiro/',
-  mbway:         '/app/pagamento/mbway/',
-  cartao:        '/app/pagamento/dinheiro/', // simulado
-  transferencia: '/app/pagamento/dinheiro/', // simulado
-  mobile_money:  '/app/pagamento/dinheiro/', // simulado
-}
+// pagos online pelo fornecedor da plataforma (os outros pagam-se à loja)
+const METODOS_ONLINE = ['cartao', 'mobile_money', 'mbway', 'flutterwave', 'stripe', 'paypal']
 
 export default {
   name: 'CheckoutPage',
@@ -403,7 +384,8 @@ export default {
       metodoPagamento: '',
       erro: '',
       agendarPara: null,   // null = o mais cedo possível · '' = a escolher · 'AAAA-MM-DDTHH:MM'
-      redirectindoFlutterwave: false,
+      redirecionando: false,
+      metodosOnline: METODOS_ONLINE,
     }
   },
 
@@ -554,35 +536,22 @@ export default {
           return
         }
 
-        // 2a — Flutterwave: redirecionar para página externa
-        if (this.metodoPagamento === 'flutterwave') {
-          const { data: flw } = await api.post('/app/pagamento/flutterwave/iniciar/', {
-            encomenda_id: encomenda.id,
-          })
-          // guardar tx_ref no localStorage para verificar no callback
-          localStorage.setItem('flw_tx_ref',     flw.tx_ref)
-          localStorage.setItem('flw_encomenda_id', encomenda.id)
-          // redirecionar para o Flutterwave
-          this.redirectindoFlutterwave = true 
-          window.location.href = flw.payment_url
+        // 2 — pagar: dinheiro/transferência ficam por receber; online vai pelo fornecedor da plataforma
+        // (aprovado já, ou o cliente vai à página dele e volta a /pagamento/callback)
+        const { data: pag } = await api.post('/app/pagamento/iniciar/', {
+          encomenda_id: encomenda.id, metodo: this.metodoPagamento,
+        })
+        if (seguirPagamento(pag)) {
+          this.redirecionando = true
           return
         }
-
-        // 2b — outros métodos: pagamento simulado
-        const endpoint = ENDPOINT_PAGAMENTO[this.metodoPagamento] || '/app/pagamento/dinheiro/'
-        const pagamentoPayload = { encomenda_id: encomenda.id, metodo: this.metodoPagamento }
-        if (this.metodoPagamento === 'mbway') {
-          const user = JSON.parse(localStorage.getItem('user') || '{}')
-          pagamentoPayload.telemovel = user.telefone || '910000000'
-        }
-        await api.post(endpoint, pagamentoPayload)
 
         // 3 — limpar carrinho e redirecionar
         window.dispatchEvent(new CustomEvent('carrinho-limpo', { detail: { lojaId: this.lojaId } }))
         this.$router.push({ name: 'EncomendaSucesso', params: { id: encomenda.id } })
       })
 
-      if (!this.erro && !this.loadingConfirmar && !this.redirectindoFlutterwave && this.$route.name !== 'EncomendaSucesso') {
+      if (!this.erro && !this.loadingConfirmar && !this.redirecionando && this.$route.name !== 'EncomendaSucesso') {
         this.erro = 'Erro ao processar a encomenda. Verifica os dados e tenta novamente.'
       }
     },

@@ -19,6 +19,8 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 
 from app.models import ConfiguracaoPlataforma, FaturaSubscricao, Subscricao
+from ..pagamentos import ErroPagamento
+from ..pagamentos import servico as pagamentos
 from ..utils import subscricoes as subs
 from ..utils import subscricoes_pos as subs_pos
 from .models import ConfiguracaoPOS
@@ -160,9 +162,11 @@ def pos_fatura_pagar(request, pos_id, fatura_id):
         return erro
     fatura = get_object_or_404(FaturaSubscricao, id=fatura_id, pos=pos)
     try:
-        subs.pagar(fatura, 'simulado', referencia=f'SIM-{fatura.id}')
-    except subs.ErroFatura as e:
+        inicio = pagamentos.iniciar_fatura(fatura, None)
+    except (subs.ErroFatura, ErroPagamento) as e:
         return _erro(str(e))
+    if inicio.estado == 'redirecionar':          # paga na página do fornecedor
+        return Response(pagamentos.para_frontend(inicio))
     pos.refresh_from_db()           # pagar pode ter levantado a suspensão
     return Response(_resumo(pos))
 

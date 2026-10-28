@@ -181,6 +181,8 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL  = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@ecommerce.com')
 
 FRONTEND_BASE_URL   = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:8080')
+# fornecedor dos pagamentos online da plataforma (app/pagamentos): simulado até haver contrato (SISP)
+PAGAMENTOS_FORNECEDOR = os.environ.get('PAGAMENTOS_FORNECEDOR', 'simulado')
 
 
 # ══════════════════════════════════════════════════════════════

@@ -218,6 +218,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
+import { seguirPagamento } from '@/utils/pagamentoOnline'
 
 export default {
   name: 'POSSubscricao',
@@ -277,6 +278,7 @@ export default {
       this.erro = ''; this.aviso = ''
       try {
         const { data } = await pedido()
+        if (seguirPagamento(data)) return       // paga na página do fornecedor e volta a /pagamento/callback
         this.dados = data
         this.versao++                // a lista das mensalidades volta a ler a página
         if (ok) this.aviso = ok

@@ -14,6 +14,9 @@ O que se regista (ligar(), em AppConfig.ready()):
 - Reembolso: pedido e cada mudança de estado;
 - Marcação: paga online, reembolsada (marcacoes.reembolsar chama registar);
 - Fatura de subscrição: emitida, paga, anulada (anulações em massa por anular_faturas);
+- Venda no POS: conta paga (com as partes de uma conta dividida) e conta paga que é cancelada;
+- Comissão: registada, liquidada, recalculada (reembolso); créditos à loja criados e descontados;
+- Pagamento cobrado que já não pôde ser aceite (pagamentos.servico: 'pago_sem_efeito');
 - Dados bancários da loja: alterados, consultados pelo admin.
 Fica na mesma transacção da mudança: se ela falhar, a linha também não fica (nem é selada).
 """
@@ -49,12 +52,15 @@ class RegistoPedidoMiddleware:
 
 
 def _contexto():
+    """(ator_id, nome do ator fora dos utilizadores, IP, pedido). Os membros da equipa de um POS autenticam-se
+    com um utilizador próprio (pk 'membro_<id>'): não cabem em ator_id e ficam pelo nome."""
     req = _pedido.get()
     if req is None:
-        return None, '', ''
+        return None, '', '', ''
     user = getattr(req, 'user', None)       # o DRF põe aqui o utilizador do token depois de autenticar
-    ator = user.pk if user is not None and getattr(user, 'is_authenticated', False) else None
-    return ator, (req.META.get('REMOTE_ADDR') or '')[:45], getattr(req, 'pedido_id', '')
+    pk = user.pk if user is not None and getattr(user, 'is_authenticated', False) else None
+    ator, outro = (pk, '') if pk is None or isinstance(pk, int) else (None, str(pk)[:40])
+    return ator, outro, (req.META.get("REMOTE_ADDR") or "")[:45], getattr(req, "pedido_id", "")
 
 
 # ── mascarar ───────────────────────────────────────────────────
@@ -118,7 +124,9 @@ def registar(tipo, evento, *, objeto_id=None, loja_id=None, pos_id=None, encomen
     Assim nenhum pagamento espera por um bloqueio global (que, segurado até ao fim da transacção
     junto com os bloqueios de linhas de pagamentos/reembolsos, podia dar deadlock)."""
     from ..models import RegistoTransacao
-    ator, ip, pedido = _contexto()
+    ator, outro, ip, pedido = _contexto()
+    if outro:
+        dados = {**(dados or {}), 'ator': outro}
     r = RegistoTransacao(
         criado_em=timezone.now(), tipo=tipo, evento=evento[:40], objeto_id=objeto_id, loja_id=loja_id,
         pos_id=pos_id, encomenda_id=encomenda_id, valor=_valor(valor),
@@ -279,14 +287,62 @@ def _ao_gravar_fatura(sender, instance, created, raw=False, update_fields=None, 
                  dados={'descricao': instance.descricao, 'vencimento': instance.vencimento})
 
 
+def _ao_gravar_conta_pos(sender, instance, created, raw=False, update_fields=None, **kw):
+    """Venda no POS: quando a conta fecha (paga) e se uma conta já paga for cancelada."""
+    if raw or not _gravou('status', update_fields):
+        return
+    antes = (getattr(instance, '_registo', None) or {}).get('status', '')
+    if antes == instance.status or not (instance.status == 'fechada' or antes == 'fechada'):
+        return
+    from ..pos.models import PagamentoDividido
+    dados = {'mesa': str(instance.mesa_id), 'subtotal': f'{instance.subtotal:.2f}', 'gorjeta': f'{instance.gorjeta:.2f}',
+             'desconto': f'{instance.desconto_valor:.2f}', 'taxa_servico': f'{instance.taxa_servico_valor:.2f}',
+             'por': instance.fechada_por if instance.status == 'fechada' else instance.cancelada_por}
+    if instance.metodo_pagamento == 'dividida':
+        dados['partes'] = '; '.join(f'{p.pessoa_numero}:{p.metodo}:{p.valor:.2f}'
+                                    for p in PagamentoDividido.objects.filter(conta=instance))
+    registar('pos', 'venda_paga' if instance.status == 'fechada' else 'venda_' + instance.status,
+             objeto_id=instance.pk, loja_id=instance.loja_id, pos_id=instance.pos_id, valor=instance.total,
+             estado_anterior=antes, estado_novo=instance.status, metodo=instance.metodo_pagamento or '', dados=dados)
+
+
+def _ao_gravar_comissao(sender, instance, created, raw=False, update_fields=None, **kw):
+    if raw:
+        return
+    antes = getattr(instance, '_registo', None)
+    base = dict(objeto_id=instance.pk, loja_id=instance.loja_id, encomenda_id=instance.encomenda_id,
+                valor=instance.valor_comissao, estado_novo=instance.status)
+    if created or antes is None:
+        registar('comissao', 'registada', dados={'percentagem': f'{instance.percentagem}',
+                                                 'valor_encomenda': f'{instance.valor_encomenda:.2f}'}, **base)
+        return
+    if _gravou('status', update_fields) and antes['status'] != instance.status:
+        registar('comissao', instance.status, estado_anterior=antes['status'], **base)
+    if _gravou('valor_comissao', update_fields) and Decimal(antes['valor_comissao']) != Decimal(instance.valor_comissao):
+        registar('comissao', 'recalculada', dados={'valor_anterior': f"{Decimal(antes['valor_comissao']):.2f}",
+                                                   'valor_encomenda': f'{instance.valor_encomenda:.2f}'}, **base)
+
+
+def _ao_gravar_credito(sender, instance, created, raw=False, update_fields=None, **kw):
+    if raw or not created:
+        return
+    registar('comissao', 'credito_loja', objeto_id=instance.comissao_id, loja_id=instance.loja_id,
+             valor=instance.valor, estado_novo=instance.estado, dados={'reembolso': str(instance.reembolso_id),
+                                                                      'credito': str(instance.pk)})
+
+
 def ligar():
     """Chamado em AppConfig.ready()."""
-    from ..models import FaturaSubscricao, Pagamento, Reembolso
+    from ..models import Comissao, CreditoComissao, FaturaSubscricao, Pagamento, Reembolso
+    from ..pos.models import ContaMesa
     from ..servicos.models import Marcacao
+    post_save.connect(_ao_gravar_credito, sender=CreditoComissao, weak=False, dispatch_uid='registo_save_CreditoComissao')
     for modelo, campos, gravar in ((Pagamento, ('status', 'valor'), _ao_gravar_pagamento),
                                    (Reembolso, ('estado',), _ao_gravar_reembolso),
                                    (Marcacao, ('pago',), _ao_gravar_marcacao),
-                                   (FaturaSubscricao, ('estado',), _ao_gravar_fatura)):
+                                   (FaturaSubscricao, ('estado',), _ao_gravar_fatura),
+                                   (ContaMesa, ('status',), _ao_gravar_conta_pos),
+                                   (Comissao, ('status', 'valor_comissao'), _ao_gravar_comissao)):
         CAMPOS[modelo] = campos
         nome = modelo.__name__
         pre_save.connect(_antes, sender=modelo, weak=False, dispatch_uid=f'registo_antes_{nome}')
