@@ -1,6 +1,5 @@
 <!-- LojaVendedor.vue — "Vendido por": quem vende, contactos e políticas da loja.
-     Na página da loja (abaixo do template) e no checkout (compacto). As políticas que a loja não
-     escreveu levam às da plataforma (/devolucoes, /entregas, /termos, /privacidade). -->
+     No checkout (compacto). Só mostra as políticas que a loja escreveu: as da Bende estão no rodapé do site. -->
 <template>
   <section :class="compacto ? '' : ['border-t py-8 px-6 md:px-12', isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-stone-50 border-stone-200']"
            data-teste="loja-vendedor">
@@ -24,13 +23,9 @@
       <p class="mt-3 text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
         A loja é responsável pelos produtos, pela entrega e pelas devoluções.
       </p>
-      <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <template v-for="p in politicas" :key="p.chave">
-          <button v-if="p.texto" type="button" @click="aberta = p" :data-teste="'politica-' + p.chave"
-            class="font-semibold text-red-500 hover:text-red-400 underline-offset-2 hover:underline">{{ p.titulo }}</button>
-          <router-link v-else :to="'/' + p.pagina" target="_blank" :data-teste="'politica-' + p.chave"
-            class="font-semibold text-red-500 hover:text-red-400 underline-offset-2 hover:underline">{{ p.titulo }}</router-link>
-        </template>
+      <div v-if="politicas.length" class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <button v-for="p in politicas" :key="p.chave" type="button" @click="aberta = p" :data-teste="'politica-' + p.chave"
+          class="font-semibold text-red-500 hover:text-red-400 underline-offset-2 hover:underline">{{ p.titulo }}</button>
       </div>
     </div>
 
@@ -64,11 +59,11 @@ export default {
       const prazo = l.prazo_devolucao_dias ? `Prazo para pedir a devolução: ${l.prazo_devolucao_dias} dias.` : ''
       const devolucao = [prazo, l.politica_devolucao].filter(x => String(x || '').trim()).join('\n\n')
       return [
-        { chave: 'devolucoes',  titulo: 'Devoluções',   texto: l.politica_devolucao ? devolucao : '', pagina: 'devolucoes' },
-        { chave: 'entregas',    titulo: 'Entregas',     texto: l.politica_entregas,    pagina: 'entregas' },
-        { chave: 'termos',      titulo: 'Termos',       texto: l.termos_servico,       pagina: 'termos' },
-        { chave: 'privacidade', titulo: 'Privacidade',  texto: l.politica_privacidade, pagina: 'privacidade' },
-      ].map(p => ({ ...p, texto: String(p.texto || '').trim() }))
+        { chave: 'devolucoes',  titulo: 'Devoluções',  texto: l.politica_devolucao ? devolucao : '' },
+        { chave: 'entregas',    titulo: 'Entregas',    texto: l.politica_entregas },
+        { chave: 'termos',      titulo: 'Termos',      texto: l.termos_servico },
+        { chave: 'privacidade', titulo: 'Privacidade', texto: l.politica_privacidade },
+      ].map(p => ({ ...p, texto: String(p.texto || '').trim() })).filter(p => p.texto)   // só as da loja
     },
   },
 }
