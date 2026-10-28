@@ -4,6 +4,7 @@ from ..Views import paginaView as v
 urlpatterns = [
     # ── Público (rodapé da home) ──────────────────────────────
     path('paginas/',                   v.pagina_list_publica, name='pagina-list'),
+    path('plataforma/publica/',        v.plataforma_publica,  name='plataforma-publica'),
     path('paginas/<slug:slug>/',       v.pagina_get_publica,  name='pagina-get'),
 
     # ── Admin ─────────────────────────────────────────────────

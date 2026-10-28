@@ -4,11 +4,17 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
-from ..models import PaginaInstitucional
+from ..models import ConfiguracaoPlataforma, PaginaInstitucional
 from .adminView import _exige_admin
 
 
 CAMPOS_CONTACTO = ('email', 'telefone', 'whatsapp', 'morada', 'horario')
+
+
+def contactos_plataforma(cfg=None):
+    """Contactos do site (Admin → Plataforma) — rodapé e página Contacto."""
+    cfg = cfg or ConfiguracaoPlataforma.atual()
+    return {k: getattr(cfg, f'contacto_{k}') for k in CAMPOS_CONTACTO}
 
 
 def _serializar(p, completo=True):
@@ -43,9 +49,7 @@ def _limpar_dados(slug, dados):
             if pergunta:
                 perguntas.append({'pergunta': pergunta, 'resposta': resposta})
         return {'perguntas': perguntas[:100]}
-    if slug == 'contacto':
-        return {k: str(dados.get(k) or '').strip()[:300] for k in CAMPOS_CONTACTO}
-    return {}
+    return {}       # contacto: os contactos editam-se em Admin → Plataforma
 
 
 # ══════════════════════════════════════════════════════════════
@@ -67,7 +71,24 @@ def pagina_get_publica(request, slug):
     p = get_object_or_404(PaginaInstitucional, slug=slug, ativo=True)
     data = _serializar(p)
     data.pop('atualizado_por', None)
+    if p.slug == 'contacto':
+        data['dados'] = contactos_plataforma()
     return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def plataforma_publica(request):
+    """GET /app/plataforma/publica/ — o rodapé de todas as páginas: quem explora o site, contactos,
+    páginas activas e se mostra os logótipos dos cartões."""
+    cfg = ConfiguracaoPlataforma.atual()
+    return Response({
+        'titular_nome': cfg.titular_nome,
+        'titular_nif': cfg.titular_nif,
+        'contactos': contactos_plataforma(cfg),
+        'mostrar_logos_pagamento': cfg.mostrar_logos_pagamento,
+        'paginas': [_serializar(p, completo=False) for p in PaginaInstitucional.objects.filter(ativo=True)],
+    })
 
 
 # ══════════════════════════════════════════════════════════════
