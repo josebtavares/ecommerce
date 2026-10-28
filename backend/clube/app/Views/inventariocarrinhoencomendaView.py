@@ -378,13 +378,18 @@ def carrinho_limpar(request, loja_id):
 def encomenda_criar(request, loja_id):
     """
     POST /app/loja/<loja_id>/encomenda/criar/
-    Body: { tipo_entrega, morada_entrega?, notas? }
-    Converte o carrinho activo numa encomenda.
+    Body: { tipo_entrega, morada_entrega?, notas?, aceita_termos: true }
+    Converte o carrinho activo numa encomenda. aceita_termos: o cliente marcou "Aceito os Termos e a
+    Política de devolução" — fica a hora na encomenda (prova para a SISP/banco em caso de disputa).
     """
     # bloqueia a loja: se o dono/admin a fechar ao mesmo tempo, ou a encomenda é criada antes
     # (e cancelada com as outras pendentes) ou já não é criada — ver Loja.mudar_estado
     loja       = get_object_or_404(Loja.objects.select_for_update(), id=loja_id, ativa=True)
     utilizador = request.user.utilizador
+
+    if request.data.get('aceita_termos') not in (True, 'true', '1', 1):
+        return Response({'detail': 'Para encomendar tens de aceitar os Termos e a Política de devolução.',
+                         'codigo': 'termos'}, status=status.HTTP_400_BAD_REQUEST)
 
     # busca o carrinho activo
     carrinho = get_object_or_404(Carrinho, utilizador=utilizador, loja=loja)
@@ -526,6 +531,7 @@ def encomenda_criar(request, loja_id):
         agendada_para  = agendada_para,
         agendamento_origem = origem,
         modelo_cobranca = loja.modelo_cobranca,   # comissão ou subscrição — fica o que estava em vigor
+        termos_aceites_em = timezone.now(),
     )
 
     # ── 2) Cria os itens e desconta o stock (uma vez por linha de stock, com F()) ──

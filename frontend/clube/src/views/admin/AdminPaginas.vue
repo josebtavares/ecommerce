@@ -1,10 +1,10 @@
-<!-- AdminPaginas.vue — editar as páginas do rodapé da home (Ajuda, Contacto, FAQ, Termos, Privacidade) -->
+<!-- AdminPaginas.vue — editar as páginas do rodapé (Ajuda, Contacto, FAQ, Termos, Privacidade, Devoluções, Entregas) -->
 <template>
   <div class="space-y-5">
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <h2 class="text-lg font-bold text-zinc-100">Páginas & Ajuda</h2>
-        <p class="text-xs text-zinc-500 mt-0.5">Conteúdo dos links "Suporte" e "Legal" no rodapé da home — abre num popup.</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Conteúdo dos links "Suporte" e "Legal" do rodapé — cada página tem também o seu endereço (ex.: /termos).</p>
       </div>
     </div>
 
@@ -58,14 +58,14 @@
               class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" />
           </div>
 
-          <!-- Contacto: campos estruturados -->
-          <div v-if="form.slug === 'contacto'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div v-for="c in CAMPOS_CONTACTO" :key="c.key" :class="c.key === 'morada' && 'sm:col-span-2'">
-              <label class="text-xs text-zinc-400 font-medium mb-1.5 flex items-center gap-1.5"><font-awesome-icon :icon="['fas', c.icone]" class="text-zinc-500" fixed-width /> {{ c.label }}</label>
-              <input v-model="form.dados[c.key]" :type="c.tipo || 'text'" :placeholder="c.placeholder" maxlength="300"
-                class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" />
-            </div>
-            <p class="sm:col-span-2 text-[10px] text-zinc-600">Campos vazios não aparecem no popup. Email, telefone, WhatsApp e morada ficam clicáveis.</p>
+          <!-- Contacto: os contactos são os da plataforma (Definições), os mesmos do rodapé -->
+          <div v-if="form.slug === 'contacto'" class="flex items-start gap-3 px-4 py-3 rounded-xl bg-zinc-800/50 text-sm text-zinc-300">
+            <font-awesome-icon :icon="['fas', 'circle-info']" class="w-4 h-4 text-zinc-400 mt-0.5" />
+            <p>
+              O email, telefone, WhatsApp, morada e horário editam-se em
+              <router-link to="/admin/plataforma" class="font-semibold text-red-400 hover:text-red-300">Definições</router-link>
+              — são os mesmos do rodapé de todas as páginas.
+            </p>
           </div>
 
           <!-- FAQ: perguntas -->
@@ -152,15 +152,8 @@ import { toast } from 'vue3-toastify'
 import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
 
 // ícones Font Awesome (solid) por página
-const ICONES = { ajuda: 'life-ring', contacto: 'envelope', faq: 'circle-question', termos: 'file-contract', privacidade: 'lock' }
-
-const CAMPOS_CONTACTO = [
-  { key: 'email',    label: 'Email',    icone: 'envelope',       tipo: 'email', placeholder: 'suporte@exemplo.com' },
-  { key: 'telefone', label: 'Telefone', icone: 'phone',          placeholder: '+238 000 00 00' },
-  { key: 'whatsapp', label: 'WhatsApp', icone: 'comment-dots',   placeholder: '+238 000 00 00' },
-  { key: 'horario',  label: 'Horário',  icone: 'clock',          placeholder: 'Seg–Sex, 9h–18h' },
-  { key: 'morada',   label: 'Morada',   icone: 'location-dot',   placeholder: 'Rua, cidade' },
-]
+const ICONES = { ajuda: 'life-ring', contacto: 'envelope', faq: 'circle-question', termos: 'file-contract', privacidade: 'lock',
+                 devolucoes: 'rotate-left', entregas: 'truck-fast' }
 
 let uid = 0
 
@@ -170,7 +163,8 @@ export default {
 
   data () {
     return {
-      ICONES, CAMPOS_CONTACTO,
+      ICONES,
+      contactos: {},        // da plataforma — só para a pré-visualização da página Contacto
       seccoes: [{ key: 'suporte', label: 'Suporte' }, { key: 'legal', label: 'Legal' }],
       paginas: [],          // estado guardado no servidor
       rascunhos: {},        // slug → form em edição
@@ -194,7 +188,7 @@ export default {
 
     paginaPreview () {
       if (!this.form) return null
-      return { ...this.form, dados: this.payloadDados(this.form) }
+      return { ...this.form, dados: this.form.slug === 'contacto' ? this.contactos : this.payloadDados(this.form) }
     },
   },
 
@@ -215,6 +209,7 @@ export default {
         this.paginas = data
         this.rascunhos = Object.fromEntries(data.map(p => [p.slug, this.paraForm(p)]))
         this.slugActivo = this.slugActivo || this.paginasDaSeccao('suporte')[0]?.slug || data[0]?.slug
+        api.get('/app/plataforma/publica/').then(r => { this.contactos = r.data.contactos }).catch(() => {})
       } catch (e) {
         this.erroCarregar = e.response?.data?.detail || 'Não foi possível carregar as páginas.'
       } finally {
@@ -231,9 +226,6 @@ export default {
       if (p.slug === 'faq') {
         dados.perguntas = (dados.perguntas || []).map(q => ({ ...q, _id: ++uid }))
       }
-      if (p.slug === 'contacto') {
-        CAMPOS_CONTACTO.forEach(c => { dados[c.key] = dados[c.key] || '' })
-      }
       return { ...p, conteudo: p.conteudo || '', dados }
     },
 
@@ -242,7 +234,6 @@ export default {
       if (f.slug === 'faq') {
         return { perguntas: f.dados.perguntas.map(({ pergunta, resposta }) => ({ pergunta, resposta })) }
       }
-      if (f.slug === 'contacto') return { ...f.dados }
       return {}
     },
 

@@ -254,6 +254,10 @@ class Loja(models.Model):
     politica_devolucao   = models.TextField(blank=True, default='')
     termos_servico       = models.TextField(blank=True, default='')
     politica_privacidade = models.TextField(blank=True, default='')
+    politica_entregas    = models.TextField(blank=True, default='', db_default='')
+    # contactos públicos da loja ("Vendido por" na página da loja e no checkout); vazios → os do dono não aparecem
+    contacto_email       = models.CharField(max_length=254, blank=True, default='', db_default='')
+    contacto_telefone    = models.CharField(max_length=40, blank=True, default='', db_default='')
     
     template_id    = models.CharField(max_length=50, default='classico', blank=True)
     cor_primaria   = models.CharField(max_length=7,  default='#dc2626',  blank=True)
@@ -877,6 +881,8 @@ class Encomenda(models.Model):
     fatura_registada_em = models.DateTimeField(null=True, blank=True)
     # comprovativo (documento interno, utils/documentos.py) enviado por email ao cliente — uma vez, ao pagar
     comprovativo_enviado_em = models.DateTimeField(null=True, blank=True)
+    # o cliente marcou "Aceito os Termos e a Política de devolução" no checkout (prova, com a hora)
+    termos_aceites_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -983,6 +989,17 @@ class ConfiguracaoPlataforma(models.Model):
     fuso_horario     = models.CharField(max_length=64, default='Atlantic/Cape_Verde')
     # dias grátis das lojas novas em subscrição (0 = paga desde a aprovação)
     subscricao_dias_teste = models.PositiveSmallIntegerField(default=30, db_default=30)
+    # identificação de quem explora o site e contactos — rodapé de todas as páginas e página Contacto
+    # (a SISP e o banco revêem isto à mão antes de dar o pagamento com cartão)
+    titular_nome      = models.CharField(max_length=200, blank=True, default='', db_default='')
+    titular_nif       = models.CharField(max_length=9, blank=True, default='', db_default='')
+    contacto_email    = models.CharField(max_length=254, blank=True, default='', db_default='')
+    contacto_telefone = models.CharField(max_length=40, blank=True, default='', db_default='')
+    contacto_whatsapp = models.CharField(max_length=40, blank=True, default='', db_default='')
+    contacto_morada   = models.CharField(max_length=300, blank=True, default='', db_default='')
+    contacto_horario  = models.CharField(max_length=120, blank=True, default='', db_default='')
+    # logótipos vinti4 / Visa / Mastercard no rodapé — só depois de haver contrato com a SISP
+    mostrar_logos_pagamento = models.BooleanField(default=False, db_default=False)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -1587,7 +1604,7 @@ class PaginaInstitucional(models.Model):
       conteudo → texto livre (parágrafos, "## Título", "- item")
       dados    → campos estruturados conforme o tipo de página:
                    faq:      {"perguntas": [{"pergunta": "...", "resposta": "..."}]}
-                   contacto: {"email", "telefone", "whatsapp", "morada", "horario"}
+                   contacto: os contactos vêm de ConfiguracaoPlataforma (Admin → Plataforma)
     """
     SLUGS = [
         ('ajuda',       'Ajuda'),
@@ -1595,6 +1612,8 @@ class PaginaInstitucional(models.Model):
         ('faq',         'FAQ'),
         ('termos',      'Termos de Serviço'),
         ('privacidade', 'Privacidade'),
+        ('devolucoes',  'Devoluções e reembolsos'),
+        ('entregas',    'Entregas'),
     ]
     SECCOES = [
         ('suporte', 'Suporte'),

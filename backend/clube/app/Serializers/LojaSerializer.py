@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 from ..models import Loja, UtilizadorLoja
 from .UtilizadorSerializer import UtilizadorMiniSerializer
@@ -46,6 +48,8 @@ class LojaSerializer(serializers.ModelSerializer):
     banner_url     = serializers.SerializerMethodField()
     banner_poster_url = serializers.SerializerMethodField()
     total_produtos = serializers.SerializerMethodField()
+    # "Vendido por": quem vende, para o cliente saber a quem compra (página da loja e checkout)
+    vendedor       = serializers.SerializerMethodField()
     minha_role     = serializers.SerializerMethodField()
     meu_chat       = serializers.SerializerMethodField()   # 'total' | 'condutor' | None (caixa da loja)
 
@@ -67,6 +71,7 @@ class LojaSerializer(serializers.ModelSerializer):
             'ativa', 'estado', 'estado_motivo', 'estado_alterado_em',
             'data_criacao', 'data_atualizacao',
             'politica_devolucao', 'prazo_devolucao_dias', 'termos_servico', 'politica_privacidade',
+            'politica_entregas', 'contacto_email', 'contacto_telefone', 'vendedor',
             'flutterwave_subaccount_id', 'aceita_flutterwave',
             'modelo_cobranca', 'percentagem_comissao',
         ]
@@ -84,6 +89,27 @@ class LojaSerializer(serializers.ModelSerializer):
         if value is None or value < 0 or value > 100:
             raise serializers.ValidationError('A taxa de IVA tem de estar entre 0 e 100%.')
         return value
+
+    def validate_contacto_email(self, value):
+        value = (value or '').strip()
+        if value:
+            from django.core.validators import validate_email
+            from django.core.exceptions import ValidationError
+            try:
+                validate_email(value)
+            except ValidationError:
+                raise serializers.ValidationError('Email inválido.')
+        return value
+
+    def validate_contacto_telefone(self, value):
+        value = (value or '').strip()
+        if value and not re.fullmatch(r'\+?[\d\s().-]{7,20}', value):
+            raise serializers.ValidationError('Telefone inválido.')
+        return value
+
+    def get_vendedor(self, obj):
+        return {'nome': obj.nome, 'nif': obj.nif, 'morada': obj.localizacao,
+                'email': obj.contacto_email, 'telefone': obj.contacto_telefone}
 
     def get_logo_url(self, obj):
         request = self.context.get('request')
@@ -151,6 +177,10 @@ class LojaPublicSerializer(serializers.ModelSerializer):
     total_avaliacoes = serializers.SerializerMethodField()
     horario        = serializers.SerializerMethodField()   # aberta/fechada + semana (utils/horarios.py)
     agendamento    = serializers.SerializerMethodField()   # o cliente pode escolher dia e hora?
+    vendedor       = serializers.SerializerMethodField()   # "Vendido por" (LojaSerializer.get_vendedor)
+
+    def get_vendedor(self, obj):
+        return LojaSerializer.get_vendedor(self, obj)
 
     class Meta:
         model  = Loja
@@ -163,6 +193,7 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             'entrega_ativa', 'levantamento_ativo',
             'rating_medio', 'total_avaliacoes',
             'politica_devolucao', 'prazo_devolucao_dias', 'termos_servico', 'politica_privacidade',
+            'politica_entregas', 'vendedor',
             'horario', 'agendamento',
         ]
 

@@ -24,12 +24,15 @@
       </router-link>
     </div>
 
-    <component
-      v-else-if="templateComponent"
-      :is="templateComponent"
-      :tema="temaActivo"
-      @toggle-dark="onToggleDark"
-    />
+    <template v-else-if="templateComponent">
+      <component
+        :is="templateComponent"
+        :tema="temaActivo"
+        @toggle-dark="onToggleDark"
+      />
+      <!-- rodapé do site, igual em todos os templates (o "Vendido por" está no rodapé de cada template: LojaRodapeInfo) -->
+      <SiteRodape :isDark="temaActivo?.darkMode !== false" />
+    </template>
 
     <div v-else class="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-400">
       <p class="text-2xl font-bold mb-2">Loja não encontrada</p>
@@ -44,12 +47,14 @@ import { useRoute } from 'vue-router'
 import api from '@/services/api'
 import { getTemplate, TEMPLATE_COMPONENTS } from '@/config/lojaTemplates'
 import { DEMO_ID, ativarLojaDemo } from '@/utils/demoLoja'
+import SiteRodape from '@/components/paginas/SiteRodape.vue'
 
 const FALLBACK_ID   = 'classico'
 const FALLBACK_TEMA = { id: FALLBACK_ID, corPrimaria: '#dc2626', corSecundaria: '#1c1c1e', darkMode: true }
 
 export default {
   name: 'LojaPublica',
+  components: { SiteRodape },
 
   setup () {
     const route             = useRoute()

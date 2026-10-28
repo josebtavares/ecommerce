@@ -269,6 +269,7 @@
           <button v-if="loja.termos_servico" @click="modalPolitica = 'termos'">Termos</button>
           <button v-if="loja.politica_privacidade" @click="modalPolitica = 'privacidade'">Privacidade</button>
         </nav>
+        <LojaRodapeInfo :loja="loja" :isDark="isDark" />
         <p class="bs-footer__copy">© {{ ano }} {{ loja.nome }}</p>
       </footer>
 
@@ -294,6 +295,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import { useLojaData } from '@/composables/useLojaData'
@@ -311,7 +313,7 @@ const LIMITE = 8
 export default {
   name: 'TemplateRestauranteBistro',
 
-  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
+  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

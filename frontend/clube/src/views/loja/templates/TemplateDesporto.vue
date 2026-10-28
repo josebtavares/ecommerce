@@ -301,6 +301,7 @@
             </nav>
             <span>© {{ ano }} {{ loja.nome }}</span>
           </div>
+          <LojaRodapeInfo :loja="loja" :isDark="isDark" />
         </div>
       </footer>
 
@@ -326,6 +327,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData } from '@/composables/useLojaData'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
@@ -354,7 +356,7 @@ function textoSobre (hex) {
 export default {
   name: 'TemplateDesporto',
 
-  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

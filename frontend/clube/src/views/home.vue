@@ -7,7 +7,6 @@
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
     <MultiCart ref="cart" :isDark="isDark" />
-    <PaginaInfoModal :slug="paginaAberta" :isDark="isDark" @close="paginaAberta = null" />
 
     <!-- Botão toggle dark/light — canto superior esquerdo, ao lado do hamburger -->
     <div class="fixed top-2 md:top-4 left-16 z-30 flex items-center gap-2">
@@ -327,16 +326,13 @@
           <StoreCatalog ref="catalogo" :isDark="isDark" :categorias="categoriasExistentes" @store-click="goToStore($event.id)" />
         </section>
 
-        <!-- ── FOOTER ── -->
-        <footer class="border-t py-12 px-6 md:px-12"
-                :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-200'">
-          <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <!-- logo here -->
-              <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="w-32 h-32 object-contain mb-3" />
-              <!-- <h3 class="text-lg font-bold mb-3" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Bendi</h3> -->
-              <p class="text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">A melhor plataforma para descobrir lojas e produtos incríveis.</p>
-            </div>
+        <!-- ── FOOTER (Suporte/Legal/Contactos/titular: components/paginas/SiteRodape.vue) ── -->
+        <SiteRodape :isDark="isDark">
+          <template #marca>
+            <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="w-32 h-32 object-contain mb-3" />
+            <p class="text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">A melhor plataforma para descobrir lojas e produtos incríveis.</p>
+          </template>
+          <template #colunas>
             <div>
               <h4 class="text-xs font-semibold uppercase tracking-wider mb-4"
                   :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">Explorar</h4>
@@ -345,22 +341,8 @@
                 <li @click="scrollToSection('produtos')" class="hover:text-red-500 cursor-pointer transition">Produtos</li>
               </ul>
             </div>
-            <div v-for="sec in seccoesRodape" :key="sec.key">
-              <h4 class="text-xs font-semibold uppercase tracking-wider mb-4"
-                  :class="isDark ? 'text-zinc-300' : 'text-zinc-600'">{{ sec.label }}</h4>
-              <ul class="space-y-2 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
-                <li v-for="p in sec.paginas" :key="p.slug">
-                  <button @click="paginaAberta = p.slug"
-                    class="hover:text-red-500 transition text-left">{{ p.titulo }}</button>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div class="max-w-7xl mx-auto mt-8 pt-8 border-t text-center text-sm"
-               :class="isDark ? 'border-zinc-800 text-zinc-500' : 'border-stone-200 text-zinc-400'">
-            © {{ new Date().getFullYear() }} Marketplace. Todos os direitos reservados.
-          </div>
-        </footer>
+          </template>
+        </SiteRodape>
       </main>
     </div>
   </div>
@@ -380,7 +362,7 @@ import StoreSlider     from '@/components/sliders/StoreSlider.vue'
 import ProductSlider   from '@/components/sliders/ProductSlider.vue'
 import StoreCatalog    from '@/components/catalog/StoreCatalog.vue'
 import HomeServicos    from '@/components/home/HomeServicos.vue'
-import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
+import SiteRodape      from '@/components/paginas/SiteRodape.vue'
 import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
 import HomeCategorias from '@/components/home/HomeCategorias.vue'
 import HomeBanners from '@/components/home/HomeBanners.vue'
@@ -393,7 +375,7 @@ import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'AppHome',
-  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, PaginaInfoModal,
+  components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, SiteRodape,
     HomeServicos,
                 HomeLojaDestaque, HomeCategorias, HomeBanners },
 
@@ -417,22 +399,10 @@ export default {
       sectionRefs: {},
       logoDefault,
       logoLight,
-      paginasRodape: [],
-      paginaAberta: null,
     }
   },
 
   computed: {
-    // Colunas "Suporte" e "Legal" do rodapé — só páginas activas no admin
-    seccoesRodape () {
-      return [
-        { key: 'suporte', label: 'Suporte' },
-        { key: 'legal',   label: 'Legal' },
-      ]
-        .map(s => ({ ...s, paginas: this.paginasRodape.filter(p => p.seccao === s.key).sort((a, b) => a.ordem - b.ordem) }))
-        .filter(s => s.paginas.length)
-    },
-
     selectedCategoriaLabel () {
       return this.categoriasExistentes.find(c => c.value === this.selectedCategoria)?.label || ''
     },
@@ -442,10 +412,7 @@ export default {
     const user = localStorage.getItem('user')
     this.user = user ? JSON.parse(user) : {}
 
-    await Promise.all([
-      this.fetchHome(),
-      this.fetchPaginasRodape(),
-    ])
+    await this.fetchHome()
   },
 
   watch: {
@@ -457,12 +424,6 @@ export default {
   methods: {
     goToStore (id) { this.sidebarAberta = false; this.$router.push(`/loja/${id}`) },
 
-    async fetchPaginasRodape () {
-      try {
-        const { data } = await api.get('/app/paginas/')
-        this.paginasRodape = data || []
-      } catch (e) { this.paginasRodape = [] }
-    },
     openProduct (produto) { this.selectedProduct = produto; this.selectedLoja = produto.loja },
     iconeCategoria,
 

@@ -285,6 +285,7 @@
             </nav>
             <span>© {{ ano }} {{ loja.nome }}</span>
           </div>
+          <LojaRodapeInfo :loja="loja" :isDark="isDark" />
         </div>
       </footer>
 
@@ -310,6 +311,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import { useLojaData } from '@/composables/useLojaData'
@@ -325,7 +327,7 @@ import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 export default {
   name: 'TemplateVibrante',
 
-  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
+  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

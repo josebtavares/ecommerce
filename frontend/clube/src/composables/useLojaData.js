@@ -39,12 +39,8 @@ export function useLojaData () {
   const soServicos = computed(() => totalProdutos.value === 0 && !!loja.value?.tem_servicos)
   const totalServicos = computed(() => loja.value?.total_servicos || 0)
 
-  const temFooter = computed(() =>
-    loja.value?.politica_devolucao ||
-    loja.value?.termos_servico ||
-    loja.value?.politica_privacidade ||
-    metodosPagamento.value.length > 0
-  )
+  // o rodapé da loja leva sempre o "Vendido por" (LojaRodapeInfo)
+  const temFooter = computed(() => !!loja.value)
 
   // Secções "Por tipo" e "Por categoria" — só metadados e contagens; cada template pede
   // os produtos de cada grupo página a página (components/produtos/ProdutosPaginados.vue).

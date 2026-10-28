@@ -46,6 +46,12 @@ const routes = [
         component: () => import('@/views/RecuperarSenha.vue'),
     },
     {
+        // páginas institucionais com endereço próprio (links do rodapé e do checkout; a SISP pede-os)
+        path: '/:slug(ajuda|contacto|faq|termos|privacidade|devolucoes|entregas)',
+        name: 'Pagina',
+        component: () => import('@/views/PaginaPublica.vue'),
+    },
+    {
         path: '/Home',
         name: 'Home',
         component: App,

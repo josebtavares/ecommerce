@@ -293,6 +293,20 @@
             </p>
           </div>
 
+          <!-- Quem vende (contactos e políticas da loja) -->
+          <div v-if="loja" class="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+            <LojaVendedor :loja="loja" :isDark="true" compacto />
+          </div>
+
+          <!-- Aceitar os termos (fica registado na encomenda: termos_aceites_em) -->
+          <label class="mt-4 flex items-start gap-2.5 text-xs text-zinc-400 leading-relaxed cursor-pointer" data-teste="aceitar-termos">
+            <input v-model="aceitaTermos" type="checkbox" class="mt-0.5 w-4 h-4 flex-shrink-0 accent-red-600" />
+            <span>
+              Li e aceito os <router-link to="/termos" target="_blank" class="font-semibold text-red-400 hover:underline">Termos de Serviço</router-link>
+              e a <router-link to="/devolucoes" target="_blank" class="font-semibold text-red-400 hover:underline">Política de devoluções</router-link>.
+            </span>
+          </label>
+
           <!-- Erro -->
           <p v-if="erro" class="text-xs text-red-400 mt-3 bg-red-500/10 rounded-lg px-3 py-2">{{ erro }}</p>
 
@@ -321,6 +335,9 @@
         </div>
       </div>
     </div>
+
+    <!-- página escrita em escuro: no tema claro o tema-claro.css troca as cores (utils/tema.js) -->
+    <SiteRodape :isDark="true" :temaEscuro="isDark" />
   </div>
 </template>
 
@@ -334,6 +351,8 @@ import { quandoAbre } from '@/components/horario/horario'
 import EscolherHora from '@/components/horario/EscolherHora.vue'
 import { temaPainel } from '@/utils/tema'
 import BotaoTema from '@/components/BotaoTema.vue'
+import LojaVendedor from '@/components/loja/LojaVendedor.vue'
+import SiteRodape from '@/components/paginas/SiteRodape.vue'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
@@ -359,7 +378,7 @@ const ENDPOINT_PAGAMENTO = {
 export default {
   name: 'CheckoutPage',
   mixins: [temaPainel],
-  components: { BotaoTema, EscolherHora },
+  components: { BotaoTema, EscolherHora, LojaVendedor, SiteRodape },
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()
@@ -372,6 +391,7 @@ export default {
       loading:        true,
       loadingMetodos: false,
       loja:           null,
+      aceitaTermos:   false,
       itens:          [],
       opcoesEntrega:  [],
       metodosPagamento: [],   // carregados da API
@@ -412,6 +432,7 @@ export default {
       if (this.lojaFechada && !this.aceitaAgendar) return false
       if (this.agendarPara === '') return false            // escolheu "dia e hora" mas ainda não a hora
       if (!this.tipoEntrega || this.itens.length === 0 || !this.metodoPagamento) return false
+      if (!this.aceitaTermos) return false
       if (this.tipoEntrega === 'entrega') {
         if (!this.opcaoEntregaId) return false
         if (!this.moradaEntrega.trim()) return false
@@ -503,6 +524,7 @@ export default {
           tipo_entrega:   this.tipoEntrega,
           morada_entrega: this.tipoEntrega === 'entrega' ? this.moradaEntrega : '',
           notas:          this.notas,
+          aceita_termos:  this.aceitaTermos,
         }
         if (this.tipoEntrega === 'entrega' && this.opcaoEntregaId) {
           payload.opcao_entrega_id = this.opcaoEntregaId
