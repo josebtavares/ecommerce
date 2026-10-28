@@ -46,7 +46,8 @@ def avaliar(loja, com_produtos=False):
         else:
             completos += 1
     servicos_ok = False
-    if not completos:
+    cfg = getattr(loja, 'config_servicos', None)
+    if not completos and cfg and cfg.ativo:        # módulo desligado: os serviços não aparecem ao público
         from ..servicos.models import Servico
         servicos_ok = any(_servico_completo(s) for s in Servico.objects.filter(loja=loja, ativo=True, visivel=True))
 
