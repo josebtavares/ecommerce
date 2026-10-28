@@ -159,6 +159,11 @@
           </div>
         </section>
 
+        <ReembolsoPorConcluir v-else-if="r.estado === 'por_reembolsar' && r.por_concluir" :valor="r.valor_aprovado"
+          :erro="r.por_concluir.erro" :tentativas="r.por_concluir.tentativas" :proxima="r.por_concluir.proxima_tentativa"
+          :incerto="r.por_concluir.incerto" :podeTentar="r.por_concluir.pode_tentar"
+          :aEnviar="aEnviar" @tentar="acao('tentar_reembolso')" />
+
         <section v-else-if="r.estado === 'a_devolver'" class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
           <template v-if="!r.entregue_em">
             <p class="text-sm text-amber-100">
@@ -202,6 +207,7 @@ import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
+import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const props = defineProps({
@@ -246,7 +252,7 @@ const aviso = computed(() => {
     reembolsado: Number(x.valor_aprovado) > 0
       ? (x.metodo === 'abatido'
           ? `${formatarDinheiro(x.valor_aprovado)} descontados no valor a cobrar na entrega.`
-          : `Reembolsado ${formatarDinheiro(x.valor_aprovado)}` + (x.metodo === 'manual' ? ' — pagamento em dinheiro: devolve o valor ao cliente em mão.' : ' para o meio de pagamento do cliente.'))
+          : `Reembolsado ${formatarDinheiro(x.valor_aprovado)}` + (x.metodo === 'manual' ? ' — pagamento em dinheiro: devolve o valor ao cliente em mão.' : (x.metodo === 'externo' ? ' — devolução confirmada pela Bendi.' : ' para o meio de pagamento do cliente.')))
       : 'Cancelamento aceite — não havia nada pago.',
     recusado: x.decisao_admin ? 'A equipa da Bendi recusou o pedido.' : 'O pedido foi recusado. O cliente ainda pode pedir à Bendi para analisar.',
     cancelado: 'O cliente desistiu do pedido.',
@@ -277,10 +283,14 @@ async function acao (nome, extra = {}) {
     r.value = data
     aRecusar.value = false
     motivoRecusa.value = ''
+    if (nome === 'tentar_reembolso' && data.estado === 'por_reembolsar') {
+      toast.error('O pagamento online voltou a recusar. ' + (data.por_concluir?.proxima_tentativa ? 'Tentamos de novo sozinhos.' : 'A equipa da Bendi vai tratar disso.'))
+      return
+    }
     toast.success({
       reembolsado: 'Reembolso feito.', proposta: 'Proposta enviada ao cliente.', aguarda_produto: 'Aceite — à espera do produto.',
       a_devolver: data.entregue_em ? 'Registado — o cliente vai confirmar.' : 'Aceite — devolve o dinheiro em mão.',
-      recusado: 'Pedido recusado.',
+      recusado: 'Pedido recusado.', por_reembolsar: 'Aceite — o pagamento online ainda não devolveu; tentamos de novo sozinhos.',
     }[data.estado] || 'Feito.')
     emit('alterado')
   } catch (e) {

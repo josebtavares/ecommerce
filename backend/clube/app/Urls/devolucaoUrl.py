@@ -19,5 +19,8 @@ urlpatterns = [
     # Bendi
     path('admin/reembolsos/',                     v.lista_admin,   name='reembolso-lista-admin'),
     path('admin/reembolsos/metricas/',            v.metricas_admin, name='reembolso-metricas-admin'),
+    path('admin/reembolsos/marcacoes/',           v.marcacoes_por_concluir_admin, name='reembolso-marcacoes-admin'),
+    path('admin/reembolsos/marcacoes/<int:id>/',  v.marcacao_reembolso_admin, name='reembolso-marcacao-admin'),
     path('admin/reembolsos/<int:id>/decidir/',    v.decidir_admin, name='reembolso-decidir'),
+    path('admin/reembolsos/<int:id>/reembolso/',  v.reembolso_admin, name='reembolso-admin-reembolso'),
 ]

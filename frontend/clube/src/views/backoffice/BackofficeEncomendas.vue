@@ -418,7 +418,7 @@ import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
 import PausaLoja from '@/components/horario/PausaLoja.vue'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
-import { ATIVOS } from '@/utils/reembolsos'
+import { EM_CURSO } from '@/utils/reembolsos'
 import FaturaEncomenda from '@/components/fiscal/FaturaEncomenda.vue'
 import { ESTADOS_FATURAVEIS } from '@/utils/fiscal'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
@@ -605,7 +605,7 @@ export default {
     // ── Artigo esgotado ───────────────────────────────────────
     podeEsgotado (enc) {
       const r = enc.reembolso
-      return ['pago', 'preparando'].includes(enc.status) && !(r && ATIVOS.includes(r.estado))
+      return ['pago', 'preparando'].includes(enc.status) && !(r && EM_CURSO.includes(r.estado))
     },
     pagoDigital (enc) {
       return ['aprovado', 'reembolsado_parcial'].includes(this.detalhes[enc.id]?.pagamento_status)

@@ -210,6 +210,7 @@ const aviso = computed(() => {
     a_devolver: x.entregue_em
       ? `A loja diz que te devolveu ${formatarDinheiro(x.valor_aprovado)} em mão. Recebeste? Se não disseres nada até ${dataHora(x.prazo_resposta)}, fica confirmado.`
       : `Pagaste em dinheiro: a loja vai devolver-te ${formatarDinheiro(x.valor_aprovado)} em mão (até ${dataHora(x.prazo_resposta)}). Combina pelas mensagens.`,
+    por_reembolsar: `O reembolso de ${formatarDinheiro(x.valor_aprovado)} foi aceite, mas houve um atraso a processá-lo. Estamos a tratar disso — não precisas de fazer nada.`,
     aguarda_produto: `Devolve o produto à loja ${x.loja_nome}. Combina a devolução pelas mensagens — o reembolso é feito quando a loja o receber.` +
                      (x.motivo === 'mudei_ideias' ? ' O envio de volta é por tua conta.' : ''),
     recusado: x.decisao_admin ? 'A equipa da Bendi analisou o pedido e recusou-o.'

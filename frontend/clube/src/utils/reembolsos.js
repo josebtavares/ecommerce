@@ -7,12 +7,15 @@ export const ESTADOS = {
   em_disputa:      { label: 'Em análise pela Bendi',    cor: 'purple' },
   aguarda_produto: { label: 'A aguardar o produto',     cor: 'indigo' },
   a_devolver:      { label: 'A devolver em mão',        cor: 'amber'  },
+  por_reembolsar:  { label: 'Reembolso a processar',    cor: 'amber'  },   // aceite; o pagamento online ainda não devolveu
   reembolsado:     { label: 'Reembolsado',              cor: 'green'  },
   recusado:        { label: 'Recusado',                 cor: 'red'    },
   cancelado:       { label: 'Desistiu',                 cor: 'zinc'   },
 }
 
 export const ATIVOS = ['pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver']
+// em curso na encomenda (não deixa abrir outro pedido) — por_reembolsar já está decidido, falta o dinheiro sair
+export const EM_CURSO = [...ATIVOS, 'por_reembolsar']
 
 // classes completas (o Tailwind só gera as que aparecem escritas por inteiro)
 const CORES = {
@@ -32,6 +35,7 @@ export function corEstado (estado) {
 export function labelEstado (estado, valorAprovado, metodo) {
   // artigo esgotado numa encomenda ainda por pagar: não houve dinheiro devolvido, baixou o valor a pagar
   if (estado === 'reembolsado' && metodo === 'abatido') return 'Descontado'
+  if (estado === 'reembolsado' && metodo === 'externo') return 'Devolvido pela Bendi'
   // cancelamento aceite sem nada pago (dinheiro na entrega) não é um "reembolso"
   if (estado === 'reembolsado' && valorAprovado !== undefined && Number(valorAprovado) === 0) return 'Cancelamento aceite'
   return ESTADOS[estado]?.label || estado

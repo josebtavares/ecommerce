@@ -253,6 +253,9 @@ export default {
     },
   },
 
+  // a secção aparece antes de a loja (e as permissões) carregar: soAgenda começa true e só depois passa a false
+  watch: { soAgenda (so) { if (!so && !this.dados) this.carregar() } },
+
   created () { if (!this.soAgenda) this.carregar() },
 
   methods: {

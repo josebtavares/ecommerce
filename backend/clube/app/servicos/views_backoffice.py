@@ -792,6 +792,7 @@ def marcacao_acao(request, loja_id, marcacao_id):
       { acao: 'notas', notas_internas }
       { acao: 'propor_preco', valor, motivo? }   (o cliente aceita ou recusa na conversa)
       { acao: 'concluir', preco_final?, motivo? } · { acao: 'falta' }   (também o profissional da marcação)
+      { acao: 'tentar_reembolso' }   (devolução recusada pelo fornecedor — reembolso_por_concluir)
     """
     loja = get_object_or_404(Loja, id=loja_id)
     membro = _get_membro(request, loja)
@@ -861,6 +862,11 @@ def marcacao_acao(request, loja_id, marcacao_id):
             m = ops.concluir(m, por, preco, motivo, membro=membro)
         elif acao == 'falta':
             m = ops.marcar_falta(m, por)
+        elif acao == 'tentar_reembolso':       # o fornecedor recusou a devolução: pedir outra vez
+            from django_ratelimit.core import is_ratelimited
+            if is_ratelimited(request=request, group='reembolso_tentar', key='user', rate='5/m', method='POST', increment=True):
+                return _erro('Demasiadas tentativas — espera um minuto.', 429)
+            m = ops.tentar_reembolso(m)
         elif acao == 'notas':
             notas, e = _texto(d, 'notas_internas', 500)
             if e:
