@@ -2208,6 +2208,8 @@ class ModeracaoUtilizador(models.Model):
     ate        = models.DateTimeField(null=True, blank=True)
     feito_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     criado_em  = models.DateTimeField(auto_now_add=True)
+    # ban: as lojas e POS do dono que o ban suspendeu e como estavam antes (levantar o ban repõe-nos)
+    afetados   = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ['-criado_em', '-id']

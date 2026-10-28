@@ -6,6 +6,9 @@ Suspender, banir e reactivar contas (Admin → Utilizadores).
   por isso não dá para criar outra conta com ele, nem pelo Google.
 - Cada acção fica em ModeracaoUtilizador (quem, quando, porquê), termina as sessões abertas
   e avisa o utilizador por email.
+- banir suspende as lojas e os POS do dono (motivo MOTIVO_BAN; o motivo do ban não aparece na
+  loja, que os gestores vêem). O registo do ban guarda como estavam; sair do ban repõe-nos.
+  As encomendas pagas continuam a ser tratadas pelos gestores; as por pagar são canceladas.
 
 Não há tarefas agendadas: uma suspensão cujo fim já passou levanta-se quando a conta volta a
 ser usada (conta_ativa, login) ou quando o admin abre a lista (levantar_expiradas).
@@ -21,6 +24,7 @@ from django.utils import timezone
 log = logging.getLogger(__name__)
 
 ACOES = ('suspender', 'banir', 'levantar')
+MOTIVO_BAN = 'Conta do dono banida'
 
 
 def fim_do_dia(dia):
@@ -62,6 +66,63 @@ def mensagem_bloqueio(utilizador):
     return 'A tua conta não está activa. Contacta o suporte.'
 
 
+def dono_banido(dono_id):
+    from ..models import Utilizador
+    return Utilizador.objects.filter(pk=dono_id, status='banido').exists()
+
+
+def _suspender_do_dono(alvo):
+    """Suspende as lojas e os POS do dono banido. Devolve como estavam (para os repor)."""
+    from ..models import Loja
+    from ..pos.models import ConfiguracaoPOS
+    lojas, pos = [], []
+    for loja in Loja.objects.filter(dono=alvo).order_by('id'):
+        lojas.append({'id': loja.id, 'nome': loja.nome, 'estado': loja.estado, 'motivo': loja.estado_motivo})
+        # também as já suspensas (ex.: falta de pagamento): com o motivo do ban, pagar não as reabre
+        loja.mudar_estado('suspensa', MOTIVO_BAN)
+    for p in ConfiguracaoPOS.objects.select_for_update().filter(dono=alvo).order_by('id'):
+        pos.append({'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso, 'motivo': p.suspenso_motivo})
+        p.suspenso, p.suspenso_motivo = True, MOTIVO_BAN
+        p.suspenso_em = p.suspenso_em or timezone.now()
+        p.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em', 'atualizado_em'])
+    return {'lojas': lojas, 'pos': pos}
+
+
+def _repor_do_dono(registo):
+    """Sai do ban: cada loja/POS que o ban suspendeu volta a como estava. Os que o admin já
+    mudou entretanto ficam como estão. A subscrição manda no fim: paga durante o ban → volta
+    activa; ficou por pagar durante o ban → fica suspensa por falta de pagamento."""
+    from ..models import Loja, Subscricao
+    from ..pos.models import ConfiguracaoPOS
+    from .subscricoes import MOTIVO_SUSPENSAO
+    por_pagar = f'{MOTIVO_SUSPENSAO}.'
+    for a in registo.afetados.get('lojas', []):
+        loja = Loja.objects.filter(pk=a['id'], estado='suspensa', estado_motivo=MOTIVO_BAN).first()
+        if not loja:
+            continue
+        estado, motivo = a['estado'], a['motivo']
+        sub_suspensa = Subscricao.objects.filter(loja=loja, estado='suspensa').exists()
+        if estado == 'suspensa' and motivo.startswith(MOTIVO_SUSPENSAO) and not sub_suspensa:
+            estado, motivo = 'ativa', ''
+        elif estado == 'ativa' and sub_suspensa:
+            estado, motivo = 'suspensa', por_pagar
+        loja.mudar_estado(estado, motivo)
+    for a in registo.afetados.get('pos', []):
+        p = ConfiguracaoPOS.objects.select_for_update().filter(pk=a['id'], suspenso=True, suspenso_motivo=MOTIVO_BAN).first()
+        if not p:
+            continue
+        suspenso, motivo = a['suspenso'], a['motivo']
+        sub_suspensa = Subscricao.objects.filter(pos=p, estado='suspensa').exists()
+        if suspenso and motivo.startswith(MOTIVO_SUSPENSAO) and not sub_suspensa:
+            suspenso = False
+        elif not suspenso and sub_suspensa:
+            suspenso, motivo = True, por_pagar
+        p.suspenso, p.suspenso_motivo = suspenso, (motivo if suspenso else '')
+        if not suspenso:
+            p.suspenso_em = None
+        p.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em', 'atualizado_em'])
+
+
 def pode_moderar(quem, alvo, acao):
     """Devolve a razão para recusar, ou None. `quem` é o Utilizador do admin."""
     if alvo.user_id == quem.user_id:
@@ -71,6 +132,8 @@ def pode_moderar(quem, alvo, acao):
         return 'Só o Super Admin pode moderar contas da equipa de administração.'
     if (acao == 'banir' or alvo.status == 'banido') and not superadmin:
         return 'Só o Super Admin pode banir ou levantar um ban.'
+    if acao == 'banir' and alvo.status == 'banido':
+        return 'A conta já está banida.'
     return None
 
 
@@ -80,6 +143,13 @@ def moderar(alvo, acao, por, motivo='', ate=None):
     from ..autenticacao import terminar_sessoes
     motivo = (motivo or '').strip()[:500]
     with transaction.atomic():
+        afetados = {}
+        if alvo.status == 'banido' and acao != 'banir':
+            ultimo = ModeracaoUtilizador.objects.filter(utilizador=alvo, acao='banir').first()
+            if ultimo:
+                _repor_do_dono(ultimo)
+        if acao == 'banir':
+            afetados = _suspender_do_dono(alvo)
         if acao == 'suspender':
             alvo.status, alvo.suspenso_ate, alvo.motivo_estado = 'suspenso', ate, motivo
         elif acao == 'banir':
@@ -88,7 +158,8 @@ def moderar(alvo, acao, por, motivo='', ate=None):
             alvo.status, alvo.suspenso_ate, alvo.motivo_estado = 'ativo', None, ''
         alvo.save(update_fields=['status', 'suspenso_ate', 'motivo_estado', 'data_atualizacao'])
         registo = ModeracaoUtilizador.objects.create(
-            utilizador=alvo, acao=acao, motivo=motivo, ate=ate if acao == 'suspender' else None, feito_por=por)
+            utilizador=alvo, acao=acao, motivo=motivo, ate=ate if acao == 'suspender' else None, feito_por=por,
+            afetados=afetados)
         transaction.on_commit(lambda: _avisar(alvo, acao, motivo, ate))
     if acao in ('suspender', 'banir'):
         terminar_sessoes(alvo.user)

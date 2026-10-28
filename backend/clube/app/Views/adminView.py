@@ -214,6 +214,11 @@ def admin_loja_gerir(request, loja_id):
             msg = f'Não é possível "{acao}" uma loja no estado "{loja.get_estado_display()}".'
         return Response({'detail': msg, 'estado': loja.estado}, status=status.HTTP_400_BAD_REQUEST)
 
+    from ..utils.moderacao import dono_banido
+    if destino == 'ativa' and dono_banido(loja.dono_id):
+        return Response({'detail': 'O dono desta loja está banido — levanta o ban em Utilizadores e a loja volta '
+                                   'ao estado em que estava.'}, status=status.HTTP_400_BAD_REQUEST)
+
     # suspensa por falta de pagamento: reactivar aqui deixava a subscrição presa em "suspensa"
     from ..utils.subscricoes import MOTIVO_SUSPENSAO
     if acao == 'reativar' and loja.estado_motivo.startswith(MOTIVO_SUSPENSAO):
@@ -517,9 +522,13 @@ def _ficha_utilizador(u, request):
         'suspenso_ate_txt': data_curta(u.suspenso_ate) if u.suspenso_ate else '',
         'data_criacao': u.data_criacao, 'ultimo_login': u.user.last_login,
         'total_encomendas': u.encomendas.count(),
-        'lojas': [{'id': l.id, 'nome': l.nome, 'estado': l.estado}
+        # em curso: o que fica por resolver quando o dono é banido (as lojas ficam suspensas)
+        'lojas': [{'id': l.id, 'nome': l.nome, 'estado': l.estado, 'estado_motivo': l.estado_motivo,
+                   'encomendas_em_curso': l.encomendas.filter(status__in=('pago', 'preparando', 'enviado')).count(),
+                   'marcacoes_futuras': l.marcacoes.filter(estado__in=('pendente', 'confirmada'), inicio__gte=now()).count()}
                   for l in u.lojas.order_by('nome')],
-        'pos': [{'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso}
+        'pos': [{'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso, 'suspenso_motivo': p.suspenso_motivo,
+                 'contas_abertas': p.contas.filter(status='aberta').count()}
                 for p in ConfiguracaoPOS.objects.filter(dono=u).order_by('nome')],
         'moderacoes': [{
             'id': m.id, 'acao': m.acao, 'acao_nome': m.get_acao_display(), 'motivo': m.motivo,

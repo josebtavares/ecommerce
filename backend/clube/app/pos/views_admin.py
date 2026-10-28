@@ -274,6 +274,10 @@ def admin_pos_reativar(request, pos_id):
     pos = get_object_or_404(ConfiguracaoPOS.objects.select_for_update(), id=pos_id)
     if not pos.suspenso:
         return Response({'detail': 'O POS não está suspenso.'}, status=status.HTTP_400_BAD_REQUEST)
+    from ..utils.moderacao import dono_banido
+    if dono_banido(pos.dono_id):
+        return Response({'detail': 'O dono deste POS está banido — levanta o ban em Utilizadores e o POS volta '
+                                   'ao estado em que estava.'}, status=status.HTTP_400_BAD_REQUEST)
     from ..utils.subscricoes import MOTIVO_SUSPENSAO
     if pos.suspenso_motivo.startswith(MOTIVO_SUSPENSAO):
         # reactivar à mão deixava o POS a funcionar sem pagar (o ciclo já não volta a suspendê-lo)

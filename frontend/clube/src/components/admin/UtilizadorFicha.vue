@@ -62,17 +62,26 @@
             </div>
           </div>
 
-          <div v-if="u.lojas.length || u.pos.length" class="space-y-1.5">
+          <div v-if="u.lojas.length || u.pos.length" class="space-y-1.5" data-teste="lojas-pos">
             <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Lojas e POS</p>
-            <div class="flex flex-wrap gap-2">
-              <router-link v-for="l in u.lojas" :key="'l' + l.id" :to="`/admin/lojas/${l.id}`"
-                class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition">
-                {{ l.nome }} <span class="text-zinc-500">· {{ l.estado }}</span>
-              </router-link>
-              <span v-for="p in u.pos" :key="'p' + p.id" class="px-2.5 py-1 rounded-lg bg-zinc-800 text-xs text-zinc-300">
-                POS {{ p.nome }} <span class="text-zinc-500">· {{ p.suspenso ? 'suspenso' : 'activo' }}</span>
-              </span>
+            <router-link v-for="l in u.lojas" :key="'l' + l.id" :to="`/admin/lojas/${l.id}`" data-teste="loja-dono"
+              class="flex items-center gap-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 px-3 py-2 transition">
+              <font-awesome-icon :icon="['fas', 'store']" class="text-zinc-500 text-xs" />
+              <span class="text-sm text-zinc-200 flex-1 min-w-0 truncate">{{ l.nome }}</span>
+              <span v-if="porResolver(l)" class="text-[11px] text-amber-400">{{ porResolver(l) }}</span>
+              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', ESTADO_LOJA[l.estado]?.classe]">{{ ESTADO_LOJA[l.estado]?.label || l.estado }}</span>
+            </router-link>
+            <div v-for="p in u.pos" :key="'p' + p.id" data-teste="pos-dono"
+                 class="flex items-center gap-3 rounded-xl bg-zinc-800/50 px-3 py-2">
+              <font-awesome-icon :icon="['fas', 'cash-register']" class="text-zinc-500 text-xs" />
+              <span class="text-sm text-zinc-200 flex-1 min-w-0 truncate">POS {{ p.nome }}</span>
+              <span v-if="p.contas_abertas" class="text-[11px] text-amber-400">{{ p.contas_abertas }} conta{{ p.contas_abertas !== 1 ? 's' : '' }} aberta{{ p.contas_abertas !== 1 ? 's' : '' }}</span>
+              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', p.suspenso ? 'bg-red-500/15 text-red-400' : 'bg-green-500/15 text-green-400']">{{ p.suspenso ? 'Suspenso' : 'Activo' }}</span>
             </div>
+            <p v-if="u.status === 'banido' && temPorResolver" class="text-xs text-amber-400" data-teste="aviso-por-resolver">
+              As lojas estão suspensas, mas as encomendas pagas e as marcações marcadas têm de ser concluídas ou reembolsadas —
+              os gestores da loja continuam a poder tratá-las; abre a loja para ver.
+            </p>
           </div>
 
           <!-- acções -->
@@ -92,6 +101,15 @@
             <div v-else class="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-3">
               <p class="text-sm font-bold text-zinc-100">{{ TITULOS[acao] }}</p>
               <p class="text-xs text-zinc-500">{{ AJUDA[acao] }}</p>
+              <div v-if="acao === 'banir' && (u.lojas.length || u.pos.length)" data-teste="aviso-ban"
+                   class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                Vão ser suspensos: {{ [...u.lojas.map(l => `loja ${l.nome}`), ...u.pos.map(p => `POS ${p.nome}`)].join(', ') }}.
+                Saem do site e deixam de aceitar encomendas e marcações; as por pagar são canceladas.
+                Ao levantar o ban voltam ao estado em que estavam.
+              </div>
+              <div v-if="acao === 'levantar' && u.status === 'banido' && (u.lojas.length || u.pos.length)" class="text-xs text-zinc-500">
+                As lojas e os POS que o ban suspendeu voltam ao estado em que estavam.
+              </div>
               <div v-if="acao !== 'levantar'">
                 <label class="text-xs text-zinc-500 mb-1 block">Motivo (o utilizador recebe-o por email)</label>
                 <textarea v-model="motivo" rows="2" maxlength="500" data-teste="motivo"
@@ -147,6 +165,12 @@ const AJUDA = {
   banir: 'Permanente: só o Super Admin levanta. O email fica bloqueado para contas novas.',
   levantar: 'A conta volta a funcionar e a pessoa recebe um email a avisar.',
 }
+const ESTADO_LOJA = {
+  ativa: { label: 'Activa', classe: 'bg-green-500/15 text-green-400' },
+  pendente: { label: 'Pendente', classe: 'bg-sky-500/15 text-sky-400' },
+  fechada: { label: 'Fechada', classe: 'bg-zinc-700 text-zinc-300' },
+  suspensa: { label: 'Suspensa', classe: 'bg-red-500/15 text-red-400' },
+}
 const CORES = {
   suspender: 'bg-amber-500/15 text-amber-400', banir: 'bg-red-500/15 text-red-400',
   levantar: 'bg-green-500/15 text-green-400', expirou: 'bg-zinc-700 text-zinc-300',
@@ -161,7 +185,7 @@ export default {
     return {
       u: null, acao: null, motivo: '', ate: '', erro: '', aGuardar: false,
       souSuperadmin: eu.role_admin === 'superadmin', meuId: eu.id,
-      TITULOS, AJUDA, CORES,
+      TITULOS, AJUDA, CORES, ESTADO_LOJA,
     }
   },
   computed: {
@@ -173,6 +197,7 @@ export default {
     // a própria conta e contas da equipa (sem ser superadmin) não se moderam aqui (o servidor também recusa)
     podeMexer () { return this.u && this.u.id !== this.meuId && (this.souSuperadmin || !this.u.is_staff) },
     hoje () { return new Date().toLocaleDateString('sv') },
+    temPorResolver () { return this.u.lojas.some(l => this.porResolver(l)) },
   },
   watch: { id: { handler: 'carregar', immediate: true } },
   methods: {
@@ -184,6 +209,12 @@ export default {
       } catch (e) {
         if (e.response?.status === 404) this.$emit('naoExiste')
       }
+    },
+    porResolver (l) {
+      const partes = []
+      if (l.encomendas_em_curso) partes.push(`${l.encomendas_em_curso} encomenda${l.encomendas_em_curso !== 1 ? 's' : ''} em curso`)
+      if (l.marcacoes_futuras) partes.push(`${l.marcacoes_futuras} marcaç${l.marcacoes_futuras !== 1 ? 'ões' : 'ão'}`)
+      return partes.join(' · ')
     },
     abrir (acao) { this.acao = acao; this.motivo = ''; this.ate = ''; this.erro = '' },
     async confirmar () {
