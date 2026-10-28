@@ -235,6 +235,36 @@
                   </span>
                 </div>
               </section>
+
+              <!-- Ver o POS só para leitura (super-admin) — backend utils/ver_loja.py -->
+              <section v-if="podeVerPos" class="bg-zinc-900 rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-ver-pos">
+                <p class="text-xs font-bold text-zinc-400">
+                  <font-awesome-icon :icon="['fas', 'eye']" class="mr-1.5" />Dashboard do POS
+                </p>
+                <p class="text-xs text-zinc-500">
+                  Abre o POS como o dono o vê, noutro separador e só para leitura (vendas, faturas, turnos, relatórios)
+                  — também com o POS suspenso ou o dono banido. Cada acesso fica registado; dura 2 horas.
+                </p>
+                <button @click="verPOS" :disabled="aAbrirPOS" data-teste="btn-ver-pos"
+                  class="w-full py-2.5 rounded-xl text-sm font-bold transition bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 disabled:opacity-50">
+                  {{ aAbrirPOS ? 'A abrir…' : 'Ver POS (só leitura)' }}
+                  <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
+                </button>
+                <div v-if="acessosAdmin.length" class="space-y-1">
+                  <p class="text-[11px] text-zinc-500">Últimos acessos</p>
+                  <p v-for="a in acessosAdmin" :key="a.id" class="text-[11px] text-zinc-400" data-teste="acesso-admin">
+                    {{ a.quando }} · {{ a.admin }}
+                  </p>
+                </div>
+              </section>
+
+              <!-- Exportar dados (super-admin) — também os POS sem loja -->
+              <section v-if="podeExportar" class="bg-zinc-900 rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-exportar-pos">
+                <p class="text-xs font-bold text-zinc-400">
+                  <font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1.5" />Exportar dados
+                </p>
+                <ExportacoesLoja :base="`/app/admin/pos/${d.id}/exportacoes/`" pos />
+              </section>
             </template>
           </div>
 
@@ -270,6 +300,7 @@ import api from '@/services/api'
 import { toast } from 'vue3-toastify'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import { passwordValida } from '@/utils/password'
+import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 
 const MODOS = {
   standalone: { label: 'Standalone', cls: 'bg-purple-500/15 text-purple-300' },
@@ -284,7 +315,12 @@ const ESTADOS = {
 
 export default {
   name: 'AdminPOS',
-  components: { PasswordForca },
+  components: { PasswordForca, ExportacoesLoja },
+
+  props: {
+    podeExportar: { type: Boolean, default: false },   // permissão exportar_lojas (super-admin)
+    podeVerPos: { type: Boolean, default: false },     // permissão ver_backoffice_lojas (super-admin)
+  },
 
   data () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -303,6 +339,7 @@ export default {
       aberto: null, d: null, loadingDetalhe: false,
       aSuspender: false, motivo: '', acao: false,
       pwMembro: null, novaPw: '', erroPw: '',
+      acessosAdmin: [], aAbrirPOS: false,
     }
   },
 
@@ -358,7 +395,34 @@ export default {
       this.aberto = p
       this.aSuspender = false
       this.pwMembro = null
+      this.carregarAcessos(p)
       await this.carregarDetalhe()
+    },
+
+    async carregarAcessos (p) {
+      this.acessosAdmin = []
+      if (!this.podeVerPos) return
+      try {
+        const { data } = await api.get(`/app/admin/pos/${p.id}/ver/`)
+        if (this.aberto?.id === p.id) this.acessosAdmin = data.acessos
+      } catch { /* a lista não é essencial */ }
+    },
+
+    async verPOS () {
+      // o separador abre-se já (no clique), senão o browser bloqueia-o como pop-up
+      const separador = window.open('', '_blank')
+      const p = this.aberto
+      this.aAbrirPOS = true
+      try {
+        const { data } = await api.post(`/app/admin/pos/${p.id}/ver/`)
+        const destino = `/pos/dashboard#ver_admin=${encodeURIComponent(data.token)}`
+        if (separador) { separador.opener = null; separador.location = destino }
+        else window.location.href = destino
+        this.carregarAcessos(p)
+      } catch (e) {
+        separador?.close()
+        toast.error(e.response?.data?.detail || 'Não foi possível abrir o POS.')
+      } finally { this.aAbrirPOS = false }
     },
 
     async carregarDetalhe () {

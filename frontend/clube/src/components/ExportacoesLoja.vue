@@ -1,8 +1,14 @@
-<!-- ExportacoesLoja.vue — exportar os dados de uma loja (ZIP com CSV). Usado no backoffice (dono) e no admin (Lojas).
-     base: '/app/loja/<id>/exportacoes/' ou '/app/admin/lojas/<id>/exportacoes/' — Views/exportacaoLojaView.py -->
+<!-- ExportacoesLoja.vue — exportar os dados de uma loja ou de um POS (ZIP com CSV). Usado no backoffice (dono)
+     e no admin (Lojas, POS). base: '/app/loja/<id>/exportacoes/', '/app/admin/lojas/<id>/exportacoes/' ou
+     '/app/admin/pos/<id>/exportacoes/' (pos=true) — Views/exportacaoLojaView.py -->
 <template>
   <div class="space-y-3" data-teste="exportacoes-loja">
-    <p class="text-xs text-zinc-400 leading-relaxed">
+    <p v-if="pos" class="text-xs text-zinc-400 leading-relaxed">
+      Um ficheiro ZIP com os dados do POS em folhas de cálculo (abrem no Excel): configuração, equipa, mesas,
+      produtos próprios e stock, vendas, turnos de caixa e o arquivo fiscal com as faturas.
+      Serve para guardar e consultar — não se importa de volta. Fica disponível {{ dias }} dias.
+    </p>
+    <p v-else class="text-xs text-zinc-400 leading-relaxed">
       Um ficheiro ZIP com os dados da loja em folhas de cálculo (abrem no Excel): produtos e stock, encomendas,
       clientes, devoluções, avaliações, serviços e marcações, vendas do POS e o arquivo fiscal com as faturas.
       Serve para guardar e consultar — não se importa de volta. Fica disponível {{ dias }} dias.
@@ -67,6 +73,7 @@ export default {
   components: { PaginacaoLista },
   props: {
     base: { type: String, required: true },
+    pos: { type: Boolean, default: false },
   },
   data () {
     return {

@@ -40,7 +40,7 @@
 
           <!-- Botão configuração (só para conta principal) -->
           <button
-            v-if="!isMembro"
+            v-if="!isMembro && !soLeitura"
             type="button"
             @click="abrirConfiguracao"
             class="rounded-2xl p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
@@ -64,6 +64,7 @@
           </button>
 
           <button
+            v-if="!soLeitura"
             type="button"
             @click="logout"
             class="rounded-2xl p-2 text-red-600 transition hover:bg-red-50"
@@ -110,6 +111,24 @@
 
     <!-- Conteúdo -->
     <main class="mx-auto max-w-7xl p-4 sm:p-6">
+      <!-- Admin a ver o POS (Admin → POS → Ver POS): o servidor recusa qualquer alteração -->
+      <section v-if="soLeitura || verAdminExpirou" data-teste="banner-ver-admin" role="status"
+               class="mb-5 flex items-start gap-3 rounded-[2rem] border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800 shadow-sm">
+        <font-awesome-icon :icon="['fas', 'eye']" class="mt-0.5 h-4 w-4 shrink-0" />
+        <div class="min-w-0 flex-1">
+          <p class="font-black">Estás a ver como admin — só leitura</p>
+          <p v-if="verAdminExpirou" class="mt-0.5 text-xs font-semibold" data-teste="ver-admin-expirou">
+            A sessão de leitura terminou. Abre outra vez o POS a partir do Admin → POS.
+          </p>
+          <p v-else class="mt-0.5 text-xs font-semibold">
+            Vês o POS como o dono o vê. Nada pode ser alterado daqui; este acesso fica registado.
+          </p>
+          <p v-if="currentPOS?.suspenso" class="mt-1 text-xs font-bold text-red-700" data-teste="ver-admin-suspenso">
+            Este POS está suspenso. {{ currentPOS.suspenso_motivo }}
+          </p>
+        </div>
+      </section>
+
       <!-- Barra de estado do POS (só para conta principal) -->
       <section
         v-if="posId && !isMembro"
@@ -142,7 +161,7 @@
             </div>
           </div>
 
-          <div class="flex flex-wrap gap-2">
+          <div v-if="!soLeitura" class="flex flex-wrap gap-2">
             <button
               type="button"
               @click="abrirConfiguracao"
@@ -203,12 +222,12 @@
 
       <!-- faturação: dados fiscais por preencher / lembrete de faturar (components/fiscal) -->
       <AvisoFaturacao v-if="posId && !isMembro && currentPOS?.fiscal" class="mb-5" tema="claro"
-                      :fiscal="currentPOS.fiscal" :chave="`pos-${posId}`" :pode-editar="true" @preencher="abrirConfiguracao" />
+                      :fiscal="currentPOS.fiscal" :chave="`pos-${posId}`" :pode-editar="!soLeitura" @preencher="abrirConfiguracao" />
 
       <!-- POS suspenso pela plataforma (a aba Subscrição continua aberta ao dono, para pagar; o Histórico também,
            para registar as faturas das vendas já feitas) -->
       <section
-        v-if="posId && currentPOS?.suspenso && !abertaSuspenso"
+        v-if="posId && currentPOS?.suspenso && !abertaSuspenso && !soLeitura"
         class="rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center shadow-sm"
       >
         <font-awesome-icon :icon="['fas', 'ban']" class="text-3xl text-red-500" />
@@ -269,9 +288,9 @@
         <p class="font-bold text-slate-600">A carregar dados do POS...</p>
       </section>
 
-      <!-- Onboarding (só conta principal) -->
+      <!-- Onboarding (só conta principal; nunca ao admin a ver — a faixa explica) -->
       <section
-        v-else
+        v-else-if="!soLeitura"
         class="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12"
       >
         <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-3xl text-slate-500">
@@ -453,7 +472,7 @@
 <script>
 import AvisoFaturacao from '@/components/fiscal/AvisoFaturacao.vue'
 import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
-import api, { POS_ACCESS, POS_REFRESH, terminarSessao } from '@/services/api'
+import api, { POS_ACCESS, POS_REFRESH, terminarSessao, verAdminPOS, EVENTO_VER_ADMIN_EXPIROU } from '@/services/api'
 
 import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
@@ -485,6 +504,10 @@ export default {
 
   data() {
     return {
+      // admin a ver este POS (Admin → POS → Ver POS): só leitura e nada se grava no localStorage
+      // (é a sessão do POS do próprio admin)
+      soLeitura: !!verAdminPOS(),
+      verAdminExpirou: !!verAdminPOS()?.expirou,
       abaGuardada: '',     // a última aba usada neste aparelho (abre-se em /pos/dashboard sem aba)
 
       posId: null,
@@ -648,6 +671,7 @@ export default {
 
   watch: {
     activeTab(aba) {
+      if (this.soLeitura) return
       try { localStorage.setItem('pos_aba', aba) } catch { /* sem storage */ }
     },
     // sem aba, aba que não existe ou que este membro não vê → a aba certa no endereço
@@ -662,7 +686,13 @@ export default {
     },
   },
 
+  beforeUnmount() {
+    window.removeEventListener(EVENTO_VER_ADMIN_EXPIROU, this.aoExpirarVer)
+  },
+
   async created() {
+    this.aoExpirarVer = () => { this.verAdminExpirou = true }
+    window.addEventListener(EVENTO_VER_ADMIN_EXPIROU, this.aoExpirarVer)
     this.loadSessao()
     this.escolherAbaInicial()
     this.loadLojasFromStorage()
@@ -686,6 +716,11 @@ export default {
     },
 
     loadSessao() {
+      if (this.soLeitura) {     // como o dono vê (o nome chega com /api/pos/meus/)
+        this.tipoSessao = 'principal'
+        this.permissoes = null
+        return
+      }
       this.tipoSessao = this.tipoSessaoDoToken()
       localStorage.setItem('tipo_sessao', this.tipoSessao)
 
@@ -759,6 +794,17 @@ export default {
       // Membro já tem POS carregado em loadSessao()
       if (this.isMembro) return
 
+      if (this.soLeitura) {
+        try {
+          const { data } = await api.get('/api/pos/meus/')
+          this.setUtilizador(data.user)
+          this.lojas = data.lojas || []
+        } catch { /* fica sem o nome do dono */ }
+        await this.carregarDetalhePOS(verAdminPOS().pos)
+        this.posLoaded = true
+        return
+      }
+
       try {
         // Fonte de verdade: o servidor. O localStorage só guarda a última escolha.
         const { data } = await api.get('/api/pos/meus/')
@@ -796,6 +842,7 @@ export default {
         this.setCurrentPOS(data)
       } catch (error) {
         console.error('Erro ao carregar detalhe do POS:', error)
+        if (this.soLeitura) return
         const posSelecionado = JSON.parse(localStorage.getItem('pos_selected') || 'null')
         if (posSelecionado?.id) this.setCurrentPOS(posSelecionado)
       }
@@ -809,6 +856,11 @@ export default {
       this.modo          = pos.modo || 'standalone'
       this.lojaVinculada = pos.loja_vinculada || null
 
+      if (this.soLeitura) {
+        this.componentRefreshKey += 1
+        this.carregarAvisoSub()
+        return
+      }
       localStorage.setItem('pos_selected',  JSON.stringify(pos))
       localStorage.setItem('pos_id',        String(pos.id))
       localStorage.setItem('pos_precisa_onboarding', 'false')

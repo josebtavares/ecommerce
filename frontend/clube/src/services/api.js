@@ -100,11 +100,13 @@ try {
   }
 } catch { /* token ilegível — fica como está */ }
 
-// ── Admin a ver o backoffice de uma loja (só leitura — backend utils/ver_loja.py) ──
-// O Admin abre /loja/<id>/backoffice#ver_admin=<token> noutro separador. O token fica só nesse
-// separador (sessionStorage), sai logo do endereço e vai nos pedidos feitos a partir do backoffice
-// dessa loja. Não se renova: quando expira, abre-se outra vez a partir do Admin.
+// ── Admin a ver o backoffice de uma loja ou o dashboard de um POS (só leitura — backend utils/ver_loja.py) ──
+// O Admin abre /loja/<id>/backoffice#ver_admin=<token> (ou /pos/dashboard#ver_admin=<token>) noutro
+// separador. O token fica só nesse separador (sessionStorage), sai logo do endereço e vai nos pedidos
+// feitos a partir do backoffice dessa loja / das páginas do POS. A sessão do POS do próprio admin
+// (localStorage) não é tocada. Não se renova: quando expira, abre-se outra vez a partir do Admin.
 const VER_ADMIN = 'ver_admin';
+const VER_ADMIN_POS = 'ver_admin_pos';
 export const EVENTO_VER_ADMIN_EXPIROU = 'ver-admin-expirou';
 const lojaDoBackoffice = () => (window.location.pathname.match(/^\/loja\/(\d+)\/backoffice/i) || [])[1];
 
@@ -113,7 +115,11 @@ export function capturarVerAdmin () {
     const m = window.location.hash.match(/ver_admin=([^&]+)/);
     const loja = lojaDoBackoffice();
     if (!m) return;
-    if (loja) sessionStorage.setItem(VER_ADMIN, JSON.stringify({ loja, token: decodeURIComponent(m[1]) }));
+    const token = decodeURIComponent(m[1]);
+    if (loja) sessionStorage.setItem(VER_ADMIN, JSON.stringify({ loja, token }));
+    else if (naPaginaPOS() && payloadDe(token).ver_pos) {
+      sessionStorage.setItem(VER_ADMIN_POS, JSON.stringify({ pos: payloadDe(token).ver_pos, token }));
+    }
     history.replaceState(history.state, '', window.location.pathname + window.location.search);
   } catch { /* sessionStorage bloqueado: abre como um utilizador normal (sem acesso) */ }
 }
@@ -127,13 +133,20 @@ export function verAdmin (lojaId) {
   } catch { return null; }
 }
 
+// POS que o admin está a ver neste separador ({ pos, token }), ou null — só nas páginas do POS
+export function verAdminPOS () {
+  if (!naPaginaPOS()) return null;
+  try { return JSON.parse(sessionStorage.getItem(VER_ADMIN_POS) || 'null'); } catch { return null; }
+}
+
 // a sessão do próprio admin (sino, tempo real) continua com o token normal
 const DO_PROPRIO_ADMIN = ['/app/notificacoes/', '/api/ws/bilhete/'];
 
 // Aplica token JWT no cabeçalho Authorization (só em URLs privadas)
 api.interceptors.request.use((config) => {
   const loja = !naPaginaPOS() && lojaDoBackoffice();
-  const ver = loja && !DO_PROPRIO_ADMIN.some(u => comBarra(config.url).includes(u)) && verAdmin(loja);
+  const ver = !DO_PROPRIO_ADMIN.some(u => comBarra(config.url).includes(u))
+    && ((loja && verAdmin(loja)) || verAdminPOS()?.token);
   if (ver) {
     config.headers.Authorization = `Bearer ${ver}`;
     config._verAdmin = true;
@@ -156,7 +169,13 @@ api.interceptors.response.use(
 
     // modo de leitura do admin: sem refresh — o separador mostra que a sessão de leitura terminou
     if (originalRequest?._verAdmin && error.response?.status === 401) {
-      try { sessionStorage.removeItem(VER_ADMIN); } catch { /* */ }
+      try {
+        // no POS fica marcado como expirado (e não apagado): sem ele, o separador caía na sessão
+        // do POS do próprio admin e mostrava o POS dele como se fosse o que estava a ver
+        const v = verAdminPOS();
+        if (v) sessionStorage.setItem(VER_ADMIN_POS, JSON.stringify({ ...v, expirou: true }));
+        else sessionStorage.removeItem(VER_ADMIN);
+      } catch { /* */ }
       window.dispatchEvent(new Event(EVENTO_VER_ADMIN_EXPIROU));
       return Promise.reject(error);
     }

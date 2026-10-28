@@ -76,8 +76,10 @@ from .permissions import (
     IsPOSAuthenticated,
     IsContaPrincipal,
     is_membro,
+    conta_principal,
     get_membro_from_request,
 )
+from ..utils.ver_loja import pos_a_ver
 
 from rest_framework.decorators import authentication_classes
 
@@ -189,12 +191,13 @@ def _resolve_pos_request(request, pos_id, require_owner=False, ativo=False, perm
             _bloquear_se_suspenso(pos)
         return pos, membro, None
 
-    utilizador = request.user.utilizador
+    utilizador = conta_principal(request)
     query = ConfiguracaoPOS.objects.filter(id=pos_id, dono=utilizador)
     if ativo:
         query = query.filter(ativo=True)
     pos = get_object_or_404(query)
-    if not permitir_suspenso:
+    # o admin a ver (só leitura) consulta também um POS suspenso
+    if not permitir_suspenso and not pos_a_ver(request.user.utilizador):
         _bloquear_se_suspenso(pos)
     return pos, None, utilizador
 
@@ -789,17 +792,16 @@ def pos_meus(request):
     POS da conta autenticada (fonte de verdade para o dashboard — não depende
     do que o login do POS guardou no browser). Inclui as lojas para o onboarding.
     """
-    try:
-        utilizador = request.user.utilizador
-    except Exception:
+    utilizador = conta_principal(request)
+    if utilizador is None:
         return Response({'detail': 'Sessão de membro não tem POS próprios.'}, status=status.HTTP_403_FORBIDDEN)
     pos_list = ConfiguracaoPOS.objects.filter(dono=utilizador, ativo=True).select_related('loja_vinculada').order_by('criado_em')
     lojas = Loja.objects.filter(dono=utilizador, estado__in=LOJAS_VINCULAVEIS)
     return Response({
         'pos': [_pos_response(p) for p in pos_list],
         'lojas': [{'id': l.id, 'nome': l.nome, 'categoria': l.categoria} for l in lojas],
-        'user': {'id': utilizador.id, 'nome': utilizador.nome, 'email': request.user.email,
-                 'username': request.user.username},
+        'user': {'id': utilizador.id, 'nome': utilizador.nome, 'email': utilizador.user.email,
+                 'username': utilizador.user.username},
     })
 
 
@@ -855,7 +857,7 @@ def pos_criar(request):
 @api_view(['GET', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def pos_detalhe(request, pos_id):
-    utilizador = request.user.utilizador
+    utilizador = conta_principal(request)
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
 
     # GET continua a funcionar num POS suspenso (o dashboard mostra o aviso); alterar não
@@ -1977,7 +1979,7 @@ def pos_equipa(request, pos_id):
     GET  → listar membros da equipa
     POST → criar novo membro (nome + username_pos + password? + papel)
     """
-    utilizador = request.user.utilizador
+    utilizador = conta_principal(request)
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
 
     # ── GET ──────────────────────────────────────────────────────────
@@ -2028,7 +2030,7 @@ def pos_equipa_membro(request, pos_id, membro_id):
     PATCH  → editar (nome, username, papel, permissões, password, ativo)
     DELETE → remover membro
     """
-    utilizador = request.user.utilizador
+    utilizador = conta_principal(request)
     pos    = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
     membro = get_object_or_404(UtilizadorPOS, id=membro_id, pos=pos)
 
@@ -2077,7 +2079,7 @@ def pos_equipa_membro(request, pos_id, membro_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def pos_verificar_username(request, pos_id):
-    utilizador = request.user.utilizador
+    utilizador = conta_principal(request)
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador, ativo=True)
     username = (request.GET.get('username') or '').strip().lower()
     if not username:

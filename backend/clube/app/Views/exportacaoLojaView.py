@@ -1,11 +1,12 @@
 """
-Exportar os dados de uma loja (ZIP com CSV; utils/exportacao_loja.py). Pede o dono no backoffice ou o
-admin (permissão exportar_lojas); o worker prepara o ficheiro e avisa por notificação.
+Exportar os dados de uma loja ou de um POS (ZIP com CSV; utils/exportacao_loja.py). Pede o dono no
+backoffice ou o admin (permissão exportar_lojas; um POS só o admin); o worker prepara o ficheiro e avisa
+por notificação.
 
   GET  /app/loja/<id>/exportacoes/?limit=&offset=          lista (só o dono)
   POST /app/loja/<id>/exportacoes/            {imagens}   pedir uma nova
   POST /app/loja/<id>/exportacoes/<eid>/descarregar/      link de 5 minutos
-  (o mesmo em /app/admin/lojas/<id>/exportacoes/...)
+  (o mesmo em /app/admin/lojas/<id>/exportacoes/... e /app/admin/pos/<id>/exportacoes/...)
   GET  /app/exportacoes/ficheiro/<token>/                 só na dev (sem R2): entrega o ficheiro do link assinado
 """
 from django.core import signing
@@ -47,8 +48,8 @@ def _item(e, admin):
     }
 
 
-def _lista(request, loja, admin):
-    qs = ExportacaoLoja.objects.filter(loja=loja).select_related('pedido_por')
+def _lista(request, alvo, admin):
+    qs = ExportacaoLoja.objects.filter(**exl.de(alvo)).select_related('pedido_por')
     pagina, total = _paginar(request, qs, 10)
     return Response({
         'count': total, 'results': [_item(e, admin) for e in pagina],
@@ -57,9 +58,9 @@ def _lista(request, loja, admin):
     })
 
 
-def _pedir(request, loja, admin):
+def _pedir(request, alvo, admin):
     try:
-        e = exl.pedir(loja, request.user, com_imagens=bool(request.data.get('imagens')), pelo_admin=admin)
+        e = exl.pedir(alvo, request.user, com_imagens=bool(request.data.get('imagens')), pelo_admin=admin)
     except exl.ExportacaoEmCurso as x:
         return Response({'detail': str(x)}, status=status.HTTP_409_CONFLICT)
     except exl.LimiteExportacoes as x:
@@ -67,8 +68,8 @@ def _pedir(request, loja, admin):
     return Response(_item(e, admin), status=status.HTTP_201_CREATED)
 
 
-def _descarregar(request, loja, exportacao_id):
-    e = ExportacaoLoja.objects.filter(pk=exportacao_id, loja=loja).first()
+def _descarregar(request, alvo, exportacao_id):
+    e = ExportacaoLoja.objects.filter(pk=exportacao_id, **exl.de(alvo)).first()
     if not e:
         return Response({'detail': 'Exportação não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
     if e.estado != 'ok' or not e.chave:
@@ -133,6 +134,27 @@ def admin_loja_exportacao_descarregar(request, loja_id, exportacao_id):
     if erro:
         return erro
     return _descarregar(request, get_object_or_404(Loja, id=loja_id), exportacao_id)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_pos_exportacoes(request, pos_id):
+    from ..pos.models import ConfiguracaoPOS
+    erro = _exige_admin(request, 'exportar_lojas')
+    if erro:
+        return erro
+    pos = get_object_or_404(ConfiguracaoPOS, id=pos_id)
+    return _pedir(request, pos, True) if request.method == 'POST' else _lista(request, pos, True)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_pos_exportacao_descarregar(request, pos_id, exportacao_id):
+    from ..pos.models import ConfiguracaoPOS
+    erro = _exige_admin(request, 'exportar_lojas')
+    if erro:
+        return erro
+    return _descarregar(request, get_object_or_404(ConfiguracaoPOS, id=pos_id), exportacao_id)
 
 
 @api_view(['GET'])
