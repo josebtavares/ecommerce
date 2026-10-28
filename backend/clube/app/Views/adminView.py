@@ -237,10 +237,10 @@ def admin_loja_gerir(request, loja_id):
             msg = f'Não é possível "{acao}" uma loja no estado "{loja.get_estado_display()}".'
         return Response({'detail': msg, 'estado': loja.estado}, status=status.HTTP_400_BAD_REQUEST)
 
-    from ..utils.moderacao import dono_banido
-    if destino == 'ativa' and dono_banido(loja.dono_id):
-        return Response({'detail': 'O dono desta loja está banido — levanta o ban em Utilizadores e a loja volta '
-                                   'ao estado em que estava.'}, status=status.HTTP_400_BAD_REQUEST)
+    from ..utils.moderacao import recusa_reativar
+    recusa = destino == 'ativa' and recusa_reativar(loja.dono_id, loja.estado_motivo)
+    if recusa:
+        return Response({'detail': recusa}, status=status.HTTP_400_BAD_REQUEST)
 
     # suspensa por falta de pagamento: reactivar aqui deixava a subscrição presa em "suspensa"
     from ..utils.subscricoes import MOTIVO_SUSPENSAO
@@ -566,7 +566,8 @@ def _ficha_utilizador(u, request):
 def admin_utilizador_moderar(request, utilizador_id):
     """
     POST /app/admin/utilizadores/<id>/moderar/
-    Body: { acao: suspender|banir|levantar, motivo, ate? (AAAA-MM-DD, só suspender) }
+    Body: { acao: suspender|banir|levantar, motivo, ate? (AAAA-MM-DD, só suspender),
+            incluir_lojas? (só suspender: suspende também as lojas e os POS do dono) }
     Suspender: gerir_utilizadores. Banir e levantar um ban: só o Super Admin.
     """
     from ..utils import moderacao
@@ -597,7 +598,8 @@ def admin_utilizador_moderar(request, utilizador_id):
         if ate <= now():
             return Response({'detail': 'A data de fim tem de ser hoje ou depois.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    moderacao.moderar(alvo, acao, request.user, motivo=motivo, ate=ate)
+    incluir = acao == 'suspender' and request.data.get('incluir_lojas') in (True, 'true', '1', 1)
+    moderacao.moderar(alvo, acao, request.user, motivo=motivo, ate=ate, incluir_lojas=incluir)
     alvo.refresh_from_db()
     return Response(_ficha_utilizador(alvo, request))
 

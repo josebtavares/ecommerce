@@ -9,6 +9,9 @@ Suspender, banir e reactivar contas (Admin → Utilizadores).
 - banir suspende as lojas e os POS do dono (motivo MOTIVO_BAN; o motivo do ban não aparece na
   loja, que os gestores vêem). O registo do ban guarda como estavam; sair do ban repõe-nos.
   As encomendas pagas continuam a ser tratadas pelos gestores; as por pagar são canceladas.
+- suspender só suspende as lojas e os POS se o admin o pedir (incluir_lojas; motivo
+  MOTIVO_SUSPENSO) — ex.: o problema é a loja, ou o dono é o único a tratar das encomendas.
+  Sem isso a loja continua a vender. No fim da suspensão (também a automática) voltam como estavam.
 
 Não há tarefas agendadas: uma suspensão cujo fim já passou levanta-se quando a conta volta a
 ser usada (conta_ativa, login) ou quando o admin abre a lista (levantar_expiradas).
@@ -25,6 +28,8 @@ log = logging.getLogger(__name__)
 
 ACOES = ('suspender', 'banir', 'levantar')
 MOTIVO_BAN = 'Conta do dono banida'
+MOTIVO_SUSPENSO = 'Conta do dono suspensa'
+MOTIVOS_DONO = (MOTIVO_BAN, MOTIVO_SUSPENSO)
 
 
 def fim_do_dia(dia):
@@ -50,6 +55,7 @@ def levantar_expiradas(utilizadores=None):
             mudou = Utilizador.objects.filter(pk=u.pk, status='suspenso', suspenso_ate__lte=agora) \
                 .update(status='ativo', suspenso_ate=None, motivo_estado='')
             if mudou:
+                _repor_ultimo(u)
                 ModeracaoUtilizador.objects.create(utilizador_id=u.pk, acao='expirou', ate=u.suspenso_ate)
                 n += 1
     return n
@@ -71,25 +77,43 @@ def dono_banido(dono_id):
     return Utilizador.objects.filter(pk=dono_id, status='banido').exists()
 
 
-def _suspender_do_dono(alvo):
-    """Suspende as lojas e os POS do dono banido. Devolve como estavam (para os repor)."""
+def recusa_reativar(dono_id, motivo):
+    """Razão para o admin não reactivar uma loja/POS por causa da conta do dono, ou None."""
+    if dono_banido(dono_id):
+        return 'O dono está banido — levanta o ban em Utilizadores e volta ao estado em que estava.'
+    if motivo == MOTIVO_SUSPENSO:
+        return ('Foi suspensa com a conta do dono — reactiva a conta em Utilizadores e volta ao estado '
+                'em que estava.')
+    return None
+
+
+def _suspender_do_dono(alvo, motivo_loja=MOTIVO_BAN):
+    """Suspende as lojas e os POS do dono. Devolve como estavam (para os repor)."""
     from ..models import Loja
     from ..pos.models import ConfiguracaoPOS
     lojas, pos = [], []
     for loja in Loja.objects.filter(dono=alvo).order_by('id'):
         lojas.append({'id': loja.id, 'nome': loja.nome, 'estado': loja.estado, 'motivo': loja.estado_motivo})
         # também as já suspensas (ex.: falta de pagamento): com o motivo do ban, pagar não as reabre
-        loja.mudar_estado('suspensa', MOTIVO_BAN)
+        loja.mudar_estado('suspensa', motivo_loja)
     for p in ConfiguracaoPOS.objects.select_for_update().filter(dono=alvo).order_by('id'):
         pos.append({'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso, 'motivo': p.suspenso_motivo})
-        p.suspenso, p.suspenso_motivo = True, MOTIVO_BAN
+        p.suspenso, p.suspenso_motivo = True, motivo_loja
         p.suspenso_em = p.suspenso_em or timezone.now()
         p.save(update_fields=['suspenso', 'suspenso_motivo', 'suspenso_em', 'atualizado_em'])
     return {'lojas': lojas, 'pos': pos}
 
 
+def _repor_ultimo(alvo):
+    """A conta sai do ban/suspensão: repõe o que o último ban/suspensão suspendeu (se suspendeu)."""
+    from ..models import ModeracaoUtilizador
+    ultimo = ModeracaoUtilizador.objects.filter(utilizador_id=alvo.pk, acao__in=('banir', 'suspender')).first()
+    if ultimo and ultimo.afetados:
+        _repor_do_dono(ultimo)
+
+
 def _repor_do_dono(registo):
-    """Sai do ban: cada loja/POS que o ban suspendeu volta a como estava. Os que o admin já
+    """Sai do ban (ou da suspensão com lojas): cada loja/POS suspensa volta a como estava. Os que o admin já
     mudou entretanto ficam como estão. A subscrição manda no fim: paga durante o ban → volta
     activa; ficou por pagar durante o ban → fica suspensa por falta de pagamento."""
     from ..models import Loja, Subscricao
@@ -97,7 +121,7 @@ def _repor_do_dono(registo):
     from .subscricoes import MOTIVO_SUSPENSAO
     por_pagar = f'{MOTIVO_SUSPENSAO}.'
     for a in registo.afetados.get('lojas', []):
-        loja = Loja.objects.filter(pk=a['id'], estado='suspensa', estado_motivo=MOTIVO_BAN).first()
+        loja = Loja.objects.filter(pk=a['id'], estado='suspensa', estado_motivo__in=MOTIVOS_DONO).first()
         if not loja:
             continue
         estado, motivo = a['estado'], a['motivo']
@@ -108,7 +132,7 @@ def _repor_do_dono(registo):
             estado, motivo = 'suspensa', por_pagar
         loja.mudar_estado(estado, motivo)
     for a in registo.afetados.get('pos', []):
-        p = ConfiguracaoPOS.objects.select_for_update().filter(pk=a['id'], suspenso=True, suspenso_motivo=MOTIVO_BAN).first()
+        p = ConfiguracaoPOS.objects.select_for_update().filter(pk=a['id'], suspenso=True, suspenso_motivo__in=MOTIVOS_DONO).first()
         if not p:
             continue
         suspenso, motivo = a['suspenso'], a['motivo']
@@ -137,19 +161,21 @@ def pode_moderar(quem, alvo, acao):
     return None
 
 
-def moderar(alvo, acao, por, motivo='', ate=None):
-    """Aplica a acção (já validada) e regista-a. `ate`: datetime ou None (só para suspender)."""
+def moderar(alvo, acao, por, motivo='', ate=None, incluir_lojas=False):
+    """Aplica a acção (já validada) e regista-a. `ate`: datetime ou None (só para suspender).
+    incluir_lojas: suspender também as lojas e os POS (o ban suspende-os sempre)."""
     from ..models import ModeracaoUtilizador
     from ..autenticacao import terminar_sessoes
     motivo = (motivo or '').strip()[:500]
     with transaction.atomic():
         afetados = {}
-        if alvo.status == 'banido' and acao != 'banir':
-            ultimo = ModeracaoUtilizador.objects.filter(utilizador=alvo, acao='banir').first()
-            if ultimo:
-                _repor_do_dono(ultimo)
+        if alvo.status in ('banido', 'suspenso'):
+            # sai do estado anterior: o que ele suspendeu volta como estava (o novo volta a suspender)
+            _repor_ultimo(alvo)
         if acao == 'banir':
             afetados = _suspender_do_dono(alvo)
+        elif acao == 'suspender' and incluir_lojas:
+            afetados = _suspender_do_dono(alvo, MOTIVO_SUSPENSO)
         if acao == 'suspender':
             alvo.status, alvo.suspenso_ate, alvo.motivo_estado = 'suspenso', ate, motivo
         elif acao == 'banir':

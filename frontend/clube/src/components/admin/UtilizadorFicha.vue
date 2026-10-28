@@ -78,7 +78,7 @@
               <span v-if="p.contas_abertas" class="text-[11px] text-amber-400">{{ p.contas_abertas }} conta{{ p.contas_abertas !== 1 ? 's' : '' }} aberta{{ p.contas_abertas !== 1 ? 's' : '' }}</span>
               <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', p.suspenso ? 'bg-red-500/15 text-red-400' : 'bg-green-500/15 text-green-400']">{{ p.suspenso ? 'Suspenso' : 'Activo' }}</span>
             </div>
-            <p v-if="u.status === 'banido' && temPorResolver" class="text-xs text-amber-400" data-teste="aviso-por-resolver">
+            <p v-if="lojasPelaConta && temPorResolver" class="text-xs text-amber-400" data-teste="aviso-por-resolver">
               As lojas estão suspensas, mas as encomendas pagas e as marcações marcadas têm de ser concluídas ou reembolsadas —
               os gestores da loja continuam a poder tratá-las; abre a loja para ver.
             </p>
@@ -107,8 +107,18 @@
                 Saem do site e deixam de aceitar encomendas e marcações; as por pagar são canceladas.
                 Ao levantar o ban voltam ao estado em que estavam.
               </div>
-              <div v-if="acao === 'levantar' && u.status === 'banido' && (u.lojas.length || u.pos.length)" class="text-xs text-zinc-500">
-                As lojas e os POS que o ban suspendeu voltam ao estado em que estavam.
+              <label v-if="acao === 'suspender' && (u.lojas.length || u.pos.length)" data-teste="incluir-lojas"
+                     class="flex items-start gap-2 rounded-lg border border-zinc-800 px-3 py-2 cursor-pointer">
+                <input v-model="incluirLojas" type="checkbox" class="mt-0.5 accent-amber-500" />
+                <span class="text-xs text-zinc-400">
+                  <span class="text-zinc-200 font-semibold">Suspender também as lojas e os POS</span><br>
+                  Usa quando o problema é a loja, ou quando o dono é o único a tratar das encomendas — sem isto a loja
+                  continua a vender durante a suspensão. Saem do site e as encomendas por pagar são canceladas; no fim
+                  da suspensão voltam ao estado em que estavam.
+                </span>
+              </label>
+              <div v-if="acao === 'levantar' && lojasPelaConta" class="text-xs text-zinc-500">
+                As lojas e os POS suspensos com a conta voltam ao estado em que estavam.
               </div>
               <div v-if="acao !== 'levantar'">
                 <label class="text-xs text-zinc-500 mb-1 block">Motivo (o utilizador recebe-o por email)</label>
@@ -183,7 +193,7 @@ export default {
   data () {
     const eu = JSON.parse(localStorage.getItem('user') || '{}')
     return {
-      u: null, acao: null, motivo: '', ate: '', erro: '', aGuardar: false,
+      u: null, acao: null, motivo: '', ate: '', incluirLojas: false, erro: '', aGuardar: false,
       souSuperadmin: eu.role_admin === 'superadmin', meuId: eu.id,
       TITULOS, AJUDA, CORES, ESTADO_LOJA,
     }
@@ -198,6 +208,12 @@ export default {
     podeMexer () { return this.u && this.u.id !== this.meuId && (this.souSuperadmin || !this.u.is_staff) },
     hoje () { return new Date().toLocaleDateString('sv') },
     temPorResolver () { return this.u.lojas.some(l => this.porResolver(l)) },
+    // lojas/POS suspensos por causa da conta (backend utils/moderacao.py MOTIVOS_DONO)
+    lojasPelaConta () {
+      const m = ['Conta do dono banida', 'Conta do dono suspensa']
+      return this.u.lojas.some(l => l.estado === 'suspensa' && m.includes(l.estado_motivo))
+        || this.u.pos.some(p => p.suspenso && m.includes(p.suspenso_motivo))
+    },
   },
   watch: { id: { handler: 'carregar', immediate: true } },
   methods: {
@@ -216,7 +232,7 @@ export default {
       if (l.marcacoes_futuras) partes.push(`${l.marcacoes_futuras} marcaç${l.marcacoes_futuras !== 1 ? 'ões' : 'ão'}`)
       return partes.join(' · ')
     },
-    abrir (acao) { this.acao = acao; this.motivo = ''; this.ate = ''; this.erro = '' },
+    abrir (acao) { this.acao = acao; this.motivo = ''; this.ate = ''; this.incluirLojas = false; this.erro = '' },
     async confirmar () {
       this.erro = ''
       if (this.acao !== 'levantar' && this.motivo.trim().length < 5) { this.erro = 'Escreve o motivo.'; return }
@@ -224,6 +240,7 @@ export default {
       try {
         const corpo = { acao: this.acao, motivo: this.motivo.trim() }
         if (this.acao === 'suspender' && this.ate) corpo.ate = this.ate
+        if (this.acao === 'suspender' && this.incluirLojas) corpo.incluir_lojas = true
         const { data } = await api.post(`/app/admin/utilizadores/${this.id}/moderar/`, corpo)
         this.u = data; this.acao = null
         this.$emit('mudou', data)
