@@ -30,8 +30,7 @@
         :tema="temaActivo"
         @toggle-dark="onToggleDark"
       />
-      <!-- iguais em todos os templates: quem vende (e as políticas da loja) e o rodapé do site -->
-      <LojaVendedor v-if="loja" :loja="loja" :isDark="temaActivo?.darkMode !== false" />
+      <!-- rodapé do site, igual em todos os templates (o "Vendido por" está no rodapé de cada template: LojaRodapeInfo) -->
       <SiteRodape :isDark="temaActivo?.darkMode !== false" />
     </template>
 
@@ -48,7 +47,6 @@ import { useRoute } from 'vue-router'
 import api from '@/services/api'
 import { getTemplate, TEMPLATE_COMPONENTS } from '@/config/lojaTemplates'
 import { DEMO_ID, ativarLojaDemo } from '@/utils/demoLoja'
-import LojaVendedor from '@/components/loja/LojaVendedor.vue'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
 
 const FALLBACK_ID   = 'classico'
@@ -56,7 +54,7 @@ const FALLBACK_TEMA = { id: FALLBACK_ID, corPrimaria: '#dc2626', corSecundaria: 
 
 export default {
   name: 'LojaPublica',
-  components: { LojaVendedor, SiteRodape },
+  components: { SiteRodape },
 
   setup () {
     const route             = useRoute()
@@ -64,7 +62,6 @@ export default {
     const templateComponent = ref(null)
     const temaActivo        = ref(null)
     const indisponivel      = ref(null)   // { fechada, nome } quando a API devolve 404
-    const loja              = ref(null)   // dados públicos (vendedor e políticas — LojaVendedor)
     let darkModeBase        = true   // modo por defeito da loja (BD)
 
     // /loja/demo — loja fictícia para o preview do "Criar loja" (utils/demoLoja.js)
@@ -74,7 +71,6 @@ export default {
       loadingTemplate.value   = true
       templateComponent.value = null
       indisponivel.value      = null
-      loja.value              = null
 
       try {
         // ── 1. Cache local (resposta imediata enquanto a API carrega) ──────────
@@ -89,7 +85,6 @@ export default {
 
         // ── 2. Fonte de verdade: API ──────────────────────────────────────────
         const { data } = await api.get(`/app/loja/${lojaId}/`)
-        loja.value    = data
         templateId    = data.template_id    || templateId
         corPrimaria   = data.cor_primaria   || corPrimaria
         corSecundaria = data.cor_secundaria || corSecundaria
@@ -199,7 +194,7 @@ export default {
     onUnmounted(() => window.removeEventListener('message', onPreviewMessage))
     watch(() => route.params.id, id => { if (id) resolveTemplate(id) })
 
-    return { loadingTemplate, templateComponent, temaActivo, onToggleDark, indisponivel, loja }
+    return { loadingTemplate, templateComponent, temaActivo, onToggleDark, indisponivel }
   },
 }
 </script>

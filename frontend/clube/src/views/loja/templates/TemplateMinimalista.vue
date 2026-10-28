@@ -284,6 +284,7 @@
             <button v-if="loja.termos_servico" class="mn-link" @click="modalPolitica = 'termos'">Termos</button>
             <button v-if="loja.politica_privacidade" class="mn-link" @click="modalPolitica = 'privacidade'">Privacidade</button>
           </nav>
+          <LojaRodapeInfo :loja="loja" :isDark="isDark" />
           <p class="mn-footer__copy">© {{ ano }}</p>
         </div>
       </footer>
@@ -308,6 +309,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import FimDaLista from '@/components/produtos/FimDaLista.vue'
@@ -326,7 +328,7 @@ const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Peças' 
 export default {
   name: 'TemplateMinimalista',
 
-  components: { SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

@@ -541,6 +541,7 @@
             </div>
           </div>
 
+          <LojaRodapeInfo :loja="loja" :isDark="isDark" />
           <div class="editorial-footer__bottom">
             <span class="editorial-footer__copy">
               © {{ currentYear }} {{ loja.nome }}. All rights reserved.
@@ -584,6 +585,7 @@
 </template>
 
 <script>
+import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData } from '@/composables/useLojaData'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
@@ -599,7 +601,7 @@ import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 export default {
   name: 'TemplateModaEditorial',
 
-  components: { SeccaoServicos,
+  components: { LojaRodapeInfo, SeccaoServicos,
     ProductInfoCard,
     BotaoFavorito, EstadoLoja,
     MultiCart,
