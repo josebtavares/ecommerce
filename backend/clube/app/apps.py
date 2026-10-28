@@ -13,3 +13,6 @@ class AppConfig(AppConfig):
         # comprovativos por email quando um pagamento é aprovado (encomendas e mensalidades)
         from .utils import emails_fiscais
         emails_fiscais.ligar()
+        # registo das transações (só de acrescentar): pagamentos, reembolsos, marcações, faturas
+        from .utils import registo
+        registo.ligar()

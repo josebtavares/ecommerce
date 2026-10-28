@@ -114,7 +114,8 @@
       <div class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
         <AdminDashboard    v-if="activeSection === 'dashboard'"    @ir="irPara" />
         <AdminLojas        v-else-if="activeSection === 'lojas'"        :pode-exportar="permissoes.includes('exportar_lojas')"
-                           :pode-ver-backoffice="permissoes.includes('ver_backoffice_lojas')" />
+                           :pode-ver-backoffice="permissoes.includes('ver_backoffice_lojas')"
+                           :pode-ver-banco="permissoes.includes('gerir_pagamentos')" />
         <AdminUtilizadores v-else-if="activeSection === 'utilizadores'" />
         <AdminProdutos     v-else-if="activeSection === 'produtos'"     />
         <AdminEncomendas   v-else-if="activeSection === 'encomendas'"   />
@@ -132,6 +133,7 @@
         <AdminDenuncias    v-else-if="activeSection === 'denuncias'"    @pendentes="n => denunciasPendentes = n" />
         <AdminPlataforma   v-else-if="activeSection === 'plataforma'"   />
         <AdminBackups      v-else-if="activeSection === 'backups'"      />
+        <AdminRegisto      v-else-if="activeSection === 'registo'"      />
         <AdminSubscricoes  v-else-if="activeSection === 'subscricoes'"  />
         <AdminFaturacao    v-else-if="activeSection === 'faturacao'"    />
       </div>
@@ -171,6 +173,7 @@ const AdminSubscricoes  = defineAsyncComponent(() => import('./AdminSubscricoes.
 const AdminFaturacao    = defineAsyncComponent(() => import('./AdminFaturacao.vue'))
 const AdminDevolucoes   = defineAsyncComponent(() => import('./AdminDevolucoes.vue'))
 const AdminBackups      = defineAsyncComponent(() => import('./AdminBackups.vue'))
+const AdminRegisto      = defineAsyncComponent(() => import('./AdminRegisto.vue'))
 
 const SECCOES = [
   // icon: nome do ícone Font Awesome (solid)
@@ -195,14 +198,15 @@ const SECCOES = [
   { key: 'denuncias',    label: 'Denúncias',       icon: 'flag',          permissao: 'moderar_chat'      },
   { key: 'plataforma',   label: 'Definições',      icon: 'globe',         permissao: 'gerir_plataforma'  },
   { key: 'backups',      label: 'Backups',         icon: 'database',      permissao: 'gerir_backups'     },
+  { key: 'registo',      label: 'Registo',         icon: 'shield-halved', permissao: 'ver_registo_transacoes' },
 
 ]
 
 const PERMISSOES_ADMIN = {
-  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_faturacao','gerir_home','gerir_devolucoes','gerir_backups','exportar_lojas','ver_backoffice_lojas'],
+  superadmin:   ['ver_stats','gerir_lojas','gerir_utilizadores','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','gerir_comissoes','ver_relatorios','gerir_categorias_destaque','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','moderar_chat','gerir_plataforma','gerir_subscricoes','gerir_faturacao','gerir_home','gerir_devolucoes','gerir_backups','exportar_lojas','ver_backoffice_lojas','ver_registo_transacoes'],
   moderador:    ['ver_stats','gerir_lojas','gerir_produtos','gerir_encomendas','gerir_pagamentos','gerir_tipos_globais','moderar_chat'],
   suporte:      ['ver_stats','gerir_utilizadores','gerir_lojas','gerir_encomendas','gerir_pagamentos','gerir_conteudo','ver_pos','gerir_pos','atender_suporte','gerir_devolucoes'],
-  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos','gerir_subscricoes','gerir_faturacao'],
+  contabilista: ['ver_stats','gerir_pagamentos','gerir_encomendas','ver_relatorios','ver_pos','gerir_subscricoes','gerir_faturacao','ver_registo_transacoes'],
 }
 
 export default {
@@ -212,7 +216,7 @@ export default {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
     AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes, AdminFaturacao,
-    AdminDevolucoes, AdminBackups,
+    AdminDevolucoes, AdminBackups, AdminRegisto,
   },
 
   data () {

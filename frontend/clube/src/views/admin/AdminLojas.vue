@@ -263,6 +263,26 @@
             </a>
           </div>
 
+          <!-- Dados bancários (gerir_pagamentos) — backend Views/registoView.py; cada consulta fica no registo -->
+          <div v-if="podeVerBanco" class="rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-banco">
+            <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              <font-awesome-icon :icon="['fas', 'building-columns']" class="mr-1.5" />Dados bancários
+            </h3>
+            <template v-if="banco.carregado">
+              <div v-if="banco.dados" class="text-sm space-y-0.5" data-teste="admin-banco-dados">
+                <p class="text-zinc-100 font-semibold">{{ banco.dados.banco }}</p>
+                <p class="text-zinc-300 font-mono break-all">{{ banco.dados.iban }}</p>
+                <p class="text-xs text-zinc-500">Titular: {{ banco.dados.titular }}</p>
+              </div>
+              <p v-else class="text-xs text-zinc-500">A loja ainda não indicou a conta bancária.</p>
+            </template>
+            <p v-if="banco.erro" class="text-xs text-red-400">{{ banco.erro }}</p>
+            <button v-if="!banco.carregado" @click="verBanco(lojaDetalhe)" :disabled="banco.aCarregar" data-teste="btn-ver-banco"
+              class="w-full py-2.5 rounded-xl text-sm font-bold transition bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-50">
+              {{ banco.aCarregar ? 'A abrir…' : 'Ver dados bancários (fica registado)' }}
+            </button>
+          </div>
+
           <!-- Ver o backoffice só para leitura (super-admin) — backend utils/ver_loja.py -->
           <div v-if="podeVerBackoffice" class="rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-ver-backoffice">
             <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">
@@ -354,11 +374,13 @@ export default {
   props: {
     podeExportar: { type: Boolean, default: false },   // permissão exportar_lojas (super-admin)
     podeVerBackoffice: { type: Boolean, default: false },   // permissão ver_backoffice_lojas (super-admin)
+    podeVerBanco: { type: Boolean, default: false },   // permissão gerir_pagamentos
   },
   data () {
     return {
       ESTADOS, ACOES,
       eliminacao: null, confirmacaoNome: '', aEliminar: false,
+      banco: { carregado: false, aCarregar: false, dados: null, erro: '' },   // dados bancários da ficha aberta
       acessosAdmin: [], aAbrirBackoffice: false,
       loading: true, lojas: [], totalCount: 0,
       page: 1, limit: 20,
@@ -390,6 +412,7 @@ export default {
   watch: {
     // a loja aberta vai no endereço (/admin/lojas/<id>): refresh mantém-na, voltar fecha-a
     '$route.params.ficha': { handler: 'carregarFicha', immediate: true },
+    'lojaDetalhe.id' () { this.banco = { carregado: false, aCarregar: false, dados: null, erro: '' } },
   },
   async created () { await this.fetchLojas() },
   methods: {
@@ -424,6 +447,15 @@ export default {
       return Object.keys(ACOES).filter(a => ACOES[a].origens.includes(loja.estado))
     },
     // aprovar = publicar: só com os requisitos todos (o backend recusa na mesma)
+    async verBanco (loja) {
+      this.banco = { ...this.banco, aCarregar: true, erro: '' }
+      try {
+        const { data } = await api.get(`/app/admin/lojas/${loja.id}/banco/`)
+        this.banco = { carregado: true, aCarregar: false, dados: data.dados, erro: '' }
+      } catch (e) {
+        this.banco = { carregado: false, aCarregar: false, dados: null, erro: e.response?.data?.detail || 'Sem acesso aos dados bancários.' }
+      }
+    },
     bloqueada (loja, acao) { return acao === 'aprovar' && loja.prontidao && !loja.prontidao.completa },
     faltam (loja) { return (loja.prontidao?.requisitos || []).filter(r => !r.ok).map(r => r.titulo) },
     acaoRapida (loja) {
