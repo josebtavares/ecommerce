@@ -1070,6 +1070,7 @@ class MetodoPagamento(models.Model):
         ('cartao',  'Cartão'),
         ('dinheiro','Dinheiro'),
         ('mbway',   'MBWay'),
+        ('mobile_money', 'Mobile Money'),
         ('paypal',  'PayPal'),
         ('stripe',  'Stripe'),
         ('flutterwave',   'Flutterwave'),
@@ -1102,6 +1103,8 @@ class Pagamento(models.Model):
     valor               = models.DecimalField(max_digits=10, decimal_places=2)
     status              = models.CharField(max_length=20, choices=STATUS, default='pendente')
     referencia_transacao= models.CharField(max_length=255, blank=True, default='')
+    # quem cobrou (pagamentos.FORNECEDORES: simulado, flutterwave…) — vazio = dinheiro/transferência
+    fornecedor          = models.CharField(max_length=20, blank=True, default='', db_default='')
     data_criacao        = models.DateTimeField(auto_now_add=True)
     # quando o dinheiro entrou (cartão: logo; dinheiro: na entrega) — os relatórios de recebimentos contam por aqui
     data_pagamento      = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -1837,7 +1840,7 @@ class FaturaSubscricao(models.Model):
     """Uma fatura por período. Registo financeiro — nunca se apaga (anula-se)."""
     ESTADOS = [('pendente', 'Por pagar'), ('paga', 'Paga'), ('anulada', 'Anulada')]
     METODOS = [('simulado', 'Pagamento simulado'), ('dinheiro', 'Dinheiro'), ('transferencia', 'Transferência'),
-               ('oferta', 'Oferta da plataforma'), ('outro', 'Outro')]
+               ('online', 'Pagamento online'), ('oferta', 'Oferta da plataforma'), ('outro', 'Outro')]
 
     loja           = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='faturas_subscricao', null=True, blank=True)
     pos            = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.PROTECT, related_name='faturas_subscricao',
@@ -2308,6 +2311,8 @@ class RegistoTransacao(models.Model):
         ('reembolso',  'Reembolso'),
         ('marcacao',   'Marcação'),
         ('subscricao', 'Fatura de subscrição'),
+        ('pos',        'Venda no POS'),
+        ('comissao',   'Comissão'),
         ('banco',      'Dados bancários'),
     ]
     criado_em      = models.DateTimeField(db_index=True)

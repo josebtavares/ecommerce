@@ -248,6 +248,7 @@ import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 import ComissoesMensais from '@/components/fiscal/ComissoesMensais.vue'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
+import { seguirPagamento } from '@/utils/pagamentoOnline'
 
 export default {
   name: 'BackofficeSubscricao',
@@ -345,6 +346,7 @@ export default {
       this.aPagar = f.id
       try {
         const { data } = await api.post(`/app/loja/${this.lojaId}/subscricao/faturas/${f.id}/pagar/`)
+        if (seguirPagamento(data)) return       // paga na página do fornecedor e volta a /pagamento/callback
         this.dados = data
         this.versao++
         this.aviso = 'Pagamento recebido. Obrigado!'

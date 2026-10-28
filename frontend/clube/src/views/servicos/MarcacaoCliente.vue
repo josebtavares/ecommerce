@@ -117,6 +117,7 @@ import MarcacaoConversa from '@/components/servicos/MarcacaoConversa.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { ouvirMarcacoes } from '@/utils/servicos'
 import { temaEscuro } from '@/utils/tema'
+import { seguirPagamento } from '@/utils/pagamentoOnline'
 
 export default {
   name: 'MarcacaoCliente',
@@ -180,7 +181,9 @@ export default {
       if (pergunta && !confirm(pergunta)) return
       this.erro = ''; this.aEnviar = true
       try {
-        this.m = (await api.post(`/app/marcacoes/${this.m.id}/acao/`, corpo)).data
+        const { data } = await api.post(`/app/marcacoes/${this.m.id}/acao/`, corpo)
+        if (seguirPagamento(data)) return        // paga na página do fornecedor e volta a /pagamento/callback
+        this.m = data
         this.cancelarAberto = false; this.remarcarAberto = false
         this.versao++
         toast.success(ok)

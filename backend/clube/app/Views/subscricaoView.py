@@ -15,6 +15,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import FaturaSubscricao, Loja, PlanoSubscricao, Subscricao
+from ..pagamentos import ErroPagamento
+from ..pagamentos import servico as pagamentos
 from ..utils import subscricoes as subs
 from ..utils.pagination import paginar_lista
 from .adminView import _exige_admin
@@ -209,16 +211,18 @@ def loja_subscricao(request, loja_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def loja_fatura_pagar(request, loja_id, fatura_id):
-    """POST /app/loja/<loja_id>/subscricao/faturas/<fatura_id>/pagar/ — pagamento (simulado) pelo dono."""
+    """POST /app/loja/<loja_id>/subscricao/faturas/<fatura_id>/pagar/ — pagamento pelo dono (pagamentos: o fornecedor activo)."""
     loja = get_object_or_404(Loja, id=loja_id)
     membro, erro = _exige_permissao(request, loja, 'pagar_subscricao')
     if erro:
         return erro
     fatura = get_object_or_404(FaturaSubscricao, id=fatura_id, loja=loja)
     try:
-        subs.pagar(fatura, 'simulado', referencia=f'SIM-{fatura.id}')
-    except subs.ErroFatura as e:
+        inicio = pagamentos.iniciar_fatura(fatura, request.user.utilizador)
+    except (subs.ErroFatura, ErroPagamento) as e:
         return _erro(str(e))
+    if inicio.estado == 'redirecionar':          # paga na página do fornecedor
+        return Response(pagamentos.para_frontend(inicio))
     loja.refresh_from_db()          # pagar pode ter mudado o modelo (pedido de mudança) ou reactivado a loja
     return Response(_resumo_loja(loja, membro))
 

@@ -1,3 +1,4 @@
+          this.initForm(l)
 <template>
   <div class="space-y-6 max-w-2xl">
 
@@ -210,7 +211,7 @@
       </p>
 
       <div class="space-y-3">
-        <div v-for="m in todosMetodos" :key="m.tipo"
+        <div v-for="m in metodosVisiveis" :key="m.tipo" :data-teste="`metodo-${m.tipo}`"
              class="flex items-center justify-between p-3 rounded-xl transition"
              :class="metodoActivo(m.tipo) ? 'bg-red-500/10 border border-red-500/30' : 'bg-zinc-800/50 border border-transparent'">
           <div class="flex items-center gap-3">
@@ -220,7 +221,7 @@
             </span>
             <div>
               <p class="text-sm font-medium text-zinc-200">{{ m.label }}</p>
-              <p class="text-xs text-zinc-500">{{ m.descricao }}</p>
+              <p class="text-xs text-zinc-500">{{ m.antigo ? 'Já não se usa — podes desligar.' : m.descricao }}</p>
             </div>
           </div>
           <button @click="toggleMetodo(m.tipo)" :disabled="loadingMetodos"
@@ -234,40 +235,10 @@
         </div>
       </div>
 
-      <!-- Configuração Flutterwave -->
-      <div v-if="metodoActivo('flutterwave')"
-           class="mt-4 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 space-y-3">
-        <div class="flex items-center gap-2 mb-2">
-          <font-awesome-icon :icon="['fas', 'earth-africa']" class="w-4 h-4 text-zinc-400" />
-          <p class="text-sm font-semibold text-zinc-200">Configuração Flutterwave</p>
-        </div>
-        <p class="text-xs text-zinc-500">
-          Para receber pagamentos precisas de criar uma conta no
-          <a href="https://flutterwave.com" target="_blank" class="text-red-400 hover:text-red-300 underline">Flutterwave</a>
-          e obter o teu Subaccount ID.
-        </p>
-        <div>
-          <label class="text-xs text-zinc-500 mb-1 block">Subaccount ID</label>
-          <input v-model="flwSubaccountId" type="text" placeholder="Ex: RS_XXXXXXXXXXXXXXXX"
-            class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
-                   font-mono focus:outline-none focus:border-red-500 transition" />
-          <p class="text-[10px] text-zinc-600 mt-1">
-            Encontras em Flutterwave Dashboard → Subaccounts → o teu Subaccount ID
-          </p>
-          <p class="text-xs text-zinc-500 mt-2">
-            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1 text-amber-500" />Taxa de processamento Flutterwave (~1.4% a 3%) é descontada automaticamente 
-            de cada pagamento recebido.
-          </p>
-        </div>
-        <button @click="guardarFlutterwave" :disabled="loadingFlw || !flwSubaccountId.trim()"
-          :class="['w-full py-2 rounded-lg text-xs font-bold transition',
-                   loadingFlw || !flwSubaccountId.trim()
-                     ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                     : 'bg-red-600 hover:bg-red-500 text-white']">
-          {{ loadingFlw ? 'A guardar…' : 'Guardar configuração Flutterwave' }}
-        </button>
-        <p v-if="flwGuardado" class="text-xs text-green-400 text-center"><font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Configuração guardada</p>
-      </div>
+      <p class="mt-4 text-xs text-zinc-500" data-teste="metodos-online-nota">
+        <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />Cartão e mobile money são pagos online: a Bende trata do pagamento e
+        transfere o dinheiro para a conta em <strong class="text-zinc-400">Dados bancários</strong>. Não precisas de conta em nenhum serviço de pagamentos.
+      </p>
     </div>
 
     <!-- Dados fiscais (só o dono) -->
@@ -409,14 +380,19 @@ import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 const LIMPAVEIS = ['localizacao', 'politica_devolucao', 'termos_servico', 'politica_privacidade', 'politica_entregas',
                    'contacto_email', 'contacto_telefone']
 
-const TODOS_METODOS = [
-  { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',           descricao: 'Pagamento em mão na entrega ou levantamento' },
-  { tipo: 'flutterwave',   icon: iconePagamento('flutterwave'),   label: 'Flutterwave',        descricao: 'Cartão Visa/Mastercard, Mobile Money' },
-  { tipo: 'mbway',         icon: iconePagamento('mbway'),         label: 'MBWay',              descricao: 'Pagamento via MBWay (Portugal)' },
-  { tipo: 'transferencia', icon: iconePagamento('transferencia'), label: 'Transferência',      descricao: 'Transferência bancária' },
-  { tipo: 'mobile_money',  icon: iconePagamento('mobile_money'),  label: 'Mobile Money',       descricao: 'Pagamento móvel local' },
-  { tipo: 'cartao',        icon: iconePagamento('cartao'),        label: 'Cartão (Stripe)',     descricao: 'Cartão via Stripe (Europa)' },
-  { tipo: 'paypal',        icon: '🅿️',  label: 'PayPal',            descricao: 'Pagamento via PayPal' },
+// o que a loja pode ligar; os pagos online passam pelo fornecedor da plataforma (backend app/pagamentos)
+const METODOS = [
+  { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro',      descricao: 'Pagamento em mão na entrega ou levantamento' },
+  { tipo: 'transferencia', icon: iconePagamento('transferencia'), label: 'Transferência', descricao: 'Transferência bancária — confirmas quando recebes' },
+  { tipo: 'cartao',        icon: iconePagamento('cartao'),        label: 'Cartão',        descricao: 'Visa, Mastercard — pago online' },
+  { tipo: 'mobile_money',  icon: iconePagamento('mobile_money'),  label: 'Mobile Money',  descricao: 'Pagamento móvel — pago online' },
+]
+// antigos: só aparecem se ainda estiverem ligados, para os desligar
+const ANTIGOS = [
+  { tipo: 'flutterwave', icon: iconePagamento('flutterwave'), label: 'Flutterwave', antigo: true },
+  { tipo: 'mbway',       icon: iconePagamento('mbway'),       label: 'MBWay',       antigo: true },
+  { tipo: 'stripe',      icon: iconePagamento('cartao'),      label: 'Stripe',      antigo: true },
+  { tipo: 'paypal',      icon: iconePagamento('cartao'),      label: 'PayPal',      antigo: true },
 ]
 function isVideo (url) {
   return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
@@ -464,16 +440,17 @@ export default {
       formOpcao:      { nome: '', preco: 0, tempo_estimado: '', area_cobertura: '' },
 
       // métodos de pagamento
-      todosMetodos:     TODOS_METODOS,
-      metodosActivos:   [],   // lista de tipos activos: ['dinheiro', 'flutterwave', ...]
+      metodosActivos:   [],   // lista de tipos activos: ['dinheiro', 'cartao', ...]
       loadingMetodos:   false,
 
-      // flutterwave
-      flwSubaccountId: '',
-      loadingFlw:      false,
-      flwGuardado:     false,
       isBannerVideo: false,
     }
+  },
+
+  computed: {
+    metodosVisiveis () {
+      return [...METODOS, ...ANTIGOS.filter(m => this.metodoActivo(m.tipo))]
+    },
   },
 
   watch: {
@@ -482,7 +459,6 @@ export default {
       handler (l) {
         if (l) {
           this.initForm(l)
-          this.flwSubaccountId = l.flutterwave_subaccount_id || ''
         }
       }
     },
@@ -609,22 +585,6 @@ export default {
         }
       } catch (e) { console.error(e) }
       finally { this.loadingMetodos = false }
-    },
-
-    async guardarFlutterwave () {
-      this.loadingFlw = true
-      this.flwGuardado = false
-      try {
-        await api.patch(`/app/loja/${this.lojaId}/editar/`, {
-          flutterwave_subaccount_id: this.flwSubaccountId,
-          aceita_flutterwave: true,
-        })
-        this.flwGuardado = true
-        setTimeout(() => { this.flwGuardado = false }, 3000)
-        this.$emit('updated')
-      } catch (e) {
-        alert(e.response?.data?.detail || 'Não foi possível guardar a configuração Flutterwave.')
-      } finally { this.loadingFlw = false }
     },
 
     // ── Loja ──────────────────────────────────────────────────

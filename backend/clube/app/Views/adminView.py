@@ -1414,5 +1414,10 @@ def admin_creditos_descontar(request):
         return Response({'detail': 'Indica a loja.'}, status=status.HTTP_400_BAD_REQUEST)
     qs = CreditoComissao.objects.select_for_update().filter(loja_id=loja_id, estado='pendente')
     total = qs.aggregate(v=Sum('valor'))['v'] or 0
+    ids = list(qs.values_list('id', flat=True))
     n = qs.update(estado='descontado', data_desconto=now())
+    if n:
+        from ..utils.registo import registar
+        registar('comissao', 'creditos_descontados', loja_id=loja_id, valor=total, estado_novo='descontado',
+                 dados={'creditos': ', '.join(map(str, ids))})
     return Response({'descontados': n, 'total': str(total)})

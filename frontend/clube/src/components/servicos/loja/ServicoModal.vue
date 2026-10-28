@@ -209,6 +209,7 @@ import api from '@/services/api'
 import { estaAutenticado } from '@/services/sessao'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { DIAS_CURTOS, diaSemana, duracaoTexto, hora, rotuloDia } from '@/utils/servicos'
+import { seguirPagamento } from '@/utils/pagamentoOnline'
 
 export const GUARDADO = 'servicos_escolha'
 
@@ -308,7 +309,9 @@ export default {
           servico_id: this.servico.id, profissional_id: this.profId, inicio: this.escolhida, pagamento: this.pagamentoEfetivo, notas: this.notas.trim() })
         let m = data
         if (m.pagamento === 'antecipado' && !m.pago && confirm(`Pagar ${formatarDinheiro(Number(m.preco_indicado))}?\n\n(Pagamento simulado)`)) {
-          m = (await api.post(`/app/marcacoes/${m.id}/acao/`, { acao: 'pagar' })).data
+          const { data: pago } = await api.post(`/app/marcacoes/${m.id}/acao/`, { acao: 'pagar' })
+          if (seguirPagamento(pago)) return       // paga na página do fornecedor e volta a /pagamento/callback
+          m = pago
         }
         this.$router.push({ path: `/minhas-marcacoes/${m.id}`, query: { nova: 1 } })
       } catch (e) {

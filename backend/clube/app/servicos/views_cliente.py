@@ -18,6 +18,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import Loja, Utilizador
+from ..pagamentos import ErroPagamento
+from ..pagamentos import servico as pagamentos
 from ..utils.dinheiro import formatar, ler_valor
 from ..utils.horarios import fuso
 from . import agenda, cobranca, conversa, pacotes
@@ -319,7 +321,9 @@ def minha_acao(request, marcacao_id):
     acao = d.get('acao')
     try:
         if acao == 'pagar':
-            m = ops.pagar(m)
+            inicio, m = pagamentos.iniciar_marcacao(m, request.user.utilizador)
+            if inicio.estado == 'redirecionar':          # o cliente paga na página do fornecedor
+                return Response(pagamentos.para_frontend(inicio))
         elif acao == 'cancelar':
             motivo, e = _texto(d, 'motivo', 200)
             if e:
@@ -348,7 +352,7 @@ def minha_acao(request, marcacao_id):
             m = conversa.responder(m, pid, acao == 'aceitar_proposta', request.user.utilizador)
         else:
             return _erro('Acção inválida.')
-    except ErroMarcacao as e:
+    except (ErroMarcacao, ErroPagamento) as e:
         return _erro(str(e))
     except conversa.ErroConversa as e:
         return _erro(e.mensagem, e.status)

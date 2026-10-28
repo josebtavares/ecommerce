@@ -551,9 +551,7 @@ export default {
 
       metodosPagamento: [
         { tipo: 'dinheiro',      icon: iconePagamento('dinheiro'),      label: 'Dinheiro'      },
-        { tipo: 'mbway',         icon: iconePagamento('mbway'),         label: 'MBWay'         },
         { tipo: 'cartao',        icon: iconePagamento('cartao'),        label: 'Cartão'        },
-        { tipo: 'flutterwave',   icon: iconePagamento('flutterwave'),   label: 'Flutterwave'   },
         { tipo: 'transferencia', icon: iconePagamento('transferencia'), label: 'Transferência' },
         { tipo: 'mobile_money',  icon: iconePagamento('mobile_money'),  label: 'Mobile Money'  },
       ],

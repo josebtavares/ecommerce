@@ -266,17 +266,15 @@ def dentro_do_prazo(m, quando=None):
     return (quando or timezone.now()) <= m.inicio - timedelta(hours=cfg.cancelar_horas)
 
 
-def pagar(m):
-    """Pagamento antecipado (simulado). Confirma logo, ou fica à espera da loja (confirmação manual)."""
-    # o prazo para pagar acabou: liberta o horário já (fora da transacção do pagamento, que falha)
+def verificar_pagavel(m):
+    """ErroMarcacao se a marcação não pode ser paga agora (antes de mandar o cliente ao fornecedor)."""
     if expirar_vencidas(pk=m.pk):
         raise ErroMarcacao('O tempo para pagar acabou e o horário foi libertado. Marca outra vez.')
-    return _pagar(m)
+    m.refresh_from_db()
+    _pagavel(m)
 
 
-@transaction.atomic
-def _pagar(m):
-    m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
+def _pagavel(m):
     if m.pagamento != 'antecipado' or m.pago:
         raise ErroMarcacao('Esta marcação não tem nada por pagar.')
     # a loja deixou de aceitar marcações (fechou, suspensa, módulo desligado ou por pagar): não se cobra
@@ -284,10 +282,29 @@ def _pagar(m):
         raise ErroMarcacao('A loja deixou de aceitar marcações — esta não pode ser paga e vai expirar sozinha.')
     if m.estado != 'pendente':
         raise ErroMarcacao(f'Esta marcação está {m.get_estado_display().lower()}.')
+
+
+def pagar(m, fornecedor='simulado', referencia=''):
+    """
+    Pagamento antecipado confirmado pelo fornecedor (pagamentos.servico — o cliente paga por lá).
+    Confirma logo, ou fica à espera da loja (confirmação manual).
+    """
+    # o prazo para pagar acabou: liberta o horário já (fora da transacção do pagamento, que falha)
+    if expirar_vencidas(pk=m.pk):
+        raise ErroMarcacao('O tempo para pagar acabou e o horário foi libertado. Marca outra vez.')
+    return _pagar(m, fornecedor, referencia)
+
+
+@transaction.atomic
+def _pagar(m, fornecedor, referencia):
+    m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
+    _pagavel(m)
     m.pago, m.pago_em, m.valor_pago, m.expira_em = True, timezone.now(), m.preco_indicado, None
+    m.pagamento_fornecedor, m.pagamento_referencia = fornecedor, (referencia or '')[:100]
     if m.loja.config_servicos.confirmacao == 'auto':
         m.estado = 'confirmada'
-    m.save(update_fields=['pago', 'pago_em', 'valor_pago', 'expira_em', 'estado', 'data_atualizacao'])
+    m.save(update_fields=['pago', 'pago_em', 'valor_pago', 'expira_em', 'estado', 'pagamento_fornecedor',
+                          'pagamento_referencia', 'data_atualizacao'])
     avisar_loja(m, 'Nova marcação paga' if m.estado == 'confirmada' else 'Marcação paga — confirma-a',
                 f'{m.servico_nome} a {quando_texto(m.inicio)} — {formatar(m.valor_pago)} pagos.', tipo='marcacao_nova')
     from ..utils.emails_fiscais import comprovativo_marcacao_depois_do_commit
@@ -330,13 +347,16 @@ def reembolsar(m):
     falta = m.reembolso_devido - m.valor_reembolsado
     if falta <= 0:
         return Decimal('0')
+    from ..pagamentos import servico as pagamentos
+    referencia = pagamentos.reembolsar(m.pagamento_fornecedor, m.pagamento_referencia, falta, chave=f'mar{m.pk}')
     m.valor_reembolsado += falta
     m.reembolsado_em = timezone.now()
     Marcacao.objects.filter(pk=m.pk).update(valor_reembolsado=m.valor_reembolsado, reembolsado_em=m.reembolsado_em)
     from ..utils.registo import registar
     registar('marcacao', 'reembolsada', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
-             metodo=m.pagamento, dados={'total_reembolsado': f'{m.valor_reembolsado:.2f}'})
-    texto = f'Devolvemos {formatar(falta)} para o meio de pagamento que usaste (pagamento simulado).'
+             metodo=m.pagamento, referencia=referencia, dados={'total_reembolsado': f'{m.valor_reembolsado:.2f}'})
+    texto = f'Devolvemos {formatar(falta)} para o meio de pagamento que usaste' + (
+        ' (pagamento simulado).' if m.pagamento_fornecedor in ('', 'simulado') else '.')
     if m.cliente_id:
         from .models import MensagemMarcacao
         MensagemMarcacao.objects.create(marcacao=m, papel='sistema', texto=texto)

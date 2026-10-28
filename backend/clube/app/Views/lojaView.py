@@ -182,8 +182,10 @@ def loja_create(request):
     metodos = request.data.getlist('metodos_pagamento')
     if metodos:
         from ..models import MetodoPagamento
+        from .pagamentoView import METODOS_LOJA
         for tipo in metodos:
-            MetodoPagamento.objects.get_or_create(loja=loja, tipo=tipo, defaults={'ativo': True})
+            if tipo in METODOS_LOJA:
+                MetodoPagamento.objects.get_or_create(loja=loja, tipo=tipo, defaults={'ativo': True})
 
     import json
     opcoes_raw = request.data.get('opcoes_entrega')

@@ -1,5 +1,6 @@
 """Loja pronta para ser publicada: os requisitos que a SISP/o banco esperam ver numa loja do marketplace
-(quem vende, contactos, políticas e pelo menos um produto ou serviço bem apresentado).
+(quem vende, contactos, políticas e pelo menos um produto ou serviço bem apresentado; com pagamentos online
+a sério e cartão/mobile money ligados, também os dados bancários).
 
 Qualquer pessoa cria a loja incompleta; o backoffice mostra a barra de progresso e o que falta,
 e o admin só aprova (publica) uma loja pendente com todos os requisitos cumpridos.
@@ -72,6 +73,15 @@ def avaliar(loja, com_produtos=False):
          'ok': bool(completos or servicos_ok),
          'ajuda': f'Com foto, preço e descrição (pelo menos {DESCRICAO_MIN} caracteres).'},
     ]
+    # com pagamentos online a sério, quem aceita cartão/mobile money tem de dizer para onde vai o dinheiro
+    from ..pagamentos import cobra_a_serio
+    from ..pagamentos.servico import METODOS_ONLINE
+    if cobra_a_serio() and loja.metodos_pagamento.filter(ativo=True, tipo__in=METODOS_ONLINE).exists():
+        from ..models import DadosBancarios
+        requisitos.append({'chave': 'banco', 'titulo': 'Dados bancários', 'seccao': 'configuracoes',
+                           'ok': DadosBancarios.objects.filter(loja=loja).exists(),
+                           'ajuda': 'Em Configurações → Dados bancários (só o dono): a conta para onde a Bende '
+                                    'transfere os pagamentos online.'})
     feitos = sum(r['ok'] for r in requisitos)
     out = {
         'percentagem': round(100 * feitos / len(requisitos)),
