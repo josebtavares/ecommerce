@@ -169,10 +169,15 @@ def pode_moderar(quem, alvo, acao):
 def moderar(alvo, acao, por, motivo='', ate=None, incluir_lojas=False):
     """Aplica a acção (já validada) e regista-a. `ate`: datetime ou None (só para suspender).
     incluir_lojas: suspender também as lojas e os POS (o ban suspende-os sempre)."""
-    from ..models import ModeracaoUtilizador
+    from ..models import ModeracaoUtilizador, Utilizador
     from ..autenticacao import terminar_sessoes
     motivo = (motivo or '').strip()[:500]
     with transaction.atomic():
+        # dois pedidos ao mesmo tempo (ex.: banir duas vezes): o segundo via o estado antigo e
+        # registava as lojas já suspensas pelo ban como "estado anterior" — nunca mais voltavam
+        atual = Utilizador.objects.select_for_update().only('status').get(pk=alvo.pk)
+        if atual.status != alvo.status:
+            raise ValueError('A conta mudou entretanto. Abre-a outra vez.')
         afetados = {}
         if alvo.status in ('banido', 'suspenso'):
             # sai do estado anterior: o que ele suspendeu volta como estava (o novo volta a suspender)
