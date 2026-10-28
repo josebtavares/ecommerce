@@ -483,6 +483,8 @@ def admin_utilizador_gerir(request, utilizador_id):
     if 'status' in request.data:
         return Response({'detail': 'Para suspender, banir ou reactivar usa /moderar/ (com motivo).'},
                         status=status.HTTP_400_BAD_REQUEST)
+    if utilizador.status == 'eliminado':
+        return Response({'detail': 'Esta conta foi apagada.'}, status=status.HTTP_400_BAD_REQUEST)
 
     # nao pode editar a si mesmo para evitar acidente
     if utilizador.user == request.user:
@@ -584,6 +586,10 @@ def admin_utilizador_eliminar(request, utilizador_id):
     if alvo.status == 'eliminado':
         return Response({'detail': 'A conta já foi apagada.'}, status=status.HTTP_400_BAD_REQUEST)
     if request.method == 'DELETE':
+        # banida/suspensa: as lojas estão suspensas pelo ban — cancelar aqui reabria-as
+        if alvo.status != 'ativo':
+            return Response({'detail': 'Levanta primeiro o ban/suspensão; depois cancela o pedido.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         if not eliminacao.cancelar(alvo, por=request.user):
             return Response({'detail': 'Não há pedido de eliminação.'}, status=status.HTTP_400_BAD_REQUEST)
     else:
@@ -638,7 +644,10 @@ def admin_utilizador_moderar(request, utilizador_id):
             return Response({'detail': 'A data de fim tem de ser hoje ou depois.'}, status=status.HTTP_400_BAD_REQUEST)
 
     incluir = acao == 'suspender' and request.data.get('incluir_lojas') in (True, 'true', '1', 1)
-    moderacao.moderar(alvo, acao, request.user, motivo=motivo, ate=ate, incluir_lojas=incluir)
+    try:
+        moderacao.moderar(alvo, acao, request.user, motivo=motivo, ate=ate, incluir_lojas=incluir)
+    except ValueError as e:
+        return Response({'detail': str(e)}, status=status.HTTP_409_CONFLICT)
     alvo.refresh_from_db()
     return Response(_ficha_utilizador(alvo, request))
 

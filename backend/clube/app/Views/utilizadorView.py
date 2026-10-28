@@ -202,6 +202,22 @@ def utilizador_me(request):
     return Response(_build_user_payload(utilizador, request), status=status.HTTP_200_OK)
 
 
+def _password_errada(request, password):
+    """Confirmar a password actual numa sessão já aberta (mudar email/password, apagar a conta).
+    Devolve a mensagem de erro ou None. Sem limite, quem roubasse uma sessão podia adivinhar a
+    password por aqui sem o axes contar: 5 erradas em 15 min por conta bloqueiam."""
+    from django_ratelimit.core import get_usage
+    limite = dict(request=request, group='confirmar_password', key='user', rate='5/15m',
+                  method=['POST', 'PUT', 'PATCH'])   # o método entra na chave: um só contador
+    uso = get_usage(increment=False, **limite)
+    if uso and uso['count'] >= uso['limit']:
+        return 'Demasiadas tentativas com a password errada. Espera 15 minutos.'
+    if request.user.check_password(password or ''):
+        return None
+    get_usage(increment=True, **limite)
+    return 'A password actual está incorrecta.'
+
+
 @api_view(['PUT', 'PATCH'])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([IsAuthenticated])
@@ -218,11 +234,9 @@ def utilizador_update_me(request):
     email_novo = (request.data.get('email') or '').strip()
     muda_email = bool(email_novo) and email_novo.lower() != (request.user.email or '').lower()
     if (request.data.get('password') or muda_email) and request.user.has_usable_password():
-        if not request.user.check_password(request.data.get('password_atual') or ''):
-            return Response(
-                {'password_atual': ['A password actual está incorrecta.']},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        erro_password = _password_errada(request, request.data.get('password_atual'))
+        if erro_password:
+            return Response({'password_atual': [erro_password]}, status=status.HTTP_400_BAD_REQUEST)
 
     data = {
         'new_username'  : request.data.get('username'),
@@ -367,8 +381,9 @@ def conta_eliminar(request):
             'tem_password': request.user.has_usable_password(),
         })
     if request.user.has_usable_password():
-        if not request.user.check_password(request.data.get('password') or ''):
-            return Response({'detail': 'Password errada.'}, status=status.HTTP_400_BAD_REQUEST)
+        erro_password = _password_errada(request, request.data.get('password'))
+        if erro_password:
+            return Response({'detail': erro_password}, status=status.HTTP_400_BAD_REQUEST)
     elif (request.data.get('confirmacao') or '').strip() != request.user.username:
         return Response({'detail': f'Escreve o teu username ({request.user.username}) para confirmar.'},
                         status=status.HTTP_400_BAD_REQUEST)
