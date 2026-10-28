@@ -2007,13 +2007,15 @@ class Reembolso(models.Model):
         ('em_disputa',      'Em análise pela Bendi'),
         ('aguarda_produto', 'A aguardar o produto'),
         ('a_devolver',      'A devolver em mão'),       # pago em dinheiro: a loja devolve, o cliente confirma
+        ('por_reembolsar',  'Reembolso por concluir'),  # aceite, mas o fornecedor recusou — volta-se a tentar
         ('reembolsado',     'Reembolsado'),
         ('recusado',        'Recusado'),
         ('cancelado',       'Desistiu'),
     ]
     ORIGENS = [('cliente', 'Cliente'), ('loja', 'Loja'), ('sistema', 'Automático')]
     METODOS = [('gateway', 'Pelo meio de pagamento'), ('manual', 'Em mão pela loja'),
-               ('abatido', 'Descontado no valor a pagar')]   # ainda não estava pago (dinheiro na entrega)
+               ('abatido', 'Descontado no valor a pagar'),   # ainda não estava pago (dinheiro na entrega)
+               ('externo', 'Devolvido por fora pela Bendi')]   # o fornecedor não conseguiu: a Bendi devolveu (ex.: transferência)
 
     encomenda       = models.ForeignKey(Encomenda, on_delete=models.PROTECT, related_name='reembolsos')
     loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='reembolsos')
@@ -2055,6 +2057,10 @@ class Reembolso(models.Model):
     recebido_auto   = models.BooleanField(default=False)
     # o cliente diz que não recebeu o dinheiro (em mão, ou do gateway depois de 10 dias) → Bendi
     nao_recebido_em = models.DateTimeField(null=True, blank=True)
+    # por_reembolsar: tentativas no fornecedor, o último erro e quando o worker volta a tentar (vazio = parou)
+    tentativas      = models.PositiveSmallIntegerField(default=0, db_default=0)
+    erro_reembolso  = models.CharField(max_length=255, blank=True, default='', db_default='')
+    proxima_tentativa = models.DateTimeField(null=True, blank=True)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
 

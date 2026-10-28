@@ -33,6 +33,10 @@
             <p v-if="m.preco_final && m.preco_final_motivo" class="text-zinc-500">Preço final: {{ m.preco_final_motivo }} ({{ m.preco_final_por }})</p>
           </div>
         </div>
+        <!-- o pagamento online recusou a devolução: quem gere tenta de novo (o worker também tenta sozinho) -->
+        <ReembolsoPorConcluir v-if="m.reembolso_por_concluir && podeGerir" :valor="m.reembolso_por_concluir.valor"
+          :erro="m.reembolso_por_concluir.erro" :tentativas="m.reembolso_por_concluir.tentativas"
+          :proxima="m.reembolso_por_concluir.proxima_tentativa" :aEnviar="aGuardar" @tentar="tentarReembolso" />
         <p v-if="m.notas_cliente" class="text-xs text-zinc-300 rounded-xl bg-zinc-800/50 px-3 py-2"><span class="text-zinc-500">Nota do cliente:</span> {{ m.notas_cliente }}</p>
         <p v-if="m.estado === 'cancelada'" class="text-xs text-zinc-400">Cancelada por {{ m.cancelada_por || '—' }}<template v-if="m.cancelada_motivo">: {{ m.cancelada_motivo }}</template></p>
 
@@ -155,6 +159,7 @@ import { CAMPO, ESTADOS_MARCACAO, diaDe, hora, hojeCV, rotuloDia, ouvirMarcacoes
 import { formatarDinheiro } from '@/utils/dinheiro'
 import MarcacaoConversa from './MarcacaoConversa.vue'
 import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
+import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
 import { descarregarComprovativoMarcacao } from '@/utils/documentos'
 
 const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro profissional' }, { k: 'preco', t: 'Propor preço' },
@@ -162,7 +167,7 @@ const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro 
 
 export default {
   name: 'MarcacaoDetalhe',
-  components: { FaturaVenda, MarcacaoConversa },
+  components: { FaturaVenda, MarcacaoConversa, ReembolsoPorConcluir },
   props: {
     lojaId: { type: [String, Number], required: true },
     marcacaoId: { type: Number, required: true },
@@ -213,6 +218,10 @@ export default {
         corpo.motivo = this.motivoPreco
       }
       this.acao(corpo, 'Serviço concluído.')
+    },
+    async tentarReembolso () {
+      await this.acao({ acao: 'tentar_reembolso' }, 'Reembolso feito.')
+      if (this.m?.reembolso_por_concluir && !this.erro) { this.ok = ''; this.erro = 'O pagamento online voltou a recusar.' }
     },
     faturaAtualizada (data) {
       this.m = data

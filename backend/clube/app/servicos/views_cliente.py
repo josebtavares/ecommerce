@@ -187,6 +187,8 @@ def _cliente_payload(request, m, completo=False):
     d = marcacao_payload(m, completo=False)
     for k in ('notas_internas', 'criada_por'):
         d.pop(k, None)
+    if d.get('reembolso_por_concluir'):     # o cliente só sabe que está a ser tratado (sem o erro do fornecedor)
+        d['reembolso_por_concluir'] = {'valor': d['reembolso_por_concluir']['valor']}
     cfg = m.loja.config_servicos
     d.update({'loja_id': m.loja_id, 'loja_nome': m.loja.nome, 'loja_logo': _url(request, m.loja.logo),
               'profissional_foto': _url(request, m.profissional.foto),

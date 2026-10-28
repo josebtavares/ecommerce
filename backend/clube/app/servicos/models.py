@@ -205,6 +205,11 @@ class Marcacao(models.Model):
     # quem cobrou o pagamento antecipado e a transacção (pagamentos.servico) — os reembolsos vão por aí
     pagamento_fornecedor = models.CharField(max_length=20, blank=True, default='', db_default='')
     pagamento_referencia = models.CharField(max_length=100, blank=True, default='', db_default='')
+    # reembolso que o fornecedor recusou (devolve-se o que falta: reembolso_devido − valor_reembolsado):
+    # o worker volta a tentar até reembolso_proxima ficar vazia; a loja e a Bendi podem tentar à mão
+    reembolso_erro = models.CharField(max_length=255, blank=True, default='', db_default='')
+    reembolso_tentativas = models.PositiveSmallIntegerField(default=0, db_default=0)
+    reembolso_proxima = models.DateTimeField(null=True, blank=True)
     # conversa: até quando cada lado leu (mensagens por ler)
     lida_cliente_em = models.DateTimeField(null=True, blank=True)
     lida_loja_em  = models.DateTimeField(null=True, blank=True)

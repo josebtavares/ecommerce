@@ -84,7 +84,7 @@
       <div v-if="carregando" class="flex justify-center py-16">
         <font-awesome-icon :icon="['fas', 'spinner']" spin class="text-2xl text-red-500" />
       </div>
-      <div v-else-if="!lista.length" class="text-center py-16 text-sm text-zinc-500">Sem pedidos aqui.</div>
+      <div v-else-if="!lista.length && !(grupo === 'por_concluir' && marcacoes.length)" class="text-center py-16 text-sm text-zinc-500">Sem pedidos aqui.</div>
       <div v-else class="space-y-2">
         <button v-for="r in lista" :key="r.id" type="button" @click="irParaFicha(router, route, r.id)"
           class="w-full text-left rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-600 p-4 flex items-center gap-3 transition">
@@ -101,6 +101,15 @@
           <button type="button" @click="carregar(true)" class="px-4 py-2 rounded-xl text-xs bg-zinc-800 text-zinc-300">Ver mais</button>
         </div>
       </div>
+      <!-- marcações com a devolução recusada pelo pagamento online -->
+      <section v-if="grupo === 'por_concluir' && marcacoes.length" class="space-y-2" data-teste="marcacoes-por-concluir">
+        <p class="text-xs font-bold uppercase tracking-wider text-zinc-500 pt-2">Marcações</p>
+        <div v-for="m in marcacoes" :key="m.id" class="space-y-2">
+          <p class="text-xs text-zinc-500">Marcação #{{ m.id }} · {{ m.loja_nome }} · {{ m.cliente_nome }} · {{ m.servico_nome }} · {{ dataHora(m.inicio) }}</p>
+          <ReembolsoPorConcluir :valor="m.valor" :erro="m.erro" :tentativas="m.tentativas" :proxima="m.proxima_tentativa" porFora
+            :aEnviar="aEnviarMarcacao === m.id" @tentar="reembolsoMarcacao(m, 'tentar')" @por-fora="reembolsoMarcacao(m, 'por_fora', $event)" />
+        </div>
+      </section>
     </template>
 
     <AdminReembolso v-if="aberto" :reembolso-id="aberto" @fechar="fechar" @alterado="carregar()" />
@@ -110,16 +119,19 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
+import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
 import AdminReembolso from './AdminReembolso.vue'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const GRUPOS = [
   { key: 'disputa',    label: 'Para decidir', ajuda: 'A loja não respondeu em 48 horas, recusou ou o cliente rejeitou a proposta. A decisão da Bendi é final.' },
+  { key: 'por_concluir', label: 'Por concluir', ajuda: 'Reembolsos aceites que o pagamento online recusou devolver (encomendas e marcações). Tentamos de novo sozinhos depois de 10 min, 1 h e 6 h; depois disso fica aqui para tentares ou dares como devolvido por fora.' },
   { key: 'ativos',     label: 'Em curso',     ajuda: 'Todos os pedidos ainda abertos (à espera da loja, do cliente, do produto ou da Bendi).' },
   { key: 'concluidos', label: 'Concluídos',   ajuda: 'Reembolsados, recusados ou desistências.' },
   { key: 'metricas',   label: 'Métricas',     ajuda: '' },
@@ -138,6 +150,8 @@ const aberto     = computed(() => fichaDaRota(route))   // /admin/devolucoes/<id
 const filtro     = ref(null)          // { campo, valor, label }
 const metricas   = ref(null)
 const periodo    = ref(90)
+const marcacoes  = ref([])            // por concluir (grupo por_concluir)
+const aEnviarMarcacao = ref(null)
 
 const dinheiro = v => formatarDinheiro(v || 0)
 const kpis = computed(() => {
@@ -159,9 +173,30 @@ async function carregar (mais = false) {
     lista.value = mais ? [...lista.value, ...data.results] : data.results
     proximo.value = data.next_offset
     contagem.value = data.contagem || {}
+    // o separador "Por concluir" conta também as marcações
+    contagem.value.por_concluir = (contagem.value.por_concluir || 0) + (contagem.value.marcacoes_por_concluir || 0)
     emit('disputas', contagem.value.disputa || 0)
+    if (grupo.value === 'por_concluir' && !mais) await carregarMarcacoes()
   } catch (e) { console.error(e) }
   finally { carregando.value = false }
+}
+
+async function carregarMarcacoes () {
+  const { data } = await api.get('/app/admin/reembolsos/marcacoes/', { params: { limit: 100 } })
+  marcacoes.value = data.results
+}
+
+async function reembolsoMarcacao (m, acao, extra = {}) {
+  aEnviarMarcacao.value = m.id
+  try {
+    const { data } = await api.post(`/app/admin/reembolsos/marcacoes/${m.id}/`, { acao, ...extra })
+    if (data.concluido) toast.success(acao === 'por_fora' ? 'Dado como devolvido por fora.' : 'Reembolso feito.')
+    else toast.error('O pagamento online voltou a recusar.')
+    carregar()
+  } catch (e) {
+    toast.error(e.response?.data?.detail || 'Não foi possível concluir.')
+    carregar()
+  } finally { aEnviarMarcacao.value = null }
 }
 
 async function carregarMetricas () {
@@ -190,6 +225,10 @@ function limparFiltro () {
 
 const fechar = () => irParaFicha(router, route, null)
 
-onMounted(() => carregar())
+// o aviso à Bendi abre já em "Por concluir" (/admin/devolucoes?grupo=por_concluir)
+onMounted(() => {
+  if (GRUPOS.some(g => g.key === route.query.grupo)) grupo.value = route.query.grupo
+  carregar()
+})
 useTempoRealReembolsos(() => carregar())
 </script>

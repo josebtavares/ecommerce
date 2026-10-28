@@ -225,6 +225,15 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(f'  devoluções: escalar falhou: {e}')
         try:
+            # reembolsos que o fornecedor recusou: nova tentativa quando a espera acaba (utils/devolucoes.py)
+            from app.utils.devolucoes import reembolsos_por_concluir
+            from app.servicos.marcacoes import reembolsos_por_concluir as marcacoes_por_concluir
+            n, m = reembolsos_por_concluir(), marcacoes_por_concluir()
+            if n or m:
+                self.stdout.write(f'  reembolsos: {n} encomenda(s) e {m} marcação(ões) tentada(s) de novo')
+        except Exception as e:
+            self.stderr.write(f'  reembolsos: nova tentativa falhou: {e}')
+        try:
             # suspensões que acabaram (as lojas suspensas com a conta voltam a horas) e contas
             # cujo prazo para apagar acabou (utils/moderacao.py, utils/eliminacao.py)
             from app.utils.moderacao import levantar_expiradas

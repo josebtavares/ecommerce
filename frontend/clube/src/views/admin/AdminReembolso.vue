@@ -45,8 +45,13 @@
           </p>
         </section>
 
+        <!-- decidido, mas o pagamento online recusou devolver: tentar de novo ou dar como devolvido por fora -->
+        <ReembolsoPorConcluir v-if="r.estado === 'por_reembolsar' && r.por_concluir" :valor="r.valor_aprovado" porFora
+          :erro="r.por_concluir.erro" :tentativas="r.por_concluir.tentativas" :proxima="r.por_concluir.proxima_tentativa"
+          :aEnviar="aEnviar" @tentar="reembolso('tentar')" @por-fora="reembolso('por_fora', $event)" />
+
         <!-- o valor já está acertado: só se decide se o dinheiro chegou ao cliente -->
-        <section v-if="decideEntrega" class="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+        <section v-else-if="decideEntrega" class="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
           <p class="text-sm font-semibold text-purple-200">Entrega do dinheiro</p>
           <p class="text-xs text-zinc-400">
             {{ r.metodo === 'manual'
@@ -124,6 +129,7 @@ import { ATIVOS, dataHora } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
+import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
 const props = defineProps({ reembolsoId: { type: [String, Number], required: true } })
@@ -163,10 +169,26 @@ async function decidir (decisao) {
     r.value = data
     nota.value = ''
     toast.success({ recusar: 'Pedido recusado.', confirmar_recebido: 'Dado como recebido.', loja_deve: 'A loja foi avisada.' }[decisao]
-                  || (data.estado === 'aguarda_produto' ? 'Decidido — à espera do produto.' : 'Reembolso feito.'))
+                  || (data.estado === 'aguarda_produto' ? 'Decidido — à espera do produto.' : data.estado === 'por_reembolsar'
+                      ? 'Decidido — o pagamento online recusou devolver; tenta de novo.' : 'Reembolso feito.'))
     emit('alterado')
   } catch (e) {
     toast.error(e.response?.data?.detail || 'Não foi possível decidir.')
+  } finally { aEnviar.value = false }
+}
+
+// reembolso por concluir: tentar de novo no pagamento online, ou dá-lo como devolvido por fora (referência)
+async function reembolso (acao, extra = {}) {
+  aEnviar.value = true
+  try {
+    const { data } = await api.post(`/app/admin/reembolsos/${r.value.id}/reembolso/`, { acao, ...extra })
+    r.value = data
+    if (data.estado === 'por_reembolsar') toast.error('O pagamento online voltou a recusar.')
+    else toast.success(acao === 'por_fora' ? 'Dado como devolvido por fora.' : 'Reembolso feito.')
+    emit('alterado')
+  } catch (e) {
+    toast.error(e.response?.data?.detail || 'Não foi possível concluir.')
+    carregar()
   } finally { aEnviar.value = false }
 }
 

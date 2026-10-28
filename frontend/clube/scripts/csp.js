@@ -16,6 +16,9 @@ const api = origem(process.env.VUE_APP_URL_BASE)
 const media = origem(process.env.VUE_APP_MEDIA_URL)
 // o WebSocket é sempre o servidor da API (services/api.js urlWebSocket)
 const ws = api && api.replace(/^http/, 'ws')
+// páginas de pagamento que recebem um formulário POST (utils/pagamentoOnline.js — ex.: SISP/vinti4):
+// VUE_APP_PAGAMENTOS_FORM="https://a.exemplo https://b.exemplo" (vazio = só o próprio site, como até aqui)
+const pagamentos = (process.env.VUE_APP_PAGAMENTOS_FORM || '').split(/[\s,]+/).map(origem)
 const lista = (...v) => [...new Set(v.filter(Boolean))].join(' ')
 
 const politica = [
@@ -33,7 +36,7 @@ const politica = [
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  `form-action ${lista("'self'", ...pagamentos)}`,
 ].join('; ')
 
 const ficheiro = path.join(raiz, 'dist', 'serve.json')

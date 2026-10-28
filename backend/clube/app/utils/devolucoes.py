@@ -15,30 +15,42 @@ Depois de receber (tipo 'devolucao', encomenda concluída):
 Dinheiro (concluir): o pagamento passa a 'reembolsado'/'reembolsado_parcial'; a comissão ainda pendente
   é recalculada sobre o que fica, a já liquidada dá um CreditoComissao à loja. O reembolso no meio de
   pagamento vai pelo fornecedor que cobrou (app/pagamentos; o simulado não devolve nada de verdade).
+Fornecedor recusa o reembolso (ErroPagamento) → 'por_reembolsar': a decisão fica, o pagamento e a comissão só se
+  acertam quando o dinheiro sai. O worker volta a tentar (ESPERAS_REEMBOLSO), a loja e a Bendi podem tentar à mão
+  (tentar_de_novo) e a Bendi pode dá-lo como devolvido por fora (devolvido_por_fora). Todas as tentativas usam a
+  mesma chave (o id do pedido) e correm com a encomenda bloqueada — nunca se devolve duas vezes.
 
 Todas as funções esperam a encomenda bloqueada (select_for_update) dentro de uma transacção.
 """
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
 from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
+from ..pagamentos.base import ErroPagamento
 from .dinheiro import formatar
+
+logger = logging.getLogger(__name__)
 
 PRAZO_PROBLEMA_H = 48           # defeito / errado / em falta / não chegou
 PRAZO_RESPOSTA_LOJA_H = 48      # depois disto o pedido vai para a Bendi
 PRAZO_ESCALAR_DIAS = 7          # depois de a loja recusar, o cliente pode pedir ajuda à Bendi até aqui
 PRAZO_DINHEIRO_DIAS = 7         # em mão: a loja tem 7 dias para entregar; o cliente 7 para dizer que não recebeu
 DIAS_NAO_RECEBI = 10            # gateway: os bancos podem demorar — "não recebi" só a partir daqui
+# fornecedor recusou o reembolso: o worker volta a tentar depois de cada espera; esgotadas, avisa a Bendi e pára
+ESPERAS_REEMBOLSO = (timedelta(minutes=10), timedelta(hours=1), timedelta(hours=6))
 MAX_FOTOS = 10
 MAX_TEXTO = 2000
 
 MOTIVOS_PROBLEMA = ('defeito', 'errado', 'em_falta', 'nao_chegou')
 ATIVOS = ('pedido', 'proposta', 'em_disputa', 'aguarda_produto', 'a_devolver')
 NAO_CONTAM = ('recusado', 'cancelado')    # pedidos que não prendem artigos nem valor
+# em curso para a encomenda (não deixa abrir outro pedido); por_reembolsar já está decidido — não se decide outra vez
+EM_CURSO = ATIVOS + ('por_reembolsar',)
 
 
 class ErroReembolso(Exception):
@@ -73,10 +85,16 @@ def valor_reembolsado(encomenda):
     """
     Dinheiro devido/devolvido ao cliente: data_reembolso marca o momento em que o valor ficou acertado (também
     o que está a ser devolvido em mão ou em disputa de entrega). Os esgotados descontados antes de pagar não
-    contam: nunca foram pagos.
+    contam: nunca foram pagos. Os por concluir (o fornecedor recusou) já são devidos — contam também.
     """
-    return (encomenda.reembolsos.filter(data_reembolso__isnull=False).exclude(metodo='abatido')
-            .aggregate(t=Sum('valor_aprovado'))['t'] or Decimal('0'))
+    return (encomenda.reembolsos.filter(Q(data_reembolso__isnull=False) | Q(estado='por_reembolsar'))
+            .exclude(metodo='abatido').aggregate(t=Sum('valor_aprovado'))['t'] or Decimal('0'))
+
+
+def valor_por_concluir(encomenda):
+    """Devido mas ainda por sair (o fornecedor recusou o reembolso) — parte de valor_reembolsado."""
+    return (encomenda.reembolsos.filter(estado='por_reembolsar').aggregate(t=Sum('valor_aprovado'))['t']
+            or Decimal('0'))
 
 
 def reembolsavel(encomenda):
@@ -102,7 +120,7 @@ def qtd_disponivel(encomenda):
 
 
 def ativo(encomenda):
-    return encomenda.reembolsos.filter(estado__in=ATIVOS).first()
+    return encomenda.reembolsos.filter(estado__in=EM_CURSO).first()
 
 
 def _entrega_falhou(encomenda):
@@ -231,9 +249,9 @@ def _avisar_loja(r, titulo, texto, tipo='reembolso_atualizado'):
                     link=f'/loja/{r.loja_id}/backoffice/devolucoes/{r.id}')
 
 
-def _avisar_admins(r, titulo, texto):
+def _avisar_admins(r, titulo, texto, tipo='reembolso_disputa'):
     from ..Views.notificacaoView import notificar_admins
-    notificar_admins(tipo='reembolso_disputa', titulo=f'{titulo} — Encomenda #{r.encomenda_id}',
+    notificar_admins(tipo=tipo, titulo=f'{titulo} — Encomenda #{r.encomenda_id}',
                      mensagem=texto, loja=r.loja, link=f'/admin/devolucoes/{r.id}')
 
 
@@ -615,6 +633,8 @@ def escalar(r, motivo):
 
 def admin_decidir(r, utilizador, decisao, valor=None, devolver_produto=False, nota=''):
     nota = (nota or '').strip()
+    if r.estado == 'por_reembolsar':          # já decidido — falta só o dinheiro sair
+        raise ErroReembolso('Este reembolso já está decidido: usa "Tentar de novo" ou "Devolvido por fora".')
     if r.estado not in ATIVOS and not (r.estado == 'recusado' and not r.decisao_admin):
         raise ErroReembolso('Este pedido já está fechado.')
     if r.data_reembolso:                       # o dinheiro já está acertado: só se decide se chegou ao cliente
@@ -862,7 +882,6 @@ def _executar_no_gateway(r, valor, metodo, pagamento=None):
 
 
 def _concluir(r, valor):
-    from ..models import Pagamento
     enc = r.encomenda
     valor = min(_q(valor), _limite(r))
     p = pagamento_de(enc)
@@ -872,12 +891,23 @@ def _concluir(r, valor):
         # endpoint do dinheiro (referência 'dinheiro'), mas o reembolso é para o meio de pagamento usado
         tipo = p.metodo.tipo if p and p.metodo_id else ('dinheiro' if p and p.referencia_transacao == 'dinheiro' else '')
         metodo = 'manual' if tipo == 'dinheiro' else 'gateway'
-        r.referencia = _executar_no_gateway(r, valor, metodo, p)
+        try:
+            r.referencia = _executar_no_gateway(r, valor, metodo, p)
+        except ErroPagamento as e:
+            return _falhou(r, valor, e)
+    return _acertar(r, valor, metodo, p)
+
+
+def _acertar(r, valor, metodo, p):
+    """O dinheiro saiu (ou fica a devolver em mão): pagamento, comissão e avisos."""
+    from ..models import Pagamento
+    enc = r.encomenda
     r.estado = 'a_devolver' if metodo == 'manual' else 'reembolsado'
     r.valor_aprovado = valor
     r.metodo = metodo
     r.data_reembolso = timezone.now()
     r.prazo_resposta = r.data_reembolso + timedelta(days=PRAZO_DINHEIRO_DIAS) if metodo == 'manual' else None
+    r.proxima_tentativa = None
     r.save()
 
     if p and valor > 0:
@@ -897,11 +927,105 @@ def _concluir(r, valor):
         _avisar_loja(r, 'Devolve o dinheiro em mão', f'Devolve {formatar(valor)} ao cliente até {_hora(r.prazo_resposta)} '
                                                      f'e marca "Dinheiro entregue" no pedido.')
         return r
-    txt = f'Reembolso de {formatar(valor)} feito para o meio de pagamento usado.'
+    if metodo == 'externo':
+        txt = f'A Bendi devolveu-te {formatar(valor)} por fora do pagamento online (referência {r.referencia}).'
+    else:
+        txt = f'Reembolso de {formatar(valor)} feito para o meio de pagamento usado.'
     mensagem(r, 'sistema', txt)
     _avisar_cliente(r, 'Reembolso feito', txt + f' Os bancos podem demorar até {DIAS_NAO_RECEBI} dias a mostrá-lo.')
     _avisar_loja(r, 'Reembolso feito', txt)
     return r
+
+
+def _falhou(r, valor, erro):
+    """
+    O fornecedor recusou o reembolso: a decisão fica (por_reembolsar), o pagamento e a comissão não mudam.
+    Volta-se a tentar depois de cada ESPERAS_REEMBOLSO; esgotadas, a Bendi é avisada e o worker pára.
+    """
+    from .registo import registar
+    primeira = r.estado != 'por_reembolsar'
+    r.estado = 'por_reembolsar'
+    r.valor_aprovado = valor
+    r.metodo = 'gateway'
+    r.referencia = ''
+    r.prazo_resposta = None
+    r.tentativas += 1
+    r.erro_reembolso = (str(erro) or 'O fornecedor recusou o reembolso.')[:255]
+    r.proxima_tentativa = (timezone.now() + ESPERAS_REEMBOLSO[r.tentativas - 1]
+                           if r.tentativas <= len(ESPERAS_REEMBOLSO) else None)
+    r.save()
+    registar('reembolso', 'reembolso_falhou', objeto_id=r.pk, loja_id=r.loja_id, encomenda_id=r.encomenda_id,
+             valor=valor, estado_novo=r.estado, metodo=r.metodo,
+             dados={'tentativa': r.tentativas, 'erro': r.erro_reembolso})
+    if primeira:
+        mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite, mas houve um atraso a processá-lo. '
+                               f'Estamos a tratar disso — não precisas de fazer nada.')
+        _avisar_cliente(r, 'Reembolso a processar', f'O reembolso de {formatar(valor)} foi aceite, mas houve um atraso '
+                                                    f'a processá-lo. Estamos a tratar disso.')
+        _avisar_loja(r, 'Reembolso por concluir', f'O pagamento online não aceitou o reembolso de {formatar(valor)} '
+                                                  f'({r.erro_reembolso}). Vamos tentar de novo sozinhos — ou usa '
+                                                  f'"Tentar de novo" no pedido.')
+    if r.tentativas == len(ESPERAS_REEMBOLSO) + 1:
+        _avisar_admins(r, 'Reembolso por concluir', f'{r.loja.nome} · {formatar(valor)} · {r.tentativas} tentativas '
+                                                    f'falhadas: {r.erro_reembolso}', tipo='pagamento_reembolsar')
+        _avisar_loja(r, 'Reembolso ainda por concluir', 'Continua a falhar — a Bendi foi avisada e vai tratar disso.')
+    return r
+
+
+def tentar_de_novo(r, utilizador=None, papel_quem='sistema'):
+    """
+    Volta a pedir o reembolso ao fornecedor (a mesma chave: o id do pedido). Espera r e a encomenda bloqueados
+    — duas tentativas ao mesmo tempo esperam uma pela outra e a segunda já não o encontra por concluir.
+    """
+    if r.estado != 'por_reembolsar':
+        raise ErroReembolso('Este reembolso já não está por concluir.', 409)
+    p = pagamento_de(r.encomenda)
+    try:
+        r.referencia = _executar_no_gateway(r, r.valor_aprovado, 'gateway', p)
+    except ErroPagamento as e:
+        _falhou(r, r.valor_aprovado, e)
+        return r
+    if utilizador:
+        mensagem(r, papel_quem, 'Tentou de novo o reembolso.', utilizador)
+    return _acertar(r, r.valor_aprovado, 'gateway', p)
+
+
+def devolvido_por_fora(r, utilizador, referencia, nota=''):
+    """A Bendi devolveu o dinheiro por outro meio (ex.: transferência) — referência obrigatória, fica no registo."""
+    referencia, nota = (referencia or '').strip(), (nota or '').strip()
+    if r.estado != 'por_reembolsar':
+        raise ErroReembolso('Este reembolso já não está por concluir.', 409)
+    if not 3 <= len(referencia) <= 100:
+        raise ErroReembolso('Indica a referência da devolução (ex.: n.º da transferência).')
+    r.referencia = referencia
+    mensagem(r, 'admin', f'A Bendi devolveu o dinheiro por fora (referência {referencia}).' + (f' {nota}' if nota else ''),
+             utilizador)
+    return _acertar(r, r.valor_aprovado, 'externo', pagamento_de(r.encomenda))
+
+
+def reembolsos_por_concluir(agora=None, lote=50):
+    """Worker (a cada minuto): volta a tentar os reembolsos recusados pelo fornecedor cuja espera acabou."""
+    from django.db import transaction
+    from ..models import Encomenda, Reembolso
+    agora = agora or timezone.now()
+    n = 0
+    pendentes = list(Reembolso.objects.filter(estado='por_reembolsar', proxima_tentativa__lte=agora)
+                     .order_by('proxima_tentativa').values_list('id', 'encomenda_id')[:lote])
+    for rid, enc_id in pendentes:
+        try:
+            with transaction.atomic():
+                # a encomenda primeiro (a ordem das views); ocupada → fica para a próxima volta
+                if not Encomenda.objects.select_for_update(skip_locked=True, of=('self',)).filter(id=enc_id).exists():
+                    continue
+                r = (Reembolso.objects.select_for_update(of=('self',)).select_related('encomenda', 'loja', 'comprador')
+                     .get(id=rid))
+                if r.estado != 'por_reembolsar' or not r.proxima_tentativa or r.proxima_tentativa > agora:
+                    continue
+                tentar_de_novo(r)
+                n += 1
+        except Exception:               # um pedido com problemas não pára os outros
+            logger.exception('reembolso #%s: nova tentativa falhou', rid)
+    return n
 
 
 def _ajustar_comissao(r, valor):
