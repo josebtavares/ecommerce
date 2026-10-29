@@ -243,6 +243,16 @@ class Command(BaseCommand):
                 self.stdout.write(f'  contas: {n} suspensão(ões) terminada(s), {m} conta(s) apagada(s)')
         except Exception as e:
             self.stderr.write(f'  contas: falhou: {e}')
+        # documentos das lojas a expirar ou expirados (utils/documentos_loja.py) — de hora a hora chega
+        if time.monotonic() - getattr(self, '_ultimo_documentos', -1e9) >= 3600:
+            self._ultimo_documentos = time.monotonic()
+            try:
+                from app.utils.documentos_loja import avisar_validades
+                n = avisar_validades()
+                if n:
+                    self.stdout.write(f'  documentos: {n} aviso(s) de validade')
+            except Exception as e:
+                self.stderr.write(f'  documentos: avisos falharam: {e}')
 
     def _sinal(self, *_):
         # termina a conversão em curso e sai

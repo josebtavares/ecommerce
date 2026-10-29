@@ -86,6 +86,12 @@ def loja_list(request):
     ordering = request.GET.get('ordering')
     qs = qs.order_by("fechada_agora", ordering if ordering in ['nome', '-nome', '-data_criacao'] else '-data_criacao')
 
+    # selo "Loja verificada" ligado para o público: numa só consulta (utils/documentos_loja.py)
+    from ..models import ConfiguracaoPlataforma
+    if ConfiguracaoPlataforma.atual().mostrar_selo_verificada:
+        from ..utils.documentos_loja import anotar_verificada
+        qs = anotar_verificada(qs)
+
     response, erro = paginar(request, qs, LojaPublicSerializer, limit_default=5)
     if erro:
         return erro

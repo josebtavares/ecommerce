@@ -139,6 +139,16 @@ def admin_loja_list(request):
     if categoria:
         qs = qs.filter(categoria__iexact=categoria)
 
+    # documentos legais (utils/documentos_loja.py): ?documentos=por_verificar | verificadas
+    from ..utils import documentos_loja
+    qs = documentos_loja.anotar_verificada(qs).annotate(
+        _docs_pendentes=Count('documentos', filter=Q(documentos__estado='pendente'), distinct=True))
+    documentos = request.GET.get('documentos')
+    if documentos == 'por_verificar':
+        qs = qs.filter(_docs_pendentes__gt=0)
+    elif documentos == 'verificadas':
+        qs = qs.filter(**{f'_doc_{t}': True for t in documentos_loja.PRINCIPAIS})
+
     # ?id= → só essa loja (ficha aberta pelo endereço, /admin/lojas/<id>)
     so_id = request.GET.get('id', '')
     if so_id:
@@ -173,6 +183,8 @@ def admin_loja_list(request):
             'pos_vinculados': [{'id': p.id, 'nome': p.nome, 'suspenso': p.suspenso}
                                for p in loja.pos_vinculados.all()],
             'prontidao': prontidao.avaliar(loja),
+            'documentos': {'verificada': documentos_loja.verificada(loja), 'pendentes': loja._docs_pendentes,
+                           'obrigatorios': loja.documentos_obrigatorios},
         })
 
     return Response({

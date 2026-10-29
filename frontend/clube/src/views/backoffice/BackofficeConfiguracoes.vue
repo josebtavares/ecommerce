@@ -248,6 +248,9 @@
     <!-- Dados bancários (só o dono) — components/loja/SeccaoDadosBancarios -->
     <SeccaoDadosBancarios v-if="podeBanco" :loja-id="lojaId" />
 
+    <!-- Documentos legais (só o dono, opcionais) — components/loja/SeccaoDocumentos -->
+    <SeccaoDocumentos v-if="podeDocumentos" :loja-id="lojaId" @alterado="$emit('updated')" />
+
     <!-- Impostos (mapa de IVA nos Relatórios) -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Impostos</h2>
@@ -374,6 +377,7 @@ import { criarVigia, emCurso, reprocessarVideo } from '@/utils/videoEstado'
 import HorarioEditor from '@/components/horario/HorarioEditor.vue'
 import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
 import SeccaoDadosBancarios from '@/components/loja/SeccaoDadosBancarios.vue'
+import SeccaoDocumentos from '@/components/loja/SeccaoDocumentos.vue'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 
 // campos de texto que o dono pode apagar (os outros vazios não se enviam)
@@ -400,13 +404,14 @@ function isVideo (url) {
 
 export default {
   name: 'BackofficeConfiguracoes',
-  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios },
+  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },
     podeFechar: { type: Boolean, default: false },   // permissão apagar_loja (dono)
     podeFiscal: { type: Boolean, default: false },   // permissão gerir_dados_fiscais (dono)
     podeBanco:  { type: Boolean, default: false },   // permissão gerir_dados_bancarios (dono)
+    podeDocumentos: { type: Boolean, default: false },   // permissão gerir_documentos (dono)
   },
   emits: ['updated'],
 

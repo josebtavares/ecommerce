@@ -137,8 +137,8 @@
                 class="inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-zinc-950/85 text-amber-300 text-[10px] font-bold rounded mb-1.5">
             <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Fechada
           </span>
-          <h3 class="text-base font-bold text-white truncate group-hover:text-red-400 transition-colors">
-            {{ loja.nome }}
+          <h3 class="text-base font-bold text-white group-hover:text-red-400 transition-colors flex items-center gap-1 min-w-0">
+            <span class="truncate">{{ loja.nome }}</span><SeloVerificada :loja="loja" icone />
           </h3>
           <p v-if="loja.localizacao" class="text-xs text-zinc-400 truncate mt-0.5 flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -181,11 +181,12 @@
 import api from '@/services/api'
 import { DEFAULT_BANNER } from '@/services/media'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import { iconeCategoria } from '@/utils/icones'
 
 export default {
   name: 'StoreCatalog',
-  components: { BotaoFavorito },
+  components: { BotaoFavorito, SeloVerificada },
   props: {
     endpoint: { type: String,  default: '/app/loja/' },
     limit:    { type: Number,  default: 16 },

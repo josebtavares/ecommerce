@@ -61,6 +61,7 @@
             <h1 class="ts-hero__nome">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
+            <SeloVerificada :loja="loja" class="loja-estado loja-selo" />
             <p v-if="loja.descricao" class="ts-hero__desc">{{ truncate(loja.descricao, 190) }}</p>
 
             <dl class="ts-specs">
@@ -393,6 +394,7 @@
 
 <script>
 import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData } from '@/composables/useLojaData'
 import { formatarAtributos } from '@/utils/atributos'
@@ -412,7 +414,7 @@ const LIMITE = 12
 export default {
   name: 'TemplateTechStore',
 
-  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { LojaRodapeInfo, SeloVerificada, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

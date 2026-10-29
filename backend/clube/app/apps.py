@@ -16,3 +16,5 @@ class AppConfig(AppConfig):
         # registo das transações (só de acrescentar): pagamentos, reembolsos, marcações, faturas
         from .utils import registo
         registo.ligar()
+        # documentos legais das lojas: apagar a linha apaga o ficheiro privado
+        from .utils import documentos_loja  # noqa: F401

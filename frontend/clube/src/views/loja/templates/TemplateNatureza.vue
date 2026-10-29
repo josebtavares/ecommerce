@@ -46,6 +46,7 @@
           <h1 class="nt-hero__nome">{{ loja.nome }}</h1>
           <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
           <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
+          <SeloVerificada :loja="loja" class="loja-estado loja-selo" />
           <p v-if="loja.descricao" class="nt-hero__desc">{{ truncate(loja.descricao, 200) }}</p>
 
           <ul class="nt-hero__dados">
@@ -343,6 +344,7 @@
 
 <script>
 import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData } from '@/composables/useLojaData'
 import ProductInfoCard from '@/components/product/productInfoCard.vue'
@@ -361,7 +363,7 @@ const SECCOES = { tipo: 'Por tipo', categoria: 'Por categoria', todos: 'Tudo' }
 export default {
   name: 'TemplateNatureza',
 
-  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
+  components: { LojaRodapeInfo, SeloVerificada, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados, FimDaLista },
 
   emits: ['toggle-dark'],
 

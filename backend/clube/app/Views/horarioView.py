@@ -197,7 +197,7 @@ def admin_plataforma(request):
     PATCH /app/admin/plataforma/   { fuso_horario?: 'Atlantic/Cape_Verde', subscricao_dias_teste?: 30,
                                      titular_nome?, titular_nif?, contacto_email?, contacto_telefone?,
                                      contacto_whatsapp?, contacto_morada?, contacto_horario?,
-                                     mostrar_logos_pagamento? }
+                                     mostrar_logos_pagamento?, mostrar_selo_verificada? }
     """
     erro = _exige_admin(request, 'gerir_plataforma')
     if erro:
@@ -205,7 +205,8 @@ def admin_plataforma(request):
     cfg = ConfiguracaoPlataforma.atual()
     if request.method == 'PATCH':
         dados = request.data
-        if not any(k in dados for k in ('fuso_horario', 'subscricao_dias_teste', 'mostrar_logos_pagamento', *CAMPOS_IDENTIFICACAO)):
+        if not any(k in dados for k in ('fuso_horario', 'subscricao_dias_teste', 'mostrar_logos_pagamento', 'mostrar_selo_verificada',
+                                     *CAMPOS_IDENTIFICACAO)):
             return Response({'detail': 'Nada para mudar.'}, status=status.HTTP_400_BAD_REQUEST)
         erro = _erro_identificacao(dados)
         if erro:
@@ -230,12 +231,15 @@ def admin_plataforma(request):
                 setattr(cfg, k, str(dados.get(k) or '').strip()[:cfg._meta.get_field(k).max_length])
         if 'mostrar_logos_pagamento' in dados:
             cfg.mostrar_logos_pagamento = dados['mostrar_logos_pagamento'] in (True, 'true', '1', 1)
+        if 'mostrar_selo_verificada' in dados:
+            cfg.mostrar_selo_verificada = dados['mostrar_selo_verificada'] in (True, 'true', '1', 1)
         cfg.save()
         horarios.limpar_cache_fechadas()   # com outro fuso, as lojas abertas/fechadas mudam já
     hora = timezone.now().astimezone(horarios.fuso())
     return Response({
         **{k: getattr(cfg, k) for k in CAMPOS_IDENTIFICACAO},
         'mostrar_logos_pagamento': cfg.mostrar_logos_pagamento,
+        'mostrar_selo_verificada': cfg.mostrar_selo_verificada,
         'subscricao_dias_teste': cfg.subscricao_dias_teste,
         'fuso_horario': cfg.fuso_horario,
         'hora_local':   hora.strftime('%d/%m/%Y %H:%M'),

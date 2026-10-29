@@ -3,7 +3,7 @@
 <template>
   <div class="lri" data-teste="loja-vendedor">
     <p>
-      Vendido por <b>{{ v.nome }}</b>
+      Vendido por <b>{{ v.nome }}</b> <SeloVerificada :loja="loja" icone />
       <template v-if="v.nif"> · NIF {{ v.nif }}</template>
       <template v-if="v.morada"> · {{ v.morada }}</template>
       <template v-if="v.email"> · <a :href="'mailto:' + v.email">{{ v.email }}</a></template>
@@ -21,10 +21,11 @@
 
 <script>
 import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
+import SeloVerificada from './SeloVerificada.vue'
 
 export default {
   name: 'LojaRodapeInfo',
-  components: { PaginaInfoModal },
+  components: { PaginaInfoModal, SeloVerificada },
 
   props: {
     loja:   { type: Object, required: true },   // LojaPublicSerializer (vendedor, politica_entregas)

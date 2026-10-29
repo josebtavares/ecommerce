@@ -5,7 +5,9 @@
            data-teste="loja-vendedor">
     <div :class="compacto ? '' : 'max-w-7xl mx-auto'">
       <p class="text-[11px] font-bold uppercase tracking-[0.18em]" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Vendido por</p>
-      <p class="text-base font-bold mt-0.5" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ v.nome }}</p>
+      <p class="text-base font-bold mt-0.5" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">
+        {{ v.nome }} <SeloVerificada :loja="loja" class="ml-1" />
+      </p>
       <ul class="mt-2 space-y-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
         <li v-if="v.nif">NIF {{ v.nif }}</li>
         <li v-if="v.morada" class="flex items-start gap-2">
@@ -36,10 +38,11 @@
 
 <script>
 import PaginaInfoModal from '@/components/paginas/PaginaInfoModal.vue'
+import SeloVerificada from './SeloVerificada.vue'
 
 export default {
   name: 'LojaVendedor',
-  components: { PaginaInfoModal },
+  components: { PaginaInfoModal, SeloVerificada },
 
   props: {
     loja:     { type: Object, required: true },   // LojaPublicSerializer: vendedor + políticas

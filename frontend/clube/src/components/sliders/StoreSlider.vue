@@ -105,8 +105,8 @@
                   class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 bg-zinc-950/85 text-amber-300 text-[10px] font-bold rounded mb-1">
               <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Fechada
             </span>
-            <h3 class="text-sm font-bold text-white truncate group-hover:text-red-400 transition-colors">
-              {{ loja.nome }}
+            <h3 class="text-sm font-bold text-white group-hover:text-red-400 transition-colors flex items-center gap-1 min-w-0">
+              <span class="truncate">{{ loja.nome }}</span><SeloVerificada :loja="loja" icone />
             </h3>
             <p v-if="loja.localizacao" class="text-xs text-zinc-300 truncate mt-0.5">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline mr-0.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,11 +144,12 @@ import 'swiper/css'
 import api from '@/services/api'
 import { DEFAULT_BANNER } from '@/services/media'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import SetasSlider from './SetasSlider.vue'
 
 export default {
   name: 'StoreSlider',
-  components: { Swiper, SwiperSlide, BotaoFavorito, SetasSlider },
+  components: { Swiper, SwiperSlide, BotaoFavorito, SetasSlider, SeloVerificada },
 
   props: {
     title:    { type: String,  required: true },
