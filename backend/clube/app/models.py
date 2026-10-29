@@ -1428,6 +1428,7 @@ class Notificacao(models.Model):
         ('loja_suspensa',            'Loja suspensa'),
         ('dados_bancarios',          'Dados bancários alterados'),
         ('documento_loja',           'Documento da loja'),
+        ('qualidade_catalogo',       'Qualidade do catálogo'),
         ('loja_reativada',           'Loja reactivada'),
         ('loja_fechada',             'Loja fechada pelo dono'),
         ('nova_encomenda',           'Nova encomenda'),
