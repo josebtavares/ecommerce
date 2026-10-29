@@ -82,6 +82,13 @@ def avaliar(loja, com_produtos=False):
                            'ok': DadosBancarios.objects.filter(loja=loja).exists(),
                            'ajuda': 'Em Configurações → Dados bancários (só o dono): a conta para onde a Bende '
                                     'transfere os pagamentos online.'})
+    # documentos legais: opcionais, a não ser que o admin os peça a esta loja (utils/documentos_loja.py)
+    if loja.documentos_obrigatorios:
+        from .documentos_loja import verificada
+        requisitos.append({'chave': 'documentos', 'titulo': 'Loja verificada (documentos aprovados)',
+                           'seccao': 'configuracoes', 'ok': verificada(loja),
+                           'ajuda': 'Em Configurações → Documentos (só o dono): documento de identificação e início de '
+                                    'atividade ou certidão comercial, aprovados pela Bende.'})
     feitos = sum(r['ok'] for r in requisitos)
     out = {
         'percentagem': round(100 * feitos / len(requisitos)),

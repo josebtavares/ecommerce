@@ -98,6 +98,7 @@
             <h1 class="rm-hero__title">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
+            <SeloVerificada :loja="loja" class="loja-estado loja-selo" />
 
             <p v-if="loja.descricao" class="rm-hero__desc">
               {{ truncate(loja.descricao, 170) }}
@@ -459,6 +460,7 @@
 
 <script>
 import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import { useLojaData } from '@/composables/useLojaData'
@@ -481,7 +483,7 @@ const LIMITE = 6   // pratos por página em cada grupo
 export default {
   name: 'TemplateRestauranteModerno',
 
-  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
+  components: { LojaRodapeInfo, SeloVerificada, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, AvaliacaoLoja, ProductCatalog, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

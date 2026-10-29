@@ -80,6 +80,7 @@
             <h1 class="text-3xl md:text-4xl font-extrabold text-white leading-tight">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
+            <SeloVerificada :loja="loja" class="loja-estado loja-selo" />
             <div class="flex items-center gap-4 mt-2 text-sm text-zinc-300 flex-wrap">
               <span v-if="loja.localizacao" class="inline-flex items-center gap-1">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -344,6 +345,7 @@
 
 <script>
 import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLojaData }   from '@/composables/useLojaData'
 import ProductInfoCard   from '@/components/product/productInfoCard.vue'
@@ -358,7 +360,7 @@ import AvaliacaoLoja     from '@/components/avaliacao/avaliacaoLoja.vue'
 
 export default {
   name: 'TemplateClassico',
-  components: { LojaRodapeInfo, SeccaoServicos, BotaoFavorito, EstadoLoja, ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
+  components: { LojaRodapeInfo, SeloVerificada, SeccaoServicos, BotaoFavorito, EstadoLoja, ProductInfoCard, MultiCart, ProductSlider, Profile, ProductCatalog, AvaliacaoLoja },
   emits: ['toggle-dark'],
 
   props: {

@@ -71,6 +71,7 @@ class Utilizador(models.Model):
             'exportar_lojas',    # exportar os dados de uma loja ou POS (ZIP com clientes, vendas...) — utils/exportacao_loja.py
             'ver_backoffice_lojas',  # abrir o backoffice de uma loja ou o dashboard de um POS só para leitura — utils/ver_loja.py
             'ver_registo_transacoes',  # registo das transações (só de acrescentar) — utils/registo.py
+            'verificar_documentos',    # documentos legais das lojas: ver, aprovar, rejeitar (utils/documentos_loja.py)
         ],
         'moderador': [
             'ver_stats',
@@ -318,6 +319,10 @@ class Loja(models.Model):
     prazo_devolucao_dias = models.PositiveSmallIntegerField(default=14, db_default=14,
                                                             validators=[MaxValueValidator(365)])
 
+    # Documentos legais (utils/documentos_loja.py): o admin decide se esta loja tem de estar verificada
+    # para ser publicada (quem vende coisas pessoais em casa não precisa) — entra na prontidão
+    documentos_obrigatorios = models.BooleanField(default=False, db_default=False)
+
     class Meta:
         ordering = ['-data_criacao']
 
@@ -381,6 +386,7 @@ class UtilizadorLoja(models.Model):
             'apagar_loja',
             'gerir_dados_fiscais',     # NIF e regime (utils/fiscal.py) — só o dono
             'gerir_dados_bancarios',   # conta para receber as vendas (utils/banco.py) — só o dono
+            'gerir_documentos',        # documentos legais da loja (utils/documentos_loja.py) — só o dono
             'gerir_staff',
             'gerir_produtos',
             'gerir_inventario',
@@ -1003,6 +1009,8 @@ class ConfiguracaoPlataforma(models.Model):
     contacto_horario  = models.CharField(max_length=120, blank=True, default='', db_default='')
     # logótipos vinti4 / Visa / Mastercard no rodapé — só depois de haver contrato com a SISP
     mostrar_logos_pagamento = models.BooleanField(default=False, db_default=False)
+    # selo "Loja verificada" na página da loja e nos cards (desligado: só o dono e o admin o vêem)
+    mostrar_selo_verificada = models.BooleanField(default=False, db_default=False)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -1419,6 +1427,7 @@ class Notificacao(models.Model):
         ('loja_rejeitada',           'Loja rejeitada'),
         ('loja_suspensa',            'Loja suspensa'),
         ('dados_bancarios',          'Dados bancários alterados'),
+        ('documento_loja',           'Documento da loja'),
         ('loja_reativada',           'Loja reactivada'),
         ('loja_fechada',             'Loja fechada pelo dono'),
         ('nova_encomenda',           'Nova encomenda'),
@@ -2307,6 +2316,70 @@ class DadosBancarios(models.Model):
 
     def __str__(self):
         return f'Dados bancários de {self.loja_id}'
+
+
+def _documento_upload(instance, filename):
+    return f'documentos_privado/{instance.loja_id}/{filename}'
+
+
+class DocumentoLoja(models.Model):
+    """Documento legal enviado pelo dono (utils/documentos_loja.py): privado, só o dono e os admins com
+    verificar_documentos o abrem, por link assinado; cada abertura fica em AcessoDocumentoLoja.
+    Apagar a linha apaga o ficheiro (signal em utils/documentos_loja.py)."""
+    TIPOS = [
+        ('identificacao', 'Documento de identificação do titular'),
+        ('atividade',     'Início de atividade ou certidão comercial'),
+        ('nif',           'Cartão de contribuinte (NIF)'),
+        ('licenca',       'Licença ou alvará'),
+        ('banco',         'Comprovativo do NIB/IBAN'),
+        ('outro',         'Outro documento'),
+    ]
+    ESTADOS = [('pendente', 'Por verificar'), ('aprovado', 'Aprovado'), ('rejeitado', 'Rejeitado')]
+    AVISOS = [('', '—'), ('a_expirar', 'Avisado: expira em breve'), ('expirado', 'Avisado: expirou')]
+
+    loja          = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='documentos')
+    tipo          = models.CharField(max_length=15, choices=TIPOS)
+    descricao     = models.CharField(max_length=120, blank=True, default='')
+    ficheiro      = models.FileField(upload_to=_documento_upload, storage=_armazenamento_privado, max_length=200,
+                                     validators=[FileExtensionValidator(['pdf', 'jpg'])])
+    formato       = models.CharField(max_length=4)                      # pdf | jpg
+    tamanho       = models.PositiveIntegerField(default=0)
+    nome_original = models.CharField(max_length=120, blank=True, default='')
+    estado        = models.CharField(max_length=10, choices=ESTADOS, default='pendente', db_index=True)
+    motivo        = models.CharField(max_length=300, blank=True, default='')    # da rejeição
+    validade      = models.DateField(null=True, blank=True)                   # vazio = não expira
+    aviso         = models.CharField(max_length=10, choices=AVISOS, blank=True, default='')
+    enviado_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    enviado_em    = models.DateTimeField(auto_now_add=True)
+    revisto_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    revisto_em    = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-enviado_em', '-id']
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} da loja {self.loja_id}'
+
+
+class AcessoDocumentoLoja(models.Model):
+    """Quem abriu, enviou, aprovou, rejeitou ou apagou um documento. Nunca se apaga (fica o tipo e a loja
+    mesmo depois de o documento ou a loja desaparecerem)."""
+    ACOES = [('enviar', 'Enviou'), ('ver', 'Abriu'), ('aprovar', 'Aprovou'), ('rejeitar', 'Rejeitou'),
+             ('apagar', 'Apagou'), ('obrigatorios', 'Mudou a obrigatoriedade')]
+    documento   = models.ForeignKey(DocumentoLoja, on_delete=models.SET_NULL, null=True, blank=True, related_name='acessos')
+    loja        = models.ForeignKey(Loja, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    loja_nome   = models.CharField(max_length=200, blank=True, default='')
+    tipo        = models.CharField(max_length=15, blank=True, default='')
+    acao        = models.CharField(max_length=12, choices=ACOES)
+    utilizador  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    nome        = models.CharField(max_length=150, blank=True, default='')
+    pela_bende  = models.BooleanField(default=False)                     # admin (não o dono)
+    detalhe     = models.CharField(max_length=300, blank=True, default='')
+    ip          = models.GenericIPAddressField(null=True, blank=True)
+    criado_em   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-id']
 
 
 class RegistoTransacao(models.Model):

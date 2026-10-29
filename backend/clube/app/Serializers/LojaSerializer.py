@@ -52,6 +52,8 @@ class LojaSerializer(serializers.ModelSerializer):
     vendedor       = serializers.SerializerMethodField()
     minha_role     = serializers.SerializerMethodField()
     meu_chat       = serializers.SerializerMethodField()   # 'total' | 'condutor' | None (caixa da loja)
+    # documentos legais aprovados (utils/documentos_loja.py) — no backoffice, mesmo com o selo público desligado
+    verificada     = serializers.SerializerMethodField()
 
     class Meta:
         model  = Loja
@@ -67,7 +69,7 @@ class LojaSerializer(serializers.ModelSerializer):
             'template_id', 'dark_mode',
             'layout_produtos',
             'total_produtos',
-            'minha_role', 'meu_chat',
+            'minha_role', 'meu_chat', 'verificada', 'documentos_obrigatorios',
             'ativa', 'estado', 'estado_motivo', 'estado_alterado_em',
             'data_criacao', 'data_atualizacao',
             'politica_devolucao', 'prazo_devolucao_dias', 'termos_servico', 'politica_privacidade',
@@ -79,7 +81,7 @@ class LojaSerializer(serializers.ModelSerializer):
         # o modelo de cobrança e a comissão só os muda o admin
         read_only_fields = ['dono', 'data_criacao', 'data_atualizacao', 'banner_estado',
                             'ativa', 'estado', 'estado_motivo', 'estado_alterado_em',
-                            'modelo_cobranca', 'percentagem_comissao']
+                            'modelo_cobranca', 'percentagem_comissao', 'documentos_obrigatorios']
         extra_kwargs = {
             'logo'  : {'write_only': True, 'required': False},
             'banner': {'write_only': True, 'required': False},
@@ -106,6 +108,10 @@ class LojaSerializer(serializers.ModelSerializer):
         if value and not re.fullmatch(r'\+?[\d\s().-]{7,20}', value):
             raise serializers.ValidationError('Telefone inválido.')
         return value
+
+    def get_verificada(self, obj):
+        from ..utils.documentos_loja import verificada
+        return verificada(obj)
 
     def get_vendedor(self, obj):
         return {'nome': obj.nome, 'nif': obj.nif, 'morada': obj.localizacao,
@@ -178,9 +184,15 @@ class LojaPublicSerializer(serializers.ModelSerializer):
     horario        = serializers.SerializerMethodField()   # aberta/fechada + semana (utils/horarios.py)
     agendamento    = serializers.SerializerMethodField()   # o cliente pode escolher dia e hora?
     vendedor       = serializers.SerializerMethodField()   # "Vendido por" (LojaSerializer.get_vendedor)
+    # selo "Loja verificada": None enquanto o admin não o liga para o público (utils/documentos_loja.py)
+    verificada     = serializers.SerializerMethodField()
 
     def get_vendedor(self, obj):
         return LojaSerializer.get_vendedor(self, obj)
+
+    def get_verificada(self, obj):
+        from ..utils.documentos_loja import selo_publico
+        return selo_publico(obj)
 
     class Meta:
         model  = Loja
@@ -193,7 +205,7 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             'entrega_ativa', 'levantamento_ativo',
             'rating_medio', 'total_avaliacoes',
             'politica_devolucao', 'prazo_devolucao_dias', 'termos_servico', 'politica_privacidade',
-            'politica_entregas', 'vendedor',
+            'politica_entregas', 'vendedor', 'verificada',
             'horario', 'agendamento',
         ]
 

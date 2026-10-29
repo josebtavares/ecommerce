@@ -22,6 +22,12 @@
           <option value="">Todas as categorias</option>
           <option v-for="cat in categorias" :key="cat" :value="cat">{{ cat }}</option>
         </select>
+        <select v-if="podeVerDocumentos" v-model="filtroDocumentos" @change="fetchLojas(1)" data-teste="filtro-documentos"
+          class="px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-300 focus:outline-none transition">
+          <option value="">Documentos: todas</option>
+          <option value="por_verificar">Documentos por verificar</option>
+          <option value="verificadas">Lojas verificadas</option>
+        </select>
       </div>
       <p class="text-xs text-zinc-500 ml-auto">{{ totalCount }} lojas</p>
     </div>
@@ -57,6 +63,15 @@
                     :class="['px-1.5 py-0.5 rounded text-[10px] font-bold',
                              loja.prontidao.completa ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400']">
                 {{ loja.prontidao.completa ? 'Completa' : `Incompleta ${loja.prontidao.percentagem}%` }}
+              </span>
+              <!-- documentos legais (utils/documentos_loja.py) -->
+              <span v-if="loja.documentos?.verificada" data-teste="admin-lista-verificada"
+                    class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/15 text-green-400">
+                <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-0.5" />Verificada
+              </span>
+              <span v-if="podeVerDocumentos && loja.documentos?.pendentes" data-teste="admin-lista-docs-pendentes"
+                    class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300">
+                {{ loja.documentos.pendentes }} doc. por verificar
               </span>
             </div>
             <p class="text-xs text-zinc-500 truncate">
@@ -283,6 +298,9 @@
             </button>
           </div>
 
+          <!-- Documentos legais (verificar_documentos) — components/admin/AdminDocumentosLoja -->
+          <AdminDocumentosLoja v-if="podeVerDocumentos" :loja-id="lojaDetalhe.id" @alterado="fetchLojas()" />
+
           <!-- Ver o backoffice só para leitura (super-admin) — backend utils/ver_loja.py -->
           <div v-if="podeVerBackoffice" class="rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-ver-backoffice">
             <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">
@@ -349,6 +367,7 @@
 <script>
 import api from '@/services/api'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
+import AdminDocumentosLoja from '@/components/admin/AdminDocumentosLoja.vue'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 
 // estados da loja (backend: Loja.estado)
@@ -370,11 +389,12 @@ const comComissao = l => ({ ...l, _comissao_edit: l.percentagem_comissao ?? 10 }
 
 export default {
   name: 'AdminLojas',
-  components: { ExportacoesLoja },
+  components: { ExportacoesLoja, AdminDocumentosLoja },
   props: {
     podeExportar: { type: Boolean, default: false },   // permissão exportar_lojas (super-admin)
     podeVerBackoffice: { type: Boolean, default: false },   // permissão ver_backoffice_lojas (super-admin)
     podeVerBanco: { type: Boolean, default: false },   // permissão gerir_pagamentos
+    podeVerDocumentos: { type: Boolean, default: false },   // permissão verificar_documentos
   },
   data () {
     return {
@@ -384,7 +404,7 @@ export default {
       acessosAdmin: [], aAbrirBackoffice: false,
       loading: true, lojas: [], totalCount: 0,
       page: 1, limit: 20,
-      q: '', filtroEstado: '', filtroCategoria: '',
+      q: '', filtroEstado: '', filtroCategoria: '', filtroDocumentos: '',
       debounceTimer: null,
       lojaDetalhe: null,
       categorias: [],
@@ -427,13 +447,14 @@ export default {
         if (this.q) params.q = this.q
         if (this.filtroEstado) params.estado = this.filtroEstado
         if (this.filtroCategoria) params.categoria = this.filtroCategoria
+        if (this.filtroDocumentos) params.documentos = this.filtroDocumentos
         const { data } = await api.get('/app/admin/lojas/', { params })
         this.lojas = (data.results || data).map(comComissao)
         // a ficha aberta passa a ser a mesma loja da lista (as ações atualizam as duas)
         const naLista = this.lojas.find(l => l.id === this.lojaDetalhe?.id)
         if (naLista) this.lojaDetalhe = naLista
         this.totalCount = data.count ?? this.lojas.length
-        if (pagina === 1 && !this.filtroCategoria && !this.filtroEstado && !this.q) {
+        if (pagina === 1 && !this.filtroCategoria && !this.filtroEstado && !this.filtroDocumentos && !this.q) {
           const cats = [...new Set(this.lojas.map(l => l.categoria).filter(Boolean))]
           if (cats.length > this.categorias.length) this.categorias = cats
         }
