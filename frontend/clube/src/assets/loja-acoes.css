@@ -76,5 +76,6 @@
 /* "Aberta · fecha às 22:00" — ao lado do "Guardar loja" (components/horario/EstadoLoja.vue) */
 .loja-estado { margin: 14px 0 6px; max-width: 100%; }
 .loja-fav:has(+ .loja-estado) { margin-right: 8px; }   /* se o selo descer de linha, fica alinhado à esquerda */
+.loja-estado + .loja-selo { margin-left: 8px; }   /* "Loja verificada" (components/loja/SeloVerificada.vue) ao lado do estado */
 /* templates com etiqueta/preço no canto direito da foto */
 .fav-card--esq { right: auto; left: 8px; }

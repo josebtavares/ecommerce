@@ -52,6 +52,7 @@
             <h1 class="vb-hero__nome">{{ loja.nome }}</h1>
             <BotaoFavorito tipo="loja" :id="lojaId" variante="pilula" :tamanho="28" class="loja-fav" />
             <EstadoLoja :horario="loja.horario" :loja-id="lojaId" class="loja-estado" />
+            <SeloVerificada :loja="loja" class="loja-estado loja-selo" />
             <p v-if="loja.descricao" class="vb-hero__desc">{{ truncate(loja.descricao, 180) }}</p>
 
             <div class="vb-chips">
@@ -312,6 +313,7 @@
 
 <script>
 import LojaRodapeInfo from '@/components/loja/LojaRodapeInfo.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ProdutosPaginados from '@/components/produtos/ProdutosPaginados.vue'
 import { useLojaData } from '@/composables/useLojaData'
@@ -327,7 +329,7 @@ import AvaliacaoLoja from '@/components/avaliacao/avaliacaoLoja.vue'
 export default {
   name: 'TemplateVibrante',
 
-  components: { LojaRodapeInfo, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
+  components: { LojaRodapeInfo, SeloVerificada, SeccaoServicos, ProductInfoCard, BotaoFavorito, EstadoLoja, MultiCart, Profile, ProductCatalog, AvaliacaoLoja, ProdutosPaginados },
 
   emits: ['toggle-dark'],
 

@@ -23,6 +23,7 @@
             <span class="px-2.5 py-1 bg-red-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider">Loja em destaque</span>
           </div>
           <h3 class="text-3xl md:text-4xl font-bold text-white leading-tight">{{ loja.nome }}</h3>
+          <SeloVerificada :loja="loja" class="mt-2 text-zinc-200" />
           <p v-if="loja.descricao" class="text-sm text-zinc-300 mt-2 line-clamp-2">{{ loja.descricao }}</p>
           <div class="flex items-center gap-4 text-zinc-300 text-sm flex-wrap mt-3">
             <span v-if="loja.rating_medio" class="flex items-center gap-1">
@@ -62,11 +63,12 @@
 <script>
 import ProductSlider from '@/components/sliders/ProductSlider.vue'
 import HomeServicos from './HomeServicos.vue'
+import SeloVerificada from '@/components/loja/SeloVerificada.vue'
 import { DEFAULT_BANNER } from '@/services/media'
 
 export default {
   name: 'HomeLojaDestaque',
-  components: { ProductSlider, HomeServicos },
+  components: { ProductSlider, HomeServicos, SeloVerificada },
   props: {
     loja:      { type: Object, required: true },
     produtos:  { type: Array,  default: () => [] },

@@ -9,7 +9,8 @@ O que fica, sem ligação à pessoa:
   admin consulta-o em "Ver backoffice" (utils/ver_loja.py).
 
 O que sai: nome, email, telefone, morada, foto, ligação ao Google, password, carrinhos, cartões
-guardados, favoritos, notificações e galeria; deixa de ser membro de equipas de lojas.
+guardados, favoritos, notificações, galeria e os documentos legais das lojas (utils/documentos_loja.py);
+deixa de ser membro de equipas de lojas.
 Banido: o email fica bloqueado (só o hash — EmailBloqueado) para não abrir outra conta.
 
 Pedido pela própria pessoa: 30 dias para mudar de ideias (DIAS_PARA_ELIMINAR). As sessões terminam
@@ -176,6 +177,9 @@ def anonimizar(alvo, por=None, motivo=''):
 
         for M in (Carrinho, CartaoGuardado, Favorito, Notificacao, Galeria):
             M.objects.filter(utilizador=alvo).delete()
+        # documentos legais das lojas (identificação do titular…): saem com a conta, os ficheiros também
+        from .documentos_loja import apagar_da_conta
+        apagar_da_conta(alvo)
         UtilizadorLoja.objects.filter(utilizador=alvo).update(ativo=False)
         Condutor.objects.filter(utilizador=alvo).update(ativo=False)
 

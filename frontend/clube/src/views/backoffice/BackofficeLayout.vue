@@ -33,6 +33,11 @@
             <span :class="['text-[10px] font-bold px-1.5 py-0.5 rounded uppercase', roleColor]">
               {{ loja.minha_role }}
             </span>
+            <!-- documentos aprovados (utils/documentos_loja.py) — o público só o vê quando a Bende ligar o selo -->
+            <span v-if="loja.verificada" data-teste="backoffice-verificada" title="Documentos aprovados pela Bende"
+                  class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">
+              <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-0.5" />Verificada
+            </span>
           </div>
         </div>
         <!-- Fechar sidebar no mobile -->
@@ -187,6 +192,7 @@
         <BackofficeConfiguracoes v-else-if="activeSection === 'configuracoes'" :loja-id="lojaId" :loja="loja"
                                  :pode-fechar="podeFecharLoja" :pode-fiscal="permissoes.includes('gerir_dados_fiscais')"
                                  :pode-banco="permissoes.includes('gerir_dados_bancarios') && !modoAdmin"
+                                 :pode-documentos="permissoes.includes('gerir_documentos') && !modoAdmin"
                                  @updated="fetchLoja" />
         <BackofficeStaff         v-else-if="activeSection === 'staff'"         :loja-id="lojaId" />
         <BackofficeSubscricao    v-else-if="activeSection === 'subscricao'"    :loja-id="lojaId" @alterado="fetchLoja" />
@@ -241,7 +247,7 @@ const ModuloRelatorios         = defineAsyncComponent(() => import('@/components
 
 const PERMISSOES = {
   dono: [
-    'ver_loja','editar_loja','apagar_loja','gerir_dados_fiscais','gerir_dados_bancarios','gerir_staff',
+    'ver_loja','editar_loja','apagar_loja','gerir_dados_fiscais','gerir_dados_bancarios','gerir_documentos','gerir_staff',
     'gerir_produtos','gerir_inventario','gerir_encomendas','gerir_devolucoes',
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',

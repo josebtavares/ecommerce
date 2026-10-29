@@ -31,6 +31,17 @@
           <span class="block text-xs text-zinc-500">Liga só depois de teres o contrato com a SISP.</span>
         </span>
       </label>
+      <label class="flex items-start gap-3 mt-3 cursor-pointer">
+        <input v-model="ident.mostrar_selo_verificada" type="checkbox" data-teste="ident-selo"
+          class="mt-0.5 w-4 h-4 accent-red-600" />
+        <span class="text-sm text-zinc-300">
+          Mostrar o selo "Loja verificada" na página da loja e nos cards
+          <span class="block text-xs text-zinc-500">
+            Lojas com o documento de identificação e o início de atividade aprovados (Admin → Lojas → Documentos).
+            Desligado, só tu e o dono da loja o vêem.
+          </span>
+        </span>
+      </label>
       <p v-if="erroIdent" class="text-sm text-red-400 mt-3" role="alert">{{ erroIdent }}</p>
       <div class="flex items-center gap-3 mt-4">
         <button type="button" @click="guardarIdent" :disabled="aGuardar || !identMudou" data-teste="ident-guardar"
@@ -121,7 +132,7 @@ const CAMPOS = [
   { k: 'contacto_horario',  label: 'Horário de atendimento', ph: 'ex.: Segunda a sexta, 9h–18h', max: 120 },
   { k: 'contacto_morada',   label: 'Morada', ph: 'ex.: Rua…, Praia, Cabo Verde', max: 300, largo: true },
 ]
-const CHAVES_IDENT = [...CAMPOS.map(c => c.k), 'mostrar_logos_pagamento']
+const CHAVES_IDENT = [...CAMPOS.map(c => c.k), 'mostrar_logos_pagamento', 'mostrar_selo_verificada']
 
 const SUGESTOES = [
   { fuso: 'Atlantic/Cape_Verde', nome: 'Cabo Verde' },
