@@ -159,7 +159,8 @@ def admin_documento(request, id):
     d = get_object_or_404(DocumentoLoja.objects.select_related('loja'), id=id)
     try:
         d, substituidos = docs.decidir(request, d, request.data.get('acao'), motivo=request.data.get('motivo', ''),
-                                       validade=_data(request.data.get('validade')))
+                                       validade=_data(request.data.get('validade')),
+                                       mudar_validade='validade' in request.data)
     except docs.ErroDocumento as e:
         return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     return Response({**_lista_admin(d.loja), 'substituidos': substituidos})
@@ -198,8 +199,8 @@ def ficheiro(request, id):
     armazenamento = d.ficheiro.storage
     if hasattr(armazenamento, 'bucket_name'):
         # R2 privado: link temporário assinado pelo próprio R2 (outro domínio — nada corre no nosso)
-        resp = HttpResponseRedirect(armazenamento.url(d.ficheiro.name, parameters={
-            'ResponseContentType': tipo, 'ResponseContentDisposition': f'inline; filename="{nome}"'}))
+        # (o tipo vem da extensão gravada: .pdf / .jpg)
+        resp = HttpResponseRedirect(armazenamento.url(d.ficheiro.name))
     else:
         resp = FileResponse(armazenamento.open(d.ficheiro.name, 'rb'), content_type=tipo)
         resp['Content-Disposition'] = f'inline; filename="{nome}"'

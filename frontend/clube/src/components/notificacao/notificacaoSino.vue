@@ -184,6 +184,7 @@ const ICONES = {
   encomenda_enviada:        { icon: 'truck',               bg: 'bg-indigo-500/20 text-indigo-500' },
   encomenda_concluida:      { icon: 'circle-check',        bg: 'bg-green-500/20 text-green-500'   },
   encomenda_cancelada:      { icon: 'ban',                 bg: 'bg-red-500/20 text-red-500'       },
+  documento_loja:           { icon: 'id-card',             bg: 'bg-emerald-500/20 text-emerald-500' },
 }
 
 export default {

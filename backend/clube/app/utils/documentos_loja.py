@@ -29,7 +29,8 @@ from django.utils import timezone
 log = logging.getLogger(__name__)
 
 TAMANHO_MAX = 10 * 1024 * 1024
-PIXEIS_MAX = 60_000_000
+PIXEIS_MAX = 100_000_000          # JPEG (descodifica reduzido)
+PNG_MAX = 25_000_000             # PNG (descodifica inteiro)
 LADO_MAX = 3000
 MAX_POR_LOJA = 30
 VALIDADE_LINK = 120                  # segundos
@@ -61,11 +62,15 @@ def preparar(ficheiro):
     if inicio.startswith(b'%PDF-'):
         return ContentFile(ficheiro.read(), name=f'{uuid.uuid4().hex}.pdf'), 'pdf'
     from PIL import Image, ImageOps, UnidentifiedImageError
-    Image.MAX_IMAGE_PIXELS = PIXEIS_MAX
     try:
         img = Image.open(ficheiro)
         if img.format not in ('JPEG', 'PNG'):
             raise ErroDocumento('Só PDF, JPG ou PNG.')
+        # sem mexer no limite global do Pillow: os píxeis contam-se aqui. O JPEG descodifica já reduzido;
+        # um PNG ocupa 4 bytes por píxel — acima de PNG_MAX pedia RAM demais ao servidor
+        if img.width * img.height > (PIXEIS_MAX if img.format == 'JPEG' else PNG_MAX):
+            raise ErroDocumento('A imagem tem píxeis demais — tira uma foto com menos resolução ou envia em PDF.')
+        img.draft('RGB', (LADO_MAX, LADO_MAX))
         img.load()
         img = ImageOps.exif_transpose(img)
     except ErroDocumento:
@@ -247,6 +252,13 @@ def enviar(request, loja, tipo, ficheiro, descricao='', validade=None):
 
 
 def _avisar_admins(loja, d):
+    try:
+        _avisar_admins_ja(loja, d)
+    except Exception:          # o documento já está gravado: o aviso não pode estragar a resposta
+        log.exception('documentos: aviso aos admins falhou')
+
+
+def _avisar_admins_ja(loja, d):
     from ..models import Notificacao, Utilizador
     admins = [u for u in Utilizador.objects.filter(user__is_staff=True, user__is_active=True).select_related('user')
               if u.pode_admin('verificar_documentos')]
@@ -256,24 +268,26 @@ def _avisar_admins(loja, d):
         link=f'/admin/lojas/{loja.id}') for u in admins])
 
 
-def decidir(request, d, acao, motivo='', validade=None):
-    """Admin aprova (com validade opcional) ou rejeita (com motivo). Aprovar substitui os do mesmo tipo."""
+def decidir(request, d, acao, motivo='', validade=None, mudar_validade=False):
+    """Admin aprova (com validade; mudar_validade=False mantém a que tem) ou rejeita (com motivo).
+    Aprovar substitui os do mesmo tipo."""
     from ..models import DocumentoLoja
-    from ..Views.notificacaoView import notificar
     motivo = ' '.join(str(motivo or '').split())[:300]
     if acao == 'rejeitar' and len(motivo) < 5:
         raise ErroDocumento('Diz à loja porque foi rejeitado (ex.: "ilegível", "nome diferente do titular").')
     if acao not in ('aprovar', 'rejeitar'):
         raise ErroDocumento('Acção inválida.')
     with transaction.atomic():
-        d = DocumentoLoja.objects.select_for_update().select_related('loja__dono__user').get(pk=d.pk)
-        if acao == 'aprovar' and validade and validade < hoje():
-            raise ErroDocumento('Essa validade já passou — rejeita o documento e pede um válido.')
+        d = DocumentoLoja.objects.select_for_update().select_related('loja__dono__user').filter(pk=d.pk).first()
+        if not d:
+            raise ErroDocumento('O documento já não existe (a loja apagou-o).')
+        if acao == 'aprovar' and mudar_validade:
+            d.validade = validade
+        if acao == 'aprovar' and d.validade and d.validade < hoje():
+            raise ErroDocumento('Essa validade já passou — indica a nova ou rejeita e pede um documento válido.')
         antes = verificada(d.loja)
         d.estado = 'aprovado' if acao == 'aprovar' else 'rejeitado'
         d.motivo = '' if acao == 'aprovar' else motivo
-        if acao == 'aprovar':
-            d.validade = validade if validade is not None else d.validade
         d.aviso = ''
         d.revisto_por, d.revisto_em = request.user, timezone.now()
         d.save()
@@ -294,9 +308,16 @@ def decidir(request, d, acao, motivo='', validade=None):
         else:
             titulo = 'Documento rejeitado'
             texto = f'{d.get_tipo_display()}: {motivo} Envia outro em Configurações → Documentos.'
-        transaction.on_commit(lambda: notificar(loja.dono, 'documento_loja', titulo, texto, loja=loja,
-                                                link=f'/loja/{loja.id}/backoffice/configuracoes'))
+        transaction.on_commit(lambda: _avisar_dono(loja, titulo, texto))
     return d, substituidos
+
+
+def _avisar_dono(loja, titulo, texto):
+    from ..Views.notificacaoView import notificar
+    try:
+        notificar(loja.dono, 'documento_loja', titulo, texto, loja=loja, link=f'/loja/{loja.id}/backoffice/configuracoes')
+    except Exception:
+        log.exception('documentos: aviso ao dono falhou (loja %s)', loja.id)
 
 
 def apagar(request, d):
