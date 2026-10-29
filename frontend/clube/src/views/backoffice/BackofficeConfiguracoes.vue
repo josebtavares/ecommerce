@@ -222,6 +222,9 @@
             <div>
               <p class="text-sm font-medium text-zinc-200">{{ m.label }}</p>
               <p class="text-xs text-zinc-500">{{ m.antigo ? 'Já não se usa — podes desligar.' : m.descricao }}</p>
+              <p v-if="metodosSuspensos.includes(m.tipo)" class="text-xs text-amber-400 mt-0.5" data-teste="metodo-suspenso">
+                Não aparece aos clientes até pores os dados bancários.
+              </p>
             </div>
           </div>
           <button @click="toggleMetodo(m.tipo)" :disabled="loadingMetodos"
@@ -446,6 +449,7 @@ export default {
 
       // métodos de pagamento
       metodosActivos:   [],   // lista de tipos activos: ['dinheiro', 'cartao', ...]
+      metodosSuspensos: [],   // activos mas escondidos do checkout: online sem dados bancários (utils/banco.online_suspenso)
       loadingMetodos:   false,
 
       isBannerVideo: false,
@@ -571,6 +575,7 @@ export default {
         const { data } = await api.get(`/app/loja/${this.lojaId}/pagamento/metodos/`)
         const lista = Array.isArray(data) ? data : data.results || []
         this.metodosActivos = lista.filter(m => m.ativo).map(m => m.tipo)
+        this.metodosSuspensos = lista.filter(m => m.ativo && m.disponivel === false).map(m => m.tipo)
       } catch (e) { console.error(e) }
       finally { this.loadingMetodos = false }
     },
@@ -590,6 +595,7 @@ export default {
         }
       } catch (e) { console.error(e) }
       finally { this.loadingMetodos = false }
+      this.fetchMetodos()     // o servidor diz se fica disponível no checkout
     },
 
     // ── Loja ──────────────────────────────────────────────────

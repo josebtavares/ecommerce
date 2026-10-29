@@ -83,3 +83,14 @@ def payload(d, completo=True):
         'final': d.nib[-4:],
         'atualizado_em': d.atualizado_em.isoformat() if d.atualizado_em else None,
     }
+
+
+def online_suspenso(loja):
+    """Com pagamentos online a sério, uma loja sem dados bancários não recebe pagamentos online (cartão, mobile
+    money, marcações pagas antecipadamente) — a Bende não saberia para onde transferir o dinheiro.
+    Os outros métodos (dinheiro, transferência) continuam. Com o fornecedor simulado nunca se aplica."""
+    from ..pagamentos import cobra_a_serio
+    if not cobra_a_serio():
+        return False
+    from ..models import DadosBancarios
+    return not DadosBancarios.objects.filter(loja=loja).exists()

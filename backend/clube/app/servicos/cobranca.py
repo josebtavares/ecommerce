@@ -231,5 +231,8 @@ def servicos_publicos():
     """Serviços que um cliente pode marcar agora (loja disponível, serviço activo, com profissional activo)."""
     from .models import Servico
     from .pacotes import marcaveis
-    return (marcaveis(Servico.objects.filter(loja__in=lojas_com_servicos(), profissionais__ativo=True))
-            .distinct().select_related('loja').prefetch_related('imagens'))
+    from ..pagamentos import cobra_a_serio
+    qs = marcaveis(Servico.objects.filter(loja__in=lojas_com_servicos(), profissionais__ativo=True))
+    if cobra_a_serio():     # só pagamento antecipado e a loja sem dados bancários: não se pode marcar (utils/banco)
+        qs = qs.exclude(pagamento='antecipado', loja__dados_bancarios__isnull=True)
+    return qs.distinct().select_related('loja').prefetch_related('imagens')
