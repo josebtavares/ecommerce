@@ -1,8 +1,9 @@
 <!-- BarraProntidao.vue — backoffice: quanto falta para a loja poder ser publicada (app/utils/prontidao.py).
      Vermelha enquanto falta algo, verde a 100%. Cada requisito em falta leva à secção onde se resolve.
-     Lojas activas e completas não vêem nada; activas incompletas vêem-na fechada (só avisos). -->
+     Lojas activas e completas não vêem nada (a não ser sugestões: logótipo, descrição, nomes provisórios, preços
+     estranhos, nomes repetidos — app/utils/qualidade.py); activas incompletas vêem-na fechada (só avisos). -->
 <template>
-  <div v-if="dados && (!dados.completa || estado === 'pendente')" data-teste="barra-prontidao"
+  <div v-if="dados && (!dados.completa || estado === 'pendente' || sugestoes)" data-teste="barra-prontidao"
        :data-completa="dados.completa ? '1' : '0'"
        class="rounded-xl border bg-zinc-900 text-sm"
        :class="dados.completa ? 'border-green-500/40' : 'border-red-500/30'">
@@ -45,6 +46,31 @@
           </button>
         </li>
       </ul>
+      <!-- sugestões (não bloqueiam a publicação) -->
+      <ul v-if="dados.avisos?.loja?.length" class="space-y-1.5" data-teste="sugestoes-loja">
+        <li v-for="a in dados.avisos.loja" :key="a.chave" class="flex items-start gap-2.5">
+          <font-awesome-icon :icon="['fas', 'lightbulb']" class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-300" />
+          <p class="flex-1 min-w-0 text-zinc-200">{{ a.titulo }}</p>
+          <button type="button" @click="$emit('ir', a.seccao)"
+            class="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex-shrink-0">
+            Resolver
+          </button>
+        </li>
+      </ul>
+      <div v-if="dados.avisos?.produtos?.length" class="rounded-lg bg-zinc-800/60 px-3 py-2.5" data-teste="produtos-a-rever">
+        <p class="text-xs font-semibold text-amber-300">
+          {{ dados.avisos.total }} produto{{ dados.avisos.total === 1 ? '' : 's' }} a rever
+          <span class="font-normal text-zinc-400">— parecem de teste ou têm um preço estranho.</span>
+        </p>
+        <ul class="mt-1.5 space-y-0.5">
+          <li v-for="p in dados.avisos.produtos.slice(0, 5)" :key="p.id" class="text-xs text-zinc-400 truncate">
+            {{ p.nome }}: <span class="text-zinc-500">{{ p.avisos.join(', ') }}</span>
+          </li>
+        </ul>
+        <button type="button" @click="$emit('ir', 'produtos')" class="mt-1.5 text-xs font-semibold text-red-400 hover:text-red-300">
+          Ver produtos →
+        </button>
+      </div>
       <div v-if="dados.produtos_incompletos?.length" class="rounded-lg bg-zinc-800/60 px-3 py-2.5" data-teste="produtos-incompletos">
         <p class="text-xs font-semibold text-amber-300">
           {{ dados.produtos_incompletos_total }} produto{{ dados.produtos_incompletos_total === 1 ? '' : 's' }} sem tudo preenchido
@@ -89,14 +115,23 @@ export default {
       if (this.abertaManual !== null) return this.abertaManual
       return this.estado === 'pendente' && !this.dados?.completa
     },
+    // sugestões que não bloqueiam (logótipo, descrição da loja, produtos a rever)
+    sugestoes () {
+      const a = this.dados?.avisos
+      return a ? (a.loja?.length || 0) + (a.total || 0) : 0
+    },
     titulo () {
       if (this.dados.completa) {
-        return this.estado === 'pendente' ? 'Loja pronta — à espera de aprovação' : 'Loja completa'
+        if (this.estado === 'pendente') return 'Loja pronta — à espera de aprovação'
+        return this.sugestoes ? `Loja completa — ${this.sugestoes} sugest${this.sugestoes === 1 ? 'ão' : 'ões'} para melhorar` : 'Loja completa'
       }
       const faltam = this.dados.requisitos.filter(r => !r.ok).length
       return `Loja por completar — falta${faltam === 1 ? '' : 'm'} ${faltam} requisito${faltam === 1 ? '' : 's'}`
     },
     explicacao () {
+      if (this.dados.completa && this.estado !== 'pendente') {
+        return 'Cumpre todos os requisitos. Estas sugestões não são obrigatórias, mas deixam a loja com melhor aspeto para os clientes.'
+      }
       if (this.dados.completa) return 'Cumpre todos os requisitos. A plataforma vai rever a loja e publicá-la.'
       if (this.estado === 'pendente') {
         return 'Para a loja ser publicada no site tem de cumprir todos estes requisitos. Quando chegar aos 100%, a plataforma revê-a e publica-a.'

@@ -249,7 +249,9 @@ def loja_prontidao(request, id):
     _, erro = _exige_permissao(request, loja, 'ver_loja')
     if erro:
         return erro
-    return Response({'estado': loja.estado, **prontidao.avaliar(loja, com_produtos=True)})
+    from ..utils.qualidade import avisos_backoffice
+    return Response({'estado': loja.estado, **prontidao.avaliar(loja, com_produtos=True),
+                     'avisos': avisos_backoffice(loja)})
 
 
 @api_view(['PATCH'])
