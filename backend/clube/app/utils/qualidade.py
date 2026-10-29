@@ -97,14 +97,15 @@ def analisar_loja(loja, com_produtos=False):
         for c in probs:
             por_tipo[c] = por_tipo.get(c, 0) + 1
     avisos = [{'chave': r['chave'], 'titulo': r['titulo']} for r in pront['requisitos'] if not r['ok']]
+    # sem nenhum produto activo (nem serviços): o requisito do produto diz-se "Nada à venda" (conta uma vez só)
+    if not produtos:
+        for a in avisos:
+            if a['chave'] == 'produto':
+                a['chave'], a['titulo'] = 'vazia', AVISOS_LOJA['vazia']
     if not loja.logo:
         avisos.append({'chave': 'logo', 'titulo': AVISOS_LOJA['logo']})
     if len((loja.descricao or '').strip()) < prontidao.DESCRICAO_MIN:
         avisos.append({'chave': 'descricao_loja', 'titulo': AVISOS_LOJA['descricao_loja']})
-    if not produtos and not pront['produtos_completos']:
-        cfg = getattr(loja, 'config_servicos', None)
-        if not (cfg and cfg.ativo):
-            avisos.append({'chave': 'vazia', 'titulo': AVISOS_LOJA['vazia']})
     com_problemas = sum(1 for _, probs in produtos if probs)
     out = {
         'id': loja.id, 'nome': loja.nome, 'estado': loja.estado, 'demo': e_demo(loja),
@@ -157,7 +158,7 @@ def texto_aviso(r):
         tipos = ', '.join(f"{TITULOS[c].lower()} ({n})" for c, n in sorted(r['por_tipo'].items(), key=lambda x: -x[1]))
         partes.append(f"{r['produtos_com_problemas']} produto(s) a rever: {tipos}.")
     return ('A equipa da Bende reviu a tua loja. ' + ' '.join(partes)
-            + ' Vê os detalhes na barra "Loja por completar" do backoffice.')
+            + ' Vê os detalhes na barra do topo do backoffice da loja.')
 
 
 def avisar(loja):

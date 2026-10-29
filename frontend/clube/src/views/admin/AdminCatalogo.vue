@@ -116,7 +116,7 @@
           </div>
         </div>
         <p v-if="!lojasVisiveis.length" class="text-center py-10 text-sm text-zinc-500 bg-zinc-900 rounded-2xl border border-zinc-800">
-          Nenhuma loja com problemas. 🎉
+          {{ soProblemas ? 'Nenhuma loja com problemas. 🎉' : 'Nenhuma loja.' }}
         </p>
       </div>
     </template>
