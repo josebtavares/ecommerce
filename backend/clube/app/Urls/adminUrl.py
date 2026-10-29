@@ -3,6 +3,7 @@ from ..Views import adminView
 from ..Views import relatorioView
 from ..Views import backupView
 from ..Views import registoView
+from ..Views import qualidadeView
 from ..pos import views_admin as pos_admin
 
 urlpatterns = [
@@ -32,6 +33,10 @@ urlpatterns = [
     path('admin/registo/verificar/',            registoView.admin_registo_verificar, name='admin-registo-verificar'),
     path('admin/lojas/<int:loja_id>/eliminar/', adminView.admin_loja_eliminar,       name='admin-loja-eliminar'),
     path('admin/lojas/<int:loja_id>/ver-backoffice/', adminView.admin_loja_ver_backoffice, name='admin-loja-ver-backoffice'),
+    # ── Qualidade do catálogo (utils/qualidade.py) ────────────
+    path('admin/qualidade/',                              qualidadeView.admin_qualidade,         name='admin-qualidade'),
+    path('admin/qualidade/lojas/<int:loja_id>/',          qualidadeView.admin_qualidade_loja,    name='admin-qualidade-loja'),
+    path('admin/qualidade/lojas/<int:loja_id>/avisar/',   qualidadeView.admin_qualidade_avisar,  name='admin-qualidade-avisar'),
 
     # ── Utilizadores ──────────────────────────────────────────
     path('admin/utilizadores/',                 adminView.admin_utilizador_list,     name='admin-utilizador-list'),
