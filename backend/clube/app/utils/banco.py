@@ -85,6 +85,33 @@ def payload(d, completo=True):
     }
 
 
+def tem_dados(loja):
+    from ..models import DadosBancarios
+    return DadosBancarios.objects.filter(loja=loja).exists()
+
+
+MSG_SEM_BANCO = ('Para aceitar transferências, preenche primeiro os dados bancários da loja '
+                 '(Configurações → Dados bancários): é para essa conta que os clientes transferem.')
+
+
+def dados_transferencia(enc):
+    """
+    O que o cliente precisa para pagar uma encomenda por transferência: banco, titular, IBAN, valor e a referência
+    a pôr no descritivo | None. Só enquanto está por pagar — o IBAN não é público, só o vê quem encomendou assim.
+    """
+    try:
+        p = enc.pagamento
+    except Exception:
+        return None
+    if p.status != 'pendente' or not p.metodo_id or p.metodo.tipo != 'transferencia':
+        return None
+    d = getattr(enc.loja, 'dados_bancarios', None)
+    if d is None:
+        return None
+    return {'banco': d.banco, 'titular': d.titular, 'iban': formatar_iban(d.nib), 'iban_simples': iban(d.nib),
+            'valor': f'{p.valor:.2f}', 'referencia': f'Encomenda {enc.id}'}
+
+
 def online_suspenso(loja):
     """Com pagamentos online a sério, só uma loja com contrato vinti4 ativo recebe pagamentos online (cartão,
     marcações pagas antecipadamente): a SISP não deixa a Bende receber por conta das lojas (utils/vinti4.py).

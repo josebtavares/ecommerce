@@ -77,6 +77,9 @@ def metodo_gerir(request, loja_id, tipo):
         # os antigos (flutterwave, mbway, stripe, paypal) só se desligam
         if tipo not in METODOS_LOJA:
             return Response({'detail': 'Método de pagamento inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+        from ..utils import banco
+        if tipo == 'transferencia' and not banco.tem_dados(loja):
+            return Response({'detail': banco.MSG_SEM_BANCO, 'codigo': 'sem_banco'}, status=status.HTTP_400_BAD_REQUEST)
         metodo, _ = MetodoPagamento.objects.get_or_create(loja=loja, tipo=tipo)
         metodo.ativo = True
         metodo.save()
