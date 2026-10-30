@@ -47,6 +47,27 @@ def ler_referencia(ref):
     return None
 
 
+class DadosClienteEmFalta(ErroPagamento):
+    """Pagar com cartão pede o perfil do cliente completo (contrato SISP, cl.3: nome, morada, telefone, email)."""
+    codigo = 'dados_cliente'
+
+    def __init__(self, campos):
+        self.campos = campos
+        nomes = {'telefone': 'o telefone', 'morada': 'a morada'}
+        super().__init__(f'Para pagar com cartão, indica {" e ".join(nomes[c] for c in campos)} no teu perfil.')
+
+
+def exigir_dados_cliente(utilizador, morada=''):
+    """Telefone e morada (a de entrega serve) de quem paga online → DadosClienteEmFalta."""
+    falta = []
+    if not str(getattr(utilizador, 'telefone', '') or '').strip():
+        falta.append('telefone')
+    if not str(morada or getattr(utilizador, 'morada', '') or '').strip():
+        falta.append('morada')
+    if falta:
+        raise DadosClienteEmFalta(falta)
+
+
 def _regresso():
     return f'{settings.FRONTEND_BASE_URL.rstrip("/")}/pagamento/callback'
 
@@ -141,6 +162,7 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
         return Inicio('pendente')
     if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')
+    exigir_dados_cliente(utilizador, encomenda.morada_entrega)
     f = ativo()
     loja = encomenda.loja
     inicio = f.iniciar(Cobranca(
@@ -188,6 +210,7 @@ def iniciar_marcacao(m, utilizador):
     ops.verificar_pagavel(m)
     if online_suspenso(m.loja):
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — a marcação não pode ser paga agora.')
+    exigir_dados_cliente(utilizador)
     f = ativo()
     inicio = f.iniciar(Cobranca(
         referencia=nova_referencia('mar', m.id, 'cartao'), valor=m.preco_indicado,
