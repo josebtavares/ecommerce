@@ -206,6 +206,7 @@ def admin_plataforma(request):
     if request.method == 'PATCH':
         dados = request.data
         if not any(k in dados for k in ('fuso_horario', 'subscricao_dias_teste', 'mostrar_logos_pagamento', 'mostrar_selo_verificada',
+                                     'cobrar_comissoes',
                                      *CAMPOS_IDENTIFICACAO)):
             return Response({'detail': 'Nada para mudar.'}, status=status.HTTP_400_BAD_REQUEST)
         erro = _erro_identificacao(dados)
@@ -233,6 +234,12 @@ def admin_plataforma(request):
             cfg.mostrar_logos_pagamento = dados['mostrar_logos_pagamento'] in (True, 'true', '1', 1)
         if 'mostrar_selo_verificada' in dados:
             cfg.mostrar_selo_verificada = dados['mostrar_selo_verificada'] in (True, 'true', '1', 1)
+        if 'cobrar_comissoes' in dados:     # ligar marca o início: só as comissões daí em diante (utils/cobranca_comissoes)
+            ligar = dados['cobrar_comissoes'] in (True, 'true', '1', 1)
+            if ligar and not cfg.cobrar_comissoes_desde:
+                cfg.cobrar_comissoes_desde = timezone.now()
+            elif not ligar:
+                cfg.cobrar_comissoes_desde = None
         cfg.save()
         horarios.limpar_cache_fechadas()   # com outro fuso, as lojas abertas/fechadas mudam já
     hora = timezone.now().astimezone(horarios.fuso())
@@ -240,6 +247,9 @@ def admin_plataforma(request):
         **{k: getattr(cfg, k) for k in CAMPOS_IDENTIFICACAO},
         'mostrar_logos_pagamento': cfg.mostrar_logos_pagamento,
         'mostrar_selo_verificada': cfg.mostrar_selo_verificada,
+        'cobrar_comissoes': bool(cfg.cobrar_comissoes_desde),
+        'cobrar_comissoes_desde': cfg.cobrar_comissoes_desde.astimezone(horarios.fuso()).strftime('%d/%m/%Y %H:%M')
+                                  if cfg.cobrar_comissoes_desde else None,
         'subscricao_dias_teste': cfg.subscricao_dias_teste,
         'fuso_horario': cfg.fuso_horario,
         'hora_local':   hora.strftime('%d/%m/%Y %H:%M'),

@@ -1011,6 +1011,9 @@ class ConfiguracaoPlataforma(models.Model):
     mostrar_logos_pagamento = models.BooleanField(default=False, db_default=False)
     # selo "Loja verificada" na página da loja e nos cards (desligado: só o dono e o admin o vêem)
     mostrar_selo_verificada = models.BooleanField(default=False, db_default=False)
+    # cobrança mensal das comissões às lojas (utils/cobranca_comissoes.py): vazio = desligada; ligada, só conta as
+    # comissões registadas a partir deste instante (as de antes vêm de vendas com pagamento simulado)
+    cobrar_comissoes_desde = models.DateTimeField(null=True, blank=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -1231,6 +1234,9 @@ class Comissao(models.Model):
     data_criacao     = models.DateTimeField(auto_now_add=True)
     data_liquidacao  = models.DateTimeField(null=True, blank=True)
     notas            = models.TextField(blank=True, default='')
+    # cobrança mensal em que entrou (utils/cobranca_comissoes.py) — liquidada quando a loja a paga
+    cobranca         = models.ForeignKey('CobrancaComissoes', on_delete=models.SET_NULL, null=True, blank=True,
+                                         related_name='comissoes')
  
     class Meta:
         ordering = ['-data_criacao']
@@ -1429,6 +1435,7 @@ class Notificacao(models.Model):
         ('dados_bancarios',          'Dados bancários alterados'),
         ('documento_loja',           'Documento da loja'),
         ('vinti4',                   'Pagamento com cartão (vinti4)'),
+        ('cobranca_comissoes',       'Comissões a pagar'),
         ('qualidade_catalogo',       'Qualidade do catálogo'),
         ('loja_reativada',           'Loja reactivada'),
         ('loja_fechada',             'Loja fechada pelo dono'),
@@ -2130,9 +2137,44 @@ class CreditoComissao(models.Model):
     estado         = models.CharField(max_length=12, choices=ESTADOS, default='pendente', db_index=True)
     data_criacao   = models.DateTimeField(auto_now_add=True)
     data_desconto  = models.DateTimeField(null=True, blank=True)
+    cobranca       = models.ForeignKey('CobrancaComissoes', on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='creditos')
 
     class Meta:
         ordering = ['-data_criacao']
+
+
+class CobrancaComissoes(models.Model):
+    """O que a loja paga à Bende pelas comissões (utils/cobranca_comissoes.py). A SISP não divide pagamentos: o
+    dinheiro das vendas vai direto para a loja e a comissão cobra-se à parte, uma vez por mês — as comissões ainda por
+    cobrar até ao fim do mês anterior, menos os créditos de reembolsos. Registo financeiro: nunca se apaga (anula-se)."""
+    ESTADOS = [('pendente', 'Por pagar'), ('paga', 'Paga'), ('anulada', 'Anulada')]
+    METODOS = [('simulado', 'Pagamento simulado'), ('online', 'Pagamento online'), ('transferencia', 'Transferência'),
+               ('dinheiro', 'Dinheiro'), ('oferta', 'Perdoada pela Bende'), ('outro', 'Outro')]
+
+    loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='cobrancas_comissoes')
+    mes             = models.DateField()        # dia 1 do último mês incluído
+    valor_comissoes = models.DecimalField(max_digits=12, decimal_places=2)
+    valor_creditos  = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor           = models.DecimalField(max_digits=12, decimal_places=2)      # a pagar = comissões − créditos
+    estado          = models.CharField(max_length=10, choices=ESTADOS, default='pendente', db_index=True)
+    vencimento      = models.DateField()
+    emitida_em      = models.DateTimeField(auto_now_add=True)
+    paga_em         = models.DateTimeField(null=True, blank=True)
+    metodo          = models.CharField(max_length=15, choices=METODOS, blank=True, default='')
+    referencia      = models.CharField(max_length=100, blank=True, default='')
+    notas           = models.CharField(max_length=300, blank=True, default='')
+    registada_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    # avisos já enviados ('d3', 'd0', 'atraso') — o worker não os repete
+    avisos          = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-mes', '-id']
+        constraints = [models.UniqueConstraint(fields=['loja', 'mes'], condition=~models.Q(estado='anulada'),
+                                               name='cobranca_comissoes_loja_mes')]
+
+    def __str__(self):
+        return f'Cobrança de comissões {self.mes:%Y-%m} — {self.loja_id} ({self.estado})'
 
 
 class RelatorioGerado(models.Model):

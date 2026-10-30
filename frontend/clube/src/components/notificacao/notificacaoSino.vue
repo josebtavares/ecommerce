@@ -186,6 +186,7 @@ const ICONES = {
   encomenda_cancelada:      { icon: 'ban',                 bg: 'bg-red-500/20 text-red-500'       },
   documento_loja:           { icon: 'id-card',             bg: 'bg-emerald-500/20 text-emerald-500' },
   vinti4:                   { icon: 'credit-card',         bg: 'bg-sky-500/20 text-sky-500' },
+  cobranca_comissoes:       { icon: 'receipt',             bg: 'bg-amber-500/20 text-amber-400' },
   qualidade_catalogo:       { icon: 'clipboard-check',     bg: 'bg-amber-500/20 text-amber-500'   },
 }
 

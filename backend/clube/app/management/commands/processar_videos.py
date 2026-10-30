@@ -105,6 +105,14 @@ class Command(BaseCommand):
                 self.stdout.write(f'  subscrições: {r}')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  subscrições: ciclo falhou: {e}')
+        try:
+            # cobrança mensal das comissões (utils/cobranca_comissoes.py): emite no início do mês, avisa à volta do vencimento
+            from app.utils import cobranca_comissoes
+            n, a = cobranca_comissoes.emitir_todas(), cobranca_comissoes.avisar()
+            if n or a:
+                self.stdout.write(f'  comissões: {n} cobranças emitidas, {a} avisos')
+        except Exception as e:
+            self.stderr.write(f'  comissões: ciclo falhou: {e}')
 
     def _backup_diario(self):
         """De 5 em 5 minutos vê se já é hora do backup da base de dados (utils/backups.py)."""

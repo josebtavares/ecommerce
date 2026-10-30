@@ -38,6 +38,9 @@
       </button>
     </div>
 
+    <!-- ══ COBRANÇAS MENSAIS (a loja paga as comissões à parte: a SISP não divide pagamentos) ══ -->
+    <AdminCobrancasComissoes :loja-id="filtroLoja" @alterado="recarregar" />
+
     <!-- ══ ABAS DE LOJAS ══ -->
     <div v-if="lojas.length > 0"
          class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -283,9 +286,12 @@
 
 <script>
 import api from '@/services/api'
+import AdminCobrancasComissoes from '@/components/admin/AdminCobrancasComissoes.vue'
 
 export default {
   name: 'AdminComissoes',
+
+  components: { AdminCobrancasComissoes },
 
   data () {
     return {
@@ -354,10 +360,12 @@ export default {
   },
 
   async created () {
-    await Promise.all([this.fetchLojas(), this.fetchComissoes()])
+    await this.recarregar()
   },
 
   methods: {
+    recarregar () { return Promise.all([this.fetchLojas(), this.fetchComissoes(this.page)]) },
+
     async fetchComissoes (pagina = this.page) {
       this.page = pagina
       this.loading = true
