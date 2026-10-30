@@ -210,6 +210,7 @@ import { estaAutenticado } from '@/services/sessao'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { DIAS_CURTOS, diaSemana, duracaoTexto, hora, rotuloDia } from '@/utils/servicos'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import { porConfirmar } from '@/services/confirmarEmail'
 
 export const GUARDADO = 'servicos_escolha'
 
@@ -316,6 +317,7 @@ export default {
         this.$router.push({ path: `/minhas-marcacoes/${m.id}`, query: { nova: 1 } })
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível marcar.'
+        if (porConfirmar(e)) return             // conta nova sem o email confirmado (aviso no topo)
         this.carregarDias(this.dia)
       } finally { this.aMarcar = false }
     },

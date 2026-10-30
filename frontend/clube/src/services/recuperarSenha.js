@@ -4,8 +4,9 @@ import { passwordValida } from '@/utils/password'
 // Recuperar password — usado pela Bendi (views/RecuperarSenha.vue) e pelo POS (views/pos/POSRecuperarSenha.vue).
 // `destino` 'pos' faz o link do email abrir /pos/recuperar_senha em vez de /recuperar_senha.
 
-export function pedirLinkRecuperacao (email, destino = 'bendi') {
-  return api.post('/app/utilizador/recuperar_senha/', { email, destino })
+// turnstile: resposta do components/forms/Turnstile.vue (utils/turnstile.py no backend)
+export function pedirLinkRecuperacao (email, destino = 'bendi', turnstile = '') {
+  return api.post('/app/utilizador/recuperar_senha/', { email, destino, turnstile })
 }
 
 export function definirPasswordNova (uid, token, password) {

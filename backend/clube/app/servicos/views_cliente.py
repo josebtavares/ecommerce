@@ -225,6 +225,10 @@ def marcar(request, loja_id):
     """
     if is_ratelimited(request=request, group='servicos_marcar', key='user', rate='30/h', method='POST', increment=True):
         return _erro('Demasiadas marcações seguidas. Tenta mais tarde.', 429)
+    from ..utils.confirmar_email import exigir
+    falta = exigir(request.user.utilizador, 'marcar')
+    if falta:
+        return Response(falta, status=status.HTTP_403_FORBIDDEN)
     loja = _loja_disponivel(loja_id)
     if not loja:
         return _erro('Esta loja não está a aceitar marcações.')

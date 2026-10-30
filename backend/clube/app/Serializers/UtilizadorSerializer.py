@@ -61,7 +61,12 @@ class UtilizadorSerializer(serializers.ModelSerializer):
         return value
 
     def validate_new_email(self, value):
-        return value.strip()
+        value = value.strip()
+        from ..utils.confirmar_email import descartavel, MSG_DESCARTAVEL
+        mesmo = self.instance is not None and value.lower() == (self.instance.user.email or '').lower()
+        if not mesmo and descartavel(value):
+            raise serializers.ValidationError(MSG_DESCARTAVEL)
+        return value
 
     # registo e alteração de password no perfil usam as mesmas regras do staff
     def validate_password(self, value):
@@ -111,6 +116,10 @@ class UtilizadorSerializer(serializers.ModelSerializer):
             new_email = validated_data.pop('new_email')
             if email_em_uso(new_email, excluir=django_user):
                 raise serializers.ValidationError({'email': 'Este email já está em uso.'})
+            if new_email.lower() != (django_user.email or '').lower():
+                # email novo: volta a ter de ser confirmado (utils/confirmar_email.py — a view envia o link)
+                instance.email_confirmado, instance.email_confirmado_em = False, None
+                self.email_mudou = True
             django_user.email = new_email
 
         if 'new_first_name' in validated_data:

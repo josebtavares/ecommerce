@@ -177,6 +177,12 @@
             <p v-if="passwordsDiferentes" class="mt-1 text-[11px] text-red-400">As passwords não coincidem.</p>
           </div>
 
+          <!-- armadilha para bots (utils/turnstile.py): uma pessoa não vê nem preenche este campo -->
+          <div aria-hidden="true" class="absolute -left-[9999px] w-px h-px overflow-hidden">
+            <label>Website <input v-model="website" type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+          </div>
+          <Turnstile ref="turnstile" v-model="turnstile" :isDark="isDark" />
+
           <!-- Erros -->
           <div v-if="errors.length" class="px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 space-y-0.5">
             <p v-for="(e, i) in errors" :key="i" class="text-red-400 text-xs">{{ e }}</p>
@@ -249,6 +255,7 @@ import { caminhoSeguro } from '@/services/sessao'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
+import Turnstile from '@/components/forms/Turnstile.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { passwordValida } from '@/utils/password'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
@@ -257,7 +264,7 @@ import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'RegisterView',
-  components: { PasswordForca, BotaoVerPassword, EstadoDisponibilidade },
+  components: { PasswordForca, BotaoVerPassword, EstadoDisponibilidade, Turnstile },
 
   setup () {
     const { loading, wrap } = useAsyncAction()
@@ -281,6 +288,8 @@ export default {
       previewUrl:    DEFAULT_UTILIZADOR,
       errors:        [],
       loadingGoogle: false,
+      turnstile:     '',
+      website:       '',
       isDark: temaEscuro(),
       logoDefault,
       logoLight,
@@ -345,6 +354,8 @@ export default {
         form.append('telefone',   this.telefone)
         form.append('morada',     this.morada)
         if (this.file) form.append('foto', this.file)
+        form.append('turnstile', this.turnstile)
+        form.append('website',   this.website)
 
         try {
           const res = await api.post('/app/utilizador/registar/', form, {
@@ -354,11 +365,14 @@ export default {
           localStorage.setItem('access_token',  access_token)
           localStorage.setItem('refresh_token', refresh_token)
           localStorage.setItem('user',          JSON.stringify(user))
-          toast.success('Conta criada com sucesso!', { autoClose: 2000 })
+          toast.success('Conta criada! Enviámos-te um email para confirmares o endereço.', { autoClose: 4000 })
           this.$router.replace(this.seguinte)
         } catch (err) {
           const data = err.response?.data
-          if (data && typeof data === 'object') {
+          this.$refs.turnstile?.repor()      // cada resposta do Turnstile só vale uma vez
+          if (data?.detail) {
+            this.errors = [data.detail]
+          } else if (data && typeof data === 'object') {
             this.errors = Object.values(data).flat()
           } else {
             this.errors = ['Não foi possível criar a conta. Tente novamente.']

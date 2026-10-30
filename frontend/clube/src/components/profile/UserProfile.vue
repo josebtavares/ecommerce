@@ -519,6 +519,7 @@ import { contactarLoja, contactarSuporte } from '@/services/chat'
 import { passwordValida } from '@/utils/password'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
+import { atualizarGuardado } from '@/services/confirmarEmail'
 
 const props = defineProps({
   data:   { type: Object,  default: () => ({}) },
@@ -744,8 +745,9 @@ async function saveProfile() {
     const fd = new FormData()
     Object.entries(form.value).forEach(([k, v]) => { if (v) fd.append(k, v) })
     if (mudaEmail.value) fd.append('password_atual', passwordEmail.value)
+    let resposta
     try {
-      await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      ({ data: resposta } = await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } }))
     } catch (e) {
       const d = e.response?.data
       const msg = d && typeof d === 'object' && Object.values(d).flat()[0]
@@ -755,10 +757,14 @@ async function saveProfile() {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
     Object.assign(user, form.value)
     localStorage.setItem('user', JSON.stringify(user))
+    // email novo: volta a ter de ser confirmado — o aviso do topo aparece (services/confirmarEmail.js)
+    const emailNovo = resposta?.email_confirmado === false && form.value.email !== valoresAtuais.value.email
+    atualizarGuardado({ email_confirmado: resposta?.email_confirmado ?? user.email_confirmado })
     valoresAtuais.value = { username: form.value.username, email: form.value.email }
     passwordEmail.value = ''
     Object.values(verificadores).forEach(v => v.verificar(''))
-    toast.success('Perfil actualizado!', { autoClose: 1500 })
+    toast.success(emailNovo ? 'Perfil actualizado! Enviámos um link para confirmares o email novo.' : 'Perfil actualizado!',
+                  { autoClose: emailNovo ? 4000 : 1500 })
   })
 }
 

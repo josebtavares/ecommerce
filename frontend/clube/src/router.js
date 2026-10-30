@@ -46,6 +46,12 @@ const routes = [
         component: () => import('@/views/RecuperarSenha.vue'),
     },
     {
+        // link do email de confirmação (?token=…, utils/confirmar_email.py) — não precisa de sessão
+        path: '/confirmar_email',
+        name: 'ConfirmarEmail',
+        component: () => import('@/views/ConfirmarEmail.vue'),
+    },
+    {
         // páginas institucionais com endereço próprio (links do rodapé e do checkout; a SISP pede-os)
         path: '/:slug(ajuda|contacto|faq|termos|privacidade|devolucoes|entregas)',
         name: 'Pagina',

@@ -138,6 +138,11 @@ def loja_create(request):
     """POST /app/loja/criar/"""
     utilizador = request.user.utilizador
 
+    from ..utils.confirmar_email import exigir
+    falta = exigir(utilizador, 'loja')
+    if falta:
+        return Response(falta, status=status.HTTP_403_FORBIDDEN)
+
     if not utilizador.verificado:
         return Response(
             {'detail': 'A tua conta precisa de estar verificada para criar uma loja.'},

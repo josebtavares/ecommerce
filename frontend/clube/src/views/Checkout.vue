@@ -367,6 +367,7 @@ import BotaoTema from '@/components/BotaoTema.vue'
 import LojaVendedor from '@/components/loja/LojaVendedor.vue'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import { porConfirmar } from '@/services/confirmarEmail'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
@@ -598,6 +599,10 @@ export default {
         } catch (e) {
           // a loja fechou enquanto o cliente estava no checkout → mostra o aviso e pede para confirmar
           const d = e.response?.data
+          if (porConfirmar(e)) {                        // conta nova sem o email confirmado (aviso no topo)
+            this.erro = d.detail
+            return
+          }
           if (d?.codigo === 'vaga_invalida') {          // a hora escolhida deixou de estar livre
             this.erro = d.detail
             this.$refs.escolherHora?.carregar()

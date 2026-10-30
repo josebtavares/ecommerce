@@ -30,6 +30,7 @@
               <input v-model.trim="email" type="email" placeholder="teu@email.com" required autocomplete="email"
                 class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-slate-950 focus:bg-white focus:ring-4 focus:ring-slate-950/10" />
             </div>
+            <Turnstile ref="turnstile" v-model="turnstile" />
             <button type="submit" :disabled="loading"
               class="flex h-12 w-full items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-60">
               {{ loading ? 'A enviar...' : 'Enviar link' }}
@@ -100,10 +101,11 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import { pedirLinkRecuperacao, definirPasswordNova, mensagemErroRecuperacao, erroPasswordNova } from '@/services/recuperarSenha'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
+import Turnstile from '@/components/forms/Turnstile.vue'
 
 export default {
   name: 'POSRecuperarSenha',
-  components: { PasswordForca, BotaoVerPassword },
+  components: { PasswordForca, BotaoVerPassword, Turnstile },
 
   setup () {
     const { loading, wrap } = useAsyncAction()
@@ -122,6 +124,7 @@ export default {
       uid:             this.$route.query.uid || '',
       token:           this.$route.query.token || '',
       erro:            '',
+      turnstile:       '',
     }
   },
 
@@ -137,9 +140,10 @@ export default {
       await this.wrap(async () => {
         this.erro = ''
         try {
-          await pedirLinkRecuperacao(this.email, 'pos')
+          await pedirLinkRecuperacao(this.email, 'pos', this.turnstile)
           this.enviado = true
         } catch (err) {
+          this.$refs.turnstile?.repor()
           this.erro = mensagemErroRecuperacao(err, 'Não foi possível enviar o email. Tenta novamente.')
         }
       })

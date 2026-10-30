@@ -49,6 +49,7 @@ class MyTokenSerializer(TokenObtainPairSerializer):
                 'morada'      : utilizador.morada,
                 'foto'        : foto_url,
                 'verificado'  : utilizador.verificado,
+                'email_confirmado': utilizador.email_confirmado,
                 'rating'      : str(utilizador.rating),
                 'status'      : utilizador.status,
                 'data_criacao': utilizador.data_criacao.strftime('%d-%m-%Y %H:%M:%S'),
