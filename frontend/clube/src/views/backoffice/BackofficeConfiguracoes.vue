@@ -239,14 +239,18 @@
       </div>
 
       <p class="mt-4 text-xs text-zinc-500" data-teste="metodos-online-nota">
-        <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />Cartão e mobile money são pagos online: a Bende trata do pagamento e
-        transfere o dinheiro para a conta em <strong class="text-zinc-400">Dados bancários</strong>. Não precisas de conta em nenhum serviço de pagamentos.
+        <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />O cartão precisa do contrato vinti4 da tua loja com a SISP
+        (em <strong class="text-zinc-400">Pagamento com cartão</strong>, mais abaixo): o dinheiro vai direto para a tua conta.
+        Dinheiro e transferência não precisam de contrato.
       </p>
     </div>
 
     <!-- Dados fiscais (só o dono) -->
     <SeccaoDadosFiscais v-if="podeFiscal && loja?.fiscal"
                         :fiscal="loja.fiscal" :url="`/app/loja/${lojaId}/fiscal/`" @guardado="$emit('updated')" />
+
+    <!-- Pagamento com cartão: contrato vinti4 da loja (só o dono) — components/loja/SeccaoVinti4 -->
+    <SeccaoVinti4 v-if="podeBanco" :loja-id="lojaId" @alterado="$emit('updated')" />
 
     <!-- Dados bancários (só o dono) — components/loja/SeccaoDadosBancarios -->
     <SeccaoDadosBancarios v-if="podeBanco" :loja-id="lojaId" />
@@ -381,6 +385,7 @@ import HorarioEditor from '@/components/horario/HorarioEditor.vue'
 import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
 import SeccaoDadosBancarios from '@/components/loja/SeccaoDadosBancarios.vue'
 import SeccaoDocumentos from '@/components/loja/SeccaoDocumentos.vue'
+import SeccaoVinti4 from '@/components/loja/SeccaoVinti4.vue'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 
 // campos de texto que o dono pode apagar (os outros vazios não se enviam)
@@ -407,7 +412,7 @@ function isVideo (url) {
 
 export default {
   name: 'BackofficeConfiguracoes',
-  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos },
+  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos, SeccaoVinti4 },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },

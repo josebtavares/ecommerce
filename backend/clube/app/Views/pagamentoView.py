@@ -103,7 +103,8 @@ def _iniciar(request, tipo_metodo):
         inicio = pagamentos.iniciar_encomenda(encomenda, tipo_metodo, request.user.utilizador)
     except ErroPagamento as e:
         transaction.set_rollback(True)
-        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        extra = {'codigo': e.codigo, 'campos': e.campos} if isinstance(e, pagamentos.DadosClienteEmFalta) else {}
+        return Response({'detail': str(e), **extra}, status=status.HTTP_400_BAD_REQUEST)
     pagamento = getattr(encomenda, 'pagamento', None) if inicio.estado != 'redirecionar' else None
     return Response(pagamentos.para_frontend(inicio, encomenda_id=encomenda.id,
                                     pagamento=PagamentoSerializer(pagamento).data if pagamento else None))

@@ -52,6 +52,26 @@
       </div>
     </div>
 
+    <div v-if="!loading" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="cobrar-comissoes">
+      <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Cobrança mensal das comissões</h3>
+      <p class="text-xs text-zinc-500 mt-1 mb-4">
+        A SISP não divide pagamentos: o dinheiro das vendas vai direto para a loja e a Bende cobra-lhe as comissões
+        uma vez por mês (Admin → Comissões). Ao ligar, só contam as comissões a partir desse momento.
+        Liga só quando os pagamentos forem a sério — com o pagamento simulado as lojas seriam cobradas por vendas de teste.
+      </p>
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" @click="alternarCobranca" :disabled="aGuardarCobranca" data-teste="cobrar-comissoes-alternar"
+          :class="['px-5 py-2.5 rounded-xl text-sm font-bold transition disabled:opacity-40',
+                   dados.cobrar_comissoes ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-100' : 'bg-red-600 hover:bg-red-500 text-white']">
+          {{ dados.cobrar_comissoes ? 'Desligar' : 'Ligar a cobrança' }}
+        </button>
+        <span class="text-sm" :class="dados.cobrar_comissoes ? 'text-green-400' : 'text-zinc-500'" data-teste="cobrar-comissoes-estado">
+          {{ dados.cobrar_comissoes ? `Ligada desde ${dados.cobrar_comissoes_desde}` : 'Desligada' }}
+        </span>
+      </div>
+      <p v-if="erroCobranca" class="text-sm text-red-400 mt-3" role="alert">{{ erroCobranca }}</p>
+    </div>
+
     <div v-if="!loading" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Fuso horário</h3>
       <p class="text-xs text-zinc-500 mt-1 mb-4">
@@ -151,7 +171,7 @@ export default {
   data () {
     return { CAMPOS, ident: {}, erroIdent: '', guardadoIdent: false,
              SUGESTOES, loading: true, aGuardar: false, guardado: false, erro: '',
-             dados: { fusos: [] }, escolhido: '', pesquisa: '', diasTeste: 30, guardadoTeste: false }
+             dados: { fusos: [] }, aGuardarCobranca: false, erroCobranca: '', escolhido: '', pesquisa: '', diasTeste: 30, guardadoTeste: false }
   },
 
   computed: {
@@ -193,6 +213,22 @@ export default {
         this.erroIdent = e.response?.data?.detail || 'Não foi possível guardar.'
       } finally {
         this.aGuardar = false
+      }
+    },
+    async alternarCobranca () {
+      const ligar = !this.dados.cobrar_comissoes
+      if (!confirm(ligar
+        ? 'Ligar a cobrança mensal das comissões? As lojas passam a receber cobranças das comissões das vendas a partir de agora.'
+        : 'Desligar a cobrança? Deixam de se emitir cobranças novas (as já emitidas continuam por pagar). Ao voltar a ligar, só contam as comissões daí em diante.')) return
+      this.erroCobranca = ''
+      this.aGuardarCobranca = true
+      try {
+        const { data } = await api.patch('/app/admin/plataforma/', { cobrar_comissoes: ligar })
+        this.dados = { ...this.dados, ...data }
+      } catch (e) {
+        this.erroCobranca = e.response?.data?.detail || 'Não foi possível guardar.'
+      } finally {
+        this.aGuardarCobranca = false
       }
     },
     async guardarTeste () {

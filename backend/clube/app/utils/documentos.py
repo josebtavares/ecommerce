@@ -25,6 +25,42 @@ def _data(d):
     return d.strftime('%d/%m/%Y')
 
 
+def _hora(d):
+    return timezone.localtime(d).strftime('%d/%m/%Y %H:%M') if d else '—'
+
+
+def _processado_por(codigo):
+    from ..pagamentos import ErroPagamento, obter
+    try:
+        return obter(codigo).nome
+    except ErroPagamento:
+        return codigo
+
+
+def _cliente(p, utilizador, morada=''):
+    """Nome, email, telefone e morada de quem pagou (contrato SISP, cl.3: o recibo identifica o titular)."""
+    user = utilizador.user
+    p.linha('Nome', user.get_full_name() or user.username)
+    if user.email:
+        p.linha('Email', user.email)
+    if utilizador.telefone:
+        p.linha('Telefone', utilizador.telefone)
+    if morada or utilizador.morada:
+        p.linha('Morada', (morada or utilizador.morada)[:90])
+
+
+def _vendedor(p, loja, online):
+    """O comerciante: com cartão é a loja (contrato vinti4 dela) — NIF e contactos sempre que os tem."""
+    p.seccao('Vendedor')
+    p.linha('Loja', loja.nome)
+    if loja.nif and (online or loja.regime_fiscal == 'atividade'):
+        p.linha('NIF', loja.nif)
+    if online:
+        for rotulo, v in (('Email', loja.contacto_email), ('Telefone', loja.contacto_telefone)):
+            if v:
+                p.linha(rotulo, v)
+
+
 class _Pdf:
     """Folha A4 simples: cabeçalho, blocos de linhas rótulo/valor, tabela e rodapé."""
 
@@ -142,16 +178,11 @@ def nome_comprovativo_encomenda(enc):
 def pdf_comprovativo_encomenda(enc):
     loja = enc.loja
     pag = getattr(enc, 'pagamento', None)
+    online = bool(pag and pag.fornecedor)
     p = _Pdf('Comprovativo de pagamento', f'E-{enc.id}', f'Encomenda #{enc.id} em {loja.nome}')
-    p.seccao('Vendedor')
-    p.linha('Loja', loja.nome)
-    if loja.regime_fiscal == 'atividade' and loja.nif:
-        p.linha('NIF', loja.nif)
+    _vendedor(p, loja, online)
     p.seccao('Cliente')
-    user = enc.comprador.user
-    p.linha('Nome', user.get_full_name() or user.username)
-    if user.email:
-        p.linha('Email', user.email)
+    _cliente(p, enc.comprador, enc.morada_entrega)
     p.linha('Data da encomenda', _data(enc.data_criacao))
 
     itens = list(enc.itens.select_related('produto'))
@@ -168,10 +199,16 @@ def pdf_comprovativo_encomenda(enc):
     if enc.valor_devido != enc.valor_total:
         p.linha('Descontado (artigos esgotados)', formatar(enc.valor_devido - enc.valor_total))
     if pag:
+        p.seccao('Pagamento')
         p.linha('Método de pagamento', pag.metodo.get_tipo_display() if pag.metodo_id else '—')
-        p.linha('Pago a', _data(pag.data_pagamento))
-    p.linha('Total pago', formatar(enc.valor_devido), destaque=True)
-    return p.fim('A fatura legal é emitida pela loja no e-Fatura e fica disponível na encomenda.')
+        p.linha('Pago a', _hora(pag.data_pagamento) if online else _data(pag.data_pagamento))
+        if online:
+            p.linha('Processado por', _processado_por(pag.fornecedor))
+            p.linha('Referência da transação', pag.referencia_transacao[:60] or '—')
+            p.linha('Estado', pag.get_status_display())
+    p.linha('Total pago (CVE)', formatar(enc.valor_devido), destaque=True)
+    nota = 'Pagamento simulado (ambiente de testes). ' if pag and pag.fornecedor == 'simulado' else ''
+    return p.fim(nota + 'A fatura legal é emitida pela loja no e-Fatura e fica disponível na encomenda.')
 
 
 # ── Marcação (serviços) ────────────────────────────────────────
@@ -183,17 +220,12 @@ def nome_comprovativo_marcacao(m):
 def pdf_comprovativo_marcacao(m):
     """Marcação paga online (antecipado). Gerado na hora: mostra também o que já foi devolvido."""
     loja = m.loja
+    online = bool(m.pagamento_fornecedor)
     p = _Pdf('Comprovativo de pagamento', f'M-{m.id}', f'Marcação #{m.id} em {loja.nome}')
-    p.seccao('Vendedor')
-    p.linha('Loja', loja.nome)
-    if loja.regime_fiscal == 'atividade' and loja.nif:
-        p.linha('NIF', loja.nif)
+    _vendedor(p, loja, online)
     p.seccao('Cliente')
     if m.cliente_id:
-        user = m.cliente.user
-        p.linha('Nome', user.get_full_name() or user.username)
-        if user.email:
-            p.linha('Email', user.email)
+        _cliente(p, m.cliente)
     else:
         p.linha('Nome', m.cliente_nome or '—')
     p.seccao('Serviço')
@@ -207,12 +239,16 @@ def pdf_comprovativo_marcacao(m):
     p.linha('Estado', m.get_estado_display())
     p.linha('Preço', formatar(m.preco))
     p.seccao('Pagamento')
-    p.linha('Pago a', _data(m.pago_em))
+    p.linha('Pago a', _hora(m.pago_em))
+    if online:
+        p.linha('Processado por', _processado_por(m.pagamento_fornecedor))
+        p.linha('Referência da transação', m.pagamento_referencia[:60] or '—')
     p.linha('Valor pago', formatar(m.valor_pago))
     if m.valor_reembolsado:
         p.linha('Devolvido', formatar(m.valor_reembolsado) + (f' ({_data(m.reembolsado_em)})' if m.reembolsado_em else ''))
     p.linha('Total pago', formatar(m.valor_pago - m.valor_reembolsado), destaque=True)
-    return p.fim('Pagamento simulado (ambiente de testes). A fatura legal é emitida pela loja no e-Fatura e fica na marcação.')
+    nota = 'Pagamento simulado (ambiente de testes). ' if m.pagamento_fornecedor == 'simulado' else ''
+    return p.fim(nota + 'A fatura legal é emitida pela loja no e-Fatura e fica na marcação.')
 
 
 # ── Subscrição ─────────────────────────────────────────────────

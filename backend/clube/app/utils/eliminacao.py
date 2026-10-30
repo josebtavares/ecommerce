@@ -180,6 +180,10 @@ def anonimizar(alvo, por=None, motivo=''):
         # documentos legais das lojas (identificação do titular…): saem com a conta, os ficheiros também
         from .documentos_loja import apagar_da_conta
         apagar_da_conta(alvo)
+        # contrato vinti4: a chave sai com a conta e o cartão pára (o registo das transações fica)
+        from ..models import AdesaoVinti4
+        AdesaoVinti4.objects.filter(loja__dono=alvo).update(chave_cifrada='', estado='suspensa',
+                                                            motivo='Conta do dono eliminada.')
         UtilizadorLoja.objects.filter(utilizador=alvo).update(ativo=False)
         Condutor.objects.filter(utilizador=alvo).update(ativo=False)
 

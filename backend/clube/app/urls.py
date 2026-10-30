@@ -23,6 +23,8 @@ urlpatterns = [
     path('', include('app.Urls.homeUrl')),
     path('', include('app.Urls.devolucaoUrl')),
     path('', include('app.Urls.documentoLojaUrl')),
+    path('', include('app.Urls.vinti4Url')),
+    path('', include('app.Urls.cobrancaComissoesUrl')),
     path('', include('app.Urls.faturacaoUrl')),
     path('', include('app.Urls.faturacaoLojaUrl')),
     path('', include('app.Urls.exportacaoLojaUrl')),

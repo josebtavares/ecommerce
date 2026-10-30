@@ -196,6 +196,9 @@
       <!-- comissões do Bende por mês: extrato + fatura (components/fiscal) -->
       <ComissoesMensais :loja-id="lojaId" />
 
+      <!-- cobrança mensal das comissões (a SISP não divide pagamentos: paga-se à parte) -->
+      <CobrancasComissoes :loja-id="lojaId" @alterado="$emit('alterado')" />
+
       <!-- Faturas (também o histórico de uma loja que voltou à comissão) -->
       <div v-if="sub || dados.faturas.length" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
         <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-6 pt-5 pb-3">Mensalidades</p>
@@ -247,12 +250,13 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 import ComissoesMensais from '@/components/fiscal/ComissoesMensais.vue'
+import CobrancasComissoes from '@/components/fiscal/CobrancasComissoes.vue'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
 
 export default {
   name: 'BackofficeSubscricao',
-  components: { ComissoesMensais, ListaCobrancas },
+  components: { ComissoesMensais, CobrancasComissoes, ListaCobrancas },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['alterado'],
 
