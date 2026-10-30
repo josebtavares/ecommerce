@@ -16,6 +16,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import transaction
 
+from ..utils.banco import online_suspenso
 from ..utils.dinheiro import formatar, valor_cobranca
 from . import ativo, obter
 from .base import Cobranca, ErroPagamento
@@ -138,6 +139,8 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
         encomenda.save(update_fields=['status'])
         _limpar_carrinho(encomenda)
         return Inicio('pendente')
+    if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir
+        raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')
     f = ativo()
     loja = encomenda.loja
     inicio = f.iniciar(Cobranca(
@@ -183,6 +186,8 @@ def iniciar_marcacao(m, utilizador):
     """→ (Inicio, marcação). Simulado: fica paga já."""
     from ..servicos import marcacoes as ops
     ops.verificar_pagavel(m)
+    if online_suspenso(m.loja):
+        raise ErroPagamento('Esta loja ainda não recebe pagamentos online — a marcação não pode ser paga agora.')
     f = ativo()
     inicio = f.iniciar(Cobranca(
         referencia=nova_referencia('mar', m.id, 'cartao'), valor=m.preco_indicado,
