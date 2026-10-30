@@ -2,7 +2,6 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.files.storage import default_storage
-from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
@@ -491,18 +490,14 @@ def password_reset_request(request):
 
     # uma falha do envio fica no log (Sentry) mas a resposta é a mesma: não revela se o email existe
     try:
-        send_mail(
-            subject='Recuperação de palavra-passe',
-            message=(
-                f'Olá {django_user.username},\n\n'
-                f'Recebemos um pedido para redefinir a password da tua conta Bende.\n'
-                f'Abre este link para escolheres uma password nova:\n\n{reset_link}\n\n'
-                f'O link só pode ser usado uma vez. Se não foste tu a pedir, ignora este email: '
-                f'a tua password não muda.\n\nBende'
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[django_user.email],
-        )
+        from ..utils.email_html import criar, saudacao
+        criar(django_user.email, 'Recuperar a password da tua conta Bende',
+              f'{saudacao(django_user)}\n\n'
+              f'Recebemos um pedido para escolher uma password nova para a tua conta Bende '
+              f'({django_user.username}).\n\n{reset_link}\n\n'
+              f'O link só pode ser usado uma vez. Se não foste tu a pedir, ignora este email: '
+              f'a tua password não muda.',
+              botao=('Escolher password nova', reset_link)).send()
     except Exception:
         logging.getLogger(__name__).exception('recuperar senha: falhou o envio do email')
 
