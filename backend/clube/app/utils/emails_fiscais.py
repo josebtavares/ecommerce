@@ -10,12 +10,12 @@ fica no log (Sentry).
 import logging
 
 from django.conf import settings
-from django.core.mail import EmailMessage
 from django.db import transaction
 from django.db.models.signals import post_save
 from django.utils import timezone
 
 from . import documentos
+from .email_html import saudacao
 
 log = logging.getLogger(__name__)
 
@@ -24,14 +24,13 @@ def _link(caminho):
     return f'{settings.FRONTEND_BASE_URL}{caminho}'
 
 
-def _enviar(para, assunto, texto, anexos=()):
+def _enviar(para, assunto, texto, anexos=(), botao=None):
     if not para:
         return False
+    from .email_html import criar
     try:
-        msg = EmailMessage(subject=assunto, body=texto + '\n\nBende', from_email=settings.DEFAULT_FROM_EMAIL, to=[para])
-        for nome, conteudo in anexos:
-            msg.attach(nome, conteudo, 'application/pdf')
-        msg.send()
+        criar(para, assunto, texto, botao=botao,
+              anexos=[(nome, conteudo, 'application/pdf') for nome, conteudo in anexos]).send()
         return True
     except Exception:
         log.exception('email fiscal: falhou "%s" para utilizador', assunto)
@@ -78,7 +77,7 @@ def enviar_comprovativo_encomenda(enc):
     user = enc.comprador.user
     ok = _enviar(
         user.email, f'Comprovativo de pagamento — encomenda #{enc.id} ({enc.loja.nome})',
-        f'Olá {user.first_name or user.username},\n\n'
+        f'{saudacao(user)}\n\n'
         f'O pagamento da tua encomenda #{enc.id} em {enc.loja.nome} foi confirmado. '
         f'Segue em anexo o comprovativo.\n\nA fatura é emitida pela loja e também te chega por email '
         f'quando estiver disponível. Podes ver a encomenda aqui: {_link("/perfil")}',
@@ -99,7 +98,7 @@ def enviar_dados_transferencia(enc_id):
     user = enc.comprador.user
     _enviar(
         user.email, f'Dados para a transferência — encomenda #{enc.id} ({enc.loja.nome})',
-        f'Olá {user.first_name or user.username},\n\n'
+        f'{saudacao(user)}\n\n'
         f'Escolheste pagar a encomenda #{enc.id} em {enc.loja.nome} por transferência bancária. Transfere para:\n\n'
         f'Banco: {t["banco"]}\nTitular: {t["titular"]}\nIBAN: {t["iban"]}\n'
         f'Valor: {formatar(t["valor"])}\nDescritivo / referência: {t["referencia"]}\n\n'
@@ -111,7 +110,7 @@ def enviar_fatura_encomenda(enc):
     pdf = _pdf_registado(enc.fatura_pdf)
     _enviar(
         user.email, f'Fatura {enc.fatura_numero} — encomenda #{enc.id} ({enc.loja.nome})',
-        f'Olá {user.first_name or user.username},\n\n'
+        f'{saudacao(user)}\n\n'
         f'{enc.loja.nome} emitiu a fatura {enc.fatura_numero} da tua encomenda #{enc.id}.'
         + (' Segue em anexo.' if pdf else '') + f'\n\nTambém a encontras na encomenda: {_link("/perfil")}',
         [(f'fatura-encomenda-{enc.id}.pdf', pdf)] if pdf else [])
@@ -124,7 +123,7 @@ def enviar_comprovativo_marcacao(m):
     user = m.cliente.user
     ok = _enviar(
         user.email, f'Comprovativo de pagamento — {m.servico_nome} ({m.loja.nome})',
-        f'Olá {user.first_name or user.username},\n\n'
+        f'{saudacao(user)}\n\n'
         f'O pagamento da tua marcação #{m.id} ({m.servico_nome}) em {m.loja.nome} foi confirmado. '
         f'Segue em anexo o comprovativo.\n\nA fatura é emitida pela loja e também te chega por email '
         f'quando estiver disponível. Marcação: {_link(f"/minhas-marcacoes/{m.id}")}',
@@ -148,7 +147,7 @@ def enviar_fatura_marcacao(m):
     pdf = _pdf_registado(m.fatura_pdf)
     _enviar(
         user.email, f'Fatura {m.fatura_numero} — {m.servico_nome} ({m.loja.nome})',
-        f'Olá {user.first_name or user.username},\n\n'
+        f'{saudacao(user)}\n\n'
         f'{m.loja.nome} emitiu a fatura {m.fatura_numero} da tua marcação #{m.id} ({m.servico_nome}).'
         + (' Segue em anexo.' if pdf else '') + f'\n\nTambém a encontras na marcação: {_link(f"/minhas-marcacoes/{m.id}")}',
         [(f'fatura-marcacao-{m.id}.pdf', pdf)] if pdf else [])
@@ -214,14 +213,14 @@ def enviar_fatura_anulada(obj, numero, motivo):
     if nome == 'encomenda':
         user = obj.comprador.user
         para, assunto = user.email, f'Fatura {numero} anulada — encomenda #{obj.id} ({obj.loja.nome})'
-        texto = (f'Olá {user.first_name or user.username},\n\n{obj.loja.nome} anulou a fatura {numero} da tua encomenda '
+        texto = (f'{saudacao(user)}\n\n{obj.loja.nome} anulou a fatura {numero} da tua encomenda '
                  f'#{obj.id}. Motivo: {motivo}\n\nSe a loja emitir outra, recebes-a por email. Encomenda: {_link("/perfil")}')
     elif nome == 'marcacao':
         if not obj.cliente_id:
             return
         user = obj.cliente.user
         para, assunto = user.email, f'Fatura {numero} anulada — {obj.servico_nome} ({obj.loja.nome})'
-        texto = (f'Olá {user.first_name or user.username},\n\n{obj.loja.nome} anulou a fatura {numero} da tua marcação '
+        texto = (f'{saudacao(user)}\n\n{obj.loja.nome} anulou a fatura {numero} da tua marcação '
                  f'#{obj.id}. Motivo: {motivo}\n\nSe a loja emitir outra, recebes-a por email. '
                  f'Marcação: {_link(f"/minhas-marcacoes/{obj.id}")}')
     elif nome == 'faturasubscricao':

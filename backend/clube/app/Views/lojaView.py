@@ -334,11 +334,9 @@ def _email_banco(para, loja_nome, texto):
     if not para:
         return
     import logging
-    from django.conf import settings
-    from django.core.mail import EmailMessage
+    from ..utils.email_html import criar
     try:
-        EmailMessage(subject=f'Dados bancários alterados — {loja_nome}', body=texto + '\n\nBende',
-                     from_email=settings.DEFAULT_FROM_EMAIL, to=[para]).send()
+        criar(para, f'Dados bancários alterados — {loja_nome}', texto).send()
     except Exception:
         logging.getLogger(__name__).exception('email dos dados bancários falhou')
 

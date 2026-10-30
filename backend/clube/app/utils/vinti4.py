@@ -162,10 +162,9 @@ def _avisar_dono(loja, titulo, mensagem, email=False):
     para = loja.dono.user.email
     if email and para:
         def enviar():
-            from django.core.mail import EmailMessage
+            from .email_html import criar
             try:
-                EmailMessage(subject=f'{titulo} — {loja.nome}', body=mensagem + '\n\nBende',
-                             from_email=settings.DEFAULT_FROM_EMAIL, to=[para]).send(fail_silently=False)
+                criar(para, f'{titulo} — {loja.nome}', mensagem).send(fail_silently=False)
             except Exception:
                 log.exception('vinti4: email ao dono falhou')
         transaction.on_commit(enviar)

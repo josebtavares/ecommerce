@@ -20,7 +20,6 @@ import logging
 from datetime import datetime, time
 
 from django.conf import settings
-from django.core.mail import EmailMessage
 from django.db import transaction
 from django.utils import timezone
 
@@ -225,8 +224,8 @@ def _avisar(alvo, acao, motivo, ate):
         assunto = 'A tua conta Bende foi reactivada'
         texto = (f'Olá {nome},\n\nA tua conta Bende voltou a estar activa. Já podes entrar em '
                  f'{settings.FRONTEND_BASE_URL}/Login')
+    from .email_html import criar
     try:
-        EmailMessage(subject=assunto, body=texto + '\n\nBende', from_email=settings.DEFAULT_FROM_EMAIL,
-                     to=[email], reply_to=[suporte] if suporte else None).send()
+        criar(email, assunto, texto).send()
     except Exception:
         log.exception('moderação: falhou o email "%s"', assunto)
