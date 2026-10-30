@@ -91,7 +91,7 @@ export function useLojaData () {
     try {
       const { data } = await api.get(`/app/loja/${id}/pagamento/metodos/`)
       // nome para mostrar ("Cartão", "Transferência"…); o tipo fica para os ícones
-      metodosPagamento.value = (data.results || data).filter(m => m.ativo).map(m => ({ ...m, nome: NOMES_PAGAMENTO[m.tipo] || m.tipo }))
+      metodosPagamento.value = (data.results || data).filter(m => m.ativo && m.disponivel !== false).map(m => ({ ...m, nome: NOMES_PAGAMENTO[m.tipo] || m.tipo }))
     } catch (e) { console.error(e) }
   }
 

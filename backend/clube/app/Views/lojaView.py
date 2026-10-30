@@ -692,8 +692,13 @@ def metodos_pagamento_publico(request, loja_id):
     """GET /app/loja/<loja_id>/pagamento/metodos/"""
     from ..models import MetodoPagamento
     loja = get_object_or_404(Loja, id=loja_id)
+    from ..pagamentos.servico import METODOS_ONLINE
+    from ..utils.banco import online_suspenso
     metodos = MetodoPagamento.objects.filter(loja=loja, ativo=True)
-    return Response([{'id': m.id, 'tipo': m.tipo, 'ativo': m.ativo} for m in metodos])
+    # disponivel=False: ligado pela loja, mas sem dados bancários não aparece no checkout (utils/banco.online_suspenso)
+    suspenso = online_suspenso(loja)
+    return Response([{'id': m.id, 'tipo': m.tipo, 'ativo': m.ativo, 'disponivel': not (suspenso and m.tipo in METODOS_ONLINE)}
+                     for m in metodos])
 
 
 # ══════════════════════════════════════════════════════════════

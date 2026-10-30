@@ -76,12 +76,15 @@ def avaliar(loja, com_produtos=False):
     # com pagamentos online a sério, quem aceita cartão/mobile money tem de dizer para onde vai o dinheiro
     from ..pagamentos import cobra_a_serio
     from ..pagamentos.servico import METODOS_ONLINE
-    if cobra_a_serio() and loja.metodos_pagamento.filter(ativo=True, tipo__in=METODOS_ONLINE).exists():
+    # (e quem tem serviços pagos antecipadamente). Sem eles, os pagamentos online ficam suspensos (utils/banco).
+    if cobra_a_serio() and (loja.metodos_pagamento.filter(ativo=True, tipo__in=METODOS_ONLINE).exists()
+                            or (cfg and cfg.ativo and loja.servicos.filter(ativo=True, pagamento__in=('antecipado', 'ambos')).exists())):
         from ..models import DadosBancarios
         requisitos.append({'chave': 'banco', 'titulo': 'Dados bancários', 'seccao': 'configuracoes',
                            'ok': DadosBancarios.objects.filter(loja=loja).exists(),
                            'ajuda': 'Em Configurações → Dados bancários (só o dono): a conta para onde a Bende '
-                                    'transfere os pagamentos online.'})
+                                    'transfere os pagamentos online. Até lá, o cartão e o mobile money não aparecem '
+                                    'aos clientes e as marcações não se pagam antecipadamente.'})
     # documentos legais: opcionais, a não ser que o admin os peça a esta loja (utils/documentos_loja.py)
     if loja.documentos_obrigatorios:
         from .documentos_loja import verificada

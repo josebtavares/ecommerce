@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from ..models import Loja, Utilizador
 from ..pagamentos import ErroPagamento
 from ..pagamentos import servico as pagamentos
+from ..utils.banco import online_suspenso
 from ..utils.dinheiro import formatar, ler_valor
 from ..utils.horarios import fuso
 from . import agenda, cobranca, conversa, pacotes
@@ -60,6 +61,11 @@ def publico(request, loja_id):
     cfg = loja.config_servicos
     servicos = list(pacotes.marcaveis(loja.servicos.all()).prefetch_related('imagens', 'profissionais', 'componentes__servico'))
     ativos = {p.id: p for p in loja.profissionais.filter(ativo=True)}
+    # sem dados bancários (com pagamentos a sério) não há pagamento antecipado: "ambos" passa a só no local
+    # e os serviços só antecipados não se podem marcar (utils/banco.online_suspenso)
+    suspenso = online_suspenso(loja)
+    if suspenso:
+        servicos = [s for s in servicos if s.pagamento != 'antecipado']
     return Response({
         'disponivel': True, 'loja': {'id': loja.id, 'nome': loja.nome, 'logo': _url(request, loja.logo)},
         'regras': {'cliente_escolhe_profissional': cfg.cliente_escolhe_profissional, 'cancelar_horas': cfg.cancelar_horas,
@@ -69,7 +75,7 @@ def publico(request, loja_id):
             'id': s.id, 'nome': s.nome, 'descricao': s.descricao, 'categoria': s.categoria, 'duracao_min': s.duracao_min,
             'tipo_preco': s.tipo_preco, 'preco': str(s.preco),
             'preco_texto': ('a partir de ' if s.tipo_preco == 'a_partir' else '') + formatar(s.preco),
-            'pagamento': s.pagamento, 'imagens': [_url(request, i.ficheiro) for i in s.imagens.all()],
+            'pagamento': 'local' if suspenso else s.pagamento, 'imagens': [_url(request, i.ficheiro) for i in s.imagens.all()],
             **_pacote_publico(s),
             'profissionais': [p.id for p in s.profissionais.all() if p.id in ativos] if cfg.cliente_escolhe_profissional else [],
         } for s in servicos if any(p.id in ativos for p in s.profissionais.all())],
@@ -250,6 +256,9 @@ def marcar(request, loja_id):
     pagamento = d.get('pagamento') or ('local' if s.pagamento == 'local' else 'antecipado')
     if pagamento not in ('antecipado', 'local') or (s.pagamento != 'ambos' and pagamento != s.pagamento):
         return _erro('Forma de pagamento inválida para este serviço.')
+    if pagamento == 'antecipado' and online_suspenso(loja):
+        return _erro('Esta loja ainda não recebe pagamentos online — este serviço não pode ser marcado agora.'
+                     if s.pagamento == 'antecipado' else 'Esta loja ainda não recebe pagamentos online — escolhe pagar no local.')
     notas, e = _texto(d, 'notas', 500)
     if e:
         return _erro(e)
