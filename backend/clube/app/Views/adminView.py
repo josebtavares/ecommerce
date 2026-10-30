@@ -185,6 +185,7 @@ def admin_loja_list(request):
             'prontidao': prontidao.avaliar(loja),
             'documentos': {'verificada': documentos_loja.verificada(loja), 'pendentes': loja._docs_pendentes,
                            'obrigatorios': loja.documentos_obrigatorios},
+            'demo':        loja.demo,
         })
 
     return Response({
@@ -192,6 +193,23 @@ def admin_loja_list(request):
         'next_offset': offset + limit if offset + limit < total else None,
         'results':     results,
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_loja_demo(request, loja_id):
+    """
+    POST /app/admin/lojas/<loja_id>/demo/  Body: { demo: bool } → { id, demo }
+    Marca (ou desmarca) uma loja de demonstração. Só aqui — nunca se deduz do email do dono.
+    """
+    erro = _exige_admin(request, 'gerir_lojas')
+    if erro: return erro
+    loja = get_object_or_404(Loja, id=loja_id)
+    if not isinstance(request.data, dict) or 'demo' not in request.data:
+        return Response({'detail': 'Indica demo: true ou false.'}, status=status.HTTP_400_BAD_REQUEST)
+    loja.demo = request.data['demo'] in (True, 'true', '1', 1)
+    loja.save(update_fields=['demo'])
+    return Response({'id': loja.id, 'demo': loja.demo})
 
 
 @api_view(['GET', 'POST'])

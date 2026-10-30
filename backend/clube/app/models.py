@@ -323,6 +323,10 @@ class Loja(models.Model):
     # para ser publicada (quem vende coisas pessoais em casa não precisa) — entra na prontidão
     documentos_obrigatorios = models.BooleanField(default=False, db_default=False)
 
+    # Loja de demonstração (dados fictícios: IBAN do banco 9999, etc.). Só o admin a liga/desliga —
+    # nunca se deduz do email do dono. Admin → Catálogo marca-as; vão ser escondidas antes de abrir ao público.
+    demo = models.BooleanField(default=False, db_default=False)
+
     class Meta:
         ordering = ['-data_criacao']
 
