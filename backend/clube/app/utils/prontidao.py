@@ -85,6 +85,13 @@ def avaliar(loja, com_produtos=False):
                            'ajuda': 'Em Configurações → Pagamento com cartão (só o dono): a adesão da loja à SISP. Até lá, '
                                     'o cartão não aparece aos clientes e as marcações não se pagam antecipadamente — '
                                     'ou desliga o cartão e vende com dinheiro/transferência.'})
+    # transferência ligada: o cliente precisa do IBAN da loja (utils/banco.dados_transferencia)
+    if loja.metodos_pagamento.filter(ativo=True, tipo='transferencia').exists():
+        from .banco import tem_dados
+        requisitos.append({'chave': 'banco', 'titulo': 'Dados bancários (para receber transferências)', 'seccao': 'configuracoes',
+                           'ok': tem_dados(loja),
+                           'ajuda': 'Em Configurações → Dados bancários (só o dono). Sem eles a transferência não aparece aos '
+                                    'clientes — ou desliga a transferência.'})
     # documentos legais: opcionais, a não ser que o admin os peça a esta loja (utils/documentos_loja.py)
     if loja.documentos_obrigatorios:
         from .documentos_loja import verificada

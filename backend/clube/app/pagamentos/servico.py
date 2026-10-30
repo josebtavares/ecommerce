@@ -153,12 +153,19 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
     metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo=tipo_metodo, ativo=True).first()
     if not metodo:
         raise ErroPagamento('Esta loja não aceita este método de pagamento.')
+    if tipo_metodo == 'transferencia':
+        from ..utils.banco import tem_dados
+        if not tem_dados(encomenda.loja):
+            raise ErroPagamento('Esta loja ainda não tem os dados para transferência — escolhe outro método de pagamento.')
     if tipo_metodo in METODOS_OFFLINE:
         Pagamento.objects.create(encomenda=encomenda, metodo=metodo, valor=encomenda.valor_total,
                                  status='pendente', referencia_transacao='dinheiro')
         encomenda.status = 'pago'           # encomenda aceite, paga-se na entrega / a loja confirma a transferência
         encomenda.save(update_fields=['status'])
         _limpar_carrinho(encomenda)
+        if tipo_metodo == 'transferencia':  # o cliente recebe por email para onde transferir
+            from ..utils.emails_fiscais import enviar_dados_transferencia
+            transaction.on_commit(lambda: enviar_dados_transferencia(encomenda.pk))
         return Inicio('pendente')
     if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')

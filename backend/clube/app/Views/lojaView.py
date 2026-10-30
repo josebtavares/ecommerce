@@ -697,7 +697,11 @@ def metodos_pagamento_publico(request, loja_id):
     metodos = MetodoPagamento.objects.filter(loja=loja, ativo=True)
     # disponivel=False: ligado pela loja, mas sem dados bancários não aparece no checkout (utils/banco.online_suspenso)
     suspenso = online_suspenso(loja)
-    return Response([{'id': m.id, 'tipo': m.tipo, 'ativo': m.ativo, 'disponivel': not (suspenso and m.tipo in METODOS_ONLINE)}
+    # transferência sem dados bancários: o cliente não saberia para onde transferir
+    from ..utils.banco import tem_dados
+    sem_banco = not tem_dados(loja)
+    return Response([{'id': m.id, 'tipo': m.tipo, 'ativo': m.ativo,
+                      'disponivel': not ((suspenso and m.tipo in METODOS_ONLINE) or (sem_banco and m.tipo == 'transferencia'))}
                      for m in metodos])
 
 

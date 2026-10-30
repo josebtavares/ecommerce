@@ -374,7 +374,7 @@ const METODO_INFO = {
   mbway:         { label: 'MBWay',              descricao: 'Pagamento via MBWay' },
   cartao:        { label: 'Cartão',             descricao: 'Cartão de débito/crédito — pago online' },
   flutterwave:   { label: 'Cartão',             descricao: 'Visa, Mastercard — pago online' },
-  transferencia: { label: 'Transferência',      descricao: 'Transferência bancária' },
+  transferencia: { label: 'Transferência',      descricao: 'Transferência bancária — vês o IBAN da loja depois de confirmar' },
   mobile_money:  { label: 'Mobile Money',       descricao: 'Pagamento via telemóvel' },
   paypal:        { label: 'PayPal',             descricao: 'Pagamento via PayPal' },
   stripe:        { label: 'Cartão',             descricao: 'Visa, Mastercard — pago online' },
