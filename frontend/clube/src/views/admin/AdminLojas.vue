@@ -57,6 +57,7 @@
               <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', estadoInfo(loja).classe]">
                 {{ estadoInfo(loja).label }}
               </span>
+              <span v-if="loja.demo" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-500/15 text-sky-400" data-teste="admin-loja-demo">Demo</span>
               <!-- requisitos para publicar (backend utils/prontidao.py) -->
               <span v-if="loja.prontidao" data-teste="admin-prontidao"
                     :title="loja.prontidao.completa ? 'Cumpre os requisitos para ser publicada' : 'Falta: ' + faltam(loja).join('; ')"
@@ -278,6 +279,18 @@
             </a>
           </div>
 
+          <!-- Loja de demonstração: marca explícita (Loja.demo), nunca deduzida do email do dono -->
+          <label class="flex items-start gap-3 rounded-xl border border-zinc-800 p-4 cursor-pointer" data-teste="admin-demo">
+            <input type="checkbox" :checked="lojaDetalhe.demo" @change="marcarDemo(lojaDetalhe, $event.target.checked)" :disabled="aMarcarDemo"
+              class="mt-0.5 w-4 h-4 accent-sky-500" data-teste="admin-demo-check" />
+            <span class="text-sm text-zinc-300">
+              Loja de demonstração
+              <span class="block text-xs text-zinc-500">Dados fictícios, para mostrar a plataforma. Aparece como "Demo" no Admin
+                (Lojas, Catálogo) e vai ser escondida antes de abrir ao público. Uma loja real nunca deve estar marcada.</span>
+            </span>
+          </label>
+          <p v-if="erroDemo" class="text-xs text-red-400 -mt-2">{{ erroDemo }}</p>
+
           <!-- Dados bancários (gerir_pagamentos) — backend Views/registoView.py; cada consulta fica no registo -->
           <div v-if="podeVerBanco" class="rounded-xl border border-zinc-800 p-4 space-y-3" data-teste="admin-banco">
             <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">
@@ -402,6 +415,7 @@ export default {
   },
   data () {
     return {
+      aMarcarDemo: false, erroDemo: '',
       ESTADOS, ACOES,
       eliminacao: null, confirmacaoNome: '', aEliminar: false,
       banco: { carregado: false, aCarregar: false, dados: null, erro: '' },   // dados bancários da ficha aberta
@@ -472,6 +486,18 @@ export default {
       return Object.keys(ACOES).filter(a => ACOES[a].origens.includes(loja.estado))
     },
     // aprovar = publicar: só com os requisitos todos (o backend recusa na mesma)
+    async marcarDemo (loja, demo) {
+      this.aMarcarDemo = true; this.erroDemo = ''
+      try {
+        const { data } = await api.post(`/app/admin/lojas/${loja.id}/demo/`, { demo })
+        loja.demo = data.demo
+        const naLista = this.lojas.find(l => l.id === loja.id)
+        if (naLista) naLista.demo = data.demo
+      } catch (e) {
+        this.erroDemo = e.response?.data?.detail || 'Não foi possível alterar.'
+      } finally { this.aMarcarDemo = false }
+    },
+
     async verBanco (loja) {
       this.banco = { ...this.banco, aCarregar: true, erro: '' }
       try {

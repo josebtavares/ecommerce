@@ -5,8 +5,8 @@ Qualidade do catálogo (Admin → Catálogo): o que a SISP/o banco notam ao reve
   bloqueiam nada: nome provisório ("teste", "asdf", "produto 1"…), preço estranho (abaixo de PRECO_MIN ou acima de
   PRECO_MAX) e o mesmo nome repetido na loja.
 • Lojas: os requisitos para publicar que faltam (prontidao.py), sem logótipo, descrição curta, sem nada à venda.
-• Só lojas activas e pendentes (as fechadas/suspensas não aparecem ao público). As lojas demo (dono
-  @demo.bendi.cv) vêm marcadas — vão ser escondidas antes da revisão.
+• Só lojas activas e pendentes (as fechadas/suspensas não aparecem ao público). As lojas demo (Loja.demo,
+  marcada pelo admin) vêm marcadas — vão ser escondidas antes da revisão.
 • "Avisar a loja": notificação ao dono com o resumo (no máximo uma por dia por loja).
 Só lê — não esconde nem altera nada.
 """
@@ -22,7 +22,6 @@ from . import prontidao
 
 PRECO_MIN = Decimal('20')            # CVE — abaixo disto quase sempre é engano ou teste
 PRECO_MAX = Decimal('2000000')
-DOMINIO_DEMO = '@demo.bendi.cv'
 INTERVALO_AVISO = timedelta(hours=24)
 
 NOMES_PROVISORIOS = re.compile(
@@ -80,7 +79,7 @@ def _produtos(loja):
 
 
 def e_demo(loja):
-    return (loja.dono.user.email or '').lower().endswith(DOMINIO_DEMO)
+    return loja.demo
 
 
 def ultimo_aviso(loja):
