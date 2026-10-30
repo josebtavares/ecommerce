@@ -46,12 +46,24 @@
         </div>
       </div>
 
+      <!-- comprovativo do pagamento online (contrato SISP, cl.3): também segue por email, em PDF -->
+      <div v-if="encomenda?.comprovativo" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5 text-left mb-8 space-y-2"
+           data-teste="comprovativo-pagamento">
+        <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider pb-1">Comprovativo de pagamento</p>
+        <div v-for="[r, v] in linhasComprovativo" :key="r" class="flex justify-between gap-4 text-sm">
+          <span class="text-zinc-500 flex-shrink-0">{{ r }}</span>
+          <span class="text-zinc-200 text-right break-all">{{ v }}</span>
+        </div>
+        <button type="button" @click="descarregarComprovativoEncomenda(encomenda.id)" data-teste="comprovativo-pdf"
+          class="mt-2 text-xs font-semibold text-red-400 hover:text-red-300 underline">Descarregar em PDF</button>
+      </div>
+
       <div class="flex gap-3">
         <button @click="$router.push({ name: 'Home' })"
           class="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold transition">
           Voltar ao início
         </button>
-        <button @click="$router.push({ name: 'Home' })"
+        <button @click="$router.push('/perfil')"
           class="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold transition">
           Ver encomendas
         </button>
@@ -64,6 +76,7 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { temaPainel } from '@/utils/tema'
+import { descarregarComprovativoEncomenda } from '@/utils/documentos'
 
 export default {
   name: 'EncomendaSucesso',
@@ -77,7 +90,19 @@ export default {
       this.encomenda = data
     } catch (e) { console.error(e) }
   },
+  computed: {
+    linhasComprovativo () {
+      const c = this.encomenda.comprovativo
+      return [
+        ['Loja', c.comerciante + (c.comerciante_nif ? ` · NIF ${c.comerciante_nif}` : '')],
+        ['Valor', `${this.formatPrice(c.valor)} (${c.moeda})`],
+        ['Data', c.data], ['Método', c.metodo], ['Processado por', c.processado_por],
+        ['Referência', c.referencia || '—'], ['Estado', c.estado],
+      ]
+    },
+  },
   methods: {
+    descarregarComprovativoEncomenda,
     formatPrice (val) {
       return formatarDinheiro(val || 0)
     }

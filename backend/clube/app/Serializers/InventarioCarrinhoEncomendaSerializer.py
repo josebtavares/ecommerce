@@ -208,6 +208,24 @@ def _valor_reembolsado(obj):
                .aggregate(t=Sum('valor_aprovado'))['t'] or '0.00')
 
 
+def _comprovativo(obj):
+    """Comprovativo de um pagamento online aprovado (contrato SISP, cl.3) | None — dinheiro/transferência não têm."""
+    from ..pagamentos import ErroPagamento, obter
+    from ..utils.horarios import fuso
+    p = getattr(obj, 'pagamento', None)
+    if not p or p.status == 'pendente' or p.status == 'falhado' or not p.fornecedor or not p.data_pagamento:
+        return None
+    try:
+        processado = obter(p.fornecedor).nome
+    except ErroPagamento:
+        processado = p.fornecedor
+    loja = obj.loja
+    return {'referencia': p.referencia_transacao, 'data': p.data_pagamento.astimezone(fuso()).strftime('%d/%m/%Y %H:%M'),
+            'valor': f'{p.valor:.2f}', 'moeda': 'CVE', 'metodo': p.metodo.get_tipo_display() if p.metodo else 'Cartão',
+            'processado_por': processado, 'comerciante': loja.nome, 'comerciante_nif': loja.nif or '',
+            'estado': p.get_status_display()}
+
+
 class EncomendaSerializer(serializers.ModelSerializer):
     itens              = ItemEncomendaSerializer(many=True, read_only=True)
     loja_nome          = serializers.CharField(source='loja.nome', read_only=True)
@@ -228,11 +246,12 @@ class EncomendaSerializer(serializers.ModelSerializer):
     valor_reembolsado  = serializers.SerializerMethodField()
     valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
     fatura             = serializers.SerializerMethodField()   # registada pela loja (utils/fiscal.py)
+    comprovativo       = serializers.SerializerMethodField()   # do pagamento online (referência, data, valor)
  
     class Meta:
         model  = Encomenda
         fields = [
-            'id',
+            'id', 'comprovativo',
             'comprador', 'comprador_username',
             'loja', 'loja_nome',
             'itens',
@@ -271,6 +290,9 @@ class EncomendaSerializer(serializers.ModelSerializer):
 
     def get_fatura(self, obj):
         return _fatura(obj, self.context.get('request'))
+
+    def get_comprovativo(self, obj):
+        return _comprovativo(obj)
 
     def get_agendada_texto(self, obj):
         if not obj.agendada_para:

@@ -1,11 +1,12 @@
-<!-- SeccaoDadosBancarios.vue — Configurações da loja (só o dono): a conta para onde vai o dinheiro das vendas.
+<!-- SeccaoDadosBancarios.vue — Configurações da loja (só o dono): a conta bancária da loja (as vendas com cartão
+     vão direto para a conta do contrato vinti4 — components/loja/SeccaoVinti4).
      Backend: GET/PUT /app/loja/<id>/banco/ (utils/banco.py). Mudar pede a password; fica no registo das
      transações e o dono recebe um email. -->
 <template>
   <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-banco">
     <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Dados bancários</h2>
     <p class="text-xs text-zinc-600 mb-5">
-      A conta onde vais receber o dinheiro das vendas pagas online. Só tu vês e alteras estes dados;
+      A conta bancária da loja (a mesma do contrato vinti4, se o tiveres). Só tu vês e alteras estes dados;
       cada alteração fica registada e recebes um email.
     </p>
 

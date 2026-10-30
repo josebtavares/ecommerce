@@ -981,6 +981,9 @@ def admin_comissao_liquidar(request, comissao_id):
     comissao = get_object_or_404(Comissao, id=comissao_id)
     if comissao.status == 'liquidada':
         return Response({'detail': 'Comissao ja esta liquidada.'}, status=status.HTTP_400_BAD_REQUEST)
+    if comissao.cobranca_id:
+        return Response({'detail': 'Esta comissão está na cobrança mensal — liquida-se quando a loja a pagar.'},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     comissao.status = 'liquidada'
     comissao.data_liquidacao = now()
@@ -1424,7 +1427,8 @@ def admin_creditos_descontar(request):
         loja_id = int(request.data.get('loja_id'))
     except (TypeError, ValueError):
         return Response({'detail': 'Indica a loja.'}, status=status.HTTP_400_BAD_REQUEST)
-    qs = CreditoComissao.objects.select_for_update().filter(loja_id=loja_id, estado='pendente')
+    # os que já entraram numa cobrança mensal descontam-se quando ela é paga (utils/cobranca_comissoes.py)
+    qs = CreditoComissao.objects.select_for_update().filter(loja_id=loja_id, estado='pendente', cobranca__isnull=True)
     total = qs.aggregate(v=Sum('valor'))['v'] or 0
     ids = list(qs.values_list('id', flat=True))
     n = qs.update(estado='descontado', data_desconto=now())

@@ -233,6 +233,8 @@ def servicos_publicos():
     from .pacotes import marcaveis
     from ..pagamentos import cobra_a_serio
     qs = marcaveis(Servico.objects.filter(loja__in=lojas_com_servicos(), profissionais__ativo=True))
-    if cobra_a_serio():     # só pagamento antecipado e a loja sem dados bancários: não se pode marcar (utils/banco)
-        qs = qs.exclude(pagamento='antecipado', loja__dados_bancarios__isnull=True)
+    if cobra_a_serio():     # só pagamento antecipado e a loja sem contrato vinti4 ativo: não se pode marcar (utils/banco)
+        from django.db.models import Q
+        from ..utils.vinti4 import ESTADOS_COM_CARTAO
+        qs = qs.exclude(Q(pagamento='antecipado') & ~Q(loja__vinti4__estado__in=ESTADOS_COM_CARTAO))
     return qs.distinct().select_related('loja').prefetch_related('imagens')

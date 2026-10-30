@@ -25,9 +25,12 @@
       <p class="mt-3 text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
         A loja é responsável pelos produtos, pela entrega e pelas devoluções.
       </p>
-      <div v-if="politicas.length" class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <div v-if="politicas.length || politicasBende.length" class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <button v-for="p in politicas" :key="p.chave" type="button" @click="aberta = p" :data-teste="'politica-' + p.chave"
           class="font-semibold text-red-500 hover:text-red-400 underline-offset-2 hover:underline">{{ p.titulo }}</button>
+        <!-- a loja não escreveu a sua: aplicam-se as da Bende (contrato SISP, cl.3: devoluções e entregas visíveis) -->
+        <router-link v-for="p in politicasBende" :key="p.chave" :to="'/' + p.chave" target="_blank" :data-teste="'politica-bende-' + p.chave"
+          class="font-semibold text-red-500 hover:text-red-400 underline-offset-2 hover:underline">{{ p.titulo }}</router-link>
       </div>
     </div>
 
@@ -67,6 +70,12 @@ export default {
         { chave: 'termos',      titulo: 'Termos',      texto: l.termos_servico },
         { chave: 'privacidade', titulo: 'Privacidade', texto: l.politica_privacidade },
       ].map(p => ({ ...p, texto: String(p.texto || '').trim() })).filter(p => p.texto)   // só as da loja
+    },
+
+    politicasBende () {
+      const proprias = this.politicas.map(p => p.chave)
+      return [{ chave: 'devolucoes', titulo: 'Devoluções' }, { chave: 'entregas', titulo: 'Entregas' }]
+        .filter(p => !proprias.includes(p.chave))
     },
   },
 }

@@ -73,18 +73,18 @@ def avaliar(loja, com_produtos=False):
          'ok': bool(completos or servicos_ok),
          'ajuda': f'Com foto, preço e descrição (pelo menos {DESCRICAO_MIN} caracteres).'},
     ]
-    # com pagamentos online a sério, quem aceita cartão/mobile money tem de dizer para onde vai o dinheiro
+    # com pagamentos online a sério, quem aceita cartão (ou tem serviços pagos antecipadamente) precisa do seu
+    # contrato vinti4 ativo — a SISP paga direto à loja (utils/vinti4.py). Sem ele, o online fica suspenso (utils/banco).
     from ..pagamentos import cobra_a_serio
     from ..pagamentos.servico import METODOS_ONLINE
-    # (e quem tem serviços pagos antecipadamente). Sem eles, os pagamentos online ficam suspensos (utils/banco).
     if cobra_a_serio() and (loja.metodos_pagamento.filter(ativo=True, tipo__in=METODOS_ONLINE).exists()
                             or (cfg and cfg.ativo and loja.servicos.filter(ativo=True, pagamento__in=('antecipado', 'ambos')).exists())):
-        from ..models import DadosBancarios
-        requisitos.append({'chave': 'banco', 'titulo': 'Dados bancários', 'seccao': 'configuracoes',
-                           'ok': DadosBancarios.objects.filter(loja=loja).exists(),
-                           'ajuda': 'Em Configurações → Dados bancários (só o dono): a conta para onde a Bende '
-                                    'transfere os pagamentos online. Até lá, o cartão e o mobile money não aparecem '
-                                    'aos clientes e as marcações não se pagam antecipadamente.'})
+        from .vinti4 import ativa
+        requisitos.append({'chave': 'vinti4', 'titulo': 'Contrato vinti4 ativo (pagamento com cartão)', 'seccao': 'configuracoes',
+                           'ok': ativa(loja),
+                           'ajuda': 'Em Configurações → Pagamento com cartão (só o dono): a adesão da loja à SISP. Até lá, '
+                                    'o cartão não aparece aos clientes e as marcações não se pagam antecipadamente — '
+                                    'ou desliga o cartão e vende com dinheiro/transferência.'})
     # documentos legais: opcionais, a não ser que o admin os peça a esta loja (utils/documentos_loja.py)
     if loja.documentos_obrigatorios:
         from .documentos_loja import verificada

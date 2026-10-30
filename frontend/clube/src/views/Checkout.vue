@@ -173,6 +173,30 @@
               </span>
             </button>
           </div>
+
+          <!-- cartão (contrato SISP, cl.3): pagamento seguro na página da SISP + dados de quem paga -->
+          <div v-if="pagaOnline" class="mt-4 space-y-3" data-teste="checkout-cartao">
+            <div class="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-400 leading-relaxed">
+              <div class="flex flex-wrap items-center gap-1.5 mb-2" aria-label="Cartões aceites">
+                <span v-for="l in CARTOES" :key="l" class="px-2 py-0.5 rounded-md border border-zinc-700 bg-zinc-800 text-[11px] font-bold text-zinc-300">{{ l }}</span>
+              </div>
+              <p class="flex items-start gap-2">
+                <font-awesome-icon :icon="['fas', 'lock']" class="w-3 h-3 mt-0.5 flex-shrink-0 text-green-400" />
+                <span>Pagas na página segura da SISP (vinti4, 3-D Secure), diretamente a <b class="text-zinc-300">{{ loja?.nome }}</b>.
+                  Os dados do cartão são introduzidos só na SISP: nem a Bende nem a loja os veem.
+                  Valores em escudos (CVE), sem custos adicionais.</span>
+              </p>
+            </div>
+            <div v-if="precisaTelefone || precisaMorada" class="grid sm:grid-cols-2 gap-3" data-teste="checkout-dados-cliente">
+              <p class="sm:col-span-2 text-xs text-zinc-500">Para pagar com cartão precisamos de completar o teu perfil (fica guardado).</p>
+              <input v-if="precisaTelefone" v-model="telefone" type="tel" maxlength="30" inputmode="tel" autocomplete="tel"
+                placeholder="Telefone" data-teste="checkout-telefone"
+                class="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+              <input v-if="precisaMorada" v-model="moradaCliente" maxlength="300" autocomplete="street-address"
+                placeholder="A tua morada" data-teste="checkout-morada"
+                :class="['w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition', precisaTelefone ? '' : 'sm:col-span-2']" />
+            </div>
+          </div>
         </div>
 
       </div>
@@ -254,6 +278,9 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Selecciona uma opção de entrega
+            </p>
+            <p v-if="faltaDadosCartao" class="text-xs text-yellow-500" data-teste="falta-dados-cartao">
+              Para pagar com cartão, indica o telefone e a morada
             </p>
             <p v-if="tipoEntrega === 'entrega' && !moradaEntrega.trim()" class="text-xs text-yellow-500 flex items-center gap-1">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -386,6 +413,10 @@ export default {
       agendarPara: null,   // null = o mais cedo possível · '' = a escolher · 'AAAA-MM-DDTHH:MM'
       redirecionando: false,
       metodosOnline: METODOS_ONLINE,
+      CARTOES: ['vinti4', 'VISA', 'Mastercard'],
+      perfilTelefone: user.telefone || '',
+      telefone:       '',
+      moradaCliente:  '',
     }
   },
 
@@ -400,6 +431,13 @@ export default {
       return parseFloat(this.opcaoSelecionada.preco || 0)
     },
     total () { return this.subtotal + this.custoEntrega },
+    pagaOnline ()      { return this.metodosOnline.includes(this.metodoPagamento) },
+    precisaTelefone () { return this.pagaOnline && !this.perfilTelefone.trim() },
+    // a morada de entrega serve; no levantamento usa-se a do perfil
+    precisaMorada ()   { return this.pagaOnline && this.tipoEntrega !== 'entrega' && !this.moradaPerfil.trim() },
+    faltaDadosCartao () {
+      return (this.precisaTelefone && !this.telefone.trim()) || (this.precisaMorada && !this.moradaCliente.trim())
+    },
     // horário da loja (utils/horarios.py no servidor) — fechada: agendar para a abertura ou não aceitar
     lojaFechada ()   { return !!(this.loja?.horario?.ativo && !this.loja.horario.aberta) },
     aceitaAgendar () { return this.loja?.horario?.fora_horario === 'agendar' && !!this.loja.horario.abre_em },
@@ -415,6 +453,7 @@ export default {
       if (this.agendarPara === '') return false            // escolheu "dia e hora" mas ainda não a hora
       if (!this.tipoEntrega || this.itens.length === 0 || !this.metodoPagamento) return false
       if (!this.aceitaTermos) return false
+      if (this.faltaDadosCartao) return false
       if (this.tipoEntrega === 'entrega') {
         if (!this.opcaoEntregaId) return false
         if (!this.moradaEntrega.trim()) return false
@@ -429,6 +468,7 @@ export default {
       this.fetchCarrinho(),
       this.fetchOpcoesEntrega(),
       this.fetchMetodosPagamento(),
+      this.fetchPerfil(),
     ])
     if (this.loja?.entrega_ativa)          this.tipoEntrega = 'entrega'
     else if (this.loja?.levantamento_ativo) this.tipoEntrega = 'levantamento'
@@ -446,6 +486,18 @@ export default {
         const { data } = await api.get(`/app/loja/${this.lojaId}/`)
         this.loja = data
       } catch (e) { console.error(e) }
+    },
+
+    // telefone/morada atuais (o localStorage pode estar desatualizado)
+    async fetchPerfil () {
+      try {
+        const { data } = await api.get('/app/utilizador/me/')
+        this.perfilTelefone = data.telefone || ''
+        if (data.morada && !this.moradaPerfil) {
+          this.moradaPerfil = data.morada
+          if (!this.moradaEntrega) this.moradaEntrega = data.morada
+        }
+      } catch (e) { /* fica o do localStorage */ }
     },
 
     async fetchCarrinho () {
@@ -501,9 +553,32 @@ export default {
       }
     },
 
+    async guardarDadosCliente () {
+      if (!this.precisaTelefone && !this.precisaMorada) return true
+      const fd = new FormData()
+      if (this.precisaTelefone) fd.append('telefone', this.telefone.trim())
+      if (this.precisaMorada) fd.append('morada', this.moradaCliente.trim())
+      try {
+        const { data } = await api.patch('/app/utilizador/me/editar/', fd)
+        try {
+          const user = JSON.parse(localStorage.getItem('user') || '{}')
+          localStorage.setItem('user', JSON.stringify({ ...user, telefone: data.telefone ?? user.telefone, morada: data.morada ?? user.morada }))
+        } catch (e) { /* sem localStorage: fica no servidor */ }
+        this.perfilTelefone = data.telefone || this.telefone.trim()
+        this.moradaPerfil = data.morada || this.moradaCliente.trim() || this.moradaPerfil
+        return true
+      } catch (e) {
+        const d = e.response?.data || {}
+        this.erro = [d.telefone, d.morada, d.detail].flat().filter(Boolean)[0] || 'Não foi possível guardar o telefone e a morada.'
+        return false
+      }
+    },
+
     async confirmarEncomenda () {
       this.erro = ''
       await this.wrap(async () => {
+        // 0 — cartão: telefone/morada em falta ficam no perfil (o backend recusa pagar sem eles)
+        if (!(await this.guardarDadosCliente())) return
         // 1 — criar encomenda
         const payload = {
           tipo_entrega:   this.tipoEntrega,

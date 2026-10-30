@@ -26,9 +26,9 @@ from .base import Cobranca, ErroPagamento
 METODOS_OFFLINE = ('dinheiro', 'transferencia')
 METODOS_ONLINE = ('cartao', 'mobile_money', 'mbway', 'flutterwave', 'stripe', 'paypal')
 
-_REF = re.compile(r'^(enc|mar|fat)-(\d{1,18})-([a-z_]{1,20})-\d{1,20}$')
+_REF = re.compile(r'^(enc|mar|fat|com)-(\d{1,18})-([a-z_]{1,20})-\d{1,20}$')
 _REF_ANTIGA = re.compile(r'^enc_(\d{1,18})_\d{1,20}$')       # tx_ref do Flutterwave antes desta camada
-TIPOS = {'enc': 'encomenda', 'mar': 'marcacao', 'fat': 'fatura'}
+TIPOS = {'enc': 'encomenda', 'mar': 'marcacao', 'fat': 'fatura', 'com': 'comissoes'}
 
 
 def nova_referencia(tipo, objeto_id, metodo):
@@ -45,6 +45,27 @@ def ler_referencia(ref):
     if m:
         return 'enc', int(m.group(1)), 'flutterwave'
     return None
+
+
+class DadosClienteEmFalta(ErroPagamento):
+    """Pagar com cartão pede o perfil do cliente completo (contrato SISP, cl.3: nome, morada, telefone, email)."""
+    codigo = 'dados_cliente'
+
+    def __init__(self, campos):
+        self.campos = campos
+        nomes = {'telefone': 'o telefone', 'morada': 'a morada'}
+        super().__init__(f'Para pagar com cartão, indica {" e ".join(nomes[c] for c in campos)} no teu perfil.')
+
+
+def exigir_dados_cliente(utilizador, morada=''):
+    """Telefone e morada (a de entrega serve) de quem paga online → DadosClienteEmFalta."""
+    falta = []
+    if not str(getattr(utilizador, 'telefone', '') or '').strip():
+        falta.append('telefone')
+    if not str(morada or getattr(utilizador, 'morada', '') or '').strip():
+        falta.append('morada')
+    if falta:
+        raise DadosClienteEmFalta(falta)
 
 
 def _regresso():
@@ -141,6 +162,7 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
         return Inicio('pendente')
     if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')
+    exigir_dados_cliente(utilizador, encomenda.morada_entrega)
     f = ativo()
     loja = encomenda.loja
     inicio = f.iniciar(Cobranca(
@@ -188,6 +210,7 @@ def iniciar_marcacao(m, utilizador):
     ops.verificar_pagavel(m)
     if online_suspenso(m.loja):
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — a marcação não pode ser paga agora.')
+    exigir_dados_cliente(utilizador)
     f = ativo()
     inicio = f.iniciar(Cobranca(
         referencia=nova_referencia('mar', m.id, 'cartao'), valor=m.preco_indicado,
@@ -279,6 +302,49 @@ def _confirmar_fatura(f, conf, oid, _metodo):
     return _resultado('fatura', fatura, 'pago', destino)
 
 
+# ── cobrança mensal das comissões (a Bende é a comerciante: a loja paga-lhe) ──
+
+def iniciar_cobranca_comissoes(c, utilizador):
+    if c.estado != 'pendente':
+        raise ErroPagamento('Esta cobrança já não está por pagar.')
+    from ..utils import cobranca_comissoes as cc
+    f = ativo()
+    inicio = f.iniciar(Cobranca(
+        referencia=nova_referencia('com', c.id, 'cartao'), valor=c.valor,
+        descricao=f'Comissões até {c.mes:%m/%Y} — {c.loja.nome}'[:100], titulo='Bende', cliente=_cliente(utilizador),
+        regresso=_regresso()))
+    if inicio.estado == 'aprovado':
+        cc.pagar(c, _metodo_fatura(f), referencia=inicio.transacao)
+    return inicio
+
+
+def _confirmar_cobranca(f, conf, oid, _metodo):
+    from ..models import CobrancaComissoes
+    from ..utils.registo import registar
+    from ..utils import cobranca_comissoes as cc
+    c = CobrancaComissoes.objects.select_related('loja').filter(pk=oid).first()
+    if not c:
+        raise ErroPagamento('Cobrança não encontrada.')
+    destino = f'/loja/{c.loja_id}/backoffice/subscricao'
+    if c.estado == 'paga' and c.referencia == conf.transacao:
+        return _resultado('comissoes', c, 'pago', destino)
+    if not _bate(f, conf, c.valor):
+        raise ErroPagamento('O valor pago não corresponde à cobrança.')
+    try:
+        cc.pagar(c, _metodo_fatura(f), referencia=conf.transacao)
+    except cc.ErroCobranca as e:
+        c.refresh_from_db()
+        if c.estado == 'paga' and c.referencia == conf.transacao:
+            return _resultado('comissoes', c, 'pago', destino)
+        registar('comissao', 'pago_sem_efeito', objeto_id=c.id, loja_id=c.loja_id, valor=c.valor, metodo=f.codigo,
+                 referencia=conf.transacao, dados={'motivo': str(e)})
+        _avisar_reembolso(f'Reembolso necessário — Comissões #{c.id}',
+                          f'{f.nome} confirmou {formatar(c.valor)} (tx {conf.transacao}) para uma cobrança de comissões '
+                          f'que já não está por pagar ({e}). Reembolsa a loja.', loja=c.loja)
+        return _resultado('comissoes', c, 'reembolso', destino)
+    return _resultado('comissoes', c, 'pago', destino)
+
+
 # ── regresso / aviso ─────────────────────────────────────────────────
 
 def confirmar(f, conf):
@@ -290,7 +356,8 @@ def confirmar(f, conf):
         raise ErroPagamento('Pagamento cancelado.' if conf.motivo == 'cancelado'
                             else f'O pagamento não foi confirmado ({conf.motivo or "sem resposta"}).')
     tipo, oid, metodo = lido
-    return {'enc': _confirmar_encomenda, 'mar': _confirmar_marcacao, 'fat': _confirmar_fatura}[tipo](f, conf, oid, metodo)
+    return {'enc': _confirmar_encomenda, 'mar': _confirmar_marcacao, 'fat': _confirmar_fatura,
+            'com': _confirmar_cobranca}[tipo](f, conf, oid, metodo)
 
 
 def para_frontend(inicio, **extra):

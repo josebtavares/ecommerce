@@ -1076,7 +1076,8 @@ def _ajustar_comissao(r, valor):
     c = Comissao.objects.select_for_update().filter(encomenda=r.encomenda).first()
     if not c or not c.percentagem:
         return
-    if c.status == 'pendente':
+    # já numa cobrança emitida (utils/cobranca_comissoes.py): o valor dela não muda — crédito para a seguinte
+    if c.status == 'pendente' and not c.cobranca_id:
         antes = c.valor_comissao
         c.valor_encomenda = max(c.valor_encomenda - valor, Decimal('0'))
         c.valor_comissao = _q(c.valor_encomenda * c.percentagem / 100)
