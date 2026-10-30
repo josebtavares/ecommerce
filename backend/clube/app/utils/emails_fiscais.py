@@ -87,6 +87,25 @@ def enviar_comprovativo_encomenda(enc):
         _libertar(type(enc), enc.pk)
 
 
+def enviar_dados_transferencia(enc_id):
+    """Encomenda paga por transferência: para onde transferir, quanto e com que referência."""
+    from ..models import Encomenda
+    from .banco import dados_transferencia
+    from .dinheiro import formatar
+    enc = Encomenda.objects.select_related('loja__dados_bancarios', 'comprador__user', 'pagamento__metodo').filter(pk=enc_id).first()
+    t = dados_transferencia(enc) if enc else None
+    if not t:
+        return
+    user = enc.comprador.user
+    _enviar(
+        user.email, f'Dados para a transferência — encomenda #{enc.id} ({enc.loja.nome})',
+        f'Olá {user.first_name or user.username},\n\n'
+        f'Escolheste pagar a encomenda #{enc.id} em {enc.loja.nome} por transferência bancária. Transfere para:\n\n'
+        f'Banco: {t["banco"]}\nTitular: {t["titular"]}\nIBAN: {t["iban"]}\n'
+        f'Valor: {formatar(t["valor"])}\nDescritivo / referência: {t["referencia"]}\n\n'
+        f'A loja confirma quando o dinheiro chegar. Podes ver a encomenda aqui: {_link("/perfil")}')
+
+
 def enviar_fatura_encomenda(enc):
     user = enc.comprador.user
     pdf = _pdf_registado(enc.fatura_pdf)

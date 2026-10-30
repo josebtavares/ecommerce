@@ -40,11 +40,17 @@
         </div>
         <div class="flex justify-between items-center text-sm">
           <span class="text-zinc-500">Estado</span>
-          <span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 text-xs font-bold rounded-full uppercase">
+          <span v-if="encomenda.transferencia" class="px-2 py-0.5 bg-amber-500/15 text-amber-300 text-xs font-bold rounded-full uppercase">
+            Aguarda transferência
+          </span>
+          <span v-else class="px-2 py-0.5 bg-blue-500/15 text-blue-400 text-xs font-bold rounded-full uppercase">
             {{ encomenda.status }}
           </span>
         </div>
       </div>
+
+      <!-- por transferência: para onde transferir (também por email) -->
+      <DadosTransferencia v-if="encomenda?.transferencia" :dados="encomenda.transferencia" class="mb-8" />
 
       <!-- comprovativo do pagamento online (contrato SISP, cl.3): também segue por email, em PDF -->
       <div v-if="encomenda?.comprovativo" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5 text-left mb-8 space-y-2"
@@ -77,10 +83,12 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { temaPainel } from '@/utils/tema'
 import { descarregarComprovativoEncomenda } from '@/utils/documentos'
+import DadosTransferencia from '@/components/loja/DadosTransferencia.vue'
 
 export default {
   name: 'EncomendaSucesso',
   mixins: [temaPainel],
+  components: { DadosTransferencia },
   data () {
     return { encomenda: null }
   },

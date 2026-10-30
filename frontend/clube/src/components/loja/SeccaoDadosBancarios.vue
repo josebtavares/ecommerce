@@ -6,8 +6,9 @@
   <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-banco">
     <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Dados bancários</h2>
     <p class="text-xs text-zinc-600 mb-5">
-      A conta bancária da loja (a mesma do contrato vinti4, se o tiveres). Só tu vês e alteras estes dados;
-      cada alteração fica registada e recebes um email.
+      A conta bancária da loja (a mesma do contrato vinti4, se o tiveres). Precisas dela para aceitar transferências:
+      o banco, o titular e o IBAN são mostrados <strong class="text-zinc-400">só aos clientes que encomendarem por transferência</strong>,
+      para saberem para onde pagar. Só tu alteras estes dados; cada alteração fica registada e recebes um email.
     </p>
 
     <p v-if="carregando" class="text-xs text-zinc-500">A carregar…</p>
@@ -92,6 +93,8 @@ export default {
     }
   },
 
+  emits: ['guardado'],
+
   async created () {
     try {
       const { data } = await api.get(`/app/loja/${this.lojaId}/banco/`)
@@ -119,6 +122,7 @@ export default {
         this.editar = false
         this.guardado = true
         this.form.password = ''
+        this.$emit('guardado')         // a transferência passa a aparecer aos clientes
       } catch (e) {
         const d = e.response?.data
         if (d && typeof d === 'object' && !d.detail) this.erros = d

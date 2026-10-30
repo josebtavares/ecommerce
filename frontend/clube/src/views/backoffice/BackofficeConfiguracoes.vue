@@ -223,7 +223,8 @@
               <p class="text-sm font-medium text-zinc-200">{{ m.label }}</p>
               <p class="text-xs text-zinc-500">{{ m.antigo ? 'Já não se usa — podes desligar.' : m.descricao }}</p>
               <p v-if="metodosSuspensos.includes(m.tipo)" class="text-xs text-amber-400 mt-0.5" data-teste="metodo-suspenso">
-                Não aparece aos clientes até pores os dados bancários.
+                {{ m.tipo === 'transferencia' ? 'Não aparece aos clientes até pores os dados bancários (mais abaixo).'
+                   : 'Não aparece aos clientes até o contrato vinti4 da loja estar ativo.' }}
               </p>
             </div>
           </div>
@@ -237,11 +238,13 @@
           </button>
         </div>
       </div>
+      <p v-if="erroMetodos" class="mt-3 text-xs text-red-400" role="alert" data-teste="metodos-erro">{{ erroMetodos }}</p>
 
       <p class="mt-4 text-xs text-zinc-500" data-teste="metodos-online-nota">
         <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />O cartão precisa do contrato vinti4 da tua loja com a SISP
         (em <strong class="text-zinc-400">Pagamento com cartão</strong>, mais abaixo): o dinheiro vai direto para a tua conta.
-        Dinheiro e transferência não precisam de contrato.
+        Dinheiro e transferência não precisam de contrato; a transferência precisa dos dados bancários
+        (os clientes que a escolherem veem o IBAN depois de encomendar).
       </p>
     </div>
 
@@ -253,7 +256,7 @@
     <SeccaoVinti4 v-if="podeBanco" :loja-id="lojaId" @alterado="$emit('updated')" />
 
     <!-- Dados bancários (só o dono) — components/loja/SeccaoDadosBancarios -->
-    <SeccaoDadosBancarios v-if="podeBanco" :loja-id="lojaId" />
+    <SeccaoDadosBancarios v-if="podeBanco" :loja-id="lojaId" @guardado="fetchMetodos" />
 
     <!-- Documentos legais (só o dono, opcionais) — components/loja/SeccaoDocumentos -->
     <SeccaoDocumentos v-if="podeDocumentos" :loja-id="lojaId" @alterado="$emit('updated')" />
@@ -456,6 +459,7 @@ export default {
       metodosActivos:   [],   // lista de tipos activos: ['dinheiro', 'cartao', ...]
       metodosSuspensos: [],   // activos mas escondidos do checkout: online sem dados bancários (utils/banco.online_suspenso)
       loadingMetodos:   false,
+      erroMetodos:      '',
 
       isBannerVideo: false,
     }
@@ -588,6 +592,7 @@ export default {
     async toggleMetodo (tipo) {
       if (this.loadingMetodos) return
       this.loadingMetodos = true
+      this.erroMetodos = ''
       try {
         if (this.metodoActivo(tipo)) {
           // desactivar
@@ -598,7 +603,7 @@ export default {
           await api.post(`/app/loja/${this.lojaId}/pagamento/metodos/${tipo}/`)
           this.metodosActivos = [...this.metodosActivos, tipo]
         }
-      } catch (e) { console.error(e) }
+      } catch (e) { this.erroMetodos = e.response?.data?.detail || 'Não foi possível alterar o método.' }
       finally { this.loadingMetodos = false }
       this.fetchMetodos()     // o servidor diz se fica disponível no checkout
     },

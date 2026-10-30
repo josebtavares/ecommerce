@@ -348,6 +348,8 @@
                       <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">A pagar na entrega (sem os artigos esgotados)</span>
                       <span class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ formatPrice(detalhesEncomenda[enc.id].valor_a_pagar) }}</span>
                     </div>
+                    <!-- por pagar por transferência: o IBAN da loja, o valor e a referência -->
+                    <DadosTransferencia v-if="detalhesEncomenda[enc.id].transferencia" :dados="detalhesEncomenda[enc.id].transferencia" :isDark="isDark" />
                     <!-- fatura que a loja emitiu no e-Fatura e registou (backend utils/fiscal.py) -->
                     <div v-if="['pago', 'preparando', 'enviado', 'concluido'].includes(enc.status)" data-teste="fatura-cliente"
                          class="flex items-center justify-between gap-2 text-xs">
@@ -510,6 +512,7 @@ import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
 import AcoesEncomenda from '@/components/reembolsos/AcoesEncomenda.vue'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
+import DadosTransferencia from '@/components/loja/DadosTransferencia.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { contactarLoja, contactarSuporte } from '@/services/chat'

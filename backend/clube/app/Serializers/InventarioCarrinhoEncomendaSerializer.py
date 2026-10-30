@@ -247,11 +247,12 @@ class EncomendaSerializer(serializers.ModelSerializer):
     valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
     fatura             = serializers.SerializerMethodField()   # registada pela loja (utils/fiscal.py)
     comprovativo       = serializers.SerializerMethodField()   # do pagamento online (referência, data, valor)
+    transferencia      = serializers.SerializerMethodField()   # banco/IBAN/valor/referência — por pagar, por transferência
  
     class Meta:
         model  = Encomenda
         fields = [
-            'id', 'comprovativo',
+            'id', 'comprovativo', 'transferencia',
             'comprador', 'comprador_username',
             'loja', 'loja_nome',
             'itens',
@@ -293,6 +294,10 @@ class EncomendaSerializer(serializers.ModelSerializer):
 
     def get_comprovativo(self, obj):
         return _comprovativo(obj)
+
+    def get_transferencia(self, obj):
+        from ..utils.banco import dados_transferencia
+        return dados_transferencia(obj)
 
     def get_agendada_texto(self, obj):
         if not obj.agendada_para:
