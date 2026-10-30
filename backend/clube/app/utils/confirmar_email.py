@@ -17,7 +17,6 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core import signing
-from django.core.mail import EmailMessage
 from django.db import transaction
 from django.utils import timezone
 
@@ -74,16 +73,16 @@ def enviar(utilizador_id):
     if not u or u.email_confirmado or not u.user.email:
         return False
     user = u.user
+    from .email_html import criar, saudacao
+    url = link(user)
     try:
-        EmailMessage(
-            subject='Confirma o teu email — Bende',
-            body=(f'Olá {user.first_name or user.username},\n\n'
-                  f'Para confirmares que este email é teu, abre o link:\n\n{link(user)}\n\n'
-                  f'O link vale {VALIDADE.days} dias. Até confirmares podes ver as lojas, mas não encomendar, '
-                  f'marcar serviços nem criar uma loja. Se não foste tu a criar a conta, ignora este email: '
-                  f'a conta é apagada ao fim de {DIAS_ABANDONO} dias.\n\nBende'),
-            from_email=settings.DEFAULT_FROM_EMAIL, to=[user.email],
-        ).send()
+        criar(user.email, 'Confirma o teu email na Bende',
+              f'{saudacao(user)}\n\n'
+              f'Obrigado por criares conta na Bende. Confirma que este email é teu:\n\n{url}\n\n'
+              f'O link vale {VALIDADE.days} dias. Até confirmares podes ver as lojas, mas não encomendar, '
+              f'marcar serviços nem criar uma loja.\n\n'
+              f'Não foste tu a criar a conta? Ignora este email: a conta é apagada ao fim de {DIAS_ABANDONO} dias.',
+              botao=('Confirmar email', url)).send()
         return True
     except Exception:
         log.exception('confirmar email: falhou o envio')

@@ -25,7 +25,6 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.mail import EmailMessage
 from django.db import transaction
 from django.utils import timezone
 
@@ -233,10 +232,9 @@ def _apagar_foto(nome):
 def _enviar(email, assunto, texto):
     if not email:
         return
-    suporte = getattr(settings, 'EMAIL_SUPORTE', '')
+    from .email_html import criar
     try:
-        EmailMessage(subject=assunto, body=texto + '\n\nBende', from_email=settings.DEFAULT_FROM_EMAIL,
-                     to=[email], reply_to=[suporte] if suporte else None).send()
+        criar(email, assunto, texto).send()
     except Exception:
         log.exception('eliminação: falhou o email "%s"', assunto)
 
