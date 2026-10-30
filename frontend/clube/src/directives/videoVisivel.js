@@ -1,7 +1,8 @@
 // directives/videoVisivel.js — v-video-visivel
 // Substitui o `autoplay` dos vídeos decorativos (banners, cartões de produto):
-//   • só reproduz enquanto o vídeo está no ecrã e pausa quando sai — evita ter
-//     vários vídeos a descodificar ao mesmo tempo (a causa dos "stutters");
+//   • só reproduz com pelo menos metade do vídeo no ecrã e pausa quando sai; no máximo
+//     MAX_A_TOCAR ao mesmo tempo (os mais visíveis) — evita ter muitos vídeos a descarregar
+//     e descodificar ao mesmo tempo (a causa dos "stutters");
 //   • com poster, não descarrega nada até ser preciso (preload="none");
 //   • respeita "poupança de dados" e "reduzir movimento" (fica no poster — utils/media.js);
 //   • escolhe a versão leve (utils/media.js): v-video-visivel="'cartao'" → 480p,
@@ -13,7 +14,9 @@ import { miniatura, poupar, videoCartao, videoDestaque } from '@/utils/media'
 
 const VERSAO = { cartao: videoCartao, destaque: videoDestaque }
 
+const MAX_A_TOCAR = 4
 let observer = null
+const visiveis = new Map()     // vídeo → fracção visível (só os que têm pelo menos metade no ecrã)
 
 function tocar (video) {
   if (poupar() || document.hidden) return
@@ -21,22 +24,41 @@ function tocar (video) {
   if (p && typeof p.catch === 'function') p.catch(() => {})   // autoplay bloqueado: fica no poster
 }
 
+// metade do vídeo no ecrã (ou, se for mais alto que o ecrã, metade da altura do ecrã ocupada por ele
+// e pelo menos metade da largura — um slide encostado à borda fica com largura 0 e não conta)
+function metadeNoEcra (e) {
+  if (!e.isIntersecting) return false
+  if (e.intersectionRatio >= 0.5) return true
+  const r = e.intersectionRect
+  return r.height >= window.innerHeight * 0.5 && r.width >= e.boundingClientRect.width * 0.5
+}
+
+// toca os MAX_A_TOCAR mais visíveis (em empate, os que já estavam no ecrã); os outros ficam pausados
+function escolher () {
+  if (document.hidden) return
+  const ordem = [...visiveis.entries()].sort((a, b) => b[1] - a[1])
+  ordem.forEach(([v], i) => {
+    if (i < MAX_A_TOCAR) { if (v.paused) tocar(v) } else if (!v.paused) v.pause()
+  })
+}
+
 function getObserver () {
   if (!observer) {
     observer = new IntersectionObserver(entradas => {
       for (const e of entradas) {
-        e.target._videoVisivel = e.isIntersecting
-        if (e.isIntersecting) tocar(e.target)
-        else if (!e.target.paused) e.target.pause()
+        if (metadeNoEcra(e)) visiveis.set(e.target, Math.round(e.intersectionRatio * 4) / 4)
+        else {
+          visiveis.delete(e.target)
+          if (!e.target.paused) e.target.pause()
+        }
       }
-    }, { rootMargin: '150px 0px', threshold: 0.1 })
+      escolher()
+    }, { threshold: [0, 0.25, 0.5, 0.75, 1] })
 
     // separador em segundo plano: pausa tudo; ao voltar, retoma só os visíveis
     document.addEventListener('visibilitychange', () => {
-      document.querySelectorAll('video[data-video-visivel]').forEach(v => {
-        if (document.hidden) v.pause()
-        else if (v._videoVisivel) tocar(v)
-      })
+      if (document.hidden) document.querySelectorAll('video[data-video-visivel]').forEach(v => v.pause())
+      else escolher()
     })
   }
   return observer
@@ -66,7 +88,7 @@ function voltarAoOriginal (e) {
   if (el._original && el.getAttribute('src') !== el._original) {
     el._versaoAtual = el._original
     el.setAttribute('src', el._original)
-    if (el._videoVisivel) tocar(el)
+    if (visiveis.has(el)) escolher()
   }
 }
 
@@ -90,6 +112,7 @@ export default {
   },
   beforeUnmount (el) {
     observer?.unobserve(el)
+    if (visiveis.delete(el)) escolher()
     el.removeEventListener('error', voltarAoOriginal)
     el.pause()
     el.removeAttribute('src')  // liberta memória/descodificador

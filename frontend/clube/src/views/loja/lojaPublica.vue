@@ -25,11 +25,14 @@
     </div>
 
     <template v-else-if="templateComponent">
-      <component
-        :is="templateComponent"
-        :tema="temaActivo"
-        @toggle-dark="onToggleDark"
-      />
+      <!-- min-h-screen: enquanto o template carrega, o rodapé fica abaixo do ecrã (senão aparece no topo e "salta") -->
+      <div class="min-h-screen">
+        <component
+          :is="templateComponent"
+          :tema="temaActivo"
+          @toggle-dark="onToggleDark"
+        />
+      </div>
       <!-- rodapé do site, igual em todos os templates (o "Vendido por" está no rodapé de cada template: LojaRodapeInfo) -->
       <SiteRodape :isDark="temaActivo?.darkMode !== false" />
     </template>
