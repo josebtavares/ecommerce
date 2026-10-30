@@ -1428,6 +1428,7 @@ class Notificacao(models.Model):
         ('loja_suspensa',            'Loja suspensa'),
         ('dados_bancarios',          'Dados bancários alterados'),
         ('documento_loja',           'Documento da loja'),
+        ('vinti4',                   'Pagamento com cartão (vinti4)'),
         ('qualidade_catalogo',       'Qualidade do catálogo'),
         ('loja_reativada',           'Loja reactivada'),
         ('loja_fechada',             'Loja fechada pelo dono'),
@@ -2305,6 +2306,34 @@ class ModeracaoUtilizador(models.Model):
         ordering = ['-criado_em', '-id']
 
 
+class AdesaoVinti4(models.Model):
+    """Contrato da loja com a SISP para aceitar cartões online (utils/vinti4.py). A SISP não tem pagamento dividido
+    nem sub-comerciantes: cada loja adere em nome próprio e o dinheiro vai direto para a conta dela.
+    A chave (posAutCode) fica cifrada e nunca sai do servidor; mudar as credenciais volta a pedir validação."""
+    ESTADOS = [
+        ('pedida',      'Pedida à SISP'),
+        ('por_validar', 'Credenciais por validar'),
+        ('teste',       'Em testes'),
+        ('ativa',       'Ativa'),
+        ('suspensa',    'Suspensa'),
+    ]
+    loja            = models.OneToOneField(Loja, on_delete=models.CASCADE, related_name='vinti4')
+    estado          = models.CharField(max_length=12, choices=ESTADOS, default='pedida')
+    pos_id          = models.CharField(max_length=40, blank=True, default='')
+    merchant_id     = models.CharField(max_length=40, blank=True, default='')
+    chave_cifrada   = models.TextField(blank=True, default='')
+    motivo          = models.CharField(max_length=300, blank=True, default='')
+    pedida_em       = models.DateTimeField(auto_now_add=True)
+    credenciais_em  = models.DateTimeField(null=True, blank=True)
+    credenciais_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    decidido_em     = models.DateTimeField(null=True, blank=True)
+    decidido_por    = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    atualizado_em   = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'vinti4 {self.loja_id} ({self.estado})'
+
+
 class DadosBancarios(models.Model):
     """Conta para onde vai o dinheiro das vendas da loja (utils/banco.py). Só o dono vê e altera;
     cada alteração fica no registo de transações (utils/registo.py) e o dono recebe um email."""
@@ -2397,6 +2426,7 @@ class RegistoTransacao(models.Model):
         ('pos',        'Venda no POS'),
         ('comissao',   'Comissão'),
         ('banco',      'Dados bancários'),
+        ('vinti4',     'Contrato vinti4 da loja'),
     ]
     criado_em      = models.DateTimeField(db_index=True)
     tipo           = models.CharField(max_length=12, choices=TIPOS, db_index=True)

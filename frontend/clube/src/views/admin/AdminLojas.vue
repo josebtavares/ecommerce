@@ -298,6 +298,9 @@
             </button>
           </div>
 
+          <!-- Contrato vinti4 da loja (gerir_pagamentos) — components/admin/AdminVinti4Loja -->
+          <AdminVinti4Loja v-if="podeVerBanco" :loja-id="lojaDetalhe.id" />
+
           <!-- Documentos legais (verificar_documentos) — components/admin/AdminDocumentosLoja -->
           <AdminDocumentosLoja v-if="podeVerDocumentos" :loja-id="lojaDetalhe.id" @alterado="fetchLojas()" />
 
@@ -368,6 +371,7 @@
 import api from '@/services/api'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 import AdminDocumentosLoja from '@/components/admin/AdminDocumentosLoja.vue'
+import AdminVinti4Loja from '@/components/admin/AdminVinti4Loja.vue'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 
 // estados da loja (backend: Loja.estado)
@@ -389,7 +393,7 @@ const comComissao = l => ({ ...l, _comissao_edit: l.percentagem_comissao ?? 10 }
 
 export default {
   name: 'AdminLojas',
-  components: { ExportacoesLoja, AdminDocumentosLoja },
+  components: { ExportacoesLoja, AdminDocumentosLoja, AdminVinti4Loja },
   props: {
     podeExportar: { type: Boolean, default: false },   // permissão exportar_lojas (super-admin)
     podeVerBackoffice: { type: Boolean, default: false },   // permissão ver_backoffice_lojas (super-admin)

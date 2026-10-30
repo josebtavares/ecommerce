@@ -179,6 +179,8 @@ EMAIL_USE_TLS       = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER     = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL  = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@ecommerce.com')
+# cifra das credenciais das lojas (vinti4 — utils/vinti4.py). Vazia: derivada da SECRET_KEY.
+CHAVE_CREDENCIAIS   = os.environ.get('CHAVE_CREDENCIAIS', '')
 
 FRONTEND_BASE_URL   = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:8080')
 # fornecedor dos pagamentos online da plataforma (app/pagamentos): simulado até haver contrato (SISP)
