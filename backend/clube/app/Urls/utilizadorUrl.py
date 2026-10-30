@@ -12,6 +12,8 @@ urlpatterns = [
     path('utilizador/me/editar/',            utilizadorView.utilizador_update_me,      name='utilizador-me-editar'),
 
     # ── Password reset ────────────────────────────────────────
+    path('utilizador/confirmar_email/',      utilizadorView.email_confirmar,           name='email-confirmar'),
+    path('utilizador/confirmar_email/reenviar/', utilizadorView.email_reenviar,        name='email-reenviar'),
     path('utilizador/recuperar_senha/',      utilizadorView.password_reset_request,    name='password-reset-request'),
     path('utilizador/recuperar_senha/confirmar/', utilizadorView.password_reset_confirm, name='password-reset-confirm'),
 

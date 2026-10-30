@@ -105,6 +105,11 @@ def google_obter_utilizador(code):
                 utilizador.google_id = google_id
                 utilizador.save(update_fields=['google_id'])
 
+        # o Google já verificou este email: se é o da conta, fica confirmado (utils/confirmar_email.py)
+        if (utilizador.user.email or '').lower() == email.lower():
+            from .confirmar_email import marcar_confirmado
+            marcar_confirmado(utilizador)
+
     # fora da transação — é um pedido de rede
     if perfil_novo and dados.get('picture'):
         _guardar_foto(utilizador, dados['picture'], google_id)

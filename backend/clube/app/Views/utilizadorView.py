@@ -26,6 +26,7 @@ from ..utils.auth import autenticar
 from ..autenticacao import terminar_sessoes, tokens_depois_da_troca
 from ..utils.google_auth import GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, google_obter_utilizador
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso, sugerir_usernames
+from ..utils import confirmar_email, turnstile
 from django_ratelimit.core import is_ratelimited
 from ..Serializers.UtilizadorSerializer import (
     UtilizadorSerializer,
@@ -61,6 +62,7 @@ def _build_user_payload(utilizador: Utilizador, request=None) -> dict:
         'morada'         : utilizador.morada,
         'foto'           : foto_url,
         'verificado'     : utilizador.verificado,
+        'email_confirmado': utilizador.email_confirmado,
         'rating'         : str(utilizador.rating),
         'status'         : utilizador.status,
         # contas criadas com Google não têm password — o perfil não pede a actual para a definir
@@ -156,13 +158,20 @@ def utilizador_create(request):
     """
     POST /app/utilizador/registar/
     Body (multipart): { username, email, password, first_name?, last_name?,
-                        telefone?, morada?, foto? }
+                        telefone?, morada?, foto?, turnstile, website (armadilha: vazio) }
     Devolve o mesmo payload do login para o frontend autenticar imediatamente.
+    A conta fica por confirmar: vai um link para o email (utils/confirmar_email.py).
     """
+    if turnstile.armadilha(request):
+        return Response({'detail': 'Pedido inválido.'}, status=status.HTTP_400_BAD_REQUEST)
     # sem limite um script criava contas em massa (o axes ignora esta rota)
     if is_ratelimited(request=request, group='utilizador_registar', key='ip', rate='10/h', method='POST', increment=True):
         return Response({'detail': 'Demasiados registos a partir desta ligação. Tenta mais tarde.'},
                         status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    erro = turnstile.verificar(request)
+    if erro:
+        return Response({'detail': erro, 'codigo': 'turnstile'}, status=status.HTTP_400_BAD_REQUEST)
 
     serializer = UtilizadorSerializer(data={
         'new_username'  : request.data.get('username'),
@@ -178,7 +187,9 @@ def utilizador_create(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    utilizador = serializer.save()
+    with transaction.atomic():
+        utilizador = serializer.save()
+        confirmar_email.enviar_depois(utilizador)
 
     # devolve auth payload para o frontend autenticar de imediato
     return Response(
@@ -258,7 +269,10 @@ def utilizador_update_me(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    serializer.save()
+    with transaction.atomic():
+        serializer.save()
+        if getattr(serializer, 'email_mudou', False):
+            confirmar_email.enviar_depois(utilizador)   # o email novo também tem de ser confirmado
     payload = _build_user_payload(utilizador, request)
     if data.get('password'):
         # as outras sessões (outros browsers, um token roubado) terminam; esta continua com tokens novos
@@ -399,6 +413,40 @@ def conta_eliminar(request):
 
 
 # ══════════════════════════════════════════════════════════════
+# CONFIRMAR EMAIL  (utils/confirmar_email.py)
+# ══════════════════════════════════════════════════════════════
+
+@api_view(['POST'])
+@authentication_classes([])     # o link pode ser aberto noutro browser, sem sessão
+@permission_classes([AllowAny])
+def email_confirmar(request):
+    """POST /app/utilizador/confirmar_email/  Body: { token } → { detail, email }"""
+    if is_ratelimited(request=request, group='confirmar_email_ip', key='ip', rate='30/h', method='POST', increment=True):
+        return Response({'detail': 'Demasiadas tentativas. Tenta mais tarde.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+    utilizador, erro = confirmar_email.confirmar(str(request.data.get('token') or ''))
+    if erro:
+        return Response({'detail': erro}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'detail': 'Email confirmado.', 'email': utilizador.user.email})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def email_reenviar(request):
+    """POST /app/utilizador/confirmar_email/reenviar/ → envia outro link para o email da conta."""
+    utilizador = get_object_or_404(Utilizador, user=request.user)
+    if utilizador.email_confirmado:
+        return Response({'detail': 'O teu email já está confirmado.', 'email_confirmado': True})
+    # só para o email da própria conta, e poucas vezes: não serve para mandar emails a terceiros
+    if is_ratelimited(request=request, group='confirmar_email_reenviar', key='user', rate='3/h', method='POST', increment=True):
+        return Response({'detail': 'Já enviámos vários emails. Espera um pouco e vê também a pasta de spam.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS)
+    if not confirmar_email.enviar(utilizador.pk):
+        return Response({'detail': 'Não foi possível enviar o email. Tenta mais tarde.'},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response({'detail': f'Enviámos um novo link para {request.user.email}.'})
+
+
+# ══════════════════════════════════════════════════════════════
 # PASSWORD RESET
 # ══════════════════════════════════════════════════════════════
 
@@ -413,6 +461,10 @@ def password_reset_request(request):
     serializer = PasswordResetRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     email = serializer.validated_data['email']
+    # sem isto um bot usava o nosso site para encher a caixa de correio de alguém
+    erro = turnstile.verificar(request)
+    if erro:
+        return Response({'detail': erro, 'codigo': 'turnstile'}, status=status.HTTP_400_BAD_REQUEST)
 
     # sem limite dava para encher a caixa de correio de alguém com emails de recuperação
     if (is_ratelimited(request=request, group='recuperar_senha_ip', key='ip', rate='10/h', method='POST', increment=True)

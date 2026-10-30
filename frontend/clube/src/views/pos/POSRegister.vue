@@ -140,6 +140,12 @@
                 <p v-if="passwordsDiferentes" class="mt-1 text-xs font-semibold text-red-600">As passwords não coincidem.</p>
               </div>
 
+              <!-- armadilha para bots (utils/turnstile.py): uma pessoa não vê nem preenche este campo -->
+              <div aria-hidden="true" class="absolute -left-[9999px] w-px h-px overflow-hidden">
+                <label>Website <input v-model="website" type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+              </div>
+              <Turnstile ref="turnstile" v-model="turnstile" />
+
               <div
                 v-if="error"
                 class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
@@ -200,10 +206,11 @@ import PasswordForca from '@/components/forms/PasswordForca.vue'
 import { passwordValida } from '@/utils/password'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
 import { criarVerificador } from '@/services/disponibilidade'
+import Turnstile from '@/components/forms/Turnstile.vue'
 
 export default {
   name: 'POSRegister',
-  components: { BotaoGoogle, BotaoVerPassword, PasswordForca, EstadoDisponibilidade },
+  components: { BotaoGoogle, BotaoVerPassword, PasswordForca, EstadoDisponibilidade, Turnstile },
 
   data() {
     return {
@@ -219,7 +226,9 @@ export default {
       verEmail:       criarVerificador('email'),
       error:          null,
       successMessage: null,
-      showPassword:   false
+      showPassword:   false,
+      turnstile:      '',
+      website:        ''
     }
   },
 
@@ -257,7 +266,9 @@ export default {
           first_name: this.form.firstName.trim(),
           last_name:  this.form.lastName.trim(),
           email:      this.form.email.trim(),
-          password:   this.form.password
+          password:   this.form.password,
+          turnstile:  this.turnstile,
+          website:    this.website
         })
 
         this.persistSession(data)
@@ -266,6 +277,7 @@ export default {
 
         this.$router.push({ name: 'POSDashboard' })
       } catch (err) {
+        this.$refs.turnstile?.repor()      // cada resposta do Turnstile só vale uma vez
         this.error = this.getErrorMessage(err)
       } finally {
         this.loading = false

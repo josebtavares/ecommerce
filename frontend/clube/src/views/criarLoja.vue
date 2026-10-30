@@ -16,8 +16,15 @@
       <BotaoTema class="ml-auto" :isDark="isDark" @alternar="alternarTema" />
     </div>
 
+    <!-- Email por confirmar (utils/confirmar_email.py) -->
+    <div v-if="user.email_confirmado === false" class="max-w-lg mx-auto px-6 py-16" data-teste="criar-loja-confirmar-email">
+      <AvisoConfirmarEmail :isDark="true">
+        Antes de criares uma loja, confirma que o email <b class="break-all">{{ user.email }}</b> é teu: abre o link que te enviámos.
+      </AvisoConfirmarEmail>
+    </div>
+
     <!-- Utilizador nao verificado -->
-    <div v-if="!user.verificado" class="max-w-lg mx-auto px-6 py-16 text-center">
+    <div v-else-if="!user.verificado" class="max-w-lg mx-auto px-6 py-16 text-center">
       <div class="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -494,6 +501,7 @@ import { dadosFiscaisValidos, corpoDadosFiscais } from '@/utils/fiscal'
 import { DEMO_ID } from '@/utils/demoLoja'
 import { temaPainel } from '@/utils/tema'
 import BotaoTema from '@/components/BotaoTema.vue'
+import AvisoConfirmarEmail from '@/components/auth/AvisoConfirmarEmail.vue'
 
 const TAG_STYLES = {
   'Versátil':  { background:'rgba(220,38,38,0.12)',  color:'#f87171', border:'1px solid rgba(220,38,38,0.25)'   },
@@ -511,7 +519,7 @@ const TAG_STYLES = {
 export default {
   name: 'CriarLoja',
   mixins: [temaPainel],
-  components: { BotaoTema, TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca, DadosFiscais },
+  components: { BotaoTema, TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca, DadosFiscais, AvisoConfirmarEmail },
 
   data () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')

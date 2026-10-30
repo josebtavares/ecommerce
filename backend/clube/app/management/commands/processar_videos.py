@@ -255,6 +255,14 @@ class Command(BaseCommand):
         if time.monotonic() - getattr(self, '_ultimo_documentos', -1e9) >= 3600:
             self._ultimo_documentos = time.monotonic()
             try:
+                # contas por confirmar há mais de 7 dias sem nada ligado (utils/confirmar_email.py)
+                from app.utils.confirmar_email import apagar_abandonadas
+                n = apagar_abandonadas()
+                if n:
+                    self.stdout.write(f'  contas: {n} conta(s) por confirmar há mais de 7 dias apagada(s)')
+            except Exception as e:
+                self.stderr.write(f'  contas: limpeza das por confirmar falhou: {e}')
+            try:
                 from app.utils.documentos_loja import avisar_validades
                 n = avisar_validades()
                 if n:

@@ -390,6 +390,10 @@ def encomenda_criar(request, loja_id):
     if request.data.get('aceita_termos') not in (True, 'true', '1', 1):
         return Response({'detail': 'Para encomendar tens de aceitar os Termos e a Política de devolução.',
                          'codigo': 'termos'}, status=status.HTTP_400_BAD_REQUEST)
+    from ..utils.confirmar_email import exigir
+    falta = exigir(utilizador, 'encomendar')
+    if falta:
+        return Response(falta, status=status.HTTP_403_FORBIDDEN)
 
     # busca o carrinho activo
     carrinho = get_object_or_404(Carrinho, utilizador=utilizador, loja=loja)
