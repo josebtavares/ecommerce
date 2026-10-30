@@ -27,6 +27,10 @@ class Utilizador(models.Model):
                         default='utilizadores/default.png'
                       )
     verificado      = models.BooleanField(default=False)
+    # o dono do email abriu o link que lhe enviámos (utils/confirmar_email.py); sem isto não compra,
+    # não marca nem cria loja. Não confundir com `verificado` (selo dado pelo admin).
+    email_confirmado    = models.BooleanField(default=False, db_default=False)
+    email_confirmado_em = models.DateTimeField(null=True, blank=True)
     rating          = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)

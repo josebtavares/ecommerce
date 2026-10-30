@@ -721,7 +721,14 @@ def pos_membro_login(request):
 @permission_classes([AllowAny])
 @pos_ratelimit(key='ip', rate='5/h')
 def pos_register(request):
-    """Registo de conta principal."""
+    """Registo de conta principal. Turnstile + armadilha + email descartável, e o link de confirmação
+    (utils/turnstile.py, utils/confirmar_email.py) — como o registo da Bende."""
+    from ..utils import confirmar_email, turnstile
+    if turnstile.armadilha(request):
+        return Response({'detail': 'Pedido inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    erro = turnstile.verificar(request)
+    if erro:
+        return Response({'detail': erro, 'codigo': 'turnstile'}, status=status.HTTP_400_BAD_REQUEST)
     first_name = request.data.get('first_name', '').strip()
     last_name  = request.data.get('last_name', '').strip()
     email      = request.data.get('email', '').strip()
@@ -756,6 +763,8 @@ def pos_register(request):
     msg = mensagem_password_fraca(password)
     if msg:
         return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+    if confirmar_email.descartavel(email):
+        return Response({'detail': confirmar_email.MSG_DESCARTAVEL}, status=status.HTTP_400_BAD_REQUEST)
 
     # Criar nova conta
     username = username_livre(email.split('@')[0])
@@ -767,6 +776,7 @@ def pos_register(request):
                 first_name=first_name, last_name=last_name,
             )
             utilizador = Utilizador.objects.create(user=user, status='ativo', verificado=False)
+            confirmar_email.enviar_depois(utilizador)
 
             return Response({
                 **_sessao_principal(utilizador, request),

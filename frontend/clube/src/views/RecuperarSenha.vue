@@ -72,6 +72,7 @@
                     : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400'"
                   placeholder="o_teu@email.com" />
               </div>
+              <Turnstile ref="turnstile" v-model="turnstile" :isDark="isDark" />
               <div v-if="erro" class="px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
                 {{ erro }}
               </div>
@@ -172,13 +173,14 @@ import { mediaUrl } from '@/services/media'
 import { pedirLinkRecuperacao, definirPasswordNova, mensagemErroRecuperacao, erroPasswordNova } from '@/services/recuperarSenha'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
+import Turnstile from '@/components/forms/Turnstile.vue'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
 import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'RecuperarSenha',
-  components: { PasswordForca, BotaoVerPassword },
+  components: { PasswordForca, BotaoVerPassword, Turnstile },
 
   setup () {
     const { loading, wrap } = useAsyncAction()
@@ -198,6 +200,7 @@ export default {
       uid:             this.$route.query.uid || '',
       token:           this.$route.query.token || '',
       erro:            '',
+      turnstile:       '',
       isDark: temaEscuro(),
       logoDefault,
       logoLight,
@@ -227,9 +230,10 @@ export default {
       await this.wrap(async () => {
         this.erro = ''
         try {
-          await pedirLinkRecuperacao(this.email)
+          await pedirLinkRecuperacao(this.email, 'bendi', this.turnstile)
           this.enviado = true
         } catch (err) {
+          this.$refs.turnstile?.repor()
           this.erro = mensagemErroRecuperacao(err, 'Não foi possível enviar o email. Tenta novamente.')
         }
       })
