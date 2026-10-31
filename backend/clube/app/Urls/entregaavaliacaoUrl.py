@@ -33,6 +33,9 @@ urlpatterns = [
     path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/entrega/atualizar/',
          v.entrega_atualizar,                    name='entrega-atualizar'),
 
+    path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/entrega/morada/',
+         v.entrega_morada,                       name='entrega-morada'),
+
     # ── Avaliações ────────────────────────────────────────────
     path('loja/<int:loja_id>/avaliacoes/',
          v.avaliacao_list_loja,                  name='avaliacao-list'),

@@ -18,6 +18,7 @@ from rest_framework.response import Response
 
 from ..models import Loja, Encomenda, Condutor
 from ..utils import horarios
+from ..utils.encomendas import valor_a_cobrar
 from .lojaView import _exige_permissao
 
 MAX_DIAS = 400
@@ -43,11 +44,8 @@ def encomendas_visiveis(loja, membro):
 
 
 def _a_pagar(e):
-    try:
-        p = e.pagamento
-    except Exception:
-        return None
-    return str(p.valor) if p.status == 'pendente' else None
+    valor = valor_a_cobrar(e)
+    return str(valor) if valor is not None else None
 
 
 def _item(e, tz):
