@@ -6,6 +6,8 @@ Regras de encomendas partilhadas entre views e modelos.
   cancelar_pendentes_da_loja(loja)     → cancela as encomendas ainda por pagar de uma loja
                                          que deixou de estar activa (fechada/suspensa)
   expirar_por_pagar()                  → worker: cancela as por pagar há mais de 30 min (repõe stock)
+  valor_a_cobrar(encomenda)            → o que o condutor recebe em dinheiro na entrega (ou None)
+  cancelar_entrega(encomenda)          → encomenda cancelada: termina a entrega em curso e avisa o condutor
   cancelar_anteriores_por_pagar(u, l)  → nova encomenda do mesmo cliente na mesma loja substitui as por pagar
 """
 from django.db.models import F
@@ -85,6 +87,31 @@ def cancelar_pendentes_da_loja(loja):
             link='/perfil',
         )
     return len(pendentes)
+
+
+def valor_a_cobrar(encomenda):
+    """Dinheiro a receber do cliente na entrega (já sem os esgotados); None se não há nada a cobrar."""
+    try:
+        p = encomenda.pagamento
+    except Exception:
+        return None
+    return p.valor if p.status == 'pendente' and p.referencia_transacao == 'dinheiro' else None
+
+
+def cancelar_entrega(encomenda):
+    from ..models import Entrega
+    from ..Views.notificacaoView import notificar
+    entrega = (Entrega.objects.filter(encomenda=encomenda, status__in=('atribuido', 'a_caminho'))
+               .select_related('condutor__utilizador').first())
+    if not entrega:
+        return
+    entrega.status = 'cancelada'
+    entrega.save(update_fields=['status'])
+    if entrega.condutor:
+        notificar(utilizador=entrega.condutor.utilizador, tipo='entrega_cancelada',
+                  titulo=f'Entrega cancelada — Encomenda #{encomenda.id}',
+                  mensagem='A encomenda foi cancelada: não a entregues. Se já a levantaste, devolve-a à loja.',
+                  loja=encomenda.loja, link=f'/loja/{encomenda.loja_id}/backoffice/entregas')
 
 
 # ── Encomendas por pagar: prazo para pagar ───────────────────────────

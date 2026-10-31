@@ -211,6 +211,29 @@ export async function contactarLoja (lojaId, { produto = null, encomendaId = nul
   return ok
 }
 
+// condutor (ou quem atende a loja): a conversa da encomenda com o cliente, pela caixa da loja
+export async function contactarCliente (lojaId, compradorId, encomendaId) {
+  if (!chat.pronto) await iniciarChat()
+  const caixa = chat.caixas.find(c => c.tipo === 'loja' && String(c.loja_id) === String(lojaId))
+  chat.aberto = true
+  if (!caixa) {
+    chat.erro = 'Não tens acesso às mensagens desta loja.'
+    return false
+  }
+  try {
+    const { data } = await api.post('/api/chat/conversas/', {
+      caixa: caixa.caixa_id, destino: 'utilizador', destino_id: compradorId, encomenda_id: encomendaId,
+    })
+    chat.caixaId = caixa.caixa_id
+    await carregarConversas()
+    await abrirConversa(data)
+    return true
+  } catch (e) {
+    chat.erro = e.response?.data?.detail || 'Não foi possível abrir a conversa.'
+    return false
+  }
+}
+
 export function contactarSuporte () {
   return abrirComDestino({ destino: 'suporte' }, 'Entra ou cria conta para falares com o suporte.')
 }

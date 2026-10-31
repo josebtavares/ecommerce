@@ -275,10 +275,11 @@ def _criar(encomenda, tipo, motivo, origem, valor, entrega, descricao='', itens=
 
 
 def _cancelar_encomenda(encomenda):
-    from .encomendas import repor_stock
+    from .encomendas import repor_stock, cancelar_entrega
     encomenda.status = 'cancelado'
     encomenda.save(update_fields=['status', 'data_atualizacao'])
     repor_stock(encomenda)
+    cancelar_entrega(encomenda)
 
 
 def cancelar_pelo_cliente(encomenda, utilizador, descricao=''):
@@ -797,8 +798,10 @@ def loja_esgotado(encomenda, utilizador, itens, nota=''):
 
 def _esgotado_tudo(encomenda, utilizador, pedidos, lista, nota):
     """Não fica nada para enviar: cancela (sem repor o stock) e reembolsa tudo o que foi pago, com a entrega."""
+    from .encomendas import cancelar_entrega
     encomenda.status = 'cancelado'
     encomenda.save(update_fields=['status', 'data_atualizacao'])
+    cancelar_entrega(encomenda)
     valor = reembolsavel(encomenda)
     r = _criar(encomenda, 'cancelamento', 'esgotado', 'loja', valor, valor_entrega(encomenda) if valor > 0 else Decimal('0'),
                nota, pedidos)

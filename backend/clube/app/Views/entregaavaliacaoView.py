@@ -8,6 +8,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_staff, notificar_admins, notificar
 from decimal import Decimal
+from django.db.models import Case, IntegerField, Q, When
+from django.db.models.functions import Coalesce
 
 
 from ..models import (
@@ -223,9 +225,10 @@ def entrega_criar(request, loja_id, encomenda_id):
             # reatribui — repõe para atribuido
             entrega.condutor = condutor
             entrega.status   = 'atribuido'
+            entrega.motivo_falha = entrega.nota_falha = ''
             if opcao:
                 entrega.opcao_entrega = opcao
-            entrega.save(update_fields=['condutor', 'status', 'opcao_entrega'])
+            entrega.save(update_fields=['condutor', 'status', 'opcao_entrega', 'motivo_falha', 'nota_falha'])
  
             # encomenda volta a "enviado"
             encomenda.status = 'enviado'
@@ -357,10 +360,11 @@ def entrega_atualizar(request, loja_id, encomenda_id):
         entrega.condutor = condutor
         if entrega.status == 'falhou':
             entrega.status = 'atribuido'
+            entrega.motivo_falha = entrega.nota_falha = ''
             encomenda.status = 'enviado'
             encomenda.save(update_fields=['status'])
             
-        entrega.save(update_fields=['condutor', 'status'])
+        entrega.save(update_fields=['condutor', 'status', 'motivo_falha', 'nota_falha'])
  
         # notifica novo condutor
         notificar(
@@ -378,12 +382,28 @@ def entrega_atualizar(request, loja_id, encomenda_id):
     # actualizar status
     novo_status = request.data.get('status')
     if novo_status:
+        motivo = request.data.get('motivo_falha') or ''
+        if novo_status == 'falhou' and motivo not in dict(Entrega.MOTIVOS_FALHA):
+            return Response({'detail': 'Indica o motivo.'}, status=status.HTTP_400_BAD_REQUEST)
+        anterior = entrega.status
         serializer = EntregaSerializer(entrega, data={'status': novo_status}, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         entrega = serializer.save()
  
-        if novo_status == 'entregue':
+        if novo_status == anterior:
+            pass
+        elif novo_status == 'a_caminho':
+            notificar(
+                utilizador=encomenda.comprador,
+                tipo='encomenda_enviada',
+                titulo=f'Encomenda #{encomenda.id} a caminho',
+                mensagem=f'A tua encomenda de {loja.nome} saiu para entrega.',
+                loja=loja,
+                link='/perfil',
+            )
+
+        elif novo_status == 'entregue':
             # entrega concluída → encomenda concluída
             from django.utils.timezone import now
             entrega.data_entrega = now()
@@ -437,6 +457,10 @@ def entrega_atualizar(request, loja_id, encomenda_id):
  
         elif novo_status == 'falhou':
             # entrega falhou → encomenda volta a "preparando" para reatribuição
+            entrega.motivo_falha = motivo
+            entrega.nota_falha = str(request.data.get('nota_falha') or '').strip()[:200]
+            entrega.save(update_fields=['motivo_falha', 'nota_falha'])
+            detalhe = entrega.get_motivo_falha_display() + (f': {entrega.nota_falha}' if entrega.nota_falha else '')
             encomenda.status = 'preparando'
             encomenda.save(update_fields=['status'])
  
@@ -445,8 +469,16 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 roles=['dono', 'gestor'],
                 tipo='entrega_cancelada',
                 titulo=f'Entrega falhou — Encomenda #{encomenda.id}',
-                mensagem='A encomenda voltou ao estado "preparando". Podes atribuir outro condutor.',
+                mensagem=f'{detalhe}. A encomenda voltou ao estado "preparando". Podes atribuir outro condutor.',
                 link=f'/loja/{loja.id}/backoffice',
+            )
+            notificar(
+                utilizador=encomenda.comprador,
+                tipo='encomenda_atualizada',
+                titulo=f'Não foi possível entregar a encomenda #{encomenda.id}',
+                mensagem=f'{entrega.get_motivo_falha_display()}. A loja vai tentar de novo ou falar contigo.',
+                loja=loja,
+                link='/perfil',
             )
  
     serializer = EntregaSerializer(entrega, context={'request': request})
@@ -590,6 +622,8 @@ def entrega_list_loja(request, loja_id):
     if erro:
         return erro
 
+    # primeiro as por entregar, a mais urgente à frente; depois as terminadas, a mais recente à frente
+    por_entregar = Q(status__in=['atribuido', 'a_caminho'])
     qs = Entrega.objects.filter(
         encomenda__loja=loja
     ).select_related(
@@ -599,7 +633,11 @@ def entrega_list_loja(request, loja_id):
         'encomenda__comprador',
         'encomenda__pagamento__metodo',
         'encomenda__opcao_entrega',
-    ).order_by('-data_criacao')
+    ).prefetch_related('encomenda__itens__produto').order_by(
+        Case(When(por_entregar, then=0), default=1, output_field=IntegerField()),
+        Case(When(por_entregar, then=Coalesce('encomenda__agendada_para', 'data_criacao'))).asc(nulls_last=True),
+        '-data_criacao',
+    )
 
     status_filtro = request.GET.get('status')
     if status_filtro:

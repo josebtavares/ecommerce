@@ -199,6 +199,17 @@ def iniciar(utilizador, origem, destino, destino_id=None, encomenda_id=None, loj
         sincronizar_grupos(utilizador)
         return Conversa.objects.get(chave=f'grp:{loja_id}')
 
+    # condutor: pela caixa da loja, só com o cliente de uma entrega que é dele
+    if origem.tipo == Caixa.LOJA and acesso_caixa(utilizador, origem) == 'condutor':
+        enc = entregas_do_condutor(utilizador, origem.loja_id).filter(id=encomenda_id).first() if encomenda_id else None
+        if not enc or destino != 'utilizador' or str(destino_id) != str(enc.comprador_id):
+            raise ErroChat('Só podes falar com o cliente das tuas entregas.', 403)
+        if not utilizador.is_active or origem.loja.estado not in LOJAS_COM_CHAT:
+            raise ErroChat('Não podes falar em nome desta caixa.', 403)
+        caixa_cliente = Caixa.de_utilizador(enc.comprador)
+        _verificar_bloqueio(origem, caixa_cliente)
+        return _conversa_cliente_loja(caixa_cliente, origem, origem.loja, enc.comprador, enc.id)
+
     if origem.tipo == Caixa.SUPORTE:
         if not atende_suporte(utilizador):
             raise ErroChat('Sem permissão para o suporte.', 403)
