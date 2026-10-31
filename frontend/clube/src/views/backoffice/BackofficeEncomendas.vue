@@ -66,6 +66,10 @@
                 {{ enc.metodo_pagamento }}
               </span>
             </p>
+            <span v-if="enc.transferencia_por_confirmar" title="Confirma na tua conta se o dinheiro chegou"
+                  class="mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300">
+              Transferência por confirmar
+            </span>
             <!-- pedido de reembolso desta encomenda: abre-o na secção Devoluções -->
             <button v-if="enc.reembolso" type="button" @click.stop="$emit('ver-reembolso', enc.reembolso.id)"
                     title="Ver o pedido de reembolso" class="mt-1 inline-flex items-center gap-1.5 hover:opacity-80">
@@ -74,10 +78,6 @@
             </button>
           </div>
           <div class="flex items-center gap-3 flex-shrink-0">
-            <span v-if="enc.transferencia_por_confirmar" title="Confirma na tua conta se o dinheiro chegou"
-                  class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300">
-              Transferência por confirmar
-            </span>
             <span v-if="porFaturar(enc)" title="Emite a fatura no e-Fatura e regista-a na encomenda"
                   class="hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300">
               Por faturar
