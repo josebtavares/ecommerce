@@ -485,6 +485,49 @@ def entrega_atualizar(request, loja_id, encomenda_id):
     return Response(serializer.data)
 
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def entrega_morada(request, loja_id, encomenda_id):
+    """
+    PATCH /app/loja/<loja_id>/encomendas/<encomenda_id>/entrega/morada/
+    Body: { morada }
+
+    A entrega falhou e a loja esclareceu a morada com o cliente: fica a certa, para a tentativa seguinte.
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'atribuir_condutor')
+    if erro:
+        return erro
+
+    encomenda = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=encomenda_id, loja=loja)
+    entrega   = get_object_or_404(Entrega, encomenda=encomenda)
+    if entrega.status != 'falhou' or encomenda.status != 'preparando':
+        return Response({'detail': 'Só se corrige a morada de uma entrega que falhou.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    morada = str(request.data.get('morada') or '').strip()
+    limite = Encomenda._meta.get_field('morada_entrega').max_length
+    if not morada or len(morada) > limite:
+        return Response({'detail': f'Indica a morada (até {limite} caracteres).'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if morada != encomenda.morada_entrega:
+        encomenda.morada_entrega = morada
+        encomenda.save(update_fields=['morada_entrega'])
+        # o cliente vê o que ficou: se a loja se enganou, ainda vai a tempo de avisar
+        notificar(
+            utilizador=encomenda.comprador,
+            tipo='encomenda_atualizada',
+            titulo=f'Morada da encomenda #{encomenda.id} actualizada',
+            mensagem=f'A entrega vai para: {morada}',
+            loja=loja,
+            link='/perfil',
+        )
+
+    entrega.refresh_from_db()
+    return Response(EntregaSerializer(entrega, context={'request': request}).data)
+
+
 # ══════════════════════════════════════════════════════════════
 # AVALIAÇÕES
 # ══════════════════════════════════════════════════════════════

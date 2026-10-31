@@ -191,6 +191,10 @@
                 class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold transition">
                 <font-awesome-icon :icon="['fas', 'xmark']" class="mr-1" />Entrega falhou
               </button>
+              <button v-if="entrega.status === 'falhou' && entrega.tipo_entrega === 'entrega'" @click="abrirMorada(entrega)"
+                class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition">
+                <font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1" />Corrigir morada
+              </button>
             </template>
             <svg v-if="loadingAcao === entrega.id" class="animate-spin h-4 w-4 text-zinc-500 ml-auto" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
@@ -349,6 +353,30 @@
       </div>
     </div>
 
+    <!-- Corrigir a morada depois de uma falha -->
+    <div v-if="modalMorada"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+         @click.self="modalMorada = null">
+      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-sm p-6 space-y-4 shadow-2xl" role="dialog" aria-modal="true">
+        <div>
+          <h3 class="text-base font-bold text-zinc-100">Corrigir morada</h3>
+          <p class="text-sm text-zinc-400 mt-1">Encomenda <strong>#{{ modalMorada.encomenda }}</strong>. O cliente é avisado da morada nova.</p>
+        </div>
+        <textarea v-model="novaMorada" rows="3" maxlength="300" aria-label="Morada de entrega"
+          class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-red-500"></textarea>
+        <div class="flex gap-3">
+          <button type="button" @click="modalMorada = null"
+            class="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
+            Voltar
+          </button>
+          <button type="button" @click="guardarMorada" :disabled="!novaMorada.trim() || loadingMorada"
+            class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition disabled:opacity-40">
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Confirmar o fecho da entrega -->
     <ConfirmarEntrega v-if="modalEntregue" :encomenda-id="modalEntregue.encomenda" :a-cobrar="modalEntregue.valor_a_cobrar"
       :is-condutor="isCondutor" :a-guardar="!!loadingAcao" @fechar="modalEntregue = null"
@@ -407,6 +435,9 @@ export default {
       loadingReatribuir: false,
       modalFalha:        null,
       modalEntregue:     null,
+      modalMorada:       null,
+      novaMorada:        '',
+      loadingMorada:     false,
       loadingAcao:       null,
       atualizador:       null,
     }
@@ -474,7 +505,7 @@ export default {
 
     // entrega nova, ou cancelada entretanto, sem o condutor ter de fazer refresh
     atualizarLista () {
-      const ocupado = this.modalReatribuir || this.modalFalha || this.modalEntregue || this.loadingAcao
+      const ocupado = this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada || this.loadingAcao
       if (!document.hidden && !ocupado && this.activeTab === 'entregas') this.fetchEntregas(true)
     },
 
@@ -524,6 +555,25 @@ export default {
     },
 
     confirmarFalha (entrega) { this.modalFalha = entrega },
+
+    abrirMorada (entrega) {
+      this.modalMorada = entrega
+      this.novaMorada  = entrega.morada_entrega || ''
+    },
+
+    async guardarMorada () {
+      this.loadingMorada = true
+      try {
+        await api.patch(
+          `/app/loja/${this.lojaId}/encomendas/${this.modalMorada.encomenda}/entrega/morada/`,
+          { morada: this.novaMorada }
+        )
+        this.modalMorada = null
+        await this.fetchEntregas(true)
+        toast.success('Morada corrigida. Atribui um condutor para tentar de novo.')
+      } catch (e) { this.erroAcao(e) }
+      finally { this.loadingMorada = false }
+    },
 
     // depois de uma falha o mesmo condutor pode tentar de novo (ex.: a morada foi esclarecida)
     bloqueado (c) {
