@@ -307,9 +307,9 @@
         <div class="space-y-2 max-h-64 overflow-y-auto">
           <button v-for="c in condutores" :key="c.id"
             @click="novoCondutorId = c.id"
-            :disabled="c.id === modalReatribuir.condutor_id_field"
+            :disabled="bloqueado(c)"
             :class="['w-full flex items-center gap-3 p-3 rounded-xl border-2 transition text-left',
-                     c.id === modalReatribuir.condutor_id_field
+                     bloqueado(c)
                        ? 'border-zinc-700 opacity-40 cursor-not-allowed'
                        : novoCondutorId === c.id
                          ? 'border-red-500 bg-red-500/10'
@@ -322,10 +322,11 @@
               <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo n/d' }}</p>
               <p v-if="c.utilizador_telefone" class="text-xs text-zinc-600"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1" />{{ c.utilizador_telefone }}</p>
             </div>
-            <span v-if="c.id === modalReatribuir.condutor_id_field" class="text-[10px] text-zinc-500">actual</span>
+            <span v-if="bloqueado(c)" class="text-[10px] text-zinc-500">actual</span>
             <div v-else-if="novoCondutorId === c.id" class="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
+            <span v-else-if="c.id === modalReatribuir.condutor_id_field" class="text-[10px] text-zinc-500">tentou antes</span>
           </button>
-          <p v-if="condutores.filter(c => c.id !== modalReatribuir.condutor_id_field).length === 0"
+          <p v-if="condutores.filter(c => !bloqueado(c)).length === 0"
              class="text-center py-4 text-zinc-500 text-sm">Sem outros condutores disponíveis.</p>
         </div>
 
@@ -524,6 +525,12 @@ export default {
 
     confirmarFalha (entrega) { this.modalFalha = entrega },
 
+    // depois de uma falha o mesmo condutor pode tentar de novo (ex.: a morada foi esclarecida)
+    bloqueado (c) {
+      const e = this.modalReatribuir
+      return c.id === e.condutor_id_field && e.status !== 'falhou'
+    },
+
     abrirReatribuir (entrega) {
       this.modalReatribuir = entrega
       this.novoCondutorId  = null
@@ -532,22 +539,14 @@ export default {
     async confirmarReatribuicao () {
       if (!this.novoCondutorId || !this.modalReatribuir) return
       this.loadingReatribuir = true
-      const entregaFalhou = this.modalReatribuir.status === 'falhou'
       try {
         await api.patch(
           `/app/loja/${this.lojaId}/encomendas/${this.modalReatribuir.encomenda}/entrega/atualizar/`,
           { condutor_id: this.novoCondutorId }
         )
-        const condutor = this.condutores.find(c => c.id === this.novoCondutorId)
-        const entrega  = this.entregas.find(e => e.id === this.modalReatribuir.id)
-        if (entrega && condutor) {
-          entrega.condutor_id_field = condutor.id
-          entrega.condutor_nome     = condutor.utilizador_nome || condutor.utilizador_username
-          entrega.condutor_veiculo  = condutor.tipo_veiculo
-          if (entregaFalhou) entrega.status = 'atribuido'
-        }
         this.modalReatribuir = null
-      } catch (e) { console.error(e) }
+        await this.fetchEntregas(true)
+      } catch (e) { this.erroAcao(e) }
       finally { this.loadingReatribuir = false }
     },
   },

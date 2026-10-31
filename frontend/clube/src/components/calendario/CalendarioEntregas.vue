@@ -217,7 +217,7 @@
             </select>
             <button type="button" @click="atribuir" :disabled="!condutorId || aGuardar"
               class="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-xs font-bold">
-              {{ detalhe.entrega?.condutor_id ? 'Trocar' : 'Atribuir' }}
+              {{ detalhe.entrega?.condutor_id && detalhe.entrega.status !== 'falhou' ? 'Trocar' : 'Atribuir' }}
             </button>
           </div>
           <p v-if="erroAcao" class="text-xs text-red-400" role="alert">{{ erroAcao }}</p>
