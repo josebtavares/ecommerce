@@ -128,7 +128,7 @@ async function cancelar () {
     if (!r) toast.success('Encomenda cancelada.')
     else if (r.estado === 'reembolsado') toast.success(`Encomenda cancelada. Reembolso de ${formatarDinheiro(r.valor_aprovado)} feito.`)
     else if (r.estado === 'por_reembolsar') toast.success(`Encomenda cancelada. O reembolso de ${formatarDinheiro(r.valor_aprovado)} está a ser processado.`)
-    else if (r.estado === 'a_devolver') toast.success(`Encomenda cancelada. A loja devolve-te ${formatarDinheiro(r.valor_aprovado)} em mão.`)
+    else if (r.estado === 'a_devolver') toast.success(`Encomenda cancelada. A loja devolve-te ${formatarDinheiro(r.valor_aprovado)} ${r.por_transferencia ? 'por transferência' : 'em mão'}.`)
     else toast.info('Pedido de cancelamento enviado à loja.')
     emit('atualizada')
   } catch (e) {

@@ -56,7 +56,7 @@
           <p class="text-sm font-semibold text-purple-200">Entrega do dinheiro</p>
           <p class="text-xs text-zinc-400">
             {{ r.metodo === 'manual'
-               ? (r.entregue_em ? `A loja diz que entregou em mão a ${dataHora(r.entregue_em)}.` : 'A loja ainda não indicou que entregou o dinheiro em mão.')
+               ? (r.entregue_em ? `A loja diz que devolveu ${r.por_transferencia ? 'por transferência' : 'em mão'} a ${dataHora(r.entregue_em)}.` : 'A loja ainda não indicou que entregou o dinheiro em mão.')
                : `Reembolsado pelo meio de pagamento a ${dataHora(r.data_reembolso)} (ref. ${r.referencia || '—'}). Confirma no gateway antes de decidir.` }}
             <span v-if="r.nao_recebido_em"> O cliente diz que não recebeu ({{ dataHora(r.nao_recebido_em) }}).</span>
           </p>
