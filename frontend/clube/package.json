@@ -5,6 +5,7 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build && node scripts/csp.js",
+    "start": "node scripts/servidor.js",
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
@@ -18,10 +19,12 @@
     "@fullcalendar/timegrid": "^6.1.18",
     "@fullcalendar/vue3": "^6.1.18",
     "axios": "^1.10.0",
+    "compression": "^1.8.1",
     "core-js": "^3.8.3",
     "dotenv": "^16.5.0",
     "font-awesome": "^4.7.0",
     "jspdf": "^4.2.1",
+    "serve-handler": "^6.1.6",
     "swiper": "^11.2.6",
     "vue": "^3.2.13",
     "vue-multiselect": "^3.2.0",
