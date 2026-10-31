@@ -164,6 +164,11 @@ const routes = [
         component: FlutterwaveCallback,
     },
     {
+        // /pos e qualquer endereço do POS que não exista: o painel, ou o login sem sessão (ver beforeEach)
+        path: '/pos/:resto(.*)*',
+        redirect: { name: 'POSDashboard' }
+    },
+    {
         path: '/pos/register',
         name: 'POSRegister',
         component: POSRegister,
