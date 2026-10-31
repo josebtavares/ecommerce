@@ -599,6 +599,52 @@ def pos_login_google(request):
 # AUTENTICAÇÃO — MEMBRO DE EQUIPA
 # ═══════════════════════════════════════════════════════════════════
 
+def _dados_membro(membro):
+    """O membro, o seu POS e as permissões — no login e em /membro/me/ (o painel lê-os a cada visita)."""
+    return {
+        'membro': {
+            'id':           membro.id,
+            'nome':         membro.nome,
+            'username_pos': membro.username_pos,
+            'papel':        membro.papel,
+            'papel_display':membro.get_papel_display(),
+        },
+        'pos': {
+            'id':          membro.pos.id,
+            'nome':        membro.pos.nome,
+            'codigo_pos':  membro.pos.codigo_pos,
+            'modo':        membro.pos.modo,
+            'loja_vinculada': {
+                'id': membro.pos.loja_vinculada.id,
+                'nome': membro.pos.loja_vinculada.nome,
+            } if membro.pos.loja_vinculada else None,
+        },
+        'permissoes': {
+            'pode_abrir_mesas':         membro.pode_abrir_mesas,
+            'pode_fechar_contas':       membro.pode_fechar_contas,
+            'pode_cancelar_items':      membro.pode_cancelar_items,
+            'pode_dar_descontos':       membro.pode_dar_descontos,
+            'pode_gerir_produtos':      membro.pode_gerir_produtos,
+            'pode_gerir_mesas':         membro.pode_gerir_mesas,
+            'pode_gerir_utilizadores':  membro.pode_gerir_utilizadores,
+            'pode_ver_relatorios':      membro.pode_ver_relatorios,
+            'pode_abrir_fechar_turno':  membro.pode_abrir_fechar_turno,
+            'pode_ver_pedidos':         membro.pode_ver_pedidos,
+            'pode_atualizar_status_items': membro.pode_atualizar_status_items,
+        },
+    }
+
+
+@api_view(['GET'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def pos_membro_me(request):
+    """GET /api/pos/membro/me/ — o membro como está agora (o dono pode ter mudado as permissões ou o POS)."""
+    if not getattr(request.user, 'is_membro', False):
+        return Response({'detail': 'Só para membros de equipa.'}, status=status.HTTP_403_FORBIDDEN)
+    return Response(_dados_membro(request.user.membro))
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @pos_ratelimit(key='ip', rate='15/m') 
@@ -680,36 +726,7 @@ def pos_membro_login(request):
         'tipo_sessao': 'membro',
         'access_token': str(access),
         'refresh_token': str(refresh),
-        'membro': {
-            'id':           membro.id,
-            'nome':         membro.nome,
-            'username_pos': membro.username_pos,
-            'papel':        membro.papel,
-            'papel_display':membro.get_papel_display(),
-        },
-        'pos': {
-            'id':          membro.pos.id,
-            'nome':        membro.pos.nome,
-            'codigo_pos':  membro.pos.codigo_pos,
-            'modo':        membro.pos.modo,
-            'loja_vinculada': {
-                'id': membro.pos.loja_vinculada.id,
-                'nome': membro.pos.loja_vinculada.nome,
-            } if membro.pos.loja_vinculada else None,
-        },
-        'permissoes': {
-            'pode_abrir_mesas':         membro.pode_abrir_mesas,
-            'pode_fechar_contas':       membro.pode_fechar_contas,
-            'pode_cancelar_items':      membro.pode_cancelar_items,
-            'pode_dar_descontos':       membro.pode_dar_descontos,
-            'pode_gerir_produtos':      membro.pode_gerir_produtos,
-            'pode_gerir_mesas':         membro.pode_gerir_mesas,
-            'pode_gerir_utilizadores':  membro.pode_gerir_utilizadores,
-            'pode_ver_relatorios':      membro.pode_ver_relatorios,
-            'pode_abrir_fechar_turno':  membro.pode_abrir_fechar_turno,
-            'pode_ver_pedidos':         membro.pode_ver_pedidos,
-            'pode_atualizar_status_items': membro.pode_atualizar_status_items,
-        },
+        **_dados_membro(membro),
     })
 
 

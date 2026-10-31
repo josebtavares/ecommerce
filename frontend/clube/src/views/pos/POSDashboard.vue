@@ -789,10 +789,21 @@ export default {
       }
     },
 
+    // o dono pode ter mudado as permissões, o papel ou o POS depois do login do membro
+    async atualizarMembro() {
+      try {
+        const { data } = await api.get('/api/pos/membro/me/')
+        localStorage.setItem('pos_membro', JSON.stringify(data.membro))
+        localStorage.setItem('pos_membro_pos', JSON.stringify(data.pos))
+        localStorage.setItem('pos_membro_permissoes', JSON.stringify(data.permissoes))
+        this.loadSessao()          // tabsVisiveis acerta a aba, se a aberta deixou de ser permitida
+      } catch { /* fica o que veio do login — o servidor confere as permissões na mesma */ }
+    },
+
     // ── CARREGAR POS ────────────────────────────────────────────────
     async loadPOSData() {
       // Membro já tem POS carregado em loadSessao()
-      if (this.isMembro) return
+      if (this.isMembro) return this.atualizarMembro()
 
       if (this.soLeitura) {
         try {
