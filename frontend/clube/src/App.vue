@@ -12,7 +12,7 @@
 import PedirLogin from '@/components/auth/PedirLogin.vue'
 import ChatFlutuante from '@/components/chat/ChatFlutuante.vue'
 import AvisoConfirmarEmail from '@/components/auth/AvisoConfirmarEmail.vue'
-import { EVENTO, emailPorConfirmar, atualizarDoServidor } from '@/services/confirmarEmail'
+import { EVENTO, emailPorConfirmar, lerConta } from '@/services/confirmarEmail'
 import { estaAutenticado } from '@/services/sessao'
 
 const SEM_AVISO = /^\/(pos|login|register|confirmar_email|recuperar_senha|auth)(\/|$)/i
@@ -27,7 +27,7 @@ export default {
   },
 
   data () {
-    return { porConfirmar: emailPorConfirmar(), fechado: false, contaLida: false }
+    return { porConfirmar: emailPorConfirmar(), fechado: false }
   },
 
   computed: {
@@ -58,10 +58,7 @@ export default {
       this.porConfirmar = emailPorConfirmar()
       if (e?.type === EVENTO && this.porConfirmar && !antes) this.fechado = false   // voltou a ser preciso (ex.: no checkout)
       // uma vez por visita lê a conta no servidor (ver services/confirmarEmail.js)
-      if (estaAutenticado() && !this.contaLida && !POS.test(window.location.pathname)) {
-        this.contaLida = true
-        atualizarDoServidor().catch(() => {})
-      }
+      if (estaAutenticado() && !POS.test(window.location.pathname)) lerConta()
     },
   },
 }

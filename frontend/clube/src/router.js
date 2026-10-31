@@ -25,6 +25,7 @@ const MarcacaoCliente = () => import('./views/servicos/MarcacaoCliente.vue');
 // POS Components
 import POSRegister from '@/views/pos/POSRegister.vue'
 import POSLogin from '@/views/pos/POSLogin.vue'
+import { esperarConta } from '@/services/confirmarEmail'
 const POSDashboard = () => import('@/views/pos/POSDashboard.vue')
 
 
@@ -108,13 +109,13 @@ const routes = [
         path: '/admin/:seccao?/:ficha?',
         name: 'Admin',
         component: AdminLayout,
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, contaAtual: true }
     },
     { 
         path: '/loja/criar', 
         name: 'CriarLoja', 
         component: criarLoja, 
-        meta: { requiresAuth: true } 
+        meta: { requiresAuth: true, contaAtual: true } 
     },
     {
         path: '/completar-perfil',
@@ -222,7 +223,9 @@ router.beforeEach((to, from, next) => {
     if (to.matched.some(record => record.meta.requiresAuth)) {
         // páginas privadas (checkout, backoffice, admin…): sem sessão vai ao login e volta cá depois
         if (estaAutenticado()) {
-            next();
+            // decidem pelo que está guardado (papel de admin, verificado): só abrem com a conta já lida
+            if (to.meta.contaAtual) esperarConta().finally(() => next());
+            else next();
         } else {
             next({ name: 'Login', query: { seguinte: to.fullPath } });
         }

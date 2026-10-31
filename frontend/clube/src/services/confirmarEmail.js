@@ -37,6 +37,18 @@ export async function atualizarDoServidor () {
   return data.email_confirmado
 }
 
+// uma vez por visita (App.vue; o router espera por ela nas páginas com meta.contaAtual)
+let leitura = null
+export function lerConta () {
+  if (!leitura) leitura = atualizarDoServidor().catch(() => {})
+  return leitura
+}
+
+// sem deixar a página presa se o servidor demorar
+export function esperarConta (limite = 3000) {
+  return Promise.race([lerConta(), new Promise(resolve => setTimeout(resolve, limite))])
+}
+
 export function reenviarLink () {
   return api.post('/app/utilizador/confirmar_email/reenviar/')
 }
