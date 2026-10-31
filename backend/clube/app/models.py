@@ -1065,6 +1065,14 @@ class Entrega(models.Model):
         ('a_caminho',   'A caminho'),
         ('entregue',    'Entregue'),
         ('falhou',      'Falhou'),
+        ('cancelada',   'Cancelada'),      # a encomenda foi cancelada com a entrega em curso
+    ]
+    MOTIVOS_FALHA = [
+        ('cliente_ausente', 'Cliente ausente'),
+        ('sem_contacto',    'Cliente não atende'),
+        ('morada_errada',   'Morada errada ou incompleta'),
+        ('recusada',        'O cliente recusou'),
+        ('outro',           'Outro motivo'),
     ]
 
     encomenda       = models.OneToOneField(Encomenda, on_delete=models.CASCADE, related_name='entrega')
@@ -1075,6 +1083,8 @@ class Entrega(models.Model):
     status          = models.CharField(max_length=15, choices=STATUS, default='atribuido')
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_entrega    = models.DateTimeField(null=True, blank=True)
+    motivo_falha    = models.CharField(max_length=20, choices=MOTIVOS_FALHA, blank=True, default='')
+    nota_falha      = models.CharField(max_length=200, blank=True, default='')
 
     def __str__(self):
         return f'Entrega da encomenda #{self.encomenda_id}'

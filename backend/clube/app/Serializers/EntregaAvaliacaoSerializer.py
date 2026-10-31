@@ -4,6 +4,8 @@ from ..models import (
     AvaliacaoLoja, Encomenda
 )
 from .UtilizadorSerializer import UtilizadorMiniSerializer
+from ..utils import devolucoes, horarios
+from ..utils.encomendas import valor_a_cobrar
 
 
 # ══════════════════════════════════════════════════════════════
@@ -78,6 +80,14 @@ class EntregaSerializer(serializers.ModelSerializer):
     notas              = serializers.CharField(source='encomenda.notas', read_only=True)
     tipo_entrega       = serializers.CharField(source='encomenda.tipo_entrega', read_only=True)
     metodo_pagamento   = serializers.SerializerMethodField()
+    # o que o condutor precisa de saber sem abrir a encomenda
+    comprador_id       = serializers.IntegerField(source='encomenda.comprador_id', read_only=True)
+    itens              = serializers.SerializerMethodField()
+    valor_a_cobrar     = serializers.SerializerMethodField()
+    pago               = serializers.SerializerMethodField()
+    agendada_para      = serializers.DateTimeField(source='encomenda.agendada_para', read_only=True)
+    agendada_texto     = serializers.SerializerMethodField()
+    motivo_falha_texto = serializers.CharField(source='get_motivo_falha_display', read_only=True)
     # campos da opção de entrega (flat — mais fácil de usar no frontend)
     opcao_entrega_nome  = serializers.CharField(source='opcao_entrega.nome',           read_only=True)
     opcao_entrega_tempo = serializers.CharField(source='opcao_entrega.tempo_estimado',  read_only=True)
@@ -99,6 +109,8 @@ class EntregaSerializer(serializers.ModelSerializer):
             'data_criacao', 'data_entrega',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'morada_entrega', 'notas', 'tipo_entrega', 'metodo_pagamento',
+            'comprador_id', 'itens', 'valor_a_cobrar', 'pago', 'agendada_para', 'agendada_texto',
+            'motivo_falha', 'motivo_falha_texto', 'nota_falha',
             'opcao_entrega_nome', 'opcao_entrega_tempo', 'opcao_entrega_preco',
             'condutor_nome', 'condutor_veiculo', 'condutor_id_field',
         ]
@@ -113,6 +125,7 @@ class EntregaSerializer(serializers.ModelSerializer):
             'atribuido' : ['a_caminho', 'entregue', 'falhou'],
             'a_caminho' : ['entregue', 'falhou'],
             'entregue'  : [],
+            'cancelada' : [],
             'falhou'    : ['atribuido'],  # permite reatribuir após falha
         }
         permitidos = transicoes.get(instancia.status, [])
@@ -146,6 +159,25 @@ class EntregaSerializer(serializers.ModelSerializer):
             return obj.encomenda.pagamento.metodo.tipo
         except Exception:
             return None
+
+    def get_itens(self, obj):
+        # o que ficou por entregar: os esgotados saem da encomenda
+        qtd = devolucoes.qtd_disponivel(obj.encomenda)
+        return [f'{qtd[i.id]}× {i.produto.nome if i.produto else "Produto removido"}'
+                for i in obj.encomenda.itens.all() if qtd[i.id] > 0]
+
+    def get_valor_a_cobrar(self, obj):
+        valor = valor_a_cobrar(obj.encomenda)
+        return str(valor) if valor is not None else None
+
+    def get_pago(self, obj):
+        try:
+            return obj.encomenda.pagamento.status == 'aprovado'
+        except Exception:
+            return False
+
+    def get_agendada_texto(self, obj):
+        return horarios.texto_agendada(obj.encomenda.agendada_para)
 
     def get_condutor_nome(self, obj):
         try:

@@ -29,7 +29,7 @@ from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
 )
 from ..utils.pagination import paginar
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
-from ..utils.encomendas import repor_stock, cancelar_anteriores_por_pagar
+from ..utils.encomendas import repor_stock, cancelar_anteriores_por_pagar, cancelar_entrega
 from ..utils import conjuntos as conj
 from ..utils import horarios
 from ..utils import devolucoes
@@ -755,6 +755,7 @@ def encomenda_atualizar_status(request, loja_id, id):
     # e, se já estava paga, o cliente é reembolsado na hora (utils/devolucoes.py)
     if novo_status == 'cancelado':
         repor_stock(encomenda)
+        cancelar_entrega(encomenda)
         devolucoes.ao_cancelar_pela_loja(encomenda, request.user.utilizador)
     elif novo_status in ('enviado', 'concluido'):
         if novo_status == 'concluido':

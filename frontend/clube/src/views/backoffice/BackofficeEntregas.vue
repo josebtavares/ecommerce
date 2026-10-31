@@ -59,6 +59,10 @@
                       class="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400">
                   {{ entrega.opcao_entrega_nome }}
                 </span>
+                <span v-if="entrega.agendada_texto" data-teste="agendada"
+                      class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300">
+                  <font-awesome-icon :icon="['fas', 'calendar-days']" class="mr-1" />{{ entrega.agendada_texto }}
+                </span>
               </div>
               <p class="text-xs text-zinc-500">{{ entrega.data_criacao }}</p>
             </div>
@@ -69,6 +73,12 @@
               <p v-if="entrega.condutor_veiculo" class="text-[10px] text-zinc-500">{{ entrega.condutor_veiculo }}</p>
               <p v-if="!entrega.condutor_nome" class="text-xs text-zinc-600 italic">Sem condutor</p>
             </div>
+          </div>
+
+          <!-- Encomenda cancelada a meio -->
+          <div v-if="entrega.status === 'cancelada'"
+               class="border-t border-zinc-800 px-4 py-3 text-xs font-semibold text-red-400">
+            <font-awesome-icon :icon="['fas', 'ban']" class="mr-1" />Encomenda cancelada — não entregar. Se já a levantaste, devolve-a à loja.
           </div>
 
           <!-- Contacto do cliente -->
@@ -91,6 +101,21 @@
             <div v-if="entrega.morada_entrega" class="col-span-2 flex gap-2">
               <span class="text-zinc-500 flex-shrink-0">Morada:</span>
               <span class="text-zinc-300">{{ entrega.morada_entrega }}</span>
+              <a v-if="porEntregar(entrega)" :href="linkMapa(entrega)" target="_blank" rel="noopener noreferrer"
+                 class="flex-shrink-0 ml-auto font-semibold text-red-400 hover:text-red-300 whitespace-nowrap">
+                <font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1" />Mapa
+              </a>
+            </div>
+            <div v-if="entrega.itens?.length" class="col-span-2 flex gap-2">
+              <span class="text-zinc-500 flex-shrink-0">Levar:</span>
+              <span class="text-zinc-200 font-semibold">{{ entrega.itens.join(', ') }}</span>
+            </div>
+            <div v-if="entrega.valor_a_cobrar" data-teste="a-cobrar"
+                 class="col-span-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 font-bold">
+              <span>A cobrar em dinheiro</span><span class="text-sm">{{ $dinheiro(entrega.valor_a_cobrar) }}</span>
+            </div>
+            <div v-else-if="entrega.pago && porEntregar(entrega)" class="col-span-2 font-semibold text-green-400">
+              <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-1" />Já pago — não cobrar nada
             </div>
             <div v-if="entrega.tipo_entrega" class="flex gap-2">
               <span class="text-zinc-500 flex-shrink-0">Tipo:</span>
@@ -118,13 +143,17 @@
               <span class="text-zinc-500 flex-shrink-0"><font-awesome-icon :icon="['fas', 'note-sticky']" class="mr-1" />Notas:</span>
               <span class="text-zinc-300 italic">{{ entrega.notas }}</span>
             </div>
+            <div v-if="entrega.motivo_falha" class="col-span-2 flex gap-2">
+              <span class="text-zinc-500 flex-shrink-0">Motivo:</span>
+              <span class="text-red-400">{{ entrega.motivo_falha_texto }}{{ entrega.nota_falha ? ` — ${entrega.nota_falha}` : '' }}</span>
+            </div>
             <div v-if="entrega.data_entrega" class="col-span-2 text-green-400">
               <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-1" />Entregue em {{ entrega.data_entrega }}
             </div>
           </div>
 
           <!-- Acções -->
-          <div v-if="!['entregue'].includes(entrega.status)"
+          <div v-if="temAcoes(entrega)"
                class="border-t border-zinc-800 px-4 py-3 flex flex-wrap gap-2 items-center">
             <template v-if="isCondutor">
               <button v-if="entrega.status === 'atribuido'"
@@ -133,7 +162,7 @@
                 <font-awesome-icon :icon="['fas', 'car']" class="mr-1" />A caminho
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
-                @click="atualizarEntrega(entrega, 'entregue')" :disabled="loadingAcao === entrega.id"
+                @click="modalEntregue = entrega" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-semibold transition">
                 <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Marcar entregue
               </button>
@@ -142,6 +171,10 @@
                 class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold transition">
                 <font-awesome-icon :icon="['fas', 'xmark']" class="mr-1" />Não consegui entregar
               </button>
+              <button v-if="podeFalar(entrega)" @click="falarComCliente(entrega)"
+                class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition">
+                <font-awesome-icon :icon="['fas', 'comment-dots']" class="mr-1" />Mensagem
+              </button>
             </template>
             <template v-else>
               <button @click="abrirReatribuir(entrega)"
@@ -149,14 +182,18 @@
                 <font-awesome-icon :icon="['fas', entrega.condutor_nome ? 'rotate-left' : 'plus']" class="mr-1" />{{ entrega.condutor_nome ? 'Reatribuir' : 'Atribuir condutor' }}
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
-                @click="atualizarEntrega(entrega, 'entregue')" :disabled="loadingAcao === entrega.id"
+                @click="modalEntregue = entrega" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-semibold transition">
                 <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Concluir entrega
               </button>
               <button v-if="['atribuido','a_caminho'].includes(entrega.status)"
                 @click="confirmarFalha(entrega)" :disabled="loadingAcao === entrega.id"
                 class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold transition">
-                <font-awesome-icon :icon="['fas', 'xmark']" class="mr-1" />Cancelar entrega
+                <font-awesome-icon :icon="['fas', 'xmark']" class="mr-1" />Entrega falhou
+              </button>
+              <button v-if="entrega.status === 'falhou' && entrega.tipo_entrega === 'entrega'" @click="abrirMorada(entrega)"
+                class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition">
+                <font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1" />Corrigir morada
               </button>
             </template>
             <svg v-if="loadingAcao === entrega.id" class="animate-spin h-4 w-4 text-zinc-500 ml-auto" viewBox="0 0 24 24" fill="none">
@@ -274,9 +311,9 @@
         <div class="space-y-2 max-h-64 overflow-y-auto">
           <button v-for="c in condutores" :key="c.id"
             @click="novoCondutorId = c.id"
-            :disabled="c.id === modalReatribuir.condutor_id_field"
+            :disabled="bloqueado(c)"
             :class="['w-full flex items-center gap-3 p-3 rounded-xl border-2 transition text-left',
-                     c.id === modalReatribuir.condutor_id_field
+                     bloqueado(c)
                        ? 'border-zinc-700 opacity-40 cursor-not-allowed'
                        : novoCondutorId === c.id
                          ? 'border-red-500 bg-red-500/10'
@@ -289,10 +326,11 @@
               <p class="text-xs text-zinc-500">{{ c.tipo_veiculo || 'Veículo n/d' }}</p>
               <p v-if="c.utilizador_telefone" class="text-xs text-zinc-600"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1" />{{ c.utilizador_telefone }}</p>
             </div>
-            <span v-if="c.id === modalReatribuir.condutor_id_field" class="text-[10px] text-zinc-500">actual</span>
+            <span v-if="bloqueado(c)" class="text-[10px] text-zinc-500">actual</span>
             <div v-else-if="novoCondutorId === c.id" class="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
+            <span v-else-if="c.id === modalReatribuir.condutor_id_field" class="text-[10px] text-zinc-500">tentou antes</span>
           </button>
-          <p v-if="condutores.filter(c => c.id !== modalReatribuir.condutor_id_field).length === 0"
+          <p v-if="condutores.filter(c => !bloqueado(c)).length === 0"
              class="text-center py-4 text-zinc-500 text-sm">Sem outros condutores disponíveis.</p>
         </div>
 
@@ -315,34 +353,37 @@
       </div>
     </div>
 
-    <!-- Modal confirmar falha -->
-    <div v-if="modalFalha"
+    <!-- Corrigir a morada depois de uma falha -->
+    <div v-if="modalMorada"
          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-         @click.self="modalFalha = null">
-      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-sm p-6 space-y-4 shadow-2xl text-center">
-        <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
+         @click.self="modalMorada = null">
+      <div class="bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-sm p-6 space-y-4 shadow-2xl" role="dialog" aria-modal="true">
         <div>
-          <h3 class="text-base font-bold text-zinc-100">Cancelar entrega?</h3>
-          <p class="text-sm text-zinc-400 mt-1">
-            A encomenda <strong>#{{ modalFalha?.encomenda }}</strong> voltará ao estado <strong>"preparando"</strong>.
-          </p>
+          <h3 class="text-base font-bold text-zinc-100">Corrigir morada</h3>
+          <p class="text-sm text-zinc-400 mt-1">Encomenda <strong>#{{ modalMorada.encomenda }}</strong>. O cliente é avisado da morada nova.</p>
         </div>
+        <textarea v-model="novaMorada" rows="3" maxlength="300" aria-label="Morada de entrega"
+          class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-red-500"></textarea>
         <div class="flex gap-3">
-          <button @click="modalFalha = null"
+          <button type="button" @click="modalMorada = null"
             class="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
             Voltar
           </button>
-          <button @click="confirmarFalhaEntrega" :disabled="loadingAcao === modalFalha?.id"
-            class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition">
-            Confirmar
+          <button type="button" @click="guardarMorada" :disabled="!novaMorada.trim() || loadingMorada"
+            class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition disabled:opacity-40">
+            Guardar
           </button>
         </div>
       </div>
     </div>
+
+    <!-- Confirmar o fecho da entrega -->
+    <ConfirmarEntrega v-if="modalEntregue" :encomenda-id="modalEntregue.encomenda" :a-cobrar="modalEntregue.valor_a_cobrar"
+      :is-condutor="isCondutor" :a-guardar="!!loadingAcao" @fechar="modalEntregue = null"
+      @confirmar="atualizarEntrega(modalEntregue, 'entregue')" />
+    <ConfirmarEntrega v-if="modalFalha" falhou :encomenda-id="modalFalha.encomenda"
+      :is-condutor="isCondutor" :a-guardar="!!loadingAcao" @fechar="modalFalha = null"
+      @confirmar="atualizarEntrega(modalFalha, 'falhou', $event)" />
 
   </div>
 </template>
@@ -351,10 +392,15 @@
 import api from '@/services/api'
 import { iconePagamento } from '@/utils/icones'
 import CalendarioEntregas from '@/components/calendario/CalendarioEntregas.vue'
+import ConfirmarEntrega from '@/components/calendario/ConfirmarEntrega.vue'
+import { contactarCliente } from '@/services/chat'
+import { toast } from 'vue3-toastify'
+
+const ATUALIZAR_MS = 30000
 
 export default {
   name: 'BackofficeEntregas',
-  components: { CalendarioEntregas },
+  components: { CalendarioEntregas, ConfirmarEntrega },
   props: {
     lojaId:    [String, Number],
     minhaRole: { type: String, default: '' },
@@ -380,6 +426,7 @@ export default {
         { value: 'a_caminho', label: 'A caminho',  active: 'bg-indigo-500/20 text-indigo-400' },
         { value: 'entregue',  label: 'Entregues',  active: 'bg-green-500/20 text-green-400'   },
         { value: 'falhou',    label: 'Falhadas',   active: 'bg-red-500/20 text-red-400'       },
+        { value: 'cancelada', label: 'Canceladas', active: 'bg-zinc-500/20 text-zinc-300'     },
       ],
       condutores:        [],
       loadingCondutores: false,
@@ -387,7 +434,12 @@ export default {
       novoCondutorId:    null,
       loadingReatribuir: false,
       modalFalha:        null,
+      modalEntregue:     null,
+      modalMorada:       null,
+      novaMorada:        '',
+      loadingMorada:     false,
       loadingAcao:       null,
+      atualizador:       null,
     }
   },
 
@@ -405,12 +457,15 @@ export default {
 
   async created () {
     await Promise.all([this.fetchEntregas(), this.fetchCondutores()])
+    this.atualizador = setInterval(this.atualizarLista, ATUALIZAR_MS)
   },
+
+  beforeUnmount () { clearInterval(this.atualizador) },
 
   methods: {
     iconePagamento,
     labelStatus (s) {
-      const map = { atribuido: 'Atribuído', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou' }
+      const map = { atribuido: 'Atribuído', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada' }
       return map[s] || s
     },
 
@@ -426,8 +481,32 @@ export default {
 
     entregasActivasDoCondutor (condutorId) {
       return this.entregas.filter(e =>
-        e.condutor_id_field === condutorId && !['entregue', 'falhou'].includes(e.status)
+        e.condutor_id_field === condutorId && this.porEntregar(e)
       ).length
+    },
+
+    porEntregar (e) { return ['atribuido', 'a_caminho'].includes(e.status) },
+    // o condutor só age nas que tem por entregar; a loja também pode reatribuir uma que falhou
+    temAcoes (e) { return this.porEntregar(e) || (!this.isCondutor && e.status === 'falhou') },
+
+    linkMapa (e) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.morada_entrega)}`
+    },
+
+    podeFalar (e) {
+      return this.porEntregar(e) && e.comprador_id
+    },
+    falarComCliente (e) { contactarCliente(this.lojaId, e.comprador_id, e.encomenda) },
+
+    erroAcao (e) {
+      const d = e.response?.data
+      toast.error(d?.detail || d?.status?.[0] || 'Não foi possível guardar. Tenta de novo.')
+    },
+
+    // entrega nova, ou cancelada entretanto, sem o condutor ter de fazer refresh
+    atualizarLista () {
+      const ocupado = this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada || this.loadingAcao
+      if (!document.hidden && !ocupado && this.activeTab === 'entregas') this.fetchEntregas(true)
     },
 
     irParaPagina (p) {
@@ -436,8 +515,8 @@ export default {
       this.fetchEntregas()
     },
 
-    async fetchEntregas () {
-      this.loadingEntregas = true
+    async fetchEntregas (silencioso = false) {
+      if (!silencioso) this.loadingEntregas = true
       try {
         const params = {
           limit:  this.limit,
@@ -460,37 +539,46 @@ export default {
       finally { this.loadingCondutores = false }
     },
 
-    async atualizarEntrega (entrega, novoStatus) {
+    async atualizarEntrega (entrega, novoStatus, extra = {}) {
       this.loadingAcao = entrega.id
       try {
         await api.patch(
           `/app/loja/${this.lojaId}/encomendas/${entrega.encomenda}/entrega/atualizar/`,
-          { status: novoStatus }
+          { status: novoStatus, ...extra }
         )
-        entrega.status = novoStatus
-        if (novoStatus === 'entregue') {
-          entrega.data_entrega = new Date().toLocaleDateString('pt-PT')
-        }
-      } catch (e) { console.error(e) }
-      finally { this.loadingAcao = null }
+      } catch (e) { this.erroAcao(e) }
+      finally {
+        this.modalEntregue = this.modalFalha = null
+        await this.fetchEntregas(true)     // mesmo com erro: a entrega pode ter mudado noutro lado
+        this.loadingAcao = null
+      }
     },
 
     confirmarFalha (entrega) { this.modalFalha = entrega },
 
-    async confirmarFalhaEntrega () {
-      if (!this.modalFalha) return
-      this.loadingAcao = this.modalFalha.id
-      const entregaId = this.modalFalha.id
+    abrirMorada (entrega) {
+      this.modalMorada = entrega
+      this.novaMorada  = entrega.morada_entrega || ''
+    },
+
+    async guardarMorada () {
+      this.loadingMorada = true
       try {
         await api.patch(
-          `/app/loja/${this.lojaId}/encomendas/${this.modalFalha.encomenda}/entrega/atualizar/`,
-          { status: 'falhou' }
+          `/app/loja/${this.lojaId}/encomendas/${this.modalMorada.encomenda}/entrega/morada/`,
+          { morada: this.novaMorada }
         )
-        const entrega = this.entregas.find(e => e.id === entregaId)
-        if (entrega) entrega.status = 'falhou'
-        this.modalFalha = null
-      } catch (e) { console.error(e) }
-      finally { this.loadingAcao = null }
+        this.modalMorada = null
+        await this.fetchEntregas(true)
+        toast.success('Morada corrigida. Atribui um condutor para tentar de novo.')
+      } catch (e) { this.erroAcao(e) }
+      finally { this.loadingMorada = false }
+    },
+
+    // depois de uma falha o mesmo condutor pode tentar de novo (ex.: a morada foi esclarecida)
+    bloqueado (c) {
+      const e = this.modalReatribuir
+      return c.id === e.condutor_id_field && e.status !== 'falhou'
     },
 
     abrirReatribuir (entrega) {
@@ -501,22 +589,14 @@ export default {
     async confirmarReatribuicao () {
       if (!this.novoCondutorId || !this.modalReatribuir) return
       this.loadingReatribuir = true
-      const entregaFalhou = this.modalReatribuir.status === 'falhou'
       try {
         await api.patch(
           `/app/loja/${this.lojaId}/encomendas/${this.modalReatribuir.encomenda}/entrega/atualizar/`,
           { condutor_id: this.novoCondutorId }
         )
-        const condutor = this.condutores.find(c => c.id === this.novoCondutorId)
-        const entrega  = this.entregas.find(e => e.id === this.modalReatribuir.id)
-        if (entrega && condutor) {
-          entrega.condutor_id_field = condutor.id
-          entrega.condutor_nome     = condutor.utilizador_nome || condutor.utilizador_username
-          entrega.condutor_veiculo  = condutor.tipo_veiculo
-          if (entregaFalhou) entrega.status = 'atribuido'
-        }
         this.modalReatribuir = null
-      } catch (e) { console.error(e) }
+        await this.fetchEntregas(true)
+      } catch (e) { this.erroAcao(e) }
       finally { this.loadingReatribuir = false }
     },
   },

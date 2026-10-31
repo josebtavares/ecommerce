@@ -198,11 +198,11 @@
                 class="px-3 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-xs font-semibold">
                 <font-awesome-icon :icon="['fas', 'car']" class="mr-1" />A caminho
               </button>
-              <button type="button" @click="mudarEntrega('entregue')" :disabled="aGuardar"
+              <button type="button" @click="confirmando = 'entregue'" :disabled="aGuardar"
                 class="px-3 py-2 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-300 text-xs font-semibold">
                 <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />{{ isCondutor ? 'Marcar entregue' : 'Concluir entrega' }}
               </button>
-              <button type="button" @click="mudarEntrega('falhou')" :disabled="aGuardar"
+              <button type="button" @click="confirmando = 'falhou'" :disabled="aGuardar"
                 class="px-3 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold">
                 <font-awesome-icon :icon="['fas', 'xmark']" class="mr-1" />{{ isCondutor ? 'Não consegui entregar' : 'Entrega falhou' }}
               </button>
@@ -217,24 +217,29 @@
             </select>
             <button type="button" @click="atribuir" :disabled="!condutorId || aGuardar"
               class="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-xs font-bold">
-              {{ detalhe.entrega?.condutor_id ? 'Trocar' : 'Atribuir' }}
+              {{ detalhe.entrega?.condutor_id && detalhe.entrega.status !== 'falhou' ? 'Trocar' : 'Atribuir' }}
             </button>
           </div>
           <p v-if="erroAcao" class="text-xs text-red-400" role="alert">{{ erroAcao }}</p>
         </div>
       </div>
     </div>
+
+    <ConfirmarEntrega v-if="confirmando && detalhe" :falhou="confirmando === 'falhou'" :encomenda-id="detalhe.encomenda_id"
+      :a-cobrar="detalhe.valor_a_pagar" :is-condutor="isCondutor" :a-guardar="aGuardar"
+      @fechar="confirmando = ''" @confirmar="mudarEntrega(confirmando, $event)" />
   </div>
 </template>
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import ConfirmarEntrega from './ConfirmarEntrega.vue'
 
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 const VISTAS = [{ key: 'dia', label: 'Dia' }, { key: 'semana', label: 'Semana' }, { key: 'mes', label: 'Mês' }, { key: 'ano', label: 'Ano' }]
-const ESTADO_ENTREGA = { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou' }
+const ESTADO_ENTREGA = { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada' }
 
 // datas como 'AAAA-MM-DD' (dia no fuso da plataforma, vindo da API) — contas em UTC para não mudar de dia
 const D = s => new Date(s + 'T00:00:00Z')
@@ -247,6 +252,7 @@ const fimMes = s => { const d = D(inicioMes(s)); d.setUTCMonth(d.getUTCMonth() +
 
 export default {
   name: 'CalendarioEntregas',
+  components: { ConfirmarEntrega },
   props: {
     lojaId:     { type: [String, Number], required: true },
     isCondutor: { type: Boolean, default: false },
@@ -260,7 +266,7 @@ export default {
       vista: window.innerWidth < 640 ? 'dia' : 'mes',
       hoje, ref: hoje, tipo: '', soAgendadas: false,
       itens: [], resumo: {}, truncado: false, carregando: false, erro: '',
-      detalhe: null, condutorId: null, aGuardar: false, erroAcao: '',
+      detalhe: null, condutorId: null, aGuardar: false, erroAcao: '', confirmando: '',
     }
   },
 
@@ -377,9 +383,9 @@ export default {
       }
     },
 
-    async mudarEntrega (estado) {
-      if (estado === 'falhou' && !confirm('Marcar esta entrega como falhada? A encomenda volta a "preparando".')) return
-      await this.acao(() => api.patch(`/app/loja/${this.lojaId}/encomendas/${this.detalhe.encomenda_id}/entrega/atualizar/`, { status: estado }))
+    async mudarEntrega (estado, extra = {}) {
+      this.confirmando = ''
+      await this.acao(() => api.patch(`/app/loja/${this.lojaId}/encomendas/${this.detalhe.encomenda_id}/entrega/atualizar/`, { status: estado, ...extra }))
     },
     async atribuir () {
       const url = `/app/loja/${this.lojaId}/encomendas/${this.detalhe.encomenda_id}/entrega/`
