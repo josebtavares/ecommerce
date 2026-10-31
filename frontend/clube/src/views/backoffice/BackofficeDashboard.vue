@@ -370,7 +370,7 @@ export default {
     entregaCor (status) {
       const map = {
         atribuido: '#3b82f6', a_caminho: '#6366f1',
-        entregue: '#22c55e', falhou: '#ef4444',
+        entregue: '#22c55e', falhou: '#ef4444', cancelada: '#71717a',
       }
       return map[status] || '#71717a'
     },
@@ -378,7 +378,7 @@ export default {
     entregaLabel (status) {
       const map = {
         atribuido: 'Atribuído', a_caminho: 'A caminho',
-        entregue: 'Entregue', falhou: 'Falhou',
+        entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada',
       }
       return map[status] || status
     },

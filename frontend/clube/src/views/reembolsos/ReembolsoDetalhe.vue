@@ -42,7 +42,7 @@
             <span>Reembolsado</span><span class="text-green-500">{{ dinheiro(r.valor_aprovado) }}</span>
           </div>
           <p v-if="r.estado === 'reembolsado' && Number(r.valor_aprovado) > 0" class="text-xs" :class="suave">
-            {{ r.metodo === 'manual' ? (r.recebido_auto ? 'Devolvido em mão pela loja — ficou confirmado sem resposta tua.' : 'Devolvido em mão pela loja — confirmaste que recebeste.')
+            {{ r.metodo === 'manual' ? (r.recebido_auto ? (r.por_transferencia ? 'Devolvido por transferência pela loja' : 'Devolvido em mão pela loja') + ' — ficou confirmado sem resposta tua.' : (r.por_transferencia ? 'Devolvido por transferência pela loja' : 'Devolvido em mão pela loja') + ' — confirmaste que recebeste.')
                : r.metodo === 'abatido' ? 'Ainda não tinhas pago: o valor foi descontado do que pagas na entrega.'
                : 'Devolvido para o meio de pagamento que usaste.' }}
           </p>
@@ -208,8 +208,8 @@ const aviso = computed(() => {
       ? 'Disseste que não recebeste o dinheiro. A equipa da Bendi está a verificar com a loja.'
       : 'A equipa da Bendi está a analisar o pedido. Podes deixar aqui mais informação ou fotos.',
     a_devolver: x.entregue_em
-      ? `A loja diz que te devolveu ${formatarDinheiro(x.valor_aprovado)} em mão. Recebeste? Se não disseres nada até ${dataHora(x.prazo_resposta)}, fica confirmado.`
-      : `Pagaste em dinheiro: a loja vai devolver-te ${formatarDinheiro(x.valor_aprovado)} em mão (até ${dataHora(x.prazo_resposta)}). Combina pelas mensagens.`,
+      ? `A loja diz que te devolveu ${formatarDinheiro(x.valor_aprovado)} ${x.por_transferencia ? 'por transferência' : 'em mão'}. Recebeste? Se não disseres nada até ${dataHora(x.prazo_resposta)}, fica confirmado.`
+      : `${x.por_transferencia ? 'Pagaste por transferência' : 'Pagaste em dinheiro'}: a loja vai devolver-te ${formatarDinheiro(x.valor_aprovado)} ${x.por_transferencia ? 'por transferência' : 'em mão'} (até ${dataHora(x.prazo_resposta)}). Combina pelas mensagens.`,
     por_reembolsar: `O reembolso de ${formatarDinheiro(x.valor_aprovado)} foi aceite, mas houve um atraso a processá-lo. Estamos a tratar disso — não precisas de fazer nada.`,
     aguarda_produto: `Devolve o produto à loja ${x.loja_nome}. Combina a devolução pelas mensagens — o reembolso é feito quando a loja o receber.` +
                      (x.motivo === 'mudei_ideias' ? ' O envio de volta é por tua conta.' : ''),

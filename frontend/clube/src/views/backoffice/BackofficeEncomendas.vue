@@ -74,6 +74,10 @@
             </button>
           </div>
           <div class="flex items-center gap-3 flex-shrink-0">
+            <span v-if="enc.transferencia_por_confirmar" title="Confirma na tua conta se o dinheiro chegou"
+                  class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300">
+              Transferência por confirmar
+            </span>
             <span v-if="porFaturar(enc)" title="Emite a fatura no e-Fatura e regista-a na encomenda"
                   class="hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300">
               Por faturar
@@ -158,8 +162,23 @@
               </div>
             </div>
 
+            <!-- a encomenda só sai depois de a loja ver o dinheiro na conta -->
+            <div v-if="enc.transferencia_por_confirmar" data-teste="transferencia-por-confirmar"
+                 class="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 space-y-2">
+              <p class="text-xs text-amber-200">
+                <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />
+                O cliente escolheu transferência. Vê na conta da loja se chegaram
+                <b>{{ formatPrice(detalhes[enc.id].valor_a_pagar || enc.valor_total) }}</b> com a referência <b>Encomenda {{ enc.id }}</b>.
+                Só depois podes enviar ou concluir a encomenda.
+              </p>
+              <button type="button" @click="confirmarTransferencia(enc)" :disabled="aConfirmar === enc.id"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50 transition">
+                <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Confirmar transferência
+              </button>
+            </div>
+
             <!-- dinheiro na entrega com artigos esgotados descontados -->
-            <div v-if="detalhes[enc.id].valor_a_pagar && Number(detalhes[enc.id].valor_a_pagar) !== Number(detalhes[enc.id].valor_total)"
+            <div v-if="!enc.transferencia_por_confirmar && detalhes[enc.id].valor_a_pagar && Number(detalhes[enc.id].valor_a_pagar) !== Number(detalhes[enc.id].valor_total)"
                  class="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 flex justify-between gap-3">
               <span><font-awesome-icon :icon="['fas', 'money-bill-wave']" class="mr-1" />A cobrar na entrega (sem os esgotados)</span>
               <span class="font-bold">{{ formatPrice(detalhes[enc.id].valor_a_pagar) }}</span>
@@ -184,7 +203,7 @@
               <span class="text-zinc-500">Condutor:</span>
               <span class="text-zinc-300 font-semibold"><font-awesome-icon :icon="['fas', 'car']" class="mr-1 text-zinc-500" />{{ detalhes[enc.id].entrega_condutor }}</span>
               <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', entregaStatusColor(detalhes[enc.id].entrega_status)]">
-                {{ detalhes[enc.id].entrega_status }}
+                {{ ESTADO_ENTREGA[detalhes[enc.id].entrega_status] || detalhes[enc.id].entrega_status }}
               </span>
             </div>
 
@@ -265,12 +284,12 @@
                 <button
                   v-for="s in estadosDisponiveis(enc)" :key="s.value"
                   @click="clicarEstado(enc, s.value)"
-                  :disabled="s.value === enc.status || loadingStatus === enc.id || estadosBloqueados.includes(enc.status)"
+                  :disabled="s.value === enc.status || loadingStatus === enc.id || estadosBloqueados.includes(enc.status) || aguardaTransferencia(enc, s.value)"
                   :class="[
                     'px-3 py-1.5 rounded-lg text-xs font-semibold transition',
                     s.value === enc.status
                       ? 'ring-1 ring-inset ' + s.ringClass + ' opacity-100 cursor-default'
-                      : estadosBloqueados.includes(enc.status)
+                      : estadosBloqueados.includes(enc.status) || aguardaTransferencia(enc, s.value)
                         ? 'opacity-30 cursor-not-allowed bg-zinc-800 text-zinc-500'
                         : s.class + ' cursor-pointer'
                   ]">
@@ -445,6 +464,8 @@ export default {
 
   data () {
     return {
+      aConfirmar: null,
+      ESTADO_ENTREGA: { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada' },
       loading: true,
       encomendas: [],
       totalCount: 0,
@@ -521,8 +542,12 @@ export default {
     },
 
     entregaStatusColor (s) {
-      const map = { atribuido: 'bg-blue-500/15 text-blue-400', a_caminho: 'bg-indigo-500/15 text-indigo-400', entregue: 'bg-green-500/15 text-green-400', falhou: 'bg-red-500/15 text-red-400' }
+      const map = { atribuido: 'bg-blue-500/15 text-blue-400', a_caminho: 'bg-indigo-500/15 text-indigo-400', entregue: 'bg-green-500/15 text-green-400', falhou: 'bg-red-500/15 text-red-400', cancelada: 'bg-zinc-500/15 text-zinc-400' }
       return map[s] || 'bg-zinc-500/15 text-zinc-400'
+    },
+
+    aguardaTransferencia (enc, estado) {
+      return enc.transferencia_por_confirmar && ['enviado', 'concluido'].includes(estado)
     },
 
     estadosDisponiveis (enc) {
@@ -649,7 +674,7 @@ export default {
 
     clicarEstado (enc, novoStatus) {
       if (novoStatus === enc.status) return
-      if (this.estadosBloqueados.includes(enc.status)) return
+      if (this.estadosBloqueados.includes(enc.status) || this.aguardaTransferencia(enc, novoStatus)) return
       const ordemEstados = ['pendente', 'pago', 'preparando', 'enviado', 'concluido']
       const idxActual = ordemEstados.indexOf(enc.status)
       const idxNovo   = ordemEstados.indexOf(novoStatus)
@@ -659,14 +684,37 @@ export default {
       }
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'levantamento') return
       // cancelar uma encomenda paga reembolsa o cliente (utils/devolucoes.py) — confirmar antes
-      if (novoStatus === 'cancelado' && !confirm(['aprovado', 'reembolsado_parcial'].includes(enc.pagamento_status)
-        ? `Cancelar a encomenda #${enc.id}? O cliente é reembolsado automaticamente (${this.formatPrice(enc.valor_total)}) e o stock volta.`
-        : `Cancelar a encomenda #${enc.id}? O stock volta ao inventário.`)) return
+      if (novoStatus === 'cancelado' && !confirm(this.avisoCancelar(enc))) return
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'entrega') {
         this.abrirModalCondutor(enc)
         return
       }
       this.mudarStatus(enc, novoStatus)
+    },
+
+    avisoCancelar (enc) {
+      if (enc.transferencia_por_confirmar) {
+        return `Cancelar a encomenda #${enc.id}? O stock volta ao inventário. Se a transferência chegar, devolve-a ao cliente.`
+      }
+      if (!['aprovado', 'reembolsado_parcial'].includes(enc.pagamento_status)) {
+        return `Cancelar a encomenda #${enc.id}? O stock volta ao inventário.`
+      }
+      return ['dinheiro', 'transferencia'].includes(enc.metodo_pagamento)
+        ? `Cancelar a encomenda #${enc.id}? O stock volta e terás de devolver ${this.formatPrice(enc.valor_total)} ao cliente.`
+        : `Cancelar a encomenda #${enc.id}? O cliente é reembolsado automaticamente (${this.formatPrice(enc.valor_total)}) e o stock volta.`
+    },
+
+    async confirmarTransferencia (enc) {
+      if (!confirm(`Confirmas que a transferência da encomenda #${enc.id} chegou à conta da loja? Isto não se pode desfazer.`)) return
+      this.aConfirmar = enc.id
+      try {
+        const { data } = await api.post(`/app/loja/${this.lojaId}/encomendas/${enc.id}/transferencia/confirmar/`)
+        enc.transferencia_por_confirmar = false
+        enc.pagamento_status = data.pagamento_status
+        this.detalhes = { ...this.detalhes, [enc.id]: data }
+      } catch (e) {
+        alert(e.response?.data?.detail || 'Não foi possível confirmar a transferência.')
+      } finally { this.aConfirmar = null }
     },
 
     async abrirModalCondutor (enc) {
@@ -719,6 +767,7 @@ export default {
         this.modalCondutor = null
       } catch (e) {
         console.error(e)
+        alert(e.response?.data?.detail || 'Não foi possível enviar a encomenda.')
         await this.fetchEncomendas()
         await this.fetchContagens()
         this.modalCondutor = null
@@ -738,6 +787,7 @@ export default {
         if (this.detalhes[enc.id]) this.detalhes[enc.id].status = novoStatus
       } catch (e) {
         console.error(e)
+        alert(e.response?.data?.detail || e.response?.data?.status?.[0] || 'Não foi possível mudar o estado.')
         await this.fetchContagens()
       } finally { this.loadingStatus = null }
     },

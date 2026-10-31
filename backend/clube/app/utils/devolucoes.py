@@ -303,10 +303,12 @@ def cancelar_pelo_cliente(encomenda, utilizador, descricao=''):
 
     if modo == 'direto' and valor <= 0:
         # ainda não pagou (por pagar, ou dinheiro na entrega): cancela-se e pronto
+        transferencia = _pagou_por_transferencia(encomenda)
         _cancelar_encomenda(encomenda)
         notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_cancelada_loja',
                         titulo=f'Encomenda #{encomenda.id} cancelada pelo cliente',
-                        mensagem='Ainda não estava paga. Stock reposto automaticamente.',
+                        mensagem='Ainda não estava paga. Stock reposto automaticamente.'
+                                 + (' Se a transferência chegar à tua conta, devolve-a ao cliente.' if transferencia else ''),
                         link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
         return None
 
@@ -595,15 +597,15 @@ def _fechar_em_mao(r, auto=False):
 
 def loja_dinheiro_entregue(r, utilizador):
     if r.estado != 'a_devolver':
-        raise ErroReembolso('Este pedido não está à espera de dinheiro em mão.')
+        raise ErroReembolso('Este pedido não está à espera de que a loja devolva o dinheiro.')
     if r.entregue_em:
         raise ErroReembolso('Já indicaste que entregaste o dinheiro.')
     r.entregue_em = timezone.now()
     r.prazo_resposta = r.entregue_em + timedelta(days=PRAZO_DINHEIRO_DIAS)
     r.save()
-    mensagem(r, 'loja', f'A loja entregou {formatar(r.valor_aprovado)} em mão ao cliente.', utilizador)
+    mensagem(r, 'loja', f'A loja devolveu {formatar(r.valor_aprovado)} {_como_devolve(r)} ao cliente.', utilizador)
     _avisar_cliente(r, 'A loja devolveu-te o dinheiro',
-                    f'A loja diz que te devolveu {formatar(r.valor_aprovado)} em mão. Se não recebeste, diz-nos até '
+                    f'A loja diz que te devolveu {formatar(r.valor_aprovado)} {_como_devolve(r)}. Se não recebeste, diz-nos até '
                     f'{_hora(r.prazo_resposta)} — depois disso fica confirmado.')
     return r
 
@@ -705,7 +707,7 @@ def _admin_decidir_entrega(r, utilizador, decisao, nota):
         r.prazo_resposta = timezone.now() + timedelta(days=PRAZO_DINHEIRO_DIAS)
         r.save()
         mensagem(r, 'admin', 'A Bendi decidiu que a loja ainda tem de devolver o dinheiro.' + (f' {nota}' if nota else ''), utilizador)
-        _avisar_loja(r, 'Decisão da Bendi', f'Devolve {formatar(r.valor_aprovado)} ao cliente em mão até '
+        _avisar_loja(r, 'Decisão da Bendi', f'Devolve {formatar(r.valor_aprovado)} ao cliente {_como_devolve(r)} até '
                                             f'{_hora(r.prazo_resposta)} e marca "Dinheiro entregue".')
         _avisar_cliente(r, 'Decisão da Bendi', f'A loja tem de te devolver {formatar(r.valor_aprovado)}.')
         return r
@@ -865,7 +867,7 @@ def escalar_sem_resposta(agora=None, lote=200):
             if r.entregue_em:
                 _fechar_em_mao(r, auto=True)
             else:
-                escalar(r, f'A loja não indicou em {PRAZO_DINHEIRO_DIAS} dias que devolveu o dinheiro em mão.')
+                escalar(r, f'A loja não indicou em {PRAZO_DINHEIRO_DIAS} dias que devolveu o dinheiro {_como_devolve(r)}.')
             n += 1
     return n
 
@@ -884,16 +886,25 @@ def _executar_no_gateway(r, valor, metodo, pagamento=None):
     return pagamentos.reembolsar(p.fornecedor if p else '', p.referencia_transacao if p else '', valor, chave=r.id)
 
 
+def _pagou_por_transferencia(encomenda):
+    p = pagamento_de(encomenda)
+    return bool(p and p.metodo_id and p.metodo.tipo == 'transferencia')
+
+
+def _como_devolve(r):
+    return 'por transferência' if _pagou_por_transferencia(r.encomenda) else 'em mão'
+
+
 def _concluir(r, valor):
     enc = r.encomenda
     valor = min(_q(valor), _limite(r))
     p = pagamento_de(enc)
     metodo = ''
     if valor > 0:
-        # em mão só o que foi pago em dinheiro — o cartão/transferência do checkout simulado também passa pelo
-        # endpoint do dinheiro (referência 'dinheiro'), mas o reembolso é para o meio de pagamento usado
+        # dinheiro e transferência foram direitos à loja: é ela que devolve (nenhum fornecedor tem esse dinheiro).
+        # O cartão do checkout simulado também passa pelo endpoint do dinheiro, mas volta ao meio de pagamento usado
         tipo = p.metodo.tipo if p and p.metodo_id else ('dinheiro' if p and p.referencia_transacao == 'dinheiro' else '')
-        metodo = 'manual' if tipo == 'dinheiro' else 'gateway'
+        metodo = 'manual' if tipo in ('dinheiro', 'transferencia') else 'gateway'
         if metodo == 'gateway':
             return _pelo_fornecedor(r, valor, p)
         r.referencia = _executar_no_gateway(r, valor, metodo, p)
@@ -945,6 +956,14 @@ def _acertar(r, valor, metodo, p):
     if valor <= 0:
         mensagem(r, 'sistema', 'Cancelamento aceite — não havia nada pago para reembolsar.')
         _avisar_cliente(r, 'Cancelamento aceite', 'A encomenda foi cancelada. Não foi cobrado nada.')
+        return r
+    if metodo == 'manual' and _pagou_por_transferencia(enc):
+        mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite — pagaste por transferência, a loja devolve-te '
+                               f'da mesma forma. Combina com ela pelas mensagens para que conta.')
+        _avisar_cliente(r, 'Reembolso aceite', f'A loja vai devolver-te {formatar(valor)} por transferência. Quando '
+                                               f'receberes, confirma no pedido.')
+        _avisar_loja(r, 'Devolve a transferência', f'Devolve {formatar(valor)} ao cliente até {_hora(r.prazo_resposta)} '
+                                                   f'e marca "Transferência feita" no pedido.')
         return r
     if metodo == 'manual':
         mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite — pagaste em dinheiro, a loja devolve-te em mão.')

@@ -30,6 +30,7 @@ from django.utils import timezone
 
 log = logging.getLogger(__name__)
 
+from .encomendas import libertar_entregas
 from .moderacao import MOTIVO_ELIMINADO
 
 DIAS_PARA_ELIMINAR = 30
@@ -184,6 +185,8 @@ def anonimizar(alvo, por=None, motivo=''):
         AdesaoVinti4.objects.filter(loja__dono=alvo).update(chave_cifrada='', estado='suspensa',
                                                             motivo='Conta do dono eliminada.')
         UtilizadorLoja.objects.filter(utilizador=alvo).update(ativo=False)
+        for condutor in Condutor.objects.filter(utilizador=alvo, ativo=True):
+            libertar_entregas(condutor, 'O condutor eliminou a conta.')
         Condutor.objects.filter(utilizador=alvo).update(ativo=False)
 
         user.username = f'eliminado-{alvo.pk}'

@@ -6,7 +6,7 @@ export const ESTADOS = {
   proposta:        { label: 'A loja propôs outro valor', cor: 'sky'    },
   em_disputa:      { label: 'Em análise pela Bendi',    cor: 'purple' },
   aguarda_produto: { label: 'A aguardar o produto',     cor: 'indigo' },
-  a_devolver:      { label: 'A devolver em mão',        cor: 'amber'  },
+  a_devolver:      { label: 'A devolver pela loja',        cor: 'amber'  },
   por_reembolsar:  { label: 'Reembolso a processar',    cor: 'amber'  },   // aceite; o pagamento online ainda não devolveu
   reembolsado:     { label: 'Reembolsado',              cor: 'green'  },
   recusado:        { label: 'Recusado',                 cor: 'red'    },

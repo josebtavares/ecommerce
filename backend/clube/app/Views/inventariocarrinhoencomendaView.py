@@ -29,7 +29,8 @@ from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
 )
 from ..utils.pagination import paginar
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
-from ..utils.encomendas import repor_stock, cancelar_anteriores_por_pagar, cancelar_entrega
+from ..utils.encomendas import (repor_stock, cancelar_anteriores_por_pagar, cancelar_entrega, fechar_entrega,
+                                aprovar_dinheiro, confirmar_transferencia, transferencia_por_confirmar)
 from ..utils import conjuntos as conj
 from ..utils import horarios
 from ..utils import devolucoes
@@ -749,6 +750,9 @@ def encomenda_atualizar_status(request, loja_id, id):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
  
     novo_status = serializer.validated_data.get('status')
+    if novo_status in ('enviado', 'concluido') and transferencia_por_confirmar(encomenda):
+        return Response({'detail': 'Confirma primeiro que a transferência chegou: a encomenda não sai sem estar paga.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     serializer.save()
  
     # cancelado → repõe stock de todos os itens (na variante, se a compra foi de uma)
@@ -761,20 +765,11 @@ def encomenda_atualizar_status(request, loja_id, id):
         if novo_status == 'concluido':
             encomenda.data_conclusao = timezone.now()
             encomenda.save(update_fields=['data_conclusao'])
+            fechar_entrega(encomenda)
         devolucoes.ao_avancar_encomenda(encomenda, request.user.utilizador)
  
     # concluido + dinheiro → aprova pagamento e regista comissao
-    if novo_status == 'concluido':
-        try:
-            pagamento = encomenda.pagamento
-            if pagamento.referencia_transacao == 'dinheiro' and pagamento.status == 'pendente':
-                from django.utils.timezone import now
-                pagamento.status = 'aprovado'
-                pagamento.save(update_fields=['status'])
-                from ..models import Comissao
-                Comissao.registar(encomenda)
-        except Exception:
-            pass
+    aprovado_agora = novo_status == 'concluido' and aprovar_dinheiro(encomenda)
     MSGS_COMPRADOR = {
         'pago':       ('Encomenda confirmada',   'O pagamento foi confirmado. A loja está a preparar o teu pedido.', 'encomenda_paga'),
         'preparando': ('Encomenda em preparação','A tua encomenda está a ser preparada.',                            'encomenda_atualizada'),
@@ -804,23 +799,20 @@ def encomenda_atualizar_status(request, loja_id, id):
             roles=['dono', 'gestor'],
             tipo='encomenda_concluida_loja',
             titulo=f'Encomenda #{encomenda.id} concluída ✓',
-            mensagem=(f'Receita: {dinheiro(encomenda.valor_total)} · Comissão ({_perc}%): {dinheiro(_com)} · Líquido: {dinheiro(_liq)}.' if _com
-                      else f'Receita: {dinheiro(encomenda.valor_total)} · Sem comissão (subscrição).'),
+            mensagem=(f'Receita: {dinheiro(encomenda.valor_devido)} · Comissão ({_perc}%): {dinheiro(_com)} · Líquido: {dinheiro(_liq)}.' if _com
+                      else f'Receita: {dinheiro(encomenda.valor_devido)} · Sem comissão (subscrição).'),
             link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
         )
  
         # notifica admins se pagamento era dinheiro (comissão registada agora)
-        try:
-            if _com and encomenda.pagamento.referencia_transacao == 'dinheiro':
-                notificar_admins(
-                    tipo='comissao_recebida',
-                    titulo=f'Comissão registada (dinheiro) — {encomenda.loja.nome}',
-                    mensagem=f'Encomenda #{encomenda.id} concluída · Comissão: {dinheiro(_com)}.',
-                    loja=encomenda.loja,
-                    link='/admin',
-                )
-        except Exception:
-            pass
+        if _com and aprovado_agora:
+            notificar_admins(
+                tipo='comissao_recebida',
+                titulo=f'Comissão registada (dinheiro) — {encomenda.loja.nome}',
+                mensagem=f'Encomenda #{encomenda.id} concluída · Comissão: {dinheiro(_com)}.',
+                loja=encomenda.loja,
+                link='/admin',
+            )
  
     # ── Notifica loja quando cancelado ───────────────────────
     if novo_status == 'cancelado':
@@ -837,6 +829,45 @@ def encomenda_atualizar_status(request, loja_id, id):
         EncomendaSerializer(encomenda, context={'request': request}).data
     )
     
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def encomenda_confirmar_transferencia(request, loja_id, id):
+    """
+    POST /app/loja/<loja_id>/encomendas/<id>/transferencia/confirmar/
+    A loja viu o dinheiro na conta: fica paga, com comissão, e a encomenda já pode sair.
+    """
+    loja = get_object_or_404(Loja, id=loja_id)
+    _, erro = _exige_permissao(request, loja, 'gerir_encomendas')
+    if erro:
+        return erro
+
+    encomenda = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=id, loja=loja)
+    if encomenda.status not in ('pago', 'preparando') or not transferencia_por_confirmar(encomenda):
+        return Response({'detail': 'Esta encomenda não tem uma transferência por confirmar.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    confirmar_transferencia(encomenda)
+    notificar(
+        utilizador=encomenda.comprador,
+        tipo='encomenda_paga',
+        titulo=f'Transferência recebida #{encomenda.id}',
+        mensagem=f'{loja.nome} confirmou a tua transferência. A encomenda segue o seu caminho.',
+        loja=loja,
+        link='/perfil',
+    )
+    comissao = getattr(encomenda, 'comissao', None)
+    if comissao and comissao.valor_comissao:
+        notificar_admins(
+            tipo='comissao_recebida',
+            titulo=f'Comissão registada (transferência) — {loja.nome}',
+            mensagem=f'Encomenda #{encomenda.id} · Comissão: {dinheiro(comissao.valor_comissao)}.',
+            loja=loja,
+            link='/admin',
+        )
+    return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def carrinho_list_utilizador(request):

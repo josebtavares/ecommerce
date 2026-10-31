@@ -26,6 +26,10 @@ from ..Serializers.EntregaAvaliacaoSerializer import (
 from ..utils.pagination import paginar
 from ..utils.dinheiro import formatar as dinheiro
 from ..utils import devolucoes
+from ..utils.encomendas import aprovar_dinheiro, libertar_entregas, transferencia_por_confirmar
+
+
+MSG_TRANSFERENCIA = 'Confirma primeiro que a transferência chegou: a encomenda não sai sem estar paga.'
 
 
 # ══════════════════════════════════════════════════════════════
@@ -131,13 +135,13 @@ def opcao_entrega_gerir(request, loja_id, opcao_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def condutor_list(request, loja_id):
-    """GET /app/loja/<loja_id>/entrega/condutores/"""
+    """GET /app/loja/<loja_id>/entrega/condutores/ — traz contactos: só para quem atribui entregas"""
     loja = get_object_or_404(Loja, id=loja_id)
-    _, erro = _exige_permissao(request, loja, 'gerir_entregas')
+    _, erro = _exige_permissao(request, loja, 'atribuir_condutor')
     if erro:
         return erro
 
-    condutores = Condutor.objects.filter(loja=loja, ativo=True).select_related('utilizador__user')
+    condutores = Condutor.objects.filter(loja=loja, ativo=True, utilizador__status='ativo').select_related('utilizador__user')
     serializer = CondutorSerializer(condutores, many=True, context={'request': request})
     return Response(serializer.data)
 
@@ -148,9 +152,10 @@ def condutor_adicionar(request, loja_id):
     """
     POST /app/loja/<loja_id>/entrega/condutores/adicionar/
     Body: { utilizador_id, tipo_veiculo }
+    Quem entra na equipa é decidido no Staff: um condutor fala com clientes pela caixa da loja.
     """
     loja = get_object_or_404(Loja, id=loja_id)
-    _, erro = _exige_permissao(request, loja, 'gerir_entregas')
+    _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
         return erro
 
@@ -158,21 +163,33 @@ def condutor_adicionar(request, loja_id):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    condutor = serializer.save(loja=loja)
+    utilizador_id = serializer.validated_data['utilizador_id']
+    if not UtilizadorLoja.objects.filter(loja=loja, utilizador_id=utilizador_id, ativo=True).exists():
+        return Response({'detail': 'Adiciona primeiro esta pessoa ao staff da loja.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    condutor = Condutor.objects.filter(loja=loja, utilizador_id=utilizador_id).first()
+    if condutor:                # já foi condutor aqui: volta (loja + utilizador são únicos)
+        condutor.ativo = True
+        condutor.tipo_veiculo = serializer.validated_data.get('tipo_veiculo', condutor.tipo_veiculo)
+        condutor.save(update_fields=['ativo', 'tipo_veiculo'])
+    else:
+        condutor = serializer.save(loja=loja)
     return Response(CondutorSerializer(condutor, context={'request': request}).data,
                     status=status.HTTP_201_CREATED)
 
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def condutor_remover(request, loja_id, condutor_id):
     """DELETE /app/loja/<loja_id>/entrega/condutores/<condutor_id>/remover/"""
     loja = get_object_or_404(Loja, id=loja_id)
-    _, erro = _exige_permissao(request, loja, 'gerir_entregas')
+    _, erro = _exige_permissao(request, loja, 'gerir_staff')
     if erro:
         return erro
 
     condutor = get_object_or_404(Condutor, id=condutor_id, loja=loja)
+    libertar_entregas(condutor, 'O condutor foi removido.')
     condutor.ativo = False
     condutor.save(update_fields=['ativo'])
     return Response({'detail': 'Condutor removido.'})
@@ -206,6 +223,11 @@ def entrega_criar(request, loja_id, encomenda_id):
             {'detail': f'Não é possível criar/reatribuir entrega para encomenda: {encomenda.status}'},
             status=status.HTTP_400_BAD_REQUEST
         )
+    if encomenda.tipo_entrega != 'entrega':
+        return Response({'detail': 'Esta encomenda é para levantar na loja: não leva condutor.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if transferencia_por_confirmar(encomenda):
+        return Response({'detail': MSG_TRANSFERENCIA}, status=status.HTTP_400_BAD_REQUEST)
  
     condutor = None
     if request.data.get('condutor_id'):
@@ -278,7 +300,7 @@ def entrega_criar(request, loja_id, encomenda_id):
             titulo=f'Encomenda enviada #{encomenda.id}',
             # agendada para mais tarde: não dizer "a caminho" dias antes
             mensagem=(f'A tua encomenda já tem condutor e será entregue {horarios.texto_agendada(encomenda.agendada_para)}.'
-                      if futura else 'A tua encomenda está a caminho!'),
+                      if futura else 'A tua encomenda já tem condutor. Avisamos-te quando sair para entrega.'),
             loja=loja,
             link='/perfil',
         )
@@ -321,7 +343,7 @@ def _entrega_do_membro(membro, entrega):
     """O condutor só mexe nas entregas atribuídas a ele; dono/gestor em todas."""
     if membro.role != 'condutor':
         return True
-    return bool(entrega.condutor_id and entrega.condutor.utilizador_id == membro.utilizador_id)
+    return bool(entrega.condutor_id and entrega.condutor.ativo and entrega.condutor.utilizador_id == membro.utilizador_id)
 
 
 @api_view(['PATCH'])
@@ -357,14 +379,34 @@ def entrega_atualizar(request, loja_id, encomenda_id):
         if not membro.pode('atribuir_condutor'):
             return Response({'detail': 'Sem permissão: atribuir_condutor'}, status=status.HTTP_403_FORBIDDEN)
         condutor = get_object_or_404(Condutor, id=request.data['condutor_id'], loja=loja, ativo=True)
+        falhou = entrega.status == 'falhou'
+        if condutor.id == entrega.condutor_id and not falhou:
+            return Response(EntregaSerializer(entrega, context={'request': request}).data)
+        if falhou and transferencia_por_confirmar(encomenda):
+            return Response({'detail': MSG_TRANSFERENCIA}, status=status.HTTP_400_BAD_REQUEST)
+        anterior = entrega.condutor
         entrega.condutor = condutor
-        if entrega.status == 'falhou':
+        if falhou:
             entrega.status = 'atribuido'
             entrega.motivo_falha = entrega.nota_falha = ''
             encomenda.status = 'enviado'
             encomenda.save(update_fields=['status'])
+            # pedido de cancelamento por responder: enviar conta como recusa (utils/devolucoes.py)
+            devolucoes.ao_avancar_encomenda(encomenda, request.user.utilizador)
+        elif entrega.status == 'a_caminho':
+            entrega.status = 'atribuido'    # o novo condutor ainda não saiu
             
         entrega.save(update_fields=['condutor', 'status', 'motivo_falha', 'nota_falha'])
+
+        if anterior and not falhou:         # se já estava a caminho, tem de saber que não vai
+            notificar(
+                utilizador=anterior.utilizador,
+                tipo='entrega_cancelada',
+                titulo=f'Entrega passada a outro condutor — Encomenda #{encomenda.id}',
+                mensagem='Já não precisas de a entregar. Se já a levantaste, devolve-a à loja.',
+                loja=loja,
+                link=f'/loja/{loja.id}/backoffice/entregas',
+            )
  
         # notifica novo condutor
         notificar(
@@ -385,6 +427,9 @@ def entrega_atualizar(request, loja_id, encomenda_id):
         motivo = request.data.get('motivo_falha') or ''
         if novo_status == 'falhou' and motivo not in dict(Entrega.MOTIVOS_FALHA):
             return Response({'detail': 'Indica o motivo.'}, status=status.HTTP_400_BAD_REQUEST)
+        if novo_status == 'entregue' and transferencia_por_confirmar(encomenda):
+            return Response({'detail': 'A transferência ainda não foi confirmada pela loja.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         anterior = entrega.status
         serializer = EntregaSerializer(entrega, data={'status': novo_status}, partial=True)
         if not serializer.is_valid():
@@ -422,15 +467,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                     link='/perfil',
                 )
             # pagamento dinheiro pendente → aprova + regista comissão
-            try:
-                pagamento = encomenda.pagamento
-                if pagamento.referencia_transacao == 'dinheiro' and pagamento.status == 'pendente':
-                    pagamento.status = 'aprovado'
-                    pagamento.save(update_fields=['status'])
-                    from ..models import Comissao
-                    Comissao.registar(encomenda)
-            except Exception:
-                pass
+            aprovado_agora = aprovar_dinheiro(encomenda)
  
             _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
             _com  = (encomenda.valor_devido * _perc / 100).quantize(Decimal('0.01'))
@@ -440,20 +477,17 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 roles=['dono', 'gestor'],
                 tipo='encomenda_concluida_loja',
                 titulo=f'Encomenda #{encomenda.id} concluída ✓',
-                mensagem=f'Receita: {dinheiro(encomenda.valor_total)} · Líquido: {dinheiro(_liq)}.',
+                mensagem=f'Receita: {dinheiro(encomenda.valor_devido)} · Líquido: {dinheiro(_liq)}.',
                 link=f'/loja/{loja.id}/backoffice',
             )
-            try:
-                if _com and encomenda.pagamento.referencia_transacao == 'dinheiro':
-                    notificar_admins(
-                        tipo='comissao_recebida',
-                        titulo=f'Comissão registada — {loja.nome}',
-                        mensagem=f'Encomenda #{encomenda.id} · Comissão: {dinheiro(_com)}.',
-                        loja=loja,
-                        link='/admin',
-                    )
-            except Exception:
-                pass
+            if _com and aprovado_agora:
+                notificar_admins(
+                    tipo='comissao_recebida',
+                    titulo=f'Comissão registada — {loja.nome}',
+                    mensagem=f'Encomenda #{encomenda.id} · Comissão: {dinheiro(_com)}.',
+                    loja=loja,
+                    link='/admin',
+                )
  
         elif novo_status == 'falhou':
             # entrega falhou → encomenda volta a "preparando" para reatribuição
@@ -689,7 +723,7 @@ def entrega_list_loja(request, loja_id):
     # condutor só vê as suas (sem ficha de condutor → nenhuma; antes via todas as da loja)
     membro = UtilizadorLoja.obter_membro(loja, request.user.utilizador)
     if membro and membro.role == 'condutor':
-        condutor = Condutor.objects.filter(loja=loja, utilizador=request.user.utilizador).first()
+        condutor = Condutor.objects.filter(loja=loja, utilizador=request.user.utilizador, ativo=True).first()
         qs = qs.filter(condutor=condutor) if condutor else qs.none()
 
     response, erro = paginar(request, qs, EntregaSerializer, limit_default=10)
