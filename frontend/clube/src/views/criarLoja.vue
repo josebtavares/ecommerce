@@ -502,6 +502,7 @@ import { DEMO_ID } from '@/utils/demoLoja'
 import { temaPainel } from '@/utils/tema'
 import BotaoTema from '@/components/BotaoTema.vue'
 import AvisoConfirmarEmail from '@/components/auth/AvisoConfirmarEmail.vue'
+import { EVENTO, utilizadorGuardado } from '@/services/confirmarEmail'
 
 const TAG_STYLES = {
   'Versátil':  { background:'rgba(220,38,38,0.12)',  color:'#f87171', border:'1px solid rgba(220,38,38,0.25)'   },
@@ -648,11 +649,17 @@ export default {
     },
   },
 
+  mounted () { window.addEventListener(EVENTO, this.lerUtilizador) },
+  beforeUnmount () { window.removeEventListener(EVENTO, this.lerUtilizador) },
+
   async created () {
     await this.fetchCategorias()
   },
 
   methods: {
+    // a conta pode ter sido verificada depois do login (App.vue lê-a do servidor)
+    lerUtilizador () { this.user = utilizadorGuardado() || {} },
+
     iconeCategoria,
     tagStyle (tag) {
       return TAG_STYLES[tag] || { background:'rgba(255,255,255,0.06)', color:'#a1a1aa', border:'1px solid rgba(255,255,255,0.1)' }

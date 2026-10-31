@@ -28,10 +28,12 @@ export function porConfirmar (erro) {
   return true
 }
 
-// estado actual no servidor (o link pode ter sido aberto noutro browser)
+// a conta como está no servidor: o `user` guardado é uma cópia do login e o admin pode ter mudado
+// a conta entretanto (verificar, dar acesso…) ou o link do email ter sido aberto noutro browser
 export async function atualizarDoServidor () {
   const { data } = await api.get('/app/utilizador/me/')
-  atualizarGuardado({ email: data.email, email_confirmado: data.email_confirmado })
+  // outra conta: saiu e entrou entretanto, ou o admin a ver um backoffice em modo de leitura
+  if (data.id === utilizadorGuardado()?.id) atualizarGuardado(data)
   return data.email_confirmado
 }
 

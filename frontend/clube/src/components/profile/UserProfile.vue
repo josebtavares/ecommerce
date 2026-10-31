@@ -46,7 +46,7 @@
             <div>
               <div class="flex items-center gap-2">
                 <p class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ data.username }}</p>
-                <span v-if="data.verificado" title="Verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold"><font-awesome-icon :icon="['fas', 'circle-check']" /></span>
+                <span v-if="verificado" title="Verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold"><font-awesome-icon :icon="['fas', 'circle-check']" /></span>
               </div>
               <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ data.email }}</p>
             </div>
@@ -499,7 +499,8 @@
 
 <script setup>
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { ref, watch, onMounted, computed } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue'
+import { EVENTO, utilizadorGuardado } from '@/services/confirmarEmail'
 import { useRouter, useRoute } from 'vue-router'
 import api from '@/services/api'
 import { DEFAULT_UTILIZADOR } from '@/services/media'
@@ -526,6 +527,13 @@ const props = defineProps({
   isDark: { type: Boolean, default: true },       // ← prop nova, default true = comportamento original
 })
 const emit = defineEmits(['log_out'])
+
+// o admin pode verificar a conta depois do login: segue o que o App.vue lê do servidor
+const verificado = ref(!!props.data.verificado)
+const lerVerificado = () => { verificado.value = !!utilizadorGuardado()?.verificado }
+watch(() => props.data.verificado, v => { verificado.value = !!v })
+onMounted(() => window.addEventListener(EVENTO, lerVerificado))
+onBeforeUnmount(() => window.removeEventListener(EVENTO, lerVerificado))
 
 const router     = useRouter()
 const route      = useRoute()

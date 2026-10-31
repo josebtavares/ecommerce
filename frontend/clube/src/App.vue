@@ -13,8 +13,10 @@ import PedirLogin from '@/components/auth/PedirLogin.vue'
 import ChatFlutuante from '@/components/chat/ChatFlutuante.vue'
 import AvisoConfirmarEmail from '@/components/auth/AvisoConfirmarEmail.vue'
 import { EVENTO, emailPorConfirmar, atualizarDoServidor } from '@/services/confirmarEmail'
+import { estaAutenticado } from '@/services/sessao'
 
 const SEM_AVISO = /^\/(pos|login|register|confirmar_email|recuperar_senha|auth)(\/|$)/i
+const POS = /^\/pos(\/|$)/i      // o POS tem a sua sessão (pos_user)
 
 export default {
   name: 'App',
@@ -25,7 +27,7 @@ export default {
   },
 
   data () {
-    return { porConfirmar: emailPorConfirmar(), fechado: false, verificado: false }
+    return { porConfirmar: emailPorConfirmar(), fechado: false, contaLida: false }
   },
 
   computed: {
@@ -55,9 +57,9 @@ export default {
       const antes = this.porConfirmar
       this.porConfirmar = emailPorConfirmar()
       if (e?.type === EVENTO && this.porConfirmar && !antes) this.fechado = false   // voltou a ser preciso (ex.: no checkout)
-      // uma vez por visita confirma no servidor: o link pode ter sido aberto noutro browser
-      if (this.porConfirmar && !this.verificado) {
-        this.verificado = true
+      // uma vez por visita lê a conta no servidor (ver services/confirmarEmail.js)
+      if (estaAutenticado() && !this.contaLida && !POS.test(window.location.pathname)) {
+        this.contaLida = true
         atualizarDoServidor().catch(() => {})
       }
     },
