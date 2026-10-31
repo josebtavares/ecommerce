@@ -88,6 +88,7 @@ export default {
 
         // ── 2. Fonte de verdade: API ──────────────────────────────────────────
         const { data } = await api.get(`/app/loja/${lojaId}/`)
+        document.title = `${data.nome} — Bende`
         templateId    = data.template_id    || templateId
         corPrimaria   = data.cor_primaria   || corPrimaria
         corSecundaria = data.cor_secundaria || corSecundaria

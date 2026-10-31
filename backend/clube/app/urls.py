@@ -7,6 +7,7 @@ urlpatterns = [
     path('',include('app.Urls.utilizadorUrl')),
     path('', include('app.Urls.produtoUrl')),
     path('', include('app.Urls.lojaUrl')),
+    path('', include('app.Urls.seoUrl')),
     path('', include('app.Urls.inventariocarrinhoencomendaUrl')),
     path('', include('app.Urls.pagamentoUrl')),
     # galeria (projeto antigo): sem uso no site e as rotas aceitavam criar/editar sem login e

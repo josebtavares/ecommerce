@@ -1,0 +1,18 @@
+User-agent: *
+Disallow: /admin
+Disallow: /checkout
+Disallow: /encomenda
+Disallow: /loja/criar
+Disallow: /loja/demo
+Disallow: /loja/*/backoffice
+Disallow: /perfil
+Disallow: /mensagens
+Disallow: /minhas-marcacoes
+Disallow: /completar-perfil
+Disallow: /pos/
+Disallow: /auth/
+Disallow: /pagamento/
+Disallow: /recuperar_senha
+Disallow: /confirmar_email
+
+Sitemap: https://bende.store/sitemap.xml

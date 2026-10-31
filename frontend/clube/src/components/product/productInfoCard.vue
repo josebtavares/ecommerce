@@ -145,6 +145,7 @@
               <h2 class="flex-1 text-2xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ produto.nome }}</h2>
               <BotaoFavorito tipo="produto" :id="produto.id" variante="simples" :tamanho="38" :isDark="isDark"
                              :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'" />
+              <BotaoPartilhar v-if="linkProduto" :caminho="linkProduto" :titulo="produto.nome" :isDark="isDark" />
             </div>
             <p class="text-2xl font-bold text-red-500 mb-4">
               <span v-if="precoDesde" class="text-sm font-semibold opacity-70 mr-1">desde</span>{{ formatPrice(precoUnitario) }}
@@ -378,6 +379,7 @@ import { toast } from 'vue3-toastify'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
 import { contactarLoja } from '@/services/chat'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
+import BotaoPartilhar from './BotaoPartilhar.vue'
 import EscolhasConjunto, { extrasDe, faltaEscolher, temEscolhas } from '@/components/conjuntos/EscolhasConjunto.vue'
 import {
   usaVariantes, atributosVariante, estadoOpcao, escolherOpcao, varianteEscolhida,
@@ -386,7 +388,7 @@ import {
 
 export default {
   name: 'ProductInfoCard',
-  components: { BotaoFavorito, EscolhasConjunto },
+  components: { BotaoFavorito, BotaoPartilhar, EscolhasConjunto },
 
   props: {
     produto: { type: Object,  default: null },
@@ -567,6 +569,12 @@ export default {
       return this.poucasUnidades ? 'bg-amber-500' : 'bg-green-500'
     },
 
+    // /loja/<id>?produto=<id> abre a loja com este produto (useLojaData); os ids fictícios da pré-visualização não têm link
+    linkProduto () {
+      const lojaId = this.produto?.loja?.id ?? this.loja?.id
+      return /^\d+$/.test(String(lojaId ?? '')) && /^\d+$/.test(String(this.produto?.id ?? ''))
+        ? `/loja/${lojaId}?produto=${this.produto.id}` : ''
+    },
     precoUnitario () {
       // conjunto: preço base + extras das opções escolhidas
       if (this.eConjunto) return Number(this.produto.preco) + extrasDe(this.produto.grupos, this.escolhas)

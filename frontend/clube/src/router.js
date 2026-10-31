@@ -231,4 +231,9 @@ router.beforeEach((to, from, next) => {
     }
 });
 
+// título do separador: a página da loja escreve o seu (lojaPublica.vue); ao entrar no site fica o que veio do servidor
+router.afterEach((to, from) => {
+    if (from.name && to.name !== 'Loja') document.title = 'Bende';
+});
+
 export default router;
