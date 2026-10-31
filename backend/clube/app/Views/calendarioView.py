@@ -18,7 +18,7 @@ from rest_framework.response import Response
 
 from ..models import Loja, Encomenda, Condutor
 from ..utils import horarios
-from ..utils.encomendas import valor_a_cobrar
+from ..utils.encomendas import transferencia_por_confirmar, valor_a_cobrar
 from .lojaView import _exige_permissao
 
 MAX_DIAS = 400
@@ -36,7 +36,7 @@ def encomendas_visiveis(loja, membro):
     """Encomendas que este membro pode ver no calendário."""
     qs = Encomenda.objects.filter(loja=loja).exclude(status='cancelado')
     if membro.role == 'condutor':
-        condutor = Condutor.objects.filter(loja=loja, utilizador=membro.utilizador).first()
+        condutor = Condutor.objects.filter(loja=loja, utilizador=membro.utilizador, ativo=True).first()
         if not condutor:
             return qs.none()
         qs = qs.filter(entrega__condutor=condutor)      # o que lhe está atribuído (como na lista)
@@ -65,6 +65,7 @@ def _item(e, tz):
         'status':         e.status,
         'valor_total':    str(e.valor_total),
         'valor_a_pagar':  _a_pagar(e),        # dinheiro na entrega: o que o condutor cobra (sem os esgotados)
+        'transferencia_por_confirmar': transferencia_por_confirmar(e),
         'cliente':        e.comprador.nome or e.comprador.user.username,
         'telefone':       e.comprador.telefone or '',
         'morada':         e.morada_entrega,

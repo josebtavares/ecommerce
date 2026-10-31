@@ -178,8 +178,9 @@
       </div>
 
       <!-- Content -->
+      <!-- só depois de saber o papel: os módulos pedem logo os dados e um condutor levava 403 -->
       <!-- pb-24: espaço para o balão do chat (canto inferior direito) não tapar o fim do conteúdo -->
-      <main v-else class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
+      <main v-else-if="loja" class="flex-1 overflow-auto p-4 pb-24 lg:p-6 lg:pb-24">
         <BackofficeDashboard     v-if="activeSection === 'dashboard'"      :loja-id="lojaId" />
         <ModuloRelatorios        v-else-if="activeSection === 'relatorios'"    :key="'rel' + lojaId"
                                  :base="`/app/loja/${lojaId}/relatorios`" :prefixo="`loja-${lojaId}`" />

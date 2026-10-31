@@ -456,7 +456,7 @@ export default {
   },
 
   async created () {
-    await Promise.all([this.fetchEntregas(), this.fetchCondutores()])
+    await Promise.all([this.fetchEntregas(), this.isCondutor ? null : this.fetchCondutores()])
     this.atualizador = setInterval(this.atualizarLista, ATUALIZAR_MS)
   },
 
@@ -487,7 +487,7 @@ export default {
 
     porEntregar (e) { return ['atribuido', 'a_caminho'].includes(e.status) },
     // o condutor só age nas que tem por entregar; a loja também pode reatribuir uma que falhou
-    temAcoes (e) { return this.porEntregar(e) || (!this.isCondutor && e.status === 'falhou') },
+    temAcoes (e) { return this.porEntregar(e) || (!this.isCondutor && e.status === 'falhou' && e.encomenda_status === 'preparando') },
 
     linkMapa (e) {
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.morada_entrega)}`

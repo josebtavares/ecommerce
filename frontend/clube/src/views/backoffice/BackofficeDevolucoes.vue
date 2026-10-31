@@ -61,7 +61,7 @@ import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 const GRUPOS = [
   { key: 'novos',      label: 'Por responder',        ajuda: 'Pedidos à espera da tua resposta. Sem resposta em 48 horas, a equipa da Bendi decide.' },
   { key: 'produto',    label: 'A aguardar o produto', ajuda: 'Aceitaste e o cliente vai devolver o produto. Confirma quando o receberes para o reembolsar.' },
-  { key: 'dinheiro',   label: 'Devolver em mão',      ajuda: 'Clientes que pagaram em dinheiro: devolve o valor em mão e marca "Dinheiro entregue". O cliente confirma (ou fica confirmado em 7 dias).' },
+  { key: 'dinheiro',   label: 'Devolver ao cliente',      ajuda: 'Clientes que pagaram em dinheiro ou por transferência: devolve o valor em mão e marca "Dinheiro entregue". O cliente confirma (ou fica confirmado em 7 dias).' },
   { key: 'por_concluir', label: 'Por concluir',       ajuda: 'Reembolsos aceites que o pagamento online recusou devolver. Tentamos de novo sozinhos — ou abre o pedido e usa "Tentar de novo".' },
   { key: 'analise',    label: 'Em análise',           ajuda: 'À espera do cliente (propostas) ou da decisão da Bendi.' },
   { key: 'concluidos', label: 'Concluídos',           ajuda: 'Reembolsados, recusados ou desistências.' },

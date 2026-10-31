@@ -220,6 +220,9 @@
               {{ detalhe.entrega?.condutor_id && detalhe.entrega.status !== 'falhou' ? 'Trocar' : 'Atribuir' }}
             </button>
           </div>
+          <p v-if="!isCondutor && detalhe.transferencia_por_confirmar" class="text-xs text-amber-300">
+            Transferência por confirmar: confirma-a em Encomendas antes de atribuir o condutor.
+          </p>
           <p v-if="erroAcao" class="text-xs text-red-400" role="alert">{{ erroAcao }}</p>
         </div>
       </div>
@@ -346,7 +349,7 @@ export default {
       return 'bg-red-500/80 text-white hover:bg-red-500'
     },
     podeAtribuir (e) {
-      return e.tipo_entrega === 'entrega' && ['pago', 'preparando', 'enviado'].includes(e.status) &&
+      return e.tipo_entrega === 'entrega' && !e.transferencia_por_confirmar && ['pago', 'preparando', 'enviado'].includes(e.status) &&
         (!e.entrega || ['atribuido', 'a_caminho', 'falhou'].includes(e.entrega.status))
     },
 
