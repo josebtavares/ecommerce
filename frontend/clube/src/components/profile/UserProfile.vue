@@ -45,10 +45,10 @@
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <p class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ data.username }}</p>
-                <span v-if="verificado" title="Verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold"><font-awesome-icon :icon="['fas', 'circle-check']" /></span>
+                <p class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ conta.username }}</p>
+                <span v-if="conta.verificado" title="Verificado" class="px-1.5 py-0.5 bg-green-500/15 text-green-400 text-[10px] rounded font-bold"><font-awesome-icon :icon="['fas', 'circle-check']" /></span>
               </div>
-              <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ data.email }}</p>
+              <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ conta.email }}</p>
             </div>
           </div>
           <button @click="toggle"
@@ -196,7 +196,7 @@
                     placeholder="A tua password" data-teste="apagar-password"
                     class="w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-red-500 transition"
                     :class="isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300 text-zinc-900'" />
-                  <input v-else v-model="apagar.password" type="text" :placeholder="`Escreve o teu username (${data.username})`"
+                  <input v-else v-model="apagar.password" type="text" :placeholder="`Escreve o teu username (${conta.username})`"
                     data-teste="apagar-password"
                     class="w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-red-500 transition"
                     :class="isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300 text-zinc-900'" />
@@ -476,7 +476,7 @@
               <font-awesome-icon :icon="['fas', 'headset']" /> Suporte
             </button>
           </div>
-          <button v-if="data.is_staff" @click="$router.push('/admin'); isOpen = false"
+          <button v-if="conta.is_staff" @click="$router.push('/admin'); isOpen = false"
             class="w-full py-2 text-xs text-purple-400 hover:text-purple-300 transition">
             <font-awesome-icon :icon="['fas', 'gear']" class="mr-1" /> Painel de Admin
           </button>
@@ -528,12 +528,18 @@ const props = defineProps({
 })
 const emit = defineEmits(['log_out'])
 
-// o admin pode verificar a conta depois do login: segue o que o App.vue lê do servidor
-const verificado = ref(!!props.data.verificado)
-const lerVerificado = () => { verificado.value = !!utilizadorGuardado()?.verificado }
-watch(() => props.data.verificado, v => { verificado.value = !!v })
-onMounted(() => window.addEventListener(EVENTO, lerVerificado))
-onBeforeUnmount(() => window.removeEventListener(EVENTO, lerVerificado))
+// a conta pode ter mudado desde o login (admin, outro aparelho): segue o que o App.vue lê do servidor
+const conta = ref(props.data)
+function lerGuardada () {
+  const u = utilizadorGuardado()
+  if (!u) return
+  const intacto = formIntacto()     // nunca por cima do que a pessoa está a escrever
+  conta.value = u
+  previewUrl.value = u.foto || DEFAULT_UTILIZADOR
+  if (intacto) initForm()
+}
+onMounted(() => window.addEventListener(EVENTO, lerGuardada))
+onBeforeUnmount(() => window.removeEventListener(EVENTO, lerGuardada))
 
 const router     = useRouter()
 const route      = useRoute()
@@ -681,15 +687,11 @@ async function fetchTemPassword() {
   } catch { /* fica o valor que já havia */ }
 }
 
+const CAMPOS_FORM = ['first_name', 'last_name', 'username', 'email', 'telefone', 'morada']
+const formIntacto = () => CAMPOS_FORM.every(k => (form.value[k] || '') === (conta.value[k] || ''))
+
 function initForm() {
-  form.value = {
-    first_name: props.data.first_name || '',
-    last_name:  props.data.last_name  || '',
-    username:   props.data.username   || '',
-    email:      props.data.email      || '',
-    telefone:   props.data.telefone   || '',
-    morada:     props.data.morada     || '',
-  }
+  form.value = Object.fromEntries(CAMPOS_FORM.map(k => [k, conta.value[k] || '']))
   valoresAtuais.value = { username: form.value.username, email: form.value.email }
 }
 
@@ -712,6 +714,7 @@ onMounted(() => {
 })
 
 watch(() => props.data, () => {
+  conta.value = props.data
   previewUrl.value = props.data.foto || DEFAULT_UTILIZADOR
   initForm()
 }, { deep: true })
@@ -726,7 +729,7 @@ function onFileChange(e) {
     const fd = new FormData()
     fd.append('foto', file)
     const res = await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    if (res.data.foto) previewUrl.value = res.data.foto
+    if (res.data.foto) { previewUrl.value = res.data.foto; atualizarGuardado({ foto: res.data.foto }) }
     toast.success('Foto actualizada!', { autoClose: 1500 })
   })
 }
