@@ -4,6 +4,7 @@ from ..models import Inventario, Carrinho, ItemCarrinho, Encomenda, ItemEncomend
 from .ProdutoSerializer import ProdutoMiniSerializer
 from .LojaSerializer import LojaMiniSerializer
 from ..utils.variantes import tem_atributos_variante
+from ..utils.encomendas import transferencia_por_confirmar
 
 
 # ══════════════════════════════════════════════════════════════
@@ -244,6 +245,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
     agendada_texto     = serializers.SerializerMethodField()
     reembolso          = serializers.SerializerMethodField()
     valor_reembolsado  = serializers.SerializerMethodField()
+    transferencia_por_confirmar = serializers.SerializerMethodField()
     valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
     fatura             = serializers.SerializerMethodField()   # registada pela loja (utils/fiscal.py)
     comprovativo       = serializers.SerializerMethodField()   # do pagamento online (referência, data, valor)
@@ -272,7 +274,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'entrega_status',
             'agendada_para', 'agendada_texto', 'agendamento_origem',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
-            'reembolso', 'valor_reembolsado', 'valor_a_pagar',
+            'reembolso', 'valor_reembolsado', 'valor_a_pagar', 'transferencia_por_confirmar',
             'fatura',
         ]
         read_only_fields = [
@@ -288,6 +290,9 @@ class EncomendaSerializer(serializers.ModelSerializer):
 
     def get_valor_a_pagar(self, obj):
         return _valor_a_pagar(obj)
+
+    def get_transferencia_por_confirmar(self, obj):
+        return transferencia_por_confirmar(obj)
 
     def get_fatura(self, obj):
         return _fatura(obj, self.context.get('request'))
@@ -388,6 +393,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
     agendada_texto     = serializers.SerializerMethodField()
     reembolso          = serializers.SerializerMethodField()
     valor_reembolsado  = serializers.SerializerMethodField()
+    transferencia_por_confirmar = serializers.SerializerMethodField()
     valor_a_pagar      = serializers.SerializerMethodField()   # ainda por cobrar (dinheiro), já sem os esgotados
     fatura             = serializers.SerializerMethodField()   # registada pela loja (utils/fiscal.py)
  
@@ -406,7 +412,7 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
             'data_criacao',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'agendada_para', 'agendada_texto', 'agendamento_origem',
-            'reembolso', 'valor_reembolsado', 'pagamento_status', 'valor_a_pagar',
+            'reembolso', 'valor_reembolsado', 'pagamento_status', 'valor_a_pagar', 'transferencia_por_confirmar',
             'fatura',
         ]
  
@@ -424,6 +430,9 @@ class EncomendaMiniSerializer(serializers.ModelSerializer):
 
     def get_valor_a_pagar(self, obj):
         return _valor_a_pagar(obj)
+
+    def get_transferencia_por_confirmar(self, obj):
+        return transferencia_por_confirmar(obj)
 
     def get_fatura(self, obj):
         return _fatura(obj, self.context.get('request'))

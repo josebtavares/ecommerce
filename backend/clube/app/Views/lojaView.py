@@ -28,6 +28,7 @@ from ..utils.fiscal import validar_dados_fiscais, aplicar_dados_fiscais, dados_f
 from ..utils.password import mensagem_password_fraca
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso
 from ..utils import prontidao
+from ..utils.encomendas import libertar_entregas
 
 
 # ══════════════════════════════════════════════════════════════
@@ -592,6 +593,10 @@ def staff_update_role(request, loja_id, membro_id):
     role_anterior = membro.role
     novo_role     = request.data.get('role', role_anterior)
 
+    serializer = UtilizadorLojaSerializer(membro, data=request.data, partial=True)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=400)
+
     if role_anterior == 'condutor' and novo_role != 'condutor':
         from ..models import Condutor, Entrega
         condutor = Condutor.objects.filter(loja=loja, utilizador=membro.utilizador).first()
@@ -607,18 +612,10 @@ def staff_update_role(request, loja_id, membro_id):
                     'requer_confirmacao': True,
                 }, status=status.HTTP_409_CONFLICT)
 
-            for entrega in entregas_activas:
-                entrega.status = 'falhou'
-                entrega.save(update_fields=['status'])
-                entrega.encomenda.status = 'preparando'
-                entrega.encomenda.save(update_fields=['status'])
-
+            libertar_entregas(condutor, 'O condutor mudou de função.')
             condutor.ativo = False
             condutor.save(update_fields=['ativo'])
 
-    serializer = UtilizadorLojaSerializer(membro, data=request.data, partial=True)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=400)
     serializer.save()
 
     if novo_role == 'condutor' and role_anterior != 'condutor':
@@ -655,12 +652,7 @@ def staff_remove(request, loja_id, membro_id):
                     'requer_confirmacao': True,
                 }, status=status.HTTP_409_CONFLICT)
 
-            for entrega in entregas_activas:
-                entrega.status = 'falhou'
-                entrega.save(update_fields=['status'])
-                entrega.encomenda.status = 'preparando'
-                entrega.encomenda.save(update_fields=['status'])
-
+            libertar_entregas(condutor, 'O condutor saiu da equipa.')
             condutor.ativo = False
             condutor.save(update_fields=['ativo'])
 
@@ -811,9 +803,10 @@ def loja_dashboard(request, loja_id):
     ent_periodo = ent_qs.filter(p.filtro('data_criacao'))
     entregas_por_status = {
         s: ent_qs.filter(status=s).count()
-        for s in ['atribuido', 'a_caminho', 'entregue', 'falhou']
+        for s in ['atribuido', 'a_caminho', 'entregue', 'falhou', 'cancelada']
     }
-    entregas_periodo    = ent_periodo.count()
+    # as canceladas não contam: a encomenda deixou de existir, o condutor não falhou nada
+    entregas_periodo    = ent_periodo.exclude(status='cancelada').count()
     entregas_concluidas = ent_periodo.filter(status='entregue').count()
     entregas_falhadas   = ent_periodo.filter(status='falhou').count()
     taxa_entrega        = round(entregas_concluidas / entregas_periodo * 100, 1) if entregas_periodo else 0

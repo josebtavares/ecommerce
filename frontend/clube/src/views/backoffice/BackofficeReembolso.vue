@@ -167,16 +167,16 @@
         <section v-else-if="r.estado === 'a_devolver'" class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
           <template v-if="!r.entregue_em">
             <p class="text-sm text-amber-100">
-              O cliente pagou em dinheiro: devolve-lhe <b>{{ dinheiro(r.valor_aprovado) }}</b> em mão até <b>{{ dataHora(r.prazo_resposta) }}</b>
+              O cliente pagou {{ r.por_transferencia ? 'por transferência' : 'em dinheiro' }}: devolve-lhe <b>{{ dinheiro(r.valor_aprovado) }}</b> {{ r.por_transferencia ? 'por transferência' : 'em mão' }} até <b>{{ dataHora(r.prazo_resposta) }}</b>
               e marca aqui. Se não marcares, o pedido vai para a equipa da Bendi.
             </p>
             <button type="button" @click="acao('dinheiro_entregue')" :disabled="aEnviar"
               class="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-60">
-              Dinheiro entregue ao cliente
+              {{ r.por_transferencia ? 'Transferência feita' : 'Dinheiro entregue ao cliente' }}
             </button>
           </template>
           <p v-else class="text-sm text-zinc-300">
-            Entregaste {{ dinheiro(r.valor_aprovado) }} em mão a {{ dataHora(r.entregue_em) }}. À espera da confirmação do cliente —
+            Devolveste {{ dinheiro(r.valor_aprovado) }} {{ r.por_transferencia ? 'por transferência' : 'em mão' }} a {{ dataHora(r.entregue_em) }}. À espera da confirmação do cliente —
             fica confirmado sozinho a {{ dataHora(r.prazo_resposta) }}.
           </p>
         </section>
@@ -289,7 +289,7 @@ async function acao (nome, extra = {}) {
     }
     toast.success({
       reembolsado: 'Reembolso feito.', proposta: 'Proposta enviada ao cliente.', aguarda_produto: 'Aceite — à espera do produto.',
-      a_devolver: data.entregue_em ? 'Registado — o cliente vai confirmar.' : 'Aceite — devolve o dinheiro em mão.',
+      a_devolver: data.entregue_em ? 'Registado — o cliente vai confirmar.' : (data.por_transferencia ? 'Aceite — devolve o valor por transferência.' : 'Aceite — devolve o dinheiro em mão.'),
       recusado: 'Pedido recusado.', por_reembolsar: 'Aceite — o pagamento online ainda não devolveu; tentamos de novo sozinhos.',
     }[data.estado] || 'Feito.')
     emit('alterado')

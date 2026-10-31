@@ -88,6 +88,7 @@ class EntregaSerializer(serializers.ModelSerializer):
     agendada_para      = serializers.DateTimeField(source='encomenda.agendada_para', read_only=True)
     agendada_texto     = serializers.SerializerMethodField()
     motivo_falha_texto = serializers.CharField(source='get_motivo_falha_display', read_only=True)
+    encomenda_status   = serializers.CharField(source='encomenda.status', read_only=True)
     # campos da opção de entrega (flat — mais fácil de usar no frontend)
     opcao_entrega_nome  = serializers.CharField(source='opcao_entrega.nome',           read_only=True)
     opcao_entrega_tempo = serializers.CharField(source='opcao_entrega.tempo_estimado',  read_only=True)
@@ -109,7 +110,7 @@ class EntregaSerializer(serializers.ModelSerializer):
             'data_criacao', 'data_entrega',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'morada_entrega', 'notas', 'tipo_entrega', 'metodo_pagamento',
-            'comprador_id', 'itens', 'valor_a_cobrar', 'pago', 'agendada_para', 'agendada_texto',
+            'comprador_id', 'itens', 'valor_a_cobrar', 'pago', 'encomenda_status', 'agendada_para', 'agendada_texto',
             'motivo_falha', 'motivo_falha_texto', 'nota_falha',
             'opcao_entrega_nome', 'opcao_entrega_tempo', 'opcao_entrega_preco',
             'condutor_nome', 'condutor_veiculo', 'condutor_id_field',
@@ -126,7 +127,7 @@ class EntregaSerializer(serializers.ModelSerializer):
             'a_caminho' : ['entregue', 'falhou'],
             'entregue'  : [],
             'cancelada' : [],
-            'falhou'    : ['atribuido'],  # permite reatribuir após falha
+            'falhou'    : [],     # só a loja volta a pôr em curso, ao reatribuir (entrega_criar/entrega_atualizar)
         }
         permitidos = transicoes.get(instancia.status, [])
         if value != instancia.status and value not in permitidos:
