@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import api, { terminarSessao } from '@/services/api'
 import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
 import { DEFAULT_BANNER } from '@/services/media'
+import { esperarFontes } from '@/utils/fontes'
 
 const NOMES_PAGAMENTO = {
   cartao: 'Cartão', dinheiro: 'Dinheiro', mbway: 'MB WAY', paypal: 'PayPal', stripe: 'Stripe',
@@ -121,6 +122,7 @@ export function useLojaData () {
       fetchMetodosPagamento(id),
       fetchTiposExistentes(id),
       fetchCategoriasExistentes(id),
+      esperarFontes(),            // as fontes do template, para o texto não "saltar" ao chegarem (máx. 1 s)
     ])
     loading.value = false
   }
