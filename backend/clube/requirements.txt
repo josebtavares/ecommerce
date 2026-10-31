@@ -7,6 +7,7 @@ django-ratelimit==4.1.0
 
 # Base de dados
 psycopg2-binary==2.9.13
+dj-database-url==2.1.0
 
 # CORS
 django-cors-headers==4.9.0
@@ -32,6 +33,16 @@ python-dotenv==1.2.4
 
 # Utilitarios
 Pillow==13.0.0
+
+# Producao
+gunicorn==23.0.0
+whitenoise==6.9.0
+
+# Cloudflare R2 / S3 storage
+django-storages==1.14.6
+boto3==1.34.69
+
+sentry-sdk==2.19.0
 
 # Relatórios (exportação Excel e PDF)
 openpyxl==3.1.5
