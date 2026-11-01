@@ -170,6 +170,10 @@
                 O cliente escolheu transferência. Vê na conta da loja se chegaram
                 <b>{{ formatPrice(detalhes[enc.id].valor_a_pagar || enc.valor_total) }}</b> com a referência <b>Encomenda {{ enc.id }}</b>.
                 Só depois podes enviar ou concluir a encomenda.
+                <template v-if="enc.prazo_transferencia">
+                  Se não a confirmares até <b data-teste="transf-prazo-loja">{{ prazoTexto(enc.prazo_transferencia) }}</b>,
+                  a encomenda é cancelada e o stock reposto.
+                </template>
               </p>
               <button type="button" @click="confirmarTransferencia(enc)" :disabled="aConfirmar === enc.id"
                 class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50 transition">
@@ -441,6 +445,7 @@ import { EM_CURSO } from '@/utils/reembolsos'
 import FaturaEncomenda from '@/components/fiscal/FaturaEncomenda.vue'
 import { ESTADOS_FATURAVEIS } from '@/utils/fiscal'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
+import { formatarPrazo } from '@/utils/transferencia'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -525,6 +530,7 @@ export default {
   },
 
   methods: {
+    prazoTexto: formatarPrazo,
     faturavel (enc) { return ESTADOS_FATURAVEIS.includes(enc.status) },
     porFaturar (enc) { return this.regimeFiscal === 'atividade' && this.faturavel(enc) && !enc.fatura },
     faturaAtualizada (enc, data) {

@@ -23,11 +23,15 @@
       Põe a referência no descritivo da transferência. A loja confirma quando o dinheiro chegar.
       Também te enviámos estes dados por email.
     </p>
+    <p v-if="dados.prazo" class="text-xs font-semibold" :class="isDark ? 'text-amber-300' : 'text-amber-700'" data-teste="transf-prazo">
+      Se a transferência não for confirmada até {{ prazoTexto }}, a encomenda é cancelada.
+    </p>
   </div>
 </template>
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
+import { formatarPrazo } from '@/utils/transferencia'
 
 export default {
   name: 'DadosTransferencia',
@@ -42,6 +46,10 @@ export default {
   },
 
   computed: {
+    prazoTexto () {
+      return formatarPrazo(this.dados.prazo)
+    },
+
     linhas () {
       const d = this.dados
       return [
