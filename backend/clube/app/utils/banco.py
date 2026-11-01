@@ -105,11 +105,13 @@ def dados_transferencia(enc):
         return None
     if p.status != 'pendente' or not p.metodo_id or p.metodo.tipo != 'transferencia':
         return None
+    from .encomendas import prazo_transferencia
+    prazo = prazo_transferencia(enc)      # None numa encomenda já cancelada: deixa de pedir a transferência
     d = getattr(enc.loja, 'dados_bancarios', None)
-    if d is None:
+    if d is None or prazo is None:
         return None
     return {'banco': d.banco, 'titular': d.titular, 'iban': formatar_iban(d.nib), 'iban_simples': iban(d.nib),
-            'valor': f'{p.valor:.2f}', 'referencia': f'Encomenda {enc.id}'}
+            'valor': f'{p.valor:.2f}', 'referencia': f'Encomenda {enc.id}', 'prazo': prazo.isoformat()}
 
 
 def online_suspenso(loja):

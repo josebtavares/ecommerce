@@ -86,6 +86,12 @@ def enviar_comprovativo_encomenda(enc):
         _libertar(type(enc), enc.pk)
 
 
+def _hora(iso):
+    from datetime import datetime
+    from django.utils import timezone
+    return timezone.localtime(datetime.fromisoformat(iso)).strftime('%d/%m às %H:%M')
+
+
 def enviar_dados_transferencia(enc_id):
     """Encomenda paga por transferência: para onde transferir, quanto e com que referência."""
     from ..models import Encomenda
@@ -102,7 +108,8 @@ def enviar_dados_transferencia(enc_id):
         f'Escolheste pagar a encomenda #{enc.id} em {enc.loja.nome} por transferência bancária. Transfere para:\n\n'
         f'Banco: {t["banco"]}\nTitular: {t["titular"]}\nIBAN: {t["iban"]}\n'
         f'Valor: {formatar(t["valor"])}\nDescritivo / referência: {t["referencia"]}\n\n'
-        f'A loja confirma quando o dinheiro chegar. Podes ver a encomenda aqui: {_link("/perfil")}')
+        f'A loja confirma quando o dinheiro chegar. Se a transferência não for confirmada até '
+        f'{_hora(t["prazo"])}, a encomenda é cancelada. Podes ver a encomenda aqui: {_link("/perfil")}')
 
 
 def enviar_fatura_encomenda(enc):

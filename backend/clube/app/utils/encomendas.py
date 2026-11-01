@@ -9,6 +9,8 @@ Regras de encomendas partilhadas entre views e modelos.
   valor_a_cobrar(encomenda)            → o que o condutor recebe em dinheiro na entrega (ou None)
   transferencia_por_confirmar(enc)     → paga por transferência que a loja ainda não viu chegar: não sai
   confirmar_transferencia(encomenda)   → a loja viu o dinheiro: pagamento aprovado + comissão
+  prazo_transferencia(encomenda)       → até quando a loja pode confirmar a transferência (72 h)
+  expirar_transferencias()             → worker: lembra 24 h antes e cancela as não confirmadas (repõe stock)
   aprovar_dinheiro(encomenda)          → entregue/concluída: o dinheiro foi recebido, pagamento + comissão
   cancelar_entrega(encomenda)          → encomenda cancelada: termina a entrega e avisa o condutor
   fechar_entrega(encomenda)            → a loja concluiu a encomenda: a entrega em curso fica entregue
@@ -135,6 +137,97 @@ def aprovar_dinheiro(encomenda):
 def confirmar_transferencia(encomenda):
     """A loja viu a transferência na conta (encomenda bloqueada por quem chama)."""
     _aprovar(encomenda, encomenda.pagamento)
+
+
+# ── Transferências por confirmar: prazo ──────────────────────────────
+# Sem prazo, uma transferência que nunca chega deixava a encomenda pendente e o stock preso para sempre.
+# 24 h antes do fim, o cliente e a loja são lembrados; no fim, a encomenda é cancelada e o stock reposto.
+
+PRAZO_TRANSFERENCIA_H = 72
+LEMBRAR_TRANSFERENCIA_H = 24          # horas antes do fim do prazo
+# as que já existiam quando a regra entrou contam a partir daqui (não se cancelam de surpresa no deploy)
+REGRA_TRANSFERENCIA_DESDE = '2026-11-01T12:00:00+00:00'
+TITULO_LEMBRETE_TRANSF = 'Transferência por confirmar — Encomenda #{id}'
+
+
+def prazo_transferencia(encomenda):
+    """Até quando a transferência pode ser confirmada | None se não há transferência por confirmar."""
+    from datetime import datetime, timedelta
+    if encomenda.status not in ('pago', 'preparando') or not transferencia_por_confirmar(encomenda):
+        return None
+    inicio = max(encomenda.data_criacao, datetime.fromisoformat(REGRA_TRANSFERENCIA_DESDE))
+    return inicio + timedelta(hours=PRAZO_TRANSFERENCIA_H)
+
+
+def _hora(dt):
+    from django.utils import timezone
+    return timezone.localtime(dt).strftime('%d/%m às %H:%M')
+
+
+def _lembrar_transferencia(encomenda, prazo):
+    from ..models import Notificacao
+    from ..Views.notificacaoView import notificar, notificar_staff
+    from .dinheiro import formatar
+    titulo = TITULO_LEMBRETE_TRANSF.format(id=encomenda.id)
+    if Notificacao.objects.filter(utilizador=encomenda.comprador, tipo='encomenda_atualizada', titulo=titulo).exists():
+        return False
+    notificar(utilizador=encomenda.comprador, tipo='encomenda_atualizada', titulo=titulo,
+              mensagem=f'A loja ainda não confirmou a tua transferência de {formatar(encomenda.pagamento.valor)}. '
+                       f'Se não for confirmada até {_hora(prazo)}, a encomenda é cancelada. Se já transferiste, '
+                       f'não precisas de fazer nada: a loja confirma quando o dinheiro chegar.',
+              loja=encomenda.loja, link='/perfil')
+    notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_atualizada',
+                    titulo=titulo,
+                    mensagem=f'Se o dinheiro já chegou, confirma a transferência até {_hora(prazo)}. '
+                             f'Depois disso a encomenda é cancelada e o stock reposto.',
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
+    return True
+
+
+def _cancelar_transferencia(encomenda):
+    from ..Views.notificacaoView import notificar, notificar_staff
+    from .devolucoes import _cancelar_encomenda
+    _cancelar_encomenda(encomenda)
+    notificar(utilizador=encomenda.comprador, tipo='encomenda_cancelada',
+              titulo=f'Encomenda cancelada #{encomenda.id}',
+              mensagem=f'A transferência não foi confirmada em {PRAZO_TRANSFERENCIA_H} horas e a encomenda foi '
+                       f'cancelada. Se chegaste a transferir, a loja devolve-te o dinheiro: fala com ela pelo chat.',
+              loja=encomenda.loja, link='/perfil')
+    notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_cancelada_loja',
+                    titulo=f'Encomenda #{encomenda.id} cancelada',
+                    mensagem=f'A transferência não foi confirmada em {PRAZO_TRANSFERENCIA_H} horas. Stock reposto '
+                             f'automaticamente. Se o dinheiro chegar à tua conta, devolve-o ao cliente.',
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
+
+
+def expirar_transferencias(agora=None, lote=200):
+    """
+    Worker (a cada minuto). → (lembradas, canceladas). skip_locked: uma que a loja esteja a confirmar agora
+    fica para a volta seguinte (e aí já não está por confirmar). Com um pedido de cancelamento em curso
+    não se mexe: esse pedido decide.
+    """
+    from datetime import timedelta
+    from django.db import transaction
+    from django.utils import timezone
+    from ..models import Encomenda
+    from .devolucoes import ativo
+    agora = agora or timezone.now()
+    limite = agora - timedelta(hours=PRAZO_TRANSFERENCIA_H - LEMBRAR_TRANSFERENCIA_H)
+    lembradas = canceladas = 0
+    with transaction.atomic():
+        for e in (Encomenda.objects.select_for_update(skip_locked=True, of=('self',))
+                  .filter(status__in=('pago', 'preparando'), data_criacao__lt=limite,
+                          pagamento__status='pendente', pagamento__metodo__tipo='transferencia')
+                  .select_related('comprador', 'loja', 'pagamento__metodo').order_by('id')[:lote]):
+            prazo = prazo_transferencia(e)
+            if not prazo or ativo(e):
+                continue
+            if agora >= prazo:
+                _cancelar_transferencia(e)
+                canceladas += 1
+            elif agora >= prazo - timedelta(hours=LEMBRAR_TRANSFERENCIA_H):
+                lembradas += _lembrar_transferencia(e, prazo)
+    return lembradas, canceladas
 
 
 ENTREGA_EM_CURSO = ('atribuido', 'a_caminho')

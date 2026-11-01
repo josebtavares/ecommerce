@@ -41,7 +41,7 @@
         <div class="flex justify-between items-center text-sm">
           <span class="text-zinc-500">Estado</span>
           <span v-if="encomenda.transferencia" class="px-2 py-0.5 bg-amber-500/15 text-amber-300 text-xs font-bold rounded-full uppercase">
-            Aguarda transferência
+            A aguardar transferência
           </span>
           <span v-else class="px-2 py-0.5 bg-blue-500/15 text-blue-400 text-xs font-bold rounded-full uppercase">
             {{ encomenda.status }}
