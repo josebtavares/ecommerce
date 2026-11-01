@@ -260,7 +260,13 @@
                     </div>
                     <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ formatDate(enc.data_criacao) }}</span>
-                      <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColor(enc.status)]">
+                      <!-- transferência ainda não confirmada pela loja: não está paga, mesmo com o estado 'pago' -->
+                      <span v-if="enc.prazo_transferencia" data-teste="aguarda-transferencia"
+                            class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/15"
+                            :class="isDark ? 'text-amber-300' : 'text-amber-700'">
+                        A aguardar transferência
+                      </span>
+                      <span v-else :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColor(enc.status)]">
                         {{ enc.status }}
                       </span>
                       <EstadoReembolso v-if="enc.reembolso" :estado="enc.reembolso.estado" :valor="enc.reembolso.valor" :metodo="enc.reembolso.metodo" />
@@ -651,7 +657,8 @@ async function recarregarEncomenda(enc) {
   try {
     const { data } = await api.get(`/app/encomenda/${enc.id}/`)
     detalhesEncomenda.value = { ...detalhesEncomenda.value, [enc.id]: data }
-    Object.assign(enc, { status: data.status, reembolso: data.reembolso, valor_reembolsado: data.valor_reembolsado })
+    Object.assign(enc, { status: data.status, reembolso: data.reembolso, valor_reembolsado: data.valor_reembolsado,
+                         prazo_transferencia: data.prazo_transferencia })
   } catch (e) { console.error(e) }
 }
 

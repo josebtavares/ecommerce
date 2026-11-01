@@ -219,6 +219,13 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(f'  encomendas: expirar falhou: {e}')
         try:
+            from app.utils.encomendas import expirar_transferencias
+            lembradas, canceladas = expirar_transferencias()
+            if lembradas or canceladas:
+                self.stdout.write(f'  transferências: {lembradas} lembrada(s), {canceladas} cancelada(s) sem confirmação')
+        except Exception as e:
+            self.stderr.write(f'  transferências: expirar falhou: {e}')
+        try:
             from app.servicos.ciclo import processar as ciclo_marcacoes
             r = ciclo_marcacoes()
             if any(r.values()):
