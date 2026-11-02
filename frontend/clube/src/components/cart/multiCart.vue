@@ -2,6 +2,8 @@
   <!-- Cart Toggle Button -->
   <!-- Posição partilhada com sino + perfil — ver assets/loja-acoes.css -->
   <div class="loja-acoes-slot loja-acoes-slot--carrinho z-30">
+    <!-- lupa da pesquisa (components/pesquisa/PesquisaGlobal.vue): à esquerda do carrinho -->
+    <PesquisaGlobal v-if="pesquisa" :isDark="isDark" />
     <button
       @click="toggleCart"
       aria-label="Carrinho"
@@ -247,12 +249,15 @@ import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { toast } from 'vue3-toastify'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
+import PesquisaGlobal from '@/components/pesquisa/PesquisaGlobal.vue'
 
 export default {
   name: 'multiCart',
+  components: { PesquisaGlobal },
 
   props: {
     isDark: { type: Boolean, default: true },  // default true = comportamento original
+    pesquisa: { type: Boolean, default: true },   // a home esconde a lupa enquanto a barra grande está à vista
   },
 
   data () {
