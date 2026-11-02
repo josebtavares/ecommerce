@@ -30,6 +30,16 @@ CACHE_S = 60
 LIMITE_C = 2000          # descrição + atributos: chega para encontrar, não incha o índice
 SIM_MINIMA = 0.45        # word_similarity para aceitar um erro de escrita no nome
 SIM_SUGESTAO = 0.3
+# híbrido (fase 2, utils/semantica.py): Reciprocal Rank Fusion das duas listas
+RRF_K = 60
+PESO_SEMANTICO = 0.8     # um pouco abaixo das palavras: o que tem a palavra pedida continua à frente
+SEM_LIMITE = 60          # candidatos semânticos por tipo
+# afinado com voyage-4-lite (2026-11-02): ruído ≤ 0,23 ('xyzq blorf'); relevante 0,29–0,64 ('tenho fome' → pratos 0,29,
+# 'cortar o cabelo' → cortes 0,61). Fica o que passa o mínimo E está perto do melhor (corta a cauda de ruído).
+SEM_MINIMO = 0.28
+SEM_MARGEM = 0.15         # dentro do mesmo tipo
+SEM_MARGEM_GLOBAL = 0.25  # face ao melhor de todos os tipos (um tipo fraco não traz ruído)
+MAX_HIBRIDO = 300
 
 # grupos de palavras equivalentes (já normalizadas, uma palavra cada)
 SINONIMOS = [
@@ -106,10 +116,15 @@ def _guardar(tipo, objeto_id, loja_id, nome, a, b, c):
 
 
 def _vetor():
+    """Português (radicais: camisolas → camisol) + 'simple' (a palavra inteira), para as palavras cujo radical
+    fica curto demais e colide com outras (comida e comando → 'com'; ver _consulta)."""
     from django.contrib.postgres.search import SearchVector
-    return (SearchVector('texto_a', weight='A', config='portuguese')
-            + SearchVector('texto_b', weight='B', config='portuguese')
-            + SearchVector('texto_c', weight='C', config='portuguese'))
+    v = None
+    for config in ('portuguese', 'simple'):
+        for campo, peso in (('texto_a', 'A'), ('texto_b', 'B'), ('texto_c', 'C')):
+            x = SearchVector(campo, weight=peso, config=config)
+            v = x if v is None else v + x
+    return v
 
 
 def _apagar(tipo, objeto_id):
@@ -247,6 +262,39 @@ def ligar_sinais():
 
 # ── pesquisar ────────────────────────────────────────────────────────
 
+_RADICAIS = {}
+
+
+def _radical_curto(palavra):
+    """O radical em português tem ≤ 3 letras (ex.: comida → com)? Então procura-se a palavra inteira."""
+    r = _RADICAIS.get(palavra)
+    if r is None:
+        from django.db import connection
+        with connection.cursor() as c:
+            c.execute("SELECT ts_lexize('portuguese_stem', %s)", [palavra])
+            lex = (c.fetchone() or [None])[0] or []
+        r = bool(lex) and len(lex[0]) <= 3 and len(palavra) > len(lex[0]) + 1
+        if len(_RADICAIS) > 5000:
+            _RADICAIS.clear()
+        _RADICAIS[palavra] = r
+    return r
+
+
+def _consulta(tokens, juntar='&'):
+    """SearchQuery das palavras (e sinónimos); a última é prefixo. Radicais curtos vão pela palavra inteira."""
+    from django.contrib.postgres.search import SearchQuery
+    grupos = None
+    for i, t in enumerate(tokens):
+        ultima = i == len(tokens) - 1
+        grupo = None
+        for a in [t] + sorted(_SIN.get(t, ())):
+            termo = f'{a}:*' if (ultima and a == t) else a
+            q = SearchQuery(termo, search_type='raw', config='simple' if _radical_curto(a) else 'portuguese')
+            grupo = q if grupo is None else grupo | q
+        grupos = grupo if grupos is None else (grupos & grupo if juntar == '&' else grupos | grupo)
+    return grupos
+
+
 def _tsquery(tokens, juntar='&'):
     """Só [a-z0-9] chega aqui (sem sintaxe do to_tsquery para partir). A última palavra é prefixo."""
     grupos = []
@@ -283,7 +331,7 @@ def _base(tipo, qn, tokens, juntar, visiveis=True):
     from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
     from django.db.models import Case, F, FloatField, Q, Value, When
     from ..models import EntradaPesquisa
-    consulta = SearchQuery(_tsquery(tokens, juntar), search_type='raw', config='portuguese')
+    consulta = _consulta(tokens, juntar)
     qs = EntradaPesquisa.objects.filter(tipo=tipo)
     if visiveis:
         qs = qs.filter(objeto_id__in=_visiveis(tipo))
@@ -321,6 +369,45 @@ def _procurar(tipo, qn, tokens, filtros, ordem):
     if len(tokens) > 1 and not qs.exists():
         qs = _filtrar(tipo, _base(tipo, qn, tokens, '|'), filtros)
     return _ordenar(tipo, qs, ordem)
+
+
+def _candidatos_semanticos(vetor):
+    """{tipo: [(id, semelhança)]} já com os limiares (mínimo, margem no tipo e margem global)."""
+    from . import semantica
+    if vetor is None:
+        return {}
+    por_tipo = {t: semantica.semelhantes(t, vetor, _visiveis(t), limite=SEM_LIMITE, minimo=SEM_MINIMO, margem=SEM_MARGEM)
+                for t in TIPOS}
+    melhor = max((r[0][1] for r in por_tipo.values() if r), default=0)
+    return {t: [(i, v) for i, v in r if v >= melhor - SEM_MARGEM_GLOBAL] for t, r in por_tipo.items()}
+
+
+def _hibrido(tipo, qn, tokens, filtros, ordem, vetor, candidatos=None):
+    """
+    → (ids ordenados, total). Sem vetor: só palavras (contagem exacta, paginação na base).
+    Com vetor: junta as palavras (até MAX_HIBRIDO) com os mais parecidos em significado (RRF); os semânticos
+    passam pelos mesmos filtros e pela mesma visibilidade.
+    """
+    from ..models import EntradaPesquisa
+    qs = _procurar(tipo, qn, tokens, filtros, ordem)
+    if vetor is None:
+        return qs, None
+    lex = list(qs.values_list('objeto_id', flat=True)[:MAX_HIBRIDO])
+    sem = (candidatos if candidatos is not None else _candidatos_semanticos(vetor)).get(tipo, [])
+    if sem and filtros:
+        ok = set(_filtrar(tipo, EntradaPesquisa.objects.filter(tipo=tipo, objeto_id__in=[i for i, _ in sem]), filtros)
+                 .values_list('objeto_id', flat=True))
+        sem = [(i, v) for i, v in sem if i in ok]
+    pontos = {}
+    for r, i in enumerate(lex):
+        pontos[i] = pontos.get(i, 0) + 1 / (RRF_K + r)
+    for r, (i, _) in enumerate(sem):
+        pontos[i] = pontos.get(i, 0) + PESO_SEMANTICO / (RRF_K + r)
+    ids = sorted(pontos, key=lambda i: (-pontos[i], i))
+    if tipo == 'produto' and ordem in ('preco', '-preco') and ids:
+        from ..models import Produto
+        ids = list(Produto.objects.filter(id__in=ids).order_by(ordem, 'id').values_list('id', flat=True))
+    return ids, len(ids)
 
 
 def _filtrar(tipo, qs, f):
@@ -435,15 +522,20 @@ def pesquisar(q, request, tipo=None, limite=5, offset=0, filtros=None, ordem='')
 
     chave = '|'.join(map(str, [qn, tokens, tipo, limite, offset, ordem, sorted(filtros.items()),
                                request.build_absolute_uri('/')]))
-    chave = 'pesq:v1:' + hashlib.sha1(chave.encode()).hexdigest()
+    chave = 'pesq:v2:' + hashlib.sha1(chave.encode()).hexdigest()
     dados = cache.get(chave)
     if dados is not None:
         return dados
 
+    from . import semantica
+    vetor = semantica.vetor_consulta(qn)
     if tipo:
-        qs = _procurar(tipo, qn, tokens, filtros, ordem)
-        total = qs.count()
-        ids = list(qs.values_list('objeto_id', flat=True)[offset:offset + limite])
+        res, total = _hibrido(tipo, qn, tokens, filtros, ordem, vetor, _candidatos_semanticos(vetor))
+        if total is None:
+            total = res.count()
+            ids = list(res.values_list('objeto_id', flat=True)[offset:offset + limite])
+        else:
+            ids = res[offset:offset + limite]
         dados = {'q': q, 'tipo': tipo, 'total': total, 'resultados': HIDRATAR[tipo](ids, request),
                  'seguinte': offset + limite if offset + limite < total else None}
         if not total and not offset:
@@ -451,9 +543,10 @@ def pesquisar(q, request, tipo=None, limite=5, offset=0, filtros=None, ordem='')
     else:
         dados = dict(vazio)
         totais = {}
+        candidatos = _candidatos_semanticos(vetor)
         for t in TIPOS:
-            qs = _procurar(t, qn, tokens, filtros, '')
-            ids = list(qs.values_list('objeto_id', flat=True)[:limite + 1])
+            res, n = _hibrido(t, qn, tokens, filtros, '', vetor, candidatos)
+            ids = list(res.values_list('objeto_id', flat=True)[:limite + 1]) if n is None else res[:limite + 1]
             totais[t] = len(ids)
             dados[{'produto': 'produtos', 'loja': 'lojas', 'servico': 'servicos'}[t]] = HIDRATAR[t](ids[:limite], request)
         dados['mais'] = {t: totais[t] > limite for t in TIPOS}
