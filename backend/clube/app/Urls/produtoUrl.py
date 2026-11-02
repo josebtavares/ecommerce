@@ -23,6 +23,7 @@ urlpatterns = [
     path('loja/<int:loja_id>/produtos/<int:id>/eliminar/', produtoView.produto_delete,    name='produto-delete'),
     
     path('loja/<int:loja_id>/produtos/categorias/', produtoView.produto_categorias_loja, name='produto-categorias-loja'),
+    path('loja/<int:loja_id>/produtos/filtros/',    produtoView.produto_filtros_loja,    name='produto-filtros-loja'),
     path('loja/<int:loja_id>/produtos/tipos/',      produtoView.produto_tipos_loja,      name='produto-tipos-loja'),
     
     # ── NOVO: eliminar imagem individual ──────────────────────

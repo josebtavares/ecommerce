@@ -2515,3 +2515,42 @@ class RegistoTransacao(models.Model):
 
     def __str__(self):
         return f'#{self.pk} {self.tipo}/{self.evento}'
+
+
+# ══════════════════════════════════════════════════════════════
+# PESQUISA — índice da barra de pesquisa (utils/pesquisa.py)
+# ══════════════════════════════════════════════════════════════
+
+from django.contrib.postgres.indexes import GinIndex          # noqa: E402
+from django.contrib.postgres.search import SearchVectorField  # noqa: E402
+
+
+class EntradaPesquisa(models.Model):
+    """
+    Uma linha por produto, loja ou serviço, só com o texto para pesquisar: nome (peso A), categoria/tipo/loja
+    (B) e descrição/atributos (C), já sem acentos e em minúsculas. `vetor` é o tsvector em português (calculado
+    pela base, utils/pesquisa.py) e `nome_norm` tem índice de trigramas (erros de escrita, palavras a meio).
+    Se está à vista decide-se na pesquisa (produto activo, loja activa, serviço marcável) — o índice só tem texto.
+    """
+    TIPOS = [('produto', 'Produto'), ('loja', 'Loja'), ('servico', 'Serviço')]
+
+    tipo      = models.CharField(max_length=8, choices=TIPOS)
+    objeto_id = models.PositiveIntegerField()
+    loja      = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='+')
+    nome      = models.CharField(max_length=200)
+    nome_norm = models.CharField(max_length=200)
+    texto_a   = models.TextField(blank=True, default='')
+    texto_b   = models.TextField(blank=True, default='')
+    texto_c   = models.TextField(blank=True, default='')
+    vetor     = SearchVectorField(null=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['tipo', 'objeto_id'], name='pesquisa_entrada_unica')]
+        indexes = [
+            GinIndex(fields=['vetor'], name='pesquisa_vetor_gin'),
+            GinIndex(fields=['nome_norm'], name='pesquisa_nome_trgm', opclasses=['gin_trgm_ops']),
+        ]
+
+    def __str__(self):
+        return f'{self.tipo} {self.objeto_id}: {self.nome}'
