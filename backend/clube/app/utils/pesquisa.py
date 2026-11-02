@@ -18,6 +18,7 @@ O que está à vista decide-se na pesquisa (produto activo de loja activa, servi
 import hashlib
 import logging
 import re
+import time
 import unicodedata
 
 from django.core.cache import cache
@@ -40,6 +41,14 @@ SEM_MINIMO = 0.28
 SEM_MARGEM = 0.15         # dentro do mesmo tipo
 SEM_MARGEM_GLOBAL = 0.25  # face ao melhor de todos os tipos (um tipo fraco não traz ruído)
 MAX_HIBRIDO = 300
+# reordenação (semantica.reordenar, rerank-3 com instrução): nota ≥ RR_MINIMO e a menos de RR_MARGEM da melhor.
+# Calibrado 2026-11-02: relevantes 0,44–0,69 ('tenho fome' 0,48–0,51, 'algo para beber' 0,58–0,66);
+# ruído ≤ 0,38 ('oculos de sol' sem óculos à venda, 'bicicleta' 0,27–0,32 fora a loja de desporto).
+RR_MINIMO = 0.44
+RR_MARGEM = 0.25
+RR_CANDIDATOS = 40        # quantos semânticos (de todos os tipos) vão ao reranker
+SEM_SEM_RR = 6            # sem reranker (falha/prazo/desligado): só os primeiros de cada tipo
+PRAZO_SEMANTICO_S = 1.8  # vetor + reranker juntos; o reranker fica com o que sobrar (mín. 0,3 s)
 
 # grupos de palavras equivalentes (já normalizadas, uma palavra cada)
 SINONIMOS = [
@@ -371,15 +380,35 @@ def _procurar(tipo, qn, tokens, filtros, ordem):
     return _ordenar(tipo, qs, ordem)
 
 
-def _candidatos_semanticos(vetor):
-    """{tipo: [(id, semelhança)]} já com os limiares (mínimo, margem no tipo e margem global)."""
+def _candidatos_semanticos(vetor, qn='', inicio=None):
+    """
+    {tipo: [(id, nota)]}: os mais parecidos pelos vetores (mínimo, margem no tipo e margem global), depois
+    reordenados e cortados pelo reranker (uma chamada para todos os tipos). Sem reranker: os SEM_SEM_RR primeiros.
+    """
     from . import semantica
+    from ..models import EntradaPesquisa
     if vetor is None:
         return {}
     por_tipo = {t: semantica.semelhantes(t, vetor, _visiveis(t), limite=SEM_LIMITE, minimo=SEM_MINIMO, margem=SEM_MARGEM)
                 for t in TIPOS}
     melhor = max((r[0][1] for r in por_tipo.values() if r), default=0)
-    return {t: [(i, v) for i, v in r if v >= melhor - SEM_MARGEM_GLOBAL] for t, r in por_tipo.items()}
+    cand = {t: [(i, v) for i, v in r if v >= melhor - SEM_MARGEM_GLOBAL] for t, r in por_tipo.items()}
+    todos = sorted(((t, i, v) for t, r in cand.items() for i, v in r), key=lambda x: (-x[2], x[0], x[1]))[:RR_CANDIDATOS]
+    if not todos:
+        return cand
+    por_chave = {(e.tipo, e.objeto_id): e for e in EntradaPesquisa.objects.filter(
+        tipo__in=TIPOS, objeto_id__in={i for _, i, _ in todos}).only('tipo', 'objeto_id', 'nome', 'texto_b', 'texto_c', 'semantico_hash')}
+    todos = [x for x in todos if (x[0], x[1]) in por_chave]
+    prazo = max(0.3, PRAZO_SEMANTICO_S - (time.monotonic() - inicio)) if inicio else None
+    notas = semantica.reordenar(qn, [por_chave[(t, i)] for t, i, _ in todos], prazo) if qn else None
+    if notas is None:
+        return {t: r[:SEM_SEM_RR] for t, r in cand.items()}
+    corte = max(RR_MINIMO, max(notas) - RR_MARGEM)
+    out = {t: [] for t in TIPOS}
+    for (t, i, _), n in sorted(zip(todos, notas), key=lambda x: -x[1]):
+        if n >= corte:
+            out[t].append((i, n))
+    return out
 
 
 def _hibrido(tipo, qn, tokens, filtros, ordem, vetor, candidatos=None):
@@ -393,7 +422,7 @@ def _hibrido(tipo, qn, tokens, filtros, ordem, vetor, candidatos=None):
     if vetor is None:
         return qs, None
     lex = list(qs.values_list('objeto_id', flat=True)[:MAX_HIBRIDO])
-    sem = (candidatos if candidatos is not None else _candidatos_semanticos(vetor)).get(tipo, [])
+    sem = (candidatos if candidatos is not None else _candidatos_semanticos(vetor, qn)).get(tipo, [])
     if sem and filtros:
         ok = set(_filtrar(tipo, EntradaPesquisa.objects.filter(tipo=tipo, objeto_id__in=[i for i, _ in sem]), filtros)
                  .values_list('objeto_id', flat=True))
@@ -522,15 +551,16 @@ def pesquisar(q, request, tipo=None, limite=5, offset=0, filtros=None, ordem='')
 
     chave = '|'.join(map(str, [qn, tokens, tipo, limite, offset, ordem, sorted(filtros.items()),
                                request.build_absolute_uri('/')]))
-    chave = 'pesq:v2:' + hashlib.sha1(chave.encode()).hexdigest()
+    chave = 'pesq:v3:' + hashlib.sha1(chave.encode()).hexdigest()
     dados = cache.get(chave)
     if dados is not None:
         return dados
 
     from . import semantica
+    inicio = time.monotonic()
     vetor = semantica.vetor_consulta(qn)
     if tipo:
-        res, total = _hibrido(tipo, qn, tokens, filtros, ordem, vetor, _candidatos_semanticos(vetor))
+        res, total = _hibrido(tipo, qn, tokens, filtros, ordem, vetor, _candidatos_semanticos(vetor, qn, inicio))
         if total is None:
             total = res.count()
             ids = list(res.values_list('objeto_id', flat=True)[offset:offset + limite])
@@ -543,7 +573,7 @@ def pesquisar(q, request, tipo=None, limite=5, offset=0, filtros=None, ordem='')
     else:
         dados = dict(vazio)
         totais = {}
-        candidatos = _candidatos_semanticos(vetor)
+        candidatos = _candidatos_semanticos(vetor, qn, inicio)
         for t in TIPOS:
             res, n = _hibrido(t, qn, tokens, filtros, '', vetor, candidatos)
             ids = list(res.values_list('objeto_id', flat=True)[:limite + 1]) if n is None else res[:limite + 1]
