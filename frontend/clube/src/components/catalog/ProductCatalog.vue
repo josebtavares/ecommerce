@@ -105,11 +105,11 @@
             isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'
           ]">
           <option value="">Ordenar por</option>
-          <option value="preco_asc">Preco menor</option>
-          <option value="preco_desc">Preco maior</option>
+          <option value="preco_asc">Preço menor</option>
+          <option value="preco_desc">Preço maior</option>
           <option value="novidade">Mais recente</option>
         </select>
-        <button @click="toggleStock"
+        <button @click="toggleStock" data-teste="catalogo-stock" :aria-pressed="filters.stock_disponivel"
           :class="[
             'px-4 py-2 text-sm font-semibold transition-all flex items-center gap-2',
             inputBorderRadius,
@@ -134,28 +134,21 @@
         </button>
       </div>
 
-      <div v-if="activeTipo && atributosFiltravelis.length" class="flex flex-wrap gap-3 mt-3 pt-3 border-t"
-           :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
-        <div v-for="attr in atributosFiltravelis" :key="attr.nome" class="relative">
-          <select v-if="attr.tipo === 'choices'" v-model="filters.atributos[attr.nome]" @change="debouncedFetch"
-            :class="[
-              'px-3 py-2 text-sm border focus:outline-none transition w-36',
-              inputBorderRadius,
-              inputFocusClass,
-              isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'
-            ]">
-            <option value="">{{ capitalize(attr.nome) }}</option>
-            <option v-for="op in attr.opcoes" :key="op" :value="op">{{ op }}</option>
-          </select>
-          <input v-else v-model="filters.atributos[attr.nome]" @input="debouncedFetch"
-            :placeholder="capitalize(attr.nome)"
-            :class="[
-              'px-3 py-2 text-sm border focus:outline-none transition w-36',
-              inputBorderRadius,
-              inputFocusClass,
-              isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100 placeholder-zinc-500' : 'bg-gray-50 border-gray-300 text-zinc-900'
-            ]" />
-        </div>
+      <!-- Atributos e variações: só os que os produtos da loja têm (do tipo/categoria escolhidos), com contagem -->
+      <div v-if="atributosFiltraveis.length" class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3 mt-3 pt-3 border-t"
+           :class="isDark ? 'border-zinc-800' : 'border-gray-200'" data-teste="catalogo-atributos">
+        <select v-for="attr in atributosFiltraveis" :key="attr.nome" v-model="filters.atributos[attr.nome]"
+          @change="resetAndFetch" :aria-label="capitalize(attr.nome)" :data-teste="'catalogo-attr-' + attr.nome"
+          :class="[
+            'px-3 py-2 text-sm border focus:outline-none transition cursor-pointer min-w-0 w-full sm:w-40',
+            inputBorderRadius,
+            inputFocusClass,
+            filters.atributos[attr.nome] ? 'font-semibold' : '',
+            isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900'
+          ]">
+          <option value="">{{ capitalize(attr.nome) }}</option>
+          <option v-for="op in attr.valores" :key="op.valor" :value="op.valor">{{ op.valor }} ({{ op.total }})</option>
+        </select>
       </div>
     </div>
 
@@ -173,7 +166,7 @@
 
     <div v-if="showProductCount" class="flex items-center justify-between mb-4">
       <p class="text-sm" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">
-        <span v-if="!loading">{{ total }} produto{{ total !== 1 ? 's' : '' }}</span>
+        <span v-if="!loading" data-teste="catalogo-total">{{ total }} produto{{ total !== 1 ? 's' : '' }}</span>
         <span v-else>A carregar...</span>
       </p>
     </div>
@@ -361,6 +354,8 @@ export default {
       defaultImg: DEFAULT_PRODUTO,
       tipos: [], activeTipo: null,
       todasCategorias: [], categoriasDoTipo: [], activeCategoria: null,
+      atributosLoja: [],        // facetas de /produtos/filtros/: só o que existe nos produtos da loja
+      pedidoFiltros: 0,
       produtos: [], total: 0, offset: 0,
       loading: false, loadingMore: false, reachedEnd: false,
       filters: { q: '', preco_min: '', preco_max: '', ordem: '', stock_disponivel: false, atributos: {} },
@@ -370,11 +365,13 @@ export default {
 
   computed: {
     categoriasVisiveis () { return this.activeTipo ? this.categoriasDoTipo : this.todasCategorias },
-    atributosFiltravelis () {
-      if (!this.activeTipo?.atributos_schema?.length) return []
-      return this.activeTipo.atributos_schema
-        .map(a => typeof a === 'string' ? { nome: a, tipo: 'texto', opcoes: [] } : a)
-        .filter(a => a.nome)
+    atributosFiltraveis () {
+      // um valor já escolhido continua na lista mesmo que deixe de aparecer (ex.: depois de mudar de categoria)
+      return this.atributosLoja.map(a => {
+        const escolhido = this.filters.atributos[a.nome]
+        if (!escolhido || a.valores.some(v => v.valor === escolhido)) return a
+        return { ...a, valores: [...a.valores, { valor: escolhido, total: 0 }] }
+      })
     },
     hasActiveFilters () {
       return this.filters.q || this.filters.preco_min || this.filters.preco_max ||
@@ -384,7 +381,8 @@ export default {
   },
 
   async mounted () {
-    await Promise.all([this.fetchTipos(), this.fetchTodasCategorias()])
+    if (this.lojaId) await this.fetchFiltros(true)
+    else await this.fetchTipos()
     await this.resetAndFetch()
     this.setupObserver()
   },
@@ -412,46 +410,49 @@ export default {
         this.tipos = Object.values(map)
       } catch (e) { console.error(e) }
     },
-    async fetchTodasCategorias () {
-      if (!this.lojaId) return
+    // tipos, categorias e atributos tirados dos produtos activos da loja (adaptam-se ao tipo/categoria)
+    async fetchFiltros (inicio = false) {
+      const pedido = ++this.pedidoFiltros
+      const params = {}
+      if (this.activeTipo) params.tipo_id = this.activeTipo.id
+      if (this.activeCategoria) params.categoria_id = this.activeCategoria.id
       try {
-        const { data } = await api.get(`/app/loja/${this.lojaId}/categorias/`)
-        this.todasCategorias = data
-      } catch (e) { console.error(e) }
-    },
-    async fetchCategoriasDoTipo (tipo) {
-      if (!this.lojaId || !tipo) return
-      try {
-        const { data } = await api.get(this.endpoint, { params: { loja_id: this.lojaId, tipo: tipo.nome, limit: 200 } })
-        const catIds = new Set(); const cats = []
-        ;(data.results || data).forEach(p => {
-          p.categorias?.forEach(cat => { if (!catIds.has(cat.id)) { catIds.add(cat.id); cats.push(cat) } })
-        })
-        this.categoriasDoTipo = cats
+        const { data } = await api.get(`/app/loja/${this.lojaId}/produtos/filtros/`, { params })
+        if (pedido !== this.pedidoFiltros) return            // já há um pedido mais recente
+        if (inicio || !this.activeTipo) this.tipos = data.tipos || []
+        if (!this.activeCategoria) {
+          if (this.activeTipo) this.categoriasDoTipo = data.categorias || []
+          else this.todasCategorias = data.categorias || []
+        }
+        this.atributosLoja = data.atributos || []
+        // escolhas de atributos que este tipo não tem saem; as outras ficam
+        const nomes = new Set(this.atributosLoja.map(a => a.nome))
+        const atributos = {}
+        this.atributosLoja.forEach(a => { atributos[a.nome] = '' })
+        Object.entries(this.filters.atributos).forEach(([k, v]) => { if (v && nomes.has(k)) atributos[k] = v })
+        this.filters.atributos = atributos
       } catch (e) { console.error(e) }
     },
     async selectTipo (tipo) {
       this.activeTipo = tipo; this.activeCategoria = null; this.categoriasDoTipo = []
-      if (tipo) await this.fetchCategoriasDoTipo(tipo)
-      if (tipo?.atributos_schema) {
-        const atributos = {}
-        tipo.atributos_schema.forEach(a => { const n = typeof a === 'string' ? a : a.nome; if (n) atributos[n] = '' })
-        this.filters.atributos = atributos
-      } else { this.filters.atributos = {} }
+      if (this.lojaId) await this.fetchFiltros()
       this.resetAndFetch()
     },
-    selectCategoria (cat) { this.activeCategoria = cat; this.resetAndFetch() },
-    resetAll () {
+    async selectCategoria (cat) {
+      this.activeCategoria = cat
+      if (this.lojaId) await this.fetchFiltros()
+      this.resetAndFetch()
+    },
+    async resetAll () {
       this.activeTipo = null; this.activeCategoria = null; this.categoriasDoTipo = []
       this.filters = { q: '', preco_min: '', preco_max: '', ordem: '', stock_disponivel: false, atributos: {} }
+      if (this.lojaId) await this.fetchFiltros()
       this.resetAndFetch()
     },
     toggleStock () { this.filters.stock_disponivel = !this.filters.stock_disponivel; this.resetAndFetch() },
     clearFilters () {
       const atributos = {}
-      if (this.activeTipo?.atributos_schema) {
-        this.activeTipo.atributos_schema.forEach(a => { const n = typeof a === 'string' ? a : a.nome; if (n) atributos[n] = '' })
-      }
+      Object.keys(this.filters.atributos).forEach(k => { atributos[k] = '' })
       this.filters = { q: '', preco_min: '', preco_max: '', ordem: '', stock_disponivel: false, atributos }
       this.resetAndFetch()
     },
@@ -459,7 +460,7 @@ export default {
     buildParams (offset = 0) {
       const p = { limit: this.limit, offset }
       if (this.lojaId)                    p.loja_id = this.lojaId
-      if (this.activeTipo)                p.tipo = this.activeTipo.nome
+      if (this.activeTipo)                p.tipo_id = this.activeTipo.id
       if (this.activeCategoria)           p.categoria_id = this.activeCategoria.id
       if (this.filters.q)                 p.q = this.filters.q
       if (this.filters.preco_min)         p.preco_min = this.filters.preco_min

@@ -279,12 +279,15 @@ def _visiveis(tipo):
     return ids
 
 
-def _base(tipo, qn, tokens, juntar):
+def _base(tipo, qn, tokens, juntar, visiveis=True):
     from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
     from django.db.models import Case, F, FloatField, Q, Value, When
     from ..models import EntradaPesquisa
     consulta = SearchQuery(_tsquery(tokens, juntar), search_type='raw', config='portuguese')
-    qs = EntradaPesquisa.objects.filter(tipo=tipo, objeto_id__in=_visiveis(tipo)).annotate(
+    qs = EntradaPesquisa.objects.filter(tipo=tipo)
+    if visiveis:
+        qs = qs.filter(objeto_id__in=_visiveis(tipo))
+    qs = qs.annotate(
         rel=SearchRank(F('vetor'), consulta, weights=[0.1, 0.25, 0.5, 1.0], normalization=32),
         sim=TrigramWordSimilarity(Value(qn), 'nome_norm'),
         comeca=Case(When(nome_norm__startswith=qn, then=Value(0.4)), default=Value(0.0), output_field=FloatField()),
@@ -293,6 +296,23 @@ def _base(tipo, qn, tokens, juntar):
     if len(qn) >= 4:
         cond |= Q(sim__gte=SIM_MINIMA)
     return qs.filter(cond).annotate(pontos=F('rel') * 3 + F('sim') + F('comeca'))
+
+
+def ids_produtos(q, loja_id=None, limite=300):
+    """Ids dos produtos que casam com q (erros de escrita, sinónimos, atributos…), do mais relevante para o
+    menos. Sem filtro de visibilidade: quem chama já tem o queryset certo (ex.: o catálogo da loja)."""
+    qn = normalizar(q, juntar=False)
+    tokens = _tokens(normalizar(re.sub(r'(?<=[^\W_])[-/.](?=[^\W_])', '', q), juntar=False))
+    if len(qn.replace(' ', '')) < 2 or not tokens:
+        return []
+
+    def procurar(juntar):
+        qs = _base('produto', qn, tokens, juntar, visiveis=False)
+        return qs.filter(loja_id=loja_id) if loja_id else qs
+    qs = procurar('&')
+    if len(tokens) > 1 and not qs.exists():
+        qs = procurar('|')
+    return list(qs.order_by('-pontos', 'objeto_id').values_list('objeto_id', flat=True)[:limite])
 
 
 def _procurar(tipo, qn, tokens, filtros, ordem):

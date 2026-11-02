@@ -364,6 +364,18 @@ function responder (metodo, caminho, params) {
         tipos: tipos.map(({ id, nome, total_produtos }) => ({ id, nome, total_produtos })),
       }
       case 'categorias/':          return categorias
+      case 'produtos/filtros/': {
+        const lista = params.tipo_id ? produtos.filter(p => p.tipo.id === Number(params.tipo_id)) : produtos
+        const ids = new Set(lista.flatMap(p => p.categorias.map(c => c.id)))
+        return {
+          total: lista.length,
+          tipos: tipos.map(({ id, nome, total_produtos }) => ({ id, nome, total: total_produtos })),
+          categorias: categorias.filter(c => ids.has(c.id))
+            .map(c => ({ id: c.id, nome: c.nome, total: lista.filter(p => p.categorias.some(x => x.id === c.id)).length })),
+          atributos: [],
+          preco: { min: null, max: null },
+        }
+      }
       case 'avaliacoes/':          return {
         count: AVALIACOES.length, next_offset: null,
         results: AVALIACOES.map(([u, p, c], i) => ({
