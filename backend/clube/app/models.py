@@ -1939,6 +1939,7 @@ class HomeSeccao(models.Model):
         ('produtos_por_tipo',            'Produtos por tipo'),
         ('produtos_categorias_destaque', 'Produtos das categorias em destaque'),
         ('servicos',      'Serviços (marcações)'),
+        ('publicidade',   'Publicidade'),
     ]
     FONTES = [
         ('manual', 'Escolhidos à mão'),
@@ -1968,10 +1969,19 @@ class HomeSeccao(models.Model):
 
 
 class HomeImagem(models.Model):
-    """Imagem carregada no construtor da home (banners). Fica guardada enquanto existir: as publicações
-    antigas podem usá-la (o worker de limpeza só apaga ficheiros sem nenhum registo)."""
-    ficheiro  = models.ImageField(upload_to='home/%Y/%m/',
-                                  validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])])
+    """Imagem ou vídeo carregado no construtor da home (banners, publicidade). Fica guardado enquanto existir:
+    as publicações antigas podem usá-lo (o worker de limpeza só apaga ficheiros sem nenhum registo).
+    Os vídeos passam pela mesma otimização dos produtos (utils/video.py): MP4 leve + versões + poster.
+    largura/altura: medidas já com a rotação aplicada — a secção Publicidade calcula a proporção com elas."""
+    TIPOS = [('imagem', 'Imagem'), ('video', 'Vídeo')]
+    ficheiro  = models.FileField(upload_to='home/%Y/%m/',
+                                 validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp', 'mp4', 'webm', 'mov'])])
+    tipo      = models.CharField(max_length=6, choices=TIPOS, default='imagem')
+    largura   = models.PositiveIntegerField(null=True, blank=True)
+    altura    = models.PositiveIntegerField(null=True, blank=True)
+    duracao   = models.FloatField(null=True, blank=True)                 # segundos (vídeos)
+    ficheiro_poster = models.ImageField(upload_to='posters/%Y/%m/', blank=True, null=True)
+    ficheiro_estado = models.CharField(max_length=12, blank=True, default='')   # vídeo: pendente/a_processar/pronto/erro
     criado_em = models.DateTimeField(auto_now_add=True)
 
 
@@ -1988,6 +1998,13 @@ class HomeItem(models.Model):
     texto   = models.CharField(max_length=300, blank=True, default='')
     link    = models.CharField(max_length=300, blank=True, default='')
     imagem  = models.ForeignKey(HomeImagem, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    # anúncio (secção Publicidade): versão para telemóvel, texto do botão, quem anuncia e datas próprias
+    imagem_movel = models.ForeignKey(HomeImagem, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    botao      = models.CharField(max_length=40, blank=True, default='')
+    anunciante = models.CharField(max_length=80, blank=True, default='')
+    inicio     = models.DateTimeField(null=True, blank=True)
+    fim        = models.DateTimeField(null=True, blank=True)
+    chave      = models.CharField(max_length=12, blank=True, default='')   # id estável do anúncio (estatísticas)
 
     class Meta:
         ordering = ['ordem', 'id']
@@ -2001,6 +2018,30 @@ class HomePublicacao(models.Model):
 
     class Meta:
         ordering = ['-publicado_em', '-id']
+
+
+class AnuncioEstatistica(models.Model):
+    """Impressões e cliques de um anúncio da secção Publicidade, por dia (utils/publicidade_stats.py).
+    Só contagens: nada de utilizadores nem IPs. `chave` = HomeItem.chave (segue o anúncio mesmo que mude de sítio)."""
+    chave      = models.CharField(max_length=12, db_index=True)
+    dia        = models.DateField(db_index=True)
+    impressoes = models.PositiveIntegerField(default=0)
+    cliques    = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['chave', 'dia'], name='anuncio_estatistica_chave_dia')]
+
+
+class AnuncioInfo(models.Model):
+    """Como era cada anúncio na última publicação em que apareceu — as estatísticas mostram o nome e a imagem
+    mesmo depois de o anúncio ser tirado da home. Actualizado ao publicar (utils/home.py publicar)."""
+    chave         = models.CharField(max_length=12, primary_key=True)
+    titulo        = models.CharField(max_length=120, blank=True, default='')
+    anunciante    = models.CharField(max_length=80, blank=True, default='', db_index=True)
+    link          = models.CharField(max_length=300, blank=True, default='')
+    imagem        = models.ForeignKey(HomeImagem, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    publicado_em  = models.DateTimeField(null=True, blank=True)        # a 1.ª vez que foi publicado
+    atualizado_em = models.DateTimeField(auto_now=True)
 
 
 # ══════════════════════════════════════════════════════════════

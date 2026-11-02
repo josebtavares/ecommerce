@@ -39,15 +39,28 @@ def _admin(request):
     return _exige_admin(request, 'gerir_home')
 
 
+def _media_admin(im, request):
+    """Imagem/vídeo carregado → o que o editor mostra (inclui o estado da conversão dos vídeos)."""
+    if im is None:
+        return None
+    return {'id': im.id, 'tipo': im.tipo, 'url': request.build_absolute_uri(im.ficheiro.url) if im.ficheiro else None,
+            'largura': im.largura, 'altura': im.altura, 'duracao': im.duracao,
+            # vídeo acabado de gravar: a tarefa entra na fila depois do commit (o estado ainda vem vazio)
+            'estado': (im.ficheiro_estado or 'pendente') if im.tipo == 'video' else 'pronto',
+            'poster': request.build_absolute_uri(im.ficheiro_poster.url) if im.ficheiro_poster else None}
+
+
 def _item_admin(i, request):
-    d = {'id': i.id, 'loja_id': i.loja_id, 'produto_id': i.produto_id, 'servico_id': i.servico_id, 'imagem_id': i.imagem_id,
-         'titulo': i.titulo, 'texto': i.texto, 'link': i.link}
+    d = {'id': i.id, **H.item_dados(i)}
     if i.servico_id:
         sv = i.servico
         d['servico'] = {'id': sv.id, 'nome': sv.nome, 'ativo': sv.ativo, 'loja': sv.loja.nome, 'loja_id': sv.loja_id,
                         'loja_ativa': sv.loja.ativa}
     if i.imagem_id:
         d['imagem_url'] = request.build_absolute_uri(i.imagem.ficheiro.url)
+        d['media'] = _media_admin(i.imagem, request)
+    if i.imagem_movel_id:
+        d['media_movel'] = _media_admin(i.imagem_movel, request)
     if i.loja_id:
         d['loja'] = {'id': i.loja.id, 'nome': i.loja.nome, 'estado': i.loja.estado, 'ativa': i.loja.ativa}
     if i.produto_id:
@@ -81,12 +94,19 @@ def _seccao_admin(s, request):
         'itens': [_item_admin(i, request) for i in s.itens.all()],
         'refs': _refs(s),
         'avisos': H.avisos_seccao(s),
+        **({'estatisticas': _resumo_anuncios(s)} if s.tipo == 'publicidade' else {}),
     }
+
+
+def _resumo_anuncios(s):
+    """Últimos 30 dias de cada anúncio (linha no editor; quem gere a home vê, mesmo sem ver_stats)."""
+    from ..utils import publicidade_stats
+    return {'dias': 30, 'por_chave': publicidade_stats.resumo_chaves([i.chave for i in s.itens.all()], 30)}
 
 
 def _seccoes_qs():
     from ..models import HomeSeccao
-    return HomeSeccao.objects.prefetch_related('itens__loja', 'itens__produto__loja', 'itens__imagem')
+    return HomeSeccao.objects.prefetch_related('itens__loja', 'itens__produto__loja', 'itens__imagem', 'itens__imagem_movel')
 
 
 def _estado():
@@ -115,6 +135,11 @@ def _opcoes():
                                 for d in CategoriaDestaque.objects.filter(categoria__isnull=False)
                                 .select_related('categoria__loja').order_by('ordem', 'id')],
         'limite_max': H.LIMITE_MAX,
+        # o editor calcula a proporção da pré-visualização como o servidor (H.proporcao)
+        'publicidade': {'proporcoes': list(H.PROPORCOES), 'limites': H.LIMITES_PROPORCAO,
+                        'sem_medidas': round(H.PROPORCAO_SEM_MEDIDAS, 4), 'intervalo': H.INTERVALO_PADRAO,
+                        'max_anuncios': H.MAX_ANUNCIOS, 'video_max_mb': VIDEO_MAX_MB, 'video_max_s': VIDEO_MAX_S,
+                        'imagem_max_mb': IMAGEM_MAX_MB},
     }
 
 
@@ -213,8 +238,12 @@ def admin_home_duplicar(request, seccao_id):
         sec.titulo = (sec.titulo + ' (cópia)')[:120] if sec.titulo else ''
         sec.ativa = False
         sec.save()
+        # a cópia é outra secção: os anúncios ganham chaves novas (as estatísticas não se misturam)
         HomeItem.objects.bulk_create([HomeItem(seccao=sec, ordem=i.ordem, loja_id=i.loja_id, produto_id=i.produto_id,
-                                               servico_id=i.servico_id, imagem_id=i.imagem_id, titulo=i.titulo, texto=i.texto, link=i.link)
+                                               servico_id=i.servico_id, imagem_id=i.imagem_id, imagem_movel_id=i.imagem_movel_id,
+                                               titulo=i.titulo, texto=i.texto, link=i.link, botao=i.botao,
+                                               anunciante=i.anunciante, inicio=i.inicio, fim=i.fim,
+                                               chave=H._nova_chave() if i.chave else '')
                                       for i in itens])
     return Response(_resposta_completa(request), status=status.HTTP_201_CREATED)
 
@@ -349,36 +378,118 @@ def admin_home_procurar(request):
     return Response({'detail': 'tipo tem de ser loja, produto, serviço ou categoria.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-IMAGEM_MAX_MB = 20      # o modelo converte para WebP 1600 px (uploads.py)
+IMAGEM_MAX_MB = 20      # o modelo converte para WebP 1920 px (uploads.py)
+VIDEO_MAX_MB = 25       # publicidade: o worker converte para MP4 leve (utils/video.py)
+VIDEO_MAX_S = 30
+EXT_IMAGEM = ('jpg', 'jpeg', 'png', 'webp')
+EXT_VIDEO = ('mp4', 'webm', 'mov')
+
+
+def _medidas_imagem(f):
+    """(largura, altura) tal como a foto aparece (orientação da câmara), reduzidas como a conversão
+    (≤1920 px) — só a proporção importa. Erro → ValueError."""
+    from PIL import Image
+    from ..utils import versoes_media
+    img = Image.open(f)
+    img.verify()
+    if img.format not in ('JPEG', 'PNG', 'WEBP'):
+        raise ValueError
+    f.seek(0)
+    img = Image.open(f)
+    largura, altura = img.size
+    try:
+        if img.getexif().get(274) in (5, 6, 7, 8):     # rodada 90° pela câmara
+            largura, altura = altura, largura
+    except Exception:
+        pass
+    lado = versoes_media.lado_de('homeimagem', 'ficheiro')
+    escala = min(1.0, lado / max(largura, altura))
+    f.seek(0)
+    return max(1, round(largura * escala)), max(1, round(altura * escala))
+
+
+def _sondar_video(f):
+    """ffprobe do upload (no disco: os grandes já lá estão; os pequenos escrevem-se num temporário)."""
+    import os
+    import tempfile
+    from ..utils import video
+    caminho = getattr(f, 'temporary_file_path', lambda: None)()
+    tmp = None
+    try:
+        if caminho is None:
+            tmp = tempfile.NamedTemporaryFile(suffix='.' + f.name.rsplit('.', 1)[-1].lower(), delete=False)
+            for bloco in f.chunks():
+                tmp.write(bloco)
+            tmp.close()
+            caminho = tmp.name
+        return video.sondar(caminho)
+    finally:
+        if tmp is not None:
+            os.unlink(tmp.name)
+        f.seek(0)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def admin_home_imagem(request):
-    """POST /app/admin/home/imagens/ (multipart: ficheiro) — imagem para um banner. Devolve {id, url}."""
-    from PIL import Image
+    """POST /app/admin/home/imagens/ (multipart: ficheiro [, video=1]) — imagem para um banner/anúncio ou vídeo
+    para um anúncio (só com video=1, para os banners antigos continuarem só com imagens).
+    Devolve a media (id, url, tipo, largura, altura, estado…)."""
     from ..models import HomeImagem
+    from ..utils import video
     erro = _admin(request)
     if erro:
         return erro
     f = request.FILES.get('ficheiro')
+    aceita_video = str(request.data.get('video') or '') in ('1', 'true')
     if f is None:
-        return Response({'detail': 'Escolhe uma imagem.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Escolhe uma imagem' + (' ou um vídeo.' if aceita_video else '.')},
+                        status=status.HTTP_400_BAD_REQUEST)
+    ext = f.name.rsplit('.', 1)[-1].lower() if '.' in f.name else ''
+    if ext in EXT_VIDEO and aceita_video:
+        if f.size > VIDEO_MAX_MB * 1024 * 1024:
+            return Response({'detail': f'O vídeo tem de ter no máximo {VIDEO_MAX_MB} MB.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            info = _sondar_video(f)
+        except video.VideoInvalido:
+            return Response({'detail': 'O ficheiro não é um vídeo válido.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not info['largura_vista'] or not info['altura_vista']:
+            return Response({'detail': 'O ficheiro não é um vídeo válido.'}, status=status.HTTP_400_BAD_REQUEST)
+        if info['duracao'] > VIDEO_MAX_S + 0.5:
+            return Response({'detail': f'O vídeo tem de ter no máximo {VIDEO_MAX_S} segundos '
+                                       f'(este tem {round(info["duracao"])} s).'}, status=status.HTTP_400_BAD_REQUEST)
+        im = HomeImagem.objects.create(ficheiro=f, tipo='video', largura=info['largura_vista'],
+                                       altura=info['altura_vista'], duracao=round(info['duracao'], 2))
+        im.refresh_from_db()        # o signal marca ficheiro_estado='pendente' (fila do worker)
+        return Response(_media_admin(im, request), status=status.HTTP_201_CREATED)
+    if ext not in EXT_IMAGEM:
+        return Response({'detail': 'Formatos aceites: JPG, PNG ou WEBP' + (' (imagem) e MP4, WEBM ou MOV (vídeo).'
+                                                                          if aceita_video else '.')},
+                        status=status.HTTP_400_BAD_REQUEST)
     if f.size > IMAGEM_MAX_MB * 1024 * 1024:
         return Response({'detail': f'A imagem tem de ter no máximo {IMAGEM_MAX_MB} MB.'}, status=status.HTTP_400_BAD_REQUEST)
-    if f.name.rsplit('.', 1)[-1].lower() not in ('jpg', 'jpeg', 'png', 'webp'):
-        return Response({'detail': 'Formatos aceites: JPG, PNG ou WEBP.'}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        img = Image.open(f)
-        img.verify()
-        if img.format not in ('JPEG', 'PNG', 'WEBP'):
-            raise ValueError
+        largura, altura = _medidas_imagem(f)
     except Exception:
         return Response({'detail': 'O ficheiro não é uma imagem válida.'}, status=status.HTTP_400_BAD_REQUEST)
-    f.seek(0)
-    im = HomeImagem.objects.create(ficheiro=f)
-    return Response({'id': im.id, 'url': request.build_absolute_uri(im.ficheiro.url)}, status=status.HTTP_201_CREATED)
+    im = HomeImagem.objects.create(ficheiro=f, tipo='imagem', largura=largura, altura=altura)
+    return Response({**_media_admin(im, request), 'url': request.build_absolute_uri(im.ficheiro.url)},
+                    status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_home_imagem_estado(request, imagem_id):
+    """GET /app/admin/home/imagens/<id>/ — para o editor acompanhar a conversão de um vídeo."""
+    from ..models import HomeImagem
+    erro = _admin(request)
+    if erro:
+        return erro
+    im = HomeImagem.objects.filter(id=imagem_id).first()
+    if im is None:
+        return Response({'detail': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(_media_admin(im, request))
 
 
 @api_view(['GET'])

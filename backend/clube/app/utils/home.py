@@ -47,7 +47,7 @@ CRITERIOS_SERVICOS = {
 CONTEUDO = {
     'servicos': 'servicos',
     'hero': 'hero', 'lojas': 'lojas', 'produtos': 'produtos', 'loja_destaque': 'loja_destaque',
-    'categorias': 'categorias', 'banner': 'banners', 'cabecalho': 'cabecalho',
+    'categorias': 'categorias', 'banner': 'banners', 'cabecalho': 'cabecalho', 'publicidade': 'publicidade',
     'lojas_por_categoria': 'lojas', 'produtos_por_tipo': 'produtos', 'produtos_categorias_destaque': 'produtos',
 }
 GRUPOS = ('lojas_por_categoria', 'produtos_por_tipo', 'produtos_categorias_destaque')
@@ -87,6 +87,29 @@ def _int(v, padrao=None):
         return padrao
 
 
+# ── itens ──────────────────────────────────────────────────────
+# Campos de um item na publicação (JSON). As datas vão em ISO; os anúncios (secção Publicidade) usam todos.
+ITEM_TEXTOS = {'titulo': 120, 'texto': 300, 'link': 300, 'botao': 40, 'anunciante': 80}
+
+
+def _iso(d):
+    return d.isoformat() if d else None
+
+
+def item_dados(i):
+    """HomeItem → dict da publicação."""
+    return {'loja_id': i.loja_id, 'produto_id': i.produto_id, 'servico_id': i.servico_id, 'imagem_id': i.imagem_id,
+            'imagem_movel_id': i.imagem_movel_id, 'chave': i.chave,
+            **{k: getattr(i, k) for k in ITEM_TEXTOS}, 'inicio': _iso(i.inicio), 'fim': _iso(i.fim)}
+
+
+def item_norm(d):
+    """dict (publicação antiga ou nova) → forma completa e comparável."""
+    return {'loja_id': d.get('loja_id'), 'produto_id': d.get('produto_id'), 'servico_id': d.get('servico_id'),
+            'imagem_id': d.get('imagem_id'), 'imagem_movel_id': d.get('imagem_movel_id'), 'chave': d.get('chave') or '',
+            **{k: d.get(k) or '' for k in ITEM_TEXTOS}, 'inicio': d.get('inicio'), 'fim': d.get('fim')}
+
+
 # ── publicação ─────────────────────────────────────────────────
 
 def _dados_seccao(s):
@@ -95,8 +118,7 @@ def _dados_seccao(s):
         'inicio': s.inicio.isoformat() if s.inicio else None,
         'fim': s.fim.isoformat() if s.fim else None,
         'fonte': s.fonte, 'criterio': s.criterio, 'parametros': s.parametros or {}, 'limite': s.limite,
-        'itens': [{'loja_id': i.loja_id, 'produto_id': i.produto_id, 'servico_id': i.servico_id, 'imagem_id': i.imagem_id,
-                   'titulo': i.titulo, 'texto': i.texto, 'link': i.link} for i in s.itens.all()],
+        'itens': [item_dados(i) for i in s.itens.all()],
     }
 
 
@@ -105,6 +127,9 @@ def publicar(user=None):
     from ..models import HomeSeccao, HomePublicacao
     seccoes = HomeSeccao.objects.prefetch_related('itens')
     pub = HomePublicacao.objects.create(dados=[_dados_seccao(s) for s in seccoes], publicado_por=user)
+    from . import publicidade_stats
+    publicidade_stats.guardar_nomes(pub.dados)      # nomes/imagens dos anúncios para as estatísticas
+    publicidade_stats.esquecer_chaves()             # anúncios novos contam já (não esperam pela cache)
     limpar_imagens()
     return pub
 
@@ -112,11 +137,15 @@ def publicar(user=None):
 def limpar_imagens():
     """Apaga as imagens carregadas há mais de 1 dia que nenhum rascunho nem publicação usa
     (o sinal post_delete põe o ficheiro na fila do worker de limpeza)."""
-    from ..models import HomeImagem, HomeItem, HomePublicacao
+    from ..models import HomeImagem, HomeItem, HomePublicacao, AnuncioInfo
     usadas = set(HomeItem.objects.exclude(imagem=None).values_list('imagem_id', flat=True))
+    # a miniatura dos anúncios antigos nas estatísticas (poucos ficheiros)
+    usadas |= set(AnuncioInfo.objects.exclude(imagem=None).values_list('imagem_id', flat=True))
+    usadas |= set(HomeItem.objects.exclude(imagem_movel=None).values_list('imagem_movel_id', flat=True))
     for dados in HomePublicacao.objects.values_list('dados', flat=True):
         for s in dados or []:
-            usadas.update(i.get('imagem_id') for i in s.get('itens') or [] if i.get('imagem_id'))
+            for i in s.get('itens') or []:
+                usadas.update(x for x in (i.get('imagem_id'), i.get('imagem_movel_id')) if x)
     HomeImagem.objects.filter(criado_em__lt=timezone.now() - timedelta(days=1)).exclude(id__in=usadas).delete()
 
 
@@ -541,6 +570,9 @@ def resolver(s, request, vistos=None):
         out['servicos'] = _serializar_servicos(ids, request)
         return out if out['servicos'] else None
 
+    if tipo == 'publicidade':
+        return _resolver_publicidade(s, out, request)
+
     if tipo == 'banner':
         itens = [i for i in s.get('itens') or [] if i.get('titulo') or i.get('imagem_id')]
         imagens = _urls_imagens([i.get('imagem_id') for i in itens], request)
@@ -550,6 +582,85 @@ def resolver(s, request, vistos=None):
         return out if out['banners'] else None
 
     return None
+
+
+# ── publicidade ────────────────────────────────────────────────
+# A secção tem UMA proporção enquanto está na página (nada salta ao trocar de anúncio): fixa, escolhida pelo
+# admin, ou automática = a mediana das proporções dos anúncios activos, dentro de limites (nem uma tira fina
+# nem um poster gigante). Um anúncio com outra proporção aparece inteiro (o frontend preenche o resto com
+# a mesma imagem desfocada). Computador e telemóvel têm cada um a sua (o telemóvel usa a versão própria se houver).
+PROPORCOES = {'21:9': 21 / 9, '3:1': 3.0, '2:1': 2.0, '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1.0, '4:5': 0.8, '9:16': 9 / 16}
+LIMITES_PROPORCAO = {'computador': (1.5, 4.0), 'telemovel': (0.6, 2.4)}
+PROPORCAO_SEM_MEDIDAS = 16 / 9
+INTERVALO_PADRAO = 6
+MAX_ANUNCIOS = 20
+
+
+def _media(im, request):
+    """HomeImagem → o que o frontend precisa, ou None se ainda não se pode mostrar
+    (vídeo .mov à espera de conversão: os browsers não o tocam)."""
+    if im is None or not im.ficheiro:
+        return None
+    url = request.build_absolute_uri(im.ficheiro.url)
+    m = {'tipo': im.tipo, 'url': url, 'largura': im.largura, 'altura': im.altura}
+    if im.tipo == 'video':
+        if im.ficheiro_estado != 'pronto' and not im.ficheiro.name.lower().endswith(('.mp4', '.webm')):
+            return None
+        m['poster'] = request.build_absolute_uri(im.ficheiro_poster.url) if im.ficheiro_poster else None
+        m['duracao'] = im.duracao
+    return m
+
+
+def proporcao(escolha, medias, onde):
+    """largura/altura da secção em `onde` ('computador' | 'telemovel')."""
+    if escolha in PROPORCOES:
+        return round(PROPORCOES[escolha], 4)
+    rs = sorted(m['largura'] / m['altura'] for m in medias if m and m.get('largura') and m.get('altura'))
+    r = rs[len(rs) // 2] if rs else PROPORCAO_SEM_MEDIDAS
+    mn, mx = LIMITES_PROPORCAO[onde]
+    return round(min(max(r, mn), mx), 4)
+
+
+def anuncio_ativo(i, agora):
+    from django.utils.dateparse import parse_datetime
+    inicio = parse_datetime(i['inicio']) if i.get('inicio') else None
+    fim = parse_datetime(i['fim']) if i.get('fim') else None
+    return (inicio is None or inicio <= agora) and (fim is None or agora < fim)
+
+
+def _resolver_publicidade(s, out, request):
+    from ..models import HomeImagem
+    p = s.get('parametros') or {}
+    agora = timezone.now()
+    limite = min(max(_int(s.get('limite'), 10) or 10, 1), MAX_ANUNCIOS)
+    itens = [i for i in s.get('itens') or [] if i.get('imagem_id') and anuncio_ativo(i, agora)]
+    ids = {x for i in itens for x in (i.get('imagem_id'), i.get('imagem_movel_id')) if x}
+    imagens = HomeImagem.objects.in_bulk(ids) if ids else {}
+    anuncios = []
+    for i in itens:
+        media = _media(imagens.get(i['imagem_id']), request)
+        if media is None:
+            continue
+        link = (i.get('link') or '').strip()
+        anuncios.append({
+            'chave': i.get('chave') or '', 'titulo': i.get('titulo') or '', 'texto': i.get('texto') or '',
+            'link': link, 'externo': link.startswith(('http://', 'https://')),
+            'botao': (i.get('botao') or '').strip() or ('Saber mais' if link else ''),
+            'anunciante': i.get('anunciante') or '',
+            'media': media, 'media_movel': _media(imagens.get(i.get('imagem_movel_id')), request),
+        })
+        if len(anuncios) >= limite:
+            break
+    if not anuncios:
+        return None
+    out['anuncios'] = anuncios
+    out['proporcao'] = {
+        'computador': proporcao(p.get('proporcao') or 'auto', [a['media'] for a in anuncios], 'computador'),
+        'telemovel': proporcao(p.get('proporcao_movel') or 'auto',
+                               [a['media_movel'] or a['media'] for a in anuncios], 'telemovel'),
+    }
+    out['intervalo'] = _int(p.get('intervalo'), INTERVALO_PADRAO) or INTERVALO_PADRAO
+    return out
 
 
 def servicos_auto_qs(criterio, p):
@@ -633,6 +744,7 @@ TIPOS_COM_ITENS = {
     'produtos':      ('produto',),
     'loja_destaque': ('produto',),
     'banner':        ('banner',),
+    'publicidade':   ('anuncio',),
     'servicos':      ('servico',),
 }
 CRITERIOS_POR_TIPO = {
@@ -656,8 +768,12 @@ PARAMETROS = {
     'categoria_ids':    ('ids', 0, 30),
     'sem_repetidos':    ('bool', 0, 0),
     'minimo':           ('int', 1, 20),
+    # publicidade
+    'proporcao':        ('str', 0, 6),
+    'proporcao_movel':  ('str', 0, 6),
+    'intervalo':        ('int', 3, 30),
 }
-LIMITE_PADRAO = {'hero': 5, 'loja_destaque': 8}
+LIMITE_PADRAO = {'hero': 5, 'loja_destaque': 8, 'publicidade': 10}
 
 
 def limite_padrao(tipo):
@@ -672,10 +788,7 @@ def _normalizar(s):
         'inicio': s.get('inicio'), 'fim': s.get('fim'), 'fonte': s.get('fonte') or 'auto',
         'criterio': s.get('criterio') or '', 'parametros': s.get('parametros') or {},
         'limite': s.get('limite') or limite_padrao(s.get('tipo')),
-        'itens': [{'loja_id': i.get('loja_id'), 'produto_id': i.get('produto_id'), 'servico_id': i.get('servico_id'),
-                   'imagem_id': i.get('imagem_id'),
-                   'titulo': i.get('titulo') or '', 'texto': i.get('texto') or '', 'link': i.get('link') or ''}
-                  for i in s.get('itens') or []],
+        'itens': [item_norm(i) for i in s.get('itens') or []],
     }
 
 
@@ -700,7 +813,7 @@ def carregar_rascunho(seccoes):
         from ..servicos.models import Servico
         servs = set(Servico.objects.filter(id__in=[i['servico_id'] for i in todos if i.get('servico_id')])
                     .values_list('id', flat=True))
-        imagens = set(HomeImagem.objects.filter(id__in=[i['imagem_id'] for i in todos if i.get('imagem_id')])
+        imagens = set(HomeImagem.objects.filter(id__in=[x for i in todos for x in (i.get('imagem_id'), i.get('imagem_movel_id')) if x])
                       .values_list('id', flat=True))
         for ordem, s in enumerate(seccoes):
             n = _normalizar(s)
@@ -716,7 +829,11 @@ def carregar_rascunho(seccoes):
                 itens.append(HomeItem(seccao=sec, ordem=o, loja_id=i['loja_id'], produto_id=i['produto_id'],
                                       servico_id=i['servico_id'],
                                       imagem_id=i['imagem_id'] if i['imagem_id'] in imagens else None,
-                                      titulo=i['titulo'], texto=i['texto'], link=i['link']))
+                                      imagem_movel_id=i['imagem_movel_id'] if i['imagem_movel_id'] in imagens else None,
+                                      chave=i['chave'],
+                                      **{k: i[k] for k in ITEM_TEXTOS},
+                                      inicio=parse_datetime(i['inicio']) if i['inicio'] else None,
+                                      fim=parse_datetime(i['fim']) if i['fim'] else None))
             HomeItem.objects.bulk_create(itens)
 
 
@@ -783,6 +900,8 @@ def avisos_seccao(s):
         avisos.append('Só aparece a partir da data de início.')
     if s.fonte == 'manual' and s.tipo in ('hero', 'lojas', 'produtos', 'banner') and not itens:
         avisos.append('Sem itens escolhidos: a secção não aparece.')
+    if s.tipo == 'publicidade':
+        avisos += _avisos_publicidade(itens, agora)
     if s.tipo == 'cabecalho' and not s.titulo:
         avisos.append('Cabeçalho sem título: não aparece.')
     if s.tipo == 'loja_destaque':
@@ -796,6 +915,48 @@ def avisos_seccao(s):
         elif not loja.ativa:
             avisos.append(f'A loja "{loja.nome}" não está activa ({loja.estado}): a secção não aparece.')
     return avisos
+
+
+def _avisos_publicidade(itens, agora):
+    if not itens:
+        return ['Sem anúncios: a secção não aparece.']
+    avisos = []
+    ativos = 0
+    for n, i in enumerate(itens, 1):
+        nome = f'Anúncio {n}' + (f' ("{i.titulo}")' if i.titulo else '')
+        if i.fim and i.fim <= agora:
+            avisos.append(f'{nome}: as datas já terminaram, não aparece.')
+            continue
+        if i.inicio and i.inicio > agora:
+            avisos.append(f'{nome}: só aparece a partir da data de início.')
+        for im, onde in ((i.imagem, ''), (i.imagem_movel, ' (versão para telemóvel)')):
+            if im is None or im.tipo != 'video':
+                continue
+            if im.ficheiro_estado == 'erro':
+                avisos.append(f'{nome}{onde}: o vídeo não se conseguiu converter — carrega outro.')
+            elif im.ficheiro_estado != 'pronto':
+                avisos.append(f'{nome}{onde}: o vídeo ainda está a ser preparado.')
+        if i.imagem_id and not (i.inicio and i.inicio > agora):
+            ativos += 1
+    if not ativos:
+        avisos.append('Nenhum anúncio activo agora: a secção não aparece.')
+    return avisos
+
+
+def _nova_chave():
+    import uuid
+    return uuid.uuid4().hex[:12]
+
+
+def _data(v, nome):
+    """→ (datetime | None, erro)."""
+    from django.utils.dateparse import parse_datetime
+    if v is None or v == '':
+        return None, None
+    d = parse_datetime(v) if isinstance(v, str) else None
+    if d is None:
+        return None, f'Data de {nome} inválida.'
+    return (timezone.make_aware(d) if timezone.is_naive(d) else d), None
 
 
 def _link_valido(link):
@@ -844,6 +1005,9 @@ def _validar_parametros(p):
             if not isinstance(v, list) or len(v) > mx or not all(isinstance(x, str) and len(x) <= 100 for x in v):
                 return None, f'Valor inválido em {k}.'
             limpos[k] = list(dict.fromkeys(x.strip().lower() for x in v if x.strip()))
+    for k in ('proporcao', 'proporcao_movel'):
+        if k in limpos and limpos[k] != 'auto' and limpos[k] not in PROPORCOES:
+            return None, 'Proporção inválida.'
     if limpos.get('estilo_titulo') not in (None, 'titulo', 'divisor'):
         return None, 'Estilo do título inválido.'
     if 'ancora' in limpos and not all(c.isalnum() or c in '-_' for c in limpos['ancora']):
@@ -872,25 +1036,45 @@ def _validar_itens(lista, tipo, params):
         if not isinstance(i, dict):
             return None, 'Item inválido.'
         loja_id, produto_id, imagem_id = _int(i.get('loja_id')), _int(i.get('produto_id')), _int(i.get('imagem_id'))
-        servico_id = _int(i.get('servico_id'))
-        titulo, texto, link = (i.get('titulo') or ''), (i.get('texto') or ''), (i.get('link') or '')
-        if not all(isinstance(x, str) for x in (titulo, texto, link)):
+        servico_id, imagem_movel_id = _int(i.get('servico_id')), _int(i.get('imagem_movel_id'))
+        textos = {k: i.get(k) or '' for k in ITEM_TEXTOS}
+        if not all(isinstance(x, str) for x in textos.values()):
             return None, 'Item inválido.'
-        if len(titulo) > 120 or len(texto) > 300 or len(link) > 300:
-            return None, 'Texto do item demasiado longo.'
+        for k, maximo in ITEM_TEXTOS.items():
+            if len(textos[k].strip()) > maximo:
+                return None, 'Texto do item demasiado longo.' if k in ('titulo', 'texto', 'link') else \
+                    f'{"O texto do botão" if k == "botao" else "O nome do anunciante"} tem no máximo {maximo} caracteres.'
+            textos[k] = textos[k].strip()
         if sum(bool(x) for x in (loja_id, produto_id, servico_id)) > 1:
             return None, 'Cada item é uma loja, um produto, um serviço ou um banner.'
-        genero = 'loja' if loja_id else 'produto' if produto_id else 'servico' if servico_id else 'banner'
+        genero = 'loja' if loja_id else 'produto' if produto_id else 'servico' if servico_id else \
+            'anuncio' if tipo == 'publicidade' else 'banner'
         if genero not in aceites:
             return None, f'Esta secção não aceita itens do tipo {genero}.'
-        if genero == 'banner' and not titulo.strip() and not imagem_id:
+        if genero == 'banner' and not textos['titulo'] and not imagem_id:
             return None, 'O banner precisa de um título ou de uma imagem.'
-        if imagem_id and genero != 'banner':
+        if genero == 'anuncio' and not imagem_id:
+            return None, 'Cada anúncio precisa de uma imagem ou de um vídeo.'
+        if imagem_id and genero not in ('banner', 'anuncio'):
             return None, 'Só os banners têm imagem própria.'
-        if not _link_valido(link.strip()):
+        inicio, erro = _data(i.get('inicio'), 'início do anúncio')
+        if erro:
+            return None, erro
+        fim, erro = _data(i.get('fim'), 'fim do anúncio')
+        if erro:
+            return None, erro
+        if genero != 'anuncio' and (imagem_movel_id or textos['botao'] or textos['anunciante'] or inicio or fim):
+            return None, 'Versão para telemóvel, botão, anunciante e datas só existem nos anúncios da Publicidade.'
+        if inicio and fim and fim <= inicio:
+            return None, 'A data de fim do anúncio tem de ser depois do início.'
+        if not _link_valido(textos['link']):
             return None, 'Link inválido: usa um caminho do site (ex.: /loja/12) ou um endereço http(s).'
+        chave = i.get('chave') if isinstance(i.get('chave'), str) and len(i['chave']) == 12 and i['chave'].isalnum() \
+            else _nova_chave()
+        if genero != 'anuncio':
+            chave = ''
         itens.append({'loja_id': loja_id, 'produto_id': produto_id, 'servico_id': servico_id, 'imagem_id': imagem_id,
-                      'titulo': titulo.strip(), 'texto': texto.strip(), 'link': link.strip()})
+                      'imagem_movel_id': imagem_movel_id, 'chave': chave, **textos, 'inicio': inicio, 'fim': fim})
     lojas = {x['loja_id'] for x in itens if x['loja_id']}
     prods = {x['produto_id'] for x in itens if x['produto_id']}
     if lojas and Loja.objects.filter(id__in=lojas).count() != len(lojas):
@@ -900,7 +1084,7 @@ def _validar_itens(lista, tipo, params):
     servs = {x['servico_id'] for x in itens if x['servico_id']}
     if servs and Servico.objects.filter(id__in=servs).count() != len(servs):
         return None, 'Um dos serviços escolhidos não existe.'
-    imagens = {x['imagem_id'] for x in itens if x['imagem_id']}
+    imagens = {y for x in itens for y in (x['imagem_id'], x['imagem_movel_id']) if y}
     if imagens and HomeImagem.objects.filter(id__in=imagens).count() != len(imagens):
         return None, 'Uma das imagens já não existe: carrega-a de novo.'
     if tipo == 'loja_destaque' and prods and \
@@ -963,7 +1147,7 @@ def validar(dados, atual=None):
         campos['criterio'] = crit
     if 'limite' in dados:
         lim = _int(dados['limite'])
-        maximo = 20 if tipo in ('hero', 'loja_destaque') else LIMITE_MAX
+        maximo = 20 if tipo in ('hero', 'loja_destaque') else MAX_ANUNCIOS if tipo == 'publicidade' else LIMITE_MAX
         if lim is None or not 1 <= lim <= maximo:
             return None, None, f'O limite tem de estar entre 1 e {maximo}.'
         campos['limite'] = lim
