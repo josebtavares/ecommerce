@@ -126,7 +126,7 @@
         <AdminComissoes    v-else-if="activeSection === 'comissoes'"    />
         <AdminCategorias   v-else-if="activeSection === 'categorias'"   />
         <AdminRelatorios   v-else-if="activeSection === 'relatorios'"   />
-        <AdminHome         v-else-if="activeSection === 'home'"         />
+        <AdminHome         v-else-if="activeSection === 'home'"         :pode-ver-estatisticas="permissoes.includes('ver_stats')" />
         <AdminPaginas      v-else-if="activeSection === 'paginas'"      />
         <AdminPOS          v-else-if="activeSection === 'pos'"          :pode-exportar="permissoes.includes('exportar_lojas')"
                            :pode-ver-pos="permissoes.includes('ver_backoffice_lojas')" />
@@ -136,7 +136,7 @@
         <AdminBackups      v-else-if="activeSection === 'backups'"      />
         <AdminRegisto      v-else-if="activeSection === 'registo'"      />
         <AdminCatalogo     v-else-if="activeSection === 'catalogo'"     />
-        <AdminPesquisas    v-else-if="activeSection === 'pesquisas'"    />
+        <AdminEstatisticas v-else-if="activeSection === 'estatisticas'" />
         <AdminSubscricoes  v-else-if="activeSection === 'subscricoes'"  />
         <AdminFaturacao    v-else-if="activeSection === 'faturacao'"    />
       </div>
@@ -178,13 +178,15 @@ const AdminDevolucoes   = defineAsyncComponent(() => import('./AdminDevolucoes.v
 const AdminBackups      = defineAsyncComponent(() => import('./AdminBackups.vue'))
 const AdminRegisto      = defineAsyncComponent(() => import('./AdminRegisto.vue'))
 const AdminCatalogo     = defineAsyncComponent(() => import('./AdminCatalogo.vue'))
-const AdminPesquisas    = defineAsyncComponent(() => import('./AdminPesquisas.vue'))
+const AdminEstatisticas = defineAsyncComponent(() => import('./AdminEstatisticas.vue'))
+// endereços antigos que continuam a abrir o módulo certo
+const NOMES_ANTIGOS = { pesquisas: 'estatisticas' }
 
 const SECCOES = [
   // icon: nome do ícone Font Awesome (solid)
   { key: 'dashboard',    label: 'Dashboard',     icon: 'chart-pie',     permissao: 'ver_stats'           },
   { key: 'relatorios',   label: 'Relatórios',    icon: 'chart-line',    permissao: 'ver_relatorios'    },
-  { key: 'pesquisas',    label: 'Pesquisas',     icon: 'magnifying-glass', permissao: 'ver_stats'        },
+  { key: 'estatisticas', label: 'Estatísticas',  icon: 'chart-pie',     permissao: 'ver_stats'         },
   { key: 'categorias',   label: 'Categorias',    icon: 'tags',          permissao: 'gerir_lojas'         },
   { key: 'lojas',        label: 'Lojas',         icon: 'store',         permissao: 'gerir_lojas'         },
   { key: 'catalogo',     label: 'Catálogo',      icon: 'clipboard-check', permissao: 'gerir_lojas'       },
@@ -224,7 +226,7 @@ export default {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
     AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes, AdminFaturacao,
-    AdminDevolucoes, AdminBackups, AdminRegisto, AdminCatalogo, AdminPesquisas,
+    AdminDevolucoes, AdminBackups, AdminRegisto, AdminCatalogo, AdminEstatisticas,
   },
 
   data () {
@@ -304,7 +306,8 @@ export default {
     // links antigos (?seccao=devolucoes&reembolso=12, /admin/devolucoes?reembolso=12) → /admin/devolucoes/12
     acertarEndereco () {
       if (this.$route.name !== 'Admin') return
-      const pedida = this.$route.params.seccao || this.$route.query.seccao
+      const pedida0 = this.$route.params.seccao || this.$route.query.seccao
+      const pedida = NOMES_ANTIGOS[pedida0] || pedida0
       const valida = this.seccoes.find(s => s.key === pedida)?.key || this.seccoes[0]?.key
       const destino = enderecoCerto(this.$route, '/admin', valida, COM_FICHA.admin)
       if (destino) this.$router.replace(destino)

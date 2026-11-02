@@ -42,8 +42,10 @@ PERFIS = {
     ('loja', 'banner'):      {'lado': 1920, 'crf': 25, 'maxrate': '5M', 'bufsize': '10M'},
     ('produto', 'ficheiro'): {'lado': 1080, 'crf': 24, 'maxrate': '3M', 'bufsize': '6M'},
     ('galeria', 'ficheiro'): {'lado': 1080, 'crf': 24, 'maxrate': '3M', 'bufsize': '6M'},
+    # publicidade da home: ocupa a largura toda, como o banner da loja
+    ('homeimagem', 'ficheiro'): {'lado': 1920, 'crf': 25, 'maxrate': '5M', 'bufsize': '10M'},
 }
-MODELOS = {'loja': 'app.Loja', 'produto': 'app.Produto', 'galeria': 'app.Galeria'}
+MODELOS = {'loja': 'app.Loja', 'produto': 'app.Produto', 'galeria': 'app.Galeria', 'homeimagem': 'app.HomeImagem'}
 # versões mais leves de todos os vídeos (o sufixo tem de bater com versoes_media.SUFIXOS['mp4'])
 VERSOES = (
     ('__720', {'lado': 1280, 'crf': 26, 'maxrate': '2500k', 'bufsize': '5M'}),   # telemóveis (destaques, página da loja)
@@ -200,11 +202,13 @@ def _correr(cmd, timeout):
 
 
 def sondar(caminho):
-    """Dados do vídeo via ffprobe: largura, altura, fps, duração, codec."""
+    """Dados do vídeo via ffprobe: largura, altura, fps, duração, codec e rotação (vídeos gravados ao alto
+    no telemóvel vêm deitados com a rotação nos metadados; largura_vista/altura_vista já a aplicam)."""
     try:
         out = _correr([
             'ffprobe', '-v', 'error', '-select_streams', 'v:0',
-            '-show_entries', 'stream=codec_name,width,height,avg_frame_rate:format=duration',
+            '-show_entries', 'stream=codec_name,width,height,avg_frame_rate:stream_side_data=rotation'
+                             ':stream_tags=rotate:format=duration',
             '-of', 'json', caminho,
         ], timeout=60)
     except RuntimeError as e:
@@ -226,9 +230,21 @@ def sondar(caminho):
     except ValueError:
         duracao = 0.0
 
+    rotacao = 0
+    try:
+        for d in s.get('side_data_list') or []:
+            if 'rotation' in d:
+                rotacao = int(float(d['rotation']))
+        if not rotacao and (s.get('tags') or {}).get('rotate'):
+            rotacao = int(float(s['tags']['rotate']))
+    except (TypeError, ValueError):
+        rotacao = 0
+    largura, altura = s.get('width') or 0, s.get('height') or 0
+    deitado = abs(rotacao) % 180 == 90
     return {
-        'codec': s.get('codec_name') or '', 'largura': s.get('width') or 0,
-        'altura': s.get('height') or 0, 'fps': fps, 'duracao': duracao,
+        'codec': s.get('codec_name') or '', 'largura': largura,
+        'altura': altura, 'fps': fps, 'duracao': duracao, 'rotacao': rotacao,
+        'largura_vista': altura if deitado else largura, 'altura_vista': largura if deitado else altura,
     }
 
 
