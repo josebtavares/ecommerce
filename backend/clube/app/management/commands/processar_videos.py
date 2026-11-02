@@ -217,6 +217,10 @@ class Command(BaseCommand):
             from app.utils.pesquisa import reindexar_tudo
             n = reindexar_tudo()
             self.stdout.write(f'  pesquisa: índice refeito ({n} entradas)')
+            from app.utils.pesquisa_stats import limpar
+            apagados = limpar()      # registos das pesquisas com mais de 180 dias (Admin → Pesquisas)
+            if apagados:
+                self.stdout.write(f'  pesquisa: {apagados} registo(s) antigos apagados')
         except Exception as e:
             self.stderr.write(f'  pesquisa: índice falhou: {e}')
 

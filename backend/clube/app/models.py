@@ -2558,3 +2558,29 @@ class EntradaPesquisa(models.Model):
 
     def __str__(self):
         return f'{self.tipo} {self.objeto_id}: {self.nome}'
+
+
+class RegistoPesquisa(models.Model):
+    """
+    Uma pesquisa feita na barra (caixa) ou na página /pesquisa — para Admin → Pesquisas (utils/pesquisa_stats.py).
+    Sem utilizador nem IP: `sessao` é um id aleatório do separador do browser (conta pessoas diferentes).
+    `id_cliente` vem do browser e junta numa linha as afinações ("cam" → "camisola") e o clique que se seguiu.
+    Apagado ao fim de DIAS_REGISTO dias (worker).
+    """
+    ORIGENS = [('caixa', 'Barra de pesquisa'), ('pagina', 'Página de resultados')]
+
+    id_cliente   = models.CharField(max_length=40, unique=True)
+    sessao       = models.CharField(max_length=40, db_index=True)
+    q            = models.CharField(max_length=80, db_index=True)       # normalizado (agrupa variantes)
+    texto        = models.CharField(max_length=80)                      # como foi escrito
+    origem       = models.CharField(max_length=8, choices=ORIGENS, default='caixa')
+    resultados   = models.PositiveIntegerField(default=0)
+    clique_tipo  = models.CharField(max_length=10, blank=True, default='')
+    clique_id    = models.PositiveIntegerField(null=True, blank=True)
+    clique_nome  = models.CharField(max_length=120, blank=True, default='')
+    clique_posicao = models.PositiveSmallIntegerField(null=True, blank=True)
+    criado_em    = models.DateTimeField(auto_now_add=True, db_index=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.q} ({self.resultados})'

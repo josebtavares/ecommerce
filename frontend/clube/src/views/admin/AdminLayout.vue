@@ -136,6 +136,7 @@
         <AdminBackups      v-else-if="activeSection === 'backups'"      />
         <AdminRegisto      v-else-if="activeSection === 'registo'"      />
         <AdminCatalogo     v-else-if="activeSection === 'catalogo'"     />
+        <AdminPesquisas    v-else-if="activeSection === 'pesquisas'"    />
         <AdminSubscricoes  v-else-if="activeSection === 'subscricoes'"  />
         <AdminFaturacao    v-else-if="activeSection === 'faturacao'"    />
       </div>
@@ -177,11 +178,13 @@ const AdminDevolucoes   = defineAsyncComponent(() => import('./AdminDevolucoes.v
 const AdminBackups      = defineAsyncComponent(() => import('./AdminBackups.vue'))
 const AdminRegisto      = defineAsyncComponent(() => import('./AdminRegisto.vue'))
 const AdminCatalogo     = defineAsyncComponent(() => import('./AdminCatalogo.vue'))
+const AdminPesquisas    = defineAsyncComponent(() => import('./AdminPesquisas.vue'))
 
 const SECCOES = [
   // icon: nome do ícone Font Awesome (solid)
   { key: 'dashboard',    label: 'Dashboard',     icon: 'chart-pie',     permissao: 'ver_stats'           },
   { key: 'relatorios',   label: 'Relatórios',    icon: 'chart-line',    permissao: 'ver_relatorios'    },
+  { key: 'pesquisas',    label: 'Pesquisas',     icon: 'magnifying-glass', permissao: 'ver_stats'        },
   { key: 'categorias',   label: 'Categorias',    icon: 'tags',          permissao: 'gerir_lojas'         },
   { key: 'lojas',        label: 'Lojas',         icon: 'store',         permissao: 'gerir_lojas'         },
   { key: 'catalogo',     label: 'Catálogo',      icon: 'clipboard-check', permissao: 'gerir_lojas'       },
@@ -221,7 +224,7 @@ export default {
     AdminDashboard, AdminLojas, AdminUtilizadores, AdminProdutos,
     AdminEncomendas, AdminPagamentos, AdminTipos, AdminComissoes,
     AdminCategorias, NotificacaoSino,AdminRelatorios,AdminHome, AdminPaginas, AdminPOS, AdminSuporte, AdminDenuncias, AdminPlataforma, AdminSubscricoes, AdminFaturacao,
-    AdminDevolucoes, AdminBackups, AdminRegisto, AdminCatalogo,
+    AdminDevolucoes, AdminBackups, AdminRegisto, AdminCatalogo, AdminPesquisas,
   },
 
   data () {
