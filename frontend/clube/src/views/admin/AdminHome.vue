@@ -325,8 +325,128 @@
             {{ DESCRICAO_GRUPO[form.tipo] }}
           </p>
 
+          <!-- publicidade: formato, anúncios e pré-visualização -->
+          <template v-if="form.tipo === 'publicidade'">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" data-teste="pub-formato">
+              <div>
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Proporção no computador</label>
+                <select v-model="form.parametros.proporcao" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" data-teste="pub-proporcao">
+                  <option value="auto">Automática ({{ formatoProporcao(previa.auto.computador) }})</option>
+                  <option v-for="k in pubConf.proporcoes" :key="k" :value="k">{{ k }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Proporção no telemóvel</label>
+                <select v-model="form.parametros.proporcao_movel" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" data-teste="pub-proporcao-movel">
+                  <option value="auto">Automática ({{ formatoProporcao(previa.auto.telemovel) }})</option>
+                  <option v-for="k in pubConf.proporcoes" :key="k" :value="k">{{ k }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-zinc-400 font-medium mb-1.5 block">Muda de anúncio a cada (s)</label>
+                <input v-model.number="form.parametros.intervalo" type="number" min="3" max="30" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
+                       :placeholder="String(pubConf.intervalo)" data-teste="pub-intervalo" />
+              </div>
+            </div>
+            <p class="text-[10px] text-zinc-600 -mt-3">
+              Automática = o formato mais comum entre os anúncios; fica igual enquanto a página está aberta (nada salta ao mudar de anúncio).
+              Anúncios com outro formato aparecem inteiros, com margens desfocadas. Os vídeos passam ao seguinte quando acabam.
+            </p>
+
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-xs text-zinc-400 font-medium block">Anúncios ({{ form.itens.length }})</label>
+                <span class="text-[10px] text-zinc-600">máx. {{ pubConf.max_anuncios }} · imagem até {{ pubConf.imagem_max_mb }} MB · vídeo até {{ pubConf.video_max_s }} s e {{ pubConf.video_max_mb }} MB</span>
+              </div>
+              <div class="space-y-2">
+                <div v-for="(it, k) in form.itens" :key="it._k" class="bg-zinc-800/70 border border-zinc-700 rounded-xl p-3 space-y-3"
+                     :data-teste="'pub-item-' + k">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold text-zinc-500 w-5">{{ k + 1 }}.</span>
+                    <p class="flex-1 min-w-0 text-sm text-zinc-100 truncate">{{ it.titulo || it.anunciante || 'Anúncio sem título' }}</p>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded font-bold" :class="ESTADO_ANUNCIO[estadoAnuncio(it)].cor"
+                          :data-teste="'pub-item-estado-' + k">{{ ESTADO_ANUNCIO[estadoAnuncio(it)].n }}</span>
+                    <button @click="moverItem(k, -1)" :disabled="k === 0" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition" aria-label="Subir"><font-awesome-icon :icon="['fas', 'chevron-up']" /></button>
+                    <button @click="moverItem(k, 1)" :disabled="k === form.itens.length - 1" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition" aria-label="Descer"><font-awesome-icon :icon="['fas', 'chevron-down']" /></button>
+                    <button @click="form.itens.splice(k, 1)" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-red-400 transition" aria-label="Remover anúncio"><font-awesome-icon :icon="['fas', 'xmark']" /></button>
+                  </div>
+
+                  <!-- estatísticas dos últimos 30 dias (só anúncios já guardados) -->
+                  <p v-if="it.chave" class="text-[11px] text-zinc-500 flex flex-wrap items-center gap-x-2 -mt-1" :data-teste="'pub-item-estat-' + k">
+                    <font-awesome-icon :icon="['fas', 'chart-simple']" class="text-zinc-600" />
+                    <template v-if="estatAnuncio(it)">
+                      <span>{{ selecionada?.estatisticas?.dias || 30 }} dias: <b class="text-zinc-300 font-semibold">{{ estatAnuncio(it).impressoes.toLocaleString('pt-PT') }}</b> impressões
+                        · <b class="text-zinc-300 font-semibold">{{ estatAnuncio(it).cliques.toLocaleString('pt-PT') }}</b> cliques
+                        <template v-if="estatAnuncio(it).ctr != null"> · {{ estatAnuncio(it).ctr.toLocaleString('pt-PT') }}%</template></span>
+                    </template>
+                    <span v-else>Ainda sem impressões nos últimos 30 dias.</span>
+                    <router-link v-if="podeVerEstatisticas" to="/admin/estatisticas?aba=publicidade" class="text-red-400 hover:text-red-300" data-teste="pub-item-estat-link">Ver estatísticas →</router-link>
+                  </p>
+
+                  <!-- media principal + versão para telemóvel -->
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div v-for="sl in SLOTS_MEDIA" :key="sl.campo" class="flex items-start gap-3" :data-teste="`pub-item-${k}-${sl.campo}`">
+                      <div class="w-28 h-16 rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden flex items-center justify-center flex-shrink-0">
+                        <img v-if="miniatura(it[sl.campo])" :src="miniatura(it[sl.campo])" alt="" class="w-full h-full object-contain" />
+                        <font-awesome-icon v-else :icon="['fas', it[sl.campo]?.tipo === 'video' ? 'film' : sl.icone]" class="text-zinc-600" />
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <p class="text-xs text-zinc-300 font-medium">{{ sl.n }}<span v-if="sl.opcional" class="text-zinc-600 font-normal"> (opcional)</span></p>
+                        <p v-if="it[sl.campo]" class="text-[11px] text-zinc-500">
+                          {{ it[sl.campo].tipo === 'video' ? 'Vídeo' : 'Imagem' }}<template v-if="it[sl.campo].largura"> · {{ it[sl.campo].largura }}×{{ it[sl.campo].altura }} · {{ formatoProporcao(it[sl.campo].largura / it[sl.campo].altura) }}</template>
+                          <template v-if="it[sl.campo].tipo === 'video'"> · {{ Math.round(it[sl.campo].duracao || 0) }} s
+                            · <span :class="ESTADO_VIDEO[it[sl.campo].estado]?.cor" :data-teste="`pub-item-${k}-${sl.campo}-estado`">{{ ESTADO_VIDEO[it[sl.campo].estado]?.n || it[sl.campo].estado }}</span></template>
+                        </p>
+                        <p v-else-if="sl.opcional" class="text-[11px] text-zinc-600">{{ sl.dica }}</p>
+                        <p v-if="avisoMedia(it, sl.campo)" class="text-[11px] text-amber-400/90 mt-0.5" :data-teste="`pub-item-${k}-${sl.campo}-aviso`">{{ avisoMedia(it, sl.campo) }}</p>
+                        <div class="flex items-center gap-3 mt-1.5">
+                          <label class="px-2.5 py-1 rounded-lg border border-zinc-700 text-[11px] font-semibold text-zinc-300 hover:border-zinc-500 cursor-pointer">
+                            {{ it['_aCarregar_' + sl.campo] ? 'A carregar…' : it[sl.campo] ? 'Trocar' : 'Carregar imagem ou vídeo' }}
+                            <input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" class="hidden"
+                                   :disabled="it['_aCarregar_' + sl.campo]" :data-teste="`pub-item-${k}-${sl.campo}-ficheiro`"
+                                   @change="e => carregarMedia(it, sl, e)" />
+                          </label>
+                          <button v-if="it[sl.campo]" type="button" @click="it[sl.campo] = null; it[sl.id] = null"
+                            class="text-[11px] text-zinc-500 hover:text-red-400">Remover</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input v-model="it.titulo" maxlength="120" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Título (opcional)" :data-teste="`pub-item-${k}-titulo`" />
+                    <input v-model="it.texto" maxlength="300" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Texto (opcional)" />
+                    <input v-model="it.link" maxlength="300" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Link: /loja/12 ou https://…" :data-teste="`pub-item-${k}-link`" />
+                    <input v-model="it.botao" maxlength="40" class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" :disabled="!it.link"
+                           :placeholder="it.link ? 'Texto do botão (Saber mais)' : 'Sem link: sem botão'" :data-teste="`pub-item-${k}-botao`" />
+                    <input v-model="it.anunciante" maxlength="80" class="sm:col-span-2 w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" placeholder="Anunciante (aparece em &quot;Publicidade · …&quot;)" :data-teste="`pub-item-${k}-anunciante`" />
+                    <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label class="block text-[11px] text-zinc-500">Mostrar a partir de <span class="text-zinc-600">(vazio = já)</span>
+                      <input v-model="it.inicio" type="datetime-local" class="mt-1 w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" title="Mostrar a partir de" :data-teste="`pub-item-${k}-inicio`" /></label>
+                      <label class="block text-[11px] text-zinc-500">Mostrar até <span class="text-zinc-600">(vazio = sempre)</span>
+                      <input v-model="it.fim" type="datetime-local" class="mt-1 w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" title="Mostrar até" :data-teste="`pub-item-${k}-fim`" /></label>
+                    </div>
+                  </div>
+                  <p v-if="it.link && /^https?:/i.test(it.link)" class="text-[10px] text-zinc-600 -mt-1">Link externo: abre num separador novo e fica marcado como patrocinado para os motores de busca.</p>
+                </div>
+              </div>
+              <button v-if="form.itens.length < pubConf.max_anuncios" type="button" @click="novoAnuncio" data-teste="pub-adicionar"
+                class="mt-2 w-full px-3 py-2 rounded-xl border border-dashed border-zinc-700 text-xs font-semibold text-zinc-300 hover:border-zinc-500">
+                + Adicionar anúncio
+              </button>
+            </div>
+
+            <p v-if="previa.formatosDiferentes" class="text-[11px] text-amber-400/90 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-xl" data-teste="pub-aviso-formatos">
+              Os anúncios têm formatos muito diferentes: alguns vão aparecer pequenos, com margens desfocadas grandes.
+              Para ficar melhor, usa imagens do mesmo formato ou carrega versões para telemóvel.
+            </p>
+
+            <Previa :anuncios="previa.anuncios" :proporcao="previa.proporcao" :fixa="previa.fixa"
+                    :intervalo="previa.intervalo" :titulo="form.titulo" :subtitulo="form.subtitulo" :vazio="previa.vazio" />
+          </template>
+
           <!-- itens escolhidos -->
-          <div v-if="aceitaItens">
+          <div v-if="aceitaItens && form.tipo !== 'publicidade'">
             <div class="flex items-center justify-between mb-2">
               <label class="text-xs text-zinc-400 font-medium block">
                 {{ form.fonte === 'misto' ? 'Fixados no início' : 'Escolhidos' }} ({{ form.itens.length }})
@@ -387,7 +507,7 @@
           <!-- limite + datas -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div v-if="form.tipo !== 'cabecalho'">
-              <label class="text-xs text-zinc-400 font-medium mb-1.5 block">{{ form.tipo === 'hero' ? 'Máximo de slides' : GRUPOS.includes(form.tipo) ? 'Máximo por slider' : 'Máximo de itens' }}</label>
+              <label class="text-xs text-zinc-400 font-medium mb-1.5 block">{{ form.tipo === 'publicidade' ? 'Máximo de anúncios' : form.tipo === 'hero' ? 'Máximo de slides' : GRUPOS.includes(form.tipo) ? 'Máximo por slider' : 'Máximo de itens' }}</label>
               <input v-model.number="form.limite" type="number" min="1" :max="limiteMax" class="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" />
             </div>
             <div>
@@ -473,12 +593,13 @@
 import api from '@/services/api'
 import { toast } from 'vue3-toastify'
 import Procurar from '@/components/admin/HomeProcurar.vue'
+import Previa, { formatoProporcao } from '@/components/admin/HomePublicidadePreview.vue'
 
 const ICONES = {
   servicos: 'calendar-check',
   hero: 'panorama', lojas: 'store', produtos: 'box', loja_destaque: 'star', categorias: 'table-cells',
   banner: 'image', cabecalho: 'heading', lojas_por_categoria: 'layer-group', produtos_por_tipo: 'shapes',
-  produtos_categorias_destaque: 'fire',
+  produtos_categorias_destaque: 'fire', publicidade: 'rectangle-ad',
 }
 const DESCRICAO_TIPO = {
   hero: 'Slides grandes no topo: lojas, produtos ou banners.',
@@ -492,6 +613,7 @@ const DESCRICAO_TIPO = {
   categorias: 'Grelha de categorias de lojas.',
   banner: 'Faixa promocional com link.',
   servicos: 'Slider de serviços (marcações): escolhidos ou por critério (novos, mais marcados, de uma loja).',
+  publicidade: 'Carrossel de anúncios (imagem ou vídeo, link e botão) que passa sozinho; o tamanho adapta-se aos anúncios.',
 }
 const DESCRICAO_FONTE = {
   manual: 'Só os que escolheres, pela tua ordem.',
@@ -506,7 +628,7 @@ const DESCRICAO_GRUPO = {
 const TEM_FONTE = ['hero', 'lojas', 'produtos', 'servicos']
 const GRUPOS = ['lojas_por_categoria', 'produtos_por_tipo', 'produtos_categorias_destaque']
 const ITENS_POR_TIPO = { hero: ['loja', 'produto', 'banner'], lojas: ['loja'], produtos: ['produto'], loja_destaque: ['produto'], banner: ['banner'],
-  servicos: ['servico'] }
+  servicos: ['servico'], publicidade: ['anuncio'] }
 const NOVA = {
   hero: { fonte: 'auto', criterio: 'novas' },
   lojas: { titulo: 'Lojas populares', fonte: 'auto', criterio: 'populares' },
@@ -515,6 +637,41 @@ const NOVA = {
   lojas_por_categoria: {}, produtos_por_tipo: {}, produtos_categorias_destaque: {},
   loja_destaque: {}, categorias: {}, banner: { fonte: 'manual' },
   servicos: { titulo: 'Marca um serviço', fonte: 'auto', criterio: 'novos' },
+  publicidade: { fonte: 'manual' },
+}
+const PUB_PADRAO = { proporcoes: ['21:9', '3:1', '2:1', '16:9', '4:3', '1:1', '4:5', '9:16'],
+  limites: { computador: [1.5, 4.0], telemovel: [0.6, 2.4] }, sem_medidas: 1.7778, intervalo: 6, max_anuncios: 20,
+  video_max_mb: 25, video_max_s: 30, imagem_max_mb: 20 }
+const SLOTS_MEDIA = [
+  { campo: 'media', id: 'imagem_id', n: 'Imagem ou vídeo', icone: 'image', opcional: false },
+  { campo: 'media_movel', id: 'imagem_movel_id', n: 'Versão para telemóvel', icone: 'mobile-screen', opcional: true,
+    dica: 'Sem ela, o telemóvel mostra a mesma. Útil para uma imagem vertical.' },
+]
+const ESTADO_VIDEO = {
+  pendente: { n: 'na fila para preparar…', cor: 'text-amber-400' },
+  a_processar: { n: 'a preparar…', cor: 'text-amber-400' },
+  pronto: { n: 'pronto', cor: 'text-green-400' },
+  erro: { n: 'não se conseguiu preparar — carrega outro', cor: 'text-red-400' },
+}
+const ESTADO_ANUNCIO = {
+  ativo: { n: 'ACTIVO', cor: 'bg-green-500/10 text-green-400' },
+  agendado: { n: 'AGENDADO', cor: 'bg-amber-500/10 text-amber-400' },
+  terminado: { n: 'TERMINADO', cor: 'bg-zinc-700/60 text-zinc-400' },
+  sem_media: { n: 'SEM IMAGEM', cor: 'bg-red-500/10 text-red-400' },
+}
+const VIDEO_EXT = /\.(mp4|webm|mov)$/i
+const SEGUIR_VIDEO_MS = 3000
+
+// proporção como o servidor (utils/home.py proporcao): fixa, ou a mediana dos anúncios dentro dos limites
+function calcProporcao (conf, escolha, medias, onde) {
+  if (escolha && escolha !== 'auto' && escolha.includes(':')) {
+    const [a, b] = escolha.split(':').map(Number)
+    if (a && b) return a / b
+  }
+  const rs = medias.filter(m => m?.largura && m?.altura).map(m => m.largura / m.altura).sort((x, y) => x - y)
+  const r = rs.length ? rs[Math.floor(rs.length / 2)] : conf.sem_medidas
+  const [mn, mx] = conf.limites[onde]
+  return Math.min(Math.max(r, mn), mx)
 }
 const MAX_SECCOES = 40
 const MAX_ITENS = 50
@@ -534,11 +691,15 @@ function paraIso (local) {
 
 export default {
   name: 'AdminHome',
-  components: { Procurar },
+  components: { Procurar, Previa },
+  props: {
+    podeVerEstatisticas: { type: Boolean, default: false },
+  },
 
   data () {
     return {
       ICONES, DESCRICAO_TIPO, DESCRICAO_FONTE, DESCRICAO_GRUPO, TEM_FONTE, GRUPOS, MAX_SECCOES, MAX_ITENS,
+      SLOTS_MEDIA, ESTADO_VIDEO, ESTADO_ANUNCIO,
       seccoes: [],
       opcoes: { fontes: [], tipos: [], criterios_lojas: [], criterios_produtos: [], criterios_servicos: [], categorias_lojas: [], tipos_produto: [], categorias_destaque: [] },
       publicacao: null,
@@ -575,7 +736,53 @@ export default {
       if (this.form.tipo === 'loja_destaque') return !!this.form.parametros.loja_id
       return !TEM_FONTE.includes(this.form.tipo) || this.form.fonte !== 'auto'
     },
-    limiteMax () { return ['hero', 'loja_destaque'].includes(this.form?.tipo) ? 20 : (this.opcoes.limite_max || 100) },
+    limiteMax () {
+      if (this.form?.tipo === 'publicidade') return this.pubConf.max_anuncios
+      return ['hero', 'loja_destaque'].includes(this.form?.tipo) ? 20 : (this.opcoes.limite_max || 100)
+    },
+    pubConf () { return { ...PUB_PADRAO, ...(this.opcoes.publicidade || {}) } },
+    // o que a home mostraria agora com este formulário (mesmas regras do servidor: _resolver_publicidade)
+    previa () {
+      const conf = this.pubConf
+      const vazio = { anuncios: [], proporcao: { computador: conf.sem_medidas, telemovel: conf.sem_medidas }, fixa: {},
+                      auto: { computador: conf.sem_medidas, telemovel: conf.sem_medidas }, intervalo: conf.intervalo,
+                      formatosDiferentes: false, vazio: '' }
+      if (this.form?.tipo !== 'publicidade') return vazio
+      const f = this.form
+      const p = f.parametros
+      const limite = Math.min(Math.max(Number(f.limite) || 10, 1), conf.max_anuncios)
+      const mostraveis = f.itens.filter(i => this.mostravel(i.media))
+      const anuncios = mostraveis.filter(i => this.estadoAnuncio(i) === 'ativo').slice(0, limite).map(i => {
+        const link = (i.link || '').trim()
+        return {
+          chave: i.chave || `novo${i._k}`, titulo: i.titulo || '', texto: i.texto || '', link,
+          externo: /^https?:\/\//i.test(link), botao: (i.botao || '').trim() || (link ? 'Saber mais' : ''),
+          anunciante: i.anunciante || '', media: this.mediaPublica(i.media),
+          media_movel: this.mostravel(i.media_movel) ? this.mediaPublica(i.media_movel) : null,
+        }
+      })
+      const auto = {
+        computador: calcProporcao(conf, 'auto', anuncios.map(a => a.media), 'computador'),
+        telemovel: calcProporcao(conf, 'auto', anuncios.map(a => a.media_movel || a.media), 'telemovel'),
+      }
+      const proporcao = {
+        computador: calcProporcao(conf, p.proporcao, anuncios.map(a => a.media), 'computador'),
+        telemovel: calcProporcao(conf, p.proporcao_movel, anuncios.map(a => a.media_movel || a.media), 'telemovel'),
+      }
+      const rs = anuncios.map(a => a.media).filter(m => m.largura && m.altura).map(m => m.largura / m.altura)
+      const intervalo = Number(p.intervalo) >= 3 && Number(p.intervalo) <= 30 ? Number(p.intervalo) : conf.intervalo
+      let msg = ''
+      if (!anuncios.length) {
+        msg = !f.itens.length ? 'Adiciona um anúncio para ver a pré-visualização.'
+          : mostraveis.length ? 'Nenhum anúncio activo agora (vê as datas): a secção não aparece na home.'
+            : 'Carrega uma imagem ou um vídeo para ver a pré-visualização.'
+      }
+      return {
+        anuncios, proporcao, auto, intervalo, vazio: msg,
+        fixa: { computador: !!p.proporcao && p.proporcao !== 'auto', telemovel: !!p.proporcao_movel && p.proporcao_movel !== 'auto' },
+        formatosDiferentes: rs.length > 1 && Math.max(...rs) / Math.min(...rs) > 2.2,
+      }
+    },
     tiposDisponiveis () { return this.opcoes.tipos },
     placeholderTitulo () {
       return { lojas_por_categoria: 'Sem título: só os sliders', produtos_por_tipo: 'Ex.: Produtos', cabecalho: 'Ex.: Produtos' }[this.form?.tipo] || ''
@@ -586,7 +793,11 @@ export default {
     await this.carregar()
   },
   mounted () { window.addEventListener('beforeunload', this.avisoSair) },
-  beforeUnmount () { window.removeEventListener('beforeunload', this.avisoSair) },
+  beforeUnmount () {
+    window.removeEventListener('beforeunload', this.avisoSair)
+    this.fechado = true
+    Object.values(this.seguidos || {}).forEach(clearTimeout)
+  },
 
   methods: {
     nomeTipo (t) { return this.opcoes.tipos.find(x => x.valor === t)?.nome || t },
@@ -601,6 +812,8 @@ export default {
         else partes.push(crit || 'Automático')
       } else if (s.tipo === 'loja_destaque' && !s.parametros?.loja_id && s.criterio) {
         partes.push(`Automática: ${this.opcoes.criterios_lojas.find(c => c.valor === s.criterio)?.nome || s.criterio}`)
+      } else if (s.tipo === 'publicidade') {
+        partes.push(s.itens.length === 1 ? '1 anúncio' : `${s.itens.length} anúncios`)
       } else if (s.tipo === 'servicos') {
         partes.push(this.opcoes.criterios_servicos.find(c => c.valor === s.criterio)?.nome || 'Serviços')
       } else partes.push(s.tipo_nome)
@@ -651,9 +864,13 @@ export default {
         inicio: paraLocal(s.inicio), fim: paraLocal(s.fim),
         fonte: s.fonte, criterio: s.criterio, limite: s.limite,
         parametros: { estilo_titulo: 'titulo', categoria: '', categoria_loja: '', ...JSON.parse(JSON.stringify(s.parametros || {})) },
-        itens: s.itens.map(i => ({ ...i, _k: ++uid })),
+        itens: s.itens.map(i => ({ ...i, inicio: paraLocal(i.inicio), fim: paraLocal(i.fim), _k: ++uid })),
         categoriasSel: (s.parametros?.categoria_ids || []).map(id => s.refs?.categorias?.[id] || { id, nome: `Categoria #${id}`, loja: '' }),
         destaqueAuto: s.tipo === 'loja_destaque' && !s.parametros?.loja_id && !!s.criterio,
+      }
+      if (s.tipo === 'publicidade') {
+        this.form.parametros = { proporcao: 'auto', proporcao_movel: 'auto', ...this.form.parametros }
+        this.form.itens.forEach(i => { ['media', 'media_movel'].forEach(c => { if (this.aPreparar(i[c])) this.seguirVideo(i[c]) }) })
       }
       if (['lojas', 'hero'].includes(s.tipo) && this.form.parametros.abertas_primeiro === undefined) {
         this.form.parametros.abertas_primeiro = ['novas', 'todas', ''].includes(s.criterio)
@@ -686,6 +903,11 @@ export default {
         if (f.fonte !== 'manual' && p.sem_repetidos) out.sem_repetidos = true
       }
       if (f.tipo === 'categorias' && p.categorias?.length) out.categorias = [...p.categorias]
+      if (f.tipo === 'publicidade') {
+        if (p.proporcao && p.proporcao !== 'auto') out.proporcao = p.proporcao
+        if (p.proporcao_movel && p.proporcao_movel !== 'auto') out.proporcao_movel = p.proporcao_movel
+        por('intervalo', p.intervalo)
+      }
       if (f.tipo === 'produtos_categorias_destaque' && f.categoriasSel.length) out.categoria_ids = f.categoriasSel.map(c => c.id)
       if (TEM_FONTE.includes(f.tipo) && f.fonte !== 'manual') {
         if (this.eLojas) {
@@ -712,7 +934,11 @@ export default {
         limite: f.limite, parametros: this.parametrosLimpos(),
         itens: comItens ? f.itens.map(i => ({ loja_id: i.loja_id || null, produto_id: i.produto_id || null, servico_id: i.servico_id || null,
                                                imagem_id: i.imagem_id || null,
-                                               titulo: i.titulo || '', texto: i.texto || '', link: i.link || '' })) : [],
+                                               titulo: i.titulo || '', texto: i.texto || '', link: i.link || '',
+                                               ...(f.tipo === 'publicidade' ? {
+                                                 imagem_movel_id: i.imagem_movel_id || null, chave: i.chave || '',
+                                                 botao: i.botao || '', anunciante: i.anunciante || '',
+                                                 inicio: paraIso(i.inicio), fim: paraIso(i.fim) } : {}) })) : [],
       }
     },
 
@@ -855,6 +1081,84 @@ export default {
       } catch (err) {
         toast.error(err.response?.data?.detail || 'Não foi possível carregar a imagem.')
       } finally { it._aCarregar = false }
+    },
+
+    // ── publicidade ──
+    formatoProporcao,
+    novoAnuncio () {
+      this.form.itens.push({ loja_id: null, produto_id: null, servico_id: null, imagem_id: null, imagem_movel_id: null,
+        media: null, media_movel: null, chave: '', titulo: '', texto: '', link: '', botao: '', anunciante: '',
+        inicio: '', fim: '', _k: ++uid })
+    },
+    estatAnuncio (it) { return this.selecionada?.estatisticas?.por_chave?.[it.chave] || null },
+    estadoAnuncio (it) {
+      if (!it.imagem_id) return 'sem_media'
+      const agora = Date.now()
+      if (it.fim && new Date(it.fim).getTime() <= agora) return 'terminado'
+      if (it.inicio && new Date(it.inicio).getTime() > agora) return 'agendado'
+      return 'ativo'
+    },
+    aPreparar (m) { return m?.tipo === 'video' && ['pendente', 'a_processar'].includes(m.estado) },
+    // como o servidor (_media): um vídeo .mov ainda por converter não se mostra (os browsers não o tocam)
+    mostravel (m) {
+      if (!m?.url) return false
+      if (m.tipo !== 'video' || m.estado === 'pronto') return true
+      return /\.(mp4|webm)$/i.test(m.url.split('?')[0])
+    },
+    mediaPublica (m) {
+      return { tipo: m.tipo, url: m.url, largura: m.largura, altura: m.altura, poster: m.poster || null, duracao: m.duracao || null }
+    },
+    miniatura (m) { return m ? (m.tipo === 'video' ? m.poster : m.url) : null },
+    avisoMedia (it, campo) {
+      const m = it[campo]
+      if (!m?.largura || !m?.altura || this.estadoAnuncio(it) !== 'ativo') return ''
+      const r = m.largura / m.altura
+      const onde = campo === 'media_movel' ? 'telemovel' : 'computador'
+      const sec = this.previa.proporcao[onde]
+      const dif = Math.max(r / sec, sec / r)
+      if (dif > 1.15) return `Formato diferente da secção (${formatoProporcao(sec)}): aparece inteiro, com margens desfocadas.`
+      if (campo === 'media' && !it.media_movel && r >= 2.2) return 'Muito larga: no telemóvel fica pequena — considera uma versão para telemóvel.'
+      return ''
+    },
+    async carregarMedia (it, sl, e) {
+      const ficheiro = e.target.files?.[0]
+      e.target.value = ''
+      if (!ficheiro) return
+      const conf = this.pubConf
+      const eVideo = ficheiro.type.startsWith('video/') || VIDEO_EXT.test(ficheiro.name)
+      const maxMb = eVideo ? conf.video_max_mb : conf.imagem_max_mb
+      if (ficheiro.size > maxMb * 1024 * 1024) {
+        toast.error(`${eVideo ? 'O vídeo' : 'A imagem'} tem de ter no máximo ${maxMb} MB.`)
+        return
+      }
+      const chave = '_aCarregar_' + sl.campo
+      it[chave] = true
+      try {
+        const fd = new FormData()
+        fd.append('ficheiro', ficheiro)
+        fd.append('video', '1')
+        const { data } = await api.post('/app/admin/home/imagens/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        it[sl.campo] = data
+        it[sl.id] = data.id
+        if (this.aPreparar(it[sl.campo])) this.seguirVideo(it[sl.campo])
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Não foi possível carregar o ficheiro.')
+      } finally { it[chave] = false }
+    },
+    // vídeo novo: o worker converte-o; vai perguntando até ficar pronto (ou dar erro)
+    seguirVideo (m) {
+      this.seguidos = this.seguidos || {}
+      if (!m?.id || this.seguidos[m.id] || this.fechado) return
+      const passo = async () => {
+        if (this.fechado) return
+        try {
+          const { data } = await api.get(`/app/admin/home/imagens/${m.id}/`)
+          Object.assign(m, data)
+        } catch (e) { /* tenta outra vez */ }
+        if (this.aPreparar(m) && !this.fechado) this.seguidos[m.id] = setTimeout(passo, SEGUIR_VIDEO_MS)
+        else delete this.seguidos[m.id]
+      }
+      this.seguidos[m.id] = setTimeout(passo, SEGUIR_VIDEO_MS)
     },
 
     nomeItem (it) {

@@ -23,7 +23,7 @@ from django.db import transaction
 from django.db.models.fields.files import FieldFile
 from django.db.models.signals import post_delete, post_init, post_save, pre_save
 
-from .models import Galeria, Loja, Produto
+from .models import Galeria, HomeImagem, Loja, Produto
 from .utils import limpeza, video
 
 # campos cujo ficheiro anterior é apagado quando é substituído
@@ -31,9 +31,10 @@ CAMPOS_FICHEIRO = {
     Loja:    ('logo', 'banner'),
     Produto: ('ficheiro',),
     Galeria: ('ficheiro',),
+    HomeImagem: ('ficheiro',),
 }
 # campos com vídeo a otimizar
-CAMPOS_VIDEO = {Loja: 'banner', Produto: 'ficheiro', Galeria: 'ficheiro'}
+CAMPOS_VIDEO = {Loja: 'banner', Produto: 'ficheiro', Galeria: 'ficheiro', HomeImagem: 'ficheiro'}
 
 
 def _nome(valor):
