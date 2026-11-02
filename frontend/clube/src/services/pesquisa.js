@@ -89,3 +89,29 @@ export function destino (tipo, r) {
   if (tipo === 'categoria') return { path: '/Home', query: { categoria: r.valor } }   // a home filtra o catálogo
   return { path: '/pesquisa', query: { q: r } }
 }
+
+// ── estatísticas (Admin → Pesquisas): o que se procura, o que não se encontra, onde se clica ──
+// Sem utilizador nem IP no servidor: só um id aleatório deste separador (sessionStorage).
+function idAleatorio () {
+  try { if (crypto.randomUUID) return crypto.randomUUID() } catch (e) { /* browser antigo */ }
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8)
+}
+
+function sessao () {
+  try {
+    let s = sessionStorage.getItem('pesquisa_sessao')
+    if (!s) { s = idAleatorio(); sessionStorage.setItem('pesquisa_sessao', s) }
+    return s
+  } catch (e) {
+    if (!sessao.memoria) sessao.memoria = idAleatorio()
+    return sessao.memoria
+  }
+}
+
+export const novoRegisto = idAleatorio
+
+// { id, q, origem: 'caixa'|'pagina', resultados, clique?: { tipo, id, nome, posicao } } — nunca falha à vista
+export function registar (dados) {
+  if (!dados?.id || !dados.q || normalizar(dados.q).replace(/ /g, '').length < MIN_LETRAS) return
+  api.post('/app/pesquisa/registo/', { ...dados, sessao: sessao() }).catch(() => {})
+}

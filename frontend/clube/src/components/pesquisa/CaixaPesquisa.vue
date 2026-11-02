@@ -115,7 +115,10 @@
 </template>
 
 <script>
-import { procurar, foiCancelado, recentes, guardarRecente, limparRecentes, destacar, destino, MIN_LETRAS } from '@/services/pesquisa'
+import { procurar, foiCancelado, recentes, guardarRecente, limparRecentes, destacar, destino, MIN_LETRAS,
+         normalizar, registar, novoRegisto } from '@/services/pesquisa'
+
+const ASSENTE_MS = 2000      // parou de escrever com os resultados à vista → conta como uma pesquisa
 
 let seq = 0
 
@@ -134,7 +137,8 @@ export default {
 
   data () {
     return { q: this.inicial, dados: null, aCarregar: false, aberto: false, ativo: -1,
-             listaRecentes: recentes(), idLista: `pesquisa-lista-${++seq}`, temporizador: null }
+             listaRecentes: recentes(), idLista: `pesquisa-lista-${++seq}`, temporizador: null,
+             registo: null, tRegisto: null }   // registo: { id, q, clicou } — ver registarAgora()
   },
 
   computed: {
@@ -168,6 +172,7 @@ export default {
   beforeUnmount () {
     document.removeEventListener('pointerdown', this.foraDaCaixa)
     clearTimeout(this.temporizador)
+    if (this.tRegisto) { clearTimeout(this.tRegisto); this.registarAgora() }   // fechou antes dos 2 s: conta na mesma
   },
 
   methods: {
@@ -192,7 +197,7 @@ export default {
       this.aCarregar = true
       try {
         const dados = await procurar(q)
-        if (q === this.q) this.dados = dados
+        if (q === this.q) { this.dados = dados; this.agendarRegisto() }
       } catch (e) {
         if (!foiCancelado(e)) this.dados = { produtos: [], lojas: [], servicos: [], categorias: [], sugestao: null }
       } finally {
@@ -235,7 +240,31 @@ export default {
       if (!this.curta) this.verTudo()
     },
 
+    // ── estatísticas (Admin → Pesquisas) ──
+    agendarRegisto () {
+      clearTimeout(this.tRegisto)
+      this.tRegisto = setTimeout(() => this.registarAgora(), ASSENTE_MS)
+    },
+    // afinar a mesma pesquisa ("cam" → "camisola", ou apagar letras) actualiza a mesma linha; outra pesquisa é nova
+    registarAgora (clique = null) {
+      clearTimeout(this.tRegisto)
+      this.tRegisto = null
+      const q = this.q.trim()
+      if (this.curta || !this.dados) return
+      if (this.inicial && normalizar(q) === normalizar(this.inicial) && !clique) return   // a página /pesquisa já a contou
+      const n = normalizar(q)
+      const r = this.registo
+      if (!r || r.clicou || !(n.startsWith(r.q) || r.q.startsWith(n))) this.registo = { id: novoRegisto(), q: n, clicou: false }
+      else r.q = n
+      const d = this.dados
+      registar({ id: this.registo.id, q, origem: 'caixa', clique,
+                 resultados: d.produtos.length + d.lojas.length + d.servicos.length + d.categorias.length })
+      if (clique) this.registo.clicou = true
+    },
+
     abrir (tipo, r) {
+      this.registarAgora({ tipo, id: tipo === 'categoria' ? null : r.id, nome: r.nome || r.label || r.valor || '',
+                           posicao: this.indice(tipo, r) })
       guardarRecente(this.q)
       this.aberto = false
       this.$emit('fechar')
@@ -246,10 +275,13 @@ export default {
       const q = this.q.trim()
       if (q.length < MIN_LETRAS) return
       guardarRecente(q)
+      this.registarAgora({ tipo: 'ver_todos' })
+      const id = this.registo?.id
       this.aberto = false
       this.$refs.campo?.blur()
       this.$emit('fechar')
-      this.$router.push({ path: '/pesquisa', query: { q } })
+      // a página continua a mesma linha (r): não conta duas vezes
+      this.$router.push({ path: '/pesquisa', query: id ? { q, r: id } : { q } })
     },
 
     usarRecente (r) {
