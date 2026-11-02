@@ -241,6 +241,78 @@ def semelhantes(tipo, vetor, visiveis, limite=60, minimo=0.0, margem=None):
     return [(int(ids[i]), float(s[i])) for i in topo if s[i] >= minimo]
 
 
+# ── reordenação (rerank) ───────────────────────────────────────────────
+# As semelhanças dos vetores ficam todas entre ~0,28 e ~0,67: quando a loja não tem o que se pede ("perfume"),
+# os vizinhos mais próximos passam os limiares e entra ruído (Fanta). O reranker lê a pesquisa e cada candidato
+# juntos e dá uma nota de relevância que separa muito melhor (calibrado em seg/calibrar_rr.py, 2026-11-02).
+
+URL_RERANK = 'https://api.voyageai.com/v1/rerank'
+PRAZO_RERANK_S = 1.0
+RERANK_TEXTO = 400            # caracteres de cada candidato
+LIMITE_DIA_RERANK = 20000
+CACHE_RERANK_S = 7 * 24 * 3600
+CHAVE_PAUSA_RERANK = 'pesq:rr:pausa'
+INSTRUCAO = ('Instrução: o cliente de uma loja online em Cabo Verde pesquisou isto. '
+             'Este produto, loja ou serviço é o que ele procura? Pesquisa: ')
+
+
+def _pedir_rerank(q, documentos, prazo):
+    """→ notas (mesma ordem dos documentos). Erros sobem."""
+    corpo = json.dumps({'query': INSTRUCAO + q, 'documents': documentos, 'model': settings.VOYAGE_RERANK}).encode()
+    pedido = urllib.request.Request(URL_RERANK, data=corpo, method='POST', headers={
+        'Authorization': f'Bearer {settings.VOYAGE_API_KEY}', 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(pedido, timeout=prazo) as r:
+        dados = json.loads(r.read())
+    notas = [None] * len(documentos)
+    for d in dados['data']:
+        notas[d['index']] = float(d['relevance_score'])
+    if any(n is None for n in notas):
+        raise ValueError('o reranker não devolveu nota para todos os documentos')
+    return notas
+
+
+def reordenar(qn, entradas, prazo=None):
+    """
+    entradas: EntradaPesquisa (tipo, objeto_id, nome, texto_b, texto_c, semantico_hash).
+    → notas de relevância na mesma ordem, ou None (desligado, pausa, limite, erro ou prazo) — quem chama
+    usa então a ordem dos vetores, com um corte mais apertado.
+    """
+    if not ativa() or not getattr(settings, 'VOYAGE_RERANK', '') or not entradas:
+        return None
+    chave = 'pesq:rr:' + hashlib.sha1('|'.join(
+        [settings.VOYAGE_RERANK, INSTRUCAO, qn] + [f'{e.tipo}:{e.objeto_id}:{e.semantico_hash}' for e in entradas]
+    ).encode()).hexdigest()
+    guardado = cache.get(chave)
+    if guardado is not None:
+        return guardado
+    if cache.get(CHAVE_PAUSA_RERANK):
+        return None
+    dia = 'pesq:rr:dia:' + timezone.localdate().isoformat()
+    if cache.get_or_set(dia, 0, 2 * 24 * 3600) >= LIMITE_DIA_RERANK:
+        return None
+    try:
+        cache.incr(dia)
+    except ValueError:
+        pass
+    documentos = [texto_documento(e)[:RERANK_TEXTO] for e in entradas]
+    t0 = time.monotonic()
+
+    def pedir():
+        notas = _pedir_rerank(qn, documentos, 3)
+        cache.set(chave, notas, CACHE_RERANK_S)      # mesmo que chegue tarde, fica para a próxima
+        return notas
+    try:
+        return _com_prazo(pedir, min(prazo or PRAZO_RERANK_S, PRAZO_RERANK_S))
+    except Exception as e:
+        from concurrent.futures import TimeoutError as Prazo
+        if isinstance(e, Prazo):
+            log.info('rerank: passou o prazo (segue com a ordem dos vetores)')
+        else:
+            cache.set(CHAVE_PAUSA_RERANK, 1, PAUSA_ERRO_S)
+            log.warning('rerank: pausa %ss (%s em %.2fs)', PAUSA_ERRO_S, _erro(e), time.monotonic() - t0)
+        return None
+
+
 def estado():
     """Para o admin/diagnóstico: quantos vetores existem e se a API está em pausa."""
     from ..models import EntradaPesquisa
