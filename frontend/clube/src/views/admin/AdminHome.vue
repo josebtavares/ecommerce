@@ -371,6 +371,18 @@
                     <button @click="form.itens.splice(k, 1)" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-red-400 transition" aria-label="Remover anúncio"><font-awesome-icon :icon="['fas', 'xmark']" /></button>
                   </div>
 
+                  <!-- estatísticas dos últimos 30 dias (só anúncios já guardados) -->
+                  <p v-if="it.chave" class="text-[11px] text-zinc-500 flex flex-wrap items-center gap-x-2 -mt-1" :data-teste="'pub-item-estat-' + k">
+                    <font-awesome-icon :icon="['fas', 'chart-simple']" class="text-zinc-600" />
+                    <template v-if="estatAnuncio(it)">
+                      <span>{{ selecionada?.estatisticas?.dias || 30 }} dias: <b class="text-zinc-300 font-semibold">{{ estatAnuncio(it).impressoes.toLocaleString('pt-PT') }}</b> impressões
+                        · <b class="text-zinc-300 font-semibold">{{ estatAnuncio(it).cliques.toLocaleString('pt-PT') }}</b> cliques
+                        <template v-if="estatAnuncio(it).ctr != null"> · {{ estatAnuncio(it).ctr.toLocaleString('pt-PT') }}%</template></span>
+                    </template>
+                    <span v-else>Ainda sem impressões nos últimos 30 dias.</span>
+                    <router-link v-if="podeVerEstatisticas" to="/admin/estatisticas?aba=publicidade" class="text-red-400 hover:text-red-300" data-teste="pub-item-estat-link">Ver estatísticas →</router-link>
+                  </p>
+
                   <!-- media principal + versão para telemóvel -->
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div v-for="sl in SLOTS_MEDIA" :key="sl.campo" class="flex items-start gap-3" :data-teste="`pub-item-${k}-${sl.campo}`">
@@ -680,6 +692,9 @@ function paraIso (local) {
 export default {
   name: 'AdminHome',
   components: { Procurar, Previa },
+  props: {
+    podeVerEstatisticas: { type: Boolean, default: false },
+  },
 
   data () {
     return {
@@ -1075,6 +1090,7 @@ export default {
         media: null, media_movel: null, chave: '', titulo: '', texto: '', link: '', botao: '', anunciante: '',
         inicio: '', fim: '', _k: ++uid })
     },
+    estatAnuncio (it) { return this.selecionada?.estatisticas?.por_chave?.[it.chave] || null },
     estadoAnuncio (it) {
       if (!it.imagem_id) return 'sem_media'
       const agora = Date.now()

@@ -127,6 +127,9 @@ def publicar(user=None):
     from ..models import HomeSeccao, HomePublicacao
     seccoes = HomeSeccao.objects.prefetch_related('itens')
     pub = HomePublicacao.objects.create(dados=[_dados_seccao(s) for s in seccoes], publicado_por=user)
+    from . import publicidade_stats
+    publicidade_stats.guardar_nomes(pub.dados)      # nomes/imagens dos anúncios para as estatísticas
+    publicidade_stats.esquecer_chaves()             # anúncios novos contam já (não esperam pela cache)
     limpar_imagens()
     return pub
 
@@ -134,8 +137,10 @@ def publicar(user=None):
 def limpar_imagens():
     """Apaga as imagens carregadas há mais de 1 dia que nenhum rascunho nem publicação usa
     (o sinal post_delete põe o ficheiro na fila do worker de limpeza)."""
-    from ..models import HomeImagem, HomeItem, HomePublicacao
+    from ..models import HomeImagem, HomeItem, HomePublicacao, AnuncioInfo
     usadas = set(HomeItem.objects.exclude(imagem=None).values_list('imagem_id', flat=True))
+    # a miniatura dos anúncios antigos nas estatísticas (poucos ficheiros)
+    usadas |= set(AnuncioInfo.objects.exclude(imagem=None).values_list('imagem_id', flat=True))
     usadas |= set(HomeItem.objects.exclude(imagem_movel=None).values_list('imagem_movel_id', flat=True))
     for dados in HomePublicacao.objects.values_list('dados', flat=True):
         for s in dados or []:

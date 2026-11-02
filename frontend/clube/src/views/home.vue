@@ -311,7 +311,7 @@
           <!-- Publicidade (anúncios em carrossel) -->
           <section v-else-if="sec.tipo === 'publicidade'" class="py-8 px-4 md:px-12" data-teste="home-publicidade">
             <HomePublicidade :anuncios="sec.anuncios" :proporcao="sec.proporcao" :intervalo="sec.intervalo"
-              :titulo="sec.titulo" :subtitulo="sec.subtitulo" :isDark="isDark" />
+              :titulo="sec.titulo" :subtitulo="sec.subtitulo" :isDark="isDark" :contar="!preview" />
           </section>
 
           <!-- Banners -->

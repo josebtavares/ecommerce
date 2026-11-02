@@ -1,9 +1,12 @@
 from django.urls import path
-from ..Views import homeView
+from ..Views import homeView, publicidadeView
 
 urlpatterns = [
     path('home/',                          homeView.home_publica, name='home-publica'),
     path('home/seccao/<str:seccao_id>/',   homeView.home_seccao,  name='home-seccao'),
+    path('home/publicidade/eventos/',      publicidadeView.eventos, name='home-publicidade-eventos'),
+    path('admin/estatisticas/publicidade/',     publicidadeView.admin_estatisticas,     name='admin-estat-publicidade'),
+    path('admin/estatisticas/publicidade/csv/', publicidadeView.admin_estatisticas_csv, name='admin-estat-publicidade-csv'),
 
     path('admin/home/',                                   homeView.admin_home,                name='admin-home'),
     path('admin/home/seccoes/',                           homeView.admin_home_criar,          name='admin-home-criar'),

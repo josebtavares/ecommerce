@@ -94,7 +94,14 @@ def _seccao_admin(s, request):
         'itens': [_item_admin(i, request) for i in s.itens.all()],
         'refs': _refs(s),
         'avisos': H.avisos_seccao(s),
+        **({'estatisticas': _resumo_anuncios(s)} if s.tipo == 'publicidade' else {}),
     }
+
+
+def _resumo_anuncios(s):
+    """Últimos 30 dias de cada anúncio (linha no editor; quem gere a home vê, mesmo sem ver_stats)."""
+    from ..utils import publicidade_stats
+    return {'dias': 30, 'por_chave': publicidade_stats.resumo_chaves([i.chave for i in s.itens.all()], 30)}
 
 
 def _seccoes_qs():

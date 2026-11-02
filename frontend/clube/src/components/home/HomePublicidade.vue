@@ -6,6 +6,8 @@
        com o foco dentro, com o separador escondido ou a secção fora do ecrã; com "reduzir movimento" não passa
        sozinho e os vídeos ficam na capa. Botão de pausa (conteúdo que se move > 5 s precisa de um).
      • Só o vídeo do anúncio visível toca (sem som); os outros ficam parados e sem descarregar.
+     • Estatísticas (utils/publicidade.js): impressão quando o anúncio activo está ≥ 50% à vista durante 1 s com o
+       separador visível; clique ao abrir o link. Nunca na pré-visualização (`modo` ou `contar` = false).
      • `modo` ('computador' | 'telemovel'): pré-visualização do Admin — força o aspecto (proporção, setas, tamanhos de
        letra e versão para telemóvel) independentemente do ecrã, sem tecto de altura e sem links a navegar. -->
 <template>
@@ -28,7 +30,7 @@
                       role="group" aria-roledescription="anúncio" :aria-label="`${i + 1} de ${anuncios.length}`"
                       :data-teste="'pub-anuncio-' + i">
           <component :is="a.link && !modo ? (a.externo ? 'a' : 'router-link') : 'div'"
-                     v-bind="ligacao(a)" class="pub-slide group block relative h-full w-full overflow-hidden"
+                     v-bind="ligacao(a)" @click="aoClicar(a)" class="pub-slide group block relative h-full w-full overflow-hidden"
                      :class="a.link ? 'cursor-pointer' : ''" draggable="false">
             <!-- fundo: a mesma imagem desfocada (preenche o que sobra quando a proporção é diferente) -->
             <img v-if="fundo(a)" :src="fundo(a)" alt="" aria-hidden="true" :loading="i === 0 ? 'eager' : 'lazy'"
@@ -100,6 +102,7 @@ import { Keyboard, A11y } from 'swiper/modules'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
 import { poupar, videoDestaque } from '@/utils/media'
+import { contarAnuncio } from '@/utils/publicidade'
 
 const PRAZO_VIDEO_EXTRA_S = 3      // se o vídeo não avisar que acabou (erro, bloqueado), passa na mesma
 
@@ -114,6 +117,7 @@ export default {
     subtitulo: { type: String, default: '' },
     isDark:    { type: Boolean, default: true },
     modo:      { type: String, default: '' },     // pré-visualização: 'computador' | 'telemovel'
+    contar:    { type: Boolean, default: true },   // false na pré-visualização do rascunho (?preview=1)
   },
   data () {
     return {
@@ -125,6 +129,7 @@ export default {
       reduzirMovimento: false,
       soCapa: false,           // poupança de dados / reduzir movimento: vídeos ficam na capa
       visivel: false,
+      metade: false,           // ≥ 50% à vista (conta impressões)
       escondido: false,
       pausas: { rato: false, foco: false, toque: false, botao: false },
       temporizador: null,
@@ -134,6 +139,7 @@ export default {
     atual () { return this.anuncios[this.ativo] || {} },
     movel () { return this.modo ? this.modo === 'telemovel' : this.telemovel },
     pc () { return !this.movel },
+    aContar () { return this.contar && !this.modo && this.metade && !this.escondido ? (this.atual.chave || '') : '' },
     assinatura () { return this.anuncios.map(a => `${a.chave || ''}|${a.media?.url || ''}|${a.media_movel?.url || ''}`).join(',') },
     parado () {
       const p = this.pausas
@@ -143,6 +149,7 @@ export default {
   },
   watch: {
     parado () { this.agendar(); this.controlarVideos() },
+    aContar: { handler: 'vigiarImpressao', immediate: true },
     modo () { this.$nextTick(() => { this.agendar(); this.controlarVideos() }) },
     // só recomeça quando muda o conjunto de anúncios (no editor do Admin, escrever um título não volta ao primeiro)
     assinatura () { this.ativo = 0; this.swiper?.slideTo(0, 0); this.$nextTick(() => { this.agendar(); this.controlarVideos() }) },
@@ -164,12 +171,15 @@ export default {
     this.aoVisibilidade = () => { this.escondido = document.hidden }
     document.addEventListener('visibilitychange', this.aoVisibilidade)
     this.aoVisibilidade()
-    this.observador = new IntersectionObserver(([e]) => { this.visivel = e.isIntersecting && e.intersectionRatio >= 0.35 },
-                                               { threshold: [0, 0.35, 0.6] })
+    this.observador = new IntersectionObserver(([e]) => {
+      this.visivel = e.isIntersecting && e.intersectionRatio >= 0.35
+      this.metade = e.isIntersecting && e.intersectionRatio >= 0.5
+    }, { threshold: [0, 0.35, 0.5, 0.6] })
     this.observador.observe(this.$refs.caixa)
   },
   beforeUnmount () {
     clearTimeout(this.temporizador)
+    clearTimeout(this.tImpressao)
     this.observador?.disconnect()
     document.removeEventListener('visibilitychange', this.aoVisibilidade)
     this.mqTelemovel?.removeEventListener?.('change', this.lerPreferencias)
@@ -185,6 +195,12 @@ export default {
       if (a.externo) return { href: a.link, target: '_blank', rel: 'sponsored noopener noreferrer' }
       return { to: a.link }
     },
+    // ── estatísticas ──
+    vigiarImpressao (chave) {
+      clearTimeout(this.tImpressao)
+      if (chave) this.tImpressao = setTimeout(() => contarAnuncio(chave, 'impressao'), 1000)
+    },
+    aoClicar (a) { if (a.link && this.contar && !this.modo) contarAnuncio(a.chave, 'clique', true) },
     guardarVideo (i, el) { if (el) this.videos[i] = el; else delete this.videos[i] },
 
     // ── navegação ──
