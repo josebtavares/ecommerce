@@ -5,7 +5,9 @@
      • Passa sozinho: imagens ao fim de `intervalo` s; vídeos quando acabam. Pára com o rato em cima, ao tocar,
        com o foco dentro, com o separador escondido ou a secção fora do ecrã; com "reduzir movimento" não passa
        sozinho e os vídeos ficam na capa. Botão de pausa (conteúdo que se move > 5 s precisa de um).
-     • Só o vídeo do anúncio visível toca (sem som); os outros ficam parados e sem descarregar. -->
+     • Só o vídeo do anúncio visível toca (sem som); os outros ficam parados e sem descarregar.
+     • `modo` ('computador' | 'telemovel'): pré-visualização do Admin — força o aspecto (proporção, setas, tamanhos de
+       letra e versão para telemóvel) independentemente do ecrã, sem tecto de altura e sem links a navegar. -->
 <template>
   <div data-teste="publicidade" :data-proporcao-computador="proporcao.computador" :data-proporcao-telemovel="proporcao.telemovel">
     <div v-if="titulo" class="mb-4">
@@ -13,8 +15,9 @@
       <p v-if="subtitulo" class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">{{ subtitulo }}</p>
     </div>
 
-    <section ref="caixa" class="pub-caixa relative overflow-hidden rounded-3xl bg-zinc-900"
-             :style="{ '--r-computador': proporcao.computador, '--r-telemovel': proporcao.telemovel }"
+    <section ref="caixa" class="pub-caixa relative overflow-hidden rounded-3xl bg-zinc-900" :class="{ 'pub-fixa': modo }"
+             :style="{ '--r-computador': proporcao.computador, '--r-telemovel': proporcao.telemovel,
+                       '--r-fixa': modo ? proporcao[modo] : undefined }"
              aria-roledescription="carrossel" :aria-label="titulo || 'Publicidade'"
              @mouseenter="pausas.rato = true" @mouseleave="pausas.rato = false"
              @focusin="aoEntrarFoco" @focusout="aoSairFoco">
@@ -24,7 +27,7 @@
         <swiper-slide v-for="(a, i) in anuncios" :key="a.chave || i" class="h-full"
                       role="group" aria-roledescription="anúncio" :aria-label="`${i + 1} de ${anuncios.length}`"
                       :data-teste="'pub-anuncio-' + i">
-          <component :is="a.link ? (a.externo ? 'a' : 'router-link') : 'div'"
+          <component :is="a.link && !modo ? (a.externo ? 'a' : 'router-link') : 'div'"
                      v-bind="ligacao(a)" class="pub-slide group block relative h-full w-full overflow-hidden"
                      :class="a.link ? 'cursor-pointer' : ''" draggable="false">
             <!-- fundo: a mesma imagem desfocada (preenche o que sobra quando a proporção é diferente) -->
@@ -45,11 +48,11 @@
 
             <!-- textos e botão -->
             <div v-if="a.titulo || a.texto || a.botao"
-                 class="absolute inset-x-0 bottom-0 p-4 pb-9 md:p-8 md:pb-10 bg-gradient-to-t from-black/75 via-black/35 to-transparent">
+                 class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent" :class="pc ? 'p-8 pb-10' : 'p-4 pb-9'">
               <div class="max-w-xl">
-                <h3 v-if="a.titulo" class="text-lg md:text-3xl font-bold text-white leading-tight line-clamp-2">{{ a.titulo }}</h3>
-                <p v-if="a.texto" class="text-xs md:text-sm text-zinc-200 mt-1 md:mt-2 line-clamp-2">{{ a.texto }}</p>
-                <span v-if="a.botao" class="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-white/95 group-hover:bg-white text-zinc-900 text-xs md:text-sm font-bold rounded-xl transition"
+                <h3 v-if="a.titulo" :class="pc ? 'text-3xl' : 'text-lg'" class="font-bold text-white leading-tight line-clamp-2">{{ a.titulo }}</h3>
+                <p v-if="a.texto" :class="pc ? 'text-sm mt-2' : 'text-xs mt-1'" class="text-zinc-200 line-clamp-2">{{ a.texto }}</p>
+                <span v-if="a.botao" class="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-white/95 group-hover:bg-white text-zinc-900 font-bold rounded-xl transition" :class="pc ? 'text-sm' : 'text-xs'"
                       :data-teste="'pub-botao-' + i">
                   {{ a.botao }}
                   <font-awesome-icon :icon="['fas', a.externo ? 'arrow-up-right-from-square' : 'arrow-right']" class="text-[11px]" />
@@ -67,12 +70,12 @@
       </span>
 
       <template v-if="anuncios.length > 1">
-        <button type="button" @click="anterior" aria-label="Anúncio anterior" data-teste="pub-anterior"
-                class="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center rounded-full bg-black/45 hover:bg-black/70 text-white transition">
+        <button v-if="pc" type="button" @click="anterior" aria-label="Anúncio anterior" data-teste="pub-anterior"
+                class="flex absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center rounded-full bg-black/45 hover:bg-black/70 text-white transition">
           <font-awesome-icon :icon="['fas', 'chevron-left']" />
         </button>
-        <button type="button" @click="seguinte" aria-label="Anúncio seguinte" data-teste="pub-seguinte"
-                class="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center rounded-full bg-black/45 hover:bg-black/70 text-white transition">
+        <button v-if="pc" type="button" @click="seguinte" aria-label="Anúncio seguinte" data-teste="pub-seguinte"
+                class="flex absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center rounded-full bg-black/45 hover:bg-black/70 text-white transition">
           <font-awesome-icon :icon="['fas', 'chevron-right']" />
         </button>
         <div class="absolute bottom-3 inset-x-0 z-10 flex items-center justify-center gap-1.5">
@@ -110,6 +113,7 @@ export default {
     titulo:    { type: String, default: '' },
     subtitulo: { type: String, default: '' },
     isDark:    { type: Boolean, default: true },
+    modo:      { type: String, default: '' },     // pré-visualização: 'computador' | 'telemovel'
   },
   data () {
     return {
@@ -128,6 +132,9 @@ export default {
   },
   computed: {
     atual () { return this.anuncios[this.ativo] || {} },
+    movel () { return this.modo ? this.modo === 'telemovel' : this.telemovel },
+    pc () { return !this.movel },
+    assinatura () { return this.anuncios.map(a => `${a.chave || ''}|${a.media?.url || ''}|${a.media_movel?.url || ''}`).join(',') },
     parado () {
       const p = this.pausas
       return this.anuncios.length < 2 || this.reduzirMovimento || !this.visivel || this.escondido ||
@@ -136,7 +143,9 @@ export default {
   },
   watch: {
     parado () { this.agendar(); this.controlarVideos() },
-    anuncios () { this.ativo = 0; this.swiper?.slideTo(0, 0); this.$nextTick(() => { this.agendar(); this.controlarVideos() }) },
+    modo () { this.$nextTick(() => { this.agendar(); this.controlarVideos() }) },
+    // só recomeça quando muda o conjunto de anúncios (no editor do Admin, escrever um título não volta ao primeiro)
+    assinatura () { this.ativo = 0; this.swiper?.slideTo(0, 0); this.$nextTick(() => { this.agendar(); this.controlarVideos() }) },
   },
   created () {
     this.videos = {}   // não reactivo; tem de existir antes dos :ref dos <video>
@@ -168,11 +177,11 @@ export default {
     Object.values(this.videos || {}).forEach(v => { v.pause(); v.removeAttribute('src'); v.load() })  // liberta o descodificador
   },
   methods: {
-    media (a) { return (this.telemovel && a.media_movel) || a.media },
+    media (a) { return (this.movel && a.media_movel) || a.media },
     fundo (a) { const m = this.media(a); return m.tipo === 'video' ? m.poster : m.url },
     fonteVideo (m) { return videoDestaque(m.url) },
     ligacao (a) {
-      if (!a.link) return {}
+      if (!a.link || this.modo) return {}
       if (a.externo) return { href: a.link, target: '_blank', rel: 'sponsored noopener noreferrer' }
       return { to: a.link }
     },
@@ -246,5 +255,6 @@ export default {
 @media (min-width: 768px) {
   .pub-caixa { aspect-ratio: var(--r-computador); max-height: 70vh; }
 }
+.pub-caixa.pub-fixa { aspect-ratio: var(--r-fixa); max-height: none; }
 .pub-caixa :deep(.swiper) { height: 100%; }
 </style>

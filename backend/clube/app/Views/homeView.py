@@ -128,6 +128,11 @@ def _opcoes():
                                 for d in CategoriaDestaque.objects.filter(categoria__isnull=False)
                                 .select_related('categoria__loja').order_by('ordem', 'id')],
         'limite_max': H.LIMITE_MAX,
+        # o editor calcula a proporção da pré-visualização como o servidor (H.proporcao)
+        'publicidade': {'proporcoes': list(H.PROPORCOES), 'limites': H.LIMITES_PROPORCAO,
+                        'sem_medidas': round(H.PROPORCAO_SEM_MEDIDAS, 4), 'intervalo': H.INTERVALO_PADRAO,
+                        'max_anuncios': H.MAX_ANUNCIOS, 'video_max_mb': VIDEO_MAX_MB, 'video_max_s': VIDEO_MAX_S,
+                        'imagem_max_mb': IMAGEM_MAX_MB},
     }
 
 
