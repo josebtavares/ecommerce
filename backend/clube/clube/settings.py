@@ -185,6 +185,11 @@ CHAVE_CREDENCIAIS   = os.environ.get('CHAVE_CREDENCIAIS', '')
 FRONTEND_BASE_URL   = os.environ.get('FRONTEND_BASE_URL', 'http://localhost:8080')
 # Cloudflare Turnstile no registo e na recuperação da password (utils/turnstile.py). Vazia: não verifica.
 TURNSTILE_SECRET    = os.environ.get('TURNSTILE_SECRET', '')
+
+# Pesquisa semântica (utils/semantica.py). Sem chave → só a pesquisa por palavras.
+VOYAGE_API_KEY      = os.environ.get('VOYAGE_API_KEY', '')
+VOYAGE_MODELO       = os.environ.get('VOYAGE_MODELO', 'voyage-4-lite')
+VOYAGE_DIMENSOES    = 512
 # "Responder para" dos emails aos clientes e lojas (utils/email_html.py), ex.: suporte@bende.store
 EMAIL_SUPORTE       = os.environ.get('EMAIL_SUPORTE', '')
 # fornecedor dos pagamentos online da plataforma (app/pagamentos): simulado até haver contrato (SISP)
