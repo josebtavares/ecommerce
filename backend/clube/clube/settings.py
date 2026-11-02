@@ -190,6 +190,7 @@ TURNSTILE_SECRET    = os.environ.get('TURNSTILE_SECRET', '')
 VOYAGE_API_KEY      = os.environ.get('VOYAGE_API_KEY', '')
 VOYAGE_MODELO       = os.environ.get('VOYAGE_MODELO', 'voyage-4-lite')
 VOYAGE_DIMENSOES    = 512
+VOYAGE_RERANK       = os.environ.get('VOYAGE_RERANK', 'rerank-3')   # vazio desliga a reordenação
 # "Responder para" dos emails aos clientes e lojas (utils/email_html.py), ex.: suporte@bende.store
 EMAIL_SUPORTE       = os.environ.get('EMAIL_SUPORTE', '')
 # fornecedor dos pagamentos online da plataforma (app/pagamentos): simulado até haver contrato (SISP)
