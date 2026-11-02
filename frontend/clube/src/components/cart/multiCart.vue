@@ -3,7 +3,7 @@
   <!-- Posição partilhada com sino + perfil — ver assets/loja-acoes.css -->
   <div class="loja-acoes-slot loja-acoes-slot--carrinho z-30">
     <!-- lupa da pesquisa (components/pesquisa/PesquisaGlobal.vue): à esquerda do carrinho -->
-    <PesquisaGlobal v-if="pesquisa" :isDark="isDark" />
+    <PesquisaGlobal v-if="pesquisa" :isDark="isDark" :campo="campoPesquisa" />
     <button
       @click="toggleCart"
       aria-label="Carrinho"
@@ -257,7 +257,8 @@ export default {
 
   props: {
     isDark: { type: Boolean, default: true },  // default true = comportamento original
-    pesquisa: { type: Boolean, default: true },   // a home esconde a lupa enquanto a barra grande está à vista
+    pesquisa: { type: Boolean, default: true },        // a página /pesquisa já tem o campo
+    campoPesquisa: { type: Boolean, default: false },  // home: caixa larga no computador em vez da lupa
   },
 
   data () {

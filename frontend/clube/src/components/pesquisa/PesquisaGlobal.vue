@@ -1,9 +1,19 @@
 <!-- PesquisaGlobal.vue — lupa do cabeçalho (ao lado do carrinho, ver multiCart.vue) que abre a pesquisa:
      ecrã inteiro no telemóvel, painel no topo no computador. Atalhos: "/" ou Ctrl/⌘+K. -->
 <template>
+  <!-- campo: no computador, caixa larga "Pesquisar…" (abre o mesmo painel); no telemóvel fica a lupa -->
+  <button v-if="campo" type="button" @click="abrir" aria-label="Pesquisar" data-teste="pesquisa-topo"
+    class="pesquisa-topo hidden md:flex items-center gap-2.5 px-4 rounded-full border text-sm transition shadow-sm"
+    :class="isDark ? 'bg-zinc-900/90 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                   : 'bg-white/95 border-stone-300 text-zinc-500 hover:border-stone-400 hover:text-zinc-700'">
+    <font-awesome-icon :icon="['fas', 'magnifying-glass']" class="text-[14px] flex-shrink-0" />
+    <span class="flex-1 text-left truncate"><span class="lg:hidden">Pesquisar…</span><span class="hidden lg:inline">Pesquisar produtos, lojas…</span></span>
+    <kbd class="text-[11px] font-mono px-1.5 py-0.5 rounded border flex-shrink-0"
+         :class="isDark ? 'border-zinc-700 text-zinc-500' : 'border-stone-300 text-zinc-400'">/</kbd>
+  </button>
   <button type="button" @click="abrir" aria-label="Pesquisar" title="Pesquisar (/)" data-teste="pesquisa-lupa"
-    class="loja-acao-btn"
-    :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
+    class="loja-acao-btn" :class="[campo ? 'md:!hidden' : '', isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200']"
+>
     <font-awesome-icon :icon="['fas', 'magnifying-glass']" class="text-[15px]" :class="isDark ? 'text-white' : 'text-zinc-700'" />
   </button>
 
@@ -35,7 +45,10 @@ import CaixaPesquisa from './CaixaPesquisa.vue'
 export default {
   name: 'PesquisaGlobal',
   components: { CaixaPesquisa },
-  props: { isDark: { type: Boolean, default: true } },
+  props: {
+    isDark: { type: Boolean, default: true },
+    campo: { type: Boolean, default: false },
+  },
 
   data () { return { aberta: false } },
 
@@ -66,3 +79,7 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+.pesquisa-topo { height: var(--acoes-botao, 36px); width: clamp(240px, 26vw, 380px); }
+</style>

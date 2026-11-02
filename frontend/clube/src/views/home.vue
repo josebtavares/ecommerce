@@ -6,7 +6,7 @@
     <ProductInfoCard :produto="selectedProduct" :loja="selectedLoja" :isDark="isDark"
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
-    <MultiCart ref="cart" :isDark="isDark" :pesquisa="lupaNoCabecalho" />
+    <MultiCart ref="cart" :isDark="isDark" campo-pesquisa />
 
     <!-- Botão toggle dark/light — canto superior esquerdo, ao lado do hamburger -->
     <div class="fixed top-2 md:top-4 left-16 z-30 flex items-center gap-2">
@@ -147,14 +147,6 @@
 
       <!-- ═══ MAIN ═══ -->
       <main class="flex-1 overflow-x-hidden relative">
-
-        <!-- ── PESQUISA (components/pesquisa): sobre o destaque, ou no topo se a home não abre com um ── -->
-        <div ref="barraPesquisa" data-teste="home-pesquisa"
-             :class="pesquisaSobreHero ? 'absolute left-0 right-0 top-16 md:top-24 z-20 px-4' : 'pt-20 md:pt-28 pb-4 px-4'">
-          <div class="max-w-2xl mx-auto">
-            <CaixaPesquisa grande :isDark="isDark" placeholder="O que procuras hoje?" />
-          </div>
-        </div>
 
         <!-- ── PRÉ-VISUALIZAÇÃO (admin → Página inicial) ── -->
         <div v-if="preview || previewErro" class="sticky top-0 z-20 px-4 py-2 text-center text-xs font-semibold"
@@ -374,7 +366,6 @@ import SiteRodape      from '@/components/paginas/SiteRodape.vue'
 import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
 import HomeCategorias from '@/components/home/HomeCategorias.vue'
 import HomeBanners from '@/components/home/HomeBanners.vue'
-import CaixaPesquisa from '@/components/pesquisa/CaixaPesquisa.vue'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
 import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import api, { terminarSessao } from '@/services/api'
@@ -386,7 +377,7 @@ export default {
   name: 'AppHome',
   components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, SiteRodape,
     HomeServicos,
-                HomeLojaDestaque, HomeCategorias, HomeBanners, CaixaPesquisa },
+                HomeLojaDestaque, HomeCategorias, HomeBanners },
 
   data () {
     return {
@@ -408,12 +399,10 @@ export default {
       sectionRefs: {},
       logoDefault,
       logoLight,
-      lupaNoCabecalho: false,   // a lupa do cabeçalho só aparece quando a barra grande sai do ecrã
     }
   },
 
   computed: {
-    pesquisaSobreHero () { return this.loadingHome || this.seccoes[0]?.tipo === 'hero' },
     selectedCategoriaLabel () {
       return this.categoriasExistentes.find(c => c.value === this.selectedCategoria)?.label || ''
     },
@@ -426,17 +415,6 @@ export default {
     await this.fetchHome()
     this.$nextTick(() => this.categoriaDoLink())
   },
-
-  mounted () {
-    if ('IntersectionObserver' in window && this.$refs.barraPesquisa) {
-      this.observador = new IntersectionObserver(([e]) => { this.lupaNoCabecalho = !e.isIntersecting })
-      this.observador.observe(this.$refs.barraPesquisa)
-    } else {
-      this.lupaNoCabecalho = true
-    }
-  },
-
-  beforeUnmount () { this.observador?.disconnect() },
 
   watch: {
     isDark (val) {
