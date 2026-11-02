@@ -18,3 +18,6 @@ class AppConfig(AppConfig):
         registo.ligar()
         # documentos legais das lojas: apagar a linha apaga o ficheiro privado
         from .utils import documentos_loja  # noqa: F401
+        # barra de pesquisa: o índice acompanha produtos, lojas e serviços
+        from .utils import pesquisa
+        pesquisa.ligar_sinais()

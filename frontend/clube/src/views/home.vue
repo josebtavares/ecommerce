@@ -6,7 +6,7 @@
     <ProductInfoCard :produto="selectedProduct" :loja="selectedLoja" :isDark="isDark"
       @close="selectedProduct = null"
       @added-to-cart="({ loja }) => $refs.cart.openForLoja(loja)" />
-    <MultiCart ref="cart" :isDark="isDark" />
+    <MultiCart ref="cart" :isDark="isDark" campo-pesquisa />
 
     <!-- Botão toggle dark/light — canto superior esquerdo, ao lado do hamburger -->
     <div class="fixed top-2 md:top-4 left-16 z-30 flex items-center gap-2">
@@ -146,7 +146,7 @@
       </transition>
 
       <!-- ═══ MAIN ═══ -->
-      <main class="flex-1 overflow-x-hidden">
+      <main class="flex-1 overflow-x-hidden relative">
 
         <!-- ── PRÉ-VISUALIZAÇÃO (admin → Página inicial) ── -->
         <div v-if="preview || previewErro" class="sticky top-0 z-20 px-4 py-2 text-center text-xs font-semibold"
@@ -413,12 +413,14 @@ export default {
     this.user = user ? JSON.parse(user) : {}
 
     await this.fetchHome()
+    this.$nextTick(() => this.categoriaDoLink())
   },
 
   watch: {
     isDark (val) {
       guardarTema(val)
-    }
+    },
+    '$route.query.categoria' () { this.categoriaDoLink() },
   },
 
   methods: {
@@ -463,6 +465,13 @@ export default {
     abrirLink (link) {
       if (/^https?:\/\//i.test(link)) window.open(link, '_blank', 'noopener')
       else if (link.startsWith('/') && !link.startsWith('//')) this.$router.push(link)
+    },
+
+    // /Home?categoria=… (vem da pesquisa) → catálogo filtrado por essa categoria
+    categoriaDoLink () {
+      const c = this.$route.query.categoria
+      if (typeof c !== 'string' || !c || this.loadingHome) return
+      this.filtrarCatalogo(c)
     },
 
     // grelha de categorias → catálogo filtrado

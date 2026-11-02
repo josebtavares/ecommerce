@@ -17,6 +17,7 @@ from ..utils.dinheiro import ler_valor
 from ..utils.variantes import sincronizar_variantes, aplicar_grelha_do_pedido
 from ..utils.tipos import tipos_para_loja, tipo_permitido
 from ..utils import conjuntos as conj
+from ..utils import catalogo, pesquisa
 
 # prefetch dos componentes dos conjuntos (evita uma query por componente nas listagens)
 PREFETCH_CONJUNTO = ('componentes__produto__inventario', 'componentes__variante', 'componentes__produto__variantes',
@@ -300,11 +301,12 @@ def produto_list_pagination(request):
         qs = qs.filter(categorias__nome__iexact=categoria_nome)
 
     # ── 3) pesquisa de texto livre (nome + descrição) ─────────
-    q = request.GET.get('q')
+    # (índice da pesquisa: erros de escrita, sinónimos, atributos, categorias; + o texto literal)
+    q = (request.GET.get('q') or '').strip()[:200]
+    relevancia = None
     if q:
-        qs = qs.filter(
-            Q(nome__icontains=q) | Q(descricao__icontains=q)
-        )
+        relevancia = pesquisa.ids_produtos(q, loja_id=loja_id if loja_id and str(loja_id).isdigit() else None)
+        qs = qs.filter(Q(id__in=relevancia) | Q(nome__icontains=q) | Q(descricao__icontains=q) | Q(sku__icontains=q))
 
     # ── 4) filtros de preço ───────────────────────────────────
     # (NaN/Infinity/negativos eram aceites pelo float() e rebentavam a query com erro 500)
@@ -315,29 +317,20 @@ def produto_list_pagination(request):
         if valor is not None:
             qs = qs.filter(**{lookup: valor})
 
-    # ── 5) filtros dinâmicos por atributos JSON ───────────────
-    #
-    #  Qualquer parâmetro que comece por "atributo_" é tratado
-    #  como filtro dentro do JSONField `atributos`.
-    #
-    #  Exemplos:
-    #    atributo_cor=preto       → atributos__cor__iexact=preto
-    #    atributo_tamanho=42      → atributos__tamanho__iexact=42
-    #    atributo_marca=Nike      → atributos__marca__iexact=Nike
-    #    atributo_volume=500ml    → atributos__volume__iexact=500ml
-    #    atributo_alergenos=gluten→ atributos__alergenos__icontains=gluten
-    #
-    for param, valor in request.GET.items():
-        if param.startswith('atributo_') and valor:
-            chave = param[len('atributo_'):]   # remove o prefixo
-            qs = qs.filter(**{f'atributos__{chave}__icontains': valor})
+    # ── 5) atributos: atributo_<nome>=<valor> exacto (texto ou lista; repetido = "ou").
+    #       Com stock por variação, a combinação pedida tem de existir (e ter stock, com "Em stock").
+    em_stock = request.GET.get('stock_disponivel') in ('true', '1')
+    pedidos = catalogo.pedidos_atributos(request.GET)
+    qs = catalogo.filtrar_atributos(qs, pedidos, em_stock)
+    if em_stock:
+        qs = catalogo.filtrar_stock(qs, pedidos)
 
     # ── 6) destaque ───────────────────────────────────────────
     if request.GET.get('destaque') == 'true':
         qs = qs.filter(destaque=True)
 
-    # ordem estável — sem ela o offset pode repetir/saltar produtos entre páginas
-    qs = qs.order_by('-id')
+    # ordem pedida (preço, novidade, nome) ou relevância; sempre com desempate estável para o offset
+    qs = catalogo.ordenar(qs.distinct() if categoria_id or categoria_nome else qs, request.GET.get('ordering'), relevancia)
 
     response, erro = paginar(request, qs, ProdutoSerializer, limit_default=20)
     if erro:
@@ -656,6 +649,40 @@ def produto_tipos_loja(request, loja_id):
             {'id': t['tipo_id'], 'nome': t['tipo__nome'], 'total_produtos': t['total_produtos']}
             for t in tipos
         ],
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def produto_filtros_loja(request, loja_id):
+    """
+    GET /app/loja/<loja_id>/produtos/filtros/?tipo_id=&categoria_id=
+    O que o catálogo da loja pode filtrar, tirado dos produtos activos (não das opções genéricas do tipo):
+      tipos       — todos os da loja, com contagem
+      categorias  — as do tipo escolhido (ou todas), com contagem
+      atributos   — [{nome, variante, valores: [{valor, total}]}] do tipo/categoria escolhidos
+      preco       — {min, max}
+    """
+    from django.db.models import Max, Min
+    base = _so_lojas_visiveis(request, Produto.objects.filter(loja_id=loja_id, ativo=True), loja_id)
+    tipos = (base.filter(tipo__isnull=False).values('tipo_id', 'tipo__nome')
+             .annotate(total=Count('id')).order_by('tipo__nome'))
+    qs = base
+    tipo_id = request.GET.get('tipo_id', '')
+    if tipo_id.isdigit():
+        qs = qs.filter(tipo_id=tipo_id)
+    cats = (qs.filter(categorias__isnull=False).values('categorias__id', 'categorias__nome')
+            .annotate(total=Count('id', distinct=True)).order_by('categorias__nome'))
+    categoria_id = request.GET.get('categoria_id', '')
+    if categoria_id.isdigit():
+        qs = qs.filter(categorias__id=categoria_id).distinct()
+    precos = qs.aggregate(min=Min('preco'), max=Max('preco'))
+    return Response({
+        'total': qs.count(),
+        'tipos': [{'id': t['tipo_id'], 'nome': t['tipo__nome'], 'total': t['total']} for t in tipos],
+        'categorias': [{'id': c['categorias__id'], 'nome': c['categorias__nome'], 'total': c['total']} for c in cats],
+        'atributos': catalogo.facetas(qs),
+        'preco': {k: (str(v) if v is not None else None) for k, v in precos.items()},
     })
 
 
