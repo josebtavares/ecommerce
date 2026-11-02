@@ -143,7 +143,8 @@ const colunas = computed(() => props.dados.map((l, i) => {
 }))
 
 function curto (v) {
-  if (!props.dinheiro) return String(Math.round(v))
+  // contagens: a marca do meio de 3 é 1,5 (arredondar dava um eixo 0 · 2 · 3)
+  if (!props.dinheiro) return Number.isInteger(v) ? String(v) : (Math.abs(v) < 100 ? v.toFixed(1).replace('.', ',') : String(Math.round(v)))
   const a = Math.abs(v)
   if (a >= 1e6) return `${(v / 1e6).toFixed(1).replace('.', ',')}M`
   if (a >= 1e3) return `${(v / 1e3).toFixed(a >= 1e4 ? 0 : 1).replace('.', ',')}k`

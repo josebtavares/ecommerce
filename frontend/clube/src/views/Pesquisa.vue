@@ -87,7 +87,7 @@
 
         <!-- produtos -->
         <div v-else-if="tipo === 'produto'" class="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4" data-teste="pesquisa-grelha">
-          <router-link v-for="p in resultados" :key="p.id" :to="destino('produto', p)"
+          <router-link v-for="(p, i) in resultados" :key="p.id" :to="destino('produto', p)" @click="clicou('produto', p, i)"
             class="group rounded-2xl border overflow-hidden transition"
             :class="isDark ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-600' : 'bg-white border-stone-200 hover:border-stone-300 shadow-sm'">
             <div class="aspect-square overflow-hidden flex items-center justify-center" :class="isDark ? 'bg-zinc-800' : 'bg-stone-100'">
@@ -109,7 +109,7 @@
 
         <!-- lojas -->
         <div v-else-if="tipo === 'loja'" class="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-teste="pesquisa-grelha">
-          <router-link v-for="l in resultados" :key="l.id" :to="destino('loja', l)"
+          <router-link v-for="(l, i) in resultados" :key="l.id" :to="destino('loja', l)" @click="clicou('loja', l, i)"
             class="flex items-center gap-3 p-3 rounded-2xl border transition"
             :class="isDark ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-600' : 'bg-white border-stone-200 hover:border-stone-300 shadow-sm'">
             <div class="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center" :class="isDark ? 'bg-zinc-800' : 'bg-stone-100'">
@@ -127,7 +127,9 @@
 
         <!-- serviços -->
         <div v-else class="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4" data-teste="pesquisa-grelha">
-          <ServicoCard v-for="s in resultados" :key="s.id" :s="s" :isDark="isDark" />
+          <div v-for="(s, i) in resultados" :key="s.id" @click.capture="clicou('servico', s, i)" class="min-w-0">
+            <ServicoCard :s="s" :isDark="isDark" />
+          </div>
         </div>
 
         <div v-if="seguinte != null" class="mt-8 text-center">
@@ -151,7 +153,7 @@ import Profile from '@/components/profile/UserProfile.vue'
 import MultiCart from '@/components/cart/multiCart.vue'
 import ServicoCard from '@/components/servicos/ServicoCard.vue'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
-import { procurar, destacar, destino, guardarRecente } from '@/services/pesquisa'
+import { procurar, destacar, destino, guardarRecente, registar, novoRegisto } from '@/services/pesquisa'
 import { terminarSessao } from '@/services/api'
 import { temaEscuro } from '@/utils/tema'
 
@@ -171,7 +173,8 @@ export default {
     let user = {}
     try { user = JSON.parse(localStorage.getItem('user') || '{}') } catch { /* nada */ }
     return { TIPOS, isDark: temaEscuro(), user, resultados: [], totais: {}, seguinte: null, sugestao: null,
-             aCarregar: false, erro: '', filtros: this.lerFiltros(), pedido: 0 }
+             aCarregar: false, erro: '', filtros: this.lerFiltros(), pedido: 0,
+             registoId: null, registoQ: '' }   // estatísticas (Admin → Pesquisas): uma linha por pesquisa
   },
 
   computed: {
@@ -204,7 +207,7 @@ export default {
       if (!this.q) { this.resultados = []; return }
       guardarRecente(this.q)
       // pesquisa nova: contar em cada separador e abrir o primeiro que tem resultados
-      if (!antigo || antigo.q !== novo.q) await this.contar()
+      if (!antigo || antigo.q !== novo.q) { await this.contar(); this.registarPagina(novo.r) }
       if (!this.tipo) {
         const primeiro = TIPOS.find(t => this.totais[t.tipo] > 0) || TIPOS[0]
         return this.$router.replace({ query: { ...this.$route.query, tipo: primeiro.tipo } })
@@ -241,6 +244,20 @@ export default {
       } finally {
         if (n === this.pedido) this.aCarregar = false
       }
+    },
+
+    // vinda da barra ("ver todos"), continua a linha dela (r); senão é uma linha nova
+    registarPagina (r) {
+      if (this.registoQ === this.q) return
+      this.registoQ = this.q
+      this.registoId = typeof r === 'string' && r ? r : novoRegisto()
+      registar({ id: this.registoId, q: this.q, origem: 'pagina', resultados: this.somaTotais() })
+    },
+    somaTotais () { return Object.values(this.totais).reduce((t, n) => t + (Number(n) || 0), 0) },
+    clicou (tipo, item, i) {
+      if (!this.registoId) return
+      registar({ id: this.registoId, q: this.q, origem: 'pagina', resultados: this.somaTotais(),
+                 clique: { tipo, id: item.id, nome: item.nome || '', posicao: i } })
     },
 
     mudar (extra) {
