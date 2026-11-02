@@ -32,6 +32,7 @@ python-dotenv==1.2.4
 
 # Utilitarios
 Pillow==13.0.0
+numpy==2.3.4
 
 # Relatórios (exportação Excel e PDF)
 openpyxl==3.1.5

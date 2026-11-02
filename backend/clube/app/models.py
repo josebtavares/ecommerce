@@ -2544,6 +2544,10 @@ class EntradaPesquisa(models.Model):
     texto_c   = models.TextField(blank=True, default='')
     vetor     = SearchVectorField(null=True)
     atualizado_em = models.DateTimeField(auto_now=True)
+    # pesquisa semântica (utils/semantica.py): vetor float32 normalizado, calculado pelo worker
+    semantico      = models.BinaryField(null=True, editable=False)
+    semantico_hash = models.CharField(max_length=40, blank=True, default='')   # do texto que deu o vetor
+    semantico_em   = models.DateTimeField(null=True, editable=False)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['tipo', 'objeto_id'], name='pesquisa_entrada_unica')]
