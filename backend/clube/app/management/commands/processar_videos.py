@@ -56,6 +56,7 @@ class Command(BaseCommand):
             close_old_connections()
             self._avisos_horario()
             self._indice_pesquisa()
+            self._vetores_pesquisa()
             self._ciclo_subscricoes()
             self._limpar_sessoes()
             self._backup_diario()
@@ -218,6 +219,20 @@ class Command(BaseCommand):
             self.stdout.write(f'  pesquisa: índice refeito ({n} entradas)')
         except Exception as e:
             self.stderr.write(f'  pesquisa: índice falhou: {e}')
+
+    def _vetores_pesquisa(self):
+        """Pesquisa semântica (utils/semantica.py): de 30 em 30 s, vetores do que é novo ou mudou (só com chave)."""
+        agora = time.monotonic()
+        if agora - getattr(self, '_ultimo_vetor', -1e9) < 30:
+            return
+        self._ultimo_vetor = agora
+        try:
+            from app.utils import semantica
+            n = semantica.atualizar_pendentes()
+            if n:
+                self.stdout.write(f'  pesquisa: {n} vetor(es) semântico(s) calculados')
+        except Exception as e:
+            self.stderr.write(f'  pesquisa: vetores falharam: {e}')
 
     def _avisos_horario(self):
         """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py) e cancela
