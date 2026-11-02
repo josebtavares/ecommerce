@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   Ações fixas da loja — carrinho · notificações · perfil
+   Ações fixas da loja — pesquisa · carrinho · notificações · perfil
    ══════════════════════════════════════════════════════════════
    Os 3 botões formam um grupo à direita, centrado verticalmente
    numa "barra" virtual no topo do ecrã. Cada template alinha-os com
@@ -17,8 +17,8 @@
 :root {
   --acoes-botao:  36px;
   --acoes-gap:    10px;
-  /* largura total do grupo (3 botões + 2 espaços) */
-  --acoes-espaco: calc(3 * var(--acoes-botao) + 2 * var(--acoes-gap));
+  /* largura total do grupo: pesquisa · carrinho · (sino, só com sessão) · perfil — --acoes-n-perfil vem do UserProfile */
+  --acoes-espaco: calc((var(--acoes-n-perfil, 2) + 2) * var(--acoes-botao) + (var(--acoes-n-perfil, 2) + 1) * var(--acoes-gap));
 }
 
 .loja-acoes-slot {
@@ -32,6 +32,11 @@
 
 @media (min-width: 768px) {
   .loja-acoes-slot { height: var(--acoes-altura, 84px); }
+}
+
+/* telemóveis estreitos: 4 botões (pesquisa, carrinho, sino, perfil) deixavam o nome da loja sem espaço */
+@media (max-width: 400px) {
+  :root { --acoes-botao: 34px; --acoes-gap: 6px; }
 }
 
 /* sino + perfil: encostado à direita */

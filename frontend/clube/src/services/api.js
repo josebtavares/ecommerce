@@ -13,6 +13,7 @@ const PUBLIC_URLS = [
   '/app/utilizador/google/',          // URL do Google e callback
   '/app/utilizador/disponivel/',      // verificação de username/email nos formulários
   '/api/token/refresh/',
+  '/app/pesquisa/',                   // barra de pesquisa: igual para todos (cache partilhada)
 
    // POS
   '/api/pos/login/',

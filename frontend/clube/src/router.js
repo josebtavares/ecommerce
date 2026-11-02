@@ -19,6 +19,7 @@ import ReembolsoDetalhe from './views/reembolsos/ReembolsoDetalhe.vue';
 import MeusReembolsos from './views/reembolsos/MeusReembolsos.vue';
 const MinhasMarcacoes = () => import('./views/servicos/MinhasMarcacoes.vue');
 const MarcacaoCliente = () => import('./views/servicos/MarcacaoCliente.vue');
+const PaginaPesquisa = () => import('./views/Pesquisa.vue');
 
 
 
@@ -63,6 +64,12 @@ const routes = [
         name: 'Home',
         component: App,
         // pública: ver lojas e produtos não exige conta (encomendar sim — checkout tem requiresAuth)
+    },
+    {
+        // todos os resultados da barra de pesquisa (pública)
+        path: '/pesquisa',
+        name: 'Pesquisa',
+        component: PaginaPesquisa,
     },
     {
         path: '/loja/:id',

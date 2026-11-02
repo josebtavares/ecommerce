@@ -55,6 +55,7 @@ class Command(BaseCommand):
                 continue
             close_old_connections()
             self._avisos_horario()
+            self._indice_pesquisa()
             self._ciclo_subscricoes()
             self._limpar_sessoes()
             self._backup_diario()
@@ -198,6 +199,25 @@ class Command(BaseCommand):
             call_command('flushexpiredtokens', verbosity=0)
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  sessões: limpeza falhou: {e}')
+
+    def _indice_pesquisa(self):
+        """Barra de pesquisa (utils/pesquisa.py): os sinais mantêm o índice; de 6 em 6 horas (e logo que esteja
+        vazio, ex.: depois do deploy) refaz-se tudo, para apanhar o que mudou sem sinais (update() em massa)."""
+        from app.models import EntradaPesquisa
+        agora = time.monotonic()
+        if agora - getattr(self, '_verif_indice', -1e9) < 60:
+            return
+        self._verif_indice = agora
+        vazio = not EntradaPesquisa.objects.exists()
+        if not vazio and agora - getattr(self, '_ultimo_indice', -1e9) < 6 * 3600:
+            return
+        self._ultimo_indice = agora
+        try:
+            from app.utils.pesquisa import reindexar_tudo
+            n = reindexar_tudo()
+            self.stdout.write(f'  pesquisa: índice refeito ({n} entradas)')
+        except Exception as e:
+            self.stderr.write(f'  pesquisa: índice falhou: {e}')
 
     def _avisos_horario(self):
         """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py) e cancela
