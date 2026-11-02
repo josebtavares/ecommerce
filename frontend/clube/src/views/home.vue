@@ -308,6 +308,12 @@
             <HomeServicos :titulo="sec.titulo" :subtitulo="sec.subtitulo" :servicos="sec.servicos" :isDark="isDark" />
           </section>
 
+          <!-- Publicidade (anúncios em carrossel) -->
+          <section v-else-if="sec.tipo === 'publicidade'" class="py-8 px-4 md:px-12" data-teste="home-publicidade">
+            <HomePublicidade :anuncios="sec.anuncios" :proporcao="sec.proporcao" :intervalo="sec.intervalo"
+              :titulo="sec.titulo" :subtitulo="sec.subtitulo" :isDark="isDark" />
+          </section>
+
           <!-- Banners -->
           <section v-else-if="sec.tipo === 'banner'" class="py-8 px-6 md:px-12">
             <HomeBanners :banners="sec.banners" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
@@ -366,6 +372,7 @@ import SiteRodape      from '@/components/paginas/SiteRodape.vue'
 import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
 import HomeCategorias from '@/components/home/HomeCategorias.vue'
 import HomeBanners from '@/components/home/HomeBanners.vue'
+import HomePublicidade from '@/components/home/HomePublicidade.vue'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
 import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import api, { terminarSessao } from '@/services/api'
@@ -377,7 +384,7 @@ export default {
   name: 'AppHome',
   components: { Swiper, SwiperSlide, Profile, ProductInfoCard, MultiCart, StoreSlider, ProductSlider, StoreCatalog, SiteRodape,
     HomeServicos,
-                HomeLojaDestaque, HomeCategorias, HomeBanners },
+                HomeLojaDestaque, HomeCategorias, HomeBanners, HomePublicidade },
 
   data () {
     return {
