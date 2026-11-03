@@ -28,8 +28,8 @@
             <p class="text-zinc-500">{{ m.pagamento === 'antecipado' ? (m.pago ? `Pago antecipado (${dinheiro(m.valor_pago)})` : 'Antecipado — por pagar') : 'Paga no local' }}</p>
             <p v-if="m.pago && Number(m.falta_pagar) > 0 && ativa" class="text-amber-300">Falta {{ dinheiro(m.falta_pagar) }} no local</p>
             <p v-if="Number(m.valor_reembolsado) > 0" class="text-green-400">Devolvido: {{ dinheiro(m.valor_reembolsado) }}</p>
-            <button v-if="m.pago" type="button" @click="comprovativo" data-teste="comprovativo-marcacao"
-              class="mt-1 text-[11px] text-zinc-400 hover:text-zinc-200 underline">Comprovativo de pagamento</button>
+            <BotaoPdf v-if="m.pago" class="mt-1" texto="Comprovativo de pagamento" titulo="Descarregar o comprovativo de pagamento (PDF)"
+              teste="comprovativo-marcacao" @click="comprovativo" />
             <p v-if="m.preco_final && m.preco_final_motivo" class="text-zinc-500">Preço final: {{ m.preco_final_motivo }} ({{ m.preco_final_por }})</p>
           </div>
         </div>
@@ -162,13 +162,14 @@ import MarcacaoConversa from './MarcacaoConversa.vue'
 import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
 import { descarregarComprovativoMarcacao } from '@/utils/documentos'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 
 const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro profissional' }, { k: 'preco', t: 'Propor preço' },
                  { k: 'cancelar', t: 'Cancelar' }]
 
 export default {
   name: 'MarcacaoDetalhe',
-  components: { FaturaVenda, MarcacaoConversa, ReembolsoPorConcluir },
+  components: { BotaoPdf, FaturaVenda, MarcacaoConversa, ReembolsoPorConcluir },
   props: {
     lojaId: { type: [String, Number], required: true },
     marcacaoId: { type: Number, required: true },

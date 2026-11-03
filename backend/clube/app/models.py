@@ -2379,6 +2379,44 @@ class ExportacaoLoja(models.Model):
         return f'exportação {alvo} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
 
 
+class ArquivoFiscal(models.Model):
+    """
+    ZIP do arquivo fiscal preparado pelo worker (utils/arquivo_fiscal.py) quando é grande demais para descarregar
+    na hora: de uma loja ou de um POS (vendas + faturas + comprovativos) ou o arquivo do Bende (mensalidades e
+    comissões de todas as lojas/POS). Vai para o bucket privado dos backups e apaga-se ao fim de DIAS_VALIDADE.
+    """
+    ESTADOS = ExportacaoLoja.ESTADOS
+    ALVOS = [('loja', 'Loja'), ('pos', 'POS'), ('bende', 'Bende')]
+    ORIGENS = [('admin', 'Admin'), ('loja', 'Backoffice'), ('pos', 'POS')]
+
+    alvo        = models.CharField(max_length=5, choices=ALVOS)
+    loja        = models.ForeignKey(Loja, on_delete=models.CASCADE, null=True, blank=True, related_name='arquivos_fiscais')
+    pos         = models.ForeignKey('pos.ConfiguracaoPOS', on_delete=models.CASCADE, null=True, blank=True,
+                                    related_name='arquivos_fiscais')
+    de          = models.DateField(null=True, blank=True)
+    ate         = models.DateField(null=True, blank=True)
+    com_bende   = models.BooleanField(default=True)        # a equipa do POS não vê os documentos do Bende
+    origem      = models.CharField(max_length=5, choices=ORIGENS)
+    pedido_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='arquivos_fiscais')
+    pedido_por_nome = models.CharField(max_length=150, blank=True, default='')   # membros do POS não são User
+    estado      = models.CharField(max_length=10, choices=ESTADOS, default='pendente', db_index=True)
+    chave       = models.CharField(max_length=255, blank=True, default='')
+    tamanho     = models.BigIntegerField(default=0)
+    erro        = models.TextField(blank=True, default='')
+    avisos      = models.TextField(blank=True, default='')
+    criado_em   = models.DateTimeField(auto_now_add=True, db_index=True)
+    iniciado_em = models.DateTimeField(null=True, blank=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+    expira_em   = models.DateTimeField(null=True, blank=True)
+    descargas   = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'arquivo fiscal {self.alvo} {self.loja_id or self.pos_id or ""} {self.estado} {self.criado_em:%Y-%m-%d %H:%M}'
+
+
 class EmailBloqueado(models.Model):
     """Email de uma conta banida que foi apagada: não pode abrir outra conta. Só o hash
     (utils/eliminacao.hash_email) — o email em si sai com o resto dos dados pessoais."""

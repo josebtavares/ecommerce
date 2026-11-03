@@ -61,11 +61,15 @@
                :data-teste="`admin-cobranca-mes-${m.mes}`">
             <span class="text-xs text-zinc-400 w-40">Comissões de {{ mes(m.mes) }} · {{ m.comissoes }} venda(s)</span>
             <span class="text-xs text-zinc-300 w-24 text-right tabular-nums">{{ $dinheiro(m.total) }}</span>
-            <button type="button" @click="extrato(c, m)" class="text-xs text-zinc-400 hover:text-zinc-200 underline">Extrato</button>
-            <RegistarFaturaBende v-if="podeFaturar" :fatura="m.fatura" :url="`/app/admin/faturacao/comissoes/${c.loja_id}/${m.mes}/fatura/`"
-              @atualizado="dados => faturaMudou(m, dados)" />
-            <span v-else-if="m.fatura" class="text-xs text-green-400">Fatura {{ m.fatura.numero }}</span>
-            <span v-else class="text-xs text-amber-300">Fatura por registar</span>
+            <SecaoDocumento>
+              <BotaoPdf texto="Extrato" titulo="Descarregar o extrato das comissões (PDF)" @click="extrato(c, m)" />
+            </SecaoDocumento>
+            <SecaoDocumento tipo="fatura">
+              <RegistarFaturaBende v-if="podeFaturar" :fatura="m.fatura" :url="`/app/admin/faturacao/comissoes/${c.loja_id}/${m.mes}/fatura/`"
+                @atualizado="dados => faturaMudou(m, dados)" />
+              <span v-else-if="m.fatura" class="text-xs text-green-400">{{ m.fatura.numero }}</span>
+              <span v-else class="text-xs text-amber-300">Por registar</span>
+            </SecaoDocumento>
           </div>
         </div>
 
@@ -94,6 +98,8 @@
 
 <script>
 import api from '@/services/api'
+import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import { descarregarPdf } from '@/utils/documentos'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
 
@@ -107,7 +113,7 @@ const FILTROS = [
 export default {
   name: 'AdminCobrancasComissoes',
 
-  components: { RegistarFaturaBende },
+  components: { SecaoDocumento, BotaoPdf, RegistarFaturaBende },
 
   props: {
     lojaId: { type: [String, Number], default: null },

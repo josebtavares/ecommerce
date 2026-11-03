@@ -6,8 +6,8 @@
     dica="Emite a fatura no e-Fatura e regista-a aqui: o cliente vê-a na encomenda." @atualizada="d => $emit('atualizada', d)">
     <!-- comprovativo do pagamento: o Bende gera-o e envia-o ao cliente; a fatura é da loja -->
     <template #acoes>
-      <button v-if="pago" type="button" @click="descarregarComprovativoEncomenda(encomenda.id)" data-teste="comprovativo-loja"
-        class="text-[11px] text-zinc-400 hover:text-zinc-200 underline">Comprovativo de pagamento</button>
+      <BotaoPdf v-if="pago" texto="Comprovativo de pagamento" titulo="Descarregar o comprovativo de pagamento (PDF)" teste="comprovativo-loja"
+        @click="descarregarComprovativoEncomenda(encomenda.id)" />
     </template>
   </FaturaVenda>
 </template>
@@ -15,10 +15,11 @@
 <script>
 import { descarregarComprovativoEncomenda } from '@/utils/documentos'
 import FaturaVenda from './FaturaVenda.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 
 export default {
   name: 'FaturaEncomenda',
-  components: { FaturaVenda },
+  components: { BotaoPdf, FaturaVenda },
   props: {
     encomenda: { type: Object, required: true },
     lojaId:    { type: [String, Number], required: true },
