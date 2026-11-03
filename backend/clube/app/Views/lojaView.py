@@ -165,7 +165,7 @@ def loja_endereco_editar(request, id):
     if erro:
         return erro
     if request.method == 'POST':
-        msg = el.mudar(loja, request.data.get('slug'))
+        msg = el.mudar(loja, request.data.get('slug'), por=request.user)
         if msg:
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
         loja.refresh_from_db(fields=['slug'])
