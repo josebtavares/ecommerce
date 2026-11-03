@@ -24,3 +24,5 @@ class AppConfig(AppConfig):
         # encomendas e entregas em tempo real (perfil do cliente, backoffice, condutor)
         from .utils import tempo_real_encomendas
         tempo_real_encomendas.ligar()
+        from .utils import tempo_real_subscricoes
+        tempo_real_subscricoes.ligar()

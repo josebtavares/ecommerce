@@ -237,6 +237,7 @@ export default {
     id:   { type: [Number, String], required: true },
     abaInicial: { type: String, default: '' },
     qInicial:   { type: String, default: '' },
+    atualizar:  { type: Number, default: 0 },     // muda → recarrega sem esqueleto (tempo real: AdminFaturacao)
   },
   emits: ['abrir', 'alterado', 'carregada'],
   data () {
@@ -245,7 +246,7 @@ export default {
       aba: this.abaInicial || 'dados',
       fv: { ...vazio(), q: this.qInicial },
       vendas: { count: 0, results: [], totais: null }, offsetVendas: 0, carregandoVendas: false,
-      aberto: {}, versao: 0, historicoVenda: '', origem: origemDe(this.qInicial, this.tipo),
+      aberto: {}, versao: 0, pedido: 0, historicoVenda: '', origem: origemDe(this.qInicial, this.tipo),
       zip: { de: '', ate: '', aExportar: false, erro: '' },
       pq: '', pRes: null, pOffset: 0,
     }
@@ -276,6 +277,7 @@ export default {
   },
   watch: {
     id () { this.carregar() },
+    atualizar () { this.carregar(true) },
     tipo () { this.origem = origemDe('', this.tipo); this.carregar() },
   },
   created () { this.carregar() },
@@ -294,12 +296,23 @@ export default {
       if (!o.regime_fiscal) return 'bg-amber-500/15 text-amber-300'
       return o.regime_fiscal === 'atividade' ? 'bg-sky-500/15 text-sky-300' : 'bg-zinc-700 text-zinc-300'
     },
-    async carregar () {
-      this.carregando = true; this.erro = ''; this.aberto = {}; this.historicoVenda = ''
-      if (!this.abas.some(a => a.key === this.aba)) this.aba = 'dados'
+    // silencioso (tempo real): mantém a aba, a origem, os históricos abertos e o que está à vista
+    async carregar (silencioso = false) {
+      const n = ++this.pedido
+      if (!silencioso) {
+        this.carregando = true; this.erro = ''; this.aberto = {}; this.historicoVenda = ''
+        if (!this.abas.some(a => a.key === this.aba)) this.aba = 'dados'
+      }
       try {
-        this.ficha = (await api.get(`/app/admin/faturacao/ficha/${this.tipo}/${this.id}/`)).data
+        const ficha = (await api.get(`/app/admin/faturacao/ficha/${this.tipo}/${this.id}/`)).data
+        if (n !== this.pedido) return
+        this.ficha = ficha
         this.$emit('carregada', this.ficha)
+        if (silencioso) {
+          this.versao++                         // os históricos abertos voltam a ler
+          if (this.aba === 'vendas') this.carregarVendas()
+          return
+        }
         // sem uma venda pedida: abre na origem com vendas por faturar (ou com vendas), não numa vazia
         const atual = (this.ficha.origens || []).find(o => o.origem === this.origem)
         if (!this.qInicial && atual && !atual.por_faturar) {
@@ -308,8 +321,8 @@ export default {
         }
         if (this.aba === 'vendas') this.carregarVendas(0)
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar a ficha.'
-      } finally { this.carregando = false }
+        if (!silencioso && n === this.pedido) this.erro = e.response?.data?.detail || 'Não foi possível carregar a ficha.'
+      } finally { if (n === this.pedido) this.carregando = false }
     },
     mudarAba (a) {
       this.aba = a

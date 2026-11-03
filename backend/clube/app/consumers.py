@@ -63,6 +63,10 @@ class NotificacaoConsumer(AsyncWebsocketConsumer):
         # encomenda ou entrega mudou (estado, fatura, condutor…): só ids — a página aberta vai buscar o resto
         await self.send(text_data=json.dumps({'type': 'encomenda', 'encomenda': event['encomenda']}))
 
+    async def subscricao_atualizada(self, event):
+        # mensalidade, subscrição ou fatura do Bende mudou: só ids ({tipo, id, loja_id, pos_id})
+        await self.send(text_data=json.dumps({'type': 'subscricao', 'subscricao': event['subscricao']}))
+
     async def notificacao_contador(self, event):
         await self.send(text_data=json.dumps({
             "type":      "contador",
