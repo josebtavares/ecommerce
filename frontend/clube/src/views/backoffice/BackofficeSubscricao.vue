@@ -197,7 +197,7 @@
       <ComissoesMensais :loja-id="lojaId" :versao="versao" />
 
       <!-- cobrança mensal das comissões (a SISP não divide pagamentos: paga-se à parte) -->
-      <CobrancasComissoes :loja-id="lojaId" @alterado="$emit('alterado')" />
+      <CobrancasComissoes :loja-id="lojaId" :versao="versao" @alterado="$emit('alterado')" />
 
       <!-- Faturas (também o histórico de uma loja que voltou à comissão) -->
       <div v-if="sub || dados.faturas.length" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">

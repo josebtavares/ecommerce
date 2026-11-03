@@ -97,15 +97,15 @@
           </div>
         </div>
 
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5" data-teste="dash-comissoes">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Comissões</h3>
             <button type="button" @click="$emit('ir', 'comissoes')" class="text-xs text-zinc-500 hover:text-zinc-300">Ver →</button>
           </div>
           <dl class="space-y-2 text-sm">
             <Linha label="Geradas no período" :valor="$dinheiro(d.comissoes.geradas)" forte />
-            <Linha label="Liquidadas no período" :valor="$dinheiro(d.comissoes.liquidadas)" />
-            <Linha label="Por liquidar (total)" :valor="$dinheiro(d.comissoes.pendentes)" :cor="Number(d.comissoes.pendentes) ? 'text-amber-400' : ''" />
+            <Linha label="Pagas no período" :valor="$dinheiro(d.comissoes.liquidadas)" />
+            <Linha label="Por receber (total)" :valor="$dinheiro(d.comissoes.pendentes)" :cor="Number(d.comissoes.pendentes) ? 'text-amber-400' : ''" />
             <Linha label="Créditos a devolver às lojas" :valor="$dinheiro(d.comissoes.creditos_pendentes)" />
             <Linha label="Créditos criados no período" :valor="$dinheiro(d.receita.creditos)" />
           </dl>
@@ -190,6 +190,7 @@ import FiltroPeriodo from '@/components/relatorios/FiltroPeriodo.vue'
 import GraficoTempo from '@/components/relatorios/GraficoTempo.vue'
 import { intervaloAtalho, dataCurta } from '@/utils/periodos'
 import { formatarDinheiro } from '@/utils/dinheiro'
+import { ouvirPainel } from '@/utils/tempoRealEncomendas'
 
 // uma linha "rótulo …… valor" dos painéis
 const Linha = (props) => h('div', { class: 'flex items-center justify-between gap-3' }, [
@@ -205,14 +206,19 @@ export default {
 
   data () {
     return {
-      loading: true, d: null, erro: '',
+      loading: true, d: null, erro: '', periodo: null, pedido: 0,
       COR_1: '#3987e5', COR_2: '#d95926',     // séries (validadas para o fundo escuro)
       ESTADOS_SUB: { teste: 'Em teste', ativa: 'Em dia', em_atraso: 'Em atraso', suspensa: 'Suspensa', cancelada: 'Cancelada', aguarda: 'A aguardar' },
       ESTADOS_ENC: { pendente: 'Pendente', pago: 'Pago', preparando: 'Em preparação', enviado: 'Enviado', concluido: 'Concluído', cancelado: 'Cancelado' },
     }
   },
 
-  created () { this.carregar(intervaloAtalho('mes')) },
+  created () {
+    this.carregar(intervaloAtalho('mes'))
+    // vendas, pagamentos, reembolsos, comissões, cobranças, mensalidades… → os números mudam sem recarregar
+    this.pararTempoReal = ouvirPainel(() => { if (this.periodo) this.carregar(this.periodo, true) })
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   computed: {
     kpis () {
@@ -248,15 +254,17 @@ export default {
 
   methods: {
     dataCurta,
-    async carregar ({ inicio, fim }) {
-      this.loading = true
-      this.erro = ''
+    // silencioso: tempo real — sem esbater a página; um erro passageiro não apaga o que está à vista
+    async carregar ({ inicio, fim }, silencioso = false) {
+      this.periodo = { inicio, fim }
+      const pedido = ++this.pedido
+      if (!silencioso) { this.loading = true; this.erro = '' }
       try {
         const { data } = await api.get('/app/admin/dashboard/', { params: { data_inicio: inicio, data_fim: fim } })
-        this.d = data
+        if (pedido === this.pedido) this.d = data
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar o dashboard.'
-      } finally { this.loading = false }
+        if (pedido === this.pedido && !silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar o dashboard.'
+      } finally { if (pedido === this.pedido) this.loading = false }
     },
     pct (v, total) { return Number(total) ? Math.max(2, (Number(v) / Number(total)) * 100) : 0 },
     statusColor (s) {

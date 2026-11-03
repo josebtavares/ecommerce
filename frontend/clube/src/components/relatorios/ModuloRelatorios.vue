@@ -75,7 +75,7 @@
 
       <template v-if="dados">
         <!-- Resumo -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" :class="carregando ? 'opacity-60' : ''">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" :class="carregando ? 'opacity-60' : ''" data-teste="relatorio-resumo">
           <div v-for="r in dados.resumo" :key="r.label" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 min-w-0">
             <p class="text-[11px] text-zinc-500 leading-tight">{{ r.label }}</p>
             <p class="text-lg sm:text-xl font-extrabold text-zinc-100 tabular-nums mt-1 break-words">{{ fmt(r.valor, r.tipo) || '—' }}</p>
@@ -169,7 +169,8 @@
 <script setup>
 // Módulo de relatórios (admin e loja): escolhe-se um relatório do catálogo, os filtros, e vê-se o resumo e as
 // linhas (paginadas). As exportações (CSV, Excel, PDF) são geradas no servidor com todas as linhas.
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { ouvirPainel } from '@/utils/tempoRealEncomendas'
 import api from '@/services/api'
 import FiltroPeriodo from '@/components/relatorios/FiltroPeriodo.vue'
 import { dataCurta, intervaloAtalho } from '@/utils/periodos'
@@ -179,6 +180,7 @@ const props = defineProps({
   base:     { type: String, required: true },          // '/app/admin/relatorios' ou '/app/loja/7/relatorios'
   prefixo:  { type: String, default: 'bendi' },        // nome dos ficheiros
   historico:{ type: Boolean, default: true },
+  tempoReal:{ type: Boolean, default: false },         // admin: os números mudam sem recarregar (utils/tempo_real_painel.py)
 })
 
 const FORMATOS = [
@@ -231,20 +233,28 @@ function limparFiltros () {
 }
 
 let pedido = 0
-async function carregar (offset = 0) {
+// silencioso: tempo real — mesma página e filtros, sem esbater; um erro passageiro não apaga o que está à vista
+async function carregar (offset = 0, silencioso = false) {
   if (!atual.value) return
   const meu = ++pedido
-  carregando.value = true
-  erro.value = ''
+  if (!silencioso) { carregando.value = true; erro.value = '' }
   try {
     const { data } = await api.get(`${props.base}/r/${atual.value.id}/`, { params: parametros({ offset, limit: 50 }) })
     if (meu === pedido) dados.value = data
   } catch (e) {
-    if (meu === pedido) { erro.value = e.response?.data?.detail || 'Não foi possível gerar o relatório.'; dados.value = null }
+    if (meu === pedido && !silencioso) { erro.value = e.response?.data?.detail || 'Não foi possível gerar o relatório.'; dados.value = null }
   } finally {
     if (meu === pedido) carregando.value = false
   }
 }
+
+let pararTempoReal = null
+if (props.tempoReal) {
+  pararTempoReal = ouvirPainel(() => {
+    if (atual.value && dados.value && !carregando.value) carregar(dados.value.offset || 0, true)
+  })
+}
+onBeforeUnmount(() => pararTempoReal?.())
 
 let espera = null
 function carregarDepois () { clearTimeout(espera); espera = setTimeout(() => carregar(0), 400) }

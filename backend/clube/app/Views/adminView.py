@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, F, Sum, Q
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 
@@ -898,12 +898,15 @@ def admin_comissao_list(request):
     if erro:
         return erro
  
-    qs = Comissao.objects.select_related('loja', 'encomenda').all()
+    # as anuladas só aparecem quando se pedem (filtro "Anuladas") — não contam em nenhum total
+    qs = Comissao.todas.select_related('loja', 'encomenda', 'cobranca')
  
     # ── filtros ───────────────────────────────────────────────
     stat = request.GET.get('status')
     if stat:
         qs = qs.filter(status=stat)
+    else:
+        qs = qs.exclude(status='anulada')
  
     loja_id = request.GET.get('loja_id')
     if loja_id:
@@ -943,6 +946,8 @@ def admin_comissao_list(request):
         'data_criacao':     'data_criacao',
         '-valor_comissao':  '-valor_comissao',
         'valor_comissao':   'valor_comissao',
+        '-data_liquidacao': F('data_liquidacao').desc(nulls_last=True),
+        'data_liquidacao':  F('data_liquidacao').asc(nulls_last=True),
     }
     ordering = ordering_map.get(request.GET.get('ordering', '-data_criacao'), '-data_criacao')
     qs = qs.order_by(ordering)
@@ -976,11 +981,16 @@ def admin_comissao_list(request):
             'status':          c.status,
             'data_criacao':    c.data_criacao.strftime('%d-%m-%Y %H:%M'),
             'data_liquidacao': c.data_liquidacao.strftime('%d-%m-%Y %H:%M') if c.data_liquidacao else None,
+            'anulada_em':      c.anulada_em.strftime('%d-%m-%Y %H:%M') if c.anulada_em else None,
             'notas':           c.notas,
+            'cobranca':        {'id': c.cobranca_id, 'mes': c.cobranca.mes.isoformat(), 'estado': c.cobranca.estado,
+                                'estado_nome': c.cobranca.get_estado_display()} if c.cobranca_id else None,
         })
  
+    total_anulado = Comissao.todas.filter(status='anulada').aggregate(t=Sum('valor_comissao'))['t'] or 0
     return Response({
         'count':           total,
+        'total_anulado':   str(total_anulado),
         'next_offset':     offset + limit if offset + limit < total else None,
         'total_pendente':  str(total_pendente),
         'total_liquidado': str(total_liquidado),
@@ -993,29 +1003,50 @@ def admin_comissao_list(request):
 @permission_classes([IsAuthenticated])
 def admin_comissao_liquidar(request, comissao_id):
     """
-    PATCH /app/admin/comissoes/<id>/liquidar/
-    Marca a comissao como liquidada.
+    PATCH /app/admin/comissoes/<id>/liquidar/ — já não se liquida venda a venda: a loja paga as comissões na
+    cobrança mensal (utils/cobranca_comissoes.py), que as liquida todas, com comprovativo e fatura do mês.
+    """
+    erro = _exige_admin(request, 'gerir_pagamentos')
+    if erro:
+        return erro
+    return Response({'detail': 'As comissões liquidam-se pela cobrança mensal (quando a loja a paga).'},
+                    status=status.HTTP_410_GONE)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_comissoes_anular(request):
+    """
+    POST /app/admin/comissoes/anular/  { ids: [..] | todas_pendentes: true, loja_id?, motivo }
+    Anula comissões por cobrar registadas por engano/testes (só superadmin): deixam de contar em todo o lado;
+    nunca se apagam (registo com o motivo). As que já estão numa cobrança não: anula-se primeiro a cobrança.
     """
     from ..models import Comissao
-    
-
+    from ..utils import cobranca_comissoes as cc
     erro = _exige_admin(request, 'gerir_pagamentos')
-    if erro: return erro
-
-    comissao = get_object_or_404(Comissao, id=comissao_id)
-    if comissao.status == 'liquidada':
-        return Response({'detail': 'Comissao ja esta liquidada.'}, status=status.HTTP_400_BAD_REQUEST)
-    if comissao.cobranca_id:
-        return Response({'detail': 'Esta comissão está na cobrança mensal — liquida-se quando a loja a pagar.'},
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    comissao.status = 'liquidada'
-    comissao.data_liquidacao = now()
-    if request.data.get('notas'):
-        comissao.notas = request.data['notas']
-    comissao.save()
-
-    return Response({'id': comissao.id, 'status': comissao.status, 'data_liquidacao': comissao.data_liquidacao})
+    if erro:
+        return erro
+    if request.user.utilizador.role_admin != 'superadmin':
+        return Response({'detail': 'Só o superadmin anula comissões.'}, status=status.HTTP_403_FORBIDDEN)
+    qs = Comissao.objects.filter(status='pendente', cobranca__isnull=True)
+    ids = request.data.get('ids')
+    if isinstance(ids, list) and ids:
+        try:
+            qs = qs.filter(pk__in=[int(x) for x in ids[:1000]])
+        except (TypeError, ValueError):
+            return Response({'detail': 'ids inválidos.'}, status=status.HTTP_400_BAD_REQUEST)
+    elif request.data.get('todas_pendentes') is not True:
+        return Response({'detail': 'Indica as comissões.'}, status=status.HTTP_400_BAD_REQUEST)
+    loja_id = request.data.get('loja_id')
+    if loja_id:
+        if not str(loja_id).isdigit():
+            return Response({'detail': 'Loja inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+        qs = qs.filter(loja_id=int(loja_id))
+    try:
+        n = cc.anular_comissoes(qs, request.data.get('motivo'), por=request.user)
+    except cc.ErroCobranca as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'anuladas': n})
 
 
 @api_view(['GET'])
@@ -1207,7 +1238,7 @@ def admin_dashboard(request):
     top = list(rel.encomendas_vendidas(p).values('loja_id', 'loja__nome', 'loja__modelo_cobranca')
                .annotate(t=Sum('venda'), n=Count('id')).order_by('-t')[:8])
     ids = [x['loja_id'] for x in top]
-    com_loja = dict(Comissao.objects.filter(p.filtro('data_criacao'), loja_id__in=ids)
+    com_loja = dict(Comissao.objects.receita().filter(p.filtro('data_criacao'), loja_id__in=ids)
                     .values_list('loja_id').annotate(t=Sum('valor_comissao')))
     sub_loja = dict(FaturaSubscricao.objects.filter(p.filtro('paga_em'), estado='paga', loja_id__in=ids)
                     .exclude(metodo='oferta').values_list('loja_id').annotate(t=Sum('valor')))

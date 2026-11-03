@@ -6,6 +6,7 @@ Cobrança mensal das comissões (utils/cobranca_comissoes.py).
   GET  /app/admin/comissoes/cobrancas/?estado=pendente|paga|anulada|atraso&loja_id=   (gerir_pagamentos)
   POST /app/admin/comissoes/cobrancas/<id>/  { acao: pagar, metodo, referencia?, notas? } | { acao: anular, motivo }
   POST /app/admin/comissoes/cobrancas/emitir/  { loja_id? } → emite já as que faltam do mês anterior
+  GET  /app/comissoes/cobrancas/<id>/comprovativo/   → PDF (dono/equipa com ver_subscricao; admin pagamentos/faturação)
 """
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404
@@ -70,8 +71,10 @@ def admin_cobrancas(request):
     if loja_id and str(loja_id).isdigit():
         qs = qs.filter(loja_id=int(loja_id))
     pend = CobrancaComissoes.objects.filter(estado='pendente')
+    lista = list(qs[:300])
+    meses = cc.meses_das_cobrancas(lista)
     return Response({
-        'resultados': [cc.payload(c, hoje) for c in qs[:300]],
+        'resultados': [cc.payload(c, hoje, meses=meses) for c in lista],
         'total_por_pagar': f"{pend.aggregate(t=Sum('valor'))['t'] or 0:.2f}",
         'total_em_atraso': f"{pend.filter(vencimento__lt=hoje).aggregate(t=Sum('valor'))['t'] or 0:.2f}",
         'n_em_atraso': pend.filter(vencimento__lt=hoje).count(),
@@ -102,7 +105,7 @@ def admin_cobranca(request, cobranca_id):
             return _erro('Acção inválida.')
     except cc.ErroCobranca as e:
         return _erro(str(e))
-    return Response(cc.payload(c))
+    return Response(cc.payload(c, meses=True))
 
 
 @api_view(['POST'])
@@ -117,3 +120,20 @@ def admin_cobrancas_emitir(request):
         c = cc.emitir(loja)
         return Response({'emitidas': int(bool(c))})
     return Response({'emitidas': cc.emitir_todas()})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def cobranca_comprovativo(request, cobranca_id):
+    from ..utils import documentos
+    from .faturacaoView import _membro, _pdf
+    c = get_object_or_404(CobrancaComissoes.objects.select_related('loja'), id=cobranca_id)
+    pode = not _exige_admin(request, 'gerir_pagamentos') or not _exige_admin(request, 'gerir_faturacao')
+    if not pode:
+        m = _membro(request, c.loja)
+        pode = bool(m and m.pode('ver_subscricao'))
+    if not pode:
+        return _erro('Sem permissão.', status.HTTP_403_FORBIDDEN)
+    if not cc.tem_comprovativo(c):
+        return _erro('Esta cobrança não está paga (ou foi perdoada) — não tem comprovativo.')
+    return _pdf(documentos.pdf_comprovativo_cobranca(c), documentos.nome_comprovativo_cobranca(c))

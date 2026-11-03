@@ -6,5 +6,6 @@ urlpatterns = [
     path('loja/<int:loja_id>/comissoes/cobrancas/<int:cobranca_id>/pagar/', v.loja_cobranca_pagar,    name='loja-cobranca-pagar'),
     path('admin/comissoes/cobrancas/',                                     v.admin_cobrancas,        name='admin-cobrancas'),
     path('admin/comissoes/cobrancas/emitir/',                              v.admin_cobrancas_emitir, name='admin-cobrancas-emitir'),
+    path('comissoes/cobrancas/<int:cobranca_id>/comprovativo/',             v.cobranca_comprovativo,  name='cobranca-comprovativo'),
     path('admin/comissoes/cobrancas/<int:cobranca_id>/',                   v.admin_cobranca,         name='admin-cobranca'),
 ]

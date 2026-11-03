@@ -18,7 +18,8 @@
         <div class="px-6 py-4 flex flex-wrap items-center gap-3">
           <div class="flex-1 min-w-[160px]">
             <p class="text-sm font-semibold text-zinc-200">{{ nomeMes(m.mes) }}</p>
-            <p class="text-xs text-zinc-500">{{ m.comissoes }} {{ m.comissoes === 1 ? 'venda' : 'vendas' }}</p>
+            <p class="text-xs text-zinc-500">{{ m.comissoes }} {{ m.comissoes === 1 ? 'venda' : 'vendas' }}
+              <EstadoCobrancaMes :cobranca="m.cobranca" /></p>
           </div>
           <span class="text-sm font-bold text-zinc-100">{{ dinheiro(m.total) }}</span>
           <button type="button" @click="abrir(m)" :aria-expanded="aberto === m.mes ? 'true' : 'false'" data-teste="comissoes-ver-vendas"
@@ -79,10 +80,11 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarPdf, urlFicheiro } from '@/utils/documentos'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
+import EstadoCobrancaMes from '@/components/fiscal/EstadoCobrancaMes.vue'
 
 export default {
   name: 'ComissoesMensais',
-  components: { DiferencaComissoes, PaginacaoLista },
+  components: { DiferencaComissoes, EstadoCobrancaMes, PaginacaoLista },
   props: {
     lojaId: { type: [String, Number], required: true },
     versao: { type: Number, default: 0 },     // muda → volta a ler a página aberta (fatura do Bende registada/anulada)

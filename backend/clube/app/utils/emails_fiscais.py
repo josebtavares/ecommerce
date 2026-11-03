@@ -1,7 +1,8 @@
 """
 Emails com os documentos de cada pagamento (PDF anexado + link para o site):
 - ao cliente: comprovativo quando a encomenda (ou a marcação, paga online) é paga; fatura quando a loja a regista;
-- ao dono da loja/POS: comprovativo da mensalidade paga; fatura do Bende (mensalidade e comissões do mês).
+- ao dono da loja/POS: comprovativo da mensalidade paga e da cobrança de comissões paga; fatura do Bende
+  (mensalidade e comissões do mês).
 
 Os comprovativos saem sozinhos (signals em ligar(): qualquer caminho que aprove um pagamento passa
 por aqui) e só uma vez (comprovativo_enviado_em). Uma falha no envio nunca desfaz o pagamento:
@@ -199,6 +200,20 @@ def enviar_fatura_subscricao(f):
         [(f'fatura-subscricao-{f.id}.pdf', pdf)] if pdf else [])
 
 
+def enviar_comprovativo_cobranca(c):
+    if not _reservar(type(c), c.pk):
+        return
+    loja = c.loja
+    ok = _enviar(
+        _dono_email(loja), f'Comprovativo de pagamento — comissões até {c.mes:%m/%Y} ({loja.nome})',
+        f'Olá,\n\nRecebemos o pagamento das comissões da loja {loja.nome} até {c.mes:%m/%Y}. '
+        f'Segue em anexo o comprovativo.\n\nAs faturas do Bende das comissões de cada mês chegam-te por email '
+        f'quando forem emitidas. Backoffice: {_link(f"/loja/{loja.id}/backoffice/subscricao")}',
+        [(documentos.nome_comprovativo_cobranca(c), documentos.pdf_comprovativo_cobranca(c))])
+    if not ok:
+        _libertar(type(c), c.pk)
+
+
 def enviar_fatura_comissoes(fc):
     loja = fc.loja
     pdf = _pdf_registado(fc.fatura_pdf)
@@ -252,9 +267,19 @@ def _ao_gravar_fatura_subscricao(sender, instance, **kwargs):
         type(instance).objects.select_related('loja__dono__user', 'pos__dono__user').get(pk=pk)))
 
 
+def _ao_gravar_cobranca(sender, instance, **kwargs):
+    from .cobranca_comissoes import tem_comprovativo
+    if instance.comprovativo_enviado_em or not tem_comprovativo(instance):
+        return
+    pk = instance.pk
+    transaction.on_commit(lambda: enviar_comprovativo_cobranca(
+        type(instance).objects.select_related('loja__dono__user').get(pk=pk)))
+
+
 def ligar():
     """Chamado em AppConfig.ready()."""
-    from ..models import FaturaSubscricao, Pagamento
+    from ..models import CobrancaComissoes, FaturaSubscricao, Pagamento
+    post_save.connect(_ao_gravar_cobranca, sender=CobrancaComissoes, weak=False, dispatch_uid='fiscal_comprovativo_cobranca')
     post_save.connect(_ao_gravar_pagamento, sender=Pagamento, weak=False, dispatch_uid='fiscal_comprovativo_encomenda')
     post_save.connect(_ao_gravar_fatura_subscricao, sender=FaturaSubscricao, weak=False,
                       dispatch_uid='fiscal_comprovativo_subscricao')
