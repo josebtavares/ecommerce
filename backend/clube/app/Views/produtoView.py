@@ -398,6 +398,21 @@ def _gerir_imagens(produto, request):
         except Exception:
             pass
 
+    # 4. Sem imagem principal (tirada no backoffice, ou só se enviaram imagens adicionais) mas com outras:
+    #    a primeira passa a principal — é a principal que aparece nos cartões e na pesquisa
+    _promover_principal(produto)
+
+
+def _promover_principal(produto):
+    if produto.ficheiro:
+        return
+    img = ProdutoImagem.objects.filter(produto=produto).order_by('ordem', 'id').first()
+    if not img:
+        return
+    produto.ficheiro.name = img.ficheiro.name       # o mesmo ficheiro (nada se copia)
+    produto.save(update_fields=['ficheiro'])
+    img.delete()       # a limpeza (utils/limpeza.em_uso) não apaga um ficheiro ainda usado pelo produto
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -566,6 +581,10 @@ def produto_update(request, loja_id, id):
  
     if 'ficheiro' in request.FILES:
         produto.ficheiro = request.FILES['ficheiro']
+        produto.save(update_fields=['ficheiro'])
+    elif str(request.data.get('remover_ficheiro', '')).lower() in ('1', 'true') and produto.ficheiro:
+        # "×" na imagem principal (backoffice): a anterior vai para a limpeza; se houver outras, a primeira sobe
+        produto.ficheiro = ''
         produto.save(update_fields=['ficheiro'])
  
     # ── NOVO: processar imagens adicionais ─────────────────────
