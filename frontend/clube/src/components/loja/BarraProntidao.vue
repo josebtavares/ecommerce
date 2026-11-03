@@ -1,5 +1,5 @@
 <!-- BarraProntidao.vue — backoffice: quanto falta para a loja poder ser publicada (app/utils/prontidao.py).
-     Vermelha enquanto falta algo, verde a 100%. Cada requisito em falta leva à secção onde se resolve.
+     Vermelha enquanto falta algo, verde a 100%. Cada requisito em falta leva à parte exacta da secção onde se resolve (utils/irParaAlvo.js).
      Lojas activas e completas não vêem nada (a não ser sugestões: logótipo, descrição, nomes provisórios, preços
      estranhos, nomes repetidos — app/utils/qualidade.py); activas incompletas vêem-na fechada (só avisos). -->
 <template>
@@ -40,7 +40,7 @@
             <p :class="r.ok ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-100 font-medium'">{{ r.titulo }}</p>
             <p v-if="!r.ok" class="text-xs text-zinc-500 mt-0.5">{{ r.ajuda }}</p>
           </div>
-          <button v-if="!r.ok" type="button" @click="$emit('ir', r.seccao)"
+          <button v-if="!r.ok" type="button" @click="$emit('ir', r.seccao, r.chave)" :data-teste="'resolver-' + r.chave"
             class="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex-shrink-0">
             Resolver
           </button>
@@ -51,7 +51,7 @@
         <li v-for="a in dados.avisos.loja" :key="a.chave" class="flex items-start gap-2.5">
           <font-awesome-icon :icon="['fas', 'lightbulb']" class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-300" />
           <p class="flex-1 min-w-0 text-zinc-200">{{ a.titulo }}</p>
-          <button type="button" @click="$emit('ir', a.seccao)"
+          <button type="button" @click="$emit('ir', a.seccao, a.chave)"
             class="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex-shrink-0">
             Resolver
           </button>
@@ -81,7 +81,7 @@
             {{ p.nome }}: <span class="text-zinc-500">falta {{ p.faltas.join(', ') }}</span>
           </li>
         </ul>
-        <button type="button" @click="$emit('ir', 'produtos')" class="mt-1.5 text-xs font-semibold text-red-400 hover:text-red-300">
+        <button type="button" @click="$emit('ir', 'produtos', 'produto')" class="mt-1.5 text-xs font-semibold text-red-400 hover:text-red-300">
           Ver produtos →
         </button>
       </div>

@@ -1,5 +1,7 @@
 <template>
   <div class="space-y-5">
+    <!-- tempo real: alguém mudou a entrega que esta pessoa tem em mãos -->
+    <AvisoMudouPorFora :visivel="!!adiada?.id" texto="Esta entrega foi alterada por outra pessoa — os dados atualizam quando terminares." />
 
     <!-- Tabs -->
     <div class="flex gap-1 bg-zinc-900 rounded-xl p-1 w-fit">
@@ -395,12 +397,14 @@ import CalendarioEntregas from '@/components/calendario/CalendarioEntregas.vue'
 import ConfirmarEntrega from '@/components/calendario/ConfirmarEntrega.vue'
 import { contactarCliente } from '@/services/chat'
 import { toast } from 'vue3-toastify'
+import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
+import AvisoMudouPorFora from '@/components/encomendas/AvisoMudouPorFora.vue'
 
 const ATUALIZAR_MS = 30000
 
 export default {
   name: 'BackofficeEntregas',
-  components: { CalendarioEntregas, ConfirmarEntrega },
+  components: { CalendarioEntregas, ConfirmarEntrega, AvisoMudouPorFora },
   props: {
     lojaId:    [String, Number],
     minhaRole: { type: String, default: '' },
@@ -440,6 +444,7 @@ export default {
       loadingMorada:     false,
       loadingAcao:       null,
       atualizador:       null,
+      adiada:            null,    // aviso em tempo real à espera de a pessoa acabar a acção ({ id } | 'todas')
     }
   },
 
@@ -448,6 +453,16 @@ export default {
     // o condutor não gere condutores
     tabsVisiveis () { return this.isCondutor ? this.tabs.filter(t => t.key !== 'condutores') : this.tabs },
     totalPages ()  { return Math.ceil(this.totalCount / this.limit) },
+    // a meio de uma acção: os dados não mudam por baixo da pessoa
+    ocupado () {
+      return !!(this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada || this.loadingAcao ||
+        this.loadingReatribuir || this.loadingMorada)
+    },
+    // a entrega que a pessoa tem em mãos (modal aberto)
+    emMaos () {
+      const m = this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada
+      return m ? m.encomenda : null
+    },
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)
       const end   = Math.min(this.totalPages, this.page + 2)
@@ -455,12 +470,26 @@ export default {
     },
   },
 
+  watch: {
+    // acabou a acção (fechou o modal) → aplica o aviso que ficou à espera
+    ocupado (v) { if (!v && this.adiada) this.atualizarLista() },
+    // ao voltar a um separador volta a carregar (sem esqueleto se já havia dados)
+    activeTab (tab) {
+      if (tab === 'entregas' || tab === 'condutores') this.fetchEntregas(this.entregas.length > 0)
+      if (tab === 'condutores' && !this.isCondutor) this.fetchCondutores()
+    },
+  },
+
   async created () {
+    // tempo real (utils/tempoRealEncomendas.js): o condutor mudou o estado, o dono reatribuiu, a encomenda foi
+    // cancelada… — dono, staff e condutor vêem logo. O intervalo fica de reserva (ex.: WebSocket bloqueado).
+    this.pararTempoReal = ouvirEncomendas(a => this.aoMudarEncomenda(a),
+      { filtro: a => !a.loja_id || String(a.loja_id) === String(this.lojaId) })
     await Promise.all([this.fetchEntregas(), this.isCondutor ? null : this.fetchCondutores()])
     this.atualizador = setInterval(this.atualizarLista, ATUALIZAR_MS)
   },
 
-  beforeUnmount () { clearInterval(this.atualizador) },
+  beforeUnmount () { clearInterval(this.atualizador); this.pararTempoReal?.() },
 
   methods: {
     iconePagamento,
@@ -505,8 +534,19 @@ export default {
 
     // entrega nova, ou cancelada entretanto, sem o condutor ter de fazer refresh
     atualizarLista () {
-      const ocupado = this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada || this.loadingAcao
-      if (!document.hidden && !ocupado && this.activeTab === 'entregas') this.fetchEntregas(true)
+      if (document.hidden || this.ocupado) return
+      this.adiada = null
+      if (this.activeTab === 'entregas') this.fetchEntregas(true)
+      else if (this.activeTab === 'condutores') this.fetchEntregas(true)   // contagem "por entregar" de cada condutor
+    },
+    aoMudarEncomenda (aviso) {
+      if (this.ocupado) {
+        // com um pedido desta pessoa a decorrer o aviso é quase sempre o da própria acção: espera em silêncio
+        const aAgir = this.loadingAcao || this.loadingReatribuir || this.loadingMorada
+        this.adiada = !aAgir && aviso?.id && this.emMaos && aviso.id === this.emMaos ? { id: aviso.id } : (this.adiada || 'todas')
+        return
+      }
+      this.atualizarLista()
     },
 
     irParaPagina (p) {
@@ -517,6 +557,8 @@ export default {
 
     async fetchEntregas (silencioso = false) {
       if (!silencioso) this.loadingEntregas = true
+      // só a resposta do pedido mais recente conta (mudar de página/filtro durante um aviso em tempo real)
+      const pedido = this.pedidoLista = (this.pedidoLista || 0) + 1
       try {
         const params = {
           limit:  this.limit,
@@ -524,10 +566,11 @@ export default {
         }
         if (this.filtroEntrega !== 'todos') params.status = this.filtroEntrega
         const { data } = await api.get(`/app/loja/${this.lojaId}/entrega/lista/`, { params })
+        if (pedido !== this.pedidoLista) return
         this.entregas   = data.results || data
         this.totalCount = data.count ?? this.entregas.length
       } catch (e) { console.error(e) }
-      finally { this.loadingEntregas = false }
+      finally { if (pedido === this.pedidoLista) this.loadingEntregas = false }
     },
 
     async fetchCondutores () {
@@ -601,11 +644,5 @@ export default {
     },
   },
 
-  watch: {
-    activeTab (tab) {
-      if (tab === 'entregas'   && this.entregas.length === 0)   this.fetchEntregas()
-      if (tab === 'condutores' && this.condutores.length === 0) this.fetchCondutores()
-    },
-  },
 }
 </script>

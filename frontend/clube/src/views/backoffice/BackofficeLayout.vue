@@ -159,7 +159,7 @@
       <!-- Requisitos para a loja ser publicada (barra vermelha → verde; components/loja/BarraProntidao) -->
       <BarraProntidao v-if="loja && ['pendente', 'ativa'].includes(loja.estado)" class="mx-4 lg:mx-6 mt-4"
                       :loja-id="lojaId" :estado="loja.estado" :recarregar="`${activeSection}-${versaoLoja}`"
-                      @ir="navegarPara" />
+                      @ir="resolverRequisito" />
 
       <!-- Faturação: dados fiscais por preencher / lembrete de faturar (components/fiscal) -->
       <AvisoFaturacao v-if="loja?.fiscal" class="mx-4 lg:mx-6 mt-4" :fiscal="loja.fiscal" :chave="`loja-${lojaId}`"
@@ -222,6 +222,7 @@ import { chat } from '@/services/chat'
 import NotificacaoSino          from '@/components/notificacao/notificacaoSino.vue'
 import AvisoFaturacao           from '@/components/fiscal/AvisoFaturacao.vue'
 import BarraProntidao           from '@/components/loja/BarraProntidao.vue'
+import { focarAlvo }            from '@/utils/irParaAlvo'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 import { COM_FICHA, enderecoCerto } from '@/utils/ficha'
 import { temaPainel } from '@/utils/tema'
@@ -414,6 +415,12 @@ export default {
         const { data } = await api.get(`/app/loja/${this.lojaId}/reembolsos/`, { params: { grupo: 'novos', limit: 1 } })
         this.devolucoesPorResponder = (data.contagem?.novos || 0) + (data.contagem?.dinheiro || 0)
       } catch { /* o contador não é essencial */ }
+    },
+
+    // "Resolver" da barra de requisitos: vai à secção e rola até ao campo (utils/irParaAlvo.js)
+    resolverRequisito (seccao, chave) {
+      this.navegarPara(seccao)
+      if (chave) focarAlvo(chave)
     },
 
     navegarPara (key) {

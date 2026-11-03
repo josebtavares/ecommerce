@@ -42,7 +42,7 @@
         </p>
         <input ref="bannerInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" class="hidden" @change="onBanner" />
 
-        <div class="absolute -bottom-4 left-4 cursor-pointer group" @click="$refs.logoInput.click()">
+        <div class="absolute -bottom-4 left-4 cursor-pointer group" data-alvo="logo" @click="$refs.logoInput.click()">
           <img v-if="logoPreview" :src="logoPreview"
                class="w-16 h-16 rounded-xl object-cover border-4 border-zinc-900 shadow-lg group-hover:ring-2 group-hover:ring-red-500 transition" />
           <div v-else class="w-16 h-16 rounded-xl bg-zinc-700 border-4 border-zinc-900 flex items-center justify-center">
@@ -59,7 +59,7 @@
             class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                    focus:outline-none focus:border-red-500 transition" />
         </div>
-        <div>
+        <div data-alvo="descricao_loja">
           <label class="text-xs text-zinc-500 mb-1 block">Descrição</label>
           <textarea v-model="form.descricao" rows="3"
             class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
@@ -72,7 +72,7 @@
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                      focus:outline-none focus:border-red-500 transition" />
           </div>
-          <div>
+          <div data-alvo="localizacao">
             <label class="text-xs text-zinc-500 mb-1 block">Localização</label>
             <input v-model="form.localizacao" type="text"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
@@ -83,7 +83,7 @@
     </div>
 
     <!-- Contactos públicos ("Vendido por" na página da loja e no checkout) -->
-    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="loja-contactos">
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="loja-contactos" data-alvo="contacto">
       <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Contactos da loja</h2>
       <p class="text-xs text-zinc-600 mb-5">
         Aparecem em "Vendido por", na página da loja e no checkout, com a localização acima e o NIF da Faturação.
@@ -249,17 +249,17 @@
     </div>
 
     <!-- Dados fiscais (só o dono) -->
-    <SeccaoDadosFiscais v-if="podeFiscal && loja?.fiscal"
+    <SeccaoDadosFiscais v-if="podeFiscal && loja?.fiscal" data-alvo="nif"
                         :fiscal="loja.fiscal" :url="`/app/loja/${lojaId}/fiscal/`" @guardado="$emit('updated')" />
 
     <!-- Pagamento com cartão: contrato vinti4 da loja (só o dono) — components/loja/SeccaoVinti4 -->
-    <SeccaoVinti4 v-if="podeBanco" :loja-id="lojaId" @alterado="$emit('updated')" />
+    <SeccaoVinti4 v-if="podeBanco" data-alvo="vinti4" :loja-id="lojaId" @alterado="$emit('updated')" />
 
     <!-- Dados bancários (só o dono) — components/loja/SeccaoDadosBancarios -->
-    <SeccaoDadosBancarios v-if="podeBanco" :loja-id="lojaId" @guardado="fetchMetodos" />
+    <SeccaoDadosBancarios v-if="podeBanco" data-alvo="banco" :loja-id="lojaId" @guardado="fetchMetodos" />
 
     <!-- Documentos legais (só o dono, opcionais) — components/loja/SeccaoDocumentos -->
-    <SeccaoDocumentos v-if="podeDocumentos" :loja-id="lojaId" @alterado="$emit('updated')" />
+    <SeccaoDocumentos v-if="podeDocumentos" data-alvo="documentos" :loja-id="lojaId" @alterado="$emit('updated')" />
 
     <!-- Impostos (mapa de IVA nos Relatórios) -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
@@ -291,14 +291,14 @@
             ou que não chegaram podem sempre ser reclamados nas 48 horas seguintes.
           </p>
         </div>
-        <div>
+        <div data-alvo="devolucoes">
           <label class="text-xs text-zinc-500 mb-1 block">Política de devoluções</label>
           <textarea v-model="form.politica_devolucao" rows="4"
             placeholder="Ex: Aceitamos devoluções até 30 dias após a compra..."
             class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                   focus:outline-none focus:border-red-500 transition resize-none"></textarea>
         </div>
-        <div>
+        <div data-alvo="entregas">
           <label class="text-xs text-zinc-500 mb-1 block">Política de entregas</label>
           <textarea v-model="form.politica_entregas" rows="4"
             placeholder="Ex: Entregamos na Praia em 24 horas; noutras ilhas em 3 a 5 dias úteis..."

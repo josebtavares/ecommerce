@@ -21,3 +21,6 @@ class AppConfig(AppConfig):
         # barra de pesquisa: o índice acompanha produtos, lojas e serviços
         from .utils import pesquisa
         pesquisa.ligar_sinais()
+        # encomendas e entregas em tempo real (perfil do cliente, backoffice, condutor)
+        from .utils import tempo_real_encomendas
+        tempo_real_encomendas.ligar()
