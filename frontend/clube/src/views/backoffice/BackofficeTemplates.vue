@@ -124,7 +124,7 @@
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-bold text-zinc-200"><font-awesome-icon :icon="['fas', 'palette']" class="mr-1.5 text-zinc-500" />Cores</h3>
-            <button @click="reporPadrao"
+            <button @click="reporPadrao()"
               class="text-[11px] text-zinc-500 hover:text-zinc-200 transition"><font-awesome-icon :icon="['fas', 'rotate-left']" class="mr-1" />Repor padrão do template</button>
           </div>
 
@@ -218,6 +218,41 @@
 
     <!-- Mensagem de erro -->
     <div v-if="erro" class="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">{{ erro }}</div>
+
+    <!-- Repor: o template actual com as cores/modo de origem, ou voltar ao template inicial (Clássico).
+         Só muda o formulário — os clientes só vêem depois de "Guardar aparência" (e "Descartar" desfaz). -->
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4" data-teste="repor-aparencia">
+      <h3 class="text-sm font-bold text-zinc-200"><font-awesome-icon :icon="['fas', 'rotate-left']" class="mr-1.5 text-zinc-500" />Repor aparência</h3>
+      <p class="text-[11px] text-zinc-500 mt-1">Fica tudo na pré-visualização — os clientes só vêem depois de guardares.</p>
+      <div v-if="!aConfirmarRepor" class="mt-3 flex flex-wrap gap-2">
+        <button type="button" @click="aConfirmarRepor = 'template'" :disabled="estaNoPadrao" data-teste="repor-template"
+          :class="['px-3 py-2 rounded-xl border text-xs font-semibold transition',
+                   estaNoPadrao ? 'border-zinc-800 text-zinc-600 cursor-not-allowed' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500']">
+          Repor «{{ templateAtual.nome }}» de origem
+        </button>
+        <button type="button" @click="aConfirmarRepor = 'classico'" :disabled="estaNoInicial" data-teste="repor-classico"
+          :class="['px-3 py-2 rounded-xl border text-xs font-semibold transition',
+                   estaNoInicial ? 'border-zinc-800 text-zinc-600 cursor-not-allowed' : 'border-zinc-700 text-zinc-200 hover:border-zinc-500']">
+          Voltar ao template inicial ({{ templateInicial.nome }})
+        </button>
+      </div>
+      <div v-else class="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3" role="alert" data-teste="repor-confirmar">
+        <p class="text-xs text-amber-100">
+          <template v-if="aConfirmarRepor === 'template'">
+            Repor as cores e o modo de origem do template «{{ templateAtual.nome }}»? Perdes as cores que escolheste.
+          </template>
+          <template v-else>
+            Voltar ao template «{{ templateInicial.nome }}» com as cores e o modo de origem, como quando a loja foi criada?
+          </template>
+        </p>
+        <div class="mt-2.5 flex gap-2">
+          <button type="button" @click="confirmarRepor" data-teste="repor-sim"
+            class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition">Repor</button>
+          <button type="button" @click="aConfirmarRepor = null"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition">Cancelar</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Barra guardar -->
     <div class="sticky bottom-0 z-10 -mx-1 px-1 py-3 flex items-center justify-end gap-3 flex-wrap"
@@ -353,6 +388,7 @@ export default {
     return {
       TEMPLATES,
       abaAtiva: 'template',
+      aConfirmarRepor: null,    // 'template' | 'classico' — confirmação dentro da página (sem confirm())
       tabs: [
         { id: 'template', label: 'Template',     icon: 'pen-ruler' },
         { id: 'cores',    label: 'Cores & Modo', icon: 'palette' },
@@ -451,6 +487,15 @@ export default {
       return this.corValida(this.textoCor.cor_primaria) && this.corValida(this.textoCor.cor_secundaria)
     },
 
+    // o template com que uma loja nova começa (models.Loja.template_id default)
+    templateInicial () { return TEMPLATES.find(t => t.id === 'classico') || TEMPLATES[0] },
+    estaNoPadraoDe () {
+      return t => this.form.template_id === t.id && this.form.cor_primaria === t.primaryDefault.toLowerCase() &&
+        (!t.usaCorSecundaria || this.form.cor_secundaria === t.secundariaDefault.toLowerCase()) &&
+        this.form.dark_mode === (t.darkDefault !== false)
+    },
+    estaNoPadrao () { return this.estaNoPadraoDe(this.templateAtual) },
+    estaNoInicial () { return this.estaNoPadraoDe(this.templateInicial) },
     temAlteracoes () {
       if (!this.guardado) return false
       return Object.keys(this.form).some(k => this.form[k] !== this.guardado[k])
@@ -548,11 +593,17 @@ export default {
       return prim && sug.secundaria?.toLowerCase() === this.form.cor_secundaria
     },
 
-    reporPadrao () {
-      const t = this.templateAtual
+    reporPadrao (t = this.templateAtual) {
+      this.form.template_id = t.id
       this.setCor('cor_primaria', t.primaryDefault)
       this.setCor('cor_secundaria', t.secundariaDefault)
       this.form.dark_mode = t.darkDefault !== false
+    },
+
+    confirmarRepor () {
+      this.reporPadrao(this.aConfirmarRepor === 'classico' ? this.templateInicial : this.templateAtual)
+      this.aConfirmarRepor = null
+      toast.info('Reposto na pré-visualização — guarda para os clientes verem.')
     },
 
     descartar () {
