@@ -796,29 +796,7 @@ def admin_encomenda_list(request):
 # PAGAMENTOS
 # ══════════════════════════════════════════════════════════════
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def admin_pagamento_list(request):
-    """
-    GET /app/admin/pagamentos/?status=&offset=0&limit=20
-    """
-    erro = _exige_admin(request, 'gerir_pagamentos')
-    if erro: return erro
-
-    from ..Serializers.PagamentoSerializer import PagamentoSerializer
-    qs = Pagamento.objects.select_related('encomenda__loja', 'encomenda__comprador__user', 'metodo').order_by('-data_criacao')
-
-    stat = request.GET.get('status')
-    if stat:
-        qs = qs.filter(status=stat)
-
-    loja_id = request.GET.get('loja_id')
-    if loja_id:
-        qs = qs.filter(encomenda__loja_id=loja_id)
-
-    response, erro = paginar(request, qs, PagamentoSerializer)
-    if erro: return erro
-    return response
+# a lista está em Views/pagamentosAdminView.py (Admin → Pagamentos)
 
 
 # ══════════════════════════════════════════════════════════════
