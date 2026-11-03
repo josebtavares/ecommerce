@@ -138,7 +138,7 @@
                     <span v-if="e.anuladas" class="ml-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-bold">{{ e.anuladas }} anulada(s)</span>
                   </td>
                   <td class="px-4 py-3 text-right whitespace-nowrap">
-                    <button v-if="e.comprovativo_url" type="button" @click="descarregarComprovativoVenda(e)" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
+                    <BotaoPdf v-if="e.comprovativo_url" class="align-middle" texto="Comprovativo" titulo="Descarregar o comprovativo de pagamento (PDF)" @click="descarregarComprovativoVenda(e)" />
                     <button type="button" @click="historicoVenda = historicoVenda === e.referencia ? '' : e.referencia" :aria-expanded="historicoVenda === e.referencia ? 'true' : 'false'" data-teste="ver-historico"
                       class="ml-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
                   </td>
@@ -201,10 +201,17 @@
                 <p class="text-[11px] text-zinc-500">{{ c.comissoes }} venda(s) <EstadoCobrancaMes :cobranca="c.cobranca" /><template v-if="c.anuladas"> · <span class="text-red-300">{{ c.anuladas }} fatura(s) anulada(s)</span></template></p>
               </div>
               <span class="text-sm font-bold text-zinc-100">{{ dinheiro(c.total) }}</span>
-              <button type="button" @click="extrato(c)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Extrato</button>
               <button type="button" @click="alternar(c.referencia)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
-              <RegistarFaturaBende :fatura="c.fatura" :url="`/app/admin/faturacao/comissoes/${ficha.id}/${c.mes}/fatura/`" @atualizado="d => atualizado(c, d)" />
-              <DiferencaComissoes :item="c" admin />
+              <!-- documento interno e fatura legal em caixas separadas, lado a lado -->
+              <div class="w-full flex flex-wrap items-center gap-2" data-teste="documentos-linha">
+                <SecaoDocumento>
+                  <BotaoPdf texto="Extrato" titulo="Descarregar o extrato das comissões (PDF)" @click="extrato(c)" />
+                </SecaoDocumento>
+                <SecaoDocumento tipo="fatura">
+                  <RegistarFaturaBende :fatura="c.fatura" :url="`/app/admin/faturacao/comissoes/${ficha.id}/${c.mes}/fatura/`" @atualizado="d => atualizado(c, d)" />
+                </SecaoDocumento>
+                <DiferencaComissoes :item="c" admin />
+              </div>
             </div>
             <HistoricoFatura v-if="aberto[c.referencia]" :key="c.referencia + versao" :referencia="c.referencia" />
           </div>
@@ -216,6 +223,7 @@
 
 <script>
 import api from '@/services/api'
+import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarArquivo, descarregarPdf, descarregarComprovativoVenda, erroDeBlob, urlFicheiro } from '@/utils/documentos'
 import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
@@ -236,7 +244,7 @@ const origemDe = (ref, tipo) => tipo === 'pos' ? 'pos' : (/^[EMV]-/i.test(ref ||
 
 export default {
   name: 'FaturacaoFicha',
-  components: { BotaoPdf, ArquivosFiscais, DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { SecaoDocumento, BotaoPdf, ArquivosFiscais, DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   props: {
     tipo: { type: String, required: true },
     id:   { type: [Number, String], required: true },

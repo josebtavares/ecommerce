@@ -26,29 +26,35 @@
       <button type="button" @click="$emit('acao', 'adiar', f)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Adiar</button>
       <button type="button" @click="$emit('acao', 'anular', f)" class="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs">Anular</button>
     </template>
-    <button v-else-if="f.estado === 'paga'" type="button" @click="$emit('acao', 'recibo', f)" :aria-label="`Comprovativo do pagamento ${f.id}`"
-      class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
+    <SecaoDocumento v-else-if="f.estado === 'paga'">
+      <BotaoPdf texto="Comprovativo" :titulo="`Descarregar o comprovativo do pagamento ${f.id} (PDF)`" @click="$emit('acao', 'recibo', f)" />
+    </SecaoDocumento>
     <!-- fatura legal do Bende: regista-se aqui ou em Admin → Faturação (o mesmo registo; as duas páginas actualizam-se) -->
     <template v-if="f.estado === 'paga' && Number(f.valor) > 0">
       <span v-if="!f.fatura" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300" data-teste="cobranca-por-faturar">Fatura do Bende por registar</span>
-      <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="$emit('acao', 'faturada', f)" />
+      <SecaoDocumento tipo="fatura">
+        <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="$emit('acao', 'faturada', f)" />
+      </SecaoDocumento>
       <button type="button" @click="$emit('acao', 'faturacao', f)" data-teste="ver-na-faturacao"
         class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ver na Faturação →</button>
     </template>
-    <a v-else-if="f.fatura && f.fatura.pdf_url" :href="urlFicheiro(f.fatura.pdf_url)" target="_blank" rel="noopener"
-      class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs">Fatura {{ f.fatura.numero }}</a>
-    <span v-else-if="f.fatura" class="text-xs text-green-400">Fatura {{ f.fatura.numero }}</span>
+    <SecaoDocumento v-else-if="f.fatura" tipo="fatura">
+      <span class="text-xs text-green-400 font-semibold">{{ f.fatura.numero }}</span>
+      <BotaoPdf v-if="f.fatura.pdf_url" :href="urlFicheiro(f.fatura.pdf_url)" titulo="Descarregar a fatura (PDF)" />
+    </SecaoDocumento>
   </div>
 </template>
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
+import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import { urlFicheiro } from '@/utils/documentos'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
 
 export default {
   name: 'LinhaCobrancaAdmin',
-  components: { RegistarFaturaBende },
+  components: { SecaoDocumento, BotaoPdf, RegistarFaturaBende },
   props: {
     f: { type: Object, required: true },
     mostrarAlvo: { type: Boolean, default: true },

@@ -122,8 +122,8 @@
               <span v-if="v.fatura" class="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[11px] font-bold">Fatura {{ v.fatura.numero }}</span>
               <span v-else-if="v.faturavel" class="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[11px] font-bold">Por faturar</span>
               <span v-if="v.anuladas" class="px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 text-[11px] font-bold">{{ v.anuladas }} anulada(s)</span>
-              <button v-if="v.comprovativo_url" type="button" @click="comprovativo(v)" data-teste="comprovativo"
-                class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
+              <BotaoPdf v-if="v.comprovativo_url" texto="Comprovativo" titulo="Descarregar o comprovativo de pagamento do Bende (PDF)"
+                teste="comprovativo" @click="comprovativo(v)" />
               <button type="button" @click="alternar(v, 'fatura')" :aria-expanded="aberto[v.referencia] === 'fatura' ? 'true' : 'false'" data-teste="abrir-fatura"
                 class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold">Fatura</button>
               <button type="button" @click="alternar(v, 'historico')" :aria-expanded="aberto[v.referencia] === 'historico' ? 'true' : 'false'" data-teste="abrir-historico"
@@ -161,6 +161,7 @@
 
 <script>
 import api from '@/services/api'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarArquivo, descarregarPdf, descarregarComprovativoVenda, erroDeBlob } from '@/utils/documentos'
 import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
@@ -185,7 +186,7 @@ const ORIGEM_DO_PREFIXO = { E: 'loja', M: 'marcacoes', V: 'pos' }
 
 export default {
   name: 'BackofficeFaturacao',
-  components: { ArquivosFiscais, FaturaVenda, HistoricoFatura, PaginacaoLista, ResultadosPesquisa },
+  components: { BotaoPdf, ArquivosFiscais, FaturaVenda, HistoricoFatura, PaginacaoLista, ResultadosPesquisa },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['ver-subscricao'],
   data () {

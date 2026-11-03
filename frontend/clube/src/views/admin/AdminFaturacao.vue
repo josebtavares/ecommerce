@@ -159,11 +159,18 @@
                   </p>
                 </div>
                 <span class="text-sm font-bold text-zinc-100">{{ euros(d.valor) }}</span>
-                <button type="button" @click="d.tipo === 'comissoes' ? extrato(g, d) : comprovativo(d)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">
-                  {{ d.tipo === 'comissoes' ? 'Extrato' : 'Comprovativo' }}
-                </button>
-                <RegistarFaturaBende :fatura="d.fatura" :url="d.url" @atualizado="r => aposFaturaBende(g, d, r)" />
-                <DiferencaComissoes v-if="d.tipo === 'comissoes'" :item="d" admin />
+                <!-- documento interno e fatura legal em caixas separadas, lado a lado -->
+                <div class="w-full flex flex-wrap items-center gap-2" data-teste="documentos-linha">
+                  <SecaoDocumento>
+                    <BotaoPdf :texto="d.tipo === 'comissoes' ? 'Extrato' : 'Comprovativo'" teste="doc-interno"
+                      :titulo="d.tipo === 'comissoes' ? 'Descarregar o extrato das comissões (PDF)' : 'Descarregar o comprovativo da mensalidade (PDF)'"
+                      @click="d.tipo === 'comissoes' ? extrato(g, d) : comprovativo(d)" />
+                  </SecaoDocumento>
+                  <SecaoDocumento tipo="fatura">
+                    <RegistarFaturaBende :fatura="d.fatura" :url="d.url" @atualizado="r => aposFaturaBende(g, d, r)" />
+                  </SecaoDocumento>
+                  <DiferencaComissoes v-if="d.tipo === 'comissoes'" :item="d" admin />
+                </div>
               </div>
             </div>
           </div>
@@ -177,6 +184,8 @@
 
 <script>
 import api from '@/services/api'
+import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarArquivo, descarregarPdf, descarregarComprovativoSubscricao, erroDeBlob } from '@/utils/documentos'
 import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
@@ -198,7 +207,7 @@ const LIMITE = 20
 
 export default {
   name: 'AdminFaturacao',
-  components: { AbasVendedores, ArquivosFiscais, SeletorMes, DiferencaComissoes, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { SecaoDocumento, BotaoPdf, AbasVendedores, ArquivosFiscais, SeletorMes, DiferencaComissoes, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   data () {
     const hoje = new Date()
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
