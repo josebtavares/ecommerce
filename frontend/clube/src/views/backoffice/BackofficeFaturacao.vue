@@ -165,6 +165,7 @@ import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
+import { ouvirFaturacao } from '@/utils/tempoRealEncomendas'
 
 const LIMITE = 20
 const NOMES = { loja: 'Loja online', marcacoes: 'Marcações', pos: 'POS' }
@@ -190,7 +191,7 @@ export default {
       periodo: 'mes', de, ate, resumo: null, erro: '', aExportar: false,
       aba: 'vendas', origem: 'loja', f: vazio(),
       vendas: { count: 0, results: [], totais: null }, offset: 0, carregando: false,
-      aberto: {}, versao: 0,
+      aberto: {}, versao: 0, pedido: 0,
       pq: '', pRes: null, pOffset: 0,
     }
   },
@@ -213,7 +214,13 @@ export default {
       ]
     },
   },
-  created () { this.recarregar(true) },
+  created () {
+    this.recarregar(true)
+    // outra pessoa registou/anulou uma fatura (aqui, na ficha da encomenda, no POS), ou entrou uma venda paga
+    this.pararTempoReal = ouvirFaturacao(() => this.atualizarEmTempoReal(),
+                                         { filtro: a => String(a.loja_id) === String(this.lojaId) })
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
   methods: {
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
     quando (s) { return s ? new Date(s).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) : '—' },
@@ -238,15 +245,24 @@ export default {
       } catch (e) { this.erro = e.response?.data?.detail || 'Não foi possível carregar a faturação.' }
       this.carregarVendas(0)
     },
-    async carregarVendas (offset = this.offset) {
-      this.offset = offset; this.carregando = true; this.aberto = {}
+    async carregarVendas (offset = this.offset, silencioso = false) {
+      const n = ++this.pedido
+      this.offset = offset
+      if (!silencioso) { this.carregando = true; this.aberto = {} }
       const params = { ...this.datas, origem: this.origem, limit: LIMITE, offset }
       for (const [k, v] of Object.entries(this.f)) if (v) params[k] = v
       try {
-        this.vendas = (await api.get(`/app/loja/${this.lojaId}/faturacao/vendas/`, { params })).data
+        const vendas = (await api.get(`/app/loja/${this.lojaId}/faturacao/vendas/`, { params })).data
+        if (n === this.pedido) this.vendas = vendas
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar as vendas.'
-      } finally { this.carregando = false }
+        if (!silencioso && n === this.pedido) this.erro = e.response?.data?.detail || 'Não foi possível carregar as vendas.'
+      } finally { if (n === this.pedido) this.carregando = false }
+    },
+    // tempo real: resumo e a página aberta, sem esqueleto e sem fechar a fatura/histórico abertos (nem o que se escreve)
+    async atualizarEmTempoReal () {
+      try { this.resumo = (await api.get(`/app/loja/${this.lojaId}/faturacao/resumo/`, { params: this.datas })).data } catch { /* fica o que está */ }
+      this.versao++
+      await this.carregarVendas(this.offset, true)
     },
     limpar () { this.f = vazio(); this.carregarVendas(0) },
     mudarOrigem (o) {

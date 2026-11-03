@@ -26,3 +26,5 @@ class AppConfig(AppConfig):
         tempo_real_encomendas.ligar()
         from .utils import tempo_real_subscricoes
         tempo_real_subscricoes.ligar()
+        from .utils import tempo_real_faturacao
+        tempo_real_faturacao.ligar()
