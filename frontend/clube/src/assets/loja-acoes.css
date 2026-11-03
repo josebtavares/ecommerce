@@ -84,3 +84,17 @@
 .loja-estado + .loja-selo { margin-left: 8px; }   /* "Loja verificada" (components/loja/SeloVerificada.vue) ao lado do estado */
 /* templates com etiqueta/preço no canto direito da foto */
 .fav-card--esq { right: auto; left: 8px; }
+
+/* "Resolver" da barra de requisitos (utils/irParaAlvo.js): a parte da página onde se resolve pisca uns segundos */
+.alvo-destaque {
+  border-radius: 1rem;
+  animation: alvo-destaque 2.6s ease-out;
+  scroll-margin: 6rem;
+}
+@keyframes alvo-destaque {
+  0%, 60% { box-shadow: 0 0 0 3px rgb(239 68 68 / 0.85), 0 0 0 8px rgb(239 68 68 / 0.18); }
+  100%    { box-shadow: 0 0 0 0 rgb(239 68 68 / 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .alvo-destaque { animation: none; box-shadow: 0 0 0 3px rgb(239 68 68 / 0.85); }
+}

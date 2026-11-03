@@ -238,6 +238,7 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import ConfirmarEntrega from './ConfirmarEntrega.vue'
+import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
 
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
@@ -318,10 +319,22 @@ export default {
     intervalo () { this.carregar() },
     tipo () { this.carregar() },
     soAgendadas () { this.carregar() },
-    detalhe (e) { this.condutorId = e?.entrega?.condutor_id || null; this.erroAcao = '' },
+    detalhe (e) {
+      this.condutorId = e?.entrega?.condutor_id || null; this.erroAcao = ''
+      if (!e && this.porAtualizar) { this.porAtualizar = false; this.carregar(true) }    // aviso que ficou à espera
+    },
   },
 
-  created () { this.carregar() },
+  created () {
+    this.carregar()
+    // tempo real (utils/tempoRealEncomendas.js): entregas mudadas por outro membro ou pelo condutor
+    // com o detalhe de uma entrega aberto não mexe por baixo: actualiza ao fechar
+    this.pararTempoReal = ouvirEncomendas(() => {
+      if (this.detalhe) this.porAtualizar = true
+      else if (!document.hidden) this.carregar(true)
+    }, { filtro: a => !a.loja_id || String(a.loja_id) === String(this.lojaId) })
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     diaSemana,
@@ -363,16 +376,17 @@ export default {
     abrirDia (d) { this.ref = d; this.vista = 'dia' },
     abrirMes (d) { this.ref = d; this.vista = 'mes' },
 
-    async carregar () {
+    async carregar (silencioso = false) {
       const [inicio, fim] = this.intervalo
       const params = { inicio, fim }
       if (this.tipo) params.tipo = this.tipo
       if (this.soAgendadas) params.agendadas = 1
       if (this.vista === 'ano') params.resumo = 1
-      this.carregando = true
-      this.erro = ''
+      if (!silencioso) { this.carregando = true; this.erro = '' }
+      const pedido = this.pedidoCal = (this.pedidoCal || 0) + 1
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/entrega/calendario/`, { params })
+        if (pedido !== this.pedidoCal) return
         if (data.hoje && data.hoje !== this.hoje) {
           if (this.ref === this.hoje) this.ref = data.hoje      // "hoje" no fuso da plataforma
           this.hoje = data.hoje
@@ -380,9 +394,9 @@ export default {
         if (this.vista === 'ano') this.resumo = data.dias || {}
         else { this.itens = data.itens || []; this.truncado = !!data.truncado }
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar o calendário.'
+        if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar o calendário.'
       } finally {
-        this.carregando = false
+        if (pedido === this.pedidoCal) this.carregando = false
       }
     },
 

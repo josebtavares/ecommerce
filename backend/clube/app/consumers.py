@@ -59,6 +59,10 @@ class NotificacaoConsumer(AsyncWebsocketConsumer):
         # marcação de serviços mudou (mensagem, proposta, estado…): só ids — a página aberta vai buscar o resto
         await self.send(text_data=json.dumps({'type': 'marcacao', 'marcacao': event['marcacao']}))
 
+    async def encomenda_atualizada(self, event):
+        # encomenda ou entrega mudou (estado, fatura, condutor…): só ids — a página aberta vai buscar o resto
+        await self.send(text_data=json.dumps({'type': 'encomenda', 'encomenda': event['encomenda']}))
+
     async def notificacao_contador(self, event):
         await self.send(text_data=json.dumps({
             "type":      "contador",

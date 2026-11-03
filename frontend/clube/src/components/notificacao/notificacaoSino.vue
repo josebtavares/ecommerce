@@ -162,6 +162,7 @@
 <script>
 import api, { urlWebSocketComBilhete } from '@/services/api'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO, marcarLigacao } from '@/composables/useTempoRealReembolsos'
+import { EVENTO_ENCOMENDA } from '@/utils/tempoRealEncomendas'
 import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
@@ -348,6 +349,8 @@ export default {
           if (msg.type === 'reembolso') window.dispatchEvent(new CustomEvent(EVENTO_REEMBOLSO, { detail: msg.reembolso }))
           // marcação de serviços mudou (utils/servicos.js ouvirMarcacoes)
           if (msg.type === 'marcacao') window.dispatchEvent(new CustomEvent('bendi:marcacao', { detail: msg.marcacao }))
+          // encomenda ou entrega mudou (utils/tempoRealEncomendas.js ouvirEncomendas)
+          if (msg.type === 'encomenda') window.dispatchEvent(new CustomEvent(EVENTO_ENCOMENDA, { detail: msg.encomenda }))
         } catch (err) { /* silencioso */ }
       }
 

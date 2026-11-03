@@ -22,6 +22,9 @@
       <div class="ml-auto text-xs text-zinc-500">{{ totalCount }} encomendas</div>
     </div>
 
+    <!-- tempo real: alguém mudou a encomenda que esta pessoa tem em mãos -->
+    <AvisoMudouPorFora :visivel="!!adiada?.id" />
+
     <!-- Loading -->
     <div v-if="loading" class="space-y-3">
       <div v-for="n in limit" :key="n" class="h-16 bg-zinc-900 rounded-2xl animate-pulse"></div>
@@ -446,6 +449,8 @@ import FaturaEncomenda from '@/components/fiscal/FaturaEncomenda.vue'
 import { ESTADOS_FATURAVEIS } from '@/utils/fiscal'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 import { formatarPrazo } from '@/utils/transferencia'
+import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
+import AvisoMudouPorFora from '@/components/encomendas/AvisoMudouPorFora.vue'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -460,7 +465,7 @@ const ESTADOS_BLOQUEADOS = ['concluido', 'cancelado', 'enviado']
 
 export default {
   name: 'BackofficeEncomendas',
-  components: { PausaLoja, EstadoReembolso, FaturaEncomenda },
+  components: { PausaLoja, EstadoReembolso, FaturaEncomenda, AvisoMudouPorFora },
   emits: ['ver-reembolso'],
   props: {
     lojaId: [String, Number],
@@ -504,6 +509,7 @@ export default {
       condutorSelecionado: null,
       loadingCondutores:  false,
       loadingEnvio:       false,
+      adiada:             null,     // aviso em tempo real à espera de a pessoa acabar a acção ({ id } | 'todas')
     }
   },
 
@@ -514,6 +520,10 @@ export default {
       return f && !this.encomendas.some(e => e.id === f.id) ? [f, ...this.encomendas] : this.encomendas
     },
     totalPages () { return Math.ceil(this.totalCount / this.limit) },
+    // a meio de uma acção sobre uma encomenda: os dados não mudam por baixo da pessoa
+    ocupada () {
+      return !!(this.modalCondutor || this.esgotadoAberto || this.loadingStatus || this.aConfirmar || this.aEsgotar || this.loadingEnvio)
+    },
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)
       const end   = Math.min(this.totalPages, this.page + 2)
@@ -523,11 +533,18 @@ export default {
 
   watch: {
     expandedId: { handler: 'abrirFicha', immediate: true },
+    // acabou a acção (fechou o modal do condutor, o painel de esgotado…) → aplica o que ficou à espera
+    ocupada (v) { if (!v && this.adiada) this.atualizarEmTempoReal() },
   },
 
   async created () {
+    // tempo real (utils/tempoRealEncomendas.js): estado mudado pelo condutor, por outro membro, pagamento…
+    this.pararTempoReal = ouvirEncomendas(a => this.aoMudarEncomenda(a),
+      { filtro: a => !a.loja_id || String(a.loja_id) === String(this.lojaId) })
     await Promise.all([this.fetchEncomendas(), this.fetchContagens()])
   },
+
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     prazoTexto: formatarPrazo,
@@ -577,17 +594,50 @@ export default {
       this.fetchEncomendas()
     },
 
-    async fetchEncomendas () {
-      this.loading = true
+    // ── tempo real ───────────────────────────────────────────
+    aoMudarEncomenda (aviso) {
+      if (this.ocupada) {
+        // com um pedido desta pessoa a decorrer o aviso é quase sempre o da própria acção: espera em silêncio.
+        // Só avisa se mexeram na encomenda que a pessoa tem aberta (modal do condutor, painel de esgotado).
+        const aAgir = this.loadingStatus || this.aConfirmar || this.aEsgotar || this.loadingEnvio
+        const emMaos = this.modalCondutor?.id || this.esgotadoAberto
+        this.adiada = !aAgir && aviso?.id && emMaos && aviso.id === emMaos ? { id: aviso.id } : (this.adiada || 'todas')
+        return
+      }
+      this.atualizarEmTempoReal()
+    },
+    async atualizarEmTempoReal () {
+      this.adiada = null
+      const aberta = this.expandedId
+      // os detalhes guardados das outras ficaram velhos: pedem-se ao abrir
+      this.detalhes = aberta && this.detalhes[aberta] ? { [aberta]: this.detalhes[aberta] } : {}
+      await Promise.all([this.fetchEncomendas(true), this.fetchContagens()])
+      if (!aberta || this.expandedId !== aberta) return
+      try {
+        if (this.fixada?.id === aberta) {
+          const { data } = await api.get(`/app/loja/${this.lojaId}/encomendas/`, { params: { id: aberta, limit: 1, offset: 0 } })
+          this.fixada = (data.results || data).find(e => e.id === aberta) || this.fixada
+        }
+        const { data } = await api.get(`/app/encomenda/${aberta}/`)
+        this.detalhes = { ...this.detalhes, [aberta]: data }
+      } catch (e) { /* fica o que estava */ }
+    },
+
+    // silencioso: tempo real — actualiza sem o esqueleto de carregamento
+    async fetchEncomendas (silencioso = false) {
+      if (!silencioso) this.loading = true
+      // só a resposta do pedido mais recente conta (mudar de página/filtro durante um aviso em tempo real)
+      const pedido = this.pedidoLista = (this.pedidoLista || 0) + 1
       try {
         const params = { limit: this.limit, offset: (this.page - 1) * this.limit }
         if (this.filtroStatus === 'agendadas') params.agendadas = 1
         else if (this.filtroStatus !== 'todos') params.status = this.filtroStatus
         const { data } = await api.get(`/app/loja/${this.lojaId}/encomendas/`, { params })
+        if (pedido !== this.pedidoLista) return
         this.encomendas = data.results || data
         this.totalCount = data.count ?? this.encomendas.length
       } catch (e) { console.error(e) }
-      finally { this.loading = false }
+      finally { if (pedido === this.pedidoLista) this.loading = false }
     },
 
     async fetchContagens () {
