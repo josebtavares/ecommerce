@@ -1,5 +1,6 @@
 from django.urls import path
 from ..Views import faturacaoView as v
+from ..Views import arquivoFiscalView as af
 
 # documentos internos e faturas registadas (ver app/Views/faturacaoView.py)
 urlpatterns = [
@@ -18,6 +19,10 @@ urlpatterns = [
     path('admin/faturacao/exportar/<str:tipo>/<int:id>/',       v.admin_exportar,          name='admin-faturacao-exportar'),
     path('admin/faturacao/abas/',                               v.admin_abas,              name='admin-faturacao-abas'),
     path('admin/faturacao/vendas.csv',                          v.admin_vendas_csv,        name='admin-faturacao-vendas'),
+    path('admin/faturacao/bende/arquivo/',                      v.admin_bende_arquivo,     name='admin-faturacao-bende-arquivo'),
+    path('admin/faturacao/arquivos/',                           af.admin_arquivos,         name='admin-faturacao-arquivos'),
+    path('admin/faturacao/arquivos/<int:aid>/descarregar/',     af.admin_arquivo_descarregar, name='admin-faturacao-arquivo-descarregar'),
+    path('faturacao/arquivos/ficheiro/<str:token>/',            af.arquivo_ficheiro,       name='faturacao-arquivo-ficheiro'),
     path('admin/faturacao/bende/',                              v.admin_bende,             name='admin-faturacao-bende'),
     path('admin/faturacao/subscricoes/<int:fatura_id>/fatura/', v.admin_fatura_subscricao, name='admin-faturacao-subscricao'),
     path('admin/faturacao/comissoes/<int:loja_id>/<str:mes>/fatura/',  v.admin_fatura_comissoes,  name='admin-faturacao-comissoes'),

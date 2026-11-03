@@ -11,7 +11,8 @@
           : (claro ? 'bg-emerald-100 text-emerald-700' : 'bg-green-500/15 text-green-400')]">
           {{ h.anulada_em ? 'Anulada' : 'Em vigor' }}
         </span>
-        <a v-if="h.pdf_url" :href="urlFicheiro(h.pdf_url)" target="_blank" rel="noopener" :class="['font-semibold underline', forte]">{{ h.numero }}</a>
+        <span v-if="h.pdf_url" class="inline-flex items-center gap-2"><span :class="['font-semibold', forte]">{{ h.numero }}</span>
+          <BotaoPdf :href="urlFicheiro(h.pdf_url)" :titulo="`Descarregar a fatura ${h.numero} (PDF)`" :claro="claro" /></span>
         <span v-else :class="['font-semibold', forte]">{{ h.numero }} <span :class="['font-normal', suave]">(sem PDF)</span></span>
         <span :class="suave">registada {{ quando(h.registada_em) }}<template v-if="h.registada_por"> por {{ h.registada_por.nome }}</template></span>
         <span v-if="h.anulada_em" :class="['w-full pl-1', claro ? 'text-slate-600' : 'text-zinc-400']">
@@ -25,9 +26,11 @@
 <script>
 import api from '@/services/api'
 import { urlFicheiro } from '@/utils/documentos'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 
 export default {
   name: 'HistoricoFatura',
+  components: { BotaoPdf },
   props: {
     referencia: { type: String, required: true },
     url: { type: String, default: '/app/admin/faturacao/historico/' },

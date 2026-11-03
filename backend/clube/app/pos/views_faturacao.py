@@ -117,7 +117,9 @@ def exportar(request, pos_id):
     de, ate, erro = fat._datas(request)
     if erro:
         return erro
-    return fat.arquivo_zip(request, pos, 'pos', de, ate, com_bende=membro is None)
+    return fat.arquivo_zip(request, pos, 'pos', de, ate, com_bende=membro is None, origem='pos',
+                           pedido_por=pos.dono.user if membro is None else None,
+                           nome=membro.nome if membro is not None else '')
 
 
 @api_view(['GET'])
@@ -148,3 +150,20 @@ def historico(request, pos_id):
     if membro is not None:
         qs = qs.filter(tipo='venda_pos')
     return Response({'referencia': ref, 'itens': fiscal.historico_payload(qs, request)})
+
+
+# arquivos fiscais preparados em segundo plano (Views/arquivoFiscalView.py)
+@api_view(['GET'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def arquivos(request, pos_id):
+    from ..Views.arquivoFiscalView import pos_arquivos
+    return pos_arquivos(request, pos_id)
+
+
+@api_view(['POST'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def arquivo_descarregar(request, pos_id, aid):
+    from ..Views.arquivoFiscalView import pos_arquivo_descarregar
+    return pos_arquivo_descarregar(request, pos_id, aid)

@@ -35,6 +35,8 @@
           </button>
           <span class="text-[11px] text-zinc-500">{{ zip.de || zip.ate ? '' : 'Sem datas: desde sempre.' }} Dados fiscais, vendas, comprovativos e todas as faturas — para a DNRE.</span>
           <p v-if="zip.erro" class="w-full text-xs text-red-400" role="alert">{{ zip.erro }}</p>
+          <p v-if="zip.aviso" class="w-full text-xs text-sky-300" role="status" data-teste="zip-em-fila">{{ zip.aviso }}</p>
+          <ArquivosFiscais class="w-full" base="/app/admin/faturacao/arquivos/" :params="{ alvo: tipo, id }" :versao="zip.versao" />
         </form>
       </div>
 
@@ -130,13 +132,13 @@
                   <td class="px-4 py-3 text-right text-zinc-200">{{ dinheiro(e.valor) }}</td>
                   <td class="px-4 py-3 text-xs text-zinc-400">{{ e.status_nome }}</td>
                   <td class="px-4 py-3 text-xs">
-                    <a v-if="e.fatura && e.fatura.pdf_url" :href="urlFicheiro(e.fatura.pdf_url)" target="_blank" rel="noopener" class="text-green-400 underline font-semibold">{{ e.fatura.numero }}</a>
-                    <span v-else-if="e.fatura" class="text-green-400 font-semibold">{{ e.fatura.numero }}</span>
+                    <span v-if="e.fatura" class="inline-flex items-center gap-2"><span class="text-green-400 font-semibold">{{ e.fatura.numero }}</span>
+                      <BotaoPdf v-if="e.fatura.pdf_url" :href="urlFicheiro(e.fatura.pdf_url)" :titulo="`Descarregar a fatura ${e.fatura.numero} (PDF)`" /></span>
                     <span v-else class="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold">Por faturar</span>
                     <span v-if="e.anuladas" class="ml-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-bold">{{ e.anuladas }} anulada(s)</span>
                   </td>
                   <td class="px-4 py-3 text-right whitespace-nowrap">
-                    <button v-if="e.comprovativo_url" type="button" @click="descarregarComprovativoVenda(e)" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
+                    <BotaoPdf v-if="e.comprovativo_url" class="align-middle" texto="Comprovativo" titulo="Descarregar o comprovativo de pagamento (PDF)" @click="descarregarComprovativoVenda(e)" />
                     <button type="button" @click="historicoVenda = historicoVenda === e.referencia ? '' : e.referencia" :aria-expanded="historicoVenda === e.referencia ? 'true' : 'false'" data-teste="ver-historico"
                       class="ml-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
                   </td>
@@ -199,10 +201,17 @@
                 <p class="text-[11px] text-zinc-500">{{ c.comissoes }} venda(s) <EstadoCobrancaMes :cobranca="c.cobranca" /><template v-if="c.anuladas"> · <span class="text-red-300">{{ c.anuladas }} fatura(s) anulada(s)</span></template></p>
               </div>
               <span class="text-sm font-bold text-zinc-100">{{ dinheiro(c.total) }}</span>
-              <button type="button" @click="extrato(c)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Extrato</button>
               <button type="button" @click="alternar(c.referencia)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
-              <RegistarFaturaBende :fatura="c.fatura" :url="`/app/admin/faturacao/comissoes/${ficha.id}/${c.mes}/fatura/`" @atualizado="d => atualizado(c, d)" />
-              <DiferencaComissoes :item="c" admin />
+              <!-- documento interno e fatura legal em caixas separadas, lado a lado -->
+              <div class="w-full flex flex-wrap items-center gap-2" data-teste="documentos-linha">
+                <SecaoDocumento>
+                  <BotaoPdf texto="Extrato" titulo="Descarregar o extrato das comissões (PDF)" @click="extrato(c)" />
+                </SecaoDocumento>
+                <SecaoDocumento tipo="fatura">
+                  <RegistarFaturaBende :fatura="c.fatura" :url="`/app/admin/faturacao/comissoes/${ficha.id}/${c.mes}/fatura/`" @atualizado="d => atualizado(c, d)" />
+                </SecaoDocumento>
+                <DiferencaComissoes :item="c" admin />
+              </div>
             </div>
             <HistoricoFatura v-if="aberto[c.referencia]" :key="c.referencia + versao" :referencia="c.referencia" />
           </div>
@@ -214,8 +223,11 @@
 
 <script>
 import api from '@/services/api'
+import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { descarregarPdf, descarregarComprovativoVenda, urlFicheiro } from '@/utils/documentos'
+import { descarregarArquivo, descarregarPdf, descarregarComprovativoVenda, erroDeBlob, urlFicheiro } from '@/utils/documentos'
+import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ListaMensalidades from '@/components/fiscal/ListaMensalidades.vue'
@@ -232,7 +244,7 @@ const origemDe = (ref, tipo) => tipo === 'pos' ? 'pos' : (/^[EMV]-/i.test(ref ||
 
 export default {
   name: 'FaturacaoFicha',
-  components: { DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { SecaoDocumento, BotaoPdf, ArquivosFiscais, DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   props: {
     tipo: { type: String, required: true },
     id:   { type: [Number, String], required: true },
@@ -248,7 +260,7 @@ export default {
       fv: { ...vazio(), q: this.qInicial },
       vendas: { count: 0, results: [], totais: null }, offsetVendas: 0, carregandoVendas: false,
       aberto: {}, versao: 0, pedido: 0, pedidoVendas: 0, historicoVenda: '', origem: origemDe(this.qInicial, this.tipo),
-      zip: { de: '', ate: '', aExportar: false, erro: '' },
+      zip: { de: '', ate: '', aExportar: false, erro: '', aviso: '', versao: 0 },
       pq: '', pRes: null, pOffset: 0,
     }
   },
@@ -386,17 +398,16 @@ export default {
       descarregarPdf('/app/admin/faturacao/vendas.csv', `${nome}-${this.id}-${de}-${ate}.csv`, { ...alvo, de, ate })
     },
     async exportar () {
-      this.zip.aExportar = true; this.zip.erro = ''
+      this.zip.aExportar = true; this.zip.erro = ''; this.zip.aviso = ''
       const params = {}
       if (this.zip.de) params.de = this.zip.de
       if (this.zip.ate) params.ate = this.zip.ate
       try {
-        await descarregarPdf(`/app/admin/faturacao/exportar/${this.tipo}/${this.id}/`,
+        const r = await descarregarArquivo(`/app/admin/faturacao/exportar/${this.tipo}/${this.id}/`,
           `arquivo-fiscal-${this.tipo}-${this.id}-${this.zip.de || 'inicio'}-${this.zip.ate || 'hoje'}.zip`, params)
+        if (r.emFila) { this.zip.aviso = r.detail; this.zip.versao++ }
       } catch (e) {
-        let msg = 'Não foi possível exportar.'
-        try { msg = JSON.parse(await e.response.data.text()).detail || msg } catch { /* resposta sem JSON */ }
-        this.zip.erro = msg
+        this.zip.erro = await erroDeBlob(e, 'Não foi possível exportar.')
       } finally { this.zip.aExportar = false }
     },
     extrato (c) {
