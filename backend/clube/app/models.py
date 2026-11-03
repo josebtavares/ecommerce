@@ -345,13 +345,22 @@ class Loja(models.Model):
         update_fields = kwargs.get('update_fields')
         if update_fields is not None and 'estado' in update_fields and 'ativa' not in update_fields:
             kwargs['update_fields'] = [*update_fields, 'ativa']
-        if not self.slug:
-            from .utils.endereco_loja import gerar
-            self.slug = gerar(self.nome, self.pk)
-            uf = kwargs.get('update_fields')
-            if uf is not None and 'slug' not in uf:
-                kwargs['update_fields'] = [*uf, 'slug']
-        super().save(*args, **kwargs)
+        if self.slug:
+            return super().save(*args, **kwargs)
+        # endereço gerado do nome; duas lojas com o mesmo nome criadas ao mesmo tempo → a segunda tenta o seguinte
+        from django.db import IntegrityError
+        from .utils.endereco_loja import gerar
+        uf = kwargs.get('update_fields')
+        if uf is not None and 'slug' not in uf:
+            kwargs['update_fields'] = [*uf, 'slug']
+        for tentativa in range(5):
+            self.slug = gerar(self.nome if not tentativa else f'{self.nome} {tentativa + 1}', self.pk)
+            try:
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError as e:
+                if 'slug' not in str(e) or tentativa == 4:
+                    raise
 
     def mudar_estado(self, novo, motivo=''):
         """

@@ -10,7 +10,7 @@ Endereço público das lojas: /loja/<slug> (ex.: /loja/bom-sabor) em vez de /loj
 import re
 from datetime import timedelta
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -83,7 +83,15 @@ def mudancas_recentes(loja):
 def mudar(loja, novo):
     """Muda o endereço; o actual passa a antigo (continua a redirecionar). Devolve a mensagem de erro ou None."""
     from ..models import Loja, LojaEnderecoAntigo
-    novo = (novo or '').strip().lower()
+    novo = (novo if isinstance(novo, str) else '').strip().lower()
+    try:
+        return _mudar(loja, novo)
+    except IntegrityError:          # outra loja ficou com ele entretanto (dois pedidos ao mesmo tempo)
+        return 'Esse endereço já é usado por outra loja.'
+
+
+def _mudar(loja, novo):
+    from ..models import Loja, LojaEnderecoAntigo
     with transaction.atomic():
         loja = Loja.objects.select_for_update().get(pk=loja.pk)
         if novo == loja.slug:
