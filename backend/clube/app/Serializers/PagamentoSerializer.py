@@ -81,21 +81,27 @@ class PagamentoSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
-    def get_comissao_valor(self, obj):
+    @staticmethod
+    def _comissao(obj):
+        """A comissão válida da encomenda (uma anulada já não se desconta)."""
         try:
-            return str(obj.encomenda.comissao.valor_comissao)
+            c = obj.encomenda.comissao
         except Exception:
             return None
+        return None if c.status == 'anulada' else c
+
+    def get_comissao_valor(self, obj):
+        c = self._comissao(obj)
+        return str(c.valor_comissao) if c else None
 
     def get_comissao_percentagem(self, obj):
-        try:
-            return str(obj.encomenda.comissao.percentagem)
-        except Exception:
-            return None
+        c = self._comissao(obj)
+        return str(c.percentagem) if c else None
 
     def get_receita_liquida(self, obj):
+        c = self._comissao(obj)
         try:
-            return str(obj.encomenda.valor_total - obj.encomenda.comissao.valor_comissao)
+            return str(obj.encomenda.valor_total - (c.valor_comissao if c else 0))
         except Exception:
             return str(obj.valor)
 

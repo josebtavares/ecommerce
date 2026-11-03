@@ -240,7 +240,7 @@ export default {
     this.carregarVendedores(0)
     // ?ficha=loja-12&aba=bende (ex.: "Ver na Faturação" em Subscrições → Cobranças)
     const m = /^(loja|pos)-(\d+)$/.exec(this.$route.query.ficha || '')
-    if (m) this.abrirFicha(m[1], Number(m[2]), this.$route.query.aba || '')
+    if (m) this.abrirFicha(m[1], Number(m[2]), this.$route.query.aba || '', this.$route.query.q || '')
     else if (this.$route.query.tab === 'bende') this.mudarTab('bende')      // aviso "arquivo do Bende pronto"
     // mensalidade paga, fatura do Bende registada/anulada (aqui, em Subscrições ou por outro admin)
     this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal())

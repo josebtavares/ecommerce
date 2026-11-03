@@ -121,7 +121,7 @@
         <AdminProdutos     v-else-if="activeSection === 'produtos'"     />
         <AdminEncomendas   v-else-if="activeSection === 'encomendas'"   />
         <AdminDevolucoes   v-else-if="activeSection === 'devolucoes'"   @disputas="n => disputasReembolso = n" />
-        <AdminPagamentos   v-else-if="activeSection === 'pagamentos'"   />
+        <AdminPagamentos   v-else-if="activeSection === 'pagamentos'"   @ir="irPara" />
         <AdminTipos        v-else-if="activeSection === 'tipos'"        />
         <AdminComissoes    v-else-if="activeSection === 'comissoes'"    />
         <AdminCategorias   v-else-if="activeSection === 'categorias'"   />

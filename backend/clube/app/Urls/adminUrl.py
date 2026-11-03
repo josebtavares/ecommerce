@@ -1,5 +1,6 @@
 from django.urls import path
 from ..Views import adminView
+from ..Views import pagamentosAdminView
 from ..Views import relatorioView
 from ..Views import backupView
 from ..Views import registoView
@@ -53,7 +54,12 @@ urlpatterns = [
     path('admin/encomendas/',                   adminView.admin_encomenda_list,      name='admin-encomenda-list'),
 
     # ── Pagamentos ────────────────────────────────────────────
-    path('admin/pagamentos/',                   adminView.admin_pagamento_list,      name='admin-pagamento-list'),
+    path('admin/pagamentos/',                   pagamentosAdminView.lista,           name='admin-pagamento-list'),
+    path('admin/pagamentos/resumo/',            pagamentosAdminView.resumo,          name='admin-pagamentos-resumo'),
+    path('admin/pagamentos/abas/',              pagamentosAdminView.abas,            name='admin-pagamentos-abas'),
+    path('admin/pagamentos.csv',                pagamentosAdminView.lista_csv,       name='admin-pagamentos-csv'),
+    path('admin/pagamentos/bende/',             pagamentosAdminView.bende,           name='admin-pagamentos-bende'),
+    path('admin/pagamentos/bende.csv',          pagamentosAdminView.bende_csv,       name='admin-pagamentos-bende-csv'),
 
     # ── Tipos de produto globais ──────────────────────────────
     path('admin/tipos/',                        adminView.admin_tipos_list_criar,    name='admin-tipos-list'),

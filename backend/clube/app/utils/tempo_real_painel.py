@@ -10,7 +10,7 @@ Depois do commit (transacção desfeita → não avisa).
 from django.db import transaction
 from django.db.models.signals import post_save
 
-PERMISSOES_ADMIN = ('ver_stats', 'ver_relatorios')
+PERMISSOES_ADMIN = ('ver_stats', 'ver_relatorios', 'gerir_pagamentos')   # + Admin → Pagamentos
 
 
 def _destinatarios():
