@@ -213,6 +213,9 @@
             </div>
           </div>
 
+          <!-- Endereço público (/loja/<endereço>) — components/loja/SeccaoEndereco em modo admin -->
+          <SeccaoEndereco admin :key="`endereco-${lojaDetalhe.id}`" :loja-id="lojaDetalhe.id" @alterado="s => { lojaDetalhe.slug = s }" />
+
           <!-- Comissões -->
           <div v-if="loadingDetalhe" class="flex justify-center py-4">
             <svg class="animate-spin h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24">
@@ -412,6 +415,7 @@ import api from '@/services/api'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 import AdminDocumentosLoja from '@/components/admin/AdminDocumentosLoja.vue'
 import AdminVinti4Loja from '@/components/admin/AdminVinti4Loja.vue'
+import SeccaoEndereco from '@/components/loja/SeccaoEndereco.vue'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 
 // estados da loja (backend: Loja.estado)
@@ -433,7 +437,7 @@ const comComissao = l => ({ ...l, _comissao_edit: l.percentagem_comissao ?? 10 }
 
 export default {
   name: 'AdminLojas',
-  components: { ExportacoesLoja, AdminDocumentosLoja, AdminVinti4Loja },
+  components: { ExportacoesLoja, AdminDocumentosLoja, AdminVinti4Loja, SeccaoEndereco },
   props: {
     podeExportar: { type: Boolean, default: false },   // permissão exportar_lojas (super-admin)
     podeVerBackoffice: { type: Boolean, default: false },   // permissão ver_backoffice_lojas (super-admin)

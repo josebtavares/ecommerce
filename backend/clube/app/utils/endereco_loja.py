@@ -32,7 +32,7 @@ def normalizar(texto):
 def _ocupado(slug, loja_id=None):
     from ..models import Loja, LojaEnderecoAntigo
     lojas = Loja.objects.filter(slug=slug)
-    antigos = LojaEnderecoAntigo.objects.filter(slug=slug)
+    antigos = LojaEnderecoAntigo.objects.filter(slug=slug, ativo=True)      # os desligados pelo admin ficam livres
     if loja_id:
         lojas, antigos = lojas.exclude(pk=loja_id), antigos.exclude(loja_id=loja_id)
     return lojas.exists() or antigos.exists()
@@ -65,46 +65,70 @@ def erro_formato(slug):
     return None
 
 
-def validar(slug, loja):
+def validar(slug, loja, admin=False):
     """Mensagem de erro, ou None se a loja pode usar este endereço."""
+    from ..models import LojaEnderecoAntigo
     e = erro_formato(slug)
     if e:
         return e
     if _ocupado(slug, loja.pk):
         return 'Esse endereço já é usado por outra loja.'
+    # um endereço que o Bende retirou à loja (desligado pelo admin) — o dono não o pode voltar a pôr
+    if not admin and LojaEnderecoAntigo.objects.filter(loja=loja, slug=slug, ativo=False).exists():
+        return 'Esse endereço foi retirado pelo Bende. Escolhe outro.'
     return None
 
 
 def mudancas_recentes(loja):
+    """Mudanças do dono nos últimos JANELA_DIAS dias (as do admin não contam)."""
     from ..models import LojaEnderecoAntigo
-    return LojaEnderecoAntigo.objects.filter(loja=loja, criado_em__gte=timezone.now() - timedelta(days=JANELA_DIAS)).count()
+    return LojaEnderecoAntigo.objects.filter(loja=loja, por_admin=False,
+                                             criado_em__gte=timezone.now() - timedelta(days=JANELA_DIAS)).count()
 
 
-def mudar(loja, novo):
-    """Muda o endereço; o actual passa a antigo (continua a redirecionar). Devolve a mensagem de erro ou None."""
-    from ..models import Loja, LojaEnderecoAntigo
+def mudar(loja, novo, por=None, admin=False, manter_antigo=True, motivo=''):
+    """
+    Muda o endereço; o actual passa a antigo. Devolve a mensagem de erro ou None.
+    admin=True: sem limite de mudanças e pode não manter o antigo (manter_antigo=False → deixa de abrir a loja e fica
+    livre para outras). O dono mantém sempre o antigo.
+    """
     novo = (novo if isinstance(novo, str) else '').strip().lower()
     try:
-        return _mudar(loja, novo)
+        return _mudar(loja, novo, por, admin, manter_antigo or not admin, (motivo or '')[:300])
     except IntegrityError:          # outra loja ficou com ele entretanto (dois pedidos ao mesmo tempo)
         return 'Esse endereço já é usado por outra loja.'
 
 
-def _mudar(loja, novo):
+def _mudar(loja, novo, por, admin, manter_antigo, motivo):
     from ..models import Loja, LojaEnderecoAntigo
     with transaction.atomic():
         loja = Loja.objects.select_for_update().get(pk=loja.pk)
         if novo == loja.slug:
             return None
-        e = validar(novo, loja)
+        e = validar(novo, loja, admin=admin)
         if e:
             return e
-        if mudancas_recentes(loja) >= MAX_MUDANCAS:
+        if not admin and mudancas_recentes(loja) >= MAX_MUDANCAS:
             return f'Já mudaste o endereço {MAX_MUDANCAS} vezes nos últimos {JANELA_DIAS} dias. Tenta mais tarde.'
-        LojaEnderecoAntigo.objects.create(loja=loja, slug=loja.slug)            # uma linha por mudança
+        LojaEnderecoAntigo.objects.create(loja=loja, slug=loja.slug, ativo=manter_antigo, por_admin=admin,
+                                          alterado_por=por if getattr(por, 'pk', None) else None, motivo=motivo)
         loja.slug = novo
         loja.save(update_fields=['slug'])
     return None
+
+
+def desligar(loja, slug):
+    """Admin: um endereço antigo deixa de abrir a loja e fica livre (o registo fica). Devolve quantos desligou."""
+    from ..models import LojaEnderecoAntigo
+    return LojaEnderecoAntigo.objects.filter(loja=loja, slug=slug, ativo=True).update(ativo=False)
+
+
+def historico(loja, n=30):
+    """Admin: todas as mudanças (quem, quando, porquê, se o antigo ainda abre a loja)."""
+    from ..models import LojaEnderecoAntigo
+    return [{'slug': a.slug, 'criado_em': a.criado_em, 'ativo': a.ativo, 'por_admin': a.por_admin, 'motivo': a.motivo,
+             'por': (a.alterado_por.get_full_name() or a.alterado_por.username) if a.alterado_por else ''}
+            for a in LojaEnderecoAntigo.objects.filter(loja=loja).select_related('alterado_por')[:n]]
 
 
 def resolver(ref):
@@ -118,7 +142,7 @@ def resolver(ref):
     loja = Loja.objects.filter(slug=ref).first()
     if loja:
         return loja
-    antigo = LojaEnderecoAntigo.objects.select_related('loja').filter(slug=ref).order_by('-criado_em').first()
+    antigo = LojaEnderecoAntigo.objects.select_related('loja').filter(slug=ref, ativo=True).order_by('-criado_em').first()
     return antigo.loja if antigo else None
 
 
@@ -126,7 +150,7 @@ def antigos(loja, n=20):
     """Endereços que a loja já usou (mais recentes primeiro), sem o actual."""
     from ..models import LojaEnderecoAntigo
     vistos = []
-    for s in LojaEnderecoAntigo.objects.filter(loja=loja).exclude(slug=loja.slug).values_list('slug', flat=True):
+    for s in LojaEnderecoAntigo.objects.filter(loja=loja, ativo=True).exclude(slug=loja.slug).values_list('slug', flat=True):
         if s not in vistos:
             vistos.append(s)
     return vistos[:n]

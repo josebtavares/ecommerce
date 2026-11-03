@@ -388,12 +388,17 @@ class Loja(models.Model):
 
 class LojaEnderecoAntigo(models.Model):
     """
-    Registo de cada mudança de endereço: o endereço que a loja deixou (e quando). Esses endereços continuam a abrir
-    a loja (redirecionam) e ficam reservados para ela. Uma linha por mudança — conta para o limite de mudanças.
+    Registo de cada mudança de endereço: o endereço que a loja deixou (e quando, e quem). Enquanto `ativo`, continua a
+    abrir a loja (redireciona) e fica reservado para ela; o admin pode desligá-lo (ex.: um endereço ofensivo) — o
+    registo fica. Uma linha por mudança; as do dono contam para o limite de mudanças, as do admin não.
     """
-    loja      = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='enderecos_antigos')
-    slug      = models.SlugField(max_length=60)
-    criado_em = models.DateTimeField(auto_now_add=True)
+    loja         = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='enderecos_antigos')
+    slug         = models.SlugField(max_length=60)
+    criado_em    = models.DateTimeField(auto_now_add=True)
+    ativo        = models.BooleanField(default=True, db_default=True)
+    por_admin    = models.BooleanField(default=False, db_default=False)
+    alterado_por = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    motivo       = models.CharField(max_length=300, blank=True, default='', db_default='')
 
     class Meta:
         ordering = ['-criado_em']
@@ -1535,6 +1540,7 @@ class Notificacao(models.Model):
         ('encomenda_atualizada',     'Encomenda actualizada'),
         # Dono / admin
         ('exportacao_pronta',        'Exportação de dados pronta'),
+        ('endereco_loja',            'Endereço da loja alterado'),
     ]
  
     utilizador   = models.ForeignKey(

@@ -164,6 +164,7 @@ def admin_loja_list(request):
         results.append({
             'id':          loja.id,
             'nome':        loja.nome,
+            'slug':        loja.slug,
             'categoria':   loja.categoria,
             'localizacao': loja.localizacao,
             # contactos públicos da loja ("Vendido por") — Admin → Lojas mostra-os no cartão e na ficha
@@ -216,6 +217,51 @@ def admin_loja_demo(request, loja_id):
     loja.demo = request.data['demo'] in (True, 'true', '1', 1)
     loja.save(update_fields=['demo'])
     return Response({'id': loja.id, 'demo': loja.demo})
+
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_loja_endereco(request, loja_id):
+    """
+    Endereço público da loja (/loja/<slug>) visto pelo admin (gerir_lojas) — utils/endereco_loja.py.
+    GET    [?verificar=<slug>] → { slug, antigos, historico, verificacao? }
+    POST   { slug, manter_antigo?: bool (true), motivo? } → muda (sem o limite do dono; o dono é avisado)
+    DELETE { slug } → um endereço antigo deixa de abrir a loja e fica livre (ex.: ofensivo); o registo fica
+    """
+    from ..utils import endereco_loja as el
+    erro = _exige_admin(request, 'gerir_lojas')
+    if erro: return erro
+    loja = get_object_or_404(Loja, id=loja_id)
+    dados_req = request.data if isinstance(request.data, dict) else {}
+
+    if request.method == 'POST':
+        antigo = loja.slug
+        manter = dados_req.get('manter_antigo', True) not in (False, 'false', '0', 0)
+        motivo = str(dados_req.get('motivo') or '').strip()[:300]
+        msg = el.mudar(loja, dados_req.get('slug'), por=request.user, admin=True, manter_antigo=manter, motivo=motivo)
+        if msg:
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+        loja.refresh_from_db(fields=['slug'])
+        if loja.slug != antigo:
+            texto = f'O Bende mudou o endereço da tua loja para /loja/{loja.slug}.'
+            texto += ' O endereço antigo continua a levar à loja.' if manter else f' O endereço /loja/{antigo} deixou de funcionar.'
+            if motivo:
+                texto += f' Motivo: {motivo}'
+            notificar(loja.dono, 'endereco_loja', 'O endereço da tua loja foi alterado', texto, loja=loja,
+                      link=f'/loja/{loja.id}/backoffice/configuracoes')
+    elif request.method == 'DELETE':
+        slug = str(dados_req.get('slug') or request.query_params.get('slug') or '').strip().lower()
+        if not el.desligar(loja, slug):
+            return Response({'detail': 'Esse endereço antigo não está activo nesta loja.'}, status=status.HTTP_404_NOT_FOUND)
+
+    resposta = {'slug': loja.slug, 'antigos': el.antigos(loja), 'historico': el.historico(loja)}
+    v = request.query_params.get('verificar')
+    if request.method == 'GET' and v is not None:
+        v = v.strip().lower()
+        msg = None if v == loja.slug else el.validar(v, loja, admin=True)
+        resposta['verificacao'] = {'slug': v, 'livre': msg is None, 'erro': msg,
+                                   'sugestao': el.gerar(v or loja.nome, loja.pk) if msg else None}
+    return Response(resposta)
 
 
 @api_view(['GET', 'POST'])

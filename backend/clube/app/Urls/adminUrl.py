@@ -34,6 +34,7 @@ urlpatterns = [
     path('admin/registo/verificar/',            registoView.admin_registo_verificar, name='admin-registo-verificar'),
     path('admin/lojas/<int:loja_id>/eliminar/', adminView.admin_loja_eliminar,       name='admin-loja-eliminar'),
     path('admin/lojas/<int:loja_id>/demo/',     adminView.admin_loja_demo,           name='admin-loja-demo'),
+    path('admin/lojas/<int:loja_id>/endereco/', adminView.admin_loja_endereco,       name='admin-loja-endereco'),
     path('admin/lojas/<int:loja_id>/ver-backoffice/', adminView.admin_loja_ver_backoffice, name='admin-loja-ver-backoffice'),
     # ── Qualidade do catálogo (utils/qualidade.py) ────────────
     path('admin/qualidade/',                              qualidadeView.admin_qualidade,         name='admin-qualidade'),
