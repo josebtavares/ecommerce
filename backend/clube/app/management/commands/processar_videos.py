@@ -140,14 +140,21 @@ class Command(BaseCommand):
             return
         self._ultima_exportacao = time.monotonic()
         try:
-            from app.utils import exportacao_loja
+            from app.utils import arquivo_fiscal, exportacao_loja
             if time.monotonic() - getattr(self, '_ultima_expiracao', -1e9) >= 3600:
                 self._ultima_expiracao = time.monotonic()
                 exportacao_loja.expirar()
+                arquivo_fiscal.expirar()
             if exportacao_loja.processar_fila():
                 self.stdout.write('  exportação de loja gerada')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  exportação: {e}')
+        try:                            # arquivo fiscal grande (Faturação → ZIP), utils/arquivo_fiscal.py
+            from app.utils import arquivo_fiscal
+            if arquivo_fiscal.processar_fila():
+                self.stdout.write('  arquivo fiscal gerado')
+        except Exception as e:
+            self.stderr.write(f'  arquivo fiscal: {e}')
 
     def _ensaio_reposicao(self):
         """De 10 em 10 segundos: o ensaio de reposição pedido no admin, ou o periódico quando é devido

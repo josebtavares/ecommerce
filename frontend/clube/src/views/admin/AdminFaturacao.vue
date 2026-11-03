@@ -111,6 +111,24 @@
           </label>
           <button type="submit" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold">Procurar</button>
         </form>
+        <!-- arquivo do Bende: comprovativos, extratos, faturas (em vigor e anuladas) e cobranças pagas de todas as lojas e POS -->
+        <div class="flex flex-wrap items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3" data-teste="bende-arquivo">
+          <span class="text-xs text-zinc-300 font-semibold mr-1"><font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1" />Arquivo do Bende (ZIP)</span>
+          <span class="text-[11px] text-zinc-500">{{ fb.de === fb.ate ? mesTexto(fb.de) : `${mesTexto(fb.de)} a ${mesTexto(fb.ate)}` }}</span>
+          <select v-model="anoZip" @change="escolherAno" aria-label="Ano inteiro" data-teste="bende-ano"
+            class="px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200">
+            <option value="">Ano inteiro…</option>
+            <option v-for="a in anos" :key="a" :value="a">{{ a }}</option>
+          </select>
+          <button type="button" @click="arquivoBende" :disabled="zipBende.aExportar" data-teste="bende-zip"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 text-xs font-semibold">
+            {{ zipBende.aExportar ? 'A preparar…' : 'Descarregar ZIP' }}
+          </button>
+          <span class="text-[11px] text-zinc-500 w-full">Mensalidades e comissões de todas as lojas e POS do período (uma pasta por loja/POS), comprovativos das cobranças pagas, CSV com tudo e a lista do que falta faturar.</span>
+          <p v-if="zipBende.erro" class="w-full text-xs text-red-400" role="alert">{{ zipBende.erro }}</p>
+          <p v-if="zipBende.aviso" class="w-full text-xs text-sky-300" role="status" data-teste="zip-em-fila">{{ zipBende.aviso }}</p>
+        </div>
+        <ArquivosFiscais base="/app/admin/faturacao/arquivos/" :params="{ alvo: 'bende' }" :versao="zipBende.versao" />
         <p v-if="bende" class="text-xs text-zinc-500" data-teste="bende-totais">
           {{ bende.totais.grupos }} loja(s)/POS · {{ bende.totais.documentos }} documento(s) · {{ euros(bende.totais.valor) }} ·
           <span :class="bende.totais.por_faturar ? 'text-amber-300 font-bold' : ''">{{ bende.totais.por_faturar }} por faturar</span>
@@ -160,7 +178,8 @@
 <script>
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { descarregarPdf, descarregarComprovativoSubscricao } from '@/utils/documentos'
+import { descarregarArquivo, descarregarPdf, descarregarComprovativoSubscricao, erroDeBlob } from '@/utils/documentos'
+import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
 import FaturacaoFicha from './FaturacaoFicha.vue'
 import AbasVendedores from '@/components/fiscal/AbasVendedores.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
@@ -178,7 +197,7 @@ const LIMITE = 20
 
 export default {
   name: 'AdminFaturacao',
-  components: { AbasVendedores, DiferencaComissoes, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { AbasVendedores, ArquivosFiscais, DiferencaComissoes, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   data () {
     const hoje = new Date()
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
@@ -195,6 +214,8 @@ export default {
       pq: '', pRes: null, pOffset: 0,
       fb: { q: '', de: mesAtual, ate: mesAtual, por_faturar: false },
       bende: null, bOffset: 0,
+      anoZip: '', anos: Array.from({ length: hoje.getFullYear() - 2024 }, (_, i) => hoje.getFullYear() - i),
+      zipBende: { aExportar: false, erro: '', aviso: '', versao: 0 },
       atualizar: 0,           // muda → a ficha aberta recarrega sem esqueleto (tempo real)
     }
   },
@@ -210,6 +231,7 @@ export default {
     // ?ficha=loja-12&aba=bende (ex.: "Ver na Faturação" em Subscrições → Cobranças)
     const m = /^(loja|pos)-(\d+)$/.exec(this.$route.query.ficha || '')
     if (m) this.abrirFicha(m[1], Number(m[2]), this.$route.query.aba || '')
+    else if (this.$route.query.tab === 'bende') this.mudarTab('bende')      // aviso "arquivo do Bende pronto"
     // mensalidade paga, fatura do Bende registada/anulada (aqui, em Subscrições ou por outro admin)
     this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal())
     // fatura de uma venda registada/anulada pela loja ou pelo POS, venda nova por faturar
@@ -223,6 +245,29 @@ export default {
     regimeClasse (o) {
       if (!o.regime_fiscal) return 'bg-amber-500/15 text-amber-300'
       return o.regime_fiscal === 'atividade' ? 'bg-sky-500/15 text-sky-300' : 'bg-zinc-700 text-zinc-300'
+    },
+    mesTexto (m) {
+      if (!m) return ''
+      const [a, mm] = m.split('-')
+      return `${mm}/${a}`
+    },
+    escolherAno () {
+      if (!this.anoZip) return
+      this.fb.de = `${this.anoZip}-01`
+      this.fb.ate = `${this.anoZip}-12`
+      this.anoZip = ''
+      this.carregarBende(0)
+    },
+    async arquivoBende () {
+      const z = this.zipBende
+      z.aExportar = true; z.erro = ''; z.aviso = ''
+      try {
+        const r = await descarregarArquivo('/app/admin/faturacao/bende/arquivo/', `arquivo-bende-${this.fb.de}-a-${this.fb.ate}.zip`,
+          { de: this.fb.de, ate: this.fb.ate })
+        if (r.emFila) { z.aviso = r.detail; z.versao++ }
+      } catch (e) {
+        z.erro = await erroDeBlob(e, 'Não foi possível preparar o arquivo.')
+      } finally { z.aExportar = false }
     },
     mudarTab (t) {
       this.tab = t

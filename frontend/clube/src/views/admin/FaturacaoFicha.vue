@@ -35,6 +35,8 @@
           </button>
           <span class="text-[11px] text-zinc-500">{{ zip.de || zip.ate ? '' : 'Sem datas: desde sempre.' }} Dados fiscais, vendas, comprovativos e todas as faturas — para a DNRE.</span>
           <p v-if="zip.erro" class="w-full text-xs text-red-400" role="alert">{{ zip.erro }}</p>
+          <p v-if="zip.aviso" class="w-full text-xs text-sky-300" role="status" data-teste="zip-em-fila">{{ zip.aviso }}</p>
+          <ArquivosFiscais class="w-full" base="/app/admin/faturacao/arquivos/" :params="{ alvo: tipo, id }" :versao="zip.versao" />
         </form>
       </div>
 
@@ -215,7 +217,8 @@
 <script>
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { descarregarPdf, descarregarComprovativoVenda, urlFicheiro } from '@/utils/documentos'
+import { descarregarArquivo, descarregarPdf, descarregarComprovativoVenda, erroDeBlob, urlFicheiro } from '@/utils/documentos'
+import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ListaMensalidades from '@/components/fiscal/ListaMensalidades.vue'
@@ -232,7 +235,7 @@ const origemDe = (ref, tipo) => tipo === 'pos' ? 'pos' : (/^[EMV]-/i.test(ref ||
 
 export default {
   name: 'FaturacaoFicha',
-  components: { DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { ArquivosFiscais, DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   props: {
     tipo: { type: String, required: true },
     id:   { type: [Number, String], required: true },
@@ -248,7 +251,7 @@ export default {
       fv: { ...vazio(), q: this.qInicial },
       vendas: { count: 0, results: [], totais: null }, offsetVendas: 0, carregandoVendas: false,
       aberto: {}, versao: 0, pedido: 0, pedidoVendas: 0, historicoVenda: '', origem: origemDe(this.qInicial, this.tipo),
-      zip: { de: '', ate: '', aExportar: false, erro: '' },
+      zip: { de: '', ate: '', aExportar: false, erro: '', aviso: '', versao: 0 },
       pq: '', pRes: null, pOffset: 0,
     }
   },
@@ -386,17 +389,16 @@ export default {
       descarregarPdf('/app/admin/faturacao/vendas.csv', `${nome}-${this.id}-${de}-${ate}.csv`, { ...alvo, de, ate })
     },
     async exportar () {
-      this.zip.aExportar = true; this.zip.erro = ''
+      this.zip.aExportar = true; this.zip.erro = ''; this.zip.aviso = ''
       const params = {}
       if (this.zip.de) params.de = this.zip.de
       if (this.zip.ate) params.ate = this.zip.ate
       try {
-        await descarregarPdf(`/app/admin/faturacao/exportar/${this.tipo}/${this.id}/`,
+        const r = await descarregarArquivo(`/app/admin/faturacao/exportar/${this.tipo}/${this.id}/`,
           `arquivo-fiscal-${this.tipo}-${this.id}-${this.zip.de || 'inicio'}-${this.zip.ate || 'hoje'}.zip`, params)
+        if (r.emFila) { this.zip.aviso = r.detail; this.zip.versao++ }
       } catch (e) {
-        let msg = 'Não foi possível exportar.'
-        try { msg = JSON.parse(await e.response.data.text()).detail || msg } catch { /* resposta sem JSON */ }
-        this.zip.erro = msg
+        this.zip.erro = await erroDeBlob(e, 'Não foi possível exportar.')
       } finally { this.zip.aExportar = false }
     },
     extrato (c) {

@@ -48,6 +48,9 @@
     </div>
     <p v-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
 
+    <p v-if="avisoZip" class="text-sm text-sky-300" role="status" data-teste="zip-em-fila">{{ avisoZip }}</p>
+    <ArquivosFiscais :base="`/app/loja/${lojaId}/faturacao/arquivos/`" :versao="versaoArquivos" />
+
     <!-- resumo do período -->
     <div v-if="resumo" class="grid grid-cols-2 sm:grid-cols-5 gap-3" data-teste="faturacao-resumo">
       <div v-for="t in cartoes" :key="t.label" class="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
@@ -159,7 +162,8 @@
 <script>
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { descarregarPdf, descarregarComprovativoVenda } from '@/utils/documentos'
+import { descarregarArquivo, descarregarPdf, descarregarComprovativoVenda, erroDeBlob } from '@/utils/documentos'
+import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
 import { PERIODOS, intervalo, textoPeriodo } from '@/utils/periodosFaturacao'
 import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
@@ -181,14 +185,14 @@ const ORIGEM_DO_PREFIXO = { E: 'loja', M: 'marcacoes', V: 'pos' }
 
 export default {
   name: 'BackofficeFaturacao',
-  components: { FaturaVenda, HistoricoFatura, PaginacaoLista, ResultadosPesquisa },
+  components: { ArquivosFiscais, FaturaVenda, HistoricoFatura, PaginacaoLista, ResultadosPesquisa },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['ver-subscricao'],
   data () {
     const [de, ate] = intervalo('mes')
     return {
       LIMITE, NOMES, PESQUISA, PERIODOS, ABAS,
-      periodo: 'mes', de, ate, resumo: null, erro: '', aExportar: false,
+      periodo: 'mes', de, ate, resumo: null, erro: '', aExportar: false, avisoZip: '', versaoArquivos: 0,
       aba: 'vendas', origem: 'loja', f: vazio(),
       vendas: { count: 0, results: [], totais: null }, offset: 0, carregando: false,
       aberto: {}, versao: 0, pedido: 0,
@@ -308,13 +312,12 @@ export default {
         .catch(() => { this.erro = 'Não foi possível exportar o CSV.' })
     },
     async exportar () {
-      this.aExportar = true; this.erro = ''
+      this.aExportar = true; this.erro = ''; this.avisoZip = ''
       try {
-        await descarregarPdf(`/app/loja/${this.lojaId}/faturacao/exportar/`, `arquivo-fiscal-${this.de || 'inicio'}-${this.ate || 'hoje'}.zip`, this.datas)
+        const r = await descarregarArquivo(`/app/loja/${this.lojaId}/faturacao/exportar/`, `arquivo-fiscal-${this.de || 'inicio'}-${this.ate || 'hoje'}.zip`, this.datas)
+        if (r.emFila) { this.avisoZip = r.detail; this.versaoArquivos++ }
       } catch (e) {
-        let msg = 'Não foi possível exportar.'
-        try { msg = JSON.parse(await e.response.data.text()).detail || msg } catch { /* resposta sem JSON */ }
-        this.erro = msg
+        this.erro = await erroDeBlob(e, 'Não foi possível exportar.')
       } finally { this.aExportar = false }
     },
     pesquisar (offset = 0) {
