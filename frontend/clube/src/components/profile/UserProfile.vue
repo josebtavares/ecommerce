@@ -527,6 +527,7 @@ import { passwordValida } from '@/utils/password'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
 import { atualizarGuardado } from '@/services/confirmarEmail'
+import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
 
 const props = defineProps({
   data:   { type: Object,  default: () => ({}) },
@@ -643,13 +644,16 @@ function statusColor(s) {
 async function toggleEncomenda(id) {
   if (expandedEncomenda.value === id) { expandedEncomenda.value = null; return }
   expandedEncomenda.value = id
-  if (detalhesEncomenda.value[id]) return
-  loadingDetalhe.value = id
+  // já visto: mostra logo o que havia e actualiza por trás (fatura nova, estado…)
+  const jaHavia = !!detalhesEncomenda.value[id]
+  if (!jaHavia) loadingDetalhe.value = id
   try {
     const { data } = await api.get(`/app/encomenda/${id}/`)
     detalhesEncomenda.value = { ...detalhesEncomenda.value, [id]: data }
+    const enc = encomendas.value.find(e => e.id === id)
+    if (enc) Object.assign(enc, { status: data.status })
   } catch (e) { console.error(e) }
-  finally { loadingDetalhe.value = null }
+  finally { if (loadingDetalhe.value === id) loadingDetalhe.value = null }
 }
 
 // depois de cancelar: o detalhe e a linha da lista mostram o novo estado
@@ -659,6 +663,11 @@ async function recarregarEncomenda(enc) {
     detalhesEncomenda.value = { ...detalhesEncomenda.value, [enc.id]: data }
     Object.assign(enc, { status: data.status, reembolso: data.reembolso, valor_reembolsado: data.valor_reembolsado,
                          prazo_transferencia: data.prazo_transferencia })
+    if (expandedEncomenda.value !== enc.id) {        // fechado: guarda-se só o da aberta
+      const resto = { ...detalhesEncomenda.value }
+      delete resto[enc.id]
+      detalhesEncomenda.value = resto
+    }
   } catch (e) { console.error(e) }
 }
 
@@ -676,13 +685,15 @@ function toggle() {
     return
   }
   isOpen.value = !isOpen.value
-  if (isOpen.value && activeTab.value === 'encomendas') fetchEncomendas()
-  if (isOpen.value && activeTab.value === 'lojas') fetchLojas()
+  if (isOpen.value && activeTab.value === 'encomendas') fetchEncomendas(encomendas.value.length > 0)
+  if (isOpen.value && activeTab.value === 'lojas') fetchLojas(lojas.value.length > 0)
 }
 
+// cada vez que se escolhe o separador volta a carregar (a loja pode ter mudado o estado, anexado a fatura…);
+// com dados já mostrados actualiza sem spinner
 watch(activeTab, (tab) => {
-  if (tab === 'encomendas' && encomendas.value.length === 0) fetchEncomendas()
-  if (tab === 'lojas'      && lojas.value.length === 0)      fetchLojas()
+  if (tab === 'encomendas') fetchEncomendas(encomendas.value.length > 0)
+  if (tab === 'lojas')      fetchLojas(lojas.value.length > 0)
   if (tab === 'password') fetchTemPassword()
 })
 
@@ -815,16 +826,36 @@ async function savePassword() {
   })
 }
 
-async function fetchEncomendas() {
-  loadingEncomendas.value = true; encomendaOffset.value = 0
+// silencioso: actualiza o que está à vista sem spinner (mantém as páginas já carregadas com "Ver mais")
+async function fetchEncomendas(silencioso = false) {
+  if (!silencioso) { loadingEncomendas.value = true; encomendaOffset.value = 0 }
+  const limite = silencioso ? Math.max(encomendaLimit.value, encomendas.value.length) : encomendaLimit.value
   try {
-    const { data } = await api.get('/app/encomenda/', { params: { limit: encomendaLimit.value, offset: 0 } })
+    const { data } = await api.get('/app/encomenda/', { params: { limit: limite, offset: 0 } })
     encomendas.value     = data.results || data
     encomendaTotal.value = data.count ?? encomendas.value.length
     encomendaOffset.value = encomendas.value.length
+    // os detalhes guardados ficaram velhos: o aberto volta a ser pedido, os outros pedem-se ao abrir
+    const aberta = expandedEncomenda.value
+    detalhesEncomenda.value = aberta && detalhesEncomenda.value[aberta] ? { [aberta]: detalhesEncomenda.value[aberta] } : {}
+    if (aberta) {
+      const enc = encomendas.value.find(e => e.id === aberta)
+      if (enc) recarregarEncomenda(enc)
+    }
   } catch (e) { console.error(e) }
   finally { loadingEncomendas.value = false }
 }
+
+// tempo real (utils/tempoRealEncomendas.js): a loja mudou o estado, anexou a fatura, o condutor saiu…
+// Só com o perfil aberto no separador Encomendas; fechado, ao abrir volta a carregar.
+let pararTempoReal = null
+// a lista (estado de cada linha) e a encomenda aberta voltam a ser pedidas, sem spinner
+function aoMudarEncomenda() {
+  if (!isOpen.value || activeTab.value !== 'encomendas' || !autenticado.value) return
+  fetchEncomendas(encomendas.value.length > 0)
+}
+onMounted(() => { pararTempoReal = ouvirEncomendas(aoMudarEncomenda) })
+onBeforeUnmount(() => pararTempoReal?.())
 
 async function carregarMais() {
   if (loadingMais.value || !temMais.value) return
@@ -839,8 +870,8 @@ async function carregarMais() {
   finally { loadingMais.value = false }
 }
 
-async function fetchLojas() {
-  loadingLojas.value = true
+async function fetchLojas(silencioso = false) {
+  if (!silencioso) loadingLojas.value = true
   try {
     const { data } = await api.get('/app/loja/minhas/')
     lojas.value = data.results || data
