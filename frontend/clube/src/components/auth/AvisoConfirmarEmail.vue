@@ -3,9 +3,11 @@
      bloco: dentro de uma página (ex.: criar loja), com mais explicação. -->
 <template>
   <!-- cartão no canto de baixo à esquerda: no topo ficava por baixo dos botões fixos das páginas;
-       à direita fica o balão do chat -->
+       à direita fica o balão do chat. No backoffice/admin (computador) fica à direita da sidebar, que está por cima
+       (no telemóvel a sidebar é uma gaveta: aberta tapa o aviso, como deve) -->
   <div v-if="faixa" role="status"
-       class="fixed z-40 bottom-4 left-4 right-20 sm:right-auto sm:max-w-sm rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 shadow-lg"
+       :class="['fixed z-40 bottom-4 left-4 right-20 sm:right-auto sm:max-w-sm rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 shadow-lg',
+                LADO_DO_PAINEL[painel]]"
        data-teste="aviso-confirmar-email">
     <div class="p-3.5 pr-9 text-xs sm:text-sm relative">
       <button type="button" @click="$emit('fechar')" aria-label="Fechar aviso"
@@ -52,8 +54,14 @@ export default {
   props: {
     faixa:  { type: Boolean, default: false },
     isDark: { type: Boolean, default: false },
+    painel: { type: String, default: '' },       // 'backoffice' | 'admin' (App.vue)
   },
   emits: ['fechar'],
+
+  created () {
+    // larguras das sidebars: BackofficeLayout w-72, AdminLayout até w-64 (recolhida w-16 → fica só um espaço)
+    this.LADO_DO_PAINEL = { backoffice: 'lg:left-[19rem]', admin: 'lg:left-[17rem]' }
+  },
 
   data () {
     return { aEnviar: false, mensagem: '', ok: false, email: utilizadorGuardado()?.email || '' }
