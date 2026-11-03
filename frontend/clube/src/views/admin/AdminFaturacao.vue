@@ -8,7 +8,7 @@
     </div>
     <AbasVendedores ref="abas" url="/app/admin/faturacao/abas/" :ativo="abaAtiva" titulo="Documentos por faturar (vendas + faturas do Bende)" @selecionar="selecionar" />
 
-    <FaturacaoFicha v-if="ficha" :key="ficha.tipo + ficha.id" :tipo="ficha.tipo" :id="ficha.id" :aba-inicial="ficha.aba" :q-inicial="ficha.q"
+    <FaturacaoFicha v-if="ficha" :key="ficha.tipo + ficha.id" :tipo="ficha.tipo" :id="ficha.id" :aba-inicial="ficha.aba" :q-inicial="ficha.q" :atualizar="atualizar"
       @abrir="abrirFicha" @alterado="carregarAbas" @carregada="f => lojaDoPos = f.tipo === 'pos' && f.loja ? f.loja.id : null" />
 
     <template v-else>
@@ -167,6 +167,7 @@ import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
 import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
 import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
+import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
 
 const TABS = [
   { key: 'vendedores', label: 'Vendedores' },
@@ -194,6 +195,7 @@ export default {
       pq: '', pRes: null, pOffset: 0,
       fb: { q: '', de: mesAtual, ate: mesAtual, por_faturar: false },
       bende: null, bOffset: 0,
+      atualizar: 0,           // muda → a ficha aberta recarrega sem esqueleto (tempo real)
     }
   },
   computed: {
@@ -208,7 +210,10 @@ export default {
     // ?ficha=loja-12&aba=bende (ex.: "Ver na Faturação" em Subscrições → Cobranças)
     const m = /^(loja|pos)-(\d+)$/.exec(this.$route.query.ficha || '')
     if (m) this.abrirFicha(m[1], Number(m[2]), this.$route.query.aba || '')
+    // mensalidade paga, fatura do Bende registada/anulada (aqui, em Subscrições ou por outro admin)
+    this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal())
   },
+  beforeUnmount () { this.pararTempoReal?.() },
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
     data (s) { return s ? new Date(s).toLocaleDateString('pt-PT') : '—' },
@@ -221,11 +226,16 @@ export default {
       this.tab = t
       if (t === 'bende' && !this.bende) this.carregarBende()
     },
-    async carregar (fn) {
-      this.carregando = true; this.erro = ''
+    async carregar (fn, silencioso = false) {
+      if (!silencioso) { this.carregando = true; this.erro = '' }
       try { await fn() } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar.'
-      } finally { this.carregando = false }
+        if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar.'
+      } finally { if (!silencioso) this.carregando = false }
+    },
+    atualizarEmTempoReal () {
+      this.carregarAbas()
+      if (this.ficha) this.atualizar++
+      else if (this.tab === 'bende' && this.bende) this.carregarBende(this.bOffset, true)
     },
     carregarVendedores (offset = this.offset) {
       this.offset = offset
@@ -260,14 +270,14 @@ export default {
       if (r.tipo === 'mensalidade' || r.tipo === 'comissoes') return this.abrirFicha(v.tipo, v.id, 'bende')
       return this.abrirFicha(v.tipo, v.id)
     },
-    carregarBende (offset = this.bOffset) {
+    carregarBende (offset = this.bOffset, silencioso = false) {
       this.bOffset = offset
       return this.carregar(async () => {
         const params = { limit: LIMITE, offset, de: this.fb.de, ate: this.fb.ate }
         if (this.fb.q) params.q = this.fb.q
         if (this.fb.por_faturar) params.por_faturar = 1
         this.bende = (await api.get('/app/admin/faturacao/bende/', { params })).data
-      })
+      }, silencioso)
     },
     // registar / substituir / anular sem recarregar a lista
     aposFaturaBende (g, d, r) {

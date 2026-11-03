@@ -219,6 +219,7 @@ import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
 
 export default {
   name: 'POSSubscricao',
@@ -250,7 +251,13 @@ export default {
     },
   },
 
-  created () { this.carregar() },
+  created () {
+    this.carregar()
+    // a página do POS não tem o WebSocket das notificações: verifica de 20 em 20 s (fatura registada, paga, plano…)
+    this.pararTempoReal = ouvirSubscricoes(() => { this.carregar(true); this.versao++ },
+                                           { filtro: a => String(a.pos_id) === String(this.posId), semSocket: true })
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
@@ -264,12 +271,12 @@ export default {
     recibo (f) { descarregarComprovativoSubscricao(f) },
     urlFicheiro,
 
-    async carregar () {
+    async carregar (silencioso = false) {
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/subscricao/`)
         this.dados = data
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar a subscrição.'
+        if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar a subscrição.'
       } finally {
         this.carregando = false
       }
