@@ -1,6 +1,6 @@
 <template>
   <!-- "Confirma o teu email" (services/confirmarEmail.js) — fora do POS e das páginas de entrada -->
-  <AvisoConfirmarEmail v-if="mostrarAviso" faixa @fechar="fechado = true" />
+  <AvisoConfirmarEmail v-if="mostrarAviso" faixa :painel="painel" @fechar="fechado = true" />
   <router-view />
   <!-- "Entra ou cria conta" — partilhado por todas as páginas públicas (services/sessao.js) -->
   <PedirLogin />
@@ -31,6 +31,8 @@ export default {
   },
 
   computed: {
+    // backoffice/admin têm uma sidebar fixa à esquerda: no computador o aviso passa para o lado dela
+    painel () { return { Backoffice: 'backoffice', Admin: 'admin' }[this.$route.name] || '' },
     mostrarAviso () {
       return this.porConfirmar && !this.fechado && !SEM_AVISO.test(this.$route.path)
     },
