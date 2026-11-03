@@ -162,7 +162,7 @@
 <script>
 import api, { urlWebSocketComBilhete } from '@/services/api'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO, marcarLigacao } from '@/composables/useTempoRealReembolsos'
-import { EVENTO_ENCOMENDA, EVENTO_SUBSCRICAO } from '@/utils/tempoRealEncomendas'
+import { EVENTO_ENCOMENDA, EVENTO_FATURACAO, EVENTO_SUBSCRICAO } from '@/utils/tempoRealEncomendas'
 import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
@@ -352,6 +352,7 @@ export default {
           // encomenda ou entrega mudou (utils/tempoRealEncomendas.js ouvirEncomendas)
           if (msg.type === 'encomenda') window.dispatchEvent(new CustomEvent(EVENTO_ENCOMENDA, { detail: msg.encomenda }))
           if (msg.type === 'subscricao') window.dispatchEvent(new CustomEvent(EVENTO_SUBSCRICAO, { detail: msg.subscricao }))
+          if (msg.type === 'faturacao') window.dispatchEvent(new CustomEvent(EVENTO_FATURACAO, { detail: msg.faturacao }))
         } catch (err) { /* silencioso */ }
       }
 
