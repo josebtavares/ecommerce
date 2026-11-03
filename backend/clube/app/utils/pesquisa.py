@@ -487,7 +487,7 @@ def _produtos(ids, request):
                     'imagem': _url(request, p.ficheiro_poster) or (_url(request, p.ficheiro) if p.ficheiro_estado != 'processando' else None),
                     'video': bool(p.ficheiro and re.search(r'\.(mp4|webm|mov|mkv)$', p.ficheiro.name or '', re.I)),
                     'esgotado': bool(inv is not None and inv.quantidade <= 0),
-                    'loja': {'id': p.loja_id, 'nome': p.loja.nome}})
+                    'loja': {'id': p.loja_id, 'nome': p.loja.nome, 'slug': p.loja.slug}})
     return out
 
 
@@ -495,7 +495,7 @@ def _lojas(ids, request):
     from ..models import Loja
     from .home import rotulo_categoria
     por_id = Loja.objects.in_bulk(ids)
-    return [{'id': l.id, 'nome': l.nome, 'logo': _url(request, l.logo), 'categoria': rotulo_categoria(l.categoria),
+    return [{'id': l.id, 'nome': l.nome, 'slug': l.slug, 'logo': _url(request, l.logo), 'categoria': rotulo_categoria(l.categoria),
              'localizacao': l.localizacao} for l in (por_id.get(i) for i in ids) if l]
 
 

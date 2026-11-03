@@ -67,7 +67,7 @@ def publico(request, loja_id):
     if suspenso:
         servicos = [s for s in servicos if s.pagamento != 'antecipado']
     return Response({
-        'disponivel': True, 'loja': {'id': loja.id, 'nome': loja.nome, 'logo': _url(request, loja.logo)},
+        'disponivel': True, 'loja': {'id': loja.id, 'nome': loja.nome, 'slug': loja.slug, 'logo': _url(request, loja.logo)},
         'regras': {'cliente_escolhe_profissional': cfg.cliente_escolhe_profissional, 'cancelar_horas': cfg.cancelar_horas,
                    'reembolso_fora_prazo': cfg.reembolso_fora_prazo, 'confirmacao': cfg.confirmacao,
                    'dias_max': cfg.dias_max, 'antecedencia_min': cfg.antecedencia_min, 'minutos_para_pagar': MINUTOS_PARA_PAGAR},
@@ -129,7 +129,7 @@ def servico_card(request, s):
     return {'id': s.id, 'nome': s.nome, 'categoria': s.categoria, 'duracao_min': s.duracao_min, 'e_pacote': s.e_pacote,
             'preco_texto': ('a partir de ' if s.tipo_preco == 'a_partir' else '') + formatar(s.preco),
             'imagem': _url(request, imgs[0].ficheiro) if imgs else None,
-            'loja': {'id': s.loja_id, 'nome': s.loja.nome, 'logo': _url(request, s.loja.logo), 'localizacao': s.loja.localizacao}}
+            'loja': {'id': s.loja_id, 'nome': s.loja.nome, 'slug': s.loja.slug, 'logo': _url(request, s.loja.logo), 'localizacao': s.loja.localizacao}}
 
 
 @api_view(['GET'])
@@ -196,7 +196,7 @@ def _cliente_payload(request, m, completo=False):
     if d.get('reembolso_por_concluir'):     # o cliente só sabe que está a ser tratado (sem o erro do fornecedor)
         d['reembolso_por_concluir'] = {'valor': d['reembolso_por_concluir']['valor']}
     cfg = m.loja.config_servicos
-    d.update({'loja_id': m.loja_id, 'loja_nome': m.loja.nome, 'loja_logo': _url(request, m.loja.logo),
+    d.update({'loja_id': m.loja_id, 'loja_slug': m.loja.slug, 'loja_nome': m.loja.nome, 'loja_logo': _url(request, m.loja.logo),
               'profissional_foto': _url(request, m.profissional.foto),
               'dentro_do_prazo': ops.dentro_do_prazo(m), 'cancelar_horas': cfg.cancelar_horas,
               'reembolso_fora_prazo': cfg.reembolso_fora_prazo,

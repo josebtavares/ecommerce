@@ -300,7 +300,7 @@
             <p v-if="lojaDetalhe.estado === 'fechada'" class="flex-1 py-2.5 text-xs text-zinc-500 text-center self-center">
               Fechada pelo dono — só o dono a pode reabrir.
             </p>
-            <a :href="`/loja/${lojaDetalhe.id}`" target="_blank"
+            <a :href="`/loja/${lojaDetalhe.slug || lojaDetalhe.id}`" target="_blank"
               class="flex-1 py-2.5 rounded-xl text-sm font-bold bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition text-center">
               Ver loja pública <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
             </a>

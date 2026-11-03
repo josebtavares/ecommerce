@@ -86,7 +86,7 @@ def _produto_cartao(request, p):
     if not p:
         return None
     img = p.ficheiro_poster or p.ficheiro
-    return {'id': p.id, 'nome': p.nome, 'preco': str(p.preco), 'loja_id': p.loja_id,
+    return {'id': p.id, 'nome': p.nome, 'preco': str(p.preco), 'loja_id': p.loja_id, 'loja_slug': p.loja.slug,
             'imagem': url_ficheiro(request, img) if img else None}
 
 
@@ -138,7 +138,7 @@ def conversa_payload(request, conversa, caixa_vista):
     titulo, outro = _titulo_e_outro(request, conversa, caixa_vista)
     eu = next((p for p in conversa.participantes.all() if p.caixa_id == caixa_vista.id), None)
     lida = eu.ultima_lida if eu else 0
-    ultima = conversa.mensagens.select_related('remetente__loja', 'remetente__utilizador__user', 'produto', 'autor__user') \
+    ultima = conversa.mensagens.select_related('remetente__loja', 'remetente__utilizador__user', 'produto__loja', 'autor__user') \
         .order_by('-id').first()
     nao_lidas = conversa.mensagens.filter(id__gt=lida, apagada=False).exclude(remetente=caixa_vista).count()
     leitura_outros = max([p.ultima_lida for p in conversa.participantes.all() if p.caixa_id != caixa_vista.id] or [0])
@@ -337,7 +337,7 @@ def mensagens(request, conversa_id):
         except ValueError:
             return Response({'detail': 'Parâmetros inválidos.'}, status=400)
         qs = conversa.mensagens.select_related('remetente__loja', 'remetente__utilizador__user',
-                                               'produto', 'autor__user')
+                                               'produto__loja', 'autor__user')
         if depois:
             # só as novas (o WebSocket avisa e o browser vem buscar as que faltam)
             pagina = list(qs.filter(id__gt=depois).order_by('id')[:limit])

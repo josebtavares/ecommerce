@@ -372,6 +372,7 @@
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
+import { caminhoLoja, hrefLoja } from '@/utils/enderecoLoja'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
@@ -569,11 +570,11 @@ export default {
       return this.poucasUnidades ? 'bg-amber-500' : 'bg-green-500'
     },
 
-    // /loja/<id>?produto=<id> abre a loja com este produto (useLojaData); os ids fictícios da pré-visualização não têm link
+    // /loja/<endereço>?produto=<id> abre a loja com este produto (useLojaData); os ids fictícios da pré-visualização não têm link
     linkProduto () {
-      const lojaId = this.produto?.loja?.id ?? this.loja?.id
-      return /^\d+$/.test(String(lojaId ?? '')) && /^\d+$/.test(String(this.produto?.id ?? ''))
-        ? `/loja/${lojaId}?produto=${this.produto.id}` : ''
+      const loja = this.produto?.loja?.id ? this.produto.loja : this.loja
+      return /^\d+$/.test(String(loja?.id ?? '')) && /^\d+$/.test(String(this.produto?.id ?? ''))
+        ? hrefLoja(loja, { produto: this.produto.id }) : ''
     },
     precoUnitario () {
       // conjunto: preço base + extras das opções escolhidas
@@ -674,7 +675,7 @@ export default {
       if (!this.loja || !this.produto || this.stock === 0 || !this.podeAdicionar) return
       // visitante: encomendar pede conta — convida a entrar e volta depois à loja do produto
       if (!estaAutenticado()) {
-        pedirLogin('Entra ou cria conta para adicionares produtos ao carrinho e encomendares.', `/loja/${this.loja.id}`)
+        pedirLogin('Entra ou cria conta para adicionares produtos ao carrinho e encomendares.', caminhoLoja(this.loja))
         return
       }
       await this.wrap(async () => {
@@ -711,7 +712,7 @@ export default {
 
     visitarLoja () {
       this.$emit('close')
-      this.$router.push(`/loja/${this.loja.id}`)
+      this.$router.push(caminhoLoja(this.loja))
     },
   }
 }

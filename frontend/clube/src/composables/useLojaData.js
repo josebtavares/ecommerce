@@ -7,6 +7,8 @@ import api, { terminarSessao } from '@/services/api'
 import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
 import { DEFAULT_BANNER } from '@/services/media'
 import { esperarFontes } from '@/utils/fontes'
+import { idDaLoja } from '@/utils/enderecoLoja'
+import { DEMO_ID } from '@/utils/demoLoja'
 
 const NOMES_PAGAMENTO = {
   cartao: 'Cartão', dinheiro: 'Dinheiro', mbway: 'MB WAY', paypal: 'PayPal', stripe: 'Stripe',
@@ -72,7 +74,8 @@ export function useLojaData () {
   })
 
   // ── Fetch ──────────────────────────────────────────────────
-  const lojaId = computed(() => route.params.id)
+  // o parâmetro é o endereço (/loja/bom-sabor); a API usa o id (resolvido pelo router — utils/enderecoLoja.js)
+  const lojaId = computed(() => route.params.id === DEMO_ID ? DEMO_ID : idDaLoja(route.params.id))
 
   async function fetchLoja (id) {
     try {

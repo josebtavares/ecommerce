@@ -63,13 +63,13 @@ def _payload(request, f):
             'id': f.id, 'tipo': 'produto', 'criado_em': f.criado_em.isoformat(),
             'disponivel': produto_visivel(p),
             'produto': {'id': p.id, 'nome': p.nome, 'preco': str(p.preco), 'imagem': _imagem_produto(request, p)},
-            'loja': {'id': p.loja_id, 'nome': p.loja.nome},
+            'loja': {'id': p.loja_id, 'nome': p.loja.nome, 'slug': p.loja.slug},
         }
     loja = f.loja
     return {
         'id': f.id, 'tipo': 'loja', 'criado_em': f.criado_em.isoformat(),
         'disponivel': loja_visivel(loja),
-        'loja': {'id': loja.id, 'nome': loja.nome, 'categoria': loja.categoria,
+        'loja': {'id': loja.id, 'nome': loja.nome, 'slug': loja.slug, 'categoria': loja.categoria,
                  'logo': _url(request, loja.logo), 'imagem': _imagem_loja(request, loja)},
     }
 

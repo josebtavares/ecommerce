@@ -50,6 +50,7 @@ import { useRoute } from 'vue-router'
 import api from '@/services/api'
 import { getTemplate, TEMPLATE_COMPONENTS } from '@/config/lojaTemplates'
 import { DEMO_ID, ativarLojaDemo } from '@/utils/demoLoja'
+import { idDaLoja } from '@/utils/enderecoLoja'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
 
 const FALLBACK_ID   = 'classico'
@@ -74,6 +75,12 @@ export default {
       loadingTemplate.value   = true
       templateComponent.value = null
       indisponivel.value      = null
+      // /loja/<slug>: o router já o resolveu (utils/enderecoLoja.js); sem id, a loja não existe para este visitante
+      if (!lojaId) {
+        indisponivel.value    = { fechada: false, nome: '' }
+        loadingTemplate.value = false
+        return
+      }
 
       try {
         // ── 1. Cache local (resposta imediata enquanto a API carrega) ──────────
@@ -169,7 +176,7 @@ export default {
 
     // Utilizador togglou dark/light — guarda preferência local
     function onToggleDark (novoValor) {
-      const lojaId = route.params.id
+      const lojaId = idDaLoja(route.params.id)
       if (!route.query.preview) {
         localStorage.setItem(`user_dark_${lojaId}`, JSON.stringify({ valor: novoValor, base: darkModeBase }))
       }
@@ -192,11 +199,14 @@ export default {
     }
 
     onMounted(() => {
-      resolveTemplate(route.params.id)
+      resolveTemplate(route.params.id === DEMO_ID ? DEMO_ID : idDaLoja(route.params.id))
       window.addEventListener('message', onPreviewMessage)
     })
     onUnmounted(() => window.removeEventListener('message', onPreviewMessage))
-    watch(() => route.params.id, id => { if (id) resolveTemplate(id) })
+    watch(() => route.params.id, (id, antes) => {
+      // a troca /loja/7 → /loja/bom-sabor (mesma loja) não recarrega
+      if (id && idDaLoja(id) !== idDaLoja(antes)) resolveTemplate(idDaLoja(id))
+    })
 
     return { loadingTemplate, templateComponent, temaActivo, onToggleDark, indisponivel }
   },

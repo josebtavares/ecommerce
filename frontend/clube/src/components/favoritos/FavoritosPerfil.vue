@@ -80,6 +80,7 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { caminhoLoja } from '@/utils/enderecoLoja'
 import api from '@/services/api'
 import { favoritos, garantirFavoritos } from '@/services/favoritos'
 import BotaoFavorito from '@/components/favoritos/BotaoFavorito.vue'
@@ -125,13 +126,13 @@ function preco (v) {
 function abrirProduto (f) {
   if (!f.disponivel) return
   emit('fechar')
-  router.push({ path: `/loja/${f.loja.id}`, query: { produto: f.produto.id } })
+  router.push(caminhoLoja(f.loja, { produto: f.produto.id }))
 }
 
 function abrirLoja (f) {
   if (!f.disponivel) return
   emit('fechar')
-  router.push(`/loja/${f.loja.id}`)
+  router.push(caminhoLoja(f.loja))
 }
 
 watch(tipo, () => { lista.value = []; carregar() })
