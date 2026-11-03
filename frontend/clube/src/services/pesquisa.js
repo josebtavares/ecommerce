@@ -2,6 +2,7 @@
 //  · procurar(q, opcoes)  → resultados; cancela o pedido anterior ainda a correr e guarda os últimos 30 (60 s)
 //  · recentes / guardarRecente / limparRecentes → pesquisas recentes, só neste browser
 import api from '@/services/api'
+import { caminhoLoja } from '@/utils/enderecoLoja'
 
 const MEMORIA_MS = 60 * 1000
 const memoria = new Map()            // chave → { quando, dados }
@@ -83,9 +84,9 @@ export function destacar (texto, q) {
 
 // para onde vai cada resultado
 export function destino (tipo, r) {
-  if (tipo === 'loja') return `/loja/${r.id}`
-  if (tipo === 'produto') return { path: `/loja/${r.loja.id}`, query: { produto: r.id } }
-  if (tipo === 'servico') return { path: `/loja/${r.loja.id}`, query: { servico: r.id } }
+  if (tipo === 'loja') return caminhoLoja(r)
+  if (tipo === 'produto') return caminhoLoja(r.loja, { produto: r.id })
+  if (tipo === 'servico') return caminhoLoja(r.loja, { servico: r.id })
   if (tipo === 'categoria') return { path: '/Home', query: { categoria: r.valor } }   // a home filtra o catálogo
   return { path: '/pesquisa', query: { q: r } }
 }

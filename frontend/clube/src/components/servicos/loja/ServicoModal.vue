@@ -301,7 +301,7 @@ export default {
       if (!this.autenticado) {
         sessionStorage.setItem(GUARDADO, JSON.stringify({ loja: String(this.lojaId), servico: this.servico.id, prof: this.profId, dia: this.dia,
                                                          inicio: this.escolhida, notas: this.notas, pagamento: this.pagamento }))
-        this.$router.push({ name: 'Login', query: { seguinte: `/loja/${this.lojaId}?servico=${this.servico.id}` } })
+        this.$router.push({ name: 'Login', query: { seguinte: `${this.$route.name === 'Loja' ? this.$route.path : `/loja/${this.lojaId}`}?servico=${this.servico.id}` } })
         return
       }
       this.erro = ''; this.aMarcar = true

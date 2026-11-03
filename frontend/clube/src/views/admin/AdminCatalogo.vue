@@ -99,7 +99,7 @@
                   class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold transition">
                   {{ aAvisar ? 'A avisar…' : 'Avisar a loja' }}
                 </button>
-                <a :href="`/loja/${l.id}`" target="_blank" rel="noopener"
+                <a :href="`/loja/${l.slug || l.id}`" target="_blank" rel="noopener"
                   class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition">
                   Ver loja pública <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" class="ml-1" />
                 </a>

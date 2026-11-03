@@ -27,6 +27,8 @@ const PaginaPesquisa = () => import('./views/Pesquisa.vue');
 import POSRegister from '@/views/pos/POSRegister.vue'
 import POSLogin from '@/views/pos/POSLogin.vue'
 import { esperarConta } from '@/services/confirmarEmail'
+import { resolverLoja } from '@/utils/enderecoLoja'
+import { DEMO_ID } from '@/utils/demoLoja'
 const POSDashboard = () => import('@/views/pos/POSDashboard.vue')
 
 
@@ -224,6 +226,17 @@ const router = createRouter({
         }
     },
 });
+
+// Página da loja: /loja/<slug>. /loja/<id> e endereços antigos resolvem-se e trocam para o actual
+// (mantém ?produto=, ?servico=, ?preview=…). Uma loja que não existe segue e a página mostra "não encontrada".
+router.beforeEach(async (to) => {
+    if (to.name !== 'Loja' || to.params.id === DEMO_ID) return true
+    const r = await resolverLoja(to.params.id)
+    if (r && r.slug && r.slug !== to.params.id) {
+        return { name: 'Loja', params: { id: r.slug }, query: to.query, hash: to.hash, replace: true }
+    }
+    return true
+})
 
 router.beforeEach((to, from, next) => {
     // Páginas do POS: precisam da sessão do POS (dono ou membro) — independente da Bendi

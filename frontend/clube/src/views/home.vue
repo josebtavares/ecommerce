@@ -126,7 +126,7 @@
             </h3>
             <ul class="space-y-2">
               <li v-for="store in storesByCategory" :key="store.id"
-                  @click="goToStore(store.id)"
+                  @click="goToStore(store)"
                   class="flex items-center gap-3 p-2 rounded-xl cursor-pointer transition"
                   :class="isDark ? 'hover:bg-zinc-800' : 'hover:bg-stone-100'">
                 <img v-if="store.logo_url" v-img :src="$miniatura(store.logo_url)" :alt="store.nome"
@@ -269,7 +269,7 @@
                        : ['py-4 px-6 md:px-12', isDark ? 'bg-zinc-900/50' : 'bg-white']">
               <StoreSlider v-if="sec.conteudo === 'lojas'" :title="g.titulo" :icon="iconeCategoria(null, g.chave)"
                 :inicial="g.pagina" :endpoint="endpointSeccao(sec.id)" :params="{ grupo: g.chave }"
-                :isDark="isDark" @store-click="goToStore($event.id)" />
+                :isDark="isDark" @store-click="goToStore($event)" />
               <ProductSlider v-else :title="g.titulo"
                 :inicial="g.pagina" :endpoint="endpointSeccao(sec.id)" :params="{ grupo: g.chave }"
                 :isDark="isDark" @product-click="openProduct($event)" />
@@ -280,7 +280,7 @@
           <section v-else-if="sec.tipo === 'lojas'" class="py-8 px-6 md:px-12">
             <StoreSlider :title="sec.titulo || 'Lojas'" :subtitle="sec.subtitulo || ''"
               :inicial="sec.pagina" :endpoint="endpointSeccao(sec.id)"
-              :isDark="isDark" @store-click="goToStore($event.id)" />
+              :isDark="isDark" @store-click="goToStore($event)" />
           </section>
 
           <!-- Produtos -->
@@ -294,7 +294,7 @@
           <!-- Loja em destaque -->
           <section v-else-if="sec.tipo === 'loja_destaque'" class="py-8 px-6 md:px-12">
             <HomeLojaDestaque :loja="sec.loja" :produtos="sec.produtos" :servicos="sec.servicos || []" :titulo="sec.titulo" :subtitulo="sec.subtitulo"
-              :isDark="isDark" @store-click="goToStore($event.id)" @product-click="openProduct($event)" />
+              :isDark="isDark" @store-click="goToStore($event)" @product-click="openProduct($event)" />
           </section>
 
           <!-- Categorias -->
@@ -329,7 +329,7 @@
             <h2 class="text-2xl md:text-3xl font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">Explorar Lojas</h2>
             <p class="mt-1 text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Pesquisa e filtra todas as lojas da plataforma</p>
           </div>
-          <StoreCatalog ref="catalogo" :isDark="isDark" :categorias="categoriasExistentes" @store-click="goToStore($event.id)" />
+          <StoreCatalog ref="catalogo" :isDark="isDark" :categorias="categoriasExistentes" @store-click="goToStore($event)" />
         </section>
 
         <!-- ── FOOTER (Suporte/Legal/Contactos/titular: components/paginas/SiteRodape.vue) ── -->
@@ -379,6 +379,7 @@ import api, { terminarSessao } from '@/services/api'
 import { DEFAULT_BANNER, DEFAULT_PRODUTO } from '@/services/media'
 import { iconeCategoria } from '@/utils/icones'
 import { temaEscuro, guardarTema } from '@/utils/tema'
+import { caminhoLoja } from '@/utils/enderecoLoja'
 
 export default {
   name: 'AppHome',
@@ -431,7 +432,7 @@ export default {
   },
 
   methods: {
-    goToStore (id) { this.sidebarAberta = false; this.$router.push(`/loja/${id}`) },
+    goToStore (loja) { this.sidebarAberta = false; this.$router.push(caminhoLoja(loja)) },   // {id, slug} ou só o id
 
     openProduct (produto) { this.selectedProduct = produto; this.selectedLoja = produto.loja },
     iconeCategoria,
@@ -463,7 +464,7 @@ export default {
     retomarHero (id) { this.heroRefs[id]?.swiper?.autoplay.start() },
 
     abrirSlide (slide) {
-      if (slide.tipo === 'loja') this.goToStore(slide.id)
+      if (slide.tipo === 'loja') this.goToStore(slide.slug ? slide : slide.id)
       else if (slide.tipo === 'produto' && slide.produto) this.openProduct(slide.produto)
       else if (slide.link) this.abrirLink(slide.link)
     },

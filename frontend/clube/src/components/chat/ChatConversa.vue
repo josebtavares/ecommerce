@@ -71,7 +71,7 @@
               <font-awesome-icon :icon="['fas', 'ban']" class="mr-1" />Mensagem apagada
             </p>
             <template v-else>
-              <router-link v-if="m.produto" :to="`/loja/${m.produto.loja_id}`"
+              <router-link v-if="m.produto" :to="`/loja/${m.produto.loja_slug || m.produto.loja_id}`"
                            class="flex items-center gap-2 mb-1.5 p-1.5 rounded-xl"
                            :class="m.minha ? 'bg-black/15' : (isDark ? 'bg-zinc-900' : 'bg-gray-50')">
                 <img v-if="m.produto.imagem" :src="m.produto.imagem" alt="" class="h-10 w-10 rounded-lg object-cover flex-shrink-0" />
