@@ -5,10 +5,14 @@
   <div class="flex flex-wrap items-center gap-2 text-xs" data-teste="fatura-bende">
     <template v-if="fatura && !modo">
       <span class="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">Faturada</span>
-      <a v-if="fatura.pdf_url" :href="urlFicheiro(fatura.pdf_url)" target="_blank" rel="noopener" class="text-zinc-200 underline">{{ fatura.numero }}</a>
-      <span v-else class="text-zinc-200">{{ fatura.numero }}</span>
-      <button type="button" @click="abrir('substituir')" class="text-zinc-400 hover:text-zinc-200 underline">Substituir</button>
-      <button type="button" @click="abrir('anular')" data-teste="fatura-bende-anular" class="text-zinc-500 hover:text-red-400 underline">Anular</button>
+      <span class="text-zinc-200 font-semibold">{{ fatura.numero }}</span>
+      <BotaoPdf v-if="fatura.pdf_url" :href="urlFicheiro(fatura.pdf_url)" titulo="Descarregar a fatura (PDF)" teste="fatura-bende-pdf" />
+      <button type="button" @click="abrir('substituir')" data-teste="fatura-bende-substituir"
+        class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold transition">
+        <font-awesome-icon :icon="['fas', 'arrows-rotate']" />Substituir</button>
+      <button type="button" @click="abrir('anular')" data-teste="fatura-bende-anular"
+        class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 font-semibold transition">
+        <font-awesome-icon :icon="['fas', 'ban']" />Anular</button>
     </template>
     <button v-else-if="!modo" type="button" @click="abrir('registar')" data-teste="registar-fatura-bende"
       class="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-semibold">Registar fatura</button>
@@ -32,9 +36,11 @@
 <script>
 import api from '@/services/api'
 import { urlFicheiro } from '@/utils/documentos'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 
 export default {
   name: 'RegistarFaturaBende',
+  components: { BotaoPdf },
   props: {
     fatura: { type: Object, default: null },
     url:    { type: String, required: true },

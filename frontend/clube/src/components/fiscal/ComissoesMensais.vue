@@ -26,14 +26,16 @@
             class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold">
             <font-awesome-icon :icon="['fas', aberto === m.mes ? 'chevron-up' : 'list']" class="mr-1" />Vendas
           </button>
-          <button type="button" @click="extrato(m)" class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold">
-            <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Extrato
-          </button>
-          <a v-if="m.fatura" :href="m.fatura.pdf_url ? urlFicheiro(m.fatura.pdf_url) : null" target="_blank" rel="noopener"
-            class="px-3 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-400 text-xs font-semibold">
-            <font-awesome-icon :icon="['fas', 'file-invoice']" class="mr-1" />Fatura {{ m.fatura.numero }}
-          </a>
-          <span v-else class="text-[11px] text-zinc-500">Fatura em breve</span>
+          <SecaoDocumento rotulo="Extrato do mês">
+            <BotaoPdf texto="Extrato" titulo="Descarregar o extrato das comissões (PDF)" teste="comissoes-extrato" @click="extrato(m)" />
+          </SecaoDocumento>
+          <SecaoDocumento tipo="fatura">
+            <template v-if="m.fatura">
+              <span class="text-xs text-green-400 font-semibold" data-teste="comissoes-fatura-numero">{{ m.fatura.numero }}</span>
+              <BotaoPdf v-if="m.fatura.pdf_url" :href="urlFicheiro(m.fatura.pdf_url)" titulo="Descarregar a fatura do Bende (PDF)" teste="comissoes-fatura-pdf" />
+            </template>
+            <span v-else class="text-[11px] text-zinc-500">Em breve</span>
+          </SecaoDocumento>
           <DiferencaComissoes :item="m" />
         </div>
 
@@ -76,6 +78,8 @@
 
 <script>
 import api from '@/services/api'
+import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarPdf, urlFicheiro } from '@/utils/documentos'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
@@ -84,7 +88,7 @@ import EstadoCobrancaMes from '@/components/fiscal/EstadoCobrancaMes.vue'
 
 export default {
   name: 'ComissoesMensais',
-  components: { DiferencaComissoes, EstadoCobrancaMes, PaginacaoLista },
+  components: { SecaoDocumento, BotaoPdf, DiferencaComissoes, EstadoCobrancaMes, PaginacaoLista },
   props: {
     lojaId: { type: [String, Number], required: true },
     versao: { type: Number, default: 0 },     // muda → volta a ler a página aberta (fatura do Bende registada/anulada)

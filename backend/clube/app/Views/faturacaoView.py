@@ -21,6 +21,10 @@ Admin (gerir_faturacao):
   GET  /app/admin/faturacao/vendas.csv?loja=|pos=&origem=&de=&ate=   vendas com as faturas (para a DNRE)
   GET  /app/admin/faturacao/bende/?de=AAAA-MM&ate=&q=&por_faturar=   o que o Bende tem de faturar, agrupado por loja (+ POS)
   GET  /app/admin/faturacao/exportar/<loja|pos>/<id>/?de=&ate=       ZIP para a DNRE (CSVs + todos os PDFs)
+                                                            (mais de MAX_VENDAS_ZIP vendas → 202, vai para a fila)
+  GET  /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM    ZIP do Bende: mensalidades, comissões e cobranças
+                                                            pagas de todas as lojas/POS (mais de MAX_DOCS_ZIP → fila)
+  (arquivos preparados na fila: Views/arquivoFiscalView.py)
   POST/DELETE /app/admin/faturacao/subscricoes/<id>/fatura/            fatura do Bende de uma mensalidade
               (substituir e DELETE pedem {motivo}: a anterior fica anulada no HistoricoFatura, nada se apaga)
   POST/DELETE /app/admin/faturacao/comissoes/<loja>/<AAAA-MM>/fatura/   fatura do Bende das comissões do mês
@@ -1014,7 +1018,7 @@ def admin_exportar(request, tipo, id):
         obj = get_object_or_404(ConfiguracaoPOS, id=id)
     else:
         return Response({'detail': 'Tipo inválido.'}, status=status.HTTP_400_BAD_REQUEST)
-    return arquivo_zip(request, obj, tipo, de, ate)
+    return arquivo_zip(request, obj, tipo, de, ate, origem='admin', pedido_por=request.user)
 
 
 def _grupos_arquivo(obj, tipo, de, ate):
@@ -1022,13 +1026,16 @@ def _grupos_arquivo(obj, tipo, de, ate):
     return [(o, _vendas_qs(o, de, ate, **filtro)) for o in (fv.ORIGENS if tipo == 'loja' else ('pos',))]
 
 
-def arquivo_zip(request, obj, tipo, de, ate, com_bende=True):
+def arquivo_zip(request, obj, tipo, de, ate, com_bende=True, origem='admin', pedido_por=None, nome=''):
     """O ZIP do arquivo fiscal de uma loja/POS no período (admin e a própria loja).
-    com_bende=False: sem os documentos do Bende (a equipa do POS não vê a subscrição do dono)."""
+    com_bende=False: sem os documentos do Bende (a equipa do POS não vê a subscrição do dono).
+    Com mais de MAX_VENDAS_ZIP vendas não se faz na hora: vai para a fila do worker (utils/arquivo_fiscal.py),
+    que avisa (notificação + email) quando estiver pronto → 202 com o pedido."""
     n = sum(qs.count() for _, qs in _grupos_arquivo(obj, tipo, de, ate))
     if n > MAX_VENDAS_ZIP:
-        return Response({'detail': f'O período tem {n} vendas — escolhe um período com até {MAX_VENDAS_ZIP}.'},
-                        status=status.HTTP_400_BAD_REQUEST)
+        from ..utils import arquivo_fiscal as af
+        return af.pedir_resposta(tipo, obj, de, ate, com_bende, origem, pedido_por, nome,
+                                 f'O período tem {n} vendas')
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         escrever_arquivo(zf, obj, tipo, de, ate, com_bende, request)
@@ -1114,6 +1121,11 @@ def escrever_arquivo(zf, obj, tipo, de, ate, com_bende=True, request=None, prefi
             linhas.append([f'C-{obj.id}-{mes:%Y%m}', 'Comissões do mês', f'{m["comissoes"]} venda(s)', f'{mes:%m/%Y}',
                            m['total'].replace('.', ','), fc.fatura_numero if fc else '',
                            HistoricoFatura.objects.filter(tipo='comissoes', loja=obj, mes=mes, anulada_em__isnull=False).count()])
+    if tipo == 'loja' and com_bende:
+        for c in _cobrancas_pagas(de, ate + timedelta(days=1) if ate else None).filter(loja=obj):
+            zf.writestr(f'bende/cobrancas/CC-{c.id}/comprovativo-CC-{c.id}.pdf', documentos.pdf_comprovativo_cobranca(c))
+            linhas.append([f'CC-{c.id}', 'Cobrança de comissões (paga)', f'Comissões até {c.mes:%m/%Y} · {c.get_metodo_display()}',
+                           _quando(c.paga_em), f'{c.valor:.2f}'.replace('.', ','), '', 0])
     if com_bende:
         zf.writestr('bende/documentos-do-bende.csv', _csv(linhas))
 
@@ -1128,12 +1140,132 @@ def escrever_arquivo(zf, obj, tipo, de, ate, com_bende=True, request=None, prefi
         'vendas-pos.csv, vendas-pos/V-<nº>/   contas fechadas do POS (os POS ligados, numa loja) com a fatura',
         'bende/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) do Bende',
         'bende/comissoes/C-…/         extrato mensal das comissões + fatura(s) do Bende',
+        'bende/cobrancas/CC-<nº>/     comprovativo do pagamento das comissões (cobrança mensal)',
         '', 'Os comprovativos e extratos são documentos internos e não substituem a fatura.',
     ]
     if faltas:
         leia += ['', 'Ficheiros em falta:'] + faltas
     zf.writestr('LEIA-ME.txt', '\r\n'.join(leia))
     return faltas
+
+
+MAX_DOCS_ZIP = 300        # documentos do Bende num ZIP feito na hora; acima disto vai para a fila
+
+
+def _cobrancas_pagas(de=None, ate_excl=None):
+    """Cobranças de comissões pagas (com dinheiro: as perdoadas não têm comprovativo) com paga_em no período."""
+    from ..models import CobrancaComissoes
+    qs = CobrancaComissoes.objects.filter(estado='paga', valor__gt=0).exclude(metodo='oferta').select_related('loja')
+    if de:
+        qs = qs.filter(paga_em__date__gte=de)
+    if ate_excl:
+        qs = qs.filter(paga_em__date__lt=ate_excl)
+    return qs.order_by('paga_em')
+
+
+def _slug(texto):
+    return re.sub(r'[^\w-]+', '-', (texto or '').lower()).strip('-')[:40] or 'sem-nome'
+
+
+def contar_docs_bende(ini, fim):
+    return sum(len(v) for v in _docs_bende(ini, fim).values()) + _cobrancas_pagas(ini, fim).count()
+
+
+def escrever_arquivo_bende(zf, ini, fim):
+    """Arquivo do Bende (mensalidades e comissões de todas as lojas e POS) dos meses [ini, fim). Uma pasta por
+    loja/POS. Devolve os ficheiros que faltaram no armazenamento."""
+    grupos = _docs_bende(ini, fim)
+    lojas = {l.id: l for l in Loja.objects.filter(id__in=[i for t, i in grupos if t == 'loja'] +
+                                                  list(_cobrancas_pagas(ini, fim).values_list('loja_id', flat=True)))}
+    poss = {p.id: p for p in ConfiguracaoPOS.objects.filter(id__in=[i for t, i in grupos if t == 'pos'])}
+    faltas = []
+    cab = ['Loja/POS', 'Tipo', 'NIF', 'Documento', 'Descrição', 'Data', 'Valor (CVE)', 'Fatura do Bende nº', 'Faturas anuladas']
+    linhas, por_faturar = [cab], [cab]
+
+    def pasta_de(t, i):
+        obj = lojas.get(i) if t == 'loja' else poss.get(i)
+        return obj, f'{"lojas" if t == "loja" else "pos"}/{i}-{_slug(obj.nome if obj else "")}'
+
+    for (t, i), docs in sorted(grupos.items(), key=lambda g: ((lojas.get(g[0][1]) if g[0][0] == 'loja' else poss.get(g[0][1])) or Loja(nome='')).nome.lower()):
+        obj, base = pasta_de(t, i)
+        if not obj:
+            continue
+        for d in docs:
+            if d['tipo'] == 'mensalidade':
+                f = FaturaSubscricao.objects.select_related('loja', 'pos', 'plano').get(pk=d['id'])
+                pasta = f'{base}/mensalidades/{d["referencia"]}'
+                zf.writestr(f'{pasta}/comprovativo-{d["referencia"]}.pdf', documentos.pdf_comprovativo_subscricao(f))
+                _juntar_faturas(zf, pasta, f, faltas)
+                desc, data = f'Mensalidade · {d["alvo"]} · {d["titulo"]}', _quando(f.paga_em)
+            else:
+                mes = _mes(d['mes'])
+                pasta = f'{base}/comissoes/{d["referencia"]}'
+                zf.writestr(f'{pasta}/extrato-{d["referencia"]}.pdf', documentos.pdf_extrato_comissoes(obj, mes))
+                for h in HistoricoFatura.objects.filter(tipo='comissoes', loja=obj, mes=mes):
+                    if h.pdf:
+                        _juntar_pdf(zf, f'{pasta}/{"anulada" if h.anulada_em else "fatura"}-{_nome_ficheiro(h.numero)}-{h.id}.pdf',
+                                    h.pdf.name, faltas)
+                desc, data = f'Comissões do mês · {d["comissoes"]} venda(s)', f'{mes:%m/%Y}'
+            linha = [obj.nome, 'Loja' if t == 'loja' else 'POS', obj.nif or '', d['referencia'], desc, data,
+                     d['valor'].replace('.', ','), (d['fatura'] or {}).get('numero', ''), d['anuladas']]
+            linhas.append(linha)
+            if not d['fatura'] or d.get('diferenca'):
+                por_faturar.append(linha)
+    for c in _cobrancas_pagas(ini, fim):
+        obj, base = pasta_de('loja', c.loja_id)
+        zf.writestr(f'{base}/cobrancas/CC-{c.id}/comprovativo-CC-{c.id}.pdf', documentos.pdf_comprovativo_cobranca(c))
+        linhas.append([c.loja.nome, 'Loja', c.loja.nif or '', f'CC-{c.id}',
+                       f'Cobrança de comissões paga (até {c.mes:%m/%Y}) · {c.get_metodo_display()}', _quando(c.paga_em),
+                       f'{c.valor:.2f}'.replace('.', ','), '', 0])
+    zf.writestr('documentos-do-bende.csv', _csv(linhas))
+    zf.writestr('por-faturar.csv', _csv(por_faturar))
+    ultimo = fim - timedelta(days=1)
+    leia = [
+        f'Arquivo do Bende — mensalidades e comissões de {ini:%m/%Y} a {ultimo:%m/%Y}. Gerado a {_quando(timezone.now())}.', '',
+        'documentos-do-bende.csv          todos os documentos (loja/POS, NIF, valor, nº da fatura do Bende)',
+        'por-faturar.csv                  os que ainda não têm fatura do Bende (ou cuja fatura já não bate certo)',
+        'lojas/<id>-<nome>/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) do Bende (dos POS ligados também)',
+        'lojas/<id>-<nome>/comissoes/C-…/         extrato mensal das comissões + fatura(s) do Bende',
+        'lojas/<id>-<nome>/cobrancas/CC-<nº>/     comprovativo do pagamento das comissões',
+        'pos/<id>-<nome>/mensalidades/S-<nº>/     POS sem loja: comprovativo + fatura(s) do Bende',
+        '', 'Faturas registadas só com o número (sem PDF) aparecem no CSV mas não têm ficheiro.',
+        'Os comprovativos e extratos são documentos internos e não substituem a fatura.',
+    ]
+    if faltas:
+        leia += ['', 'Ficheiros em falta:'] + faltas
+    zf.writestr('LEIA-ME.txt', '\r\n'.join(leia))
+    return faltas
+
+
+def zip_resposta(nome, escrever):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        escrever(zf)
+    r = HttpResponse(buf.getvalue(), content_type='application/zip')
+    r['Content-Disposition'] = f'attachment; filename="{nome}"'
+    return r
+
+
+def nome_arquivo_bende(ini, fim):
+    return f'arquivo-bende-{ini:%Y-%m}-a-{(fim - timedelta(days=1)):%Y-%m}.zip'
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_bende_arquivo(request):
+    """GET /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM — ZIP do Bende (na hora, ou 202 = fila)."""
+    erro = _exige_admin(request, 'gerir_faturacao')
+    if erro:
+        return erro
+    ini, fim = _intervalo_meses(request)
+    if not ini:
+        return Response({'detail': 'Escolhe no máximo 24 meses.'}, status=status.HTTP_400_BAD_REQUEST)
+    n = contar_docs_bende(ini, fim)
+    if n > MAX_DOCS_ZIP:
+        from ..utils import arquivo_fiscal as af
+        return af.pedir_resposta('bende', None, ini, fim - timedelta(days=1), True, 'admin', request.user, '',
+                                 f'O período tem {n} documentos')
+    return zip_resposta(nome_arquivo_bende(ini, fim), lambda zf: escrever_arquivo_bende(zf, ini, fim))
 
 
 def _registar(request, obj):

@@ -113,7 +113,7 @@ def exportar(request, loja_id):
     de, ate, erro = fat._datas(request)
     if erro:
         return erro
-    return fat.arquivo_zip(request, loja, 'loja', de, ate)
+    return fat.arquivo_zip(request, loja, 'loja', de, ate, origem='loja', pedido_por=request.user)
 
 
 @api_view(['GET'])

@@ -63,6 +63,8 @@ urlpatterns = [
     path('<int:pos_id>/faturacao/vendas/',     views_faturacao.vendas,     name='pos_faturacao_vendas'),
     path('<int:pos_id>/faturacao/vendas.csv',  views_faturacao.vendas_csv, name='pos_faturacao_vendas_csv'),
     path('<int:pos_id>/faturacao/exportar/',   views_faturacao.exportar,   name='pos_faturacao_exportar'),
+    path('<int:pos_id>/faturacao/arquivos/',   views_faturacao.arquivos,   name='pos_faturacao_arquivos'),
+    path('<int:pos_id>/faturacao/arquivos/<int:aid>/descarregar/', views_faturacao.arquivo_descarregar, name='pos_faturacao_arquivo_descarregar'),
     path('<int:pos_id>/faturacao/pesquisa/',   views_faturacao.pesquisa,   name='pos_faturacao_pesquisa'),
     path('<int:pos_id>/faturacao/historico/',  views_faturacao.historico,  name='pos_faturacao_historico'),
 

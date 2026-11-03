@@ -10,6 +10,27 @@ export async function descarregarPdf (url, nome, params = {}) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000)
 }
 
+// arquivo fiscal (ZIP): na hora, ou — período grande — 202 = vai ser preparado em segundo plano
+// (backend utils/arquivo_fiscal.py). Devolve { emFila, detail } para a página mostrar o aviso e a lista.
+export async function descarregarArquivo (url, nome, params = {}) {
+  const r = await api.get(url, { responseType: 'blob', params })
+  if (r.status === 202) {
+    const data = JSON.parse(await r.data.text())
+    return { emFila: true, detail: data.detail, arquivo: data.arquivo }
+  }
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(r.data)
+  a.download = nome
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+  return { emFila: false }
+}
+
+// erro de um pedido com responseType blob: o JSON do detail vem dentro do blob
+export async function erroDeBlob (e, padrao) {
+  try { return JSON.parse(await e.response.data.text()).detail || padrao } catch { return padrao }
+}
+
 // comprovativo de uma mensalidade paga (loja, POS ou admin)
 export function descarregarComprovativoSubscricao (f) {
   return descarregarPdf(`/app/subscricao/faturas/${f.id}/comprovativo/`, `comprovativo-subscricao-${f.id}.pdf`)

@@ -13,9 +13,16 @@
           </p>
         </div>
         <span class="text-sm font-bold text-zinc-100">{{ dinheiro(f.valor) }}</span>
-        <button type="button" @click="descarregarComprovativoSubscricao(f)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
         <button type="button" @click="aberto = aberto === f.referencia ? '' : f.referencia" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Histórico</button>
-        <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="d => atualizado(f, d)" />
+        <!-- documento interno e fatura legal em caixas separadas, lado a lado -->
+        <div class="w-full flex flex-wrap items-center gap-2" data-teste="documentos-linha">
+          <SecaoDocumento>
+            <BotaoPdf texto="Comprovativo" titulo="Descarregar o comprovativo da mensalidade (PDF)" @click="descarregarComprovativoSubscricao(f)" />
+          </SecaoDocumento>
+          <SecaoDocumento tipo="fatura">
+            <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="d => atualizado(f, d)" />
+          </SecaoDocumento>
+        </div>
       </div>
       <HistoricoFatura v-if="aberto === f.referencia" :key="f.referencia + versao" :referencia="f.referencia" />
     </div>
@@ -24,13 +31,15 @@
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
+import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import { descarregarComprovativoSubscricao } from '@/utils/documentos'
 import HistoricoFatura from './HistoricoFatura.vue'
 import RegistarFaturaBende from './RegistarFaturaBende.vue'
 
 export default {
   name: 'ListaMensalidades',
-  components: { HistoricoFatura, RegistarFaturaBende },
+  components: { SecaoDocumento, BotaoPdf, HistoricoFatura, RegistarFaturaBende },
   props: {
     mensalidades: { type: Array, required: true },
     mostrarAlvo:  { type: Boolean, default: true },     // "POS X (código) ·" nas mensalidades dos POS

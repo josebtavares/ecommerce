@@ -15,10 +15,12 @@
     <div v-if="documento.fatura && !modo" class="flex flex-wrap items-center gap-2 text-xs">
       <span :class="c.faturada">Faturada</span>
       <span :class="c.numero" data-teste="fatura-numero">{{ documento.fatura.numero }}</span>
-      <a v-if="documento.fatura.pdf_url" :href="urlFicheiro(documento.fatura.pdf_url)" target="_blank" rel="noopener" :class="c.link">Ver PDF</a>
+      <BotaoPdf v-if="documento.fatura.pdf_url" :href="urlFicheiro(documento.fatura.pdf_url)" titulo="Descarregar a fatura (PDF)" :claro="tema === 'claro'" teste="fatura-pdf" />
       <span class="flex-1"></span>
-      <button v-if="!cancelada" type="button" @click="abrir('substituir')" data-teste="fatura-substituir" :class="c.acao">Substituir</button>
-      <button type="button" @click="abrir('anular')" data-teste="fatura-anular" :class="c.anular">Anular</button>
+      <button v-if="!cancelada" type="button" @click="abrir('substituir')" data-teste="fatura-substituir" :class="c.acao">
+        <font-awesome-icon :icon="['fas', 'arrows-rotate']" />Substituir</button>
+      <button type="button" @click="abrir('anular')" data-teste="fatura-anular" :class="c.anular">
+        <font-awesome-icon :icon="['fas', 'ban']" />Anular</button>
       <p v-if="cancelada" :class="['w-full text-[11px]', c.aviso]" data-teste="fatura-cancelada">
         Venda cancelada depois de faturada: emite a nota de crédito no e-Fatura e anula aqui a fatura (com esse motivo).
       </p>
@@ -65,6 +67,7 @@
 <script>
 import api from '@/services/api'
 import { urlFicheiro } from '@/utils/documentos'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 
 const TEMAS = {
   escuro: {
@@ -73,9 +76,8 @@ const TEMAS = {
     faturada: 'px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold',
     porFaturar: 'px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold',
     numero: 'text-zinc-200 font-semibold',
-    link: 'text-red-400 hover:text-red-300 underline',
-    acao: 'text-zinc-400 hover:text-zinc-200 underline',
-    anular: 'text-zinc-500 hover:text-red-400 underline',
+    acao: 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold transition',
+    anular: 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 font-semibold transition',
     suave: 'text-zinc-500',
     aviso: 'text-amber-300',
     erro: 'text-red-400',
@@ -92,9 +94,8 @@ const TEMAS = {
     faturada: 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-black',
     porFaturar: 'px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-black',
     numero: 'text-slate-950 font-black',
-    link: 'text-red-600 hover:text-red-700 underline font-bold',
-    acao: 'text-slate-500 hover:text-slate-900 underline font-semibold',
-    anular: 'text-slate-500 hover:text-red-600 underline font-semibold',
+    acao: 'inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-black transition',
+    anular: 'inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-black transition',
     suave: 'text-slate-500',
     aviso: 'text-amber-700',
     erro: 'text-red-600 font-semibold',
@@ -109,6 +110,7 @@ const TEMAS = {
 
 export default {
   name: 'FaturaVenda',
+  components: { BotaoPdf },
   props: {
     documento: { type: Object, required: true },
     url:       { type: String, required: true },

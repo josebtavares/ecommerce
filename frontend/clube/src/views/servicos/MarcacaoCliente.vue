@@ -57,8 +57,8 @@
           <p v-if="m.notas_cliente" class="text-xs pt-1" :class="suave">A tua nota: {{ m.notas_cliente }}</p>
           <!-- a fatura que a loja emitiu e registou (também chega por email) -->
           <div v-if="m.fatura" class="flex justify-between gap-3 pt-1" data-teste="fatura-cliente"><span :class="suave">Fatura</span>
-            <span><b>{{ m.fatura.numero }}</b>
-              <a v-if="m.fatura.pdf_url" :href="urlFicheiro(m.fatura.pdf_url)" target="_blank" rel="noopener" class="ml-2 text-red-500 underline text-xs font-semibold">Ver PDF</a></span></div>
+            <span class="inline-flex items-center gap-2"><b>{{ m.fatura.numero }}</b>
+              <BotaoPdf v-if="m.fatura.pdf_url" :href="urlFicheiro(m.fatura.pdf_url)" texto="PDF" titulo="Descarregar a fatura (PDF)" :claro="!isDark" /></span></div>
           <p v-if="m.estado === 'cancelada'" class="text-xs pt-1" :class="suave">Cancelada{{ m.cancelada_por && m.cancelada_por !== 'Cliente' ? ' pela loja' : '' }}{{ m.cancelada_motivo ? ': ' + m.cancelada_motivo : '' }}</p>
         </div>
 
@@ -117,6 +117,7 @@ import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarComprovativoMarcacao, urlFicheiro } from '@/utils/documentos'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import { DIAS_CURTOS, diaDe, diaSemana, hojeCV, hora, rotuloDia, somarDias } from '@/utils/servicos'
 import MarcacaoConversa from '@/components/servicos/MarcacaoConversa.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
@@ -126,7 +127,7 @@ import { seguirPagamento } from '@/utils/pagamentoOnline'
 
 export default {
   name: 'MarcacaoCliente',
-  components: { MarcacaoConversa, NotificacaoSino },
+  components: { BotaoPdf, MarcacaoConversa, NotificacaoSino },
   data () {
     return { m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
              novoDia: null, horas: [], novaHora: null, versao: 0, isDark: temaEscuro(), DIAS_CURTOS }
