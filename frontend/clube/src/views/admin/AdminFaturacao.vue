@@ -102,10 +102,10 @@
         <form @submit.prevent="carregarBende(0)" class="flex flex-wrap items-end gap-2">
           <input v-model.trim="fb.q" type="search" placeholder="Loja, POS, NIF ou dono" aria-label="Pesquisar nas faturas do Bende" data-teste="bende-q"
             class="flex-1 min-w-[200px] px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-red-500" />
-          <label class="text-[11px] text-zinc-500">De <input type="month" v-model="fb.de" @change="carregarBende(0)" aria-label="Mês inicial" data-teste="bende-de"
-            class="ml-1 px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 [color-scheme:dark]" /></label>
-          <label class="text-[11px] text-zinc-500">a <input type="month" v-model="fb.ate" @change="carregarBende(0)" aria-label="Mês final" data-teste="bende-ate"
-            class="ml-1 px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 [color-scheme:dark]" /></label>
+          <span class="flex items-center gap-1.5 text-[11px] text-zinc-500">De
+            <SeletorMes v-model="fb.de" @change="carregarBende(0)" rotulo="Mês inicial" teste="bende-de" /></span>
+          <span class="flex items-center gap-1.5 text-[11px] text-zinc-500">a
+            <SeletorMes v-model="fb.ate" @change="carregarBende(0)" rotulo="Mês final" teste="bende-ate" /></span>
           <label class="flex items-center gap-1.5 text-xs text-zinc-400 px-1">
             <input type="checkbox" v-model="fb.por_faturar" @change="carregarBende(0)" class="accent-red-600" data-teste="bende-por-faturar" /> Só por faturar
           </label>
@@ -180,6 +180,7 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarArquivo, descarregarPdf, descarregarComprovativoSubscricao, erroDeBlob } from '@/utils/documentos'
 import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
+import SeletorMes from '@/components/fiscal/SeletorMes.vue'
 import FaturacaoFicha from './FaturacaoFicha.vue'
 import AbasVendedores from '@/components/fiscal/AbasVendedores.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
@@ -197,7 +198,7 @@ const LIMITE = 20
 
 export default {
   name: 'AdminFaturacao',
-  components: { AbasVendedores, ArquivosFiscais, DiferencaComissoes, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { AbasVendedores, ArquivosFiscais, SeletorMes, DiferencaComissoes, FaturacaoFicha, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   data () {
     const hoje = new Date()
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
