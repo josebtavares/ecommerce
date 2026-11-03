@@ -167,7 +167,7 @@ import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
 import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
 import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
-import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
+import { ouvirFaturacao, ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
 
 const TABS = [
   { key: 'vendedores', label: 'Vendedores' },
@@ -212,8 +212,10 @@ export default {
     if (m) this.abrirFicha(m[1], Number(m[2]), this.$route.query.aba || '')
     // mensalidade paga, fatura do Bende registada/anulada (aqui, em Subscrições ou por outro admin)
     this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal())
+    // fatura de uma venda registada/anulada pela loja ou pelo POS, venda nova por faturar
+    this.pararFaturacao = ouvirFaturacao(a => this.atualizarEmTempoReal(a, true))
   },
-  beforeUnmount () { this.pararTempoReal?.() },
+  beforeUnmount () { this.pararTempoReal?.(); this.pararFaturacao?.() },
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
     data (s) { return s ? new Date(s).toLocaleDateString('pt-PT') : '—' },
@@ -232,18 +234,28 @@ export default {
         if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar.'
       } finally { if (!silencioso) this.carregando = false }
     },
-    atualizarEmTempoReal () {
+    // aviso: { loja_id, pos_id } (null = vários juntos ou religou → tudo); venda: vem da faturação das vendas
+    atualizarEmTempoReal (aviso = null, venda = false) {
       this.carregarAbas()
-      if (this.ficha) this.atualizar++
-      else if (this.tab === 'bende' && this.bende) this.carregarBende(this.bOffset, true)
+      if (this.ficha) {
+        if (!aviso || this.daFicha(aviso)) this.atualizar++
+      } else if (venda) {
+        if (this.tab === 'vendedores') this.carregarVendedores(this.offset, true)
+      } else if (this.tab === 'bende' && this.bende) this.carregarBende(this.bOffset, true)
     },
-    carregarVendedores (offset = this.offset) {
+    // o aviso é desta ficha? loja: a própria ou um POS ligado; POS: o próprio
+    daFicha (a) {
+      const f = this.ficha
+      if (f.tipo === 'pos') return String(a.pos_id) === String(f.id)
+      return String(a.loja_id) === String(f.id) || (!a.loja_id && !!a.pos_id)
+    },
+    carregarVendedores (offset = this.offset, silencioso = false) {
       this.offset = offset
       return this.carregar(async () => {
         const params = { limit: LIMITE, offset }
         for (const [k, v] of Object.entries(this.fl)) if (v) params[k] = k === 'por_faturar' ? 1 : v
         this.vend = (await api.get('/app/admin/faturacao/vendedores/', { params })).data
-      })
+      }, silencioso)
     },
     pesquisar (offset = 0) {
       this.pOffset = offset

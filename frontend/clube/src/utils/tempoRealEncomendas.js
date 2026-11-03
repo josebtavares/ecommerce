@@ -4,10 +4,12 @@
 // verifica de 20 em 20 s.
 //   • encomendas e entregas (backend utils/tempo_real_encomendas.py): { id, loja_id }
 //   • mensalidades, subscrições e faturas do Bende (utils/tempo_real_subscricoes.py): { tipo, id, loja_id, pos_id }
+//   • faturas das vendas e vendas que passam a faturáveis (utils/tempo_real_faturacao.py): { origem, id, loja_id, pos_id }
 import { EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 
 export const EVENTO_ENCOMENDA = 'bendi:encomenda'
 export const EVENTO_SUBSCRICAO = 'bendi:subscricao'
+export const EVENTO_FATURACAO = 'bendi:faturacao'
 const SEM_LIGACAO_MS = 20000
 
 // fn(aviso | null) — null quando é para recarregar tudo (avisos diferentes juntos, religou, sem ligação).
@@ -37,3 +39,4 @@ export function ouvirAvisos (evento, fn, { filtro = () => true, espera = 400, se
 
 export function ouvirEncomendas (fn, opcoes) { return ouvirAvisos(EVENTO_ENCOMENDA, fn, opcoes) }
 export function ouvirSubscricoes (fn, opcoes) { return ouvirAvisos(EVENTO_SUBSCRICAO, fn, opcoes) }
+export function ouvirFaturacao (fn, opcoes) { return ouvirAvisos(EVENTO_FATURACAO, fn, opcoes) }
