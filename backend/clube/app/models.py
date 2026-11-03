@@ -1230,11 +1230,28 @@ def chat_upload(instance, filename):
     return f'chat/{now():%Y/%m}/{filename}'
 
 
+class ComissaoQuerySet(models.QuerySet):
+    def receita(self):
+        """As que contam como receita da Bende: sem as perdoadas (cobrança paga como oferta — não entrou dinheiro)."""
+        return self.exclude(cobranca__estado='paga', cobranca__metodo='oferta')
+
+
+class ComissaoManager(models.Manager.from_queryset(ComissaoQuerySet)):
+    """Comissao.objects: só as que valem (sem as anuladas) — todas as somas, listas, extratos e cobranças.
+    Comissao.todas: com as anuladas (lista do admin, que as mostra à parte)."""
+    def get_queryset(self):
+        return super().get_queryset().exclude(status='anulada')
+
+
 class Comissao(models.Model):
     STATUS = [
         ('pendente',   'Pendente'),    # registada, aguarda liquidacao
         ('liquidada',  'Liquidada'),   # paga ao administrador
+        ('anulada',    'Anulada'),     # não conta (registada por engano/teste) — nunca se apaga
     ]
+
+    objects = ComissaoManager()
+    todas = models.Manager.from_queryset(ComissaoQuerySet)()
  
     # PROTECT: comissões são registos financeiros
     encomenda        = models.OneToOneField(
@@ -1252,6 +1269,8 @@ class Comissao(models.Model):
     data_criacao     = models.DateTimeField(auto_now_add=True)
     data_liquidacao  = models.DateTimeField(null=True, blank=True)
     notas            = models.TextField(blank=True, default='')
+    anulada_em       = models.DateTimeField(null=True, blank=True)
+    anulada_por      = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     # cobrança mensal em que entrou (utils/cobranca_comissoes.py) — liquidada quando a loja a paga
     cobranca         = models.ForeignKey('CobrancaComissoes', on_delete=models.SET_NULL, null=True, blank=True,
                                          related_name='comissoes')
@@ -1278,7 +1297,7 @@ class Comissao(models.Model):
         valor_comissao = (valor * percentagem / 100).quantize(
             __import__('decimal').Decimal('0.01')
         )
-        comissao, criada = cls.objects.get_or_create(
+        comissao, criada = cls.todas.get_or_create(      # uma anulada também conta: não se regista outra
             encomenda=encomenda,
             defaults={
                 'loja':           loja,
@@ -2226,6 +2245,7 @@ class CobrancaComissoes(models.Model):
     registada_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     # avisos já enviados ('d3', 'd0', 'atraso') — o worker não os repete
     avisos          = models.JSONField(default=list, blank=True)
+    comprovativo_enviado_em = models.DateTimeField(null=True, blank=True)     # email com o comprovativo (só uma vez)
 
     class Meta:
         ordering = ['-mes', '-id']

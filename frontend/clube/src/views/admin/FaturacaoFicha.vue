@@ -196,7 +196,7 @@
             <div class="flex flex-wrap items-center gap-3">
               <div class="flex-1 min-w-[200px]">
                 <p class="text-sm font-semibold text-zinc-200">{{ nomeMes(c.mes) }} <span class="text-[11px] text-zinc-500 font-normal">· {{ c.referencia }}</span></p>
-                <p class="text-[11px] text-zinc-500">{{ c.comissoes }} venda(s)<template v-if="c.anuladas"> · <span class="text-red-300">{{ c.anuladas }} fatura(s) anulada(s)</span></template></p>
+                <p class="text-[11px] text-zinc-500">{{ c.comissoes }} venda(s) <EstadoCobrancaMes :cobranca="c.cobranca" /><template v-if="c.anuladas"> · <span class="text-red-300">{{ c.anuladas }} fatura(s) anulada(s)</span></template></p>
               </div>
               <span class="text-sm font-bold text-zinc-100">{{ dinheiro(c.total) }}</span>
               <button type="button" @click="extrato(c)" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Extrato</button>
@@ -221,6 +221,7 @@ import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ListaMensalidades from '@/components/fiscal/ListaMensalidades.vue'
 import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
 import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
+import EstadoCobrancaMes from '@/components/fiscal/EstadoCobrancaMes.vue'
 import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
 
 const LIMITE = 20
@@ -231,7 +232,7 @@ const origemDe = (ref, tipo) => tipo === 'pos' ? 'pos' : (/^[EMV]-/i.test(ref ||
 
 export default {
   name: 'FaturacaoFicha',
-  components: { DiferencaComissoes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   props: {
     tipo: { type: String, required: true },
     id:   { type: [Number, String], required: true },

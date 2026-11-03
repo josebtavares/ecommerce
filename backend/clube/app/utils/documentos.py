@@ -3,6 +3,7 @@ Documentos internos em PDF (reportlab), gerados na hora — não são faturas:
 - comprovativo de pagamento de uma encomenda (cliente);
 - comprovativo de pagamento de uma marcação paga online (cliente) — as pagas no local não passam pelo Bende;
 - comprovativo de pagamento de uma mensalidade da subscrição (dono da loja/POS);
+- comprovativo de pagamento de uma cobrança mensal de comissões (dono da loja);
 - extrato mensal das comissões de uma loja.
 As faturas legais saem do e-Fatura e são registadas à parte (utils/fiscal.py).
 """
@@ -277,6 +278,38 @@ def pdf_comprovativo_subscricao(f):
 
 
 # ── Comissões ──────────────────────────────────────────────────
+
+def nome_comprovativo_cobranca(c):
+    return f'comprovativo-comissoes-{c.id}.pdf'
+
+
+def pdf_comprovativo_cobranca(c):
+    from .cobranca_comissoes import meses_da_cobranca
+    loja = c.loja
+    p = _Pdf('Comprovativo de pagamento', f'CC-{c.id}', 'Comissões da loja na plataforma')
+    p.linha('Loja', loja.nome)
+    if loja.nif:
+        p.linha('NIF', loja.nif)
+    p.linha('Comissões até', f'{c.mes:%m/%Y}')
+    meses = meses_da_cobranca(c)
+    if meses:
+        p.seccao('Comissões incluídas')
+        p.tabela([('Mês', 40, 'l'), ('Vendas', 30, 'r'), ('Comissões', 50, 'r'), ('Fatura do Bende', 50, 'l')],
+                 [[m['mes'][5:] + '/' + m['mes'][:4], m['comissoes'], formatar(m['total']),
+                   (m['fatura'] or {}).get('numero') or 'por emitir'] for m in meses])
+    p.linha('Comissões', formatar(c.valor_comissoes))
+    if c.valor_creditos:
+        p.linha('Créditos de reembolsos', '-' + formatar(c.valor_creditos))
+    p.linha('Pago a', _data(c.paga_em))
+    p.linha('Método', c.get_metodo_display() if c.metodo else '—')
+    if c.referencia:
+        p.linha('Referência', c.referencia)
+    p.linha('Total pago', formatar(c.valor), destaque=True)
+    extra = 'As faturas do Bende das comissões de cada mês são emitidas no e-Fatura e chegam por email.'
+    if c.metodo == 'simulado':
+        extra = 'Pagamento simulado (ambiente de testes). ' + extra
+    return p.fim(extra)
+
 
 def comissoes_do_mes(loja, mes):
     """Comissões registadas no mês (mes = dia 1)."""

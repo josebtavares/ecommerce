@@ -146,7 +146,7 @@ def definicoes_filtros(nomes, ambito='admin', loja_id=None, pos_id=None):
                         'opcoes': _opcoes([('geradas', 'em que foi gerada'), ('liquidadas', 'de liquidação')])})
         elif n == 'estado_comissao':
             out.append({'nome': 'estado', 'label': 'Estado', 'tipo': 'select', 'todos': 'Todos',
-                        'opcoes': _opcoes(Comissao.STATUS)})
+                        'opcoes': _opcoes([x for x in Comissao.STATUS if x[0] != 'anulada'])})
         elif n == 'modelo':
             out.append({'nome': 'modelo', 'label': 'Modelo', 'tipo': 'select', 'todos': 'Comissão e subscrição',
                         'opcoes': _opcoes(Loja.MODELOS_COBRANCA)})
@@ -239,7 +239,7 @@ def _metodo_label():
 def _receita(f):
     from ..models import Comissao, CreditoComissao, FaturaSubscricao
     p = _periodo_agrupado(f)
-    com = _loja(f, Comissao.objects.all())
+    com = _loja(f, Comissao.objects.receita())         # sem anuladas nem perdoadas (oferta)
     fat = _loja(f, FaturaSubscricao.objects.filter(estado='paga').exclude(metodo='oferta'))
     cred = _loja(f, CreditoComissao.objects.all())
     c = rel.serie(com, 'data_criacao', p, t=Sum('valor_comissao'), n=Count('id'))
@@ -414,7 +414,7 @@ def _vendas_lojas(f):
     v = {x['loja_id']: x for x in rel.encomendas_vendidas(p).values('loja_id')
          .annotate(n=Count('id'), brutas=Sum('valor_total'), ajustes=Sum('ajuste'))}
     dv = dict(rel.devolucoes(p).values_list('loja_id').annotate(t=Sum('valor_aprovado')))
-    com = dict(Comissao.objects.filter(p.filtro('data_criacao')).values_list('loja_id').annotate(t=Sum('valor_comissao')))
+    com = dict(Comissao.objects.receita().filter(p.filtro('data_criacao')).values_list('loja_id').annotate(t=Sum('valor_comissao')))
     sub = dict(FaturaSubscricao.objects.filter(p.filtro('paga_em'), estado='paga', loja__isnull=False)
                .exclude(metodo='oferta').values_list('loja_id').annotate(t=Sum('valor')))
     lojas = Loja.objects.filter(id__in=set(v) | set(dv) | set(com) | set(sub))

@@ -225,7 +225,7 @@ def _antes(sender, instance, raw=False, **kw):
     instance._registo = None
     if raw or not instance.pk:
         return
-    instance._registo = sender.objects.filter(pk=instance.pk).values(*CAMPOS[sender]).first()
+    instance._registo = sender._base_manager.filter(pk=instance.pk).values(*CAMPOS[sender]).first()
 
 
 def _gravou(campo, update_fields):
