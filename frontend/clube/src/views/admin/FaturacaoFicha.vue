@@ -132,8 +132,8 @@
                   <td class="px-4 py-3 text-right text-zinc-200">{{ dinheiro(e.valor) }}</td>
                   <td class="px-4 py-3 text-xs text-zinc-400">{{ e.status_nome }}</td>
                   <td class="px-4 py-3 text-xs">
-                    <a v-if="e.fatura && e.fatura.pdf_url" :href="urlFicheiro(e.fatura.pdf_url)" target="_blank" rel="noopener" class="text-green-400 underline font-semibold">{{ e.fatura.numero }}</a>
-                    <span v-else-if="e.fatura" class="text-green-400 font-semibold">{{ e.fatura.numero }}</span>
+                    <span v-if="e.fatura" class="inline-flex items-center gap-2"><span class="text-green-400 font-semibold">{{ e.fatura.numero }}</span>
+                      <BotaoPdf v-if="e.fatura.pdf_url" :href="urlFicheiro(e.fatura.pdf_url)" :titulo="`Descarregar a fatura ${e.fatura.numero} (PDF)`" /></span>
                     <span v-else class="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold">Por faturar</span>
                     <span v-if="e.anuladas" class="ml-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-bold">{{ e.anuladas }} anulada(s)</span>
                   </td>
@@ -219,6 +219,7 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { descarregarArquivo, descarregarPdf, descarregarComprovativoVenda, erroDeBlob, urlFicheiro } from '@/utils/documentos'
 import ArquivosFiscais from '@/components/fiscal/ArquivosFiscais.vue'
+import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ListaMensalidades from '@/components/fiscal/ListaMensalidades.vue'
@@ -235,7 +236,7 @@ const origemDe = (ref, tipo) => tipo === 'pos' ? 'pos' : (/^[EMV]-/i.test(ref ||
 
 export default {
   name: 'FaturacaoFicha',
-  components: { ArquivosFiscais, DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
+  components: { BotaoPdf, ArquivosFiscais, DiferencaComissoes, EstadoCobrancaMes, HistoricoFatura, ListaMensalidades, PaginacaoLista, RegistarFaturaBende, ResultadosPesquisa },
   props: {
     tipo: { type: String, required: true },
     id:   { type: [Number, String], required: true },
