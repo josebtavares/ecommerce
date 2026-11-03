@@ -60,6 +60,8 @@ def emitir(origem, id_, loja_id=None, pos_id=None):
         return
     aviso = {'origem': origem, 'id': id_, 'loja_id': loja_id, 'pos_id': pos_id}
     transaction.on_commit(lambda: _enviar(aviso))
+    from . import tempo_real_painel             # as vendas também mudam o Dashboard e os Relatórios
+    tempo_real_painel.emitir('venda')
 
 
 def _foto(origem, obj):

@@ -141,6 +141,7 @@ def pagar(c, metodo, referencia='', notas='', por=None):
         c.save()
         for com in c.comissoes.select_for_update().filter(status='pendente'):     # save(): cada uma fica no registo
             com.status, com.data_liquidacao = 'liquidada', agora
+            com._sem_tempo_real = True          # avisa-se uma vez, pela cobrança
             com.save(update_fields=['status', 'data_liquidacao'])
         c.creditos.filter(estado='pendente').update(estado='descontado', data_desconto=agora)
         registar('comissao', 'cobranca_paga', objeto_id=c.id, loja_id=c.loja_id, valor=c.valor, estado_anterior='pendente',
@@ -165,6 +166,29 @@ def anular(c, motivo, por=None):
         registar('comissao', 'cobranca_anulada', objeto_id=c.id, loja_id=c.loja_id, valor=c.valor,
                  estado_anterior='pendente', estado_novo='anulada', dados={'motivo': motivo})
     return c
+
+
+def anular_comissoes(qs, motivo, por=None):
+    """Anula comissões por cobrar (registadas por engano ou em testes): deixam de contar em todo o lado (somas,
+    cobranças, extratos, relatórios). Nunca se apagam — ficam no registo com o motivo. Só as pendentes ainda fora
+    de uma cobrança (as que já estão numa cobrança: anula-se primeiro a cobrança). → nº anuladas."""
+    from ..models import Comissao
+    motivo = ' '.join(str(motivo or '').split())[:300]
+    if len(motivo) < 5:
+        raise ErroCobranca('Escreve o motivo.')
+    agora = timezone.now()
+    n = 0
+    lojas = set()
+    with transaction.atomic():
+        for c in Comissao.objects.select_for_update().filter(pk__in=qs.values('pk'), status='pendente',
+                                                              cobranca__isnull=True):
+            c.status, c.anulada_em, c.anulada_por = 'anulada', agora, por
+            c.notas = ((c.notas + '\n') if c.notas else '') + f'Anulada: {motivo}'
+            c._sem_tempo_real = c.loja_id in lojas      # avisa-se uma vez por loja (a primeira de cada uma)
+            lojas.add(c.loja_id)
+            c.save(update_fields=['status', 'anulada_em', 'anulada_por', 'notas'])      # registo: 'anulada'
+            n += 1
+    return n
 
 
 # ── avisos (worker) ──────────────────────────────────────────────
@@ -207,16 +231,57 @@ def _avisar_dono(loja, titulo, mensagem):
         log.exception('cobrança de comissões: aviso ao dono falhou')
 
 
-def payload(c, d=None):
+def meses_das_cobrancas(cobrancas):
+    """Os meses (das comissões) que cada cobrança inclui — pode juntar meses que ficaram abaixo do mínimo — com a
+    fatura do Bende de cada um. {cobranca_id: [{mes: 'AAAA-MM', comissoes, total, fatura}]} (2 consultas)."""
+    from django.db.models import Count
+    from django.db.models.functions import TruncMonth
+    from ..models import Comissao, FaturaComissoes
+    from . import fiscal
+    cobrancas = list(cobrancas)
+    if not cobrancas:
+        return {}
+    por = {}
+    for r in (Comissao.objects.filter(cobranca__in=cobrancas).annotate(m=TruncMonth('data_criacao'))
+              .values('cobranca_id', 'loja_id', 'm').annotate(t=Sum('valor_comissao'), n=Count('id'))):
+        m = timezone.localtime(r['m']).date().replace(day=1) if hasattr(r['m'], 'tzinfo') else r['m']
+        x = por.setdefault(r['cobranca_id'], {}).setdefault(m, [Decimal('0'), 0, r['loja_id']])
+        x[0] += r['t'] or 0
+        x[1] += r['n']
+    meses = {m for d in por.values() for m in d}
+    faturas = {(fc.loja_id, fc.mes): fc for fc in FaturaComissoes.objects.filter(
+        loja_id__in={c.loja_id for c in cobrancas}, mes__in=meses)}
+    return {c.id: [{'mes': f'{m:%Y-%m}', 'comissoes': n, 'total': f'{t:.2f}',
+                    'fatura': fiscal.fatura_resumo(faturas.get((loja_id, m)))}
+                   for m, (t, n, loja_id) in sorted(por.get(c.id, {}).items())] for c in cobrancas}
+
+
+def meses_da_cobranca(c):
+    return meses_das_cobrancas([c]).get(c.id, [])
+
+
+def payload(c, d=None, meses=None):
+    """meses: o resultado de meses_das_cobrancas() (para não repetir a consulta por cobrança) | True | None."""
     d = d or _hoje()
-    return {
+    extra = {}
+    if meses is True:
+        extra['meses'] = meses_da_cobranca(c)
+    elif meses is not None:
+        extra['meses'] = meses.get(c.id, [])
+    return {**extra,
         'id': c.id, 'loja_id': c.loja_id, 'loja_nome': c.loja.nome, 'mes': c.mes.isoformat(),
         'valor_comissoes': f'{c.valor_comissoes:.2f}', 'valor_creditos': f'{c.valor_creditos:.2f}', 'valor': f'{c.valor:.2f}',
         'estado': c.estado, 'estado_nome': c.get_estado_display(), 'em_atraso': c.estado == 'pendente' and d > c.vencimento,
         'vencimento': c.vencimento.isoformat(), 'emitida_em': c.emitida_em.isoformat(),
         'paga_em': c.paga_em.isoformat() if c.paga_em else None, 'metodo': c.metodo,
         'metodo_nome': c.get_metodo_display() if c.metodo else '', 'referencia': c.referencia, 'notas': c.notas,
+        'tem_comprovativo': tem_comprovativo(c),
     }
+
+
+def tem_comprovativo(c):
+    """Paga e com dinheiro (as perdoadas — oferta — não levam comprovativo)."""
+    return c.estado == 'paga' and c.metodo != 'oferta' and c.valor > 0
 
 
 def resumo_loja(loja):
@@ -231,7 +296,8 @@ def resumo_loja(loja):
     else:
         acumular = creditos = Decimal('0')
     cobrancas = list(loja.cobrancas_comissoes.select_related('loja').exclude(estado='anulada')[:24])
-    return {'cobrancas': [payload(c) for c in cobrancas],
+    meses = meses_das_cobrancas(cobrancas)
+    return {'cobrancas': [payload(c, meses=meses) for c in cobrancas],
             'a_acumular': f'{acumular:.2f}', 'creditos': f'{creditos:.2f}',
             'por_pagar': f'{sum((c.valor for c in cobrancas if c.estado == "pendente"), Decimal("0")):.2f}',
             'dias_para_pagar': DIAS_PARA_PAGAR, 'minimo': f'{VALOR_MINIMO:.2f}', 'ligada': bool(inicio)}

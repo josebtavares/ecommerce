@@ -4,11 +4,11 @@
     <!-- ══ SUMÁRIO DE TOTAIS ══ -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-        <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Pendente</p>
+        <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Por receber</p>
         <p class="text-xl font-extrabold text-yellow-400">{{ $dinheiro(totalPendente) }}</p>
       </div>
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
-        <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Liquidado</p>
+        <p class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Pagas</p>
         <p class="text-xl font-extrabold text-green-400">{{ $dinheiro(totalLiquidado) }}</p>
       </div>
       <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
@@ -28,8 +28,9 @@
       <div class="flex-1 text-sm text-sky-100">
         <p class="font-semibold">{{ lojaSelecionada.nome }} tem {{ $dinheiro(lojaSelecionada.credito) }} de créditos por descontar.</p>
         <p class="text-xs text-sky-200/70 mt-0.5">
-          São comissões de encomendas reembolsadas depois de a comissão já estar liquidada.
-          Na próxima liquidação, a loja paga {{ $dinheiro(liquidoLoja) }} ({{ $dinheiro(lojaSelecionada.pendente) }} pendentes − créditos).
+          São comissões de encomendas reembolsadas depois de a comissão já estar paga. Descontam-se sozinhos na próxima
+          cobrança mensal: a loja paga {{ $dinheiro(liquidoLoja) }} ({{ $dinheiro(lojaSelecionada.pendente) }} por cobrar − créditos).
+          Só os marques à mão se já acertaste com a loja por fora.
         </p>
       </div>
       <button type="button" @click="descontarCreditos" :disabled="aDescontar"
@@ -39,7 +40,7 @@
     </div>
 
     <!-- ══ COBRANÇAS MENSAIS (a loja paga as comissões à parte: a SISP não divide pagamentos) ══ -->
-    <AdminCobrancasComissoes :loja-id="filtroLoja" @alterado="recarregar" />
+    <AdminCobrancasComissoes :loja-id="filtroLoja" :versao="versao" @alterado="recarregar" />
 
     <!-- ══ ABAS DE LOJAS ══ -->
     <div v-if="lojas.length > 0"
@@ -73,7 +74,7 @@
 
         <!-- Status -->
         <div class="flex gap-1">
-          <button v-for="s in statusOpcoes" :key="s.value"
+          <button v-for="s in statusOpcoes" :key="s.value" :data-teste="`comissoes-filtro-${s.value || 'todas'}`"
             @click="filtroStatus = s.value; fetchComissoes(1)"
             :class="['px-3 py-2 rounded-xl text-xs font-semibold transition border',
                      filtroStatus === s.value
@@ -181,29 +182,60 @@
       </div>
     </div>
 
+    <!-- ══ ANULAR (superadmin): comissões registadas por engano ou em testes — deixam de contar, nunca se apagam ══ -->
+    <div v-if="souSuperadmin && anular" class="rounded-2xl border border-red-500/30 bg-red-500/5 p-4 space-y-3" data-teste="anular-form">
+      <p class="text-sm text-red-100 font-semibold">
+        <template v-if="anular.c">Anular a comissão #{{ anular.c.id }} ({{ anular.c.loja_nome }}, {{ $dinheiro(anular.c.valor_comissao) }})?</template>
+        <template v-else>Anular todas as comissões por cobrar{{ filtroLoja ? ` de ${lojaLabel(filtroLoja)}` : ' de todas as lojas' }}?</template>
+      </p>
+      <p class="text-xs text-red-200/70">Deixam de contar nos totais, nas cobranças, nos extratos, no Dashboard e nos Relatórios.
+        Não se apagam: ficam na lista "Anuladas" e no registo, com o motivo. As que já estão numa cobrança não são anuladas
+        (anula primeiro a cobrança).</p>
+      <input v-model="anular.motivo" maxlength="300" placeholder="Motivo (obrigatório)" data-teste="anular-motivo"
+        class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500" />
+      <div class="flex flex-wrap gap-2">
+        <button type="button" @click="confirmarAnular" :disabled="anular.aGuardar || anular.motivo.trim().length < 5" data-teste="anular-confirmar"
+          class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50">
+          {{ anular.aGuardar ? 'A anular…' : 'Anular' }}
+        </button>
+        <button type="button" @click="anular = null" class="px-4 py-2 rounded-xl text-xs font-bold text-zinc-300 bg-zinc-800 hover:bg-zinc-700">Cancelar</button>
+      </div>
+      <p v-if="anular.erro" class="text-xs text-red-400" role="alert">{{ anular.erro }}</p>
+    </div>
+    <p v-if="msgAnular" class="text-xs text-green-400" role="status" data-teste="anular-msg">{{ msgAnular }}</p>
+
     <!-- Resultado -->
-    <div class="flex items-center justify-between text-xs text-zinc-500">
-      <span>{{ totalCount }} comissão{{ totalCount !== 1 ? 'ões' : '' }} encontrada{{ totalCount !== 1 ? 's' : '' }}</span>
+    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+      <span>{{ totalCount }} {{ totalCount === 1 ? 'comissão encontrada' : 'comissões encontradas' }}</span>
+      <button v-if="souSuperadmin && Number(totalPorCobrarFiltro) > 0 && !anular" type="button" @click="abrirAnular(null)" data-teste="anular-todas"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-400 bg-red-500/10 hover:bg-red-500/20">
+        Anular por cobrar{{ filtroLoja ? ` (${lojaLabel(filtroLoja)})` : '' }}…
+      </button>
       <span v-if="totalCount > 0">Página {{ page }} de {{ totalPages }}</span>
     </div>
 
     <!-- ══ LOADING ══ -->
-    <div v-if="loading" class="space-y-2">
+    <div v-if="loading && !comissoes.length" class="space-y-2">
       <div v-for="n in limit" :key="n" class="h-16 bg-zinc-900 rounded-2xl animate-pulse border border-zinc-800"></div>
     </div>
 
     <!-- ══ LISTA ══ -->
-    <div v-else-if="comissoes.length" class="space-y-2">
-      <div v-for="c in comissoes" :key="c.id"
+    <div v-else-if="comissoes.length" class="space-y-2" data-teste="lista-comissoes">
+      <div v-for="c in comissoes" :key="c.id" :data-teste="`comissao-${c.id}`"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 hover:border-zinc-700 transition">
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1 flex-wrap">
               <p class="text-sm font-semibold text-zinc-200 truncate">{{ c.loja_nome }}</p>
-              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold',
-                             c.status === 'pendente' ? 'bg-yellow-500/15 text-yellow-400' : 'bg-green-500/15 text-green-400']">
-                {{ c.status }}
+              <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold', ESTADOS[c.status]?.cor]" data-teste="comissao-estado">
+                {{ ESTADOS[c.status]?.nome || c.status }}
               </span>
+              <span v-if="c.cobranca" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-400"
+                    title="Cobrança mensal em que entrou">
+                Cobrança {{ mesCurto(c.cobranca.mes) }} · {{ c.cobranca.estado_nome }}
+              </span>
+              <span v-else-if="c.status === 'pendente'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-500"
+                    title="Entra na próxima cobrança mensal">por cobrar</span>
             </div>
             <p class="text-xs text-zinc-500">
               Encomenda #{{ c.encomenda_id }}
@@ -214,20 +246,16 @@
             </p>
             <p class="text-[10px] text-zinc-600 mt-0.5">{{ formatarData(c.data_criacao) }}</p>
             <p v-if="c.data_liquidacao" class="text-[10px] text-green-600 mt-0.5">
-              <font-awesome-icon :icon="['fas', 'check']" /> Liquidada em {{ formatarData(c.data_liquidacao) }}
+              <font-awesome-icon :icon="['fas', 'check']" /> Paga em {{ formatarData(c.data_liquidacao) }}
             </p>
+            <p v-if="c.anulada_em" class="text-[10px] text-zinc-500 mt-0.5">Anulada em {{ formatarData(c.anulada_em) }} · {{ ultimaNota(c.notas) }}</p>
           </div>
           <div class="flex flex-col items-end gap-2 flex-shrink-0">
-            <p class="text-lg font-extrabold text-red-400">{{ $dinheiro(c.valor_comissao) }}</p>
-            <button v-if="c.status === 'pendente'"
-              @click="liquidar(c)" :disabled="liquidandoId === c.id"
-              class="px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25
-                     text-xs font-bold transition disabled:opacity-50 flex items-center gap-1">
-              <svg v-if="liquidandoId === c.id" class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
-                <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
-              </svg>
-              {{ liquidandoId === c.id ? '...' : 'Liquidar' }}
+            <p :class="['text-lg font-extrabold', c.status === 'anulada' ? 'text-zinc-500 line-through' : 'text-red-400']">{{ $dinheiro(c.valor_comissao) }}</p>
+            <button v-if="souSuperadmin && c.status === 'pendente' && !c.cobranca" type="button" @click="abrirAnular(c)"
+              :data-teste="`comissao-anular-${c.id}`"
+              class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-red-300 hover:bg-red-500/10 text-xs font-semibold transition">
+              Anular
             </button>
           </div>
         </div>
@@ -287,6 +315,15 @@
 <script>
 import api from '@/services/api'
 import AdminCobrancasComissoes from '@/components/admin/AdminCobrancasComissoes.vue'
+import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
+
+const ESTADOS = {
+  pendente:  { nome: 'Pendente',  cor: 'bg-yellow-500/15 text-yellow-400' },
+  liquidada: { nome: 'Paga',      cor: 'bg-green-500/15 text-green-400' },
+  anulada:   { nome: 'Anulada',   cor: 'bg-zinc-700 text-zinc-400' },
+}
+// avisos das subscrições que mexem nesta página (comissões, créditos, cobranças; null = recarregar tudo)
+const TIPOS = ['comissao', 'credito_comissao', 'cobranca_comissoes', 'fatura_comissoes']
 
 export default {
   name: 'AdminComissoes',
@@ -294,7 +331,14 @@ export default {
   components: { AdminCobrancasComissoes },
 
   data () {
+    const eu = JSON.parse(localStorage.getItem('user') || '{}')
     return {
+      ESTADOS,
+      souSuperadmin: eu.role_admin === 'superadmin',
+      anular: null,          // { c: comissão | null (todas por cobrar do filtro), motivo, aGuardar, erro }
+      msgAnular: '',
+      versao: 0,             // muda → as cobranças voltam a ler (tempo real)
+      pedido: 0,
       loading: true,
       comissoes: [],
       totalCount: 0,
@@ -319,14 +363,14 @@ export default {
       lojas: [],
 
       // estado
-      liquidandoId: null,
       debounceTimer: null,
       atalhoActivo: null,
 
       statusOpcoes: [
         { value: '',         label: 'Todas',     activeClass: 'bg-zinc-700 border-zinc-600 text-zinc-200' },
         { value: 'pendente', label: 'Pendentes', activeClass: 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' },
-        { value: 'liquidada',label: 'Liquidadas',activeClass: 'bg-green-500/20 border-green-500/50 text-green-400' },
+        { value: 'liquidada',label: 'Pagas',     activeClass: 'bg-green-500/20 border-green-500/50 text-green-400' },
+        { value: 'anulada',  label: 'Anuladas',  activeClass: 'bg-zinc-700 border-zinc-500 text-zinc-200' },
       ],
 
       atalhosData: [
@@ -342,6 +386,8 @@ export default {
     totalPages () { return Math.ceil(this.totalCount / this.limit) },
 
     lojaSelecionada () { return this.lojas.find(l => l.id === this.filtroLoja) || null },
+    // há comissões por cobrar (pendentes) no filtro de loja → mostra "Anular por cobrar…"
+    totalPorCobrarFiltro () { return this.filtroLoja ? (this.lojaSelecionada?.pendente || 0) : this.totalPendente },
     liquidoLoja () {
       const l = this.lojaSelecionada
       return l ? Number(l.pendente) - Number(l.credito) : 0
@@ -360,15 +406,45 @@ export default {
   },
 
   async created () {
+    this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal(),
+      { filtro: a => !a || !a.tipo || TIPOS.includes(a.tipo), espera: 600 })
     await this.recarregar()
   },
+
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     recarregar () { return Promise.all([this.fetchLojas(), this.fetchComissoes(this.page)]) },
 
-    async fetchComissoes (pagina = this.page) {
+    // outra sessão (ou uma venda nova, um reembolso, a loja a pagar) mexeu nas comissões: sem esqueleto nem saltos
+    atualizarEmTempoReal () {
+      this.versao++
+      return Promise.all([this.fetchLojas(), this.fetchComissoes(this.page, true)])
+    },
+
+    mesCurto (iso) { const [a, m] = iso.split('-'); return `${m}/${a}` },
+    ultimaNota (n) { return (n || '').split('\n').filter(Boolean).pop() || '' },
+
+    abrirAnular (c) { this.anular = { c, motivo: '', aGuardar: false, erro: '' }; this.msgAnular = '' },
+
+    async confirmarAnular () {
+      const a = this.anular
+      a.aGuardar = true; a.erro = ''
+      const corpo = a.c ? { ids: [a.c.id] } : { todas_pendentes: true, ...(this.filtroLoja ? { loja_id: this.filtroLoja } : {}) }
+      try {
+        const { data } = await api.post('/app/admin/comissoes/anular/', { ...corpo, motivo: a.motivo })
+        this.anular = null
+        this.msgAnular = data.anuladas === 1 ? '1 comissão anulada.' : `${data.anuladas} comissões anuladas.`
+        await this.recarregar()
+      } catch (e) {
+        a.erro = e.response?.data?.detail || 'Não foi possível anular.'
+      } finally { a.aGuardar = false }
+    },
+
+    async fetchComissoes (pagina = this.page, silencioso = false) {
       this.page = pagina
-      this.loading = true
+      if (!silencioso) this.loading = true
+      const pedido = ++this.pedido
       try {
         const params = {
           offset:   (this.page - 1) * this.limit,
@@ -382,13 +458,14 @@ export default {
         if (this.filtroMin)        params.valor_min    = this.filtroMin
 
         const { data } = await api.get('/app/admin/comissoes/', { params })
+        if (pedido !== this.pedido) return          // entretanto pediu-se outra página/filtro
         this.comissoes      = data.results || data
         this.totalCount     = data.count           ?? this.comissoes.length
         this.totalPendente  = data.total_pendente  || '0.00'
         this.totalLiquidado = data.total_liquidado || '0.00'
         this.totalCreditos  = data.total_creditos  || '0.00'
       } catch (e) { console.error(e) }
-      finally { this.loading = false }
+      finally { if (pedido === this.pedido) this.loading = false }
     },
 
     async fetchLojas () {
@@ -471,15 +548,6 @@ export default {
       } finally { this.aDescontar = false }
     },
 
-    async liquidar (c) {
-      if (!confirm(`Marcar comissão #${c.id} (${this.$dinheiro(c.valor_comissao)}) como liquidada?`)) return
-      this.liquidandoId = c.id
-      try {
-        await api.patch(`/app/admin/comissoes/${c.id}/liquidar/`)
-        await this.fetchComissoes(this.page)
-      } catch (e) { console.error(e) }
-      finally { this.liquidandoId = null }
-    },
   },
 }
 </script>

@@ -71,6 +71,10 @@ class NotificacaoConsumer(AsyncWebsocketConsumer):
         # fatura de uma venda registada/anulada, ou venda que passou a faturável: só ids ({origem, id, loja_id, pos_id})
         await self.send(text_data=json.dumps({'type': 'faturacao', 'faturacao': event['faturacao']}))
 
+    async def painel_atualizado(self, event):
+        # algo mudou nos números da plataforma (Dashboard/Relatórios do admin): só {origem}
+        await self.send(text_data=json.dumps({'type': 'painel', 'painel': event['painel']}))
+
     async def notificacao_contador(self, event):
         await self.send(text_data=json.dumps({
             "type":      "contador",

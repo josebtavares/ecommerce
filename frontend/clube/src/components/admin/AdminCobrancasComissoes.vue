@@ -1,6 +1,8 @@
 <!-- AdminCobrancasComissoes.vue — Admin → Comissões: cobranças mensais às lojas (gerir_pagamentos).
      Registar um pagamento recebido por fora (transferência, dinheiro, oferta), anular (solta as comissões para a
      cobrança seguinte) ou emitir já as que faltam. Atraso não suspende nada sozinho — decide-se aqui.
+     Cada cobrança mostra os meses que inclui, com o extrato e a fatura do Bende de cada um (registar aqui = registar na
+     Faturação), e o comprovativo quando está paga. Em tempo real (versao, de AdminComissoes).
      Backend: /app/admin/comissoes/cobrancas/ (Views/cobrancaComissoesView.py). -->
 <template>
   <div v-if="!semAcesso" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="admin-cobrancas">
@@ -26,16 +28,16 @@
     </div>
     <p v-if="msg" class="px-5 pb-3 text-xs" :class="msgOk ? 'text-green-400' : 'text-red-400'" role="status" data-teste="cobrancas-admin-msg">{{ msg }}</p>
 
-    <p v-if="carregando" class="px-5 pb-5 text-xs text-zinc-500">A carregar…</p>
+    <p v-if="carregando && !d" class="px-5 pb-5 text-xs text-zinc-500">A carregar…</p>
     <p v-else-if="!d?.resultados.length" class="px-5 pb-5 text-xs text-zinc-500">Sem cobranças{{ estado ? ' neste filtro' : '' }}.</p>
     <div v-else class="divide-y divide-zinc-800 border-t border-zinc-800">
-      <div v-for="c in d.resultados" :key="c.id" class="px-5 py-3" data-teste="admin-cobranca">
+      <div v-for="c in d.resultados" :key="c.id" class="px-5 py-3" data-teste="admin-cobranca" :data-cobranca="c.id">
         <div class="flex flex-wrap items-center gap-3">
           <div class="flex-1 min-w-[180px]">
             <p class="text-sm font-semibold text-zinc-200">{{ c.loja_nome }} <span class="text-zinc-500 font-normal">· até {{ mes(c.mes) }}</span></p>
             <p class="text-xs text-zinc-500">
               {{ $dinheiro(c.valor_comissoes) }}<template v-if="Number(c.valor_creditos)"> − {{ $dinheiro(c.valor_creditos) }} créditos</template>
-              · <template v-if="c.estado === 'paga'">paga {{ data(c.paga_em) }} ({{ c.metodo_nome }}<template v-if="c.referencia"> {{ c.referencia }}</template>)</template>
+              · <template v-if="c.estado === 'paga'">paga {{ data(c.paga_em) }} ({{ c.metodo_nome }}{{ c.referencia ? ' · ' + c.referencia : '' }})</template>
               <template v-else-if="c.estado === 'anulada'">anulada</template>
               <template v-else>vence {{ data(c.vencimento) }}</template>
             </p>
@@ -43,10 +45,28 @@
           </div>
           <span :class="['px-2 py-0.5 rounded-lg text-[11px] font-bold', cor(c)]">{{ c.em_atraso ? 'Em atraso' : c.estado_nome }}</span>
           <span class="text-sm font-bold text-zinc-100 w-28 text-right">{{ $dinheiro(c.valor) }}</span>
+          <button v-if="c.tem_comprovativo" type="button" @click="comprovativo(c)" data-teste="admin-cobranca-comprovativo"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-300">
+            <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Comprovativo
+          </button>
           <button v-if="c.estado === 'pendente'" type="button" @click="abrir(c)" :data-teste="`admin-cobranca-abrir-${c.id}`"
             class="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-200">
             {{ aberta === c.id ? 'Fechar' : 'Registar' }}
           </button>
+        </div>
+
+        <!-- meses incluídos: extrato e fatura do Bende de cada mês (a mesma da Faturação) -->
+        <div v-if="c.meses?.length && c.estado !== 'anulada'" class="mt-2 space-y-1.5" data-teste="admin-cobranca-meses">
+          <div v-for="m in c.meses" :key="m.mes" class="flex flex-wrap items-center gap-2 pl-3 border-l-2 border-zinc-800"
+               :data-teste="`admin-cobranca-mes-${m.mes}`">
+            <span class="text-xs text-zinc-400 w-40">Comissões de {{ mes(m.mes) }} · {{ m.comissoes }} venda(s)</span>
+            <span class="text-xs text-zinc-300 w-24 text-right tabular-nums">{{ $dinheiro(m.total) }}</span>
+            <button type="button" @click="extrato(c, m)" class="text-xs text-zinc-400 hover:text-zinc-200 underline">Extrato</button>
+            <RegistarFaturaBende v-if="podeFaturar" :fatura="m.fatura" :url="`/app/admin/faturacao/comissoes/${c.loja_id}/${m.mes}/fatura/`"
+              @atualizado="dados => faturaMudou(m, dados)" />
+            <span v-else-if="m.fatura" class="text-xs text-green-400">Fatura {{ m.fatura.numero }}</span>
+            <span v-else class="text-xs text-amber-300">Fatura por registar</span>
+          </div>
         </div>
 
         <div v-if="aberta === c.id" class="mt-3 grid sm:grid-cols-4 gap-2" data-teste="admin-cobranca-form">
@@ -74,6 +94,10 @@
 
 <script>
 import api from '@/services/api'
+import { descarregarPdf } from '@/utils/documentos'
+import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
+
+const PERMISSOES_FATURAR = ['superadmin', 'contabilista']     // gerir_faturacao (Admin → Faturação)
 
 const FILTROS = [
   { v: 'pendente', label: 'Por pagar' }, { v: 'atraso', label: 'Em atraso' }, { v: 'paga', label: 'Pagas' },
@@ -83,18 +107,26 @@ const FILTROS = [
 export default {
   name: 'AdminCobrancasComissoes',
 
+  components: { RegistarFaturaBende },
+
   props: {
     lojaId: { type: [String, Number], default: null },
+    versao: { type: Number, default: 0 },      // muda → volta a ler em silêncio (tempo real)
   },
 
   emits: ['alterado'],
 
   data () {
+    const eu = JSON.parse(localStorage.getItem('user') || '{}')
     return { FILTROS, d: null, semAcesso: false, estado: 'pendente', carregando: true, aberta: null, form: this.novoForm(),
-             aGuardar: false, aEmitir: false, msg: '', msgOk: false }
+             aGuardar: false, aEmitir: false, msg: '', msgOk: false, pedido: 0,
+             podeFaturar: PERMISSOES_FATURAR.includes(eu.role_admin) }
   },
 
-  watch: { lojaId () { this.carregar() } },
+  watch: {
+    lojaId () { this.carregar() },
+    versao () { this.carregar(true) },
+  },
 
   created () { this.carregar() },
 
@@ -107,14 +139,33 @@ export default {
       return { paga: 'bg-green-500/15 text-green-400', anulada: 'bg-zinc-700 text-zinc-400' }[c.estado] || 'bg-amber-500/15 text-amber-300'
     },
 
-    async carregar () {
-      this.carregando = true
+    // silencioso: tempo real — mantém o formulário aberto e a mensagem
+    async carregar (silencioso = false) {
+      if (!silencioso) this.carregando = true
+      const pedido = ++this.pedido
       const params = {}
       if (this.estado) params.estado = this.estado
       if (this.lojaId) params.loja_id = this.lojaId
-      try { this.d = (await api.get('/app/admin/comissoes/cobrancas/', { params })).data }
-      catch (e) { this.d = null; this.semAcesso = e.response?.status === 403; this.msg = e.response?.data?.detail || 'Não foi possível carregar.'; this.msgOk = false }
-      finally { this.carregando = false }
+      try {
+        const { data } = await api.get('/app/admin/comissoes/cobrancas/', { params })
+        if (pedido === this.pedido) this.d = data
+      } catch (e) {
+        if (pedido !== this.pedido || silencioso) return
+        this.d = null; this.semAcesso = e.response?.status === 403; this.msg = e.response?.data?.detail || 'Não foi possível carregar.'; this.msgOk = false
+      } finally { if (pedido === this.pedido) this.carregando = false }
+    },
+
+    comprovativo (c) {
+      descarregarPdf(`/app/comissoes/cobrancas/${c.id}/comprovativo/`, `comprovativo-comissoes-${c.id}.pdf`)
+    },
+
+    extrato (c, m) {
+      descarregarPdf(`/app/admin/faturacao/comissoes/${c.loja_id}/${m.mes}/extrato/`, `extrato-comissoes-${c.loja_id}-${m.mes}.pdf`)
+    },
+
+    faturaMudou (m, dados) {
+      m.fatura = dados?.fatura || null
+      this.$emit('alterado')
     },
 
     abrir (c) { this.aberta = this.aberta === c.id ? null : c.id; this.form = this.novoForm(); this.msg = '' },

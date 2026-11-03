@@ -2,9 +2,10 @@
 Tempo real das mensalidades e das faturas do Bende (como utils/tempo_real_encomendas.py): quando uma mensalidade
 (FaturaSubscricao) muda — emitida, paga, adiada, anulada, fatura do Bende registada/substituída/anulada —, quando
 uma subscrição muda de estado ou de plano, ou quando a fatura das comissões de um mês (FaturaComissoes) é
-registada/anulada, avisa pelo WebSocket das notificações (grupo notif_<user>):
+registada/anulada, e nas comissões — uma comissão registada/recalculada/anulada/liquidada, um crédito de reembolso,
+uma cobrança mensal emitida/paga/anulada —, avisa pelo WebSocket das notificações (grupo notif_<user>):
 
-• os admins que gerem subscrições ou faturação (Admin → Subscrições e Admin → Faturação);
+• os admins que gerem subscrições, faturação ou pagamentos (Admin → Subscrições, Faturação e Comissões);
 • quem vê a subscrição da loja (Backoffice → Subscrição: dono, gestor, contabilista…);
 • o dono do POS (a página do POS não tem WebSocket: verifica sozinha de tempos a tempos).
 
@@ -13,7 +14,7 @@ Só leva ids: a página aberta vai buscar o resto com as suas permissões. Depoi
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 
-PERMISSOES_ADMIN = ('gerir_subscricoes', 'gerir_faturacao')
+PERMISSOES_ADMIN = ('gerir_subscricoes', 'gerir_faturacao', 'gerir_pagamentos')
 
 
 def _destinatarios(loja_id, pos_id):
@@ -49,7 +50,8 @@ def _enviar(aviso):
 
 
 def emitir(tipo, id_, loja_id=None, pos_id=None):
-    """tipo: 'mensalidade' | 'subscricao' | 'fatura_comissoes'. Avisa depois do commit (desfeita → não avisa)."""
+    """tipo: 'mensalidade' | 'subscricao' | 'fatura_comissoes' | 'comissao' | 'credito_comissao' |
+    'cobranca_comissoes'. Avisa depois do commit (desfeita → não avisa)."""
     if not (loja_id or pos_id):
         return
     aviso = {'tipo': tipo, 'id': id_, 'loja_id': loja_id, 'pos_id': pos_id}
@@ -71,8 +73,19 @@ def _ao_mudar_fatura_comissoes(sender, instance, raw=False, **kwargs):
         emitir('fatura_comissoes', instance.pk, instance.loja_id)
 
 
+def _ao_gravar_comissoes(tipo):
+    def gravar(sender, instance, raw=False, **kwargs):
+        # pagar/anular uma cobrança grava muitas comissões de uma vez: avisa só a cobrança (_sem_tempo_real)
+        if not raw and not getattr(instance, '_sem_tempo_real', False):
+            emitir(tipo, instance.pk, instance.loja_id)
+    return gravar
+
+
 def ligar():
-    from ..models import FaturaComissoes, FaturaSubscricao, Subscricao
+    from ..models import CobrancaComissoes, Comissao, CreditoComissao, FaturaComissoes, FaturaSubscricao, Subscricao
+    for tipo, modelo in (('comissao', Comissao), ('credito_comissao', CreditoComissao),
+                         ('cobranca_comissoes', CobrancaComissoes)):
+        post_save.connect(_ao_gravar_comissoes(tipo), sender=modelo, weak=False, dispatch_uid=f'tempo_real_{modelo.__name__}')
     post_save.connect(_ao_gravar_mensalidade, sender=FaturaSubscricao, weak=False, dispatch_uid='tempo_real_FaturaSubscricao')
     post_save.connect(_ao_gravar_subscricao, sender=Subscricao, weak=False, dispatch_uid='tempo_real_Subscricao')
     post_save.connect(_ao_mudar_fatura_comissoes, sender=FaturaComissoes, weak=False, dispatch_uid='tempo_real_FaturaComissoes')

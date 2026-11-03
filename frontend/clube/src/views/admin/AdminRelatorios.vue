@@ -1,6 +1,6 @@
 <template>
   <!-- Relatórios da plataforma: catálogo, filtros, resumo, linhas e exportação (CSV, Excel, PDF) -->
-  <ModuloRelatorios base="/app/admin/relatorios" prefixo="bendi" />
+  <ModuloRelatorios base="/app/admin/relatorios" prefixo="bendi" tempo-real />
 </template>
 
 <script>
