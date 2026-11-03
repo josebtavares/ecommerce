@@ -1,5 +1,6 @@
 <!-- LinhaCobrancaAdmin.vue — uma cobrança (FaturaSubscricao) em Admin → Subscrições, com as ações.
-     Emite 'acao' com (tipo, f): pagar | adiar | anular | recibo | faturacao. mostrarAlvo: mostra a loja/POS. -->
+     Emite 'acao' com (tipo, f): pagar | adiar | anular | recibo | faturacao | faturada (fatura do Bende registada/substituída/
+     anulada aqui). mostrarAlvo: mostra a loja/POS. -->
 <template>
   <div :class="['flex flex-wrap items-center gap-3', embutida ? 'px-4 sm:px-6 py-3' : 'bg-zinc-900 rounded-2xl border border-zinc-800 px-4 py-3']"
     :data-teste="`cobranca-S-${f.id}`">
@@ -27,21 +28,27 @@
     </template>
     <button v-else-if="f.estado === 'paga'" type="button" @click="$emit('acao', 'recibo', f)" :aria-label="`Comprovativo do pagamento ${f.id}`"
       class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Comprovativo</button>
-    <a v-if="f.fatura && f.fatura.pdf_url" :href="urlFicheiro(f.fatura.pdf_url)" target="_blank" rel="noopener"
+    <!-- fatura legal do Bende: regista-se aqui ou em Admin → Faturação (o mesmo registo; as duas páginas actualizam-se) -->
+    <template v-if="f.estado === 'paga' && Number(f.valor) > 0">
+      <span v-if="!f.fatura" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300" data-teste="cobranca-por-faturar">Fatura do Bende por registar</span>
+      <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="$emit('acao', 'faturada', f)" />
+      <button type="button" @click="$emit('acao', 'faturacao', f)" data-teste="ver-na-faturacao"
+        class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ver na Faturação →</button>
+    </template>
+    <a v-else-if="f.fatura && f.fatura.pdf_url" :href="urlFicheiro(f.fatura.pdf_url)" target="_blank" rel="noopener"
       class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs">Fatura {{ f.fatura.numero }}</a>
     <span v-else-if="f.fatura" class="text-xs text-green-400">Fatura {{ f.fatura.numero }}</span>
-    <span v-else-if="f.estado === 'paga' && Number(f.valor) > 0" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300" data-teste="cobranca-por-faturar">Fatura do Bende por registar</span>
-    <button v-if="f.estado === 'paga' && Number(f.valor) > 0" type="button" @click="$emit('acao', 'faturacao', f)" data-teste="ver-na-faturacao"
-      class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs">Ver na Faturação →</button>
   </div>
 </template>
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { urlFicheiro } from '@/utils/documentos'
+import RegistarFaturaBende from '@/components/fiscal/RegistarFaturaBende.vue'
 
 export default {
   name: 'LinhaCobrancaAdmin',
+  components: { RegistarFaturaBende },
   props: {
     f: { type: Object, required: true },
     mostrarAlvo: { type: Boolean, default: true },

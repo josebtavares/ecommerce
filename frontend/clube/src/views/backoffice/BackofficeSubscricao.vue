@@ -194,7 +194,7 @@
       </div>
 
       <!-- comissões do Bende por mês: extrato + fatura (components/fiscal) -->
-      <ComissoesMensais :loja-id="lojaId" />
+      <ComissoesMensais :loja-id="lojaId" :versao="versao" />
 
       <!-- cobrança mensal das comissões (a SISP não divide pagamentos: paga-se à parte) -->
       <CobrancasComissoes :loja-id="lojaId" @alterado="$emit('alterado')" />
@@ -253,6 +253,7 @@ import ComissoesMensais from '@/components/fiscal/ComissoesMensais.vue'
 import CobrancasComissoes from '@/components/fiscal/CobrancasComissoes.vue'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
 
 export default {
   name: 'BackofficeSubscricao',
@@ -297,7 +298,13 @@ export default {
     corEstadoTexto () { return this.sub?.estado === 'em_atraso' ? 'text-red-400' : 'text-zinc-400' },
   },
 
-  created () { this.carregar() },
+  created () {
+    this.carregar()
+    // a plataforma registou a fatura, marcou uma mensalidade paga, adiou, ofereceu meses… → aparece sem recarregar
+    this.pararTempoReal = ouvirSubscricoes(() => { this.carregar(true); this.versao++ },
+                                           { filtro: a => String(a.loja_id) === String(this.lojaId) })
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
@@ -334,12 +341,12 @@ export default {
       if (f.atrasada) return 'bg-red-500/15 text-red-400'
       return { paga: 'bg-green-500/15 text-green-400', pendente: 'bg-amber-500/15 text-amber-300', anulada: 'bg-zinc-700 text-zinc-400' }[f.estado]
     },
-    async carregar () {
+    async carregar (silencioso = false) {
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/subscricao/`)
         this.dados = data
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar a subscrição.'
+        if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar a subscrição.'
       } finally {
         this.carregando = false
       }

@@ -2,7 +2,7 @@
      estado (por pagar, em atraso, pagas, anuladas) e período. Cada linha é desenhada pelo slot default { f }.
      url: /app/admin/faturas/ | /app/loja/<id>/subscricao/faturas/ | /api/pos/<id>/subscricao/faturas/
      params: filtros fixos (ex.: { loja: 12 }). versao: muda → recarrega (depois de uma ação). claro: páginas de fundo branco (POS).
-     recarregar() mantém a página. -->
+     recarregar() mantém a página e não pisca (depois de uma ação ou de um aviso em tempo real). -->
 <template>
   <div data-teste="lista-cobrancas">
     <div v-if="mostrarFiltros" :class="['flex flex-wrap items-center gap-2', claro ? 'px-5 sm:px-6 pb-3' : (embutida ? 'px-4 sm:px-6 pb-3' : 'pb-3')]">
@@ -82,11 +82,10 @@ export default {
   },
   created () { this.ir(0) },
   methods: {
-    async ir (offset) {
+    async ir (offset, silencioso = false) {
       const n = ++this.pedido
       this.offset = offset
-      this.aCarregar = true
-      this.erro = ''
+      if (!silencioso) { this.aCarregar = true; this.erro = '' }
       try {
         const params = { ...this.params, limit: this.limite, offset }
         if (this.q) params.q = this.q
@@ -96,16 +95,16 @@ export default {
         const { data } = await api.get(this.url, { params })
         if (n !== this.pedido) return
         // depois de uma ação a última página pode ficar vazia: volta uma
-        if (!data.results.length && offset > 0 && data.count) return this.ir(Math.max(0, offset - this.limite))
+        if (!data.results.length && offset > 0 && data.count) return this.ir(Math.max(0, offset - this.limite), silencioso)
         this.lista = data
         this.$emit('carregada', data)
       } catch (e) {
-        if (n === this.pedido) this.erro = e.response?.data?.detail || 'Não foi possível carregar as mensalidades.'
+        if (n === this.pedido && !silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar as mensalidades.'
       } finally {
         if (n === this.pedido) this.aCarregar = false
       }
     },
-    recarregar () { return this.ir(this.offset) },
+    recarregar () { return this.ir(this.offset, true) },
     limpar () {
       this.q = ''; this.estado = ''; this.de = ''; this.ate = ''
       this.ir(0)

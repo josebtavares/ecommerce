@@ -83,11 +83,15 @@ import DiferencaComissoes from '@/components/fiscal/DiferencaComissoes.vue'
 export default {
   name: 'ComissoesMensais',
   components: { DiferencaComissoes, PaginacaoLista },
-  props: { lojaId: { type: [String, Number], required: true } },
+  props: {
+    lojaId: { type: [String, Number], required: true },
+    versao: { type: Number, default: 0 },     // muda → volta a ler a página aberta (fatura do Bende registada/anulada)
+  },
   data () {
     return { meses: [], count: 0, anos: [], ano: '', offset: 0, aCarregar: false,
              aberto: null, v: { count: 0, total: 0, results: [] }, vq: '', vOffset: 0, vCarregar: false, vErro: '' }
   },
+  watch: { versao () { this.carregar(this.offset) } },
   created () { this.carregar(0) },
   methods: {
     urlFicheiro,
