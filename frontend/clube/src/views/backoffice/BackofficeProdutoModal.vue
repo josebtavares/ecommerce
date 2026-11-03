@@ -40,19 +40,28 @@
           <!-- Grid de imagens existentes + nova imagem principal -->
           <div class="flex flex-wrap gap-3">
 
-            <!-- Imagem principal -->
-            <div class="relative group cursor-pointer flex-shrink-0"
+            <!-- Imagem principal: vazia tem o "+" (como o "Adicionar"); com foto, clicar troca-a e o × tira-a -->
+            <div class="relative group cursor-pointer flex-shrink-0" data-teste="imagem-principal"
                  @click="$refs.fileInput.click()">
               <div class="w-24 h-24 rounded-xl overflow-hidden border-2 border-dashed transition"
-                   :class="previewUrl ? 'border-zinc-600' : 'border-zinc-700 hover:border-zinc-500'">
+                   :class="previewUrl ? 'border-zinc-600' : 'border-red-500/60 hover:border-red-400'">
                 <img v-if="previewUrl" :src="previewUrl" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full bg-zinc-800 flex flex-col items-center justify-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <div v-else class="w-full h-full bg-zinc-800/50 flex flex-col items-center justify-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                   </svg>
-                  <span class="text-[10px] text-zinc-600">Principal</span>
+                  <span class="text-[10px] text-zinc-400 text-center leading-tight">Foto<br>principal</span>
                 </div>
               </div>
+              <!-- Botão remover a principal -->
+              <button v-if="previewUrl" type="button" @click.stop="removerPrincipal" aria-label="Remover imagem principal"
+                data-teste="remover-principal"
+                class="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500
+                       flex items-center justify-center transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
               <!-- Overlay editar -->
               <div v-if="previewUrl"
                    class="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100
@@ -120,7 +129,8 @@
           </div>
 
           <p class="text-[10px] text-zinc-600 mt-2">
-            A primeira imagem é a principal. Clica em × para remover. Podes adicionar várias fotos do mesmo produto.
+            A principal é a que aparece nos cartões da loja e na pesquisa. Clica em × para remover — sem principal, a
+            primeira das outras passa a principal. Podes adicionar várias fotos do mesmo produto.
           </p>
         </div>
 
@@ -377,6 +387,7 @@ export default {
       categoriasDaLoja: [],
       // Imagem principal
       ficheiro: null,
+      removerFicheiro: false,   // × na principal já guardada
       previewUrl: '',
       // Imagens adicionais já existentes (ao editar)
       imagensExistentes: [],    // [{ id, url }] — imagens do servidor
@@ -456,6 +467,7 @@ export default {
       }
 
       this.previewUrl = this.produto.ficheiro_url || ''
+      this.removerFicheiro = false
       this.imagensExistentes = (this.produto.imagens || []).map(img => ({
         id: img.id,
         url: img.ficheiro_url,
@@ -505,14 +517,32 @@ export default {
     // ── Imagem principal ──────────────────────────────────────────
     onFileChange (e) {
       const file = e.target.files[0]
+      e.target.value = ''           // permite escolher a mesma foto outra vez depois de a tirar
       if (!file) return
+      this.definirPrincipal(file)
+    },
+    definirPrincipal (file) {
+      if (this.ficheiro && this.previewUrl) URL.revokeObjectURL(this.previewUrl)
       this.ficheiro   = file
       this.previewUrl = URL.createObjectURL(file)
+      this.removerFicheiro = false
+    },
+    // × na principal: nova (ainda não guardada) → tira-a; já guardada → o servidor tira-a ao guardar e, se houver
+    // outras, a primeira sobe (Views/produtoView._promover_principal)
+    removerPrincipal () {
+      if (this.ficheiro) {
+        URL.revokeObjectURL(this.previewUrl)
+        this.ficheiro = null
+      }
+      this.removerFicheiro = !!this.produto?.ficheiro_url
+      this.previewUrl = ''
     },
 
     // ── Imagens adicionais ─────────────────────────────────────────
     onImagensAdicionaisChange (e) {
       const files = Array.from(e.target.files)
+      // ainda sem principal: a primeira foto escolhida passa a ser a principal (era o engano mais comum)
+      if (!this.previewUrl && files.length) this.definirPrincipal(files.shift())
       files.forEach(file => {
         this.novasImagens.push({ file, preview: URL.createObjectURL(file) })
       })
@@ -642,6 +672,7 @@ export default {
 
         // Imagem principal
         if (this.ficheiro) fd.append('ficheiro', this.ficheiro)
+        else if (this.removerFicheiro) fd.append('remover_ficheiro', '1')
 
         // Imagens adicionais novas
         this.novasImagens.forEach((img, idx) => {

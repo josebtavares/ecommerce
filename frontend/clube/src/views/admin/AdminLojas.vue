@@ -79,6 +79,15 @@
               {{ loja.categoria }} · {{ loja.dono.username }}
               · {{ loja.total_produtos }} prod. · {{ loja.total_encomendas }} enc.
             </p>
+            <!-- contactos públicos da loja ("Vendido por"): os mesmos que os clientes vêem -->
+            <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-400 min-w-0" data-teste="admin-loja-contactos">
+              <a v-if="loja.contacto_email" :href="`mailto:${loja.contacto_email}`" @click.stop
+                 class="truncate max-w-full hover:text-zinc-200"><font-awesome-icon :icon="['fas', 'envelope']" class="mr-1 text-zinc-500" />{{ loja.contacto_email }}</a>
+              <a v-if="loja.contacto_telefone" :href="`tel:${loja.contacto_telefone}`" @click.stop
+                 class="whitespace-nowrap hover:text-zinc-200"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1 text-zinc-500" />{{ loja.contacto_telefone }}</a>
+              <span v-if="loja.localizacao" class="truncate max-w-full"><font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1 text-zinc-500" />{{ loja.localizacao }}</span>
+              <span v-if="!loja.contacto_email && !loja.contacto_telefone && !loja.localizacao" class="text-zinc-600 italic">Sem contactos da loja</span>
+            </p>
           </div>
 
           <!-- Acção rápida conforme o estado (loja fechada pelo dono: só o dono reabre) -->
@@ -177,6 +186,24 @@
         </div>
 
         <div class="p-5 space-y-5">
+          <!-- Contactos: da loja (públicos, "Vendido por") e do dono (a conta) -->
+          <div class="grid sm:grid-cols-2 gap-3" data-teste="admin-ficha-contactos">
+            <div class="bg-zinc-800/60 rounded-xl p-4 space-y-1.5 text-xs min-w-0">
+              <h3 class="font-bold text-zinc-400 uppercase tracking-wider mb-2">Contactos da loja</h3>
+              <p v-if="lojaDetalhe.contacto_email" class="truncate"><font-awesome-icon :icon="['fas', 'envelope']" class="mr-1.5 text-zinc-500" fixed-width /><a :href="`mailto:${lojaDetalhe.contacto_email}`" class="text-red-400 hover:text-red-300">{{ lojaDetalhe.contacto_email }}</a></p>
+              <p v-if="lojaDetalhe.contacto_telefone"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1.5 text-zinc-500" fixed-width /><a :href="`tel:${lojaDetalhe.contacto_telefone}`" class="text-red-400 hover:text-red-300">{{ lojaDetalhe.contacto_telefone }}</a></p>
+              <p class="text-zinc-300"><font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1.5 text-zinc-500" fixed-width />{{ lojaDetalhe.localizacao || 'Sem localização' }}</p>
+              <p class="text-zinc-300"><font-awesome-icon :icon="['fas', 'id-card']" class="mr-1.5 text-zinc-500" fixed-width />NIF {{ lojaDetalhe.nif || '—' }}</p>
+              <p v-if="!lojaDetalhe.contacto_email && !lojaDetalhe.contacto_telefone" class="text-zinc-500 italic">A loja ainda não pôs email nem telefone.</p>
+            </div>
+            <div class="bg-zinc-800/60 rounded-xl p-4 space-y-1.5 text-xs min-w-0">
+              <h3 class="font-bold text-zinc-400 uppercase tracking-wider mb-2">Dono</h3>
+              <p class="text-zinc-200 font-semibold truncate"><font-awesome-icon :icon="['fas', 'user']" class="mr-1.5 text-zinc-500" fixed-width />{{ lojaDetalhe.dono.nome || lojaDetalhe.dono.username }}<span v-if="lojaDetalhe.dono.nome" class="font-normal text-zinc-500"> · {{ lojaDetalhe.dono.username }}</span></p>
+              <p v-if="lojaDetalhe.dono.email" class="truncate"><font-awesome-icon :icon="['fas', 'envelope']" class="mr-1.5 text-zinc-500" fixed-width /><a :href="`mailto:${lojaDetalhe.dono.email}`" class="text-red-400 hover:text-red-300">{{ lojaDetalhe.dono.email }}</a></p>
+              <p v-if="lojaDetalhe.dono.telefone"><font-awesome-icon :icon="['fas', 'phone']" class="mr-1.5 text-zinc-500" fixed-width /><a :href="`tel:${lojaDetalhe.dono.telefone}`" class="text-red-400 hover:text-red-300">{{ lojaDetalhe.dono.telefone }}</a></p>
+            </div>
+          </div>
+
           <!-- KPIs -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div v-for="kpi in kpisDetalhe" :key="kpi.label"
