@@ -164,10 +164,24 @@ def _creditos_por_mes(**filtro):
     return out
 
 
+def _estado_cobranca(r):
+    """Em que ponto está o pagamento das comissões do mês (cobrança mensal, utils/cobranca_comissoes.py)."""
+    if r['pagas'] == r['n']:
+        return {'estado': 'paga', 'nome': 'Paga'}
+    if r['em_cobranca']:
+        return {'estado': 'por_pagar', 'nome': 'Em cobrança · por pagar'}
+    if r['pagas']:
+        return {'estado': 'parcial', 'nome': f"{r['pagas']} de {r['n']} pagas"}
+    return {'estado': 'por_cobrar', 'nome': 'Por cobrar'}
+
+
 def _comissoes_por_mes(loja):
     from django.db.models.functions import TruncMonth
     meses = (Comissao.objects.filter(loja=loja).annotate(m=TruncMonth('data_criacao'))
-             .values('m').annotate(total=Sum('valor_comissao'), n=Count('id')).order_by('-m'))
+             .values('m').annotate(total=Sum('valor_comissao'), n=Count('id'),
+                                   pagas=Count('id', filter=Q(status='liquidada')),
+                                   em_cobranca=Count('id', filter=Q(status='pendente', cobranca__estado='pendente')))
+             .order_by('-m'))
     faturas = {fc.mes: fc for fc in FaturaComissoes.objects.filter(loja=loja)}
     creditos = _creditos_por_mes(loja=loja)
     out = []
@@ -175,7 +189,7 @@ def _comissoes_por_mes(loja):
         mes = _mes_local(r['m'])
         fc = faturas.get(mes)
         out.append({'mes': f'{mes:%Y-%m}', 'total': str(r['total']), 'comissoes': r['n'],
-                    'fatura': fiscal.fatura_resumo(fc),
+                    'fatura': fiscal.fatura_resumo(fc), 'cobranca': _estado_cobranca(r),
                     **resumo_comissoes(r['total'] or Decimal('0'), creditos.get((loja.id, mes), Decimal('0')), fc)})
     return out
 

@@ -226,7 +226,7 @@ def reembolsos(periodo, loja_id=None):
 def receita_plataforma(periodo, loja_id=None):
     """Comissões geradas + subscrições pagas (sem ofertas) − créditos de comissão devolvidos às lojas."""
     from ..models import Comissao, CreditoComissao, FaturaSubscricao
-    com = Comissao.objects.filter(periodo.filtro('data_criacao'))
+    com = Comissao.objects.receita().filter(periodo.filtro('data_criacao'))       # sem anuladas nem perdoadas
     fat = FaturaSubscricao.objects.filter(periodo.filtro('paga_em'), estado='paga').exclude(metodo='oferta')
     cred = CreditoComissao.objects.filter(periodo.filtro('data_criacao'))
     if loja_id:
@@ -242,7 +242,7 @@ def receita_plataforma(periodo, loja_id=None):
 
 def serie_receita(periodo):
     from ..models import Comissao, CreditoComissao, FaturaSubscricao
-    c = serie(Comissao.objects.all(), 'data_criacao', periodo, t=Sum('valor_comissao'))
+    c = serie(Comissao.objects.receita(), 'data_criacao', periodo, t=Sum('valor_comissao'))
     f = serie(FaturaSubscricao.objects.filter(estado='paga').exclude(metodo='oferta'), 'paga_em', periodo,
               t=Sum('valor'))
     cr = serie(CreditoComissao.objects.all(), 'data_criacao', periodo, t=Sum('valor'))

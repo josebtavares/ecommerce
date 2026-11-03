@@ -763,7 +763,7 @@ def resumo_periodo(inicio, fim):
     receita_sub = pagas.exclude(metodo='oferta').aggregate(v=Sum('valor'), n=Count('id'))
     por_plano = list(pagas.exclude(metodo='oferta').values('plano__nome').annotate(v=Sum('valor'), n=Count('id')).order_by('-v'))
     por_metodo = list(pagas.values('metodo').annotate(v=Sum('valor'), n=Count('id')).order_by('-n'))
-    com = Comissao.objects.filter(data_criacao__gte=de, data_criacao__lt=ate).aggregate(
+    com = Comissao.objects.receita().filter(data_criacao__gte=de, data_criacao__lt=ate).aggregate(
         v=Sum('valor_comissao'), n=Count('id'),
         liquidada=Sum('valor_comissao', filter=Q(status='liquidada')),
         pendente=Sum('valor_comissao', filter=Q(status='pendente')))
