@@ -86,7 +86,7 @@ def _produto_cartao(request, p):
     if not p:
         return None
     img = p.ficheiro_poster or p.ficheiro
-    return {'id': p.id, 'nome': p.nome, 'preco': str(p.preco), 'loja_id': p.loja_id,
+    return {'id': p.id, 'nome': p.nome, 'preco': str(p.preco), 'loja_id': p.loja_id, 'loja_slug': p.loja.slug,
             'imagem': url_ficheiro(request, img) if img else None}
 
 

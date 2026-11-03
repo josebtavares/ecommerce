@@ -70,7 +70,7 @@ function paginaFixa (caminho) {
 
 function sitemap (site, dados) {
   const fixas = Object.keys(PUBLICAS).map(c => ({ loc: site + c }))
-  const lojas = (dados.lojas || []).map(l => ({ loc: `${site}/loja/${l.id}`, lastmod: l.atualizado }))
+  const lojas = (dados.lojas || []).map(l => ({ loc: `${site}/loja/${l.slug || l.id}`, lastmod: l.atualizado }))
   const produtos = (dados.produtos || []).map(p => ({ loc: `${site}/loja/${p.loja}?produto=${p.id}` }))
   const urls = [...fixas, ...lojas, ...produtos].map(u =>
     `<url><loc>${esc(u.loc)}</loc>${u.lastmod ? `<lastmod>${esc(u.lastmod)}</lastmod>` : ''}</url>`)

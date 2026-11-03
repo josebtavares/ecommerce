@@ -82,6 +82,9 @@
       </div>
     </div>
 
+    <!-- Endereço público (/loja/<endereço>) -->
+    <SeccaoEndereco :loja-id="lojaId" @alterado="$emit('updated')" />
+
     <!-- Contactos públicos ("Vendido por" na página da loja e no checkout) -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="loja-contactos" data-alvo="contacto">
       <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Contactos da loja</h2>
@@ -389,6 +392,7 @@ import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
 import SeccaoDadosBancarios from '@/components/loja/SeccaoDadosBancarios.vue'
 import SeccaoDocumentos from '@/components/loja/SeccaoDocumentos.vue'
 import SeccaoVinti4 from '@/components/loja/SeccaoVinti4.vue'
+import SeccaoEndereco from '@/components/loja/SeccaoEndereco.vue'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 
 // campos de texto que o dono pode apagar (os outros vazios não se enviam)
@@ -415,7 +419,7 @@ function isVideo (url) {
 
 export default {
   name: 'BackofficeConfiguracoes',
-  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos, SeccaoVinti4 },
+  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos, SeccaoVinti4, SeccaoEndereco },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },

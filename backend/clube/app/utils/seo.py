@@ -79,7 +79,7 @@ def dados_loja(loja):
         estruturados['address'] = loja.localizacao
     return {
         'tipo': 'loja', 'titulo': f'{loja.nome} — Bende', 'descricao': descricao, 'nome': loja.nome,
-        'caminho': f'/loja/{loja.pk}', 'imagem': _url_imagem('loja', loja, foto_loja(loja)),
+        'caminho': f'/loja/{loja.slug}', 'imagem': _url_imagem('loja', loja, foto_loja(loja)),
         'indexar': not loja.demo, 'estruturados': estruturados,
     }
 
@@ -92,7 +92,7 @@ def dados_produto(produto):
     descricao = _texto(f'{rotulo} · {loja.nome}' + (f'. {resumo}' if resumo else ''))
     return {
         'tipo': 'produto', 'titulo': f'{produto.nome} — {loja.nome}', 'descricao': descricao, 'nome': produto.nome,
-        'caminho': f'/loja/{loja.pk}?produto={produto.pk}',
+        'caminho': f'/loja/{loja.slug}?produto={produto.pk}',
         'imagem': _url_imagem('produto', produto, foto_produto(produto)), 'indexar': not loja.demo,
         'estruturados': {
             '@context': 'https://schema.org', '@type': 'Product', 'name': produto.nome,
@@ -137,9 +137,9 @@ def imagem_jpeg(foto):
 def lista_sitemap():
     from ..models import Loja, Produto
     lojas = Loja.objects.filter(ativa=True, demo=False)
-    produtos = Produto.objects.filter(ativo=True, loja__in=lojas).values_list('pk', 'loja_id')
+    produtos = Produto.objects.filter(ativo=True, loja__in=lojas).values_list('pk', 'loja__slug')
     return {
-        'lojas': [{'id': pk, 'atualizado': d.date().isoformat()}
-                  for pk, d in lojas.values_list('pk', 'data_atualizacao')],
+        'lojas': [{'id': pk, 'slug': slug, 'atualizado': d.date().isoformat()}
+                  for pk, slug, d in lojas.values_list('pk', 'slug', 'data_atualizacao')],
         'produtos': [{'id': pk, 'loja': loja} for pk, loja in produtos[:45000]],
     }

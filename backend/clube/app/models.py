@@ -209,6 +209,8 @@ class Loja(models.Model):
     
 
     nome            = models.CharField(max_length=200)
+    # endereço público /loja/<slug> (utils/endereco_loja.py): gerado do nome ao criar, o dono pode mudá-lo
+    slug            = models.SlugField(max_length=60, unique=True)
     descricao       = models.TextField(blank=True, default='')
     categoria       = models.CharField(max_length=100)          # ex: 'comida', 'roupa', 'eletronicos'
     localizacao     = models.CharField(max_length=300, blank=True, default='')
@@ -343,6 +345,12 @@ class Loja(models.Model):
         update_fields = kwargs.get('update_fields')
         if update_fields is not None and 'estado' in update_fields and 'ativa' not in update_fields:
             kwargs['update_fields'] = [*update_fields, 'ativa']
+        if not self.slug:
+            from .utils.endereco_loja import gerar
+            self.slug = gerar(self.nome, self.pk)
+            uf = kwargs.get('update_fields')
+            if uf is not None and 'slug' not in uf:
+                kwargs['update_fields'] = [*uf, 'slug']
         super().save(*args, **kwargs)
 
     def mudar_estado(self, novo, motivo=''):
@@ -367,6 +375,22 @@ class Loja(models.Model):
             from .servicos.ciclo import sincronizar_depois
             sincronizar_depois(self)
             return cancelar_pendentes_da_loja(self) if novo != 'ativa' else 0
+
+
+class LojaEnderecoAntigo(models.Model):
+    """
+    Registo de cada mudança de endereço: o endereço que a loja deixou (e quando). Esses endereços continuam a abrir
+    a loja (redirecionam) e ficam reservados para ela. Uma linha por mudança — conta para o limite de mudanças.
+    """
+    loja      = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='enderecos_antigos')
+    slug      = models.SlugField(max_length=60)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'{self.slug} → {self.loja_id}'
 
 
 # ══════════════════════════════════════════════════════════════

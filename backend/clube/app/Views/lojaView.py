@@ -128,6 +128,63 @@ def loja_get(request, id):
 
 
 # ══════════════════════════════════════════════════════════════
+# LOJA — ENDEREÇO (/loja/<slug>) — utils/endereco_loja.py
+# ══════════════════════════════════════════════════════════════
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def loja_endereco(request, ref):
+    """
+    GET /app/loja/endereco/<slug | endereço antigo | id>/ → {id, slug}
+    A página pública resolve o endereço antes de carregar a loja; se `slug` não for o pedido, o site troca o
+    endereço (links antigos e /loja/<id> redirecionam). As lojas não activas (excepto fechadas) só se resolvem
+    para quem as gere — o mesmo que loja_get.
+    """
+    from ..utils import endereco_loja
+    loja = endereco_loja.resolver(ref)
+    if loja and not (loja.ativa or loja.estado == 'fechada'):
+        u = request.user
+        ve = u.is_authenticated and (u.is_staff or UtilizadorLoja.objects.filter(
+            loja=loja, utilizador__user=u, ativo=True).exists())
+        loja = loja if ve else None
+    if not loja:
+        return Response({'detail': 'Loja não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+    return Response({'id': loja.id, 'slug': loja.slug})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def loja_endereco_editar(request, id):
+    """
+    GET  /app/loja/<id>/endereco/[?verificar=<slug>] → endereço actual, antigos e (com verificar) se está livre
+    POST /app/loja/<id>/endereco/ {slug} → muda o endereço (o actual continua a abrir a loja)
+    """
+    from ..utils import endereco_loja as el
+    loja = get_object_or_404(Loja, id=id)
+    _, erro = _exige_permissao(request, loja, 'editar_loja')
+    if erro:
+        return erro
+    if request.method == 'POST':
+        msg = el.mudar(loja, request.data.get('slug'))
+        if msg:
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+        loja.refresh_from_db(fields=['slug'])
+    dados = {
+        'slug': loja.slug,
+        'antigos': el.antigos(loja),
+        'mudancas_restantes': max(el.MAX_MUDANCAS - el.mudancas_recentes(loja), 0),
+        'max_mudancas': el.MAX_MUDANCAS, 'janela_dias': el.JANELA_DIAS, 'min': el.MIN, 'max': el.MAX,
+    }
+    v = request.query_params.get('verificar')
+    if request.method == 'GET' and v is not None:
+        v = v.strip().lower()
+        msg = None if v == loja.slug else el.validar(v, loja)
+        dados['verificacao'] = {'slug': v, 'livre': msg is None, 'erro': msg,
+                                'sugestao': el.gerar(v or loja.nome, loja.pk) if msg else None}
+    return Response(dados)
+
+
+# ══════════════════════════════════════════════════════════════
 # LOJA — CRIAR
 # ══════════════════════════════════════════════════════════════
 

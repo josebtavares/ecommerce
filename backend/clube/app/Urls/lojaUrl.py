@@ -9,6 +9,8 @@ urlpatterns = [
     # ── Leitura pública ───────────────────────────────────────
     path('loja/',                                       lojaView.loja_list,             name='loja-list'),
     path('loja/<int:id>/',                              lojaView.loja_get,              name='loja-get'),
+    path('loja/endereco/<str:ref>/',                    lojaView.loja_endereco,         name='loja-endereco'),
+    path('loja/<int:id>/endereco/',                     lojaView.loja_endereco_editar,  name='loja-endereco-editar'),
 
     # ── Criar loja (utilizador autenticado) ───────────────────
     path('loja/criar/',                                 lojaView.loja_create,           name='loja-criar'),

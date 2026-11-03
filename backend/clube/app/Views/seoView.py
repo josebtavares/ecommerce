@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from ..models import Loja, Produto
-from ..utils import seo
+from ..utils import seo, endereco_loja
 
 
 def _produto_publico(id, loja_id=None):
@@ -17,9 +17,13 @@ def _produto_publico(id, loja_id=None):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def seo_pagina(request, id):
-    """GET /app/seo/loja/<id>/[?produto=<id>] — dados para o HTML da página da loja (ou do produto nela)."""
-    loja = get_object_or_404(Loja, pk=id, ativa=True)
+def seo_pagina(request, ref):
+    """GET /app/seo/loja/<slug | endereço antigo | id>/[?produto=<id>] — dados para o HTML da página da loja (ou do
+    produto nela). `caminho` é o endereço canónico (/loja/<slug>): o site redireciona para ele (301) quando o pedido
+    veio por outro (id, endereço antigo)."""
+    loja = endereco_loja.resolver(ref)
+    if not loja or not loja.ativa:
+        return Response({'detail': 'Loja não encontrada.'}, status=404)
     pid = request.query_params.get('produto', '')
     valido = pid.isascii() and pid.isdigit() and len(pid) < 12
     produto = _produto_publico(int(pid), loja.pk) if valido else None

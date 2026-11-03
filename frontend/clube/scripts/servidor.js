@@ -53,6 +53,7 @@ function guardado (chave, pedir) {
   return Promise.resolve(e.valor)
 }
 
+const APP_LOJA = new Set(['criar', 'demo'])
 const api = (caminho, ms = ESPERA_API) => fetch(API + caminho, { signal: AbortSignal.timeout(ms) })
 
 function dadosLoja (loja, produto) {
@@ -79,6 +80,14 @@ async function paginaLoja (req, res, url, loja) {
   if (!dados) return enviarHtml(res, indexHtml)
   if (dados.naoExiste) {   // a app mostra "loja não encontrada"/"fechada"; o Google não a guarda
     return enviarHtml(res, injetar(indexHtml, SITE, { ...paginaFixa('/sem-pagina'), caminho: url.pathname }), 404)
+  }
+  // /loja/<id> ou um endereço antigo → 301 para o actual (/loja/<slug>), com a mesma query (?produto=, ?servico=…)
+  const canonico = String(dados.caminho || '').split('?')[0]
+  if (canonico.startsWith('/loja/') && canonico !== url.pathname.replace(/\/+$/, '')) {
+    res.statusCode = 301
+    res.setHeader('Location', canonico + url.search)
+    res.setHeader('Cache-Control', 'public, max-age=300')
+    return res.end()
   }
   enviarHtml(res, injetar(indexHtml, SITE, dados))
 }
@@ -110,8 +119,9 @@ async function atender (req, res) {
     const og = c.match(/^\/og\/(loja|produto)\/(\d{1,12})\.jpg$/)
     if (og) return imagemPartilha(res, og[1], og[2], req.method === 'HEAD')
     if (c === '/sitemap.xml') return mapaDoSite(res)
-    const loja = c.match(/^\/loja\/(\d{1,11})\/?$/i)
-    if (loja) return paginaLoja(req, res, url, loja[1])
+    // /loja/<slug> (ou /loja/<id>, endereço antigo); /loja/criar e /loja/demo são páginas da app
+    const loja = c.match(/^\/loja\/([a-z0-9][a-z0-9-]{0,59})\/?$/i)
+    if (loja && !APP_LOJA.has(loja[1].toLowerCase())) return paginaLoja(req, res, url, loja[1].toLowerCase())
     if (!path.extname(c)) return enviarHtml(res, injetar(indexHtml, SITE, paginaFixa(c)))
   }
   return serveHandler(req, res, opcoesFicheiros)

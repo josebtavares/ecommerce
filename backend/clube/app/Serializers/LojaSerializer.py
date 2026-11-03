@@ -60,7 +60,7 @@ class LojaSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'dono',
-            'nome', 'descricao', 'categoria', 'localizacao',
+            'nome', 'slug', 'descricao', 'categoria', 'localizacao',
             'percentagem_iva',
             'entrega_ativa', 'levantamento_ativo',
             'logo', 'logo_url',
@@ -79,7 +79,8 @@ class LojaSerializer(serializers.ModelSerializer):
         ]
         # estado/ativa só mudam pelos endpoints próprios (fechar/reabrir, admin) — nunca por PATCH;
         # o modelo de cobrança e a comissão só os muda o admin
-        read_only_fields = ['dono', 'data_criacao', 'data_atualizacao', 'banner_estado',
+        # o endereço (slug) muda-se por /app/loja/<id>/endereco/ (validado, guarda o antigo)
+        read_only_fields = ['dono', 'slug', 'data_criacao', 'data_atualizacao', 'banner_estado',
                             'ativa', 'estado', 'estado_motivo', 'estado_alterado_em',
                             'modelo_cobranca', 'percentagem_comissao', 'documentos_obrigatorios']
         extra_kwargs = {
@@ -197,7 +198,7 @@ class LojaPublicSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Loja
         fields = [
-            'id', 'nome', 'descricao', 'categoria', 'localizacao',
+            'id', 'nome', 'slug', 'descricao', 'categoria', 'localizacao',
             'logo_url', 'banner_url', 'banner_poster_url', 'banner_estado',
             'cor_primaria', 'cor_secundaria',
             'template_id', 'dark_mode',
@@ -258,7 +259,7 @@ class LojaMiniSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Loja
-        fields = ['id', 'nome', 'categoria', 'logo_url']
+        fields = ['id', 'nome', 'slug', 'categoria', 'logo_url']
 
     def get_logo_url(self, obj):
         request = self.context.get('request')
