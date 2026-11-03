@@ -212,7 +212,7 @@
       </div>
     </template>
 
-    <!-- ═══ COBRANÇAS (mensalidades: FaturaSubscricao), paginadas no servidor — a fatura legal do Bende regista-se em Faturação ═══ -->
+    <!-- ═══ COBRANÇAS (mensalidades: FaturaSubscricao), paginadas no servidor — a fatura legal do Bende regista-se na linha ou em Faturação ═══ -->
     <template v-else-if="tab === 'faturas'">
       <div class="flex flex-wrap items-center gap-2">
         <select v-model="tipoFatura" aria-label="Lojas ou POS" data-teste="cobrancas-tipo"
@@ -389,6 +389,7 @@ import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 import LinhaCobrancaAdmin from '@/components/subscricao/LinhaCobrancaAdmin.vue'
 import SubscricaoFicha from './SubscricaoFicha.vue'
+import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
 
 const TABS = [{ key: 'resumo', label: 'Resumo' }, { key: 'lojas', label: 'Lojas' }, { key: 'pos', label: 'POS' }, { key: 'faturas', label: 'Cobranças' }, { key: 'planos', label: 'Planos' }]
 const PERIODOS = [{ key: 'este_mes', label: 'Este mês' }, { key: 'mes_passado', label: 'Mês passado' },
@@ -426,7 +427,12 @@ export default {
     },
   },
 
-  created () { this.escolherPeriodo('este_mes'); this.carregarPlanos() },
+  created () {
+    this.escolherPeriodo('este_mes'); this.carregarPlanos()
+    // mensalidade paga/anulada, fatura do Bende registada (aqui ou em Faturação), subscrição mudada… por outra pessoa
+    this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal())
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     euros (v) { return formatarDinheiro(Number(v) || 0) },
@@ -438,11 +444,21 @@ export default {
     corFatura (e) { return { paga: 'bg-green-500/15 text-green-400', pendente: 'bg-amber-500/15 text-amber-300', anulada: 'bg-zinc-700 text-zinc-400' }[e] },
     debounce (fn) { clearTimeout(this.t); this.t = setTimeout(fn, 300) },
 
-    async pedir (fn) {
-      this.carregando = true; this.erro = ''
-      try { await fn() } catch (e) { this.erro = e.response?.data?.detail || 'Não foi possível carregar.' } finally { this.carregando = false }
+    // silencioso: actualização em tempo real — sem esqueleto e sem apagar o que está à vista
+    async pedir (fn, silencioso = false) {
+      if (!silencioso) { this.carregando = true; this.erro = '' }
+      try { await fn() } catch (e) {
+        if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar.'
+      } finally { if (!silencioso) this.carregando = false }
     },
-    carregarLojas (offset = this.lOffset) {
+    atualizarEmTempoReal () {
+      this.$refs.abas?.recarregar()
+      if (this.ficha || this.tab === 'faturas') { this.versao++; return }    // vista da loja/POS e listas de cobranças
+      if (this.tab === 'lojas') this.carregarLojas(this.lOffset, true)
+      else if (this.tab === 'pos') this.carregarPos(this.pOffset, true)
+      else if (this.tab === 'resumo') this.carregarResumo(true)
+    },
+    carregarLojas (offset = this.lOffset, silencioso = false) {
       this.lOffset = offset
       return this.pedir(async () => {
         const params = { limit: LIMITE, offset }
@@ -450,7 +466,7 @@ export default {
         if (this.modelo) params.modelo = this.modelo
         if (this.estado) params.estado = this.estado
         this.lojas = (await api.get('/app/admin/subscricoes/', { params })).data
-      })
+      }, silencioso)
     },
     carregarPlanos () {
       return this.pedir(async () => { this.planos = (await api.get('/app/admin/planos/')).data })
@@ -472,7 +488,8 @@ export default {
     acaoFicha (tipo, x, extra) {
       const f = { oferta: () => this.abrirOferta(x, extra), modelo: () => this.abrirModelo(x), ofertaPos: () => this.abrirOfertaPos(x),
                   planoPos: () => this.abrirPlanoPos(x), pagar: () => this.abrirPagar(x), adiar: () => this.abrirAdiar(x),
-                  anular: () => this.abrirAnular(x), recibo: () => this.recibo(x), faturacao: () => this.verNaFaturacao(x) }[tipo]
+                  anular: () => this.abrirAnular(x), recibo: () => this.recibo(x), faturacao: () => this.verNaFaturacao(x),
+                  faturada: () => this.alterado() }[tipo]
       if (f) f()
     },
     // depois de uma ação: as listas (versao), a vista aberta e os contadores das abas
@@ -494,7 +511,7 @@ export default {
                      form: { metodo: 'transferencia', notas: '' } }
     },
     recibo (f) { descarregarComprovativoSubscricao(f) },
-    // a fatura legal do Bende (registar, substituir, anular, histórico) vive em Admin → Faturação, na ficha da loja/POS
+    // a fatura legal do Bende regista-se na linha da cobrança ou em Admin → Faturação (lá também o histórico)
     verNaFaturacao (f) {
       this.$router.push({ path: '/admin/faturacao', query: { ficha: f.loja_id ? `loja-${f.loja_id}` : `pos-${f.pos_id}`, aba: 'bende' } })
     },
@@ -510,11 +527,11 @@ export default {
       this.fim = iso(b)
       this.carregarResumo()
     },
-    carregarResumo () {
+    carregarResumo (silencioso = false) {
       if (!this.inicio || !this.fim) return
       return this.pedir(async () => {
         this.resumo = (await api.get('/app/admin/subscricoes/resumo/', { params: { inicio: this.inicio, fim: this.fim } })).data
-      })
+      }, silencioso)
     },
     abrirOferta (l, servicos = false) {
       const sub = servicos ? l.subscricao_servicos : l.subscricao
@@ -522,7 +539,7 @@ export default {
                      titulo: `Oferecer meses${servicos ? ' de Serviços' : ''} — ${l.loja_nome}`, botao: 'Oferecer', erro: '', aGuardar: false,
                      form: servicos ? { meses: 1, motivo: '', servicos: true } : { meses: 1, motivo: '' } }
     },
-    carregarPos (offset = this.pOffset) {
+    carregarPos (offset = this.pOffset, silencioso = false) {
       this.pOffset = offset
       return this.pedir(async () => {
         const params = { limit: LIMITE, offset }
@@ -530,7 +547,7 @@ export default {
         if (this.situacaoPos) params.situacao = this.situacaoPos
         if (this.estadoPos) params.estado = this.estadoPos
         this.posLista = (await api.get('/app/admin/subscricoes/pos/', { params })).data
-      })
+      }, silencioso)
     },
     abrirOfertaPos (p) {
       this.modal = { tipo: 'oferta', pos: p, nome: p.pos_nome, planoNome: p.subscricao.plano ? p.subscricao.plano.nome : 'sem plano',
