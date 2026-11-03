@@ -109,7 +109,7 @@
         </p>
         <!-- fora da tabela: no telemóvel a tabela desliza para o lado e o histórico ficava escondido -->
         <div v-if="historicoVenda" class="relative">
-          <HistoricoFatura :key="historicoVenda" :referencia="historicoVenda" />
+          <HistoricoFatura :key="historicoVenda + versao" :referencia="historicoVenda" />
           <button type="button" @click="historicoVenda = ''" aria-label="Fechar histórico" class="absolute top-2 right-3 text-xs text-zinc-400 hover:text-zinc-200">Fechar ✕</button>
         </div>
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-x-auto">
@@ -246,7 +246,7 @@ export default {
       aba: this.abaInicial || 'dados',
       fv: { ...vazio(), q: this.qInicial },
       vendas: { count: 0, results: [], totais: null }, offsetVendas: 0, carregandoVendas: false,
-      aberto: {}, versao: 0, pedido: 0, historicoVenda: '', origem: origemDe(this.qInicial, this.tipo),
+      aberto: {}, versao: 0, pedido: 0, pedidoVendas: 0, historicoVenda: '', origem: origemDe(this.qInicial, this.tipo),
       zip: { de: '', ate: '', aExportar: false, erro: '' },
       pq: '', pRes: null, pOffset: 0,
     }
@@ -310,7 +310,7 @@ export default {
         this.$emit('carregada', this.ficha)
         if (silencioso) {
           this.versao++                         // os históricos abertos voltam a ler
-          if (this.aba === 'vendas') this.carregarVendas()
+          if (this.aba === 'vendas') this.carregarVendas(this.offsetVendas, true)
           return
         }
         // sem uma venda pedida: abre na origem com vendas por faturar (ou com vendas), não numa vazia
@@ -328,17 +328,20 @@ export default {
       this.aba = a
       if (a === 'vendas' && !this.vendas.totais) this.carregarVendas(0)
     },
-    async carregarVendas (offset = this.offsetVendas) {
-      this.offsetVendas = offset; this.carregandoVendas = true; this.erro = ''
+    async carregarVendas (offset = this.offsetVendas, silencioso = false) {
+      const n = ++this.pedidoVendas
+      this.offsetVendas = offset
+      if (!silencioso) { this.carregandoVendas = true; this.erro = '' }
       const params = { limit: LIMITE, offset }
       for (const [k, v] of Object.entries(this.fv)) if (v) params[k] = v
       if (this.tipo === 'loja') params.origem = this.origem
       const url = this.tipo === 'pos' ? `/app/admin/faturacao/pos/${this.id}/vendas/` : `/app/admin/faturacao/loja/${this.id}/vendas/`
       try {
-        this.vendas = (await api.get(url, { params })).data
+        const vendas = (await api.get(url, { params })).data
+        if (n === this.pedidoVendas) this.vendas = vendas
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar as vendas.'
-      } finally { this.carregandoVendas = false }
+        if (!silencioso && n === this.pedidoVendas) this.erro = e.response?.data?.detail || 'Não foi possível carregar as vendas.'
+      } finally { if (n === this.pedidoVendas) this.carregandoVendas = false }
     },
     limparVendas () { this.fv = vazio(); this.carregarVendas(0) },
     mudarOrigem (o) {

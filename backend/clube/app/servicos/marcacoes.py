@@ -381,6 +381,8 @@ def _reembolso_feito(m, falta, referencia, texto=''):
     Marcacao.objects.filter(pk=m.pk).update(valor_reembolsado=m.valor_reembolsado, reembolsado_em=m.reembolsado_em,
                                             reembolso_erro='', reembolso_tentativas=0, reembolso_proxima=None,
                                             reembolso_incerto=False)
+    from ..utils import tempo_real_faturacao          # update() não dispara o sinal: a receita da marcação mudou
+    tempo_real_faturacao.emitir('marcacoes', m.pk, m.loja_id)
     from ..utils.registo import registar
     registar('marcacao', 'reembolsada', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
              metodo=m.pagamento, referencia=referencia, dados={'total_reembolsado': f'{m.valor_reembolsado:.2f}'})
