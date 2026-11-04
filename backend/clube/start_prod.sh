@@ -19,11 +19,13 @@ if [ "$WORKER_SEPARADO" != "1" ]; then
 fi
 
 # Web: WEB_CONCURRENCY processos (cada um atende HTTP e WebSockets; o channel layer no Redis liga-os).
+#   8 por omissão (teste de carga 2026-11-04: 4 processos davam ~180 pedidos/s). Cada processo: até MAX_PEDIDOS
+#   pedidos a correr (clube/borda.py) e um pool de até DB_POOL_MAX ligações ao Postgres (settings.ligar_pool).
 #   --max-requests: recicla cada processo de vez em quando (evita crescer em memória); os WebSockets reconectam.
 #   --graceful-timeout: num deploy, os pedidos em curso têm 30s para acabar.
 exec gunicorn clube.asgi:application \
   --worker-class uvicorn_worker.UvicornWorker \
-  --workers "${WEB_CONCURRENCY:-4}" \
+  --workers "${WEB_CONCURRENCY:-8}" \
   --bind "0.0.0.0:${PORT:-8000}" \
   --forwarded-allow-ips '*' \
   --timeout 60 \

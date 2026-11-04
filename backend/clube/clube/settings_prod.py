@@ -42,6 +42,8 @@ DATABASES = {
         ssl_require=True,
     )
 }
+# pool de ligações por processo (psycopg 3) — substitui o conn_max_age acima; ver ligar_pool no settings.py
+DATABASES['default'] = ligar_pool(DATABASES['default'])
 
 # ══════════════════════════════════════════════════════════════
 # CORS
