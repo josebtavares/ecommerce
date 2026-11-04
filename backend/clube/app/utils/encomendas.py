@@ -56,6 +56,8 @@ def repor_stock(encomenda, quantidades=None):
             )
     for produto in produtos_variante:
         atualizar_total_inventario(produto)
+    from .cache_publico import invalidar
+    invalidar(loja_id=encomenda.loja_id)   # o stock voltou (os .update() não disparam sinais)
 
 
 _MOTIVO_CLIENTE = {

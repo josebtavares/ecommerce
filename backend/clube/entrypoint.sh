@@ -6,16 +6,16 @@ set -e
 echo "â³ A aguardar base de dados..."
 
 while ! python -c "
-import os, psycopg2
+import os, psycopg
 try:
-    psycopg2.connect(
+    psycopg.connect(
         dbname=os.environ['DB_NAME'],
         user=os.environ['DB_USER'],
         password=os.environ['DB_PASSWORD'],
         host=os.environ['DB_HOST'],
         port=os.environ['DB_PORT'],
-    )
-except psycopg2.OperationalError:
+    ).close()
+except psycopg.OperationalError:
     exit(1)
 " 2>/dev/null; do
   echo "   PostgreSQL nao esta pronto -- a tentar novamente em 2s..."

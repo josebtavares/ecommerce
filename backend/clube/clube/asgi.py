@@ -13,6 +13,7 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from urllib.parse import parse_qs
 from django.contrib.auth.models import AnonymousUser
 import app.routing
+from clube.borda import Borda
 
 django_app = get_asgi_application()
 
@@ -58,7 +59,7 @@ class JwtAuthMiddleware:
 
 
 application = ProtocolTypeRouter({
-    "http": django_app,                          # HTTP — sem alterações
+    "http": Borda(django_app),                   # HTTP — cache pública + limite de pedidos (clube/borda.py)
     "websocket": JwtAuthMiddleware(              # WebSocket — com JWT
         URLRouter(app.routing.websocket_urlpatterns)
     ),
