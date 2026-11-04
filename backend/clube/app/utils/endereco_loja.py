@@ -8,6 +8,7 @@ Endereço público das lojas: /loja/<slug> (ex.: /loja/bom-sabor) em vez de /loj
 - O backoffice continua em /loja/<id>/backoffice (privado, não se partilha).
 """
 import re
+import time
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
@@ -22,6 +23,32 @@ RESERVADOS = frozenset({
     'bende', 'suporte', 'ajuda', 'editar', 'pesquisa', 'servicos', 'produto', 'produtos', 'checkout',
 })
 MAX_MUDANCAS, JANELA_DIAS = 3, 30
+# O servidor do site (scripts/servidor.js) guarda os dados das páginas das lojas em memória e consulta esta versão a
+# cada poucos segundos: quando muda, esquece o que guardou — o endereço novo e o redireccionamento valem logo.
+CHAVE_VERSAO = 'seo:enderecos:versao'
+
+
+def versao():
+    from django.core.cache import cache
+    try:
+        v = cache.get(CHAVE_VERSAO)
+        if v is None:
+            v = str(time.time_ns())
+            cache.add(CHAVE_VERSAO, v, timeout=None)
+            v = cache.get(CHAVE_VERSAO) or v
+        return str(v)
+    except Exception:   # sem Redis: o site fica com a validade normal (5 min)
+        return '0'
+
+
+def _avisar_site():
+    def bump():
+        from django.core.cache import cache
+        try:
+            cache.set(CHAVE_VERSAO, str(time.time_ns()), timeout=None)
+        except Exception:
+            pass
+    transaction.on_commit(bump)
 
 
 def normalizar(texto):
@@ -114,13 +141,17 @@ def _mudar(loja, novo, por, admin, manter_antigo, motivo):
                                           alterado_por=por if getattr(por, 'pk', None) else None, motivo=motivo)
         loja.slug = novo
         loja.save(update_fields=['slug'])
+        _avisar_site()
     return None
 
 
 def desligar(loja, slug):
     """Admin: um endereço antigo deixa de abrir a loja e fica livre (o registo fica). Devolve quantos desligou."""
     from ..models import LojaEnderecoAntigo
-    return LojaEnderecoAntigo.objects.filter(loja=loja, slug=slug, ativo=True).update(ativo=False)
+    n = LojaEnderecoAntigo.objects.filter(loja=loja, slug=slug, ativo=True).update(ativo=False)
+    if n:
+        _avisar_site()
+    return n
 
 
 def historico(loja, n=30):

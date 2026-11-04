@@ -19,6 +19,7 @@ const ESPERA_API = 1500
 const VALIDADE = 5 * 60 * 1000
 const VALIDADE_404 = 60 * 1000
 const VALIDADE_SITEMAP = 60 * 60 * 1000
+const VERIFICAR_VERSAO = 10 * 1000   // a cada 10 s: mudou o endereço de alguma loja?
 const MAX_CACHE = 2000
 
 const config = JSON.parse(fs.readFileSync(path.join(DIST, 'serve.json'), 'utf8'))
@@ -29,13 +30,15 @@ const opcoesFicheiros = { ...config, public: DIST, directoryListing: false,
 
 const cache = new Map()    // chave → { valor, ate }
 const aPedir = new Map()   // chave → promessa (o mesmo pedido não sai duas vezes)
+let geracao = 0            // sobe quando a cache é esquecida: um pedido que já ia a meio não guarda dados antigos
 
 // valor → guarda-o; null → erro passageiro (não guarda: fica o anterior, ou o index.html normal)
 function renovar (chave, pedir) {
   if (aPedir.has(chave)) return aPedir.get(chave)
+  const g = geracao
   const pedido = pedir().catch(() => null).then(r => {
     aPedir.delete(chave)
-    if (r) {
+    if (r && g === geracao) {
       cache.delete(chave)
       if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value)
       cache.set(chave, { valor: r.valor, ate: Date.now() + r.validade })
@@ -55,6 +58,25 @@ function guardado (chave, pedir) {
 
 const APP_LOJA = new Set(['criar', 'demo'])
 const api = (caminho, ms = ESPERA_API) => fetch(API + caminho, { signal: AbortSignal.timeout(ms) })
+
+// Quando o endereço de uma loja muda (ou um antigo é desligado), a API muda a versão: esquece as páginas das lojas e
+// o sitemap guardados, para o endereço antigo passar logo a redireccionar e o novo a abrir (em vez de até 5 min).
+let versaoEnderecos = null
+async function verificarVersao () {
+  try {
+    const r = await api('/app/seo/versao/')
+    if (!r.ok) return
+    const v = String((await r.json()).enderecos)
+    if (versaoEnderecos !== null && v !== versaoEnderecos) {
+      geracao++
+      aPedir.clear()
+      for (const chave of [...cache.keys()]) if (chave.startsWith('loja:') || chave === 'sitemap') cache.delete(chave)
+    }
+    versaoEnderecos = v
+  } catch (e) { /* API em baixo: fica a validade normal */ }
+}
+setInterval(verificarVersao, VERIFICAR_VERSAO).unref()
+verificarVersao()
 
 function dadosLoja (loja, produto) {
   const q = produto ? `?produto=${produto}` : ''
@@ -86,7 +108,8 @@ async function paginaLoja (req, res, url, loja) {
   if (canonico.startsWith('/loja/') && canonico !== url.pathname.replace(/\/+$/, '')) {
     res.statusCode = 301
     res.setHeader('Location', canonico + url.search)
-    res.setHeader('Cache-Control', 'public, max-age=300')
+    // sem cache no browser: se o dono voltar ao endereço antigo, um 301 guardado fazia um ciclo de redireccionamentos
+    res.setHeader('Cache-Control', 'no-cache')
     return res.end()
   }
   enviarHtml(res, injetar(indexHtml, SITE, dados))
