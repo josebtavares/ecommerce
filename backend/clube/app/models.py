@@ -1123,9 +1123,38 @@ class Entrega(models.Model):
     data_entrega    = models.DateTimeField(null=True, blank=True)
     motivo_falha    = models.CharField(max_length=20, choices=MOTIVOS_FALHA, blank=True, default='')
     nota_falha      = models.CharField(max_length=200, blank=True, default='')
+    # dinheiro que o condutor cobrou ao cliente nesta entrega (pagamento em dinheiro); fica com ele até a loja o
+    # receber num acerto (AcertoCondutor, utils/acertos_condutor.py). None = não cobrou nada.
+    valor_recebido  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    acerto          = models.ForeignKey('AcertoCondutor', on_delete=models.PROTECT, null=True, blank=True,
+                                        related_name='entregas')
 
     def __str__(self):
         return f'Entrega da encomenda #{self.encomenda_id}'
+
+
+class AcertoCondutor(models.Model):
+    """A loja recebeu do condutor o dinheiro que ele cobrou nas entregas (utils/acertos_condutor.py).
+    Não se apaga: anular deixa o registo (com o motivo) e as entregas voltam a estar por acertar."""
+    loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='acertos_condutor')
+    condutor        = models.ForeignKey(Condutor, on_delete=models.PROTECT, related_name='acertos')
+    condutor_nome   = models.CharField(max_length=150, blank=True, default='')
+    valor           = models.DecimalField(max_digits=12, decimal_places=2)
+    n_entregas      = models.PositiveIntegerField(default=0)
+    encomendas      = models.JSONField(default=list, blank=True)   # [ids] — fica mesmo depois de anulado
+    nota            = models.CharField(max_length=300, blank=True, default='')
+    recebido_por    = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    criado_em       = models.DateTimeField(auto_now_add=True, db_index=True)
+    anulado         = models.BooleanField(default=False)
+    anulado_em      = models.DateTimeField(null=True, blank=True)
+    anulado_por     = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    motivo_anulacao = models.CharField(max_length=300, blank=True, default='')
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'Acerto {self.id} — {self.condutor_nome} ({self.valor})'
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1541,6 +1570,7 @@ class Notificacao(models.Model):
         # Dono / admin
         ('exportacao_pronta',        'Exportação de dados pronta'),
         ('endereco_loja',            'Endereço da loja alterado'),
+        ('acerto_condutor',          'Dinheiro entregue à loja (condutor)'),
     ]
  
     utilizador   = models.ForeignKey(
@@ -2625,6 +2655,7 @@ class RegistoTransacao(models.Model):
         ('comissao',   'Comissão'),
         ('banco',      'Dados bancários'),
         ('vinti4',     'Contrato vinti4 da loja'),
+        ('acerto',     'Dinheiro entregue pelo condutor'),
     ]
     criado_em      = models.DateTimeField(db_index=True)
     tipo           = models.CharField(max_length=12, choices=TIPOS, db_index=True)

@@ -26,7 +26,7 @@ from ..Serializers.EntregaAvaliacaoSerializer import (
 from ..utils.pagination import paginar
 from ..utils.dinheiro import formatar as dinheiro
 from ..utils import devolucoes
-from ..utils.encomendas import aprovar_dinheiro, libertar_entregas, transferencia_por_confirmar
+from ..utils.encomendas import aprovar_dinheiro, libertar_entregas, transferencia_por_confirmar, valor_a_cobrar
 
 
 MSG_TRANSFERENCIA = 'Confirma primeiro que a transferência chegou: a encomenda não sai sem estar paga.'
@@ -466,8 +466,13 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                     loja=encomenda.loja,
                     link='/perfil',
                 )
-            # pagamento dinheiro pendente → aprova + regista comissão
+            # pagamento dinheiro pendente → aprova + regista comissão; o condutor fica com o dinheiro até o
+            # entregar à loja (acerto — utils/acertos_condutor.py)
+            cobrado = valor_a_cobrar(encomenda)
             aprovado_agora = aprovar_dinheiro(encomenda)
+            if aprovado_agora and cobrado and entrega.condutor_id:
+                entrega.valor_recebido = cobrado
+                entrega.save(update_fields=['valor_recebido'])
  
             _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
             _com  = (encomenda.valor_devido * _perc / 100).quantize(Decimal('0.01'))
@@ -710,6 +715,7 @@ def entrega_list_loja(request, loja_id):
         'encomenda__comprador',
         'encomenda__pagamento__metodo',
         'encomenda__opcao_entrega',
+        'acerto',
     ).prefetch_related('encomenda__itens__produto').order_by(
         Case(When(por_entregar, then=0), default=1, output_field=IntegerField()),
         Case(When(por_entregar, then=Coalesce('encomenda__agendada_para', 'data_criacao'))).asc(nulls_last=True),
