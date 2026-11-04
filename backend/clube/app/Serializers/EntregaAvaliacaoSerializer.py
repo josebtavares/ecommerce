@@ -97,6 +97,10 @@ class EntregaSerializer(serializers.ModelSerializer):
     condutor_nome     = serializers.SerializerMethodField()
     valor_recebido    = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     acertado_em       = serializers.SerializerMethodField()
+    prova             = serializers.SerializerMethodField()
+    pode_juntar_prova = serializers.SerializerMethodField()
+    # o cliente pediu para cancelar e a loja ainda não respondeu (o condutor não deve sair sem falar com a loja)
+    cancelamento_pedido = serializers.SerializerMethodField()
     condutor_veiculo  = serializers.SerializerMethodField()
     condutor_id_field = serializers.SerializerMethodField()
     data_criacao      = serializers.DateTimeField(format='%d-%m-%Y %H:%M', read_only=True)
@@ -116,7 +120,7 @@ class EntregaSerializer(serializers.ModelSerializer):
             'motivo_falha', 'motivo_falha_texto', 'nota_falha',
             'opcao_entrega_nome', 'opcao_entrega_tempo', 'opcao_entrega_preco',
             'condutor_nome', 'condutor_veiculo', 'condutor_id_field',
-            'valor_recebido', 'acertado_em',
+            'valor_recebido', 'acertado_em', 'prova', 'pode_juntar_prova', 'cancelamento_pedido',
         ]
         read_only_fields = ['data_criacao']
 
@@ -140,6 +144,23 @@ class EntregaSerializer(serializers.ModelSerializer):
             )
         return value
     
+    def get_prova(self, obj):
+        from ..utils import prova_entrega
+        return prova_entrega.dados(obj, self.context.get('request'))
+
+    def get_pode_juntar_prova(self, obj):
+        from ..utils import prova_entrega
+        return prova_entrega.pode_juntar(obj) is None and not (obj.prova_foto and obj.prova_assinatura
+                                                                 and obj.recebido_por_nome)
+
+    def get_cancelamento_pedido(self, obj):
+        if obj.status not in ('atribuido', 'a_caminho'):
+            return False
+        anotado = getattr(obj, 'cancelamento_pedido_anot', None)
+        if anotado is not None:
+            return anotado
+        return obj.encomenda.reembolsos.filter(tipo='cancelamento', estado='pedido').exists()
+
     def get_comprador_nome(self, obj):
         try:
             return obj.encomenda.comprador.user.get_full_name() or obj.encomenda.comprador.user.username

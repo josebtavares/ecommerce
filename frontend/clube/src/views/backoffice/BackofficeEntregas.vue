@@ -15,6 +15,7 @@
 
     <!-- ═══ TAB: ENTREGAS ═══ -->
     <div v-if="activeTab === 'entregas'">
+      <ResumoDia ref="resumo" :loja-id="lojaId" :is-condutor="isCondutor" />
 
       <!-- Filtros + limit -->
       <div class="flex flex-wrap items-center gap-2 mb-4">
@@ -46,7 +47,7 @@
       </div>
 
       <div v-else class="space-y-3">
-        <div v-for="entrega in entregas" :key="entrega.id"
+        <div v-for="entrega in entregas" :key="entrega.id" :data-teste="`entrega-${entrega.encomenda}`"
              class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
 
           <!-- Header -->
@@ -81,6 +82,14 @@
           <div v-if="entrega.status === 'cancelada'"
                class="border-t border-zinc-800 px-4 py-3 text-xs font-semibold text-red-400">
             <font-awesome-icon :icon="['fas', 'ban']" class="mr-1" />Encomenda cancelada — não entregar. Se já a levantaste, devolve-a à loja.
+          </div>
+
+          <!-- O cliente pediu para cancelar e a loja ainda não respondeu -->
+          <div v-if="entrega.cancelamento_pedido" data-teste="cancelamento-pedido"
+               class="border-t border-zinc-800 px-4 py-3 text-xs font-semibold text-amber-300 bg-amber-500/10">
+            <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />
+            {{ isCondutor ? 'O cliente pediu para cancelar. Fala com a loja antes de sair.'
+                          : 'O cliente pediu para cancelar — responde em Devoluções antes de o condutor sair.' }}
           </div>
 
           <!-- Contacto do cliente -->
@@ -157,6 +166,23 @@
             </div>
             <div v-if="entrega.data_entrega" class="col-span-2 text-green-400">
               <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-1" />Entregue em {{ entrega.data_entrega }}
+            </div>
+            <!-- prova de entrega (opcional) -->
+            <div v-if="entrega.status === 'entregue' && (entrega.prova || entrega.pode_juntar_prova)"
+                 class="col-span-2 flex flex-wrap items-center gap-2 pt-1" data-teste="prova">
+              <a v-if="entrega.prova?.foto" :href="entrega.prova.foto" target="_blank" rel="noopener" data-teste="prova-ver-foto">
+                <img :src="entrega.prova.foto" alt="Foto da entrega" loading="lazy" class="h-14 w-14 object-cover rounded-lg border border-zinc-700" />
+              </a>
+              <a v-if="entrega.prova?.assinatura" :href="entrega.prova.assinatura" target="_blank" rel="noopener" data-teste="prova-ver-assinatura">
+                <img :src="entrega.prova.assinatura" alt="Assinatura do cliente" loading="lazy" class="h-14 w-24 object-contain rounded-lg bg-white border border-zinc-700" />
+              </a>
+              <span v-if="entrega.prova?.recebido_por" class="text-zinc-400" data-teste="prova-recebido-por">
+                Recebido por <strong class="text-zinc-200">{{ entrega.prova.recebido_por }}</strong>
+              </span>
+              <button v-if="entrega.pode_juntar_prova" type="button" @click="modalProva = entrega" data-teste="prova-juntar"
+                class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold">
+                <font-awesome-icon :icon="['fas', 'camera']" class="mr-1" />{{ entrega.prova ? 'Completar prova' : 'Juntar prova' }}
+              </button>
             </div>
           </div>
 
@@ -396,6 +422,9 @@
     <ConfirmarEntrega v-if="modalFalha" falhou :encomenda-id="modalFalha.encomenda"
       :is-condutor="isCondutor" :a-guardar="!!loadingAcao" @fechar="modalFalha = null"
       @confirmar="atualizarEntrega(modalFalha, 'falhou', $event)" />
+    <!-- depois de entregar: foto / assinatura / quem recebeu — opcional, a entrega já está feita -->
+    <ProvaEntrega v-if="modalProva" :loja-id="lojaId" :entrega="modalProva"
+      @fechar="modalProva = null" @guardada="modalProva = null; fetchEntregas(true); $refs.resumo?.carregar()" />
 
   </div>
 </template>
@@ -406,6 +435,8 @@ import { iconePagamento } from '@/utils/icones'
 import CalendarioEntregas from '@/components/calendario/CalendarioEntregas.vue'
 import ConfirmarEntrega from '@/components/calendario/ConfirmarEntrega.vue'
 import DinheiroCondutores from '@/components/entregas/DinheiroCondutores.vue'
+import ResumoDia from '@/components/entregas/ResumoDia.vue'
+import ProvaEntrega from '@/components/entregas/ProvaEntrega.vue'
 import { contactarCliente } from '@/services/chat'
 import { toast } from 'vue3-toastify'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
@@ -415,7 +446,7 @@ const ATUALIZAR_MS = 30000
 
 export default {
   name: 'BackofficeEntregas',
-  components: { CalendarioEntregas, ConfirmarEntrega, AvisoMudouPorFora, DinheiroCondutores },
+  components: { CalendarioEntregas, ConfirmarEntrega, AvisoMudouPorFora, DinheiroCondutores, ResumoDia, ProvaEntrega },
   props: {
     lojaId:    [String, Number],
     minhaRole: { type: String, default: '' },
@@ -451,6 +482,7 @@ export default {
       loadingReatribuir: false,
       modalFalha:        null,
       modalEntregue:     null,
+      modalProva:        null,
       modalMorada:       null,
       novaMorada:        '',
       loadingMorada:     false,
@@ -471,12 +503,12 @@ export default {
     totalPages ()  { return Math.ceil(this.totalCount / this.limit) },
     // a meio de uma acção: os dados não mudam por baixo da pessoa
     ocupado () {
-      return !!(this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada || this.loadingAcao ||
+      return !!(this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada || this.modalProva || this.loadingAcao ||
         this.loadingReatribuir || this.loadingMorada)
     },
     // a entrega que a pessoa tem em mãos (modal aberto)
     emMaos () {
-      const m = this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada
+      const m = this.modalReatribuir || this.modalFalha || this.modalEntregue || this.modalMorada || this.modalProva
       return m ? m.encomenda : null
     },
     paginasVisiveis () {
@@ -552,7 +584,7 @@ export default {
     atualizarLista () {
       if (document.hidden || this.ocupado) return
       this.adiada = null
-      if (this.activeTab === 'entregas') this.fetchEntregas(true)
+      if (this.activeTab === 'entregas') { this.fetchEntregas(true); this.$refs.resumo?.carregar() }
       else if (this.activeTab === 'condutores') this.fetchEntregas(true)   // contagem "por entregar" de cada condutor
       else if (this.activeTab === 'dinheiro') this.$refs.dinheiro?.carregar(true)   // um condutor entregou: mais dinheiro
     },
@@ -601,16 +633,24 @@ export default {
 
     async atualizarEntrega (entrega, novoStatus, extra = {}) {
       this.loadingAcao = entrega.id
+      let feita = null
       try {
-        await api.patch(
+        const { data } = await api.patch(
           `/app/loja/${this.lojaId}/encomendas/${entrega.encomenda}/entrega/atualizar/`,
           { status: novoStatus, ...extra }
         )
+        feita = data
       } catch (e) { this.erroAcao(e) }
       finally {
         this.modalEntregue = this.modalFalha = null
         await this.fetchEntregas(true)     // mesmo com erro: a entrega pode ter mudado noutro lado
+        this.$refs.resumo?.carregar()
         this.loadingAcao = null
+      }
+      // entregue: oferece a prova (opcional — a entrega já está concluída)
+      if (novoStatus === 'entregue' && feita) {
+        const atual = this.entregas.find(e => e.id === entrega.id) || feita
+        if (atual.pode_juntar_prova) this.modalProva = atual
       }
     },
 
