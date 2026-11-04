@@ -4,8 +4,8 @@
     <AvisoMudouPorFora :visivel="!!adiada?.id" texto="Esta entrega foi alterada por outra pessoa — os dados atualizam quando terminares." />
 
     <!-- Tabs -->
-    <div class="flex gap-1 bg-zinc-900 rounded-xl p-1 w-fit">
-      <button v-for="tab in tabsVisiveis" :key="tab.key"
+    <div class="flex gap-1 bg-zinc-900 rounded-xl p-1 w-fit max-w-full overflow-x-auto">
+      <button v-for="tab in tabsVisiveis" :key="tab.key" :data-teste="`tab-${tab.key}`"
         @click="activeTab = tab.key"
         :class="['px-4 py-2 rounded-lg text-sm font-semibold transition',
                  activeTab === tab.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300']">
@@ -115,6 +115,12 @@
             <div v-if="entrega.valor_a_cobrar" data-teste="a-cobrar"
                  class="col-span-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 font-bold">
               <span>A cobrar em dinheiro</span><span class="text-sm">{{ $dinheiro(entrega.valor_a_cobrar) }}</span>
+            </div>
+            <div v-else-if="entrega.valor_recebido && entrega.status === 'entregue'" data-teste="cobrado"
+                 :class="['col-span-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold',
+                          entrega.acertado_em ? 'bg-green-500/10 text-green-300' : 'bg-amber-500/10 text-amber-300']">
+              <span>{{ entrega.acertado_em ? 'Cobrado · entregue à loja' : 'Cobrado · por entregar à loja' }}</span>
+              <span class="text-sm">{{ $dinheiro(entrega.valor_recebido) }}</span>
             </div>
             <div v-else-if="entrega.pago && porEntregar(entrega)" class="col-span-2 font-semibold text-green-400">
               <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-1" />Já pago — não cobrar nada
@@ -232,6 +238,10 @@
         </div>
       </div>
     </div>
+
+    <!-- ═══ TAB: DINHEIRO (o que os condutores cobraram e entregaram à loja) ═══ -->
+    <DinheiroCondutores v-if="activeTab === 'dinheiro'" ref="dinheiro" :loja-id="lojaId"
+      @alterado="entregas.length && fetchEntregas(true)" />
 
     <!-- ═══ TAB: CALENDÁRIO ═══ -->
     <CalendarioEntregas v-if="activeTab === 'calendario'" :loja-id="lojaId" :is-condutor="isCondutor"
@@ -395,6 +405,7 @@ import api from '@/services/api'
 import { iconePagamento } from '@/utils/icones'
 import CalendarioEntregas from '@/components/calendario/CalendarioEntregas.vue'
 import ConfirmarEntrega from '@/components/calendario/ConfirmarEntrega.vue'
+import DinheiroCondutores from '@/components/entregas/DinheiroCondutores.vue'
 import { contactarCliente } from '@/services/chat'
 import { toast } from 'vue3-toastify'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
@@ -404,7 +415,7 @@ const ATUALIZAR_MS = 30000
 
 export default {
   name: 'BackofficeEntregas',
-  components: { CalendarioEntregas, ConfirmarEntrega, AvisoMudouPorFora },
+  components: { CalendarioEntregas, ConfirmarEntrega, AvisoMudouPorFora, DinheiroCondutores },
   props: {
     lojaId:    [String, Number],
     minhaRole: { type: String, default: '' },
@@ -417,6 +428,7 @@ export default {
         { key: 'entregas',   label: 'Entregas',   icon: 'box' },
         { key: 'calendario', label: 'Calendário', icon: 'calendar-days' },
         { key: 'condutores', label: 'Condutores', icon: 'car' },
+        { key: 'dinheiro',   label: 'Dinheiro',   icon: 'money-bill-wave' },
       ],
       entregas:      [],
       totalCount:    0,
@@ -451,7 +463,11 @@ export default {
   computed: {
     isCondutor ()  { return this.minhaRole === 'condutor' },
     // o condutor não gere condutores
-    tabsVisiveis () { return this.isCondutor ? this.tabs.filter(t => t.key !== 'condutores') : this.tabs },
+    // Dinheiro: o condutor vê o seu; da loja só quem gere pagamentos (dono, gestor — gerir_pagamentos)
+    tabsVisiveis () {
+      return this.tabs.filter(t => t.key === 'condutores' ? !this.isCondutor
+        : t.key === 'dinheiro' ? (this.isCondutor || ['dono', 'gestor'].includes(this.minhaRole)) : true)
+    },
     totalPages ()  { return Math.ceil(this.totalCount / this.limit) },
     // a meio de uma acção: os dados não mudam por baixo da pessoa
     ocupado () {
@@ -538,6 +554,7 @@ export default {
       this.adiada = null
       if (this.activeTab === 'entregas') this.fetchEntregas(true)
       else if (this.activeTab === 'condutores') this.fetchEntregas(true)   // contagem "por entregar" de cada condutor
+      else if (this.activeTab === 'dinheiro') this.$refs.dinheiro?.carregar(true)   // um condutor entregou: mais dinheiro
     },
     aoMudarEncomenda (aviso) {
       if (this.ocupado) {

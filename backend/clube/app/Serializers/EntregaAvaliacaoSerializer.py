@@ -95,6 +95,8 @@ class EntregaSerializer(serializers.ModelSerializer):
     opcao_entrega_preco = serializers.DecimalField(source='opcao_entrega.preco', max_digits=10, decimal_places=2, read_only=True)
     # campos do condutor (flat)
     condutor_nome     = serializers.SerializerMethodField()
+    valor_recebido    = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    acertado_em       = serializers.SerializerMethodField()
     condutor_veiculo  = serializers.SerializerMethodField()
     condutor_id_field = serializers.SerializerMethodField()
     data_criacao      = serializers.DateTimeField(format='%d-%m-%Y %H:%M', read_only=True)
@@ -114,6 +116,7 @@ class EntregaSerializer(serializers.ModelSerializer):
             'motivo_falha', 'motivo_falha_texto', 'nota_falha',
             'opcao_entrega_nome', 'opcao_entrega_tempo', 'opcao_entrega_preco',
             'condutor_nome', 'condutor_veiculo', 'condutor_id_field',
+            'valor_recebido', 'acertado_em',
         ]
         read_only_fields = ['data_criacao']
 
@@ -185,6 +188,11 @@ class EntregaSerializer(serializers.ModelSerializer):
             return obj.condutor.utilizador.user.get_full_name() or obj.condutor.utilizador.user.username
         except Exception:
             return None
+
+    def get_acertado_em(self, obj):
+        """Dinheiro cobrado já entregue à loja (acerto não anulado): quando."""
+        a = obj.acerto if obj.acerto_id else None
+        return a.criado_em if a and not a.anulado else None
 
     def get_condutor_veiculo(self, obj):
         try:
