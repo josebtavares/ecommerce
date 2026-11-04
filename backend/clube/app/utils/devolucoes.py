@@ -149,7 +149,17 @@ def modo_cancelar(encomenda):
         return 'direto'
     if encomenda.status == 'preparando':
         return 'direto' if _entrega_falhou(encomenda) else 'pedido'
+    if encomenda.status == 'enviado' and _condutor_por_sair(encomenda):
+        # já tem condutor mas ele ainda não saiu (ex.: agendada para daqui a dias): a loja decide
+        return 'pedido'
     return None
+
+
+def _condutor_por_sair(encomenda):
+    try:
+        return encomenda.tipo_entrega == 'entrega' and encomenda.entrega.status == 'atribuido'
+    except ObjectDoesNotExist:
+        return False
 
 
 def opcoes(encomenda, agora=None):
@@ -326,11 +336,14 @@ def cancelar_pelo_cliente(encomenda, utilizador, descricao=''):
 
     r.prazo_resposta = timezone.now() + timedelta(hours=PRAZO_RESPOSTA_LOJA_H)
     r.save(update_fields=['prazo_resposta'])
+    enviada = encomenda.status == 'enviado'
     _avisar_loja(r, 'Pedido de cancelamento',
-                 f'O cliente quer cancelar uma encomenda em preparação ({formatar(valor)}). '
+                 (f'O cliente quer cancelar uma encomenda já com condutor, que ainda não saiu ({formatar(valor)}). '
+                  if enviada else f'O cliente quer cancelar uma encomenda em preparação ({formatar(valor)}). ') +
                  f'Responde até {_hora(r.prazo_resposta)} — depois disso a Bendi decide.', 'reembolso_pedido')
     _avisar_cliente(r, 'Pedido de cancelamento enviado',
-                    'A encomenda já estava em preparação, por isso a loja tem de aceitar o cancelamento.')
+                    ('A encomenda já tem condutor' if enviada else 'A encomenda já estava em preparação')
+                    + ', por isso a loja tem de aceitar o cancelamento.')
     return r
 
 
@@ -435,7 +448,9 @@ def loja_aceitar(r, utilizador, valor=None, devolver_produto=None):
     _resposta_loja(r, 'aceite')
 
     if r.tipo == 'cancelamento':
-        if enc.status not in ('pago', 'preparando'):
+        # 'enviado': o pedido foi feito com o condutor ainda por sair; se entretanto saiu, a loja aceita sabendo
+        # disso (cancelar_entrega avisa o condutor para trazer a encomenda de volta)
+        if enc.status not in ('pago', 'preparando', 'enviado'):
             raise ErroReembolso('A encomenda já não pode ser cancelada.')
         _cancelar_encomenda(enc)
         mensagem(r, 'loja', 'A loja aceitou o cancelamento.', utilizador)

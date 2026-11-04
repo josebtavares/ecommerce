@@ -1,6 +1,7 @@
 from django.urls import path
 from ..Views import entregaavaliacaoView as v
 from ..Views import acertoCondutorView as acerto
+from ..Views import entregaProvaView as prova
 
 urlpatterns = [
 
@@ -60,4 +61,9 @@ urlpatterns = [
     path('loja/<int:loja_id>/entrega/dinheiro/<int:condutor_id>/', acerto.dinheiro_condutor),
     path('loja/<int:loja_id>/entrega/dinheiro/<int:condutor_id>/receber/', acerto.dinheiro_receber),
     path('loja/<int:loja_id>/entrega/dinheiro/acertos/<int:acerto_id>/anular/', acerto.dinheiro_anular),
+
+    # ── Prova de entrega (opcional) e resumo do dia ────────────
+    path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/entrega/prova/', prova.prova_juntar),
+    path('entregas/<int:entrega_id>/prova/<str:parte>/', prova.prova_ficheiro),
+    path('loja/<int:loja_id>/entrega/resumo-dia/', prova.resumo_dia),
 ]
