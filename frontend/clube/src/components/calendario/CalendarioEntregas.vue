@@ -231,6 +231,9 @@
     <ConfirmarEntrega v-if="confirmando && detalhe" :falhou="confirmando === 'falhou'" :encomenda-id="detalhe.encomenda_id"
       :a-cobrar="detalhe.valor_a_pagar" :is-condutor="isCondutor" :a-guardar="aGuardar"
       @fechar="confirmando = ''" @confirmar="mudarEntrega(confirmando, $event)" />
+    <!-- depois de entregar: prova opcional (foto / assinatura / quem recebeu), como na lista -->
+    <ProvaEntrega v-if="prova" :loja-id="lojaId" :entrega="prova" @fechar="prova = null"
+      @guardada="prova = null; carregar(true); $emit('alterado')" />
   </div>
 </template>
 
@@ -238,6 +241,7 @@
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import ConfirmarEntrega from './ConfirmarEntrega.vue'
+import ProvaEntrega from '@/components/entregas/ProvaEntrega.vue'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
 
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
@@ -256,7 +260,7 @@ const fimMes = s => { const d = D(inicioMes(s)); d.setUTCMonth(d.getUTCMonth() +
 
 export default {
   name: 'CalendarioEntregas',
-  components: { ConfirmarEntrega },
+  components: { ConfirmarEntrega, ProvaEntrega },
   props: {
     lojaId:     { type: [String, Number], required: true },
     isCondutor: { type: Boolean, default: false },
@@ -267,6 +271,7 @@ export default {
     const hoje = S(new Date())
     return {
       DIAS_CURTOS, VISTAS, ESTADO_ENTREGA,
+      prova: null,       // entrega acabada de entregar → ProvaEntrega
       vista: window.innerWidth < 640 ? 'dia' : 'mes',
       hoje, ref: hoje, tipo: '', soAgendadas: false,
       itens: [], resumo: {}, truncado: false, carregando: false, erro: '',
@@ -402,7 +407,9 @@ export default {
 
     async mudarEntrega (estado, extra = {}) {
       this.confirmando = ''
-      await this.acao(() => api.patch(`/app/loja/${this.lojaId}/encomendas/${this.detalhe.encomenda_id}/entrega/atualizar/`, { status: estado, ...extra }))
+      const data = await this.acao(() => api.patch(`/app/loja/${this.lojaId}/encomendas/${this.detalhe.encomenda_id}/entrega/atualizar/`, { status: estado, ...extra }))
+      // entregue: oferece a prova (opcional — a entrega já está concluída)
+      if (estado === 'entregue' && data?.pode_juntar_prova) this.prova = data
     },
     async atribuir () {
       const url = `/app/loja/${this.lojaId}/encomendas/${this.detalhe.encomenda_id}/entrega/`
@@ -414,11 +421,12 @@ export default {
       this.aGuardar = true
       this.erroAcao = ''
       try {
-        await fn()
+        const { data } = await fn()
         const id = this.detalhe.encomenda_id
         await this.carregar()
         this.detalhe = this.itens.find(e => e.encomenda_id === id) || null
         this.$emit('alterado')
+        return data
       } catch (e) {
         this.erroAcao = e.response?.data?.detail || 'Não foi possível guardar.'
       } finally {
