@@ -6,7 +6,9 @@ django-axes==8.3.1
 django-ratelimit==4.1.0
 
 # Base de dados
-psycopg2-binary==2.9.13
+# psycopg 3 + pool de ligações (Django 5.2: OPTIONS['pool'] — ver DATABASES no settings)
+psycopg[binary]==3.2.13
+psycopg-pool==3.2.8
 dj-database-url==2.1.0
 
 # CORS

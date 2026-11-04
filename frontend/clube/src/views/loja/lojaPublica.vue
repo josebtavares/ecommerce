@@ -47,7 +47,7 @@
 <script>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import api from '@/services/api'
+import { pedirLoja } from '@/utils/pedirLoja'
 import { getTemplate, TEMPLATE_COMPONENTS } from '@/config/lojaTemplates'
 import { DEMO_ID, ativarLojaDemo } from '@/utils/demoLoja'
 import { idDaLoja } from '@/utils/enderecoLoja'
@@ -94,7 +94,7 @@ export default {
         let darkModeDB    = cached?.darkMode      ?? true
 
         // ── 2. Fonte de verdade: API ──────────────────────────────────────────
-        const { data } = await api.get(`/app/loja/${lojaId}/`)
+        const data = await pedirLoja(lojaId)   // o mesmo pedido que o template faz a seguir (useLojaData)
         document.title = `${data.nome} — Bende`
         templateId    = data.template_id    || templateId
         corPrimaria   = data.cor_primaria   || corPrimaria

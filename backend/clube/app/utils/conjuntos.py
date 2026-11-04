@@ -357,7 +357,10 @@ def msg_sem_stock(conjunto, comp, disponivel):
 def descontar_chave(chave, quantidade):
     """Desconta `quantidade` do stock identificado pela chave (F() — sem perder outras escritas)."""
     from ..pos.models import ProdutoPOS, VarianteProdutoPOS
+    from .cache_publico import invalidar_stock
     tipo, pk = chave
+    if tipo in ('v', 'i'):
+        invalidar_stock(variante_id=pk if tipo == 'v' else None, inventario_id=pk if tipo == 'i' else None)
     if tipo == 'v':
         VarianteProduto.objects.filter(pk=pk).update(quantidade=F('quantidade') - quantidade)
         atualizar_total_inventario(Produto.objects.get(variantes__pk=pk))
@@ -428,6 +431,8 @@ def repor(componentes, quantidade):
             else:
                 ProdutoPOS.objects.filter(pk=c['produto_id'], controlar_stock=True).update(stock=F('stock') + q)
         else:
+            from .cache_publico import invalidar_stock
+            invalidar_stock(produto_id=c.get('produto_id'), variante_id=c.get('variante_id'))
             if c.get('variante_id'):
                 VarianteProduto.objects.filter(pk=c['variante_id']).update(quantidade=F('quantidade') + q)
                 p = Produto.objects.filter(variantes__pk=c['variante_id']).first()
