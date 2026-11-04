@@ -26,6 +26,7 @@ from ..Serializers.EntregaAvaliacaoSerializer import (
 from ..utils.pagination import paginar
 from ..utils.dinheiro import formatar as dinheiro
 from ..utils import devolucoes
+from ..Serializers.EntregaAvaliacaoSerializer import CANCELAMENTO_POR_DECIDIR
 from ..utils.encomendas import aprovar_dinheiro, libertar_entregas, transferencia_por_confirmar, valor_a_cobrar
 
 
@@ -733,7 +734,7 @@ def entrega_list_loja(request, loja_id):
 
     # o cliente pediu para cancelar (EntregaSerializer.cancelamento_pedido) — sem uma consulta por entrega
     qs = qs.annotate(cancelamento_pedido_anot=Exists(Reembolso.objects.filter(
-        encomenda=OuterRef('encomenda'), tipo='cancelamento', estado='pedido')))
+        encomenda=OuterRef('encomenda'), tipo='cancelamento', estado__in=CANCELAMENTO_POR_DECIDIR)))
 
     status_filtro = request.GET.get('status')
     if status_filtro:

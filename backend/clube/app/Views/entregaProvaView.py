@@ -35,6 +35,12 @@ def prova_juntar(request, loja_id, encomenda_id):
     nome = request.data.get('recebido_por') or ''
     if not isinstance(nome, str):
         return Response({'detail': 'Nome inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    # verificação barata primeiro: não se convertem imagens de quem não pode juntar prova a esta entrega
+    previa = Entrega.objects.select_related('condutor').filter(encomenda_id=encomenda_id, encomenda__loja=loja).first()
+    if not previa:
+        return Response({'detail': 'Entrega não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+    if not _entrega_do_membro(membro, previa):
+        return Response({'detail': 'Esta entrega não é tua.'}, status=status.HTTP_403_FORBIDDEN)
     try:
         # converter as imagens é lento: antes de bloquear a entrega
         foto = P.preparar(request.FILES.get('foto'))

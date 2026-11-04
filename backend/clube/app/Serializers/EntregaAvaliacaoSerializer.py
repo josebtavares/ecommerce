@@ -7,6 +7,9 @@ from .UtilizadorSerializer import UtilizadorMiniSerializer
 from ..utils import devolucoes, horarios
 from ..utils.encomendas import valor_a_cobrar
 
+# pedido de cancelamento sem resposta (pedido) ou já com a Bendi (em_disputa): o condutor não deve sair
+CANCELAMENTO_POR_DECIDIR = ('pedido', 'em_disputa')
+
 
 # ══════════════════════════════════════════════════════════════
 # OPÇÃO DE ENTREGA
@@ -159,7 +162,7 @@ class EntregaSerializer(serializers.ModelSerializer):
         anotado = getattr(obj, 'cancelamento_pedido_anot', None)
         if anotado is not None:
             return anotado
-        return obj.encomenda.reembolsos.filter(tipo='cancelamento', estado='pedido').exists()
+        return obj.encomenda.reembolsos.filter(tipo='cancelamento', estado__in=CANCELAMENTO_POR_DECIDIR).exists()
 
     def get_comprador_nome(self, obj):
         try:
