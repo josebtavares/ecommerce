@@ -20,6 +20,14 @@ from .dinheiro import formatar as dinheiro
 MOTIVO_MIN = 5
 
 
+def _tempo_real(encomenda_id):
+    """As entregas mudaram por .update() (sem sinais): avisa já pelo WebSocket quem tem a página aberta — o condutor
+    e a loja (cartões 'por entregar / entregue à loja', separador Dinheiro). Um aviso chega: a página recarrega a
+    lista toda (utils/tempoRealEncomendas.js)."""
+    from .tempo_real_encomendas import emitir
+    emitir(encomenda_id)
+
+
 def nome_condutor(condutor):
     u = condutor.utilizador.user      # o mesmo nome que a lista das entregas mostra (EntregaSerializer)
     return (u.get_full_name() or u.username)[:150]
@@ -104,6 +112,7 @@ def receber(loja, condutor, entrega_ids, por, nota=''):
             n_entregas=len(entregas), encomendas=encomendas, nota=str(nota or '').strip()[:300],
             recebido_por=por)
         type(entregas[0]).objects.filter(id__in=ids).update(acerto=a)
+        _tempo_real(encomendas[0])
         registo.registar('acerto', 'recebido', objeto_id=a.id, loja_id=loja.id, valor=valor, metodo='dinheiro',
                          estado_novo='recebido', dados={'condutor': a.condutor_nome, 'encomendas': encomendas})
         notificar(
@@ -132,6 +141,8 @@ def anular(acerto, por, motivo):
         a.anulado, a.anulado_em, a.anulado_por, a.motivo_anulacao = True, timezone.now(), por, motivo[:300]
         a.save(update_fields=['anulado', 'anulado_em', 'anulado_por', 'motivo_anulacao'])
         Entrega.objects.filter(acerto=a).update(acerto=None)
+        if a.encomendas:
+            _tempo_real(a.encomendas[0])
         registo.registar('acerto', 'anulado', objeto_id=a.id, loja_id=a.loja_id, valor=a.valor, metodo='dinheiro',
                          estado_anterior='recebido', estado_novo='anulado',
                          dados={'condutor': a.condutor_nome, 'encomendas': a.encomendas, 'motivo': a.motivo_anulacao})
