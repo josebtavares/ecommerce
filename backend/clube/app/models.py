@@ -1097,6 +1097,16 @@ class Condutor(models.Model):
         return f'Condutor {self.utilizador} @ {self.loja}'
 
 
+def _armazenamento_privado():
+    # as fotos dos pedidos são privadas, como as imagens do chat (bucket/pasta sem acesso público)
+    from .chat.imagens import armazenamento_privado
+    return armazenamento_privado()
+
+
+def prova_entrega_upload(instance, filename):
+    return f'entregas_privado/{now():%Y/%m}/{filename}'
+
+
 class Entrega(models.Model):
     STATUS = [
         ('atribuido',   'Atribuído'),
@@ -1128,9 +1138,33 @@ class Entrega(models.Model):
     valor_recebido  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     acerto          = models.ForeignKey('AcertoCondutor', on_delete=models.PROTECT, null=True, blank=True,
                                         related_name='entregas')
+    # prova de entrega (utils/prova_entrega.py): tudo opcional — o cliente pode não estar para assinar e a
+    # entrega nunca fica à espera disto. Ficheiros privados; cada um só se grava uma vez (é prova).
+    prova_foto        = models.FileField(upload_to=prova_entrega_upload, storage=_armazenamento_privado,
+                                         blank=True, default='', db_default='', max_length=200)
+    prova_assinatura  = models.FileField(upload_to=prova_entrega_upload, storage=_armazenamento_privado,
+                                         blank=True, default='', db_default='', max_length=200)
+    recebido_por_nome = models.CharField(max_length=100, blank=True, default='', db_default='')
+    prova_em          = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f'Entrega da encomenda #{self.encomenda_id}'
+
+
+class TentativaEntrega(models.Model):
+    """Cada entrega concluída ou falhada (resumo do dia — utils/resumo_entregas.py). A Entrega muda de condutor e
+    de estado (uma falhada é reatribuída); isto fica como aconteceu."""
+    RESULTADOS = [('entregue', 'Entregue'), ('falhou', 'Falhou')]
+    entrega        = models.ForeignKey(Entrega, on_delete=models.CASCADE, related_name='tentativas')
+    loja           = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='+')
+    condutor       = models.ForeignKey(Condutor, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    resultado      = models.CharField(max_length=10, choices=RESULTADOS)
+    motivo         = models.CharField(max_length=20, blank=True, default='')
+    valor_recebido = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    criado_em      = models.DateTimeField(default=now)
+
+    class Meta:
+        indexes = [models.Index(fields=['loja', 'criado_em'])]
 
 
 class AcertoCondutor(models.Model):
@@ -2135,12 +2169,6 @@ class AnuncioInfo(models.Model):
 # ══════════════════════════════════════════════════════════════
 # DEVOLUÇÕES / REEMBOLSOS  (regras em utils/devolucoes.py)
 # ══════════════════════════════════════════════════════════════
-
-def _armazenamento_privado():
-    # as fotos dos pedidos são privadas, como as imagens do chat (bucket/pasta sem acesso público)
-    from .chat.imagens import armazenamento_privado
-    return armazenamento_privado()
-
 
 def foto_reembolso_upload(instance, filename):
     return f'reembolsos_privado/{now():%Y/%m}/{filename}'
