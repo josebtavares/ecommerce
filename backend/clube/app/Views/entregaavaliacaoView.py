@@ -8,13 +8,13 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_staff, notificar_admins, notificar
 from decimal import Decimal
-from django.db.models import Case, IntegerField, Q, When
+from django.db.models import Case, Exists, IntegerField, OuterRef, Q, When
 from django.db.models.functions import Coalesce
 
 
 from ..models import (
     OpcaoEntrega, Condutor, Entrega,
-    AvaliacaoLoja, Loja, Encomenda, UtilizadorLoja,
+    AvaliacaoLoja, Loja, Encomenda, UtilizadorLoja, Reembolso, TentativaEntrega,
 )
 from ..Serializers.EntregaAvaliacaoSerializer import (
     OpcaoEntregaSerializer,
@@ -26,6 +26,7 @@ from ..Serializers.EntregaAvaliacaoSerializer import (
 from ..utils.pagination import paginar
 from ..utils.dinheiro import formatar as dinheiro
 from ..utils import devolucoes
+from ..Serializers.EntregaAvaliacaoSerializer import CANCELAMENTO_POR_DECIDIR
 from ..utils.encomendas import aprovar_dinheiro, libertar_entregas, transferencia_por_confirmar, valor_a_cobrar
 
 
@@ -231,7 +232,9 @@ def entrega_criar(request, loja_id, encomenda_id):
  
     condutor = None
     if request.data.get('condutor_id'):
-        condutor = get_object_or_404(Condutor, id=request.data['condutor_id'], loja=loja, ativo=True)
+        # conta suspensa/banida não recebe entregas (moderacao.moderar liberta as que tinha)
+        condutor = get_object_or_404(Condutor, id=request.data['condutor_id'], loja=loja, ativo=True,
+                                     utilizador__status='ativo')
  
     opcao = None
     opcao_id = request.data.get('opcao_entrega_id')
@@ -378,7 +381,9 @@ def entrega_atualizar(request, loja_id, encomenda_id):
     if 'condutor_id' in request.data:
         if not membro.pode('atribuir_condutor'):
             return Response({'detail': 'Sem permissão: atribuir_condutor'}, status=status.HTTP_403_FORBIDDEN)
-        condutor = get_object_or_404(Condutor, id=request.data['condutor_id'], loja=loja, ativo=True)
+        # conta suspensa/banida não recebe entregas (moderacao.moderar liberta as que tinha)
+        condutor = get_object_or_404(Condutor, id=request.data['condutor_id'], loja=loja, ativo=True,
+                                     utilizador__status='ativo')
         falhou = entrega.status == 'falhou'
         if condutor.id == entrega.condutor_id and not falhou:
             return Response(EntregaSerializer(entrega, context={'request': request}).data)
@@ -473,6 +478,9 @@ def entrega_atualizar(request, loja_id, encomenda_id):
             if aprovado_agora and cobrado and entrega.condutor_id:
                 entrega.valor_recebido = cobrado
                 entrega.save(update_fields=['valor_recebido'])
+            TentativaEntrega.objects.create(entrega=entrega, loja=loja, condutor_id=entrega.condutor_id,
+                                            resultado='entregue', valor_recebido=entrega.valor_recebido,
+                                            criado_em=entrega.data_entrega)
  
             _perc = encomenda.percentagem_comissao_aplicavel     # 0 se a loja estava em subscrição
             _com  = (encomenda.valor_devido * _perc / 100).quantize(Decimal('0.01'))
@@ -499,6 +507,8 @@ def entrega_atualizar(request, loja_id, encomenda_id):
             entrega.motivo_falha = motivo
             entrega.nota_falha = str(request.data.get('nota_falha') or '').strip()[:200]
             entrega.save(update_fields=['motivo_falha', 'nota_falha'])
+            TentativaEntrega.objects.create(entrega=entrega, loja=loja, condutor_id=entrega.condutor_id,
+                                            resultado='falhou', motivo=motivo)
             detalhe = entrega.get_motivo_falha_display() + (f': {entrega.nota_falha}' if entrega.nota_falha else '')
             encomenda.status = 'preparando'
             encomenda.save(update_fields=['status'])
@@ -721,6 +731,10 @@ def entrega_list_loja(request, loja_id):
         Case(When(por_entregar, then=Coalesce('encomenda__agendada_para', 'data_criacao'))).asc(nulls_last=True),
         '-data_criacao',
     )
+
+    # o cliente pediu para cancelar (EntregaSerializer.cancelamento_pedido) — sem uma consulta por entrega
+    qs = qs.annotate(cancelamento_pedido_anot=Exists(Reembolso.objects.filter(
+        encomenda=OuterRef('encomenda'), tipo='cancelamento', estado__in=CANCELAMENTO_POR_DECIDIR)))
 
     status_filtro = request.GET.get('status')
     if status_filtro:

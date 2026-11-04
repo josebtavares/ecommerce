@@ -108,7 +108,9 @@ const textoConfirmar = computed(() => {
   const o = op.value
   if (!o) return ''
   if (o.cancelar === 'pedido') {
-    return 'A loja já está a preparar a encomenda, por isso tem de aceitar o cancelamento. ' +
+    return (props.encomenda.status === 'enviado'
+      ? 'A encomenda já tem condutor (ainda não saiu), por isso a loja tem de aceitar o cancelamento. '
+      : 'A loja já está a preparar a encomenda, por isso tem de aceitar o cancelamento. ') +
            'Se não responder em 48 horas, a equipa da Bendi decide.' +
            (Number(o.reembolsavel) > 0 ? ` Se for aceite, recebes ${formatarDinheiro(o.reembolsavel)}.` : '')
   }

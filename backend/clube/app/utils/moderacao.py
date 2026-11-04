@@ -192,6 +192,8 @@ def moderar(alvo, acao, por, motivo='', ate=None, incluir_lojas=False):
         else:
             alvo.status, alvo.suspenso_ate, alvo.motivo_estado = 'ativo', None, ''
         alvo.save(update_fields=['status', 'suspenso_ate', 'motivo_estado', 'data_atualizacao'])
+        if acao in ('suspender', 'banir'):
+            _libertar_entregas(alvo, acao)
         registo = ModeracaoUtilizador.objects.create(
             utilizador=alvo, acao=acao, motivo=motivo, ate=ate if acao == 'suspender' else None, feito_por=por,
             afetados=afetados)
@@ -199,6 +201,16 @@ def moderar(alvo, acao, por, motivo='', ate=None, incluir_lojas=False):
     if acao in ('suspender', 'banir'):
         terminar_sessoes(alvo.user)
     return registo
+
+
+def _libertar_entregas(alvo, acao):
+    """Conta suspensa/banida já não entra no site: as entregas que tinha em curso voltam às lojas para outro
+    condutor (antes ficavam presas e escondidas). Não volta a atribuí-las quando a conta é reactivada."""
+    from ..models import Condutor
+    from .encomendas import libertar_entregas
+    nota = ('A conta do condutor foi suspensa.' if acao == 'suspender' else 'A conta do condutor foi bloqueada.') +         ' Se já tinha levantado a encomenda, recupera-a.'
+    for condutor in Condutor.objects.filter(utilizador=alvo):
+        libertar_entregas(condutor, nota)
 
 
 def _avisar(alvo, acao, motivo, ate):
