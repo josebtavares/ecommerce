@@ -131,10 +131,14 @@ def repor_stock_item(item):
     elif item.variante_id:
         VarianteProduto.objects.filter(id=item.variante_id).update(quantidade=F('quantidade') + q)
         atualizar_total_inventario(Produto.objects.get(id=item.variante.produto_id))
+        from ..utils.cache_publico import invalidar_stock
+        invalidar_stock(variante_id=item.variante_id)
     elif item.produto_pos_id:
         ProdutoPOS.objects.filter(id=item.produto_pos_id, controlar_stock=True).update(stock=F('stock') + q)
     elif item.produto_id:
         Inventario.objects.filter(produto_id=item.produto_id).update(quantidade=F('quantidade') + q)
+        from ..utils.cache_publico import invalidar_stock
+        invalidar_stock(produto_id=item.produto_id)
 
 
 def _alerta(produto, antes, depois, variante=None):

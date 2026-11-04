@@ -98,8 +98,29 @@ DATABASES = {
         'PASSWORD': os.environ.get('DB_PASSWORD', 'password'),
         'HOST'    : os.environ.get('DB_HOST',     'localhost'),
         'PORT'    : os.environ.get('DB_PORT',     '5432'),
+        'OPTIONS' : {},
     }
 }
+
+# Pool de ligações (psycopg 3, Django 5.2). O ASGI corre cada pedido numa thread nova: sem pool, cada pedido abria uma
+# ligação nova ao Postgres (com SSL na prod). O pool de cada processo reaproveita-as entre threads e põe um tecto
+# (DB_POOL_MAX por processo; a borda — clube/borda.py — deixa no máximo MAX_PEDIDOS pedidos a correr). Exige
+# CONN_MAX_AGE = 0. A settings_prod chama isto depois de montar o DATABASES dela.
+def ligar_pool(bd):
+    if os.environ.get('DB_POOL', '1') != '1':
+        return bd
+    bd['CONN_MAX_AGE'] = 0
+    bd['CONN_HEALTH_CHECKS'] = True     # o Django passa ao pool o check: ligação que caiu → outra
+    bd.setdefault('OPTIONS', {})['pool'] = {
+        'min_size': int(os.environ.get('DB_POOL_MIN', '2')),
+        'max_size': int(os.environ.get('DB_POOL_MAX', '10')),
+        'timeout': float(os.environ.get('DB_POOL_ESPERA_S', '15')),   # à espera de uma ligação livre
+        'max_idle': 300,
+    }
+    return bd
+
+
+DATABASES['default'] = ligar_pool(DATABASES['default'])
 
 
 # ══════════════════════════════════════════════════════════════

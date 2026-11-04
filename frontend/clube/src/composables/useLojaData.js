@@ -4,6 +4,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api, { terminarSessao } from '@/services/api'
+import { pedirLoja } from '@/utils/pedirLoja'
 import { iconeTipoProduto, iconePagamento } from '@/utils/icones'
 import { DEFAULT_BANNER } from '@/services/media'
 import { esperarFontes } from '@/utils/fontes'
@@ -77,9 +78,12 @@ export function useLojaData () {
   // o parâmetro é o endereço (/loja/bom-sabor); a API usa o id (resolvido pelo router — utils/enderecoLoja.js)
   const lojaId = computed(() => route.params.id === DEMO_ID ? DEMO_ID : idDaLoja(route.params.id))
 
+  let primeiraVez = true
   async function fetchLoja (id) {
     try {
-      const { data } = await api.get(`/app/loja/${id}/`)
+      // a 1.ª vez partilha o pedido que a lojaPublica já fez (utils/pedirLoja.js); recarregar vai à API
+      const data = primeiraVez ? await pedirLoja(id) : (await api.get(`/app/loja/${id}/`)).data
+      primeiraVez = false
       loja.value = data
     } catch (e) { console.error(e) }
   }
