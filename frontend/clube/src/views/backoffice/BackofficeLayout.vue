@@ -156,8 +156,9 @@
         </button>
       </div>
 
-      <!-- Requisitos para a loja ser publicada (barra vermelha → verde; components/loja/BarraProntidao) -->
-      <BarraProntidao v-if="loja && ['pendente', 'ativa'].includes(loja.estado)" class="mx-4 lg:mx-6 mt-4"
+      <!-- Requisitos para a loja ser publicada (barra vermelha → verde; components/loja/BarraProntidao).
+           O condutor não a vê: não pode fazer nada e ocupa o ecrã do telemóvel -->
+      <BarraProntidao v-if="loja && ['pendente', 'ativa'].includes(loja.estado) && role !== 'condutor'" class="mx-4 lg:mx-6 mt-4"
                       :loja-id="lojaId" :estado="loja.estado" :recarregar="`${activeSection}-${versaoLoja}`"
                       @ir="resolverRequisito" />
 
