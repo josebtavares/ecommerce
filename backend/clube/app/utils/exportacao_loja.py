@@ -244,6 +244,17 @@ def escrever_zip(destino, exp):
               r.get_metodo_display() if r.metodo else '', _quando(r.data_reembolso), r.descricao]
              for r in Reembolso.objects.filter(loja=loja).select_related('comprador__user').order_by('data_criacao')])
 
+        from ..models import AcertoCondutor
+        acertos = AcertoCondutor.objects.filter(loja=loja).select_related('recebido_por', 'anulado_por').order_by('criado_em')
+        if acertos.exists():
+            _quem = lambda u: (u.get_full_name() or u.username) if u else ''
+            csv('acertos-condutores.csv', ['Acerto', 'Data', 'Condutor', 'Valor (CVE)', 'Entregas', 'Encomendas',
+                                           'Recebido por', 'Nota', 'Anulado', 'Anulado em', 'Anulado por', 'Motivo'],
+                [[a.id, _quando(a.criado_em), a.condutor_nome, _v(a.valor), a.n_entregas,
+                  ' '.join(f'E-{i}' for i in a.encomendas), _quem(a.recebido_por), a.nota,
+                  'sim' if a.anulado else 'não', _quando(a.anulado_em), _quem(a.anulado_por), a.motivo_anulacao]
+                 for a in acertos])
+
         csv('avaliacoes.csv', ['Data', 'Cliente', 'Encomenda', 'Pontuação', 'Comentário', 'Oculta'],
             [[_quando(a.data_criacao), _pessoa(a.utilizador)[0], f'E-{a.encomenda_id}' if a.encomenda_id else '',
               a.pontuacao, a.comentario, 'sim' if a.oculta else 'não']

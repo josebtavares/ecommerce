@@ -37,10 +37,12 @@ def _da_loja(request, loja):
 def dinheiro(request, loja_id):
     loja = get_object_or_404(Loja, id=loja_id)
     m = _membro(request, loja)
-    if m and m.role == 'condutor':
-        c = Condutor.objects.filter(loja=loja, utilizador=m.utilizador).first()
-        if not c:
-            return Response({'detail': 'Não és condutor desta loja.'}, status=status.HTTP_403_FORBIDDEN)
+    # condutor (ou outro membro com ficha de condutor que não gere pagamentos): só o seu dinheiro
+    c = (Condutor.objects.filter(loja=loja, utilizador=m.utilizador).first()
+         if m and m.pk and (m.role == 'condutor' or not m.pode(PERM)) else None)
+    if m and m.role == 'condutor' and not c:
+        return Response({'detail': 'Não és condutor desta loja.'}, status=status.HTTP_403_FORBIDDEN)
+    if c:
         entregas = A.lista_por_acertar(loja, c)
         total = sum((Decimal(e['valor']) for e in entregas), Decimal('0.00'))
         return Response({'condutor': True, 'por_acertar': str(total), 'n': len(entregas), 'entregas': entregas,
@@ -73,9 +75,14 @@ def dinheiro_receber(request, loja_id, condutor_id):
     if erro:
         return erro
     c = get_object_or_404(Condutor.objects.select_related('utilizador__user'), id=condutor_id, loja=loja)
+    m = _membro(request, loja)
+    # quem também é condutor não regista que recebeu o próprio dinheiro (só o dono, que é quem o recebe)
+    if c.utilizador_id == m.utilizador_id and m.role != 'dono':
+        return Response({'detail': 'Não podes registar o teu próprio dinheiro: pede ao dono.'},
+                        status=status.HTTP_403_FORBIDDEN)
     entregas = request.data.get('entregas')
-    if not isinstance(entregas, list):
-        return Response({'detail': 'Escolhe as entregas.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not isinstance(entregas, list) or len(entregas) > 500:
+        return Response({'detail': 'Escolhe as entregas (até 500 de cada vez).'}, status=status.HTTP_400_BAD_REQUEST)
     nota = request.data.get('nota') or ''
     if not isinstance(nota, str):
         return Response({'detail': 'Nota inválida.'}, status=status.HTTP_400_BAD_REQUEST)
