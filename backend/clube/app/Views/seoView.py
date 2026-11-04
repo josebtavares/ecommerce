@@ -49,6 +49,13 @@ def seo_imagem(request, tipo, id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def seo_versao(request):
+    """GET /app/seo/versao/ — muda sempre que o endereço de uma loja muda ou é desligado (o site esquece a cache)."""
+    return Response({'enderecos': endereco_loja.versao()})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def seo_sitemap(request):
     """GET /app/seo/sitemap/ — lojas e produtos para o /sitemap.xml."""
     return Response(seo.lista_sitemap())
