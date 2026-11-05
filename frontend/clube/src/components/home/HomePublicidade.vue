@@ -101,7 +101,7 @@
 import { Keyboard, A11y } from 'swiper/modules'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
-import { poupar, videoDestaque } from '@/utils/media'
+import { poupar, videoCartao, videoMovel as videoDestaqueMovel } from '@/utils/media'
 import { contarAnuncio } from '@/utils/publicidade'
 
 const PRAZO_VIDEO_EXTRA_S = 3      // se o vídeo não avisar que acabou (erro, bloqueado), passa na mesma
@@ -189,7 +189,8 @@ export default {
   methods: {
     media (a) { return (this.movel && a.media_movel) || a.media },
     fundo (a) { const m = this.media(a); return m.tipo === 'video' ? m.poster : m.url },
-    fonteVideo (m) { return videoDestaque(m.url) },
+    // telemóvel: 480p (o 720p fazia cair a 30 fps e gastava ~4× mais dados); computador: o original
+    fonteVideo (m) { return this.movel ? videoCartao(m.url) : m.url },
     ligacao (a) {
       if (!a.link || this.modo) return {}
       if (a.externo) return { href: a.link, target: '_blank', rel: 'sponsored noopener noreferrer' }
@@ -243,10 +244,14 @@ export default {
       this.seguinte()
     },
     aoErroVideo (e, a) {
-      // versão leve (720p) em falta → original
+      // versão leve em falta (ainda a converter / vídeo antigo): 480p → 720p → original
       const v = e.target
       const m = this.media(a)
-      if (v && m && v.getAttribute('src') && v.getAttribute('src') !== m.url) v.setAttribute('src', m.url)
+      const atual = v?.getAttribute('src')
+      if (!v || !m || !atual || atual === m.url) return
+      const p720 = videoDestaqueMovel(m.url)
+      v.setAttribute('src', atual !== p720 && p720 !== m.url ? p720 : m.url)
+      this.$nextTick(() => this.controlarVideos())      // a fonte nova não arranca sozinha se for o anúncio à vista
     },
     controlarVideos () {
       Object.entries(this.videos).forEach(([i, v]) => {
