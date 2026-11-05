@@ -73,14 +73,21 @@ def prova_ficheiro(request, entrega_id, parte):
     pode = u and u.user.is_active and (P.pode_ver(u, e) or (lido[3] and u.user.is_staff))
     if not f or not pode:
         return Response({'detail': 'Imagem não encontrada.'}, status=404)
+    # ?baixar=1 → descarrega (botão no modal de ver a prova); senão abre no browser
+    baixar = request.query_params.get('baixar') == '1'
+    nome = f'prova-encomenda-{e.encomenda_id}-{parte}.webp'
+    disposicao = f'attachment; filename="{nome}"' if baixar else 'inline'
     armazenamento = f.storage
     if hasattr(armazenamento, 'bucket_name'):
-        resp = HttpResponseRedirect(armazenamento.url(f.name))
+        # o R2 pode guardar o ficheiro sem o tipo certo (o browser descarregava em vez de mostrar): o link
+        # assinado força o tipo e a forma de abrir
+        resp = HttpResponseRedirect(armazenamento.url(f.name, parameters={
+            'ResponseContentType': 'image/webp', 'ResponseContentDisposition': disposicao}))
     else:
         resp = FileResponse(armazenamento.open(f.name, 'rb'), content_type='image/webp')
     resp['Cache-Control'] = 'private, max-age=3600'
     resp['X-Content-Type-Options'] = 'nosniff'
-    resp['Content-Disposition'] = 'inline'
+    resp['Content-Disposition'] = disposicao
     return resp
 
 
