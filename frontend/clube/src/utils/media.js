@@ -25,6 +25,9 @@ export const ecraPequeno = () =>
 // vídeo em destaque (topo da home, página da loja/produto): 720p no telemóvel, 1080p no computador
 export const videoDestaque = url => (ecraPequeno() ? versao(url, '__720', 'mp4') : url)
 
+// a versão 720p, sem olhar ao ecrã (recurso quando a 480p falta)
+export const videoMovel = url => versao(url, '__720', 'mp4')
+
 // "Poupança de dados" do telemóvel/browser ou "Reduzir movimento" do sistema: os vídeos ficam no poster
 export function poupar () {
   if (typeof window === 'undefined') return false
