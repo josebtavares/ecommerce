@@ -170,12 +170,13 @@
             <!-- prova de entrega (opcional) -->
             <div v-if="entrega.status === 'entregue' && (entrega.prova || entrega.pode_juntar_prova)"
                  class="col-span-2 flex flex-wrap items-center gap-2 pt-1" data-teste="prova">
-              <a v-if="entrega.prova?.foto" :href="entrega.prova.foto" target="_blank" rel="noopener" data-teste="prova-ver-foto">
+              <!-- ver no site (modal com descarregar), não abre/descarrega directamente -->
+              <button v-if="entrega.prova?.foto" type="button" @click="verProva = entrega" aria-label="Ver a foto da entrega" data-teste="prova-ver-foto">
                 <img :src="entrega.prova.foto" alt="Foto da entrega" loading="lazy" class="h-14 w-14 object-cover rounded-lg border border-zinc-700" />
-              </a>
-              <a v-if="entrega.prova?.assinatura" :href="entrega.prova.assinatura" target="_blank" rel="noopener" data-teste="prova-ver-assinatura">
+              </button>
+              <button v-if="entrega.prova?.assinatura" type="button" @click="verProva = entrega" aria-label="Ver a assinatura" data-teste="prova-ver-assinatura">
                 <img :src="entrega.prova.assinatura" alt="Assinatura do cliente" loading="lazy" class="h-14 w-24 object-contain rounded-lg bg-white border border-zinc-700" />
-              </a>
+              </button>
               <span v-if="entrega.prova?.recebido_por" class="text-zinc-400" data-teste="prova-recebido-por">
                 Recebido por <strong class="text-zinc-200">{{ entrega.prova.recebido_por }}</strong>
               </span>
@@ -425,6 +426,7 @@
     <!-- depois de entregar: foto / assinatura / quem recebeu — opcional, a entrega já está feita -->
     <ProvaEntrega v-if="modalProva" :loja-id="lojaId" :entrega="modalProva"
       @fechar="modalProva = null" @guardada="modalProva = null; fetchEntregas(true); $refs.resumo?.carregar()" />
+    <VerProva v-if="verProva" :entrega="verProva" @fechar="verProva = null" />
 
   </div>
 </template>
@@ -436,7 +438,8 @@ import CalendarioEntregas from '@/components/calendario/CalendarioEntregas.vue'
 import ConfirmarEntrega from '@/components/calendario/ConfirmarEntrega.vue'
 import DinheiroCondutores from '@/components/entregas/DinheiroCondutores.vue'
 import ResumoDia from '@/components/entregas/ResumoDia.vue'
-import ProvaEntrega from '@/components/entregas/ProvaEntrega.vue'
+import ProvaEntrega, { provaPendente } from '@/components/entregas/ProvaEntrega.vue'
+import VerProva from '@/components/entregas/VerProva.vue'
 import { contactarCliente } from '@/services/chat'
 import { toast } from 'vue3-toastify'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
@@ -446,7 +449,7 @@ const ATUALIZAR_MS = 30000
 
 export default {
   name: 'BackofficeEntregas',
-  components: { CalendarioEntregas, ConfirmarEntrega, AvisoMudouPorFora, DinheiroCondutores, ResumoDia, ProvaEntrega },
+  components: { CalendarioEntregas, ConfirmarEntrega, AvisoMudouPorFora, DinheiroCondutores, ResumoDia, ProvaEntrega, VerProva },
   props: {
     lojaId:    [String, Number],
     minhaRole: { type: String, default: '' },
@@ -483,6 +486,7 @@ export default {
       modalFalha:        null,
       modalEntregue:     null,
       modalProva:        null,
+      verProva:          null,
       modalMorada:       null,
       novaMorada:        '',
       loadingMorada:     false,
@@ -534,6 +538,7 @@ export default {
     this.pararTempoReal = ouvirEncomendas(a => this.aoMudarEncomenda(a),
       { filtro: a => !a.loja_id || String(a.loja_id) === String(this.lojaId) })
     await Promise.all([this.fetchEntregas(), this.isCondutor ? null : this.fetchCondutores()])
+    this.reabrirProva()
     this.atualizador = setInterval(this.atualizarLista, ATUALIZAR_MS)
   },
 
@@ -655,6 +660,19 @@ export default {
     },
 
     confirmarFalha (entrega) { this.modalFalha = entrega },
+
+    // o telemóvel recarregou a página enquanto a app da câmara estava aberta: volta ao modal da mesma entrega
+    async reabrirProva () {
+      const p = provaPendente(this.lojaId)
+      if (!p) return
+      try {
+        const { data } = await api.get(`/app/loja/${this.lojaId}/encomendas/${p.encomenda}/entrega/`)
+        if (!data.pode_juntar_prova) return
+        this.modalProva = data
+        toast.info('O telemóvel recarregou a página. Tira a foto outra vez.')
+        this.$nextTick(() => document.querySelector(`[data-teste="entrega-${p.encomenda}"]`)?.scrollIntoView({ block: 'center' }))
+      } catch (e) { /* a entrega já não está acessível: segue */ }
+    },
 
     abrirMorada (entrega) {
       this.modalMorada = entrega

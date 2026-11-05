@@ -3,7 +3,7 @@
      (até 24 h). Foto, assinatura do cliente e nome de quem recebeu — tudo opcional; cada parte grava-se uma vez. -->
 <template>
   <div class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
-       @click.self="$emit('fechar')">
+       @click.self="fecharModal">
     <div class="bg-zinc-900 sm:rounded-2xl rounded-t-2xl border border-zinc-800 w-full max-w-md p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto"
          role="dialog" aria-modal="true" data-teste="prova-modal">
       <div>
@@ -21,11 +21,24 @@
           <img :src="fotoUrl" alt="Foto da entrega" class="w-full max-h-48 object-cover rounded-xl border border-zinc-700" />
           <button type="button" @click="limparFoto" class="absolute top-2 right-2 px-2 py-1 rounded-lg bg-black/70 text-xs text-zinc-200">Trocar</button>
         </div>
-        <label v-else class="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-zinc-700 text-sm text-zinc-400 cursor-pointer hover:border-zinc-500">
-          <font-awesome-icon :icon="['fas', 'camera']" />Tirar foto
-          <input type="file" accept="image/*" capture="environment" class="hidden" data-teste="prova-foto" @change="escolherFoto" />
-        </label>
+        <template v-else>
+          <!-- câmara dentro do site: não sai da página (a app da câmara às vezes fazia o telemóvel recarregá-la) -->
+          <button v-if="podeCamara" type="button" @click="camara = true; erroCamara = ''" data-teste="prova-camera"
+            class="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-zinc-700 text-sm text-zinc-300 hover:border-zinc-500">
+            <font-awesome-icon :icon="['fas', 'camera']" />Tirar foto
+          </button>
+          <p v-if="erroCamara" class="text-[11px] text-amber-300 mt-1">{{ erroCamara }}</p>
+          <label :class="podeCamara
+                   ? 'block text-center text-[11px] text-zinc-500 hover:text-zinc-300 mt-1.5 cursor-pointer underline'
+                   : 'flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-zinc-700 text-sm text-zinc-400 cursor-pointer hover:border-zinc-500'"
+                 @click="guardarPendente">
+            <template v-if="podeCamara">Usar a app da câmara ou a galeria</template>
+            <template v-else><font-awesome-icon :icon="['fas', 'camera']" />Tirar foto</template>
+            <input type="file" accept="image/*" capture="environment" class="hidden" data-teste="prova-foto" @change="escolherFoto" />
+          </label>
+        </template>
       </div>
+      <CameraFoto v-if="camara" @foto="fotoDaCamara" @fechar="camara = false" @falhou="camaraFalhou" />
 
       <!-- Assinatura -->
       <div v-if="!jaTem.assinatura">
@@ -47,7 +60,7 @@
       </div>
 
       <div class="flex gap-3 pt-1">
-        <button type="button" @click="$emit('fechar')" data-teste="prova-saltar"
+        <button type="button" @click="fecharModal" data-teste="prova-saltar"
           class="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm font-semibold hover:text-zinc-200 transition">
           {{ temAlgo ? 'Cancelar' : 'Saltar' }}
         </button>
@@ -63,6 +76,21 @@
 <script>
 import api from '@/services/api'
 import { toast } from 'vue3-toastify'
+import CameraFoto, { camaraNoSite } from './CameraFoto.vue'
+
+// se o telemóvel recarregar a página enquanto a app da câmara está aberta, o modal volta a abrir nesta entrega
+// com o nome e a assinatura (BackofficeEntregas lê provaPendente)
+const CHAVE = 'bende:prova-pendente'
+const VALIDADE_MS = 15 * 60 * 1000
+
+export function provaPendente (lojaId) {
+  try {
+    const p = JSON.parse(sessionStorage.getItem(CHAVE) || 'null')
+    if (p && String(p.loja) === String(lojaId) && Date.now() - p.t < VALIDADE_MS) return p
+  } catch (e) { /* sem storage */ }
+  return null
+}
+function limparPendente () { try { sessionStorage.removeItem(CHAVE) } catch (e) { /* sem storage */ } }
 
 const LADO_MAX = 1600     // reduz a foto no telemóvel antes de enviar (dados móveis)
 
@@ -89,9 +117,11 @@ export default {
     lojaId:  { type: [String, Number], required: true },
     entrega: { type: Object, required: true },
   },
+  components: { CameraFoto },
   emits: ['fechar', 'guardada'],
   data () {
-    return { foto: null, fotoUrl: '', nome: '', assinou: false, aDesenhar: false, aGuardar: false }
+    return { foto: null, fotoUrl: '', nome: '', assinou: false, aDesenhar: false, aGuardar: false,
+             camara: false, erroCamara: '', podeCamara: camaraNoSite() }
   },
   computed: {
     jaTem () {
@@ -100,7 +130,10 @@ export default {
     },
     temAlgo () { return !!(this.foto || this.assinou || this.nome.trim()) },
   },
-  mounted () { this.prepararTela() },
+  mounted () {
+    this.prepararTela()
+    this.reporPendente()
+  },
   beforeUnmount () { if (this.fotoUrl) URL.revokeObjectURL(this.fotoUrl) },
   methods: {
     prepararTela () {
@@ -137,7 +170,46 @@ export default {
     parar () { this.aDesenhar = false },
     limparAssinatura () { this.assinou = false; this.prepararTela() },
 
+    // antes de abrir a app da câmara: o que já estava preenchido sobrevive a um recarregamento da página
+    guardarPendente () {
+      try {
+        sessionStorage.setItem(CHAVE, JSON.stringify({
+          loja: this.lojaId, encomenda: this.entrega.encomenda, t: Date.now(), nome: this.nome,
+          assinatura: this.assinou ? this.$refs.tela.toDataURL('image/png') : '',
+        }))
+      } catch (e) { /* sem storage: segue sem a rede de segurança */ }
+    },
+    reporPendente () {
+      const p = provaPendente(this.lojaId)
+      if (!p || String(p.encomenda) !== String(this.entrega.encomenda)) return
+      limparPendente()
+      if (p.nome && !this.nome) this.nome = p.nome
+      if (p.assinatura && this.ctx) {
+        const img = new Image()
+        img.onload = () => {
+          const r = this.$refs.tela.getBoundingClientRect()
+          this.ctx.drawImage(img, 0, 0, r.width, r.height)
+          this.assinou = true
+        }
+        img.src = p.assinatura
+      }
+    },
+    fecharModal () { limparPendente(); this.$emit('fechar') },
+    fotoDaCamara (blob) {
+      this.camara = false
+      if (this.fotoUrl) URL.revokeObjectURL(this.fotoUrl)
+      this.foto = blob
+      this.fotoUrl = URL.createObjectURL(blob)
+    },
+    camaraFalhou (motivo) {
+      this.camara = false
+      this.erroCamara = motivo === 'NotAllowedError'
+        ? 'Sem permissão para a câmara. Autoriza nas definições do browser ou usa a app da câmara.'
+        : 'Não foi possível abrir a câmara aqui. Usa a app da câmara.'
+    },
+
     async escolherFoto (ev) {
+      limparPendente()
       const f = ev.target.files?.[0]
       ev.target.value = ''
       if (!f) return
@@ -164,6 +236,7 @@ export default {
         if (this.nome.trim()) fd.append('recebido_por', this.nome.trim())
         const { data } = await api.post(`/app/loja/${this.lojaId}/encomendas/${this.entrega.encomenda}/entrega/prova/`, fd,
           { headers: { 'Content-Type': 'multipart/form-data' } })
+        limparPendente()
         toast.success('Prova de entrega guardada.')
         this.$emit('guardada', data)
       } catch (e) {
