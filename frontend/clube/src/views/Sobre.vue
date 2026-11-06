@@ -44,6 +44,7 @@
           <LandingPlanos v-else-if="s.tipo === 'planos'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
           <LandingTutoriais v-else-if="s.tipo === 'tutoriais'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
           <LandingFaq v-else-if="s.tipo === 'faq'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
+          <LandingApp v-else-if="s.tipo === 'app'" :s="s" :isDark="isDark" />
           <LandingContactos v-else-if="s.tipo === 'contactos'" :s="s" :isDark="isDark" />
         </div>
       </div>
@@ -86,6 +87,7 @@ import LandingPlanos from '@/components/landing/LandingPlanos.vue'
 import LandingTutoriais from '@/components/landing/LandingTutoriais.vue'
 import LandingFaq from '@/components/landing/LandingFaq.vue'
 import LandingContactos from '@/components/landing/LandingContactos.vue'
+import LandingApp from '@/components/landing/LandingApp.vue'
 // só quando são precisos: os visitantes não descarregam o editor nem os formulários de conta
 const JanelaConta = defineAsyncComponent(() => import('@/components/landing/JanelaConta.vue'))
 const BarraEdicao = defineAsyncComponent(() => import('@/components/landing/editor/BarraEdicao.vue'))
@@ -101,7 +103,7 @@ function lerUser () {
 export default {
   name: 'PaginaSobre',
   components: {
-    SiteRodape, LandingNav, LandingHero, LandingClientes, LandingLojas, LandingPlanos, LandingTutoriais, LandingFaq, LandingContactos, JanelaConta,
+    SiteRodape, LandingNav, LandingHero, LandingClientes, LandingLojas, LandingPlanos, LandingTutoriais, LandingFaq, LandingApp, LandingContactos, JanelaConta,
     BarraEdicao, PainelSeccao,
   },
 
