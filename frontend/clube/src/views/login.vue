@@ -58,98 +58,7 @@
           Entra na tua conta para continuar
         </p>
 
-        <form @submit.prevent="handleLogin" class="space-y-4">
-          <div>
-            <label class="text-xs font-medium mb-1.5 block transition-colors"
-                   :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Username ou Email</label>
-            <input v-model="username" required autocomplete="username"
-              class="w-full px-4 py-2.5 rounded-xl text-sm border transition-all focus:outline-none placeholder-zinc-400"
-              :class="isDark
-                ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500'
-                : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400'"
-              placeholder="o_teu_username" />
-          </div>
-
-          <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="text-xs font-medium transition-colors"
-                     :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Password</label>
-              <router-link :to="{ name: 'RecuperarSenha' }" class="text-xs transition-colors"
-                 :class="isDark ? 'text-red-400 hover:text-red-300' : 'text-orange-500 hover:text-orange-400'">
-                Esqueceste?
-              </router-link>
-            </div>
-            <div class="relative">
-              <input v-model="password" :type="verPassword ? 'text' : 'password'" required autocomplete="current-password"
-                class="w-full px-4 pr-10 py-2.5 rounded-xl text-sm border transition-all focus:outline-none"
-                :class="isDark
-                  ? 'bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-red-500'
-                  : 'bg-gray-50 border-gray-200 text-zinc-900 focus:border-orange-400'"
-                placeholder="••••••••" />
-              <BotaoVerPassword :visivel="verPassword" :isDark="isDark" @toggle="verPassword = !verPassword" />
-            </div>
-          </div>
-
-          <div v-if="warning"
-               class="px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
-            {{ warningMsg }}
-          </div>
-
-          <!-- Botão login principal -->
-          <button type="submit" :disabled="loading"
-            class="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all
-                   flex items-center justify-center gap-2"
-            :class="loading ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90 active:scale-[0.98]'"
-            :style="isDark
-              ? 'background: linear-gradient(135deg, #dc2626, #b91c1c);'
-              : 'background: linear-gradient(135deg, #f97316, #ea580c);'">
-            <svg v-if="loading" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
-              <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
-            </svg>
-            {{ loading ? 'A entrar…' : 'Entrar' }}
-          </button>
-
-          <!-- Separador -->
-          <div class="flex items-center gap-3">
-            <div class="flex-1 h-px transition-colors"
-                 :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
-            <span class="text-[10px] font-medium transition-colors"
-                  :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">ou continua com</span>
-            <div class="flex-1 h-px transition-colors"
-                 :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
-          </div>
-
-          <!-- Botão Google -->
-          <button type="button" @click="loginComGoogle" :disabled="loadingGoogle"
-            class="w-full py-2.5 rounded-xl text-sm font-semibold border transition-all
-                   flex items-center justify-center gap-3"
-            :class="isDark
-              ? 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800 disabled:opacity-50'
-              : 'bg-white border-gray-300 text-zinc-700 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50'">
-            <svg v-if="!loadingGoogle" class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            <svg v-else class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
-              <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
-            </svg>
-            {{ loadingGoogle ? 'A redirecionar...' : 'Continuar com Google' }}
-          </button>
-        </form>
-
-        <p class="mt-5 text-center text-xs transition-colors"
-           :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-          Ainda não tens conta?
-          <router-link :to="{ name: 'Register', query: $route.query }"
-            class="font-semibold transition-colors"
-            :class="isDark ? 'text-red-400 hover:text-red-300' : 'text-orange-500 hover:text-orange-400'">
-            Regista-te
-          </router-link>
-        </p>
+        <FormEntrar :isDark="isDark" :seguinte="seguinte" @entrou="aoEntrar" />
       </div>
     </div>
   </div>
@@ -157,99 +66,45 @@
 
 <script>
 import { toast } from 'vue3-toastify'
-import { useAsyncAction } from '@/composables/useAsyncAction'
-import api from '@/services/api.js'
 import { mediaUrl } from '@/services/media'
-import { iniciarLoginGoogle } from '@/services/google'
 import { caminhoSeguro } from '@/services/sessao'
-import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
+import FormEntrar from '@/components/auth/FormEntrar.vue'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
 import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
   name: 'AppLogin',
-  components: { BotaoVerPassword },
-
-  setup () {
-    const { loading, wrap } = useAsyncAction()
-    return { loading, wrap }
-  },
+  components: { FormEntrar },
 
   data () {
-    return {
-      videoFundo:   mediaUrl('videos/background.mp4'),
-      username:     '',
-      password:     '',
-      verPassword:  false,
-      warning:      false,
-      warningMsg:   'Credenciais inválidas.',
-      loadingGoogle: false,
-      isDark: temaEscuro(),
-      logoDefault,
-      logoLight,
-    }
+    return { videoFundo: mediaUrl('videos/background.mp4'), isDark: temaEscuro(), logoDefault, logoLight }
   },
 
   watch: {
-    isDark (val) {
-      guardarTema(val)
-    }
+    isDark (val) { guardarTema(val) },
   },
 
   computed: {
     // página para onde voltar depois de entrar (só caminhos internos)
-    seguinte () {
-      return caminhoSeguro(this.$route.query.seguinte)
-    },
+    seguinte () { return caminhoSeguro(this.$route.query.seguinte) },
   },
 
   created () {
-    if (localStorage.getItem('access_token')) {
-      this.$router.replace(this.seguinte)
-    }
+    if (localStorage.getItem('access_token')) this.$router.replace(this.seguinte)
   },
 
   methods: {
-    async handleLogin () {
-      await this.wrap(async () => {
-        this.warning = false
-        try {
-          const res = await api.post('/app/utilizador/login/', {
-            username: this.username,
-            password: this.password,
-          })
-          const { access_token, refresh_token, user } = res.data
-          localStorage.setItem('access_token',  access_token)
-          localStorage.setItem('refresh_token', refresh_token)
-          localStorage.setItem('user',          JSON.stringify(user))
-          if (res.data.eliminacao_cancelada) {
-            // depois de mudar de página: os avisos limpam-se quando o endereço muda
-            await this.$router.replace(this.seguinte)
-            toast.info('Bem-vindo de volta! O pedido para apagar a tua conta foi cancelado.', { autoClose: 8000, clearOnUrlChange: false })
-            return
-          }
-          toast.success('Login bem-sucedido!', { autoClose: 2000 })
-          this.$router.replace(this.seguinte)
-        } catch (err) {
-          const msg = err.response?.data?.detail || 'Credenciais inválidas.'
-          this.warningMsg = msg
-          this.warning = true
-          toast.error(msg, { autoClose: 3000 })
-        }
-      })
-    },
-
-    async loginComGoogle () {
-      this.loadingGoogle = true
-      try {
-        await iniciarLoginGoogle('bendi', this.seguinte)
-      } catch (e) {
-        console.error(e)
-        toast.error('Erro ao iniciar login com Google.', { autoClose: 3000 })
-        this.loadingGoogle = false
+    async aoEntrar (dados) {
+      if (dados.eliminacao_cancelada) {
+        // depois de mudar de página: os avisos limpam-se quando o endereço muda
+        await this.$router.replace(this.seguinte)
+        toast.info('Bem-vindo de volta! O pedido para apagar a tua conta foi cancelado.', { autoClose: 8000, clearOnUrlChange: false })
+        return
       }
+      toast.success('Login bem-sucedido!', { autoClose: 2000 })
+      this.$router.replace(this.seguinte)
     },
-  }
+  },
 }
 </script>
