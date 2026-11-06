@@ -2166,6 +2166,26 @@ class AnuncioInfo(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
 
+class LandingRascunho(models.Model):
+    """Rascunho da landing page (/sobre) — uma só linha (pk=1). `dados` = lista de secções validada por
+    utils/landing.py; o admin (gerir_home) edita-a na própria página e publica (LandingPublicacao).
+    `versao` sobe a cada gravação: o editor manda a que leu e um pedido desactualizado recebe 409."""
+    dados         = models.JSONField(default=list)
+    versao        = models.PositiveIntegerField(default=0)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    atualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+
+class LandingPublicacao(models.Model):
+    """Cópia publicada da landing page — a mais recente é a que os visitantes vêem; as antigas servem para restaurar."""
+    dados         = models.JSONField(default=list)
+    publicado_em  = models.DateTimeField(auto_now_add=True)
+    publicado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-publicado_em', '-id']
+
+
 # ══════════════════════════════════════════════════════════════
 # DEVOLUÇÕES / REEMBOLSOS  (regras em utils/devolucoes.py)
 # ══════════════════════════════════════════════════════════════
