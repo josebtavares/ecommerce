@@ -22,7 +22,7 @@
            :class="isDark ? 'bg-red-900' : 'bg-amber-200'"></div>
     </div>
 
-    <div class="relative z-10 w-full max-w-7xl mx-auto px-5 sm:px-8 pt-32 pb-24 sm:pb-28">
+    <div class="relative z-10 w-full px-5 sm:px-10 lg:px-16 pt-32 pb-24 sm:pb-28">
       <div class="max-w-3xl">
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight whitespace-pre-line"
             :class="media ? 'text-white drop-shadow' : (isDark ? 'text-white' : 'text-zinc-900')" data-teste="hero-titulo">{{ s.titulo }}</h1>
