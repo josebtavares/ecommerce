@@ -38,7 +38,8 @@
         </div>
         <div :class="comMolduras && !s.ativa ? 'opacity-50' : ''">
           <LandingHero v-if="s.tipo === 'hero'" :s="heroVisivel(s)" :isDark="isDark" :seguinte="visiveis[n + 1]?.tipo || ''" @acao="acao" />
-          <LandingCartoes v-else-if="s.tipo === 'clientes' || s.tipo === 'lojas'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
+          <LandingClientes v-else-if="s.tipo === 'clientes'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
+          <LandingLojas v-else-if="s.tipo === 'lojas'" :s="s" :isDark="isDark" @acao="acao" />
           <LandingPlanos v-else-if="s.tipo === 'planos'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
           <LandingTutoriais v-else-if="s.tipo === 'tutoriais'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
           <LandingFaq v-else-if="s.tipo === 'faq'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
@@ -78,7 +79,8 @@ import { temaEscuro, guardarTema } from '@/utils/tema'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
 import LandingNav from '@/components/landing/LandingNav.vue'
 import LandingHero from '@/components/landing/LandingHero.vue'
-import LandingCartoes from '@/components/landing/LandingCartoes.vue'
+import LandingClientes from '@/components/landing/LandingClientes.vue'
+import LandingLojas from '@/components/landing/LandingLojas.vue'
 import LandingPlanos from '@/components/landing/LandingPlanos.vue'
 import LandingTutoriais from '@/components/landing/LandingTutoriais.vue'
 import LandingFaq from '@/components/landing/LandingFaq.vue'
@@ -98,7 +100,7 @@ function lerUser () {
 export default {
   name: 'PaginaSobre',
   components: {
-    SiteRodape, LandingNav, LandingHero, LandingCartoes, LandingPlanos, LandingTutoriais, LandingFaq, LandingContactos, JanelaConta,
+    SiteRodape, LandingNav, LandingHero, LandingClientes, LandingLojas, LandingPlanos, LandingTutoriais, LandingFaq, LandingContactos, JanelaConta,
     BarraEdicao, PainelSeccao,
   },
 
