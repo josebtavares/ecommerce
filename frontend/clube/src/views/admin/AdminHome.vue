@@ -11,6 +11,11 @@
         </p>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
+        <!-- a landing page (/sobre) edita-se na própria página (views/Sobre.vue) -->
+        <router-link :to="{ path: '/sobre', query: { editar: 1 } }" data-teste="editar-landing"
+          class="px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-900 text-xs font-semibold text-zinc-300 hover:border-zinc-500 transition flex items-center gap-1.5">
+          <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Editar a landing page
+        </router-link>
         <button @click="abrirPreview" :disabled="loading"
           class="px-3 py-2 rounded-xl border border-zinc-700 bg-zinc-900 text-xs font-semibold text-zinc-300 hover:border-zinc-500 transition flex items-center gap-1.5">
           <font-awesome-icon :icon="['fas', 'eye']" /> Pré-visualizar

@@ -35,3 +35,10 @@ export function pedirLogin (mensagem = 'Entra ou cria conta para continuar.', se
 export function fecharPedidoLogin () {
   pedidoLogin.aberto = false
 }
+
+// depois de entrar ou criar conta (resposta de /app/utilizador/login/ ou /registar/)
+export function guardarSessao ({ access_token, refresh_token, user }) {
+  localStorage.setItem('access_token', access_token)
+  localStorage.setItem('refresh_token', refresh_token)
+  localStorage.setItem('user', JSON.stringify(user))
+}

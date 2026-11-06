@@ -149,6 +149,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME' : timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS' : True,
+    'BLACKLIST_AFTER_ROTATION': True,   # o refresh já renovado deixa de valer (um roubado não dura o dia todo)
     'AUTH_HEADER_TYPES'     : ('Bearer',),
     'TOKEN_REFRESH_SERIALIZER': 'app.autenticacao.RefreshContaAtiva',   # renovar também verifica a conta
 }

@@ -162,6 +162,39 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Renovar a sessão. O servidor roda o refresh a cada renovação e o antigo deixa de valer
+// (BLACKLIST_AFTER_ROTATION): um refresh roubado deixa de servir quando o dono renova. Por isso:
+// - guarda-se o refresh novo;
+// - uma renovação de cada vez por sessão (vários pedidos a falhar juntos esperam pela mesma);
+// - outro separador pode ter renovado primeiro (o nosso refresh já estava gasto): usa-se o dele.
+const aRenovar = {};
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
+function renovar (chaveAccess, chaveRefresh) {
+  if (aRenovar[chaveRefresh]) return aRenovar[chaveRefresh];
+  const usado = localStorage.getItem(chaveRefresh);
+  aRenovar[chaveRefresh] = (async () => {
+    if (!usado) throw new Error('No refresh token');
+    try {
+      const res = await axios.post(`${process.env.VUE_APP_URL_BASE}/api/token/refresh/`, { refresh: usado });
+      const novo = res.data.access_token || res.data.access;
+      localStorage.setItem(chaveAccess, novo);
+      if (res.data.refresh) localStorage.setItem(chaveRefresh, res.data.refresh);
+      return novo;
+    } catch (e) {
+      // o outro separador pode ainda estar a receber a resposta dele: espera um pouco e volta a ver
+      for (let i = 0; i < 2; i++) {
+        const atual = localStorage.getItem(chaveRefresh);
+        if (atual && atual !== usado && localStorage.getItem(chaveAccess)) return localStorage.getItem(chaveAccess);
+        if (e.response?.status !== 401 || !atual) break;
+        await esperar(1500);
+      }
+      throw e;
+    }
+  })().finally(() => { delete aRenovar[chaveRefresh]; });
+  return aRenovar[chaveRefresh];
+}
+
 // Interceptor de resposta para renovar token automaticamente
 api.interceptors.response.use(
   response => response,
@@ -197,16 +230,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem(chaveRefresh);
-        if (!refreshToken) throw new Error('No refresh token');
-
-        const res = await axios.post(`${process.env.VUE_APP_URL_BASE}/api/token/refresh/`, {
-          refresh: refreshToken
-        });
-
-        const newAccess = res.data.access_token || res.data.access;
-        localStorage.setItem(chaveAccess, newAccess);
-
+        const newAccess = await renovar(chaveAccess, chaveRefresh);
         originalRequest.headers.Authorization = `Bearer ${newAccess}`;
         return axios(originalRequest);
       } catch (refreshError) {

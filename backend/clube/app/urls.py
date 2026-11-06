@@ -22,6 +22,7 @@ urlpatterns = [
     path('', include('app.Urls.favoritoUrl')),
     path('', include('app.Urls.subscricaoUrl')),
     path('', include('app.Urls.homeUrl')),
+    path('', include('app.Urls.landingUrl')),
     path('', include('app.Urls.pesquisaUrl')),
     path('', include('app.Urls.devolucaoUrl')),
     path('', include('app.Urls.documentoLojaUrl')),

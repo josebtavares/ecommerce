@@ -33,7 +33,8 @@ const politica = [
   `img-src ${lista("'self'", 'data:', 'blob:', api, media, 'https:')}`,
   `media-src ${lista("'self'", 'blob:', api, media, 'https:')}`,
   `connect-src ${lista("'self'", api, ws, media, turnstile)}`,
-  `frame-src ${lista("'self'", turnstile)}`,
+  // tutoriais da landing page (/sobre): vídeos do YouTube no modo de privacidade (sem cookies até tocar)
+  `frame-src ${lista("'self'", turnstile, 'https://www.youtube-nocookie.com')}`,
   "frame-ancestors 'self'",
   "worker-src 'self' blob:",
   "object-src 'none'",
