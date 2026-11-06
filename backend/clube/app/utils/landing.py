@@ -216,8 +216,13 @@ def _valor(espec, v, nome, medias):
         return v
     if tipo == 'email':
         v = _texto(v, 254, nome)
-        if v and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v):
-            raise Invalido(f'{nome}: email inválido.')
+        if v:
+            from django.core.exceptions import ValidationError
+            from django.core.validators import validate_email
+            try:
+                validate_email(v)       # sem aspas, "<", ">" nem espaços (vai num link mailto:)
+            except ValidationError:
+                raise Invalido(f'{nome}: email inválido.')
         return v
     if tipo == 'youtube':
         vid = youtube_id(v if isinstance(v, str) else '')
