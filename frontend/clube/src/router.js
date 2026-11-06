@@ -95,7 +95,13 @@ const routes = [
         component: MarcacaoCliente,
         meta: { requiresAuth: true }
     },
-        {   
+    {
+        // landing page da Bende (apresentação, tutoriais, planos) — conteúdo editado pelo admin (utils/landing.py)
+        path: '/sobre',
+        name: 'Sobre',
+        component: () => import('@/views/Sobre.vue'),
+    },
+        {
         path: '/',
         redirect: '/Home'
     },

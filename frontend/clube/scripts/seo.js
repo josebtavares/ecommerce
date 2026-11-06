@@ -8,6 +8,7 @@ const IMAGEM = { url: '/og-bende.png', largura: 1200, altura: 630, tipo: 'image/
 // páginas institucionais (router.js → /:slug) e as de entrada no site
 const PUBLICAS = {
   '/': 'Bende — Marketplace de Cabo Verde',
+  '/sobre': 'A Bende — compra e vende nas lojas de Cabo Verde',   // landing page (o título real vem da API)
   '/ajuda': 'Ajuda — Bende',
   '/contacto': 'Contacto — Bende',
   '/faq': 'Perguntas frequentes — Bende',

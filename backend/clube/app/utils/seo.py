@@ -143,3 +143,55 @@ def lista_sitemap():
                   for pk, slug, d in lojas.values_list('pk', 'slug', 'data_atualizacao')],
         'produtos': [{'id': pk, 'loja': loja} for pk, loja in produtos[:45000]],
     }
+
+
+# ── landing page (/sobre) — utils/landing.py ─────────────────────────────────
+
+def foto_landing():
+    """(HomeImagem, ficheiro) do hero publicado: a imagem, ou o poster do vídeo. (None, None) sem nenhuma."""
+    from ..models import HomeImagem
+    from . import landing
+    _, seccoes = landing.publicada()
+    hero = next((s for s in seccoes if s.get('tipo') == 'hero'), None) or {}
+    for chave in ('media', 'media_movel'):
+        im = HomeImagem.objects.filter(pk=hero.get(chave)).first() if hero.get(chave) else None
+        if im:
+            foto = _foto(im.ficheiro) if im.tipo == 'imagem' else _foto(im.ficheiro_poster)
+            if foto:
+                return im, foto
+    return None, None
+
+
+def dados_landing():
+    """Título, descrição, imagem e dados estruturados da landing page publicada (Organization + FAQPage)."""
+    from . import landing
+    _, seccoes = landing.publicada()
+    por_tipo = {s['tipo']: s for s in seccoes}
+    hero = por_tipo.get('hero') or {}
+    titulo = _texto(hero.get('titulo'), 90) or 'A Bende'
+    descricao = _texto(hero.get('subtitulo')) or _texto('Compra nas lojas de Cabo Verde, marca serviços e vende online '
+                                                         'com loja, POS, entregas e faturação na Bende.')
+    im, foto = foto_landing()
+    imagem = None
+    if foto:
+        versao = hashlib.sha1(foto.name.encode()).hexdigest()[:10]
+        imagem = f'/og/landing/{im.pk}.jpg?v={versao}'
+    contactos = por_tipo.get('contactos') or {}
+    redes = [u for u in (contactos.get('redes') or {}).values() if u] if contactos.get('ativa') else []
+    from django.conf import settings
+    site = settings.FRONTEND_BASE_URL.rstrip('/')
+    organizacao = {'@type': 'Organization', 'name': 'Bende', 'url': site + '/', 'description': descricao}
+    if redes:
+        organizacao['sameAs'] = redes
+    grafo = [organizacao]
+    faq = por_tipo.get('faq') or {}
+    perguntas = [p for p in faq.get('perguntas') or [] if p.get('pergunta') and p.get('resposta')]
+    if faq.get('ativa') and perguntas:
+        grafo.append({'@type': 'FAQPage', 'mainEntity': [
+            {'@type': 'Question', 'name': p['pergunta'],
+             'acceptedAnswer': {'@type': 'Answer', 'text': p['resposta']}} for p in perguntas]})
+    return {
+        'tipo': 'site', 'titulo': f'{titulo} — Bende', 'descricao': descricao, 'nome': 'Bende',
+        'caminho': '/sobre', 'imagem': imagem, 'indexar': True,
+        'estruturados': {'@context': 'https://schema.org', '@graph': grafo},
+    }
