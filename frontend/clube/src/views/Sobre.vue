@@ -24,16 +24,43 @@
       </div>
     </div>
 
-    <main v-else>
-      <template v-for="(s, n) in seccoes" :key="s.tipo">
-        <LandingHero v-if="s.tipo === 'hero'" :s="heroVisivel(s)" :isDark="isDark" :seguinte="seccoes[n + 1]?.tipo || ''" @acao="acao" />
-        <LandingCartoes v-else-if="s.tipo === 'clientes' || s.tipo === 'lojas'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
-        <LandingPlanos v-else-if="s.tipo === 'planos'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
-        <LandingTutoriais v-else-if="s.tipo === 'tutoriais'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
-        <LandingFaq v-else-if="s.tipo === 'faq'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
-        <LandingContactos v-else-if="s.tipo === 'contactos'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
-      </template>
+    <main v-else :class="editar ? 'pt-12' : ''">
+      <div v-for="(s, n) in visiveis" :key="s.tipo" class="relative" :class="comMolduras ? 'seccao-editavel' : ''"
+           :data-teste="'seccao-' + s.tipo">
+        <div v-if="comMolduras" class="absolute z-30 right-3 sm:right-6 flex items-center gap-2" :class="s.tipo === 'hero' ? 'top-32' : 'top-4'">
+          <span v-if="!s.ativa" class="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[11px] font-bold" data-teste="marca-escondida">
+            <font-awesome-icon :icon="['fas', 'eye-slash']" class="mr-1" />Escondida</span>
+          <span v-else-if="s.vazia" class="px-2.5 py-1 rounded-lg bg-amber-500 text-black text-[11px] font-bold" data-teste="marca-vazia">
+            Sem conteúdo — os visitantes não a vêem</span>
+          <button type="button" @click="abrirPainel(s.tipo)" :data-teste="'editar-' + s.tipo"
+                  class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg">
+            <font-awesome-icon :icon="['fas', 'pen']" class="mr-1" />Editar</button>
+        </div>
+        <div :class="comMolduras && !s.ativa ? 'opacity-50' : ''">
+          <LandingHero v-if="s.tipo === 'hero'" :s="heroVisivel(s)" :isDark="isDark" :seguinte="visiveis[n + 1]?.tipo || ''" @acao="acao" />
+          <LandingCartoes v-else-if="s.tipo === 'clientes' || s.tipo === 'lojas'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
+          <LandingPlanos v-else-if="s.tipo === 'planos'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
+          <LandingTutoriais v-else-if="s.tipo === 'tutoriais'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
+          <LandingFaq v-else-if="s.tipo === 'faq'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
+          <LandingContactos v-else-if="s.tipo === 'contactos'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
+        </div>
+      </div>
     </main>
+
+    <!-- edição (admin com gerir_home): rascunho → Publicar -->
+    <button v-if="podeEditar && !editar && !aCarregar" type="button" @click="entrarEdicao" data-teste="editar-pagina"
+            class="fixed bottom-5 left-5 z-40 px-4 py-3 rounded-2xl bg-zinc-900 text-white text-sm font-bold shadow-2xl border border-zinc-700 hover:bg-zinc-800">
+      <font-awesome-icon :icon="['fas', 'pen-to-square']" class="mr-2" />Editar página</button>
+    <BarraEdicao v-if="editar && estado" :seccoes="estado.rascunho" :nomes="nomesSeccoes" :alteracoes="estado.alteracoes"
+                 :visitante="visitante" :ocupado="ocupado" :historico="historico"
+                 @visitante="v => { visitante = v; depoisDeMudar() }" @sair="sairEdicao" @historico="carregarHistorico"
+                 @publicar="publicar" @descartar="acaoEditor('/app/admin/landing/descartar/', 'Alterações descartadas.')"
+                 @padrao="acaoEditor('/app/admin/landing/padrao/', 'Textos de origem repostos no rascunho.')"
+                 @restaurar="id => acaoEditor(`/app/admin/landing/publicacoes/${id}/restaurar/`, 'Publicação carregada no rascunho.')"
+                 @ordem="ordenar" @visibilidade="mudarVisibilidade" />
+    <PainelSeccao v-if="editar && painelTipo && seccaoRascunho" :seccao="seccaoRascunho" :resolvida="seccaoResolvida"
+                  :medias="estado.medias || {}" :nome="nomesSeccoes[painelTipo]" :limites="limites" :aGravar="aGravar" :erro="erroPainel"
+                  @gravar="gravarSeccao" @fechar="painelTipo = ''; erroPainel = ''" />
 
     <SiteRodape :isDark="isDark" />
 
@@ -56,6 +83,8 @@ import LandingTutoriais from '@/components/landing/LandingTutoriais.vue'
 import LandingFaq from '@/components/landing/LandingFaq.vue'
 import LandingContactos from '@/components/landing/LandingContactos.vue'
 import JanelaConta from '@/components/landing/JanelaConta.vue'
+import BarraEdicao from '@/components/landing/editor/BarraEdicao.vue'
+import PainelSeccao from '@/components/landing/editor/PainelSeccao.vue'
 
 const ACOES_CONTA = { '#entrar': 'entrar', '#criar-conta': 'registo' }
 
@@ -66,23 +95,41 @@ function lerUser () {
 
 export default {
   name: 'PaginaSobre',
-  components: { SiteRodape, LandingNav, LandingHero, LandingCartoes, LandingPlanos, LandingTutoriais, LandingFaq, LandingContactos, JanelaConta },
+  components: {
+    SiteRodape, LandingNav, LandingHero, LandingCartoes, LandingPlanos, LandingTutoriais, LandingFaq, LandingContactos, JanelaConta,
+    BarraEdicao, PainelSeccao,
+  },
 
   data () {
     return {
       seccoes: [], aCarregar: true, erro: false,
       isDark: temaEscuro(), user: lerUser(), lojas: [],
       ativa: '', noTopo: true, janela: null,
+      // edição
+      podeEditar: false, editar: false, estado: null, visitante: false, painelTipo: '', aGravar: false, erroPainel: '',
+      ocupado: false, historico: [],
     }
   },
 
   computed: {
-    links () { return this.seccoes.filter(s => s.tipo !== 'hero' && s.nav).map(s => ({ tipo: s.tipo, nav: s.nav })) },
+    // em edição mostra o rascunho (todas as secções, com as escondidas/vazias marcadas); "Ver como visitante" tira-as
+    visiveis () {
+      if (!this.editar || !this.estado) return this.seccoes
+      return this.visitante ? this.estado.pagina.filter(s => !s.vazia) : this.estado.pagina
+    },
+    comMolduras () { return this.editar && !this.visitante },
+    links () { return this.visiveis.filter(s => s.tipo !== 'hero' && s.nav && (!this.editar || s.ativa)).map(s => ({ tipo: s.tipo, nav: s.nav })) },
     // barra transparente com letras brancas só no topo e por cima de um hero com imagem/vídeo
     sobreHero () {
-      const h = this.seccoes[0]
-      return this.noTopo && h?.tipo === 'hero' && !!(h.media || h.media_movel)
+      const h = this.visiveis[0]
+      return !this.editar && this.noTopo && h?.tipo === 'hero' && !!(h.media || h.media_movel)
     },
+    nomesSeccoes () {
+      return Object.fromEntries((this.estado?.opcoes?.tipos || []).map(t => [t.tipo, t.nome]))
+    },
+    limites () { return this.estado?.opcoes },
+    seccaoRascunho () { return this.estado?.rascunho.find(s => s.tipo === this.painelTipo) || null },
+    seccaoResolvida () { return this.estado?.pagina.find(s => s.tipo === this.painelTipo) || null },
   },
 
   watch: {
@@ -92,7 +139,7 @@ export default {
   created () {
     document.title = 'Bende — compra e vende nas lojas de Cabo Verde'
     this.carregar()
-    if (this.user) this.carregarLojas()
+    if (this.user) { this.carregarLojas(); this.verPermissao() } else if (this.$route.query.editar) this.janela = 'entrar'
   },
 
   mounted () {
@@ -131,6 +178,107 @@ export default {
 
     alternado (n) { return n % 2 === 1 },
 
+    // ── edição ──────────────────────────────────────────
+    // só contas de staff perguntam; o servidor responde 403 a quem não tem gerir_home
+    async verPermissao () {
+      this.podeEditar = false
+      if (!this.user?.is_staff) return
+      try {
+        const { data } = await api.get('/app/admin/landing/')
+        this.estado = data
+        this.podeEditar = true
+        if (this.$route.query.editar) this.entrarEdicao()
+      } catch (e) { this.podeEditar = false }
+    },
+
+    async entrarEdicao () {
+      this.ocupado = true
+      try {
+        const { data } = await api.get('/app/admin/landing/')
+        this.estado = data
+        this.editar = true
+        this.depoisDeMudar()
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Sem permissão para editar esta página.')
+      } finally { this.ocupado = false }
+    },
+
+    sairEdicao () {
+      this.editar = false
+      this.painelTipo = ''
+      this.visitante = false
+      if (this.$route.query.editar) this.$router.replace({ query: {} })
+      this.carregar()        // o que os visitantes vêem (pode ter sido publicado entretanto)
+    },
+
+    depoisDeMudar () { this.$nextTick(() => this.vigiar()) },
+
+    abrirPainel (tipo) { this.erroPainel = ''; this.painelTipo = tipo },
+
+    // erro do servidor: 409 = alguém gravou noutro sítio → recarrega o rascunho
+    async falhou (e, alvo = 'toast') {
+      const msg = e.response?.data?.detail || 'Não foi possível guardar.'
+      if (e.response?.status === 409) {
+        toast.error(msg, { autoClose: 6000 })
+        try { this.estado = (await api.get('/app/admin/landing/')).data } catch (x) { /* fica o que havia */ }
+        return
+      }
+      if (alvo === 'painel') this.erroPainel = msg
+      else toast.error(msg)
+    },
+
+    async gravarSeccao (dados) {
+      this.aGravar = true
+      this.erroPainel = ''
+      try {
+        const { data } = await api.patch(`/app/admin/landing/seccoes/${this.painelTipo}/`, { versao: this.estado.versao, dados })
+        this.estado = data
+        toast.success('Guardado no rascunho.', { autoClose: 1500 })
+        this.depoisDeMudar()
+      } catch (e) {
+        await this.falhou(e, 'painel')
+      } finally { this.aGravar = false }
+    },
+
+    async ordenar (ordem) {
+      this.ocupado = true
+      try {
+        this.estado = (await api.post('/app/admin/landing/ordem/', { versao: this.estado.versao, ordem })).data
+        this.depoisDeMudar()
+      } catch (e) { await this.falhou(e) } finally { this.ocupado = false }
+    },
+
+    async mudarVisibilidade (tipo, ativa) {
+      this.ocupado = true
+      try {
+        this.estado = (await api.patch(`/app/admin/landing/seccoes/${tipo}/`, { versao: this.estado.versao, dados: { ativa } })).data
+        this.depoisDeMudar()
+      } catch (e) { await this.falhou(e) } finally { this.ocupado = false }
+    },
+
+    async acaoEditor (url, mensagem) {
+      this.ocupado = true
+      this.painelTipo = ''
+      try {
+        this.estado = (await api.post(url, {})).data
+        toast.success(mensagem, { autoClose: 2000 })
+        this.depoisDeMudar()
+      } catch (e) { await this.falhou(e) } finally { this.ocupado = false }
+    },
+
+    async publicar () {
+      this.ocupado = true
+      try {
+        this.estado = (await api.post('/app/admin/landing/publicar/', { versao: this.estado.versao })).data
+        this.historico = []
+        toast.success('Publicado! Os visitantes já vêem a página nova.', { autoClose: 3000 })
+      } catch (e) { await this.falhou(e) } finally { this.ocupado = false }
+    },
+
+    async carregarHistorico () {
+      try { this.historico = (await api.get('/app/admin/landing/publicacoes/')).data } catch (e) { this.historico = [] }
+    },
+
     // com sessão iniciada, os botões de entrar/criar conta do hero deixam de fazer sentido
     heroVisivel (s) {
       if (!this.user) return s
@@ -145,7 +293,7 @@ export default {
       this.observador = new IntersectionObserver(entradas => {
         for (const e of entradas) if (e.isIntersecting) this.ativa = e.target.id === 'hero' ? '' : e.target.id
       }, { rootMargin: '-45% 0px -50% 0px' })
-      for (const s of this.seccoes) {
+      for (const s of this.visiveis) {
         const el = document.getElementById(s.tipo)
         if (el) this.observador.observe(el)
       }
@@ -189,6 +337,7 @@ export default {
       this.janela = null
       this.user = lerUser()
       this.carregarLojas()
+      this.verPermissao()
       if (window.location.hash && ACOES_CONTA[window.location.hash]) {
         try { history.replaceState(history.state, '', window.location.pathname) } catch (e) { /* ignora */ }
       }
@@ -204,6 +353,9 @@ export default {
       for (const k of ['access_token', 'refresh_token', 'user']) localStorage.removeItem(k)
       this.user = null
       this.lojas = []
+      if (this.editar) this.sairEdicao()
+      this.podeEditar = false
+      this.estado = null
       toast.info('Terminaste a sessão.', { autoClose: 2000 })
     },
   },

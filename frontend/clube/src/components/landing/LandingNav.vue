@@ -36,7 +36,7 @@
             class="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-colors"
             :class="claro ? 'border-white/30 text-white hover:bg-white/10'
                           : (isDark ? 'border-zinc-700 text-zinc-200 hover:bg-zinc-800' : 'border-stone-300 text-zinc-700 hover:bg-stone-100')">
-            <img v-if="user.foto" :src="user.foto" alt="" class="w-7 h-7 rounded-full object-cover" />
+            <img v-if="user.foto && !semFoto" :src="user.foto" alt="" class="w-7 h-7 rounded-full object-cover" @error="semFoto = true" />
             <span v-else class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
                   :class="isDark ? 'bg-red-600' : 'bg-orange-500'">{{ inicial }}</span>
             <span class="hidden sm:inline text-sm font-semibold max-w-[9rem] truncate">Olá, {{ nome }}</span>
@@ -106,7 +106,7 @@ export default {
     sobreHero: { type: Boolean, default: false },   // no topo, por cima de um hero com imagem: letras brancas, sem fundo
   },
   emits: ['ir', 'entrar', 'registo', 'tema', 'sair'],
-  data () { return { aberto: false, menu: false, logoDefault, logoLight } },
+  data () { return { aberto: false, menu: false, semFoto: false, logoDefault, logoLight } },
   computed: {
     claro () { return this.sobreHero && !this.aberto },
     nome () { return this.user?.first_name || this.user?.username || '' },

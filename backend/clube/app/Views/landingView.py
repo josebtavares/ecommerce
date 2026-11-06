@@ -24,18 +24,25 @@ def _admin(request):
 def _estado(request, r=None):
     """Tudo o que o editor precisa: o rascunho em bruto (para editar), já resolvido (para mostrar como fica)."""
     from ..models import LandingPublicacao
+    from ..models import HomeImagem
+    from . import homeView
     r = r or L.rascunho()
     pub = LandingPublicacao.objects.select_related('publicado_por').only(
         'id', 'publicado_em', 'publicado_por__username').first()
+    # imagens/vídeos do rascunho como o editor os mostra (com o estado da conversão dos vídeos)
+    ids = {s.get(k) for s in r.dados for k in ('media', 'media_movel') if s.get(k)}
+    medias = {str(i): homeView._media_admin(im, request) for i, im in HomeImagem.objects.in_bulk(ids).items()} if ids else {}
     return {
         'versao': r.versao,
         'rascunho': r.dados,
+        'medias': medias,
         'pagina': L.resolver(r.dados, request, todas=True),
         'alteracoes': L.tem_alteracoes(r),
         'publicacao': {'id': pub.id, 'em': pub.publicado_em,
                        'por': pub.publicado_por.username if pub.publicado_por else None} if pub else None,
         'opcoes': {'tipos': [{'tipo': t, 'nome': L.NOMES[t]} for t in L.TIPOS], 'redes': list(L.REDES),
-                   'tipos_plano': list(L.TIPOS_PLANO)},
+                   'tipos_plano': list(L.TIPOS_PLANO), 'imagem_max_mb': homeView.IMAGEM_MAX_MB,
+                   'video_max_mb': homeView.VIDEO_MAX_MB, 'video_max_s': homeView.VIDEO_MAX_S},
     }
 
 
