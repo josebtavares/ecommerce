@@ -19,6 +19,7 @@ const ESPERA_API = 1500
 const VALIDADE = 5 * 60 * 1000
 const VALIDADE_404 = 60 * 1000
 const VALIDADE_SITEMAP = 60 * 60 * 1000
+const VALIDADE_LANDING = 60 * 1000      // a landing page (/sobre) muda quando o admin publica
 const VERIFICAR_VERSAO = 10 * 1000   // a cada 10 s: mudou o endereço de alguma loja?
 const MAX_CACHE = 2000
 
@@ -95,6 +96,15 @@ function enviarHtml (res, html, estado = 200) {
   res.end(html)
 }
 
+// /sobre: título, descrição e imagem do que o admin publicou (backend app/utils/seo.py dados_landing)
+async function paginaLanding (res) {
+  const dados = await guardado('landing', async () => {
+    const r = await api('/app/seo/landing/')
+    return r.ok ? { valor: await r.json(), validade: VALIDADE_LANDING } : null
+  })
+  enviarHtml(res, injetar(indexHtml, SITE, dados || paginaFixa('/sobre')))
+}
+
 async function paginaLoja (req, res, url, loja) {
   const pid = url.searchParams.get('produto') || ''
   const produto = /^\d{1,11}$/.test(pid) ? pid : ''
@@ -139,9 +149,10 @@ async function atender (req, res) {
   if (req.method === 'GET' || req.method === 'HEAD') {
     const url = new URL(req.url, 'http://x')
     const c = url.pathname
-    const og = c.match(/^\/og\/(loja|produto)\/(\d{1,12})\.jpg$/)
+    const og = c.match(/^\/og\/(loja|produto|landing)\/(\d{1,12})\.jpg$/)
     if (og) return imagemPartilha(res, og[1], og[2], req.method === 'HEAD')
     if (c === '/sitemap.xml') return mapaDoSite(res)
+    if (c.replace(/\/+$/, '').toLowerCase() === '/sobre') return paginaLanding(res)
     // /loja/<slug> (ou /loja/<id>, endereço antigo); /loja/criar e /loja/demo são páginas da app
     const loja = c.match(/^\/loja\/([a-z0-9][a-z0-9-]{0,59})\/?$/i)
     if (loja && !APP_LOJA.has(loja[1].toLowerCase())) return paginaLoja(req, res, url, loja[1].toLowerCase())

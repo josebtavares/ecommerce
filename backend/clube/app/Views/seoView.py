@@ -49,6 +49,26 @@ def seo_imagem(request, tipo, id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def seo_landing(request):
+    """GET /app/seo/landing/ — título, descrição, imagem e dados estruturados da landing page (/sobre) publicada."""
+    return Response(seo.dados_landing())
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def seo_imagem_landing(request, id):
+    """GET /app/seo/imagem/landing/<id>.jpg — imagem da partilha de /sobre. Só a do hero publicado (outro id → 404)."""
+    im, foto = seo.foto_landing()
+    dados = seo.imagem_jpeg(foto) if im and im.pk == int(id) else None
+    if dados is None:
+        return HttpResponse(status=404)
+    resposta = HttpResponse(dados, content_type='image/jpeg')
+    resposta['Cache-Control'] = 'public, max-age=604800'
+    return resposta
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def seo_versao(request):
     """GET /app/seo/versao/ — muda sempre que o endereço de uma loja muda ou é desligado (o site esquece a cache)."""
     return Response({'enderecos': endereco_loja.versao()})

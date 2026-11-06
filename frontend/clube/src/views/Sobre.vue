@@ -71,6 +71,7 @@
 
 <script>
 import { toast } from 'vue3-toastify'
+import { defineAsyncComponent } from 'vue'
 import api, { terminarSessao } from '@/services/api'
 import { estaAutenticado } from '@/services/sessao'
 import { temaEscuro, guardarTema } from '@/utils/tema'
@@ -82,9 +83,10 @@ import LandingPlanos from '@/components/landing/LandingPlanos.vue'
 import LandingTutoriais from '@/components/landing/LandingTutoriais.vue'
 import LandingFaq from '@/components/landing/LandingFaq.vue'
 import LandingContactos from '@/components/landing/LandingContactos.vue'
-import JanelaConta from '@/components/landing/JanelaConta.vue'
-import BarraEdicao from '@/components/landing/editor/BarraEdicao.vue'
-import PainelSeccao from '@/components/landing/editor/PainelSeccao.vue'
+// só quando são precisos: os visitantes não descarregam o editor nem os formulários de conta
+const JanelaConta = defineAsyncComponent(() => import('@/components/landing/JanelaConta.vue'))
+const BarraEdicao = defineAsyncComponent(() => import('@/components/landing/editor/BarraEdicao.vue'))
+const PainelSeccao = defineAsyncComponent(() => import('@/components/landing/editor/PainelSeccao.vue'))
 
 const ACOES_CONTA = { '#entrar': 'entrar', '#criar-conta': 'registo' }
 
