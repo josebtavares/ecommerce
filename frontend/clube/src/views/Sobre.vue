@@ -38,12 +38,13 @@
         </div>
         <div :class="comMolduras && !s.ativa ? 'opacity-50' : ''">
           <LandingHero v-if="s.tipo === 'hero'" :s="heroVisivel(s)" :isDark="isDark" :seguinte="visiveis[n + 1]?.tipo || ''" @acao="acao" />
-          <LandingClientes v-else-if="s.tipo === 'clientes'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
+          <LandingClientes v-else-if="s.tipo === 'clientes'" :s="s" :isDark="isDark" :alternado="alternado(n)"
+                           :temTutoriais="visiveis.some(v => v.tipo === 'tutoriais' && !v.vazia && (v.ativa || comMolduras))" @acao="acao" />
           <LandingLojas v-else-if="s.tipo === 'lojas'" :s="s" :isDark="isDark" @acao="acao" />
           <LandingPlanos v-else-if="s.tipo === 'planos'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
           <LandingTutoriais v-else-if="s.tipo === 'tutoriais'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
           <LandingFaq v-else-if="s.tipo === 'faq'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
-          <LandingContactos v-else-if="s.tipo === 'contactos'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
+          <LandingContactos v-else-if="s.tipo === 'contactos'" :s="s" :isDark="isDark" />
         </div>
       </div>
     </main>

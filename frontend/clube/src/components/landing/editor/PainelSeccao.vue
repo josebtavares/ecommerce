@@ -69,9 +69,19 @@
           </template>
         </ListaItens>
         <div v-if="tipo === 'lojas'">
-          <label class="rot">Imagem ou vídeo ao lado <span class="text-zinc-500 font-normal">(opcional)</span></label>
-          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem imagem" @media="m => guardarMedia(m)" />
+          <label class="rot">Imagem ou vídeo de fundo do topo <span class="text-zinc-500 font-normal">(opcional)</span></label>
+          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem fundo (usa as cores da Bende)" @media="m => guardarMedia(m)" />
         </div>
+        <template v-if="tipo === 'clientes'">
+          <div>
+            <label class="rot">Foto principal <span class="text-zinc-500 font-normal">(opcional)</span></label>
+            <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem foto (usa as cores da Bende)" @media="m => guardarMedia(m)" />
+          </div>
+          <div>
+            <label class="rot">Foto pequena, por cima <span class="text-zinc-500 font-normal">(opcional)</span></label>
+            <CampoMedia v-model="f.media2" :media="mediaDe(f.media2)" nome="media2" :limites="limites" vazio="Sem foto (usa as cores da Bende)" @media="m => guardarMedia(m)" />
+          </div>
+        </template>
         <CampoBotao v-model="f.botao" nome="botao" />
       </template>
 
@@ -152,6 +162,10 @@
             <input v-model="f.redes[r.rede]" maxlength="300" class="campo" :placeholder="r.exemplo" :data-teste="'rede-' + r.rede" />
           </div>
         </div>
+        <div>
+          <label class="rot">Foto ao lado <span class="text-zinc-500 font-normal">(opcional)</span></label>
+          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem foto (usa as cores da Bende)" @media="m => guardarMedia(m)" />
+        </div>
       </template>
     </div>
 
@@ -183,12 +197,12 @@ import ListaItens from './ListaItens.vue'
 
 const CAMPOS = {
   hero: ['media', 'media_movel', 'escurecer', 'botao', 'botao2'],
-  clientes: ['passos', 'botao'],
+  clientes: ['passos', 'botao', 'media', 'media2'],
   lojas: ['itens', 'botao', 'media'],
   planos: ['tipos', 'mostrar_comissao', 'comissao_titulo', 'comissao_texto', 'nota', 'botao'],
   tutoriais: ['videos'],
   faq: ['perguntas'],
-  contactos: ['email', 'telefone', 'whatsapp', 'morada', 'horario', 'redes'],
+  contactos: ['email', 'telefone', 'whatsapp', 'morada', 'horario', 'redes', 'media'],
 }
 const LISTAS = ['passos', 'itens', 'videos', 'perguntas']
 const CAMPOS_ITEM = {
@@ -254,7 +268,7 @@ export default {
         if (c === 'botao' || c === 'botao2') v = v && (v.texto || '').trim() ? { texto: v.texto, link: v.link || '' } : null
         else if (LISTAS.includes(c)) v = (v || []).map(it => Object.fromEntries(CAMPOS_ITEM[c].filter(k => k in it && (k !== 'id' || it.id)).map(k => [k, it[k] ?? ''])))
         else if (c === 'redes') v = Object.fromEntries(Object.entries(v || {}).filter(([, u]) => (u || '').trim()).map(([k, u]) => [k, u.trim()]))
-        else if (c === 'media' || c === 'media_movel') v = v || null
+        else if (c === 'media' || c === 'media_movel' || c === 'media2') v = v || null
         else if (c === 'tipos') v = [...(v || [])]
         else if (c === 'escurecer') v = Number.isInteger(v) ? v : 45
         else if (c === 'mostrar_comissao') v = !!v

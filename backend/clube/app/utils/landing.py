@@ -28,6 +28,7 @@ RE_ICONE = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
 RE_YOUTUBE_ID = re.compile(r'^[A-Za-z0-9_-]{11}$')
 RE_ANCORA = re.compile(r'^#[a-z0-9-]{1,40}$')
 RE_ITEM_ID = re.compile(r'^[a-z0-9]{1,12}$')
+MEDIAS = ('media', 'media_movel', 'media2')     # campos que guardam o id de uma HomeImagem
 
 # ── campos de cada tipo: ('texto', máx) · ('bool',) · ('int', mín, máx) · ('botao',) · ('media',)
 #    ('lista', máx itens, {campo: espec}) · ('escolhas', valores) · ('redes',) · ('email',) · ('youtube',)
@@ -35,7 +36,7 @@ _PASSO = {'icone': ('icone',), 'titulo': ('texto', 80), 'texto': ('texto', 300)}
 CAMPOS = {
     'hero': {'botao': ('botao',), 'botao2': ('botao',), 'media': ('media',), 'media_movel': ('media',),
              'escurecer': ('int', 0, 80)},
-    'clientes': {'passos': ('lista', 8, _PASSO), 'botao': ('botao',)},
+    'clientes': {'passos': ('lista', 8, _PASSO), 'botao': ('botao',), 'media': ('media',), 'media2': ('media',)},
     'lojas': {'itens': ('lista', 12, _PASSO), 'botao': ('botao',), 'media': ('media',)},
     'planos': {'tipos': ('escolhas', TIPOS_PLANO), 'mostrar_comissao': ('bool',), 'comissao_titulo': ('texto', 80),
                'comissao_texto': ('texto', 300), 'nota': ('texto', 300), 'botao': ('botao',)},
@@ -43,7 +44,8 @@ CAMPOS = {
                                            'descricao': ('texto', 300), 'categoria': ('texto', 40)})},
     'faq': {'perguntas': ('lista', 40, {'pergunta': ('texto', 200), 'resposta': ('texto', 2000)})},
     'contactos': {'email': ('email',), 'telefone': ('texto', 40), 'whatsapp': ('texto', 40),
-                  'morada': ('texto', 300), 'horario': ('texto', 120), 'redes': ('redes',)},
+                  'morada': ('texto', 300), 'horario': ('texto', 120), 'redes': ('redes',),
+                  'media': ('media',)},
 }
 COMUNS = {'ativa': ('bool',), 'nav': ('texto', 30), 'titulo': ('texto', 120), 'subtitulo': ('texto', 300)}
 OBRIGATORIOS = {'youtube', 'pergunta'}      # itens sem estes campos não fazem sentido
@@ -73,7 +75,7 @@ PADRAO = [
          {'icone': 'calendar-check', 'titulo': 'Marca serviços', 'texto': 'Cabeleireiro, estética, reparações: '
                                                                           'escolhe o dia e a hora.'},
      ],
-     'botao': _b('Explorar lojas', '/Home')},
+     'botao': _b('Explorar lojas', '/Home'), 'media': None, 'media2': None},
     {'tipo': 'lojas', 'ativa': True, 'nav': 'Para lojas',
      'titulo': 'Vende mais com a Bende',
      'subtitulo': 'Tudo o que a tua loja precisa para vender online e ao balcão.',
@@ -115,7 +117,7 @@ PADRAO = [
      ]},
     {'tipo': 'contactos', 'ativa': True, 'nav': 'Contactos',
      'titulo': 'Fala connosco', 'subtitulo': 'Estamos aqui para ajudar clientes e lojas.',
-     'email': '', 'telefone': '', 'whatsapp': '', 'morada': '', 'horario': '', 'redes': {}},
+     'email': '', 'telefone': '', 'whatsapp': '', 'morada': '', 'horario': '', 'redes': {}, 'media': None},
 ]
 for _s in PADRAO:      # ids estáveis dos itens de origem (o editor usa-os como chave)
     for _k in ('passos', 'itens', 'videos', 'perguntas'):
@@ -298,7 +300,7 @@ def validar_seccao(tipo, alteracoes, atual):
     for c, v in alteracoes.items():
         if c != 'tipo':
             nova[c] = _valor(campos[c], v, c, medias)
-    for c in ('media', 'media_movel'):
+    for c in MEDIAS:
         if nova.get(c):
             medias.add(nova[c])
     if medias:
@@ -400,7 +402,7 @@ def medias_usadas():
     for dados in listas:
         for s in dados or []:
             if isinstance(s, dict):
-                usadas.update(v for k, v in s.items() if k in ('media', 'media_movel') and isinstance(v, int))
+                usadas.update(v for k, v in s.items() if k in MEDIAS and isinstance(v, int))
     return usadas
 
 
@@ -442,12 +444,12 @@ def resolver(seccoes, request, todas=False):
     """Secções guardadas → o que a página mostra. todas=False (visitantes): só activas e com conteúdo.
     todas=True (editor): todas, com 'vazia' a dizer quais os visitantes não vêem."""
     from ..models import HomeImagem
-    ids = {s.get(k) for s in seccoes for k in ('media', 'media_movel') if s.get(k)}
+    ids = {s.get(k) for s in seccoes for k in MEDIAS if s.get(k)}
     imagens = HomeImagem.objects.in_bulk(ids) if ids else {}
     out = []
     for s in seccoes:
-        r = {k: v for k, v in s.items() if k not in ('media', 'media_movel')}
-        for k in ('media', 'media_movel'):
+        r = {k: v for k, v in s.items() if k not in MEDIAS}
+        for k in MEDIAS:
             if k in s:
                 r[k] = H._media(imagens.get(s[k]), request) if s[k] else None
         t = s['tipo']
