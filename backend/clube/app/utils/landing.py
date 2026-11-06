@@ -19,9 +19,10 @@ from django.db import transaction
 from . import home as H
 
 CACHE_SEGUNDOS = 60
-TIPOS = ('hero', 'clientes', 'lojas', 'planos', 'tutoriais', 'faq', 'contactos')
+TIPOS = ('hero', 'clientes', 'lojas', 'planos', 'tutoriais', 'faq', 'app', 'contactos')
 NOMES = {'hero': 'Topo (hero)', 'clientes': 'Para clientes', 'lojas': 'Para lojas', 'planos': 'Planos e preços',
-         'tutoriais': 'Tutoriais', 'faq': 'Perguntas frequentes', 'contactos': 'Contactos'}
+         'tutoriais': 'Tutoriais', 'faq': 'Perguntas frequentes', 'app': 'Baixar a app',
+         'contactos': 'Contactos'}
 REDES = ('facebook', 'instagram', 'tiktok', 'youtube', 'linkedin', 'x')
 TIPOS_PLANO = ('loja', 'pos', 'loja_pos', 'servicos')
 RE_ICONE = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
@@ -31,7 +32,7 @@ RE_ITEM_ID = re.compile(r'^[a-z0-9]{1,12}$')
 MEDIAS = ('media', 'media_movel', 'media2')     # campos que guardam o id de uma HomeImagem
 
 # ── campos de cada tipo: ('texto', máx) · ('bool',) · ('int', mín, máx) · ('botao',) · ('media',)
-#    ('lista', máx itens, {campo: espec}) · ('escolhas', valores) · ('redes',) · ('email',) · ('youtube',)
+#    ('lista', máx itens, {campo: espec}) · ('escolhas', valores) · ('redes',) · ('email',) · ('youtube',) · ('https',)
 _PASSO = {'icone': ('icone',), 'titulo': ('texto', 80), 'texto': ('texto', 300)}
 CAMPOS = {
     'hero': {'botao': ('botao',), 'botao2': ('botao',), 'media': ('media',), 'media_movel': ('media',),
@@ -46,6 +47,7 @@ CAMPOS = {
     'contactos': {'email': ('email',), 'telefone': ('texto', 40), 'whatsapp': ('texto', 40),
                   'morada': ('texto', 300), 'horario': ('texto', 120), 'redes': ('redes',),
                   'media': ('media',)},
+    'app': {'play_store': ('https',), 'app_store': ('https',), 'itens': ('lista', 4, _PASSO), 'media': ('media',)},
 }
 COMUNS = {'ativa': ('bool',), 'nav': ('texto', 30), 'titulo': ('texto', 120), 'subtitulo': ('texto', 300)}
 OBRIGATORIOS = {'youtube', 'pergunta'}      # itens sem estes campos não fazem sentido
@@ -115,6 +117,17 @@ PADRAO = [
           'resposta': 'Podes pagar uma comissão por venda ou escolher um plano mensal. Vê os valores na secção '
                       'Planos e preços.'},
      ]},
+    # começa escondida: o admin liga-a quando a app estiver nas lojas (sem link → "Em breve" no botão)
+    {'tipo': 'app', 'ativa': False, 'nav': 'App',
+     'titulo': 'Baixa a app da Bende',
+     'subtitulo': 'Compra, acompanha as encomendas e marca serviços no telemóvel, com notificações em tempo real.',
+     'play_store': '', 'app_store': '',
+     'itens': [
+         {'icone': 'bell', 'titulo': 'Notificações', 'texto': 'Sabe na hora quando a encomenda sai e chega.'},
+         {'icone': 'bolt', 'titulo': 'Mais rápida', 'texto': 'Abre num toque, sem procurar o site.'},
+         {'icone': 'shield-halved', 'titulo': 'Segura', 'texto': 'A mesma conta e os mesmos pagamentos do site.'},
+     ],
+     'media': None},
     {'tipo': 'contactos', 'ativa': True, 'nav': 'Contactos',
      'titulo': 'Fala connosco', 'subtitulo': 'Estamos aqui para ajudar clientes e lojas.',
      'email': '', 'telefone': '', 'whatsapp': '', 'morada': '', 'horario': '', 'redes': {}, 'media': None},
@@ -131,7 +144,8 @@ def _padrao(tipo):
 
 
 def normalizar(dados):
-    """Lista guardada → as 7 secções, cada tipo uma vez (as que faltarem entram com o texto de origem)."""
+    """Lista guardada → todas as secções (TIPOS), cada tipo uma vez. As que faltarem (ex.: um tipo novo) entram com o
+    texto de origem, no lugar de TIPOS: antes da primeira secção guardada que venha depois dela."""
     vistos, out = set(), []
     for s in dados or []:
         t = s.get('tipo') if isinstance(s, dict) else None
@@ -140,7 +154,11 @@ def normalizar(dados):
             base = _padrao(t)
             base.update({k: v for k, v in s.items() if k in COMUNS or k in CAMPOS[t]})
             out.append(base)
-    out += [_padrao(t) for t in TIPOS if t not in vistos]
+    for t in TIPOS:
+        if t not in vistos:
+            depois = TIPOS[TIPOS.index(t) + 1:]
+            pos = next((n for n, x in enumerate(out) if x['tipo'] in depois), len(out))
+            out.insert(pos, _padrao(t))
     return out
 
 
@@ -223,6 +241,13 @@ def _valor(espec, v, nome, medias):
                 validate_email(v)       # sem aspas, "<", ">" nem espaços (vai num link mailto:)
             except ValidationError:
                 raise Invalido(f'{nome}: email inválido.')
+        return v
+    if tipo == 'https':        # link para fora (ex.: Google Play): só https://, sem caminhos do site nem âncoras
+        v = _texto(v, 300, nome)
+        if v:
+            u = urlparse(v)
+            if u.scheme != 'https' or not u.netloc or not H._link_valido(v):
+                raise Invalido(f'{nome}: tem de ser um link https://.')
         return v
     if tipo == 'youtube':
         vid = youtube_id(v if isinstance(v, str) else '')

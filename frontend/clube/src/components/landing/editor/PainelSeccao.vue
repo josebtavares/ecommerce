@@ -148,6 +148,34 @@
         </ListaItens>
       </template>
 
+      <!-- BAIXAR A APP -->
+      <template v-if="tipo === 'app'">
+        <p class="text-xs text-zinc-400 rounded-xl bg-zinc-900 px-4 py-3">Liga <b>Mostrar aos visitantes</b> quando a app estiver publicada.
+          Sem link do Google Play, o botão aparece como <b>"Em breve"</b>; o da App Store só aparece com link.</p>
+        <div>
+          <label class="rot">Link do Google Play</label>
+          <input v-model="f.play_store" maxlength="300" class="campo" placeholder="https://play.google.com/store/apps/details?id=…" data-teste="campo-play_store" />
+        </div>
+        <div>
+          <label class="rot">Link da App Store <span class="text-zinc-500 font-normal">(opcional)</span></label>
+          <input v-model="f.app_store" maxlength="300" class="campo" placeholder="https://apps.apple.com/…" data-teste="campo-app_store" />
+        </div>
+        <ListaItens v-model="f.itens" :novo="() => ({ icone: 'circle-check', titulo: '', texto: '' })" rotulo="Vantagem" nome="itens" :maximo="4"
+                    vazio="Sem vantagens: só o título, o texto e os botões.">
+          <template #default="{ item }">
+            <div class="space-y-2">
+              <CampoIcone v-model="item.icone" />
+              <input v-model="item.titulo" maxlength="80" class="campo" placeholder="Título" data-teste="item-titulo" />
+              <textarea v-model="item.texto" maxlength="300" rows="2" class="campo" placeholder="Texto" data-teste="item-texto"></textarea>
+            </div>
+          </template>
+        </ListaItens>
+        <div>
+          <label class="rot">Ecrã do telemóvel <span class="text-zinc-500 font-normal">(opcional: uma captura da app, ao alto)</span></label>
+          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem captura (mostra o logo da Bende)" @media="m => guardarMedia(m)" />
+        </div>
+      </template>
+
       <!-- CONTACTOS -->
       <template v-if="tipo === 'contactos'">
         <p class="text-xs text-zinc-400 rounded-xl bg-zinc-900 px-4 py-3">Campo vazio = usa o contacto de <b>Admin → Plataforma</b> (o mesmo do rodapé).</p>
@@ -202,6 +230,7 @@ const CAMPOS = {
   planos: ['tipos', 'mostrar_comissao', 'comissao_titulo', 'comissao_texto', 'nota', 'botao'],
   tutoriais: ['videos'],
   faq: ['perguntas'],
+  app: ['play_store', 'app_store', 'itens', 'media'],
   contactos: ['email', 'telefone', 'whatsapp', 'morada', 'horario', 'redes', 'media'],
 }
 const LISTAS = ['passos', 'itens', 'videos', 'perguntas']

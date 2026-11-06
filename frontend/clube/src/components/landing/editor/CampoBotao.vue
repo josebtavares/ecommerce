@@ -25,6 +25,7 @@ export const DESTINOS = [
   { link: '#planos', nome: 'Secção: Planos e preços' },
   { link: '#tutoriais', nome: 'Secção: Tutoriais' },
   { link: '#faq', nome: 'Secção: Perguntas frequentes' },
+  { link: '#app', nome: 'Secção: Baixar a app' },
   { link: '#contactos', nome: 'Secção: Contactos' },
 ]
 
