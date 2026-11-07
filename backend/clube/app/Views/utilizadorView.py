@@ -490,16 +490,20 @@ def password_reset_request(request):
 
     # uma falha do envio fica no log (Sentry) mas a resposta é a mesma: não revela se o email existe
     try:
-        from ..utils.email_html import criar, saudacao
-        criar(django_user.email, 'Recuperar a password da tua conta Bende',
+        from datetime import timedelta
+        from ..utils import fila_emails
+        from ..utils.email_html import saudacao
+        fila_emails.enfileirar(django_user.email, 'Recuperar a password da tua conta Bende',
               f'{saudacao(django_user)}\n\n'
               f'Recebemos um pedido para escolher uma password nova para a tua conta Bende '
               f'({django_user.username}).\n\n{reset_link}\n\n'
               f'O link só pode ser usado uma vez. Se não foste tu a pedir, ignora este email: '
               f'a tua password não muda.',
-              botao=('Escolher password nova', reset_link)).send()
+              tipo='recuperar_password', prioridade=fila_emails.ESSENCIAL,
+              utilizador=getattr(django_user, 'utilizador', None),
+              botao=('Escolher password nova', reset_link), validade=timedelta(hours=24))
     except Exception:
-        logging.getLogger(__name__).exception('recuperar senha: falhou o envio do email')
+        logging.getLogger(__name__).exception('recuperar senha: o email não ficou na fila')
 
     return Response(status=status.HTTP_200_OK)
 

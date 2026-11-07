@@ -235,11 +235,11 @@ def _apagar_foto(nome):
 def _enviar(email, assunto, texto):
     if not email:
         return
-    from .email_html import criar
+    from . import fila_emails
     try:
-        criar(email, assunto, texto).send()
+        fila_emails.enfileirar(email, assunto, texto, tipo='conta_eliminacao', prioridade=fila_emails.ESSENCIAL)
     except Exception:
-        log.exception('eliminação: falhou o email "%s"', assunto)
+        log.exception('eliminação: o email "%s" não ficou na fila', assunto)
 
 
 def _avisar_pedido(email, nome, quando):

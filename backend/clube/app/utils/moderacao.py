@@ -236,8 +236,8 @@ def _avisar(alvo, acao, motivo, ate):
         assunto = 'A tua conta Bende foi reactivada'
         texto = (f'Olá {nome},\n\nA tua conta Bende voltou a estar activa. Já podes entrar em '
                  f'{settings.FRONTEND_BASE_URL}/Login')
-    from .email_html import criar
+    from . import fila_emails
     try:
-        criar(email, assunto, texto).send()
+        fila_emails.enfileirar(email, assunto, texto, tipo='conta_moderacao', prioridade=fila_emails.ESSENCIAL)
     except Exception:
-        log.exception('moderação: falhou o email "%s"', assunto)
+        log.exception('moderação: o email "%s" não ficou na fila', assunto)

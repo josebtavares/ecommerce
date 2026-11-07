@@ -8,8 +8,10 @@ apagados/substituídos do storage (app/utils/limpeza.py).
   python manage.py processar_videos --reprocessar-erros
 
 Corre um só worker por ambiente (dev: serviço `worker` no docker-compose).
+Os emails (utils/fila_emails.py) têm uma thread própria: um vídeo ou um backup demorado não os atrasa.
 """
 import signal
+import threading
 import time
 
 from django.core.management.base import BaseCommand
@@ -48,6 +50,8 @@ class Command(BaseCommand):
         if n:
             self.stdout.write(f'{n} tarefa(s) interrompida(s) de volta à fila.')
 
+        if not opts['uma_vez']:
+            threading.Thread(target=self._fila_emails, name='fila-emails', daemon=True).start()
         self.stdout.write(self.style.SUCCESS('Worker de vídeo e limpeza a correr.'))
         while not self.parar:
             if repor_backup.em_manutencao():      # a base está a ser reposta: não tocar em nada
@@ -91,6 +95,29 @@ class Command(BaseCommand):
                 self.stdout.write(f'  {t.estado}: {t.erro[-300:] if t.erro else ""}')
 
         self.stdout.write('Worker de vídeo parado.')
+
+    def _fila_emails(self):
+        """Thread: envia a fila de emails a cada 3 s; limpa o registo antigo uma vez por hora."""
+        from app.utils import fila_emails
+        ultima_limpeza = -1e9
+        while not self.parar:
+            try:
+                if repor_backup.em_manutencao():
+                    time.sleep(5)
+                    continue
+                close_old_connections()
+                r = fila_emails.processar()
+                if any(r.values()):
+                    self.stdout.write(f'  emails: {r}')
+                if time.monotonic() - ultima_limpeza > 3600:
+                    ultima_limpeza = time.monotonic()
+                    n = fila_emails.limpar()
+                    if n:
+                        self.stdout.write(f'  emails: {n} registo(s) antigo(s) apagado(s)')
+            except Exception as e:      # uma falha aqui não pode parar a thread
+                self.stderr.write(f'  emails: ciclo falhou: {e}')
+                time.sleep(10)
+            time.sleep(3)
 
     def _ciclo_subscricoes(self):
         """A cada 10 minutos: faturas, avisos, pagamento automático e suspensões (utils/subscricoes.py)."""

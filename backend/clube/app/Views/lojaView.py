@@ -392,11 +392,12 @@ def _email_banco(para, loja_nome, texto):
     if not para:
         return
     import logging
-    from ..utils.email_html import criar
+    from ..utils import fila_emails
     try:
-        criar(para, f'Dados bancários alterados — {loja_nome}', texto).send()
+        fila_emails.enfileirar(para, f'Dados bancários alterados — {loja_nome}', texto, tipo='dados_bancarios',
+                               prioridade=fila_emails.ESSENCIAL)
     except Exception:
-        logging.getLogger(__name__).exception('email dos dados bancários falhou')
+        logging.getLogger(__name__).exception('o email dos dados bancários não ficou na fila')
 
 
 CAMPOS_RECEBIMENTO = {'flutterwave_subaccount_id', 'aceita_flutterwave'}

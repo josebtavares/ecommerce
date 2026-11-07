@@ -5,8 +5,8 @@ Emails com os documentos de cada pagamento (PDF anexado + link para o site):
   (mensalidade e comissões do mês).
 
 Os comprovativos saem sozinhos (signals em ligar(): qualquer caminho que aprove um pagamento passa
-por aqui) e só uma vez (comprovativo_enviado_em). Uma falha no envio nunca desfaz o pagamento:
-fica no log (Sentry).
+por aqui) e só uma vez (comprovativo_enviado_em). Vão pela fila (utils/fila_emails.py, prioridade essencial):
+o worker envia e volta a tentar se o Resend falhar; uma falha nunca desfaz o pagamento.
 """
 import logging
 
@@ -25,16 +25,18 @@ def _link(caminho):
     return f'{settings.FRONTEND_BASE_URL}{caminho}'
 
 
-def _enviar(para, assunto, texto, anexos=(), botao=None):
+def _enviar(para, assunto, texto, anexos=(), botao=None, tipo='fiscal', prioridade=None):
+    """Põe o email na fila (o worker envia). True se ficou na fila."""
     if not para:
         return False
-    from .email_html import criar
+    from . import fila_emails
     try:
-        criar(para, assunto, texto, botao=botao,
-              anexos=[(nome, conteudo, 'application/pdf') for nome, conteudo in anexos]).send()
-        return True
+        return fila_emails.enfileirar(
+            para, assunto, texto, tipo=tipo, botao=botao,
+            prioridade=prioridade or fila_emails.ESSENCIAL,
+            anexos=[(nome, conteudo, 'application/pdf') for nome, conteudo in anexos]) is not None
     except Exception:
-        log.exception('email fiscal: falhou "%s" para utilizador', assunto)
+        log.exception('email fiscal: não ficou na fila "%s"', assunto)
         return False
 
 

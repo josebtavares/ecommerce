@@ -161,13 +161,12 @@ def _avisar_dono(loja, titulo, mensagem, email=False):
         log.exception('vinti4: aviso ao dono falhou')
     para = loja.dono.user.email
     if email and para:
-        def enviar():
-            from .email_html import criar
-            try:
-                criar(para, f'{titulo} — {loja.nome}', mensagem).send(fail_silently=False)
-            except Exception:
-                log.exception('vinti4: email ao dono falhou')
-        transaction.on_commit(enviar)
+        from . import fila_emails
+        try:        # na mesma transacção do pedido: se for desfeito, o email também
+            fila_emails.enfileirar(para, f'{titulo} — {loja.nome}', mensagem, tipo='vinti4',
+                                   prioridade=fila_emails.IMPORTANTE, utilizador=loja.dono)
+        except Exception:
+            log.exception('vinti4: o email ao dono não ficou na fila')
 
 
 def _bloquear(loja):

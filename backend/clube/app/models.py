@@ -1561,6 +1561,49 @@ class PermissaoLoja(BasePermission):
 # NOTIFICAÇÕES
 # ══════════════════════════════════════════════════════════════
  
+class EmailEnviado(models.Model):
+    """Fila e registo dos emails (utils/fila_emails.py): o pedido só grava aqui; o worker envia, com novas
+    tentativas e a respeitar o limite do Resend (EMAIL_LIMITE_DIA / EMAIL_LIMITE_MES). Os enviados apagam-se ao
+    fim de RETENCAO_DIAS e os anexos logo depois do envio."""
+    ESSENCIAL, IMPORTANTE, INFORMATIVO = 1, 2, 3
+    PRIORIDADES = [(1, 'Essencial'), (2, 'Importante'), (3, 'Informativo')]
+    ESTADOS = [('pendente', 'Por enviar'), ('a_enviar', 'A enviar'), ('enviado', 'Enviado'),
+               ('falhou', 'Falhou'), ('cancelado', 'Cancelado')]
+
+    tipo              = models.CharField(max_length=40)
+    prioridade        = models.PositiveSmallIntegerField(choices=PRIORIDADES, default=IMPORTANTE)
+    para              = models.CharField(max_length=254)
+    utilizador        = models.ForeignKey(Utilizador, on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='emails')
+    assunto           = models.CharField(max_length=300)
+    texto             = models.TextField()
+    botao_texto       = models.CharField(max_length=80, blank=True, default='')
+    botao_url         = models.CharField(max_length=1000, blank=True, default='')
+    estado            = models.CharField(max_length=10, choices=ESTADOS, default='pendente')
+    tentativas        = models.PositiveSmallIntegerField(default=0)
+    proxima_tentativa = models.DateTimeField(default=now)
+    adiado_limite     = models.BooleanField(default=False)      # à espera de espaço no limite do Resend
+    erro              = models.TextField(blank=True, default='')
+    chave             = models.CharField(max_length=120, null=True, blank=True, unique=True)   # evita repetidos
+    expira_em         = models.DateTimeField(null=True, blank=True)   # depois disto já não vale a pena enviar
+    criado_em         = models.DateTimeField(auto_now_add=True)
+    enviado_em        = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+        indexes = [models.Index(fields=['estado', 'prioridade', 'proxima_tentativa'], name='email_fila_idx')]
+
+    def __str__(self):
+        return f'{self.tipo} → {self.para} ({self.estado})'
+
+
+class EmailAnexo(models.Model):
+    email    = models.ForeignKey(EmailEnviado, on_delete=models.CASCADE, related_name='anexos')
+    nome     = models.CharField(max_length=200)
+    mime     = models.CharField(max_length=100, default='application/pdf')
+    conteudo = models.BinaryField()
+
+
 class Notificacao(models.Model):
     TIPOS = [
         # Admin do site
@@ -1605,6 +1648,8 @@ class Notificacao(models.Model):
         ('exportacao_pronta',        'Exportação de dados pronta'),
         ('endereco_loja',            'Endereço da loja alterado'),
         ('acerto_condutor',          'Dinheiro entregue à loja (condutor)'),
+        # Admin
+        ('emails',                   'Emails da plataforma'),
     ]
  
     utilizador   = models.ForeignKey(
