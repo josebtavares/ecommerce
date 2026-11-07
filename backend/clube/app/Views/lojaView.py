@@ -244,6 +244,7 @@ def loja_create(request):
         mensagem=f'{utilizador.nome} criou a loja "{loja.nome}" ({loja.categoria}). Aguarda aprovação.',
         loja=loja,
         link='/admin',
+        email=2,                        # alguém está à espera de começar a vender
     )
 
     UtilizadorLoja.objects.create(loja=loja, utilizador=utilizador, role='dono', ativo=True)
@@ -628,7 +629,7 @@ def _notificar_novo_staff(utilizador, loja, role):
             utilizador=utilizador, tipo='novo_staff',
             titulo=f'Foste adicionado à loja "{loja.nome}"',
             mensagem=f'Tens o papel de {role} na loja {loja.nome}.',
-            loja=loja, link=f'/loja/{loja.id}/backoffice',
+            loja=loja, link=f'/loja/{loja.id}/backoffice', email=2,
         )
     except Exception:
         pass

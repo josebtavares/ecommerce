@@ -59,7 +59,8 @@ def _empurrar_depois(notificacoes, loja=None):
 
 # rótulo do botão do email, pelo início do link do aviso
 BOTOES = (('/minhas-marcacoes', 'Ver a marcação'), ('/perfil/reembolsos', 'Ver o pedido'),
-          ('/perfil', 'Ver as minhas encomendas'), ('/encomenda/', 'Ver a encomenda'))
+          ('/perfil', 'Ver as minhas encomendas'), ('/encomenda/', 'Ver a encomenda'),
+          ('/loja/', 'Abrir o backoffice'), ('/pos/', 'Abrir o POS'), ('/admin', 'Abrir o admin'))
 
 
 def notificar(utilizador, tipo, titulo, mensagem='', loja=None, link='', email=None, email_validade=None,
@@ -98,50 +99,70 @@ def _email(utilizador, tipo, titulo, mensagem, loja, link, prioridade, validade,
         log.warning('notificações: o email do aviso "%s" não ficou na fila', tipo, exc_info=True)
 
 
-def notificar_staff(loja, roles, tipo, titulo, mensagem='', link='', excluir=None):
-    """Notifica todos os membros activos da loja com os roles indicados."""
+def notificar_staff(loja, roles, tipo, titulo, mensagem='', link='', excluir=None, email=None, email_roles=None,
+                    email_validade=None, email_chave=None, sino=True):
+    """Notifica todos os membros activos da loja com os roles indicados.
+    email=<prioridade>: também por email aos membros com os roles de email_roles (por omissão os mesmos de roles).
+    sino=False: só o email (o aviso no sino já foi dado antes)."""
     try:
         from ..models import UtilizadorLoja
-        membros = UtilizadorLoja.objects.filter(
-            loja=loja, role__in=roles, ativo=True
-        ).select_related('utilizador')
-
-        notificacoes = []
-        for membro in membros:
-            if excluir and membro.utilizador == excluir:
-                continue
-            notificacoes.append(Notificacao(
-                utilizador=membro.utilizador,
-                tipo=tipo,
-                titulo=titulo,
-                mensagem=mensagem,
-                loja=loja,
-                link=link,
-            ))
-        if notificacoes:
+        membros = [m for m in UtilizadorLoja.objects.filter(loja=loja, role__in=roles, ativo=True)
+                   .select_related('utilizador__user') if not (excluir and m.utilizador == excluir)]
+        notificacoes = [Notificacao(utilizador=m.utilizador, tipo=tipo, titulo=titulo, mensagem=mensagem, loja=loja,
+                                    link=link) for m in membros]
+        if notificacoes and sino:
             _empurrar_depois(Notificacao.objects.bulk_create(notificacoes), loja)
+        if email:
+            vistos = set()
+            for m in membros:
+                if m.role in (email_roles or roles) and m.utilizador_id not in vistos:
+                    vistos.add(m.utilizador_id)
+                    _email(m.utilizador, tipo, titulo, mensagem, loja, link, email, email_validade,
+                           f'{email_chave}:{m.utilizador_id}' if email_chave else None)
     except Exception:
         log.warning('notificações: notificar_staff falhou', exc_info=True)
 
 
-def notificar_admins(tipo, titulo, mensagem='', loja=None, link=''):
-    """Notifica todos os admins do site (is_staff=True)."""
+# Quem recebe cada aviso da plataforma (Utilizador.PERMISSOES_ADMIN): só quem trata do assunto.
+PERMISSAO_AVISO = {
+    'comissao_recebida':    'gerir_pagamentos',
+    'pagamento_reembolsar': 'gerir_pagamentos',
+    'cobranca_comissoes':   'gerir_pagamentos',
+    'dados_bancarios':      'gerir_pagamentos',
+    'vinti4':               'gerir_pagamentos',
+    'reembolso_disputa':    'gerir_devolucoes',
+    'reembolso_atualizado': 'gerir_devolucoes',
+    'loja_pendente':        'gerir_lojas',
+    'loja_fechada':         'gerir_lojas',
+    'documento_loja':       'verificar_documentos',
+    'subscricao_fatura':    'gerir_subscricoes',
+    'subscricao_paga':      'gerir_subscricoes',
+    'emails':               'gerir_plataforma',
+}
+
+
+def admins_com(permissao):
+    """Contas de admin activas com esta permissão (None = todas as contas de admin activas)."""
+    from ..models import Utilizador
+    admins = Utilizador.objects.filter(user__is_staff=True, user__is_active=True).select_related('user')
+    if permissao:
+        admins = admins.filter(role_admin__in=[r for r, perms in Utilizador.PERMISSOES_ADMIN.items() if permissao in perms])
+    return [a for a in admins if a.is_active]       # um admin suspenso ou banido não recebe avisos
+
+
+def notificar_admins(tipo, titulo, mensagem='', loja=None, link='', permissao=None, email=None, email_chave=None):
+    """Notifica os admins do site que tratam deste assunto: permissao (ou PERMISSAO_AVISO[tipo]).
+    email=<prioridade>: também por email (só para o que pede uma acção — não gastar o limite)."""
     try:
-        from ..models import Utilizador
-        admins = Utilizador.objects.filter(user__is_staff=True)
-        notificacoes = [
-            Notificacao(
-                utilizador=admin,
-                tipo=tipo,
-                titulo=titulo,
-                mensagem=mensagem,
-                loja=loja,
-                link=link,
-            )
-            for admin in admins
-        ]
+        admins = admins_com(permissao or PERMISSAO_AVISO.get(tipo))
+        notificacoes = [Notificacao(utilizador=a, tipo=tipo, titulo=titulo, mensagem=mensagem, loja=loja, link=link)
+                        for a in admins]
         if notificacoes:
             _empurrar_depois(Notificacao.objects.bulk_create(notificacoes), loja)
+        if email:
+            for a in admins:
+                _email(a, tipo, titulo, mensagem, loja, link, email, None,
+                       f'{email_chave}:{a.id}' if email_chave else None)
     except Exception:
         log.warning('notificações: notificar_admins falhou', exc_info=True)
 

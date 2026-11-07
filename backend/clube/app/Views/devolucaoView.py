@@ -365,7 +365,7 @@ def _avisar_mensagem(r, papel):
     if papel != 'cliente':
         dev._avisar_cliente(r, 'Nova mensagem no teu pedido', 'Tens uma nova mensagem sobre o reembolso.', email=None)
     if papel != 'loja':
-        dev._avisar_loja(r, 'Nova mensagem num pedido de reembolso', 'Tens uma nova mensagem.')
+        dev._avisar_loja(r, 'Nova mensagem num pedido de reembolso', 'Tens uma nova mensagem.', email=None)
 
 
 @api_view(['GET'])

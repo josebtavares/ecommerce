@@ -143,12 +143,10 @@ def _registar(loja, evento, a, extra=None):
 
 
 def _avisar_admins(loja, titulo, mensagem):
-    try:
-        from ..models import Notificacao, Utilizador
-        admins = [u for u in Utilizador.objects.filter(user__is_staff=True, user__is_active=True).select_related('user')
-                  if u.pode_admin('gerir_pagamentos')]
-        Notificacao.objects.bulk_create([Notificacao(utilizador=u, tipo='vinti4', titulo=titulo, mensagem=mensagem,
-                                                     loja=loja, link=f'/admin/lojas/{loja.id}') for u in admins])
+    try:        # credenciais para validar: o cartão da loja fica parado até lá — vai também por email
+        from ..Views.notificacaoView import notificar_admins
+        notificar_admins(tipo='vinti4', titulo=titulo, mensagem=mensagem, loja=loja, link=f'/admin/lojas/{loja.id}',
+                         permissao='gerir_pagamentos', email=2)
     except Exception:          # o pedido já está gravado: o aviso não pode estragar a resposta
         log.exception('vinti4: aviso aos admins falhou')
 

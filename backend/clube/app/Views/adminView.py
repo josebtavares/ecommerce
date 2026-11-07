@@ -404,7 +404,7 @@ def _notificar_estado_loja(loja, acao, canceladas=0):
                       'A tua loja voltou a estar visível no site.'),
     }
     tipo, titulo, mensagem = textos[acao]
-    notificar(utilizador=loja.dono, tipo=tipo, titulo=titulo, mensagem=mensagem, loja=loja, link=link)
+    notificar(utilizador=loja.dono, tipo=tipo, titulo=titulo, mensagem=mensagem, loja=loja, link=link, email=2)
 
 
 def _bloqueios_eliminar_loja(loja):

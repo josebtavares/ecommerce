@@ -191,7 +191,8 @@ def _lembrar_transferencia(encomenda, prazo):
                     titulo=titulo,
                     mensagem=f'Se o dinheiro já chegou, confirma a transferência até {_hora(prazo)}. '
                              f'Depois disso a encomenda é cancelada e o stock reposto.',
-                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
+                    email=FE.IMPORTANTE, email_roles=['dono', 'gestor'], email_validade=_ate(prazo))
     return True
 
 
@@ -208,7 +209,8 @@ def _cancelar_transferencia(encomenda):
                     titulo=f'Encomenda #{encomenda.id} cancelada',
                     mensagem=f'A transferência não foi confirmada em {PRAZO_TRANSFERENCIA_H} horas. Stock reposto '
                              f'automaticamente. Se o dinheiro chegar à tua conta, devolve-o ao cliente.',
-                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
+                    email=FE.INFORMATIVO, email_roles=['dono', 'gestor'])
 
 
 def expirar_transferencias(agora=None, lote=200):
@@ -301,7 +303,7 @@ def libertar_entregas(condutor, nota):
             notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor'], tipo='entrega_cancelada',
                             titulo=f'Entrega sem condutor — Encomenda #{encomenda.id}',
                             mensagem=f'{nota} Atribui outro condutor.',
-                            link=f'/loja/{encomenda.loja_id}/backoffice/entregas')
+                            link=f'/loja/{encomenda.loja_id}/backoffice/entregas', email=FE.IMPORTANTE)
             notificar(utilizador=encomenda.comprador, tipo='encomenda_atualizada',
                       titulo=f'A entrega da encomenda #{encomenda.id} mudou',
                       mensagem='A loja vai atribuir outro condutor à tua encomenda.',

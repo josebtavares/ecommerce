@@ -524,7 +524,8 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 tipo='entrega_cancelada',
                 titulo=f'Entrega falhou — Encomenda #{encomenda.id}',
                 mensagem=f'{detalhe}. A encomenda voltou ao estado "preparando". Podes atribuir outro condutor.',
-                link=f'/loja/{loja.id}/backoffice',
+                link=f'/loja/{loja.id}/backoffice/encomendas/{encomenda.id}',
+                email=FE.IMPORTANTE,
             )
             notificar(
                 utilizador=encomenda.comprador,

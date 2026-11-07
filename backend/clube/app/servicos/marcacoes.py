@@ -175,7 +175,7 @@ def remarcar(m, inicio, por='', motivo='', ignorar_horario=False, pelo_cliente=F
         raise ErroMarcacao(f'{m.profissional.nome} já está ocupado(a) a essa hora.')
     nota = f'{m.servico_nome}: passou de {quando_texto(antes)} para {quando_texto(inicio)}.' + (f' {motivo}' if motivo else '')
     if pelo_cliente:
-        avisar_loja(m, 'O cliente remarcou', nota)
+        avisar_loja(m, 'O cliente remarcou', nota, email=2)
         _avisar(m, 'Marcação remarcada', nota, cliente=False)
     else:
         _avisar(m, 'Marcação remarcada', nota, email=FE.IMPORTANTE)
@@ -254,11 +254,12 @@ def cancelar(m, por='', motivo='', pela_loja=True):
     return m
 
 
-def avisar_loja(m, titulo, mensagem, tipo='marcacao_atualizada'):
-    """Dono e gestor, e o profissional desta marcação se tiver conta."""
+def avisar_loja(m, titulo, mensagem, tipo='marcacao_atualizada', email=None):
+    """Dono e gestor, e o profissional desta marcação se tiver conta. email=<prioridade>: dono e gestor também por email."""
     from ..Views.notificacaoView import notificar, notificar_staff
     link = f'/loja/{m.loja_id}/backoffice/servicos?marcacao={m.id}'
-    notificar_staff(loja=m.loja, roles=['dono', 'gestor'], tipo=tipo, titulo=titulo, mensagem=mensagem, link=link)
+    notificar_staff(loja=m.loja, roles=['dono', 'gestor'], tipo=tipo, titulo=titulo, mensagem=mensagem, link=link,
+                    email=email)
     prof = m.profissional
     if prof.membro_id and prof.membro.ativo and prof.membro.role not in ('dono', 'gestor'):
         notificar(utilizador=prof.membro.utilizador, tipo=tipo, titulo=titulo, mensagem=mensagem, loja=m.loja, link=link)
@@ -310,7 +311,8 @@ def _pagar(m, fornecedor, referencia):
     m.save(update_fields=['pago', 'pago_em', 'valor_pago', 'expira_em', 'estado', 'pagamento_fornecedor',
                           'pagamento_referencia', 'data_atualizacao'])
     avisar_loja(m, 'Nova marcação paga' if m.estado == 'confirmada' else 'Marcação paga — confirma-a',
-                f'{m.servico_nome} a {quando_texto(m.inicio)} — {formatar(m.valor_pago)} pagos.', tipo='marcacao_nova')
+                f'{m.servico_nome} a {quando_texto(m.inicio)} — {formatar(m.valor_pago)} pagos.', tipo='marcacao_nova',
+                email=2)
     from ..utils.emails_fiscais import comprovativo_marcacao_depois_do_commit
     comprovativo_marcacao_depois_do_commit(m)       # o cliente recebe o comprovativo do Bende por email
     return m
@@ -337,7 +339,7 @@ def cancelar_cliente(m, motivo=''):
     anular_propostas(m)
     reembolsar(m)
     avisar_loja(m, 'O cliente cancelou uma marcação', f'{m.servico_nome} a {quando_texto(m.inicio)}.'
-                + (f' Motivo: {motivo}' if motivo else '') + (' (fora do prazo)' if not no_prazo else ''))
+                + (f' Motivo: {motivo}' if motivo else '') + (' (fora do prazo)' if not no_prazo else ''), email=2)
     return m
 
 
@@ -435,11 +437,11 @@ def _reembolso_falhou(m, falta, erro):
                       email=FE.INFORMATIVO)
         if incerto:
             avisar_loja(m, 'Reembolso por concluir', f'{m.servico_nome}: o pagamento online não respondeu à devolução '
-                                                     f'de {formatar(falta)}. A Bendi vai confirmar se o dinheiro já saiu.')
+                                                     f'de {formatar(falta)}. A Bendi vai confirmar se o dinheiro já saiu.', email=2)
         else:
             avisar_loja(m, 'Reembolso por concluir', f'{m.servico_nome}: o pagamento online não aceitou a devolução de '
                                                      f'{formatar(falta)} ({m.reembolso_erro}). Vamos tentar de novo '
-                                                     f'sozinhos — ou usa "Tentar de novo" na marcação.')
+                                                     f'sozinhos — ou usa "Tentar de novo" na marcação.', email=2)
     if incerto or m.reembolso_tentativas == len(ESPERAS_REEMBOLSO) + 1:
         if incerto:
             titulo, porque = 'confirmar', 'o fornecedor não respondeu — confirma no painel se o dinheiro saiu'
@@ -447,7 +449,7 @@ def _reembolso_falhou(m, falta, erro):
             titulo, porque = 'concluir', f'{m.reembolso_tentativas} tentativas falhadas'
         notificar_admins(tipo='pagamento_reembolsar', titulo=f'Reembolso por {titulo} — Marcação #{m.id}',
                          mensagem=f'{m.loja.nome} · {formatar(falta)} · {porque}: {m.reembolso_erro}',
-                         loja=m.loja, link='/admin/devolucoes?grupo=por_concluir')
+                         loja=m.loja, link='/admin/devolucoes?grupo=por_concluir', email=2)
     return Decimal('0')
 
 
