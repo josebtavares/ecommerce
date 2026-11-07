@@ -78,7 +78,7 @@ export default {
   components: { FormEntrar },
 
   data () {
-    return { videoFundo: mediaUrl('videos/background.mp4'), isDark: temaEscuro(), logoDefault, logoLight }
+    return { videoFundo: mediaUrl('videos/fundo-login.mp4'), isDark: temaEscuro(), logoDefault, logoLight }
   },
 
   watch: {
