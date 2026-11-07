@@ -282,7 +282,8 @@ def marcar(request, loja_id):
         return _erro(str(e))
     if pagamento == 'local':
         ops.avisar_loja(m, 'Nova marcação' if estado == 'confirmada' else 'Nova marcação — confirma-a',
-                        f'{m.servico_nome} a {ops.quando_texto(m.inicio)} com {m.profissional.nome} — {u.nome}.', tipo='marcacao_nova')
+                        f'{m.servico_nome} a {ops.quando_texto(m.inicio)} com {m.profissional.nome} — {u.nome}.', tipo='marcacao_nova',
+                        email=2)
     m = Marcacao.objects.select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
     return Response(_cliente_payload(request, m, completo=True), status=status.HTTP_201_CREATED)
 

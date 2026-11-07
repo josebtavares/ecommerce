@@ -99,7 +99,7 @@ def _avisar_reembolso(titulo, mensagem, loja=None):
     from ..Views.notificacaoView import notificar_admins
     if Notificacao.objects.filter(tipo='pagamento_reembolsar', titulo=titulo).exists():
         return
-    notificar_admins(tipo='pagamento_reembolsar', titulo=titulo, mensagem=mensagem, loja=loja, link='/admin')
+    notificar_admins(tipo='pagamento_reembolsar', titulo=titulo, mensagem=mensagem, loja=loja, link='/admin', email=2)
 
 
 # ── encomendas ───────────────────────────────────────────────────────
@@ -126,8 +126,9 @@ def aprovar_encomenda(encomenda, metodo, transacao, fornecedor):
         loja=encomenda.loja, roles=['dono', 'gestor'], tipo='pagamento_aprovado',
         titulo=f'Pagamento confirmado — Encomenda #{encomenda.id}',
         mensagem=f'{formatar(encomenda.valor_total)} recebido ({obter(fornecedor).nome}). '
-                 f'Receita líquida: {formatar(encomenda.valor_total - com)}.',
-        link=f'/loja/{encomenda.loja_id}/backoffice',
+                 f'Receita líquida: {formatar(encomenda.valor_total - com)}. Já podes preparar a encomenda.',
+        link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
+        email=2, email_chave=f'enc:{encomenda.id}:loja_paga',      # encomenda firme: a loja tem de a preparar
     )
     if com:     # as lojas em subscrição não pagam comissão
         notificar_admins(
@@ -163,9 +164,32 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
         encomenda.status = 'pago'           # encomenda aceite, paga-se na entrega / a loja confirma a transferência
         encomenda.save(update_fields=['status'])
         _limpar_carrinho(encomenda)
+        from ..Views.notificacaoView import notificar_staff
+        # a encomenda ficou firme: email ao dono e gestor (o aviso no sino já foi dado ao criá-la)
+        notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor'], tipo='nova_encomenda', sino=False,
+                        titulo=f'Nova encomenda #{encomenda.id}',
+                        mensagem=f'Encomenda de {encomenda.comprador.nome} no valor de {formatar(encomenda.valor_total)}, '
+                                 + ('paga por transferência — confirma-a quando o dinheiro chegar à conta.'
+                                    if tipo_metodo == 'transferencia' else
+                                    'paga em dinheiro na entrega.' if encomenda.tipo_entrega == 'entrega' else
+                                    'paga em dinheiro no levantamento.'),
+                        link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
+                        email=2, email_chave=f'enc:{encomenda.id}:loja_nova')
         if tipo_metodo == 'transferencia':  # o cliente recebe por email para onde transferir
             from ..utils.emails_fiscais import enviar_dados_transferencia
             transaction.on_commit(lambda: enviar_dados_transferencia(encomenda.pk))
+        else:                               # dinheiro: confirmação da encomenda (no sino e por email)
+            from ..utils import fila_emails
+            from ..Views.notificacaoView import notificar
+            entrega = encomenda.tipo_entrega == 'entrega'
+            notificar(utilizador=encomenda.comprador, tipo='encomenda_atualizada',
+                      titulo=f'Encomenda recebida #{encomenda.id}',
+                      mensagem=f'{encomenda.loja.nome} recebeu a tua encomenda #{encomenda.id} de '
+                               f'{formatar(encomenda.valor_total)}. Pagas em dinheiro '
+                               + ('na entrega. Avisamos-te quando estiver a caminho.' if entrega
+                                  else 'quando levantares na loja.'),
+                      loja=encomenda.loja, link='/perfil', email=fila_emails.IMPORTANTE,
+                      email_chave=f'enc:{encomenda.id}:recebida')
         return Inicio('pendente')
     if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')

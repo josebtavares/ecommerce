@@ -204,7 +204,9 @@ def _avisar(a):
         except Exception:
             log.exception('arquivo fiscal: não consegui notificar')
     try:
+        from . import fila_emails
         from .emails_fiscais import _enviar, _link
-        _enviar(u.email, titulo, texto, botao=('Abrir a Faturação', _link(link(a))) if ok else None)
+        _enviar(u.email, titulo, texto, botao=('Abrir a Faturação', _link(link(a))) if ok else None,
+                tipo='arquivo_fiscal', prioridade=fila_emails.IMPORTANTE)
     except Exception:
         log.exception('arquivo fiscal: não consegui enviar o email')

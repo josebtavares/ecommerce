@@ -143,12 +143,10 @@ def _registar(loja, evento, a, extra=None):
 
 
 def _avisar_admins(loja, titulo, mensagem):
-    try:
-        from ..models import Notificacao, Utilizador
-        admins = [u for u in Utilizador.objects.filter(user__is_staff=True, user__is_active=True).select_related('user')
-                  if u.pode_admin('gerir_pagamentos')]
-        Notificacao.objects.bulk_create([Notificacao(utilizador=u, tipo='vinti4', titulo=titulo, mensagem=mensagem,
-                                                     loja=loja, link=f'/admin/lojas/{loja.id}') for u in admins])
+    try:        # credenciais para validar: o cartão da loja fica parado até lá — vai também por email
+        from ..Views.notificacaoView import notificar_admins
+        notificar_admins(tipo='vinti4', titulo=titulo, mensagem=mensagem, loja=loja, link=f'/admin/lojas/{loja.id}',
+                         permissao='gerir_pagamentos', email=2)
     except Exception:          # o pedido já está gravado: o aviso não pode estragar a resposta
         log.exception('vinti4: aviso aos admins falhou')
 
@@ -161,13 +159,12 @@ def _avisar_dono(loja, titulo, mensagem, email=False):
         log.exception('vinti4: aviso ao dono falhou')
     para = loja.dono.user.email
     if email and para:
-        def enviar():
-            from .email_html import criar
-            try:
-                criar(para, f'{titulo} — {loja.nome}', mensagem).send(fail_silently=False)
-            except Exception:
-                log.exception('vinti4: email ao dono falhou')
-        transaction.on_commit(enviar)
+        from . import fila_emails
+        try:        # na mesma transacção do pedido: se for desfeito, o email também
+            fila_emails.enfileirar(para, f'{titulo} — {loja.nome}', mensagem, tipo='vinti4',
+                                   prioridade=fila_emails.IMPORTANTE, utilizador=loja.dono)
+        except Exception:
+            log.exception('vinti4: o email ao dono não ficou na fila')
 
 
 def _bloquear(loja):
