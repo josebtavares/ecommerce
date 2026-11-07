@@ -146,7 +146,8 @@ def pagar(c, metodo, referencia='', notas='', por=None):
         c.creditos.filter(estado='pendente').update(estado='descontado', data_desconto=agora)
         registar('comissao', 'cobranca_paga', objeto_id=c.id, loja_id=c.loja_id, valor=c.valor, estado_anterior='pendente',
                  estado_novo='paga', metodo=metodo, referencia=c.referencia)
-        _avisar_dono(c.loja, 'Comissões pagas', f'Recebemos {_dinheiro(c.valor)} das comissões até {c.mes:%m/%Y}. Obrigado!')
+        _avisar_dono(c.loja, 'Comissões pagas', f'Recebemos {_dinheiro(c.valor)} das comissões até {c.mes:%m/%Y}. Obrigado!',
+                    email=None)     # o comprovativo já vai por email
     return c
 
 
@@ -222,11 +223,11 @@ def _dinheiro(v):
     return formatar(v)
 
 
-def _avisar_dono(loja, titulo, mensagem):
+def _avisar_dono(loja, titulo, mensagem, email=2):
     try:
         from ..Views.notificacaoView import notificar_staff
         notificar_staff(loja=loja, roles=['dono'], tipo='cobranca_comissoes', titulo=titulo, mensagem=mensagem,
-                        link=f'/loja/{loja.id}/backoffice/subscricao')
+                        link=f'/loja/{loja.id}/backoffice/subscricao', email=email)
     except Exception:          # a cobrança já está gravada: o aviso não a pode estragar
         log.exception('cobrança de comissões: aviso ao dono falhou')
 

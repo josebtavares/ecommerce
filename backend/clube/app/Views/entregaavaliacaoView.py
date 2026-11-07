@@ -7,7 +7,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from ..Views.notificacaoView import notificar_staff, notificar_admins, notificar
+from datetime import timedelta
 from decimal import Decimal
+from ..utils import fila_emails as FE
 from django.db.models import Case, Exists, IntegerField, OuterRef, Q, When
 from django.db.models.functions import Coalesce
 
@@ -451,6 +453,8 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 mensagem=f'A tua encomenda de {loja.nome} saiu para entrega.',
                 loja=loja,
                 link='/perfil',
+                email=FE.INFORMATIVO, email_validade=timedelta(hours=6),   # depois disto já chegou
+                email_chave=f'enc:{encomenda.id}:a_caminho',
             )
 
         elif novo_status == 'entregue':
@@ -470,6 +474,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                     mensagem='A tua encomenda foi entregue. Obrigado pela compra!',
                     loja=encomenda.loja,
                     link='/perfil',
+                    email=FE.INFORMATIVO, email_chave=f'enc:{encomenda.id}:concluido',
                 )
             # pagamento dinheiro pendente → aprova + regista comissão; o condutor fica com o dinheiro até o
             # entregar à loja (acerto — utils/acertos_condutor.py)
@@ -519,7 +524,8 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 tipo='entrega_cancelada',
                 titulo=f'Entrega falhou — Encomenda #{encomenda.id}',
                 mensagem=f'{detalhe}. A encomenda voltou ao estado "preparando". Podes atribuir outro condutor.',
-                link=f'/loja/{loja.id}/backoffice',
+                link=f'/loja/{loja.id}/backoffice/encomendas/{encomenda.id}',
+                email=FE.IMPORTANTE,
             )
             notificar(
                 utilizador=encomenda.comprador,
@@ -528,6 +534,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 mensagem=f'{entrega.get_motivo_falha_display()}. A loja vai tentar de novo ou falar contigo.',
                 loja=loja,
                 link='/perfil',
+                email=FE.IMPORTANTE,
             )
  
     serializer = EntregaSerializer(entrega, context={'request': request})
@@ -568,9 +575,10 @@ def entrega_morada(request, loja_id, encomenda_id):
             utilizador=encomenda.comprador,
             tipo='encomenda_atualizada',
             titulo=f'Morada da encomenda #{encomenda.id} actualizada',
-            mensagem=f'A entrega vai para: {morada}',
+            mensagem=f'A entrega vai para: {morada}. Se não estiver certa, fala com a loja pelo chat.',
             loja=loja,
             link='/perfil',
+            email=FE.INFORMATIVO,
         )
 
     entrega.refresh_from_db()

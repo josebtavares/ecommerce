@@ -152,7 +152,7 @@ def propor(m, valor, motivo, por):
     from ..Views.notificacaoView import notificar
     notificar(utilizador=m.cliente, tipo='marcacao_proposta', titulo=f'{m.loja.nome} propõe um preço novo',
               mensagem=f'{m.servico_nome}: {formatar(valor)}. Aceita ou recusa na marcação.', loja=m.loja,
-              link=f'/minhas-marcacoes/{m.id}')
+              link=f'/minhas-marcacoes/{m.id}', email=2)       # importante: o cliente tem de responder
     return p
 
 

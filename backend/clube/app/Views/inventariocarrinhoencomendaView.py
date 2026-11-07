@@ -770,15 +770,17 @@ def encomenda_atualizar_status(request, loja_id, id):
  
     # concluido + dinheiro → aprova pagamento e regista comissao
     aprovado_agora = novo_status == 'concluido' and aprovar_dinheiro(encomenda)
+    from ..utils import fila_emails as FE
+    # email: "pago" já leva o comprovativo (emails_fiscais) e "em preparação" fica só no sino
     MSGS_COMPRADOR = {
-        'pago':       ('Encomenda confirmada',   'O pagamento foi confirmado. A loja está a preparar o teu pedido.', 'encomenda_paga'),
-        'preparando': ('Encomenda em preparação','A tua encomenda está a ser preparada.',                            'encomenda_atualizada'),
-        'enviado':    ('Encomenda enviada',       'A tua encomenda está a caminho!',                                 'encomenda_enviada'),
-        'concluido':  ('Encomenda concluída',     'A tua encomenda foi entregue. Obrigado pela compra!',             'encomenda_concluida'),
-        'cancelado':  ('Encomenda cancelada',     f'A tua encomenda #{encomenda.id} foi cancelada.',                 'encomenda_cancelada'),
+        'pago':       ('Encomenda confirmada',   'O pagamento foi confirmado. A loja está a preparar o teu pedido.', 'encomenda_paga', None),
+        'preparando': ('Encomenda em preparação','A tua encomenda está a ser preparada.',                            'encomenda_atualizada', None),
+        'enviado':    ('Encomenda enviada',       'A tua encomenda está a caminho!',                                 'encomenda_enviada', FE.INFORMATIVO),
+        'concluido':  ('Encomenda concluída',     'A tua encomenda foi entregue. Obrigado pela compra!',             'encomenda_concluida', FE.INFORMATIVO),
+        'cancelado':  ('Encomenda cancelada',     f'A tua encomenda #{encomenda.id} foi cancelada.',                 'encomenda_cancelada', FE.IMPORTANTE),
     }
     if novo_status in MSGS_COMPRADOR:
-        titulo, msg, tipo_c = MSGS_COMPRADOR[novo_status]
+        titulo, msg, tipo_c, prioridade = MSGS_COMPRADOR[novo_status]
         notificar(
             utilizador=encomenda.comprador,
             tipo=tipo_c,
@@ -786,6 +788,8 @@ def encomenda_atualizar_status(request, loja_id, id):
             mensagem=msg,
             loja=encomenda.loja,
             link='/perfil',
+            email=prioridade,
+            email_chave=f'enc:{encomenda.id}:{novo_status}' if prioridade else None,
         )
  
     # ── Notifica dono/gestor quando concluído ─────────────────

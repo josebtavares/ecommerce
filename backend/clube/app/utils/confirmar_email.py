@@ -73,19 +73,21 @@ def enviar(utilizador_id):
     if not u or u.email_confirmado or not u.user.email:
         return False
     user = u.user
-    from .email_html import criar, saudacao
+    from . import fila_emails
+    from .email_html import saudacao
     url = link(user)
     try:
-        criar(user.email, 'Confirma o teu email na Bende',
+        fila_emails.enfileirar(user.email, 'Confirma o teu email na Bende',
               f'{saudacao(user)}\n\n'
               f'Obrigado por criares conta na Bende. Confirma que este email é teu:\n\n{url}\n\n'
               f'O link vale {VALIDADE.days} dias. Até confirmares podes ver as lojas, mas não encomendar, '
               f'marcar serviços nem criar uma loja.\n\n'
               f'Não foste tu a criar a conta? Ignora este email: a conta é apagada ao fim de {DIAS_ABANDONO} dias.',
-              botao=('Confirmar email', url)).send()
+              tipo='confirmar_email', prioridade=fila_emails.ESSENCIAL, utilizador=u,
+              botao=('Confirmar email', url), validade=VALIDADE)
         return True
     except Exception:
-        log.exception('confirmar email: falhou o envio')
+        log.exception('confirmar email: não ficou na fila')
         return False
 
 

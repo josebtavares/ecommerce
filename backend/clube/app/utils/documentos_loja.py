@@ -259,13 +259,10 @@ def _avisar_admins(loja, d):
 
 
 def _avisar_admins_ja(loja, d):
-    from ..models import Notificacao, Utilizador
-    admins = [u for u in Utilizador.objects.filter(user__is_staff=True, user__is_active=True).select_related('user')
-              if u.pode_admin('verificar_documentos')]
-    Notificacao.objects.bulk_create([Notificacao(
-        utilizador=u, tipo='documento_loja', titulo='Documento para verificar',
-        mensagem=f'A loja "{loja.nome}" enviou: {d.get_tipo_display()}.', loja=loja,
-        link=f'/admin/lojas/{loja.id}') for u in admins])
+    from ..Views.notificacaoView import notificar_admins
+    notificar_admins(tipo='documento_loja', titulo='Documento para verificar',
+                     mensagem=f'A loja "{loja.nome}" enviou: {d.get_tipo_display()}.', loja=loja,
+                     link=f'/admin/lojas/{loja.id}', permissao='verificar_documentos', email=2)
 
 
 def decidir(request, d, acao, motivo='', validade=None, mudar_validade=False):
@@ -315,7 +312,8 @@ def decidir(request, d, acao, motivo='', validade=None, mudar_validade=False):
 def _avisar_dono(loja, titulo, texto):
     from ..Views.notificacaoView import notificar
     try:
-        notificar(loja.dono, 'documento_loja', titulo, texto, loja=loja, link=f'/loja/{loja.id}/backoffice/configuracoes')
+        notificar(loja.dono, 'documento_loja', titulo, texto, loja=loja, link=f'/loja/{loja.id}/backoffice/configuracoes',
+                  email=2)
     except Exception:
         log.exception('documentos: aviso ao dono falhou (loja %s)', loja.id)
 
@@ -336,7 +334,8 @@ def mudar_obrigatorios(request, loja, valor):
     if valor and not verificada(loja):
         notificar(loja.dono, 'documento_loja', 'Documentos pedidos pela Bende',
                   'Para publicar a loja, envia o documento de identificação e o início de atividade (ou certidão '
-                  'comercial) em Configurações → Documentos.', loja=loja, link=f'/loja/{loja.id}/backoffice/configuracoes')
+                  'comercial) em Configurações → Documentos.', loja=loja, link=f'/loja/{loja.id}/backoffice/configuracoes',
+                  email=2)
 
 
 def apagar_da_conta(utilizador):
@@ -370,7 +369,8 @@ def avisar_validades():
             DocumentoLoja.objects.filter(pk=d.pk).update(aviso=aviso)
             try:
                 notificar(loja.dono, 'documento_loja', titulo, texto, loja=loja,
-                          link=f'/loja/{loja.id}/backoffice/configuracoes')
+                          link=f'/loja/{loja.id}/backoffice/configuracoes', email=2,
+                          email_chave=f'doc:{d.pk}:{aviso}')
             except Exception:
                 log.exception('documentos: aviso de validade falhou (%s)', d.pk)
             n += 1

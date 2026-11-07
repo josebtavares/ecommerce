@@ -171,7 +171,7 @@ def pagar(fatura, metodo, referencia='', notas='', quando=None, avisar=True):
                  + (' O módulo Serviços está activo.' if ativa_servicos else '')
                  + ((' O módulo Serviços voltou.' if sub.servicos else ' A loja foi reactivada.' if loja
                      else ' O POS foi reactivado.') if reativou else ''),
-                 tipo='subscricao_paga')
+                 tipo='subscricao_paga', email=None)       # a fatura-recibo já vai por email
     _avisar_admins(alvo, f'Subscrição paga — {nome_alvo(alvo)}',
                    f'Fatura #{fatura.id} · {_eur(fatura.valor)} · {fatura.get_metodo_display()}.'
                    + (' Passou de comissão para subscrição.' if ativacao else ''),
@@ -336,14 +336,16 @@ def _marcar(fatura, chave):
     return True
 
 
-def _avisar_dono(alvo, titulo, mensagem, tipo='subscricao_fatura'):
-    """Notifica o dono da loja (backoffice) ou do POS (painel do POS)."""
+def _avisar_dono(alvo, titulo, mensagem, tipo='subscricao_fatura', email=2):
+    """Notifica o dono da loja (backoffice) ou do POS (painel do POS); por omissão também por email (é dinheiro e
+    prazos). email=None: só no sino."""
     from ..Views.notificacaoView import notificar, notificar_staff
     if isinstance(alvo, Loja):
         notificar_staff(loja=alvo, roles=['dono'], tipo=tipo, titulo=titulo, mensagem=mensagem,
-                        link=f'/loja/{alvo.id}/backoffice')
+                        link=f'/loja/{alvo.id}/backoffice', email=email)
     else:
-        notificar(utilizador=alvo.dono, tipo=tipo, titulo=titulo, mensagem=mensagem, link='/pos/dashboard')
+        notificar(utilizador=alvo.dono, tipo=tipo, titulo=titulo, mensagem=mensagem, link='/pos/dashboard',
+                  email=email)
 
 
 def _avisar_admins(alvo, titulo, mensagem, tipo='subscricao_fatura'):

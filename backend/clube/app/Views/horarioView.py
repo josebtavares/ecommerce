@@ -300,3 +300,23 @@ def loja_estado(request, loja_id):
     return Response({'aberta': e['aberta'], 'texto': e['texto'] or 'Aberta', 'horario_ativo': loja.horario_ativo,
                      'pausa_ate': loja.pausa_ate.isoformat() if horarios.pausa_ativa(loja) else None,
                      'pausa_hora': loja.pausa_ate.astimezone(horarios.fuso()).strftime('%H:%M') if horarios.pausa_ativa(loja) else ''})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_emails(request):
+    """
+    GET  /app/admin/emails/   uso do limite do Resend, fila, falhados (utils/fila_emails.py)
+    POST /app/admin/emails/   { ids?: [..] } → os falhados (todos ou estes) voltam à fila
+    """
+    from ..utils import fila_emails
+    erro = _exige_admin(request, 'gerir_plataforma')
+    if erro:
+        return erro
+    if request.method == 'POST':
+        ids = request.data.get('ids') if isinstance(request.data, dict) else None
+        if ids is not None and (not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids)):
+            return Response({'detail': 'ids inválidos.'}, status=status.HTTP_400_BAD_REQUEST)
+        n = fila_emails.tentar_outra_vez(ids)
+        return Response({'reenviar': n, **fila_emails.resumo()})
+    return Response(fila_emails.resumo())

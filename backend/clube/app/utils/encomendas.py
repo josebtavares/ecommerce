@@ -19,6 +19,8 @@ Regras de encomendas partilhadas entre views e modelos.
 """
 from django.db.models import F
 
+from . import fila_emails as FE
+
 
 def repor_stock(encomenda, quantidades=None):
     """
@@ -166,6 +168,13 @@ def _hora(dt):
     return timezone.localtime(dt).strftime('%d/%m às %H:%M')
 
 
+def _ate(prazo):
+    """Validade de um email que só serve até ao prazo (pelo menos 10 min)."""
+    from datetime import timedelta
+    from django.utils import timezone
+    return max(prazo - timezone.now(), timedelta(minutes=10))
+
+
 def _lembrar_transferencia(encomenda, prazo):
     from ..models import Notificacao
     from ..Views.notificacaoView import notificar, notificar_staff
@@ -177,12 +186,13 @@ def _lembrar_transferencia(encomenda, prazo):
               mensagem=f'A loja ainda não confirmou a tua transferência de {formatar(encomenda.pagamento.valor)}. '
                        f'Se não for confirmada até {_hora(prazo)}, a encomenda é cancelada. Se já transferiste, '
                        f'não precisas de fazer nada: a loja confirma quando o dinheiro chegar.',
-              loja=encomenda.loja, link='/perfil')
+              loja=encomenda.loja, link='/perfil', email=FE.IMPORTANTE, email_validade=_ate(prazo))
     notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_atualizada',
                     titulo=titulo,
                     mensagem=f'Se o dinheiro já chegou, confirma a transferência até {_hora(prazo)}. '
                              f'Depois disso a encomenda é cancelada e o stock reposto.',
-                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
+                    email=FE.IMPORTANTE, email_roles=['dono', 'gestor'], email_validade=_ate(prazo))
     return True
 
 
@@ -194,12 +204,13 @@ def _cancelar_transferencia(encomenda):
               titulo=f'Encomenda cancelada #{encomenda.id}',
               mensagem=f'A transferência não foi confirmada em {PRAZO_TRANSFERENCIA_H} horas e a encomenda foi '
                        f'cancelada. Se chegaste a transferir, a loja devolve-te o dinheiro: fala com ela pelo chat.',
-              loja=encomenda.loja, link='/perfil')
+              loja=encomenda.loja, link='/perfil', email=FE.IMPORTANTE)
     notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_cancelada_loja',
                     titulo=f'Encomenda #{encomenda.id} cancelada',
                     mensagem=f'A transferência não foi confirmada em {PRAZO_TRANSFERENCIA_H} horas. Stock reposto '
                              f'automaticamente. Se o dinheiro chegar à tua conta, devolve-o ao cliente.',
-                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
+                    email=FE.INFORMATIVO, email_roles=['dono', 'gestor'])
 
 
 def expirar_transferencias(agora=None, lote=200):
@@ -292,7 +303,7 @@ def libertar_entregas(condutor, nota):
             notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor'], tipo='entrega_cancelada',
                             titulo=f'Entrega sem condutor — Encomenda #{encomenda.id}',
                             mensagem=f'{nota} Atribui outro condutor.',
-                            link=f'/loja/{encomenda.loja_id}/backoffice/entregas')
+                            link=f'/loja/{encomenda.loja_id}/backoffice/entregas', email=FE.IMPORTANTE)
             notificar(utilizador=encomenda.comprador, tipo='encomenda_atualizada',
                       titulo=f'A entrega da encomenda #{encomenda.id} mudou',
                       mensagem='A loja vai atribuir outro condutor à tua encomenda.',
@@ -327,7 +338,7 @@ def _cancelar_por_pagar(encomenda, mensagem_cliente=None, avisar_loja=True):
     if mensagem_cliente:
         notificar(utilizador=encomenda.comprador, tipo='encomenda_cancelada',
                   titulo=f'Encomenda cancelada #{encomenda.id}', mensagem=mensagem_cliente,
-                  loja=encomenda.loja, link='/perfil')
+                  loja=encomenda.loja, link='/perfil', email=FE.INFORMATIVO)     # o cliente desistiu de pagar
     if avisar_loja:
         notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor', 'staff'], tipo='encomenda_cancelada_loja',
                         titulo=f'Encomenda #{encomenda.id} cancelada',

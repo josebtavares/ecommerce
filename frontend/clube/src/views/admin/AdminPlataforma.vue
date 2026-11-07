@@ -52,6 +52,8 @@
       </div>
     </div>
 
+    <AdminEmails v-if="!loading" />
+
     <div v-if="!loading" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="cobrar-comissoes">
       <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Cobrança mensal das comissões</h3>
       <p class="text-xs text-zinc-500 mt-1 mb-4">
@@ -142,6 +144,7 @@
 
 <script>
 import api from '@/services/api'
+import AdminEmails from '@/components/admin/AdminEmails.vue'
 
 const CAMPOS = [
   { k: 'titular_nome',      label: 'Nome do titular (pessoa ou empresa)', ph: 'ex.: Maria Silva', max: 200 },
@@ -168,6 +171,7 @@ const SUGESTOES = [
 
 export default {
   name: 'AdminPlataforma',
+  components: { AdminEmails },
   data () {
     return { CAMPOS, ident: {}, erroIdent: '', guardadoIdent: false,
              SUGESTOES, loading: true, aGuardar: false, guardado: false, erro: '',
