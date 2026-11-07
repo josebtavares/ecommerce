@@ -246,10 +246,12 @@ def _enviar(r):
         pass     # sem Redis/WebSocket: as páginas actualizam ao voltar ao separador (como antes)
 
 
-def _avisar_cliente(r, titulo, texto, tipo='reembolso_atualizado'):
+def _avisar_cliente(r, titulo, texto, tipo='reembolso_atualizado', email=2):
+    """No sino e (por omissão) por email, prioridade importante — é o dinheiro do cliente. email=None: só no sino
+    (o que o próprio cliente acabou de fazer, mensagens)."""
     from ..Views.notificacaoView import notificar
     notificar(utilizador=r.comprador, tipo=tipo, titulo=f'{titulo} — Encomenda #{r.encomenda_id}',
-              mensagem=texto, loja=r.loja, link=f'/perfil/reembolsos/{r.id}')
+              mensagem=texto, loja=r.loja, link=f'/perfil/reembolsos/{r.id}', email=email)
 
 
 def _avisar_loja(r, titulo, texto, tipo='reembolso_atualizado'):
@@ -343,7 +345,7 @@ def cancelar_pelo_cliente(encomenda, utilizador, descricao=''):
                  f'Responde até {_hora(r.prazo_resposta)} — depois disso a Bendi decide.', 'reembolso_pedido')
     _avisar_cliente(r, 'Pedido de cancelamento enviado',
                     ('A encomenda já tem condutor' if enviada else 'A encomenda já estava em preparação')
-                    + ', por isso a loja tem de aceitar o cancelamento.')
+                    + ', por isso a loja tem de aceitar o cancelamento.', email=None)
     return r
 
 
@@ -394,7 +396,8 @@ def pedir_devolucao(encomenda, utilizador, motivo, itens=None, descricao='', ago
     _avisar_loja(r, 'Pedido de reembolso',
                  f'{r.get_motivo_display()} · {formatar(valor)}. Responde até {_hora(r.prazo_resposta)} — '
                  f'depois disso a Bendi decide.', 'reembolso_pedido')
-    _avisar_cliente(r, 'Pedido de reembolso enviado', f'A loja tem até {_hora(r.prazo_resposta)} para responder.')
+    _avisar_cliente(r, 'Pedido de reembolso enviado', f'A loja tem até {_hora(r.prazo_resposta)} para responder.',
+                    email=None)
     return r
 
 
@@ -642,7 +645,7 @@ def escalar(r, motivo):
     mensagem(r, 'sistema', f'{motivo} A equipa da Bendi vai analisar e decidir.')
     _avisar_admins(r, 'Reembolso para decidir', f'{r.loja.nome} · {r.get_motivo_display()} · '
                                                 f'{formatar(r.valor_pedido)}. {motivo}')
-    _avisar_cliente(r, 'Pedido em análise pela Bendi', 'A equipa da Bendi vai analisar e decidir.')
+    _avisar_cliente(r, 'Pedido em análise pela Bendi', 'A equipa da Bendi vai analisar e decidir.', email=3)
     _avisar_loja(r, 'Pedido em análise pela Bendi', f'{motivo} A Bendi vai decidir — podes deixar a tua versão '
                                                      f'nas mensagens do pedido.')
 
@@ -1025,7 +1028,7 @@ def _falhou(r, valor, erro):
         mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite, mas houve um atraso a processá-lo. '
                                f'Estamos a tratar disso — não precisas de fazer nada.')
         _avisar_cliente(r, 'Reembolso a processar', f'O reembolso de {formatar(valor)} foi aceite, mas houve um atraso '
-                                                    f'a processá-lo. Estamos a tratar disso.')
+                                                    f'a processá-lo. Estamos a tratar disso.', email=3)
     if incerto:
         _avisar_admins(r, 'Reembolso por confirmar', f'{r.loja.nome} · {formatar(valor)} · o fornecedor não respondeu '
                                                      f'— confirma no painel se o dinheiro saiu: {r.erro_reembolso}',

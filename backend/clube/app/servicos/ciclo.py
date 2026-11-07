@@ -49,14 +49,14 @@ def sincronizar_loja(loja):
             notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo=f'{loja.nome} está fechada de momento',
                       mensagem=f'A tua marcação ({m.servico_nome}, {ops.quando_texto(m.inicio)}) continua marcada. '
                                'Se preferires, podes cancelá-la com devolução total.',
-                      loja=loja, link=f'/minhas-marcacoes/{m.id}')
+                      loja=loja, link=f'/minhas-marcacoes/{m.id}', email=3, email_chave=f'marc:{m.id}:fechada:{timezone.localdate()}')
             n += 1
         elif aberta and avisado:
             m.avisos = [a for a in m.avisos if a != 'loja_indisponivel']
             Marcacao.objects.filter(pk=m.pk).update(avisos=m.avisos)
             notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo=f'{loja.nome} voltou a abrir',
                       mensagem=f'A tua marcação ({m.servico_nome}, {ops.quando_texto(m.inicio)}) mantém-se.',
-                      loja=loja, link=f'/minhas-marcacoes/{m.id}')
+                      loja=loja, link=f'/minhas-marcacoes/{m.id}', email=3, email_chave=f'marc:{m.id}:aberta:{timezone.localdate()}')
             n += 1
     return n
 
@@ -88,7 +88,7 @@ def processar(agora=None):
                 notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='A loja não confirmou a marcação',
                           mensagem=f'{m.servico_nome} a {ops.quando_texto(m.inicio)} ficou sem efeito.'
                                    + (' O valor pago foi devolvido.' if devolvido else ''),
-                          loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
+                          loja=m.loja, link=f'/minhas-marcacoes/{m.id}', email=2, email_chave=f'marc:{m.id}:expirada')
             r['sem_confirmacao'] += 1
 
     lembrar = Marcacao.objects.filter(estado='confirmada', inicio__gt=agora,
@@ -104,7 +104,8 @@ def processar(agora=None):
         texto = f'{m.servico_nome} com {m.profissional.nome} — {ops.quando_texto(m.inicio)}, em {m.loja.nome}.'
         if m.cliente_id:
             notificar(utilizador=m.cliente, tipo='marcacao_lembrete', titulo='Lembrete: tens uma marcação', mensagem=texto,
-                      loja=m.loja, link=f'/minhas-marcacoes/{m.id}')
+                      loja=m.loja, link=f'/minhas-marcacoes/{m.id}', email=2, email_chave=f'marc:{m.id}:lembrete',
+                      email_validade=max(m.inicio - agora, timedelta(minutes=10)))   # depois da hora já não serve
         prof = m.profissional
         if prof.membro_id and prof.membro.ativo:
             notificar(utilizador=prof.membro.utilizador, tipo='marcacao_lembrete', titulo='Amanhã na tua agenda',

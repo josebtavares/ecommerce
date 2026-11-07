@@ -57,13 +57,45 @@ def _empurrar_depois(notificacoes, loja=None):
 # HELPERS — importa e usa em qualquer view
 # ══════════════════════════════════════════════════════════════
 
-def notificar(utilizador, tipo, titulo, mensagem='', loja=None, link=''):
+# rótulo do botão do email, pelo início do link do aviso
+BOTOES = (('/minhas-marcacoes', 'Ver a marcação'), ('/perfil/reembolsos', 'Ver o pedido'),
+          ('/perfil', 'Ver as minhas encomendas'), ('/encomenda/', 'Ver a encomenda'))
+
+
+def notificar(utilizador, tipo, titulo, mensagem='', loja=None, link='', email=None, email_validade=None,
+              email_chave=None):
     """Grava a notificação e, depois do commit, manda-a em tempo real (WebSocket) à pessoa.
-    Se ela não estiver ligada, a notificação fica na BD e aparece quando abrir o sino."""
+    Se ela não estiver ligada, a notificação fica na BD e aparece quando abrir o sino.
+    email=<prioridade> (utils/fila_emails: ESSENCIAL / IMPORTANTE / INFORMATIVO): também vai por email, pela fila,
+    na mesma transacção. email_validade: timedelta depois do qual já não vale a pena enviar; email_chave: não repete."""
     notif = Notificacao.objects.create(utilizador=utilizador, tipo=tipo, titulo=titulo, mensagem=mensagem,
                                        loja=loja, link=link)
     _empurrar_depois([notif], loja)
+    if email:
+        _email(utilizador, tipo, titulo, mensagem, loja, link, email, email_validade, email_chave)
     return notif
+
+
+def _email(utilizador, tipo, titulo, mensagem, loja, link, prioridade, validade, chave):
+    """O aviso por email: saudação, o texto do aviso e um botão para a página. Só para contas activas com o email
+    confirmado (as outras não recebem — evita emails devolvidos). Uma falha nunca parte a acção."""
+    try:
+        from django.conf import settings
+        from ..utils import fila_emails
+        from ..utils.email_html import saudacao
+        user = utilizador.user
+        if not user.email or not user.is_active or not utilizador.email_confirmado:
+            return
+        assunto = titulo if not loja or loja.nome in titulo else f'{titulo} — {loja.nome}'
+        texto = f'{saudacao(user)}\n\n{mensagem or titulo}'
+        botao = None
+        if link.startswith('/'):
+            rotulo = next((r for prefixo, r in BOTOES if link.startswith(prefixo)), 'Abrir na Bende')
+            botao = (rotulo, settings.FRONTEND_BASE_URL.rstrip('/') + link)
+        fila_emails.enfileirar(user.email, assunto, texto, tipo=f'aviso_{tipo}', prioridade=prioridade,
+                               botao=botao, utilizador=utilizador, chave=chave, validade=validade)
+    except Exception:
+        log.warning('notificações: o email do aviso "%s" não ficou na fila', tipo, exc_info=True)
 
 
 def notificar_staff(loja, roles, tipo, titulo, mensagem='', link='', excluir=None):

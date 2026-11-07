@@ -166,6 +166,18 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
         if tipo_metodo == 'transferencia':  # o cliente recebe por email para onde transferir
             from ..utils.emails_fiscais import enviar_dados_transferencia
             transaction.on_commit(lambda: enviar_dados_transferencia(encomenda.pk))
+        else:                               # dinheiro: confirmação da encomenda (no sino e por email)
+            from ..utils import fila_emails
+            from ..Views.notificacaoView import notificar
+            entrega = encomenda.tipo_entrega == 'entrega'
+            notificar(utilizador=encomenda.comprador, tipo='encomenda_atualizada',
+                      titulo=f'Encomenda recebida #{encomenda.id}',
+                      mensagem=f'{encomenda.loja.nome} recebeu a tua encomenda #{encomenda.id} de '
+                               f'{formatar(encomenda.valor_total)}. Pagas em dinheiro '
+                               + ('na entrega. Avisamos-te quando estiver a caminho.' if entrega
+                                  else 'quando levantares na loja.'),
+                      loja=encomenda.loja, link='/perfil', email=fila_emails.IMPORTANTE,
+                      email_chave=f'enc:{encomenda.id}:recebida')
         return Inicio('pendente')
     if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')
