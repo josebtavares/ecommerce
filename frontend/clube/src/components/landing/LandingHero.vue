@@ -2,7 +2,7 @@
      véu escuro para o texto se ler, título, subtítulo e até dois botões. Sem media: fundo com as cores da marca.
      Vídeo: 720p no telemóvel; com "poupança de dados" / "reduzir movimento" fica só o poster. -->
 <template>
-  <section id="hero" class="relative min-h-[100svh] flex items-center overflow-hidden" data-teste="landing-hero"
+  <section id="hero" class="relative min-h-[100svh] flex items-end overflow-hidden" data-teste="landing-hero"
            :class="media ? 'bg-black' : (isDark ? 'bg-zinc-950' : 'bg-orange-50')">
     <template v-if="media">
       <video v-if="media.tipo === 'video' && !pouparDados" :key="fonteVideo" ref="video" :src="fonteVideo" :poster="media.poster || undefined"
@@ -11,7 +11,9 @@
       <img v-else :src="media.tipo === 'video' ? media.poster : media.url" alt="" aria-hidden="true" data-teste="hero-imagem"
            fetchpriority="high" class="absolute inset-0 w-full h-full object-cover" />
       <div class="absolute inset-0" :style="{ background: `rgba(0,0,0,${(s.escurecer ?? 45) / 100})` }"></div>
-      <div class="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/50 to-transparent"></div>
+      <!-- como o hero da Home: sombra de baixo e da esquerda, onde fica o texto -->
+      <div class="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/75 via-black/30 to-transparent"></div>
+      <div class="absolute inset-0 bg-gradient-to-r from-black/55 via-black/10 to-transparent"></div>
     </template>
     <div v-else class="absolute inset-0 pointer-events-none" aria-hidden="true">
       <div class="absolute -top-40 -right-40 w-[38rem] h-[38rem] rounded-full blur-3xl opacity-40"
@@ -20,7 +22,7 @@
            :class="isDark ? 'bg-red-900' : 'bg-amber-200'"></div>
     </div>
 
-    <div class="relative z-10 w-full max-w-7xl mx-auto px-5 sm:px-8 pt-28 pb-20">
+    <div class="relative z-10 w-full px-5 sm:px-10 lg:px-16 pt-32 pb-24 sm:pb-28">
       <div class="max-w-3xl">
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight whitespace-pre-line"
             :class="media ? 'text-white drop-shadow' : (isDark ? 'text-white' : 'text-zinc-900')" data-teste="hero-titulo">{{ s.titulo }}</h1>
