@@ -1,7 +1,10 @@
 <template>
   <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden">
 
-    <div class="absolute inset-0 bg-[url('/src/assets/img/register/register_fundo3.png')] bg-cover bg-center bg-no-repeat"></div>
+    <video autoplay muted loop playsinline :poster="posterFundo"
+      class="absolute inset-0 w-full h-full object-cover">
+      <source :src="videoFundo" type="video/mp4">
+    </video>
     <div class="absolute inset-0 transition-all" :class="isDark ? 'bg-black/55' : 'bg-black/30'"></div>
 
     <button @click="isDark = !isDark"
@@ -74,12 +77,14 @@ import FormRegisto from '@/components/auth/FormRegisto.vue'
 import logoDefault from '@/assets/img/login/logo_final_640.webp'
 import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import { temaEscuro, guardarTema } from '@/utils/tema'
+import { mediaUrl } from '@/services/media'
+import posterFundo from '@/assets/img/register/register_fundo3.png'
 
 export default {
   name: 'RegisterView',
   components: { FormRegisto },
   data () {
-    return { isDark: temaEscuro(), logoDefault, logoLight }
+    return { videoFundo: mediaUrl('videos/fundo-login.mp4'), posterFundo, isDark: temaEscuro(), logoDefault, logoLight }
   },
   computed: {
     // página para onde voltar depois de criar a conta (só caminhos internos)
