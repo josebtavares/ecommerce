@@ -189,7 +189,7 @@ export default {
 
   data () {
     return {
-      videoFundo:      mediaUrl('videos/background.mp4'),
+      videoFundo:      mediaUrl('videos/fundo-login.mp4'),
       email:           '',
       enviado:         false,
       password:        '',
