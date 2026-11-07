@@ -4,62 +4,65 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+import logging
+
+from django.db import transaction
+from django.db.models import Count
+from django.utils import timezone
+
 from ..models import Notificacao
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+
+log = logging.getLogger(__name__)
+
+
+def _data(n):
+    """Data da notificação na hora de Cabo Verde (TIME_ZONE), como o sino a mostra."""
+    return timezone.localtime(n.data_criacao).strftime('%d-%m-%Y %H:%M')
+
+
+def _payload(n, loja=None):
+    loja = loja if loja is not None else n.loja
+    return {'id': n.id, 'tipo': n.tipo, 'titulo': n.titulo, 'mensagem': n.mensagem,
+            'loja_id': loja.id if loja else None, 'loja_nome': loja.nome if loja else None,
+            'link': n.link, 'lida': False, 'data_criacao': _data(n)}
+
+
+def _empurrar(notificacoes, loja=None):
+    """Manda pelo WebSocket (grupo notif_<user.id>) cada notificação acabada de gravar, com o contador de não
+    lidas de cada pessoa. Quem não estiver ligado vê-as ao abrir o sino. Uma falha aqui nunca parte a acção."""
+    if not notificacoes:
+        return
+    try:
+        canal = get_channel_layer()
+        ids = {n.utilizador_id for n in notificacoes}
+        contas = dict(Notificacao.objects.filter(utilizador_id__in=ids, lida=False)
+                      .values('utilizador_id').annotate(n=Count('id')).values_list('utilizador_id', 'n'))
+        users = dict(type(notificacoes[0].utilizador).objects.filter(id__in=ids).values_list('id', 'user_id'))
+        for n in notificacoes:
+            if users.get(n.utilizador_id) is None:
+                continue
+            async_to_sync(canal.group_send)(f'notif_{users[n.utilizador_id]}', {
+                'type': 'notificacao.nova', 'notificacao': _payload(n, loja), 'nao_lidas': contas.get(n.utilizador_id, 0)})
+    except Exception:
+        log.warning('notificações: envio em tempo real falhou', exc_info=True)
+
+
+def _empurrar_depois(notificacoes, loja=None):
+    # depois do commit: se a acção for desfeita, ninguém recebe um aviso de algo que não aconteceu
+    transaction.on_commit(lambda: _empurrar(notificacoes, loja))
 
 # ══════════════════════════════════════════════════════════════
 # HELPERS — importa e usa em qualquer view
 # ══════════════════════════════════════════════════════════════
 
 def notificar(utilizador, tipo, titulo, mensagem='', loja=None, link=''):
-    """
-    1. Grava a notificação na BD (como antes)
-    2. Envia em tempo real via WebSocket ao utilizador
-       Se ele não estiver ligado, a notificação fica na BD
-       e é carregada quando abrir o sino.
-    """
-    
-    
- 
-    # ── 1. gravar na BD ──────────────────────────────────────
-    notif = Notificacao.objects.create(
-        utilizador = utilizador,
-        tipo       = tipo,
-        titulo     = titulo,
-        mensagem   = mensagem,
-        loja       = loja,
-        link       = link,
-    )
- 
-    # ── 2. contar não lidas ───────────────────────────────────
-    nao_lidas = Notificacao.objects.filter(
-        utilizador=utilizador, lida=False
-    ).count()
- 
-    # ── 3. enviar via WebSocket ───────────────────────────────
-    try:
-        channel_layer = get_channel_layer()
-        group_name    = f"notif_{utilizador.user.id}"
- 
-        async_to_sync(channel_layer.group_send)(group_name, {
-            "type": "notificacao.nova",      # → chama notificacao_nova() no consumer
-            "notificacao": {
-                "id":          notif.id,
-                "tipo":        notif.tipo,
-                "titulo":      notif.titulo,
-                "mensagem":    notif.mensagem,
-                "loja_id":     loja.id   if loja else None,
-                "loja_nome":   loja.nome if loja else None,
-                "link":        notif.link,
-                "lida":        False,
-                "data_criacao": notif.data_criacao.strftime('%d-%m-%Y %H:%M'),
-            },
-            "nao_lidas": nao_lidas,
-        })
-    except Exception:
-        pass  # falha silenciosa — notificação já está na BD
- 
+    """Grava a notificação e, depois do commit, manda-a em tempo real (WebSocket) à pessoa.
+    Se ela não estiver ligada, a notificação fica na BD e aparece quando abrir o sino."""
+    notif = Notificacao.objects.create(utilizador=utilizador, tipo=tipo, titulo=titulo, mensagem=mensagem,
+                                       loja=loja, link=link)
+    _empurrar_depois([notif], loja)
     return notif
 
 
@@ -84,9 +87,9 @@ def notificar_staff(loja, roles, tipo, titulo, mensagem='', link='', excluir=Non
                 link=link,
             ))
         if notificacoes:
-            Notificacao.objects.bulk_create(notificacoes)
+            _empurrar_depois(Notificacao.objects.bulk_create(notificacoes), loja)
     except Exception:
-        pass
+        log.warning('notificações: notificar_staff falhou', exc_info=True)
 
 
 def notificar_admins(tipo, titulo, mensagem='', loja=None, link=''):
@@ -106,9 +109,9 @@ def notificar_admins(tipo, titulo, mensagem='', loja=None, link=''):
             for admin in admins
         ]
         if notificacoes:
-            Notificacao.objects.bulk_create(notificacoes)
+            _empurrar_depois(Notificacao.objects.bulk_create(notificacoes), loja)
     except Exception:
-        pass
+        log.warning('notificações: notificar_admins falhou', exc_info=True)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -149,7 +152,7 @@ def notificacao_list(request):
             'loja_nome':    n.loja.nome if n.loja else None,
             'link':         n.link,
             'lida':         n.lida,
-            'data_criacao': n.data_criacao.strftime('%d-%m-%Y %H:%M'),
+            'data_criacao': _data(n),
         }
         for n in items
     ]
