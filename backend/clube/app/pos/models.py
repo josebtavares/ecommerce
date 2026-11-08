@@ -573,6 +573,11 @@ class ContaMesa(models.Model):
             models.Index(fields=['mesa', '-criada_em']),
             models.Index(fields=['pos', 'fechada_em']),
         ]
+        constraints = [
+            # uma mesa só tem uma conta aberta de cada vez (dois aparelhos a abrir a mesma mesa)
+            models.UniqueConstraint(fields=['mesa'], condition=models.Q(status='aberta'),
+                                    name='uma_conta_aberta_por_mesa'),
+        ]
 
     def __str__(self):
         return f"Conta #{self.id} - {self.mesa.numero} - {self.total} CVE"

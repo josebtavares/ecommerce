@@ -207,7 +207,9 @@ export default {
       loading: false,
       loadingGoogle: false,
       verPassword: false,
-      error: null,
+      // sessão terminada pelo POS (membro desactivado/removido — POSDashboard, tempo real)
+      error: this.$route?.query?.motivo === 'sem_acesso'
+        ? 'A tua sessão terminou: este acesso ao POS foi desactivado. Fala com o responsável do POS.' : null,
 
       // Conta principal
       form: {

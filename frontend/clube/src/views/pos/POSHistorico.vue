@@ -349,6 +349,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 
 export default {
@@ -380,6 +381,7 @@ export default {
       totalCount: 0,
       contaSelecionada: null,
       porFaturar: 0,
+      carregado: false,
 
       filtros: {
         dataInicio:       '',
@@ -411,12 +413,35 @@ export default {
       this.filtros.dataInicio = ha30.toISOString().split('T')[0]
       this.filtros.dataFim    = hoje.toISOString().split('T')[0]
       this.carregarHistorico()
+      // tempo real: conta cobrada noutro aparelho, fatura registada/anulada (aqui, no admin ou noutro aparelho)
+      this.pararTempoReal = ouvirPOS(['conta', 'faturacao'], (a) => this.atualizarEmTempoReal(a), {
+        espera: 500, maximo: 4000,
+        filtro: (a) => a.tipo === 'faturacao' || a.status === 'fechada',
+      })
     }
   },
 
+  beforeUnmount() {
+    this.pararTempoReal?.()
+  },
+
   methods: {
-    async carregarHistorico(reset = false, novaPagina = this.page) {
+    // a mesma página e os mesmos filtros, sem indicador; a conta aberta na ficha acompanha
+    async atualizarEmTempoReal(aviso) {
+      await this.carregarHistorico(false, this.page, { silencioso: true })
+      const aberta = this.contaSelecionada
+      if (!aberta || (aviso && aviso.id !== aberta.id)) return
+      const daLista = this.historico.find(c => c.id === aberta.id)
+      if (daLista) { this.contaSelecionada = daLista; return }
+      try {
+        const { data } = await api.get(`/api/pos/${this.posId}/contas/${aberta.id}/`)
+        if (this.contaSelecionada?.id === data.id) this.contaSelecionada = data
+      } catch { /* fica a que estava */ }
+    },
+
+    async carregarHistorico(reset = false, novaPagina = this.page, { silencioso = false } = {}) {
       if (!this.podeVerRelatorios) return
+      const pedido = (this.pedido = (this.pedido || 0) + 1)    // só a resposta do último pedido conta
 
       if (reset) {
         this.page    = 1
@@ -425,8 +450,7 @@ export default {
         this.page = novaPagina
       }
 
-      this.loading = true
-      this.error   = ''
+      if (!silencioso) { this.loading = true; this.error = '' }
 
       try {
         const params = {
@@ -440,16 +464,19 @@ export default {
         if (this.filtros.fatura)           params.fatura      = this.filtros.fatura
 
         const { data } = await api.get(`/api/pos/${this.posId}/historico/`, { params })
+        if (pedido !== this.pedido) return
 
         this.historico  = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : [])
         this.totalCount = data.count || this.historico.length
         this.porFaturar = data.por_faturar || 0
+        this.carregado  = true
       } catch (err) {
+        if (silencioso || pedido !== this.pedido) return
         this.error = err.response?.status === 404
           ? 'Endpoint de histórico não encontrado.'
           : err.response?.data?.detail || 'Erro ao carregar histórico.'
       } finally {
-        this.loading = false
+        if (pedido === this.pedido) this.loading = false
       }
     },
 

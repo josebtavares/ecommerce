@@ -219,7 +219,7 @@ import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
-import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 
 export default {
   name: 'POSSubscricao',
@@ -253,9 +253,8 @@ export default {
 
   created () {
     this.carregar()
-    // a página do POS não tem o WebSocket das notificações: verifica de 20 em 20 s (fatura registada, paga, plano…)
-    this.pararTempoReal = ouvirSubscricoes(() => { this.carregar(true); this.versao++ },
-                                           { filtro: a => String(a.pos_id) === String(this.posId), semSocket: true })
+    // tempo real (utils/tempoRealPOS.js): mensalidade emitida/paga, fatura do Bende, plano, suspensão
+    this.pararTempoReal = ouvirPOS(['subscricao', 'pos'], () => { this.carregar(true); this.versao++ }, { espera: 600 })
   },
   beforeUnmount () { this.pararTempoReal?.() },
 

@@ -9,17 +9,11 @@
         </p>
       </div>
 
-      <div class="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
-        <span class="text-sm font-bold text-slate-600">Auto-refresh</span>
-        <label class="relative inline-flex cursor-pointer items-center">
-          <input
-            v-model="autoRefresh"
-            type="checkbox"
-            class="peer sr-only"
-            @change="toggleAutoRefresh"
-          />
-          <div class="h-6 w-11 rounded-full bg-slate-300 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-slate-950 peer-checked:after:translate-x-5"></div>
-        </label>
+      <!-- tempo real (utils/tempoRealPOS.js): os pedidos de todos os aparelhos aparecem sozinhos -->
+      <div class="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-sm"
+           data-teste="pedidos-ao-vivo">
+        <span class="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span>
+        Atualiza sozinho
       </div>
     </div>
 
@@ -172,6 +166,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 
 export default {
   name: 'POSPedidos',
@@ -197,8 +192,10 @@ export default {
       loading: false,
       error: '',
       statusFiltro: 'todas',
-      autoRefresh: false,
-      refreshInterval: null,
+      carregado: false,
+      agora: Date.now(),
+      aCarregar: false,
+      repetir: false,
 
       filtrosStatus: [
         { value: 'todas',      label: 'Todas' },
@@ -232,21 +229,31 @@ export default {
 
   created() {
     this.carregarPedidos()
+    // tempo real: item novo, cozinha a preparar/pronto, conta cobrada/cancelada noutro aparelho
+    this.pararTempoReal = ouvirPOS('conta', () => this.carregarPedidos({ silencioso: true }), { espera: 300, maximo: 3000 })
+    // "Há 5 min" vai avançando
+    this.relogio = setInterval(() => { this.agora = Date.now() }, 30000)
   },
 
   beforeUnmount() {
-    this.stopAutoRefresh()
+    this.pararTempoReal?.()
+    clearInterval(this.relogio)
   },
 
   methods: {
-    async carregarPedidos() {
-      this.loading = true
-      this.error = ''
+    // silencioso (tempo real): a lista fica no ecrã; um pedido a meio → repete no fim (não perde avisos)
+    async carregarPedidos({ silencioso = false } = {}) {
+      if (this.aCarregar) { this.repetir = true; return }
+      this.aCarregar = true
+      if (!silencioso) { this.loading = true; this.error = '' }
 
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/contas/ativas/`)
         this.pedidos = Array.isArray(data) ? data : (data.results ?? [])
+        this.carregado = true
+        this.error = ''
       } catch (err) {
+        if (silencioso) return
         if (err.response?.status === 404) {
           this.error = 'Endpoint de pedidos ativos não encontrado.'
         } else {
@@ -254,21 +261,8 @@ export default {
         }
       } finally {
         this.loading = false
-      }
-    },
-
-    toggleAutoRefresh() {
-      if (this.autoRefresh) {
-        this.refreshInterval = setInterval(() => this.carregarPedidos(), 10000)
-      } else {
-        this.stopAutoRefresh()
-      }
-    },
-
-    stopAutoRefresh() {
-      if (this.refreshInterval) {
-        clearInterval(this.refreshInterval)
-        this.refreshInterval = null
+        this.aCarregar = false
+        if (this.repetir) { this.repetir = false; this.carregarPedidos({ silencioso: true }) }
       }
     },
 
@@ -292,9 +286,10 @@ export default {
           `/api/pos/${this.posId}/contas/${contaId}/items/${itemId}/status/`,
           { status: novoStatus }
         )
-        await this.carregarPedidos()
+        await this.carregarPedidos({ silencioso: true })
       } catch (err) {
         alert(err.response?.data?.detail || 'Erro ao atualizar status do item.')
+        this.carregarPedidos({ silencioso: true })     // outro aparelho pode já o ter mudado
       }
     },
 
@@ -353,7 +348,7 @@ export default {
 
     formatTime(timestamp) {
       if (!timestamp) return ''
-      const diff = Math.floor((new Date() - new Date(timestamp)) / 60000)
+      const diff = Math.floor((this.agora - new Date(timestamp)) / 60000)
       if (diff < 1)  return 'Agora mesmo'
       if (diff < 60) return `Há ${diff} min`
       const h = Math.floor(diff / 60)

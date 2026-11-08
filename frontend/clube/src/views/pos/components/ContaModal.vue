@@ -44,6 +44,13 @@
         {{ error }}
       </div>
 
+      <!-- tempo real: outro aparelho cobrou ou cancelou esta conta -->
+      <div v-if="terminada" data-teste="conta-terminada" role="alert"
+        class="mx-4 mt-3 shrink-0 rounded-2xl border px-3 py-2 text-xs font-bold"
+        :class="conta.status === 'fechada' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'">
+        {{ textoTerminada }}
+      </div>
+
       <!-- Mobile Tabs: Produtos / Pedido -->
       <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div class="shrink-0 border-b border-slate-200 bg-white">
@@ -152,7 +159,7 @@
                     v-for="produto in produtosFiltrados"
                     :key="produtoUid(produto)"
                     type="button"
-                    :disabled="addingProdutoUid === produtoUid(produto) || !produto.disponivel"
+                    :disabled="terminada || addingProdutoUid === produtoUid(produto) || !produto.disponivel"
                     @click="adicionarProduto(produto)"
                     class="group overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -228,7 +235,7 @@
 
                     <!-- Botão remover: só se tiver permissão -->
                     <button
-                      v-if="podeCancelarItems && item.status !== 'cancelado'"
+                      v-if="podeCancelarItems && !terminada && item.status !== 'cancelado'"
                       type="button"
                       @click="removerItem(item)"
                       :aria-label="`Retirar ${item.nome}`"
@@ -277,7 +284,7 @@
                   v-if="podeFecharContas"
                   type="button"
                   @click="finalizarConta"
-                  :disabled="itensAtivos.length === 0"
+                  :disabled="terminada || itensAtivos.length === 0"
                   class="h-11 rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   Pagar
@@ -289,7 +296,7 @@
                   Sem permissão
                 </div>
               </div>
-              <button v-if="podeCancelarItems" type="button" @click="cancelarConta"
+              <button v-if="podeCancelarItems && !terminada" type="button" @click="cancelarConta"
                 class="mt-2 h-10 w-full rounded-2xl text-xs font-black text-red-600 transition hover:bg-red-50">
                 Cancelar conta
               </button>
@@ -340,6 +347,13 @@
         class="mx-6 mt-4 shrink-0 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
       >
         {{ error }}
+      </div>
+
+      <!-- tempo real: outro aparelho cobrou ou cancelou esta conta -->
+      <div v-if="terminada" data-teste="conta-terminada" role="alert"
+        class="mx-6 mt-4 !text-sm shrink-0 rounded-2xl border px-3 py-2 text-xs font-bold"
+        :class="conta.status === 'fechada' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'">
+        {{ textoTerminada }}
       </div>
 
       <!-- Split Layout Desktop -->
@@ -423,7 +437,7 @@
                   v-for="produto in produtosFiltrados"
                   :key="produtoUid(produto)"
                   type="button"
-                  :disabled="addingProdutoUid === produtoUid(produto) || !produto.disponivel"
+                  :disabled="terminada || addingProdutoUid === produtoUid(produto) || !produto.disponivel"
                   @click="adicionarProduto(produto)"
                   class="group overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -509,7 +523,7 @@
 
                   <!-- Botão remover: só se tiver permissão -->
                   <button
-                    v-if="podeCancelarItems && item.status !== 'cancelado'"
+                    v-if="podeCancelarItems && !terminada && item.status !== 'cancelado'"
                     type="button"
                     @click="removerItem(item)"
                     :aria-label="`Retirar ${item.nome}`"
@@ -559,7 +573,7 @@
                 v-if="podeFecharContas"
                 type="button"
                 @click="finalizarConta"
-                :disabled="itensAtivos.length === 0"
+                :disabled="terminada || itensAtivos.length === 0"
                 class="h-12 rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
               >
                 Pagar
@@ -572,7 +586,7 @@
                 Sem permissão
               </div>
             </div>
-            <button v-if="podeCancelarItems" type="button" @click="cancelarConta"
+            <button v-if="podeCancelarItems && !terminada" type="button" @click="cancelarConta"
               class="mt-2 h-10 w-full rounded-2xl text-xs font-black text-red-600 transition hover:bg-red-50">
               Cancelar conta
             </button>
@@ -620,6 +634,9 @@ import VariantePicker from './VariantePicker.vue'
 import ConjuntoPicker from './ConjuntoPicker.vue'
 import { temEscolhas } from '@/components/conjuntos/EscolhasConjunto.vue'
 import { precisaEscolha } from '@/utils/variantes'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
+
+const hora = (iso) => (iso ? new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '')
 
 export default {
   name: 'ContaModal',
@@ -664,6 +681,7 @@ export default {
       menuEscolha: null,      // menu à espera das escolhas do cliente (ex.: bebida)
       error: '',
       mobileActiveTab: 'produtos',
+      produtosDeNovo: false,
       scrollPosition: 0
     }
   },
@@ -710,10 +728,37 @@ export default {
       if (!this.isMembro) return true
       return this.permissoes?.pode_dar_descontos ?? false
     },
+
+    // tempo real: outro aparelho cobrou ou cancelou esta conta — nada mais se pode fazer nela
+    terminada() {
+      return Boolean(this.conta && this.conta.status && this.conta.status !== 'aberta')
+    },
+    textoTerminada() {
+      const c = this.conta || {}
+      if (c.status === 'fechada') {
+        return `Esta conta foi cobrada${c.fechada_por ? ` por ${c.fechada_por}` : ''}${c.fechada_em ? ` às ${hora(c.fechada_em)}` : ''}. Já não pode ser alterada.`
+      }
+      return `Esta conta foi cancelada${c.cancelada_por ? ` por ${c.cancelada_por}` : ''}${c.cancelada_em ? ` às ${hora(c.cancelada_em)}` : ''}${c.motivo_cancelamento ? ` (${c.motivo_cancelamento})` : ''}. Já não pode ser alterada.`
+    },
+  },
+
+  watch: {
+    // cobrada/cancelada noutro aparelho com o pagamento aberto aqui: fecha-o (o aviso explica)
+    terminada(sim) { if (sim) { this.showPagamentoModal = false; this.produtoEscolha = null; this.menuEscolha = null } },
   },
 
   async created() {
+    // tempo real (utils/tempoRealPOS.js): itens, cozinha e pagamento feitos noutro aparelho; stock dos produtos
+    this.pararTempoReal = [
+      ouvirPOS('conta', () => this.recarregarConta({ silencioso: true }),
+               { espera: 250, filtro: (a) => a.id === this.conta?.id }),
+      ouvirPOS(['produto', 'conta'], () => this.carregarProdutos({ silencioso: true }), { espera: 1200, maximo: 5000 }),
+    ]
     await Promise.all([this.iniciarConta(), this.carregarProdutos()])
+  },
+
+  beforeUnmount() {
+    this.pararTempoReal?.forEach(parar => parar())
   },
 
   mounted() {
@@ -751,13 +796,14 @@ export default {
       this.conta = this.normalizeConta(data)
     },
 
-    async recarregarConta() {
+    async recarregarConta({ silencioso = false } = {}) {
       if (!this.conta?.id) return
-      await this.carregarConta(this.conta.id)
+      if (!silencioso) return this.carregarConta(this.conta.id)
+      try { await this.carregarConta(this.conta.id) } catch { /* fica a que estava */ }
     },
 
-    async carregarProdutos() {
-      if (this.loadingProdutos) return
+    async carregarProdutos({ silencioso = false } = {}) {
+      if (this.loadingProdutos) { if (silencioso) this.produtosDeNovo = true; return }
       this.loadingProdutos = true
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/produtos/`)
@@ -767,15 +813,21 @@ export default {
         const cats = new Set()
         this.produtos.forEach(p => { if (p.categoria && p.categoria !== 'Sem categoria') cats.add(p.categoria) })
         this.categorias = Array.from(cats).sort()
+        // a escolher opções de um produto: o seletor fica com o stock actual
+        if (this.produtoEscolha) {
+          this.produtoEscolha = this.produtos.find(p => this.produtoUid(p) === this.produtoUid(this.produtoEscolha)) || this.produtoEscolha
+        }
       } catch (err) {
-        this.error = err.response?.data?.detail || 'Erro ao carregar produtos.'
+        if (!silencioso) this.error = err.response?.data?.detail || 'Erro ao carregar produtos.'
       } finally {
         this.loadingProdutos = false
+        if (this.produtosDeNovo) { this.produtosDeNovo = false; this.carregarProdutos({ silencioso: true }) }
       }
     },
 
     async adicionarProduto(produto) {
       if (!this.conta?.id) { this.error = 'A conta ainda não está pronta.'; return }
+      if (this.terminada) return
       if (!produto.disponivel) { this.error = 'Este produto não está disponível.'; return }
 
       // menu com escolhas (ex.: bebida) → escolher primeiro
@@ -837,7 +889,7 @@ export default {
     },
 
     async cancelarConta() {
-      if (!this.podeCancelarItems || !this.conta?.id) return
+      if (!this.podeCancelarItems || !this.conta?.id || this.terminada) return
       const motivo = window.prompt('Cancelar a conta inteira? O stock de todos os itens volta a ficar disponível.\n\nMotivo (opcional):', '')
       if (motivo === null) return
       this.error = ''
@@ -852,7 +904,7 @@ export default {
     },
 
     async removerItem(item) {
-      if (!this.podeCancelarItems) return
+      if (!this.podeCancelarItems || this.terminada) return
       // fica na conta como retirado (com quem e porquê), não é cobrado e o stock volta
       const motivo = window.prompt(`Retirar ${item.nome} da conta? O stock volta a ficar disponível.
 
@@ -870,7 +922,7 @@ Motivo (opcional):`, '')
     },
 
     finalizarConta() {
-      if (!this.podeFecharContas || !this.conta || this.itensAtivos.length === 0) return
+      if (!this.podeFecharContas || !this.conta || this.terminada || this.itensAtivos.length === 0) return
       this.showPagamentoModal = true
     },
 

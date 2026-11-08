@@ -473,6 +473,7 @@
 import AvisoFaturacao from '@/components/fiscal/AvisoFaturacao.vue'
 import SeccaoDadosFiscais from '@/components/fiscal/SeccaoDadosFiscais.vue'
 import api, { POS_ACCESS, POS_REFRESH, terminarSessao, verAdminPOS, EVENTO_VER_ADMIN_EXPIROU } from '@/services/api'
+import { ligarPOS, desligarPOS, acordarPOS, ouvirPOS, EVENTO_POS_SEM_ACESSO } from '@/utils/tempoRealPOS'
 
 import POSMesas from './POSMesas.vue'
 import POSPedidos from './POSPedidos.vue'
@@ -523,6 +524,8 @@ export default {
       userInitial: '',
       permissoes: null,
       membroPapel: '',
+      membroId: null,
+      pararTempoReal: [],
 
       posLoaded: false,
       creatingPos: false,
@@ -684,15 +687,35 @@ export default {
     'configForm.modo'(modo) {
       if (modo === 'standalone') this.configForm.loja_id = ''
     },
+    // tempo real (utils/tempoRealPOS.js): uma ligação ao POS aberto
+    posId(id) { if (id) ligarPOS(id); else desligarPOS() },
   },
 
   beforeUnmount() {
     window.removeEventListener(EVENTO_VER_ADMIN_EXPIROU, this.aoExpirarVer)
+    window.removeEventListener(EVENTO_POS_SEM_ACESSO, this.aoPerderAcesso)
+    document.removeEventListener('visibilitychange', acordarPOS)
+    window.removeEventListener('online', acordarPOS)
+    this.pararTempoReal.forEach(parar => parar())
+    desligarPOS()
   },
 
   async created() {
     this.aoExpirarVer = () => { this.verAdminExpirou = true }
     window.addEventListener(EVENTO_VER_ADMIN_EXPIROU, this.aoExpirarVer)
+    // membro desactivado/removido pelo dono (ou conta do dono suspensa): a sessão termina já
+    this.aoPerderAcesso = () => { if (!this.soLeitura) this.sair({ semPerguntar: true, motivo: 'sem_acesso' }) }
+    window.addEventListener(EVENTO_POS_SEM_ACESSO, this.aoPerderAcesso)
+    document.addEventListener('visibilitychange', acordarPOS)
+    window.addEventListener('online', acordarPOS)
+    this.pararTempoReal = [
+      // o próprio membro mudou (permissões, papel): as abas acertam-se logo
+      ouvirPOS('equipa', () => this.atualizarMembro(), { filtro: (a) => this.isMembro && a.id === this.membroId }),
+      // definições do POS ou suspensão (pelo admin ou pela subscrição)
+      ouvirPOS('pos', () => this.recarregarPOS(), { espera: 600 }),
+      // mensalidade paga/em atraso: a faixa da subscrição do dono
+      ouvirPOS('subscricao', () => this.carregarAvisoSub(), { espera: 800, filtro: () => !this.isMembro }),
+    ]
     this.loadSessao()
     this.escolherAbaInicial()
     this.loadLojasFromStorage()
@@ -732,6 +755,7 @@ export default {
         this.userName    = membro.nome || 'Membro'
         this.userInitial = (membro.nome || 'M').charAt(0).toUpperCase()
         this.membroPapel = membro.papel || ''
+        this.membroId    = membro.id || null
         this.permissoes  = JSON.parse(localStorage.getItem('pos_membro_permissoes') || 'null')
 
         // Definir POS diretamente (membro entra sempre no POS associado)
@@ -796,6 +820,7 @@ export default {
         localStorage.setItem('pos_membro', JSON.stringify(data.membro))
         localStorage.setItem('pos_membro_pos', JSON.stringify(data.pos))
         localStorage.setItem('pos_membro_permissoes', JSON.stringify(data.permissoes))
+        this.currentPOS = { ...(this.currentPOS || {}), ...data.pos }   // suspensão do POS
         this.loadSessao()          // tabsVisiveis acerta a aba, se a aberta deixou de ser permitida
       } catch { /* fica o que veio do login — o servidor confere as permissões na mesma */ }
     },
@@ -845,6 +870,22 @@ export default {
       } finally {
         this.posLoaded = true
       }
+    },
+
+    // tempo real: o POS mudou (definições, suspensão) — actualiza sem remontar a aba aberta
+    async recarregarPOS() {
+      if (!this.posId) return
+      if (this.isMembro) return this.atualizarMembro()
+      try {
+        const { data } = await api.get(`/api/pos/${this.posId}/`)
+        this.currentPOS    = data
+        this.posNome       = data.nome || 'POS Principal'
+        this.posCodigo     = data.codigo_pos || ''
+        this.modo          = data.modo || 'standalone'
+        this.lojaVinculada = data.loja_vinculada || null
+        if (!this.soLeitura) localStorage.setItem('pos_selected', JSON.stringify(data))
+        this.carregarAvisoSub()
+      } catch { /* fica o que estava; o servidor confere na mesma */ }
     },
 
     async carregarDetalhePOS(posId) {
@@ -1042,8 +1083,11 @@ export default {
     },
 
     // ── LOGOUT ──────────────────────────────────────────────────────
-    logout() {
-      if (!confirm('Tem a certeza que quer sair?')) return
+    logout() { this.sair() },
+
+    sair({ semPerguntar = false, motivo = '' } = {}) {
+      if (!semPerguntar && !confirm('Tem a certeza que quer sair?')) return
+      desligarPOS()
 
       // sai só do POS (dono ou membro) — a sessão Bendi que exista no browser não é tocada
       terminarSessao(POS_ACCESS, POS_REFRESH)
@@ -1055,7 +1099,7 @@ export default {
       ]
       keys.forEach(k => localStorage.removeItem(k))
 
-      this.$router.push('/pos/login')
+      this.$router.push(motivo ? { path: '/pos/login', query: { motivo } } : '/pos/login')
     }
   }
 }
