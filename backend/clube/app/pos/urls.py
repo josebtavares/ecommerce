@@ -7,6 +7,7 @@ urlpatterns = [
     path('login/membro/', views.pos_membro_login, name='pos_membro_login'),  # NOVO
     path('login/google/', views.pos_login_google, name='pos_login_google'),
     path('membro/me/',    views.pos_membro_me,    name='pos_membro_me'),
+    path('<int:pos_id>/ws/bilhete/', views.pos_bilhete_ws, name='pos_bilhete_ws'),   # tempo real (ws/pos/)
     path('register/',     views.pos_register,     name='pos_register'),
 
     # ── CONFIGURAÇÃO POS ──────────────────────────────────────────────

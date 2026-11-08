@@ -594,6 +594,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 import TiposModal from './components/TiposModal.vue'
 import VariantesGrelhaForm from '@/components/inventario/VariantesGrelhaForm.vue'
 import ConjuntoEditor, { erroConjunto, gruposDoProduto } from '@/components/conjuntos/ConjuntoEditor.vue'
@@ -633,6 +634,8 @@ export default {
     return {
       produtos: [],
       loading: false,
+      aCarregar: false,
+      repetir: false,
       searchQuery: '',
       categoriaFiltro: '',
       origemFiltro: '',
@@ -780,6 +783,13 @@ export default {
 
   created() {
     this.carregarProdutos()
+    // tempo real: produto/stock mudado noutro aparelho (ou na loja ligada), vendas que gastam stock, modo do POS
+    this.pararTempoReal = ouvirPOS(['produto', 'conta', 'pos'], () => this.carregarProdutos({ silencioso: true }),
+                                   { espera: 1000, maximo: 5000 })
+  },
+
+  beforeUnmount() {
+    this.pararTempoReal?.()
   },
 
   watch: {
@@ -797,11 +807,13 @@ export default {
   },
 
   methods: {
-    async carregarProdutos() {
-      if (!this.posId || this.loading) return
+    // silencioso (tempo real): sem indicador; um pedido a meio → repete no fim (não perde avisos)
+    async carregarProdutos({ silencioso = false } = {}) {
+      if (!this.posId) return
+      if (this.aCarregar) { this.repetir = true; return }
 
-      this.loading = true
-      this.error = ''
+      this.aCarregar = true
+      if (!silencioso) { this.loading = true; this.error = '' }
 
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/produtos/?gestao=1`)
@@ -815,9 +827,11 @@ export default {
 
         this.produtos = lista.map(this.normalizarProduto)
       } catch (err) {
-        this.error = err.response?.data?.detail || 'Erro ao carregar produtos.'
+        if (!silencioso) this.error = err.response?.data?.detail || 'Erro ao carregar produtos.'
       } finally {
         this.loading = false
+        this.aCarregar = false
+        if (this.repetir) { this.repetir = false; this.carregarProdutos({ silencioso: true }) }
       }
     },
 

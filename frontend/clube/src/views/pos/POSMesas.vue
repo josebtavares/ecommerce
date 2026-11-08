@@ -206,6 +206,7 @@ import api from '@/services/api'
 import MesaCard from './components/MesaCard.vue'
 import ContaModal from './components/ContaModal.vue'
 import CaixaCartao from './components/CaixaCartao.vue'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 
 export default {
   name: 'POSMesas',
@@ -232,6 +233,8 @@ export default {
     return {
       mesas: [],
       loading: false,
+      aCarregar: false,
+      repetir: false,
       saving: false,
       abrindoMesa: false,
       error: '',
@@ -272,6 +275,12 @@ export default {
 
   created() {
     this.carregarMesas()
+    // tempo real: outro aparelho abriu/fechou/cobrou uma mesa — a grelha acerta-se (sem piscar)
+    this.pararTempoReal = ouvirPOS(['mesa', 'conta'], () => this.carregarMesas({ silencioso: true }), { espera: 300 })
+  },
+
+  beforeUnmount() {
+    this.pararTempoReal?.()
   },
 
   watch: {
@@ -281,19 +290,28 @@ export default {
   },
 
   methods: {
-    async carregarMesas() {
-      if (!this.posId || this.loading) return
+    // silencioso (tempo real): sem indicador nem limpar mensagens; um pedido a meio → repete no fim (não perde avisos)
+    async carregarMesas({ silencioso = false } = {}) {
+      if (!this.posId) return
+      if (this.aCarregar) { this.repetir = true; return }
 
-      this.loading = true
-      this.error = ''
+      this.aCarregar = true
+      if (!silencioso) { this.loading = true; this.error = '' }
 
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/mesas/`)
         this.mesas = Array.isArray(data) ? data : (data.results ?? [])
+        // a conta aberta acompanha a mesa (estado e quem atende)
+        if (this.mesaSelecionada) {
+          const m = this.mesas.find(x => x.id === this.mesaSelecionada.id)
+          if (m) this.mesaSelecionada = m
+        }
       } catch (err) {
-        this.error = err.response?.data?.detail || 'Erro ao carregar mesas.'
+        if (!silencioso) this.error = err.response?.data?.detail || 'Erro ao carregar mesas.'
       } finally {
         this.loading = false
+        this.aCarregar = false
+        if (this.repetir) { this.repetir = false; this.carregarMesas({ silencioso: true }) }
       }
     },
 

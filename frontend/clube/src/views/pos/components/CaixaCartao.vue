@@ -50,8 +50,9 @@
 <script setup>
 // Caixa (turno) do POS: estado, fundo e esperado; abrir/fechar para o dono e os membros com "Abrir/Fechar turno".
 // Quem não vê os relatórios fecha "às cegas" (não vê o esperado) — vê a diferença só depois de fechar.
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import api from '@/services/api'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 import { formatarDinheiro, lerCentavos } from '@/utils/dinheiro'
 
 const props = defineProps({
@@ -84,12 +85,21 @@ function textoDiferenca (v) {
 }
 const corDiferenca = (v) => !Number(v) ? 'font-black text-emerald-700' : 'font-black text-red-700'
 
-async function carregar () {
+async function carregar ({ silencioso = false } = {}) {
   try {
+    const antes = c.value ? (c.value.turno?.id ?? null) : undefined
     const { data } = await api.get(`/api/pos/${props.posId}/turnos/atual/`)
     c.value = data
+    // outro aparelho abriu/fechou a caixa enquanto se escrevia aqui: o valor era para a outra acção — limpa-o
+    const agora = data.turno?.id ?? null
+    if (silencioso && !aGuardar.value && antes !== undefined && antes !== agora) {   // não a acção deste aparelho
+      if (valor.value) valor.value = ''
+      resultado.value = agora
+        ? `A caixa foi aberta noutro aparelho${data.turno.operador ? ` por ${data.turno.operador}` : ''}.`
+        : `A caixa foi fechada noutro aparelho${data.ultimo_turno?.fechado_por ? ` por ${data.ultimo_turno.fechado_por}` : ''}.`
+    }
   } catch (e) {
-    erro.value = e.response?.data?.detail || 'Não foi possível carregar a caixa.'
+    if (!silencioso) erro.value = e.response?.data?.detail || 'Não foi possível carregar a caixa.'
   }
 }
 
@@ -120,4 +130,8 @@ async function acao () {
 
 defineExpose({ carregar })
 onMounted(carregar)
+// tempo real: caixa aberta/fechada noutro aparelho; contas pagas em dinheiro mudam o esperado
+const parar = ouvirPOS(['turno', 'conta'], () => carregar({ silencioso: true }),
+                       { espera: 800, maximo: 5000, filtro: (a) => a.tipo === 'turno' || a.status === 'fechada' })
+onBeforeUnmount(parar)
 </script>

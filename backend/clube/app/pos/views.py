@@ -494,6 +494,9 @@ def _conta_payload(conta, request=None):
         'criada_em': conta.criada_em,
         'fechada_em': conta.fechada_em,
         'fechada_por': conta.fechada_por,
+        'cancelada_em': conta.cancelada_em,              # tempo real: "cancelada por X às HH:MM" (ContaModal)
+        'cancelada_por': conta.cancelada_por,
+        'motivo_cancelamento': conta.motivo_cancelamento,
         # fatura que o POS emitiu no e-Fatura e registou aqui (Histórico); faturável = fechada com total > 0
         'nif_cliente': conta.nif_cliente,
         'referencia': f'V-{conta.id}',
@@ -614,6 +617,8 @@ def _dados_membro(membro):
             'nome':        membro.pos.nome,
             'codigo_pos':  membro.pos.codigo_pos,
             'modo':        membro.pos.modo,
+            'suspenso':    membro.pos.suspenso,          # o painel do membro mostra a suspensão (em tempo real)
+            'suspenso_motivo': membro.pos.suspenso_motivo,
             'loja_vinculada': {
                 'id': membro.pos.loja_vinculada.id,
                 'nome': membro.pos.loja_vinculada.nome,
@@ -1405,7 +1410,16 @@ def produto_apagar(request, pos_id, produto_id):
 @permission_classes([IsPOSAuthenticated])
 def mesas_listar(request, pos_id):
     pos, membro = _get_pos_for_request(request, pos_id)
-    mesas = Mesa.objects.filter(pos=pos, ativa=True).order_by('numero')
+    mesas = Mesa.objects.filter(pos=pos, ativa=True).select_related('atendente_atual__user').order_by('numero')
+    # quem está a atender: o nome fica na conta aberta (dono ou membro da equipa — a mesa só guarda o dono)
+    abertas = {c['mesa_id']: c for c in ContaMesa.objects.filter(pos=pos, status='aberta', mesa__isnull=False)
+               .values('id', 'mesa_id', 'atendente_nome', 'membro_id')}
+
+    def atendente(m, conta):
+        if conta and conta['atendente_nome']:
+            return {'id': conta['membro_id'] or (m.atendente_atual_id if m.atendente_atual_id else None),
+                    'nome': conta['atendente_nome'], 'membro': bool(conta['membro_id'])}
+        return {'id': m.atendente_atual.id, 'nome': m.atendente_atual.nome} if m.atendente_atual else None
 
     return Response([
         {
@@ -1413,9 +1427,10 @@ def mesas_listar(request, pos_id):
             'numero': m.numero,
             'capacidade': m.capacidade,
             'status': m.status,
-            'atendente_atual': {'id': m.atendente_atual.id, 'nome': m.atendente_atual.nome} if m.atendente_atual else None,
+            'atendente_atual': atendente(m, abertas.get(m.id)),
             'aberta_em': m.aberta_em,
-            'tem_conta_aberta': ContaMesa.objects.filter(mesa=m, status='aberta').exists(),
+            'tem_conta_aberta': m.id in abertas,
+            'conta_id': (abertas.get(m.id) or {}).get('id'),
         }
         for m in mesas
     ])
@@ -1457,8 +1472,13 @@ def mesa_abrir(request, pos_id, mesa_id):
     if membro and not membro.pode_abrir_mesas:
         return Response({'detail': 'Sem permissão para abrir mesas.'}, status=status.HTTP_403_FORBIDDEN)
 
-    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos, ativa=True)   # mesas removidas não abrem
+    with transaction.atomic():
+        # mesa bloqueada até ao fim: dois aparelhos a abrir a mesma mesa ao mesmo tempo ficam com a mesma conta
+        mesa = get_object_or_404(Mesa.objects.select_for_update(), id=mesa_id, pos=pos, ativa=True)   # mesas removidas não abrem
+        return _mesa_abrir_bloqueada(request, pos, membro, mesa)
 
+
+def _mesa_abrir_bloqueada(request, pos, membro, mesa):
     conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
     if conta_existente:
         return Response({
@@ -1518,10 +1538,10 @@ def mesa_apagar(request, pos_id, mesa_id):
 @permission_classes([IsPOSAuthenticated])
 def conta_criar(request, pos_id, mesa_id):
     pos, membro, utilizador = _resolve_pos_request(request, pos_id)
-    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
-    conta_aberta = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
 
     if request.method == 'GET':
+        mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
+        conta_aberta = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
         if not conta_aberta:
             return Response({'detail': 'Esta mesa não tem conta aberta'}, status=status.HTTP_404_NOT_FOUND)
         return Response(_conta_payload(conta_aberta, request))
@@ -1529,6 +1549,14 @@ def conta_criar(request, pos_id, mesa_id):
     erro = _sem_permissao(membro, 'pode_abrir_mesas', 'Sem permissão para abrir mesas.')
     if erro:
         return erro
+    with transaction.atomic():
+        # mesa bloqueada: dois aparelhos a abrir a mesma mesa ao mesmo tempo ficam com a mesma conta
+        mesa = get_object_or_404(Mesa.objects.select_for_update(), id=mesa_id, pos=pos, ativa=True)
+        return _conta_criar_bloqueada(request, pos, membro, utilizador, mesa)
+
+
+def _conta_criar_bloqueada(request, pos, membro, utilizador, mesa):
+    conta_aberta = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
     if conta_aberta:
         return Response(_conta_payload(conta_aberta, request), status=status.HTTP_200_OK)
 
@@ -2120,3 +2148,24 @@ def pos_verificar_username(request, pos_id):
         if candidato not in existentes and len(sugestoes) < 3:
             sugestoes.append(candidato)
     return Response({'disponivel': False, 'sugestoes': sugestoes})
+
+# ═══════════════════════════════════════════════════════════════════
+# TEMPO REAL (ws/pos/ — app/pos/consumers.py, utils/tempo_real_pos.py)
+# ═══════════════════════════════════════════════════════════════════
+
+@api_view(['GET', 'POST'])      # GET: o admin a ver (token só de leitura) também liga
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def pos_bilhete_ws(request, pos_id):
+    """Bilhete de uso único (60 s) para abrir o WebSocket do POS: dono, membro da equipa ou admin a ver.
+    Os membros não são utilizadores do site, por isso não servem os bilhetes de /api/ws/bilhete/."""
+    import secrets
+    from django.core.cache import cache
+    pos, membro, _ = _resolve_pos_request(request, pos_id, permitir_suspenso=True)   # suspenso: vê a suspensão
+    bilhete = secrets.token_urlsafe(32)
+    cache.set(f'ws_bilhete_pos:{bilhete}', {
+        'pos_id': pos.id,
+        'membro_id': membro.id if membro else None,
+        'user_id': None if membro else request.user.pk,
+    }, 60)
+    return Response({'bilhete': bilhete})

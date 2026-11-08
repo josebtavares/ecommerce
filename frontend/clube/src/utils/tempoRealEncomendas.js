@@ -18,7 +18,9 @@ const SEM_LIGACAO_MS = 20000
 // fn(aviso | null) — null quando é para recarregar tudo (avisos diferentes juntos, religou, sem ligação).
 // semSocket: páginas sem o sino (POS) — verificam sempre de 20 em 20 s enquanto visíveis.
 // maximo: com avisos sem parar (muitas vendas), recarrega pelo menos a cada `maximo` ms. Devolve a função para parar.
-export function ouvirAvisos (evento, fn, { filtro = () => true, espera = 400, maximo = 0, semSocket = false } = {}) {
+// ligado / religado: outra ligação que não a do sino (o POS tem a sua — utils/tempoRealPOS.js).
+export function ouvirAvisos (evento, fn, { filtro = () => true, espera = 400, maximo = 0, semSocket = false,
+                                         ligado = () => window.bendiTempoReal, religado = EVENTO_RELIGADO } = {}) {
   let temporizador = null
   let ultimo = null
   let primeiro = 0
@@ -32,15 +34,15 @@ export function ouvirAvisos (evento, fn, { filtro = () => true, espera = 400, ma
   const aoAviso = (e) => { const a = e.detail || {}; if (filtro(a)) agendar(a) }
   const aoReligar = () => agendar(null)
   window.addEventListener(evento, aoAviso)
-  window.addEventListener(EVENTO_RELIGADO, aoReligar)
+  window.addEventListener(religado, aoReligar)
   const recurso = setInterval(() => {
-    if ((semSocket || !window.bendiTempoReal) && document.visibilityState === 'visible') fn(null)
+    if ((semSocket || !ligado()) && document.visibilityState === 'visible') fn(null)
   }, SEM_LIGACAO_MS)
   return () => {
     clearTimeout(temporizador)
     clearInterval(recurso)
     window.removeEventListener(evento, aoAviso)
-    window.removeEventListener(EVENTO_RELIGADO, aoReligar)
+    window.removeEventListener(religado, aoReligar)
   }
 }
 

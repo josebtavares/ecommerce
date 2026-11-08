@@ -177,7 +177,7 @@ import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 import HistoricoFatura from '@/components/fiscal/HistoricoFatura.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import ResultadosPesquisa from '@/components/fiscal/ResultadosPesquisa.vue'
-import { ouvirFaturacao } from '@/utils/tempoRealEncomendas'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 
 const LIMITE = 20
 const ABAS = [{ key: 'vendas', label: 'Vendas e faturas' }, { key: 'pesquisa', label: 'Pesquisar documentos' }]
@@ -230,9 +230,9 @@ export default {
   },
   created () {
     this.recarregar()
-    // sem o WebSocket das notificações no POS: verifica de 20 em 20 s (a loja registou a fatura de uma conta, outro aparelho…)
-    this.pararTempoReal = ouvirFaturacao(() => this.atualizarEmTempoReal(),
-                                         { filtro: a => String(a.pos_id) === String(this.posId), semSocket: true })
+    // tempo real (utils/tempoRealPOS.js): fatura registada/anulada (aqui, na loja, no admin), conta cobrada noutro aparelho
+    this.pararTempoReal = ouvirPOS(['faturacao', 'conta'], () => this.atualizarEmTempoReal(),
+                                   { espera: 500, maximo: 4000, filtro: a => a.tipo === 'faturacao' || a.status === 'fechada' })
   },
   beforeUnmount () { this.pararTempoReal?.() },
   methods: {
