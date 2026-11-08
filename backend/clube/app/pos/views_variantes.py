@@ -18,7 +18,7 @@ from app.utils.variantes import grelha_variantes, guardar_grelha
 
 from .models import ProdutoPOS
 from .permissions import POSAuthentication, IsPOSAuthenticated
-from .views import _resolve_pos_request, _verificar_permissao_loja_produtos
+from .views import _resolve_pos_request, _verificar_permissao_loja_produtos, _loja_suspensa, _loja_suspensa_resposta
 
 
 def _pode_gerir_produtos(membro):
@@ -135,6 +135,8 @@ def pos_produto_variantes(request, pos_id, produto_id):
         if not _verificar_permissao_loja_produtos(pos.loja_vinculada, utilizador):
             return Response({'detail': 'Sem permissão para gerir produtos desta loja.'}, status=status.HTTP_403_FORBIDDEN)
         produto = get_object_or_404(Produto.objects.select_related('tipo'), id=produto_id, loja=pos.loja_vinculada)
+        if request.method == 'PUT' and _loja_suspensa(pos):
+            return _loja_suspensa_resposta(pos)
     else:
         return Response({'detail': 'Origem inválida. Usa "pos" ou "loja".'}, status=status.HTTP_400_BAD_REQUEST)
 
