@@ -126,7 +126,10 @@ def aprovar_encomenda(encomenda, metodo, transacao, fornecedor):
         loja=encomenda.loja, roles=['dono', 'gestor'], tipo='pagamento_aprovado',
         titulo=f'Pagamento confirmado — Encomenda #{encomenda.id}',
         mensagem=f'{formatar(encomenda.valor_total)} recebido ({obter(fornecedor).nome}). '
-                 f'Receita líquida: {formatar(encomenda.valor_total - com)}. Já podes preparar a encomenda.',
+                 + (f'Depois da comissão da Bende: {formatar(encomenda.valor_total - com)}. ' if com
+                    else 'Sem comissão da Bende (subscrição). ')
+                 + 'A comissão da SISP pelo cartão é descontada à parte, no valor que te chega à conta. '
+                   'Já podes preparar a encomenda.',
         link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
         email=2, email_chave=f'enc:{encomenda.id}:loja_paga',      # encomenda firme: a loja tem de a preparar
     )

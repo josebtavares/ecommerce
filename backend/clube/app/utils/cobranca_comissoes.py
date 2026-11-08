@@ -114,7 +114,7 @@ def emitir_todas(d=None):
                                    data_criacao__lt=_inicio_do_mes(d))
            .values_list('loja_id', flat=True).distinct())
     n = 0
-    for loja in Loja.objects.filter(id__in=list(ids)):
+    for loja in Loja.objects.filter(id__in=list(ids), demo=False):     # as lojas demo nunca são cobradas
         try:
             n += bool(emitir(loja, d))
         except Exception:

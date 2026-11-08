@@ -15,6 +15,24 @@
       cartão vai direto para a tua conta — a Bende não toca nele. Sem contrato, vendes com dinheiro ou transferência.
     </p>
 
+    <!-- tarifário V.02 e cláusulas 4 e 6 do contrato MD050.02 — o que a loja deve saber antes de aderir -->
+    <details class="mb-5 rounded-xl border border-zinc-800" data-teste="vinti4-custos">
+      <summary class="px-4 py-3 text-sm text-zinc-300 cursor-pointer select-none">Custos e prazos da SISP</summary>
+      <ul class="px-4 pb-4 space-y-2 text-xs text-zinc-400 list-disc list-inside">
+        <li>A SISP desconta a comissão dela em cada venda com cartão: <span class="text-zinc-200">0,70% + IVA</span> nos
+            cartões vinti4 e <span class="text-zinc-200">2,5%</span> nos cartões internacionais. Recebes o valor da venda
+            já sem essa comissão.</li>
+        <li>Esta comissão é da SISP e é diferente da comissão ou mensalidade da Bende. Os valores "líquidos" que vês na
+            Bende só descontam a comissão da Bende, não a da SISP.</li>
+        <li>O dinheiro chega à tua conta <span class="text-zinc-200">no próprio dia</span> nos cartões vinti4 e
+            <span class="text-zinc-200">4 dias úteis</span> depois nos cartões internacionais.</li>
+        <li>Se um cliente reclamar no banco que não recebeu a encomenda ou o serviço, ou se a venda for fraudulenta, a SISP
+            pode debitar esse valor da tua conta. Entrega sempre o que vendes e guarda a prova de entrega.</li>
+        <li>Não podes cobrar ao cliente nenhum valor extra por pagar com cartão. A SISP pode pedir uma garantia bancária,
+            conforme o volume de vendas.</li>
+      </ul>
+    </details>
+
     <p v-if="carregando" class="text-xs text-zinc-500">A carregar…</p>
     <p v-else-if="!d" class="text-xs text-red-400">{{ erroGeral || 'Não foi possível carregar.' }}</p>
 
