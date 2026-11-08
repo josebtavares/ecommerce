@@ -79,6 +79,6 @@ function ir (caminho) {
 
 // tempo real: a loja confirmou, propôs outra hora, escreveu… (só enquanto o separador está aberto)
 let desligar = null
-onMounted(() => { carregar(); desligar = ouvirMarcacoes(() => carregar(true)) })
+onMounted(() => { carregar(); desligar = ouvirMarcacoes(() => carregar(true), { semLigacao: true }) })
 onBeforeUnmount(() => desligar?.())
 </script>

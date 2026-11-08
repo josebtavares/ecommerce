@@ -32,6 +32,7 @@
 <script>
 import api from '@/services/api'
 import { ouvirMarcacoes } from '@/utils/servicos'
+import { recarregarMostradas } from '@/utils/paginacao'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import CartaoMarcacao from '@/components/servicos/CartaoMarcacao.vue'
 import { temaEscuro } from '@/utils/tema'
@@ -48,7 +49,7 @@ export default {
   },
   created () { this.carregar() },
   // tempo real (utils/servicos.js ouvirMarcacoes): a loja confirmou, propôs outra hora, escreveu…
-  mounted () { this.desligar = ouvirMarcacoes(() => this.carregar(true)) },
+  mounted () { this.desligar = ouvirMarcacoes(() => this.carregar(true), { semLigacao: true }) },
   beforeUnmount () { this.desligar?.() },
   methods: {
     mudarTipo (k) {
@@ -62,9 +63,10 @@ export default {
       const pedido = (this.pedido || 0) + 1
       this.pedido = pedido
       if (!silencioso) this.carregando = true
-      const limit = silencioso ? Math.min(Math.max(POR_PAGINA, this.lista.length), 100) : POR_PAGINA
       try {
-        const { data } = await api.get('/app/marcacoes/', { params: { tipo: this.tipo, offset: 0, limit } })
+        const data = silencioso
+          ? await recarregarMostradas('/app/marcacoes/', { tipo: this.tipo }, this.lista.length, POR_PAGINA)
+          : (await api.get('/app/marcacoes/', { params: { tipo: this.tipo, offset: 0, limit: POR_PAGINA } })).data
         if (pedido !== this.pedido) return
         this.lista = data.results || []
         this.total = data.count ?? this.lista.length

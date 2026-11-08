@@ -71,6 +71,7 @@ import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import { temaEscuro } from '@/utils/tema'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
+import { recarregarMostradas } from '@/utils/paginacao'
 import { SEPARADORES, nomeEstado, corEstado, dataCurta } from '@/utils/encomendasCliente'
 
 const POR_PAGINA = 20
@@ -102,8 +103,9 @@ export default {
   beforeUnmount () { this.desligar?.(); clearTimeout(this.tempoPesquisa) },
   methods: {
     formatarDinheiro, nomeEstado, corEstado, dataCurta,
-    filtros (limit, offset) {
-      const p = { limit, offset }
+    // separador e pesquisa (sem a página)
+    filtros () {
+      const p = {}
       if (this.grupo) p.grupo = this.grupo
       if (this.termo.trim()) p.q = this.termo.trim()
       return p
@@ -112,9 +114,10 @@ export default {
       const pedido = (this.pedido || 0) + 1
       this.pedido = pedido
       if (!silencioso) this.carregando = true
-      const limite = silencioso ? Math.max(POR_PAGINA, this.lista.length) : POR_PAGINA
       try {
-        const { data } = await api.get('/app/encomenda/', { params: this.filtros(limite, 0) })
+        const data = silencioso
+          ? await recarregarMostradas('/app/encomenda/', this.filtros(), this.lista.length, POR_PAGINA)
+          : (await api.get('/app/encomenda/', { params: { ...this.filtros(), limit: POR_PAGINA, offset: 0 } })).data
         if (pedido !== this.pedido) return            // chegou depois de outro pedido (mudou o separador/pesquisa)
         this.lista = data.results || []
         this.total = data.count ?? this.lista.length
@@ -130,7 +133,7 @@ export default {
       this.aCarregarMais = true
       const pedido = this.pedido
       try {
-        const { data } = await api.get('/app/encomenda/', { params: this.filtros(POR_PAGINA, this.lista.length) })
+        const { data } = await api.get('/app/encomenda/', { params: { ...this.filtros(), limit: POR_PAGINA, offset: this.lista.length } })
         if (pedido !== this.pedido) return
         const vistos = new Set(this.lista.map(e => e.id))
         this.lista = [...this.lista, ...(data.results || []).filter(e => !vistos.has(e.id))]

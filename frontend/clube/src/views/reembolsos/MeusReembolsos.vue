@@ -35,6 +35,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '@/services/api'
+import { recarregarMostradas } from '@/utils/paginacao'
 import CartaoReembolso from '@/components/reembolsos/CartaoReembolso.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
@@ -53,10 +54,10 @@ async function carregar (mais = false) {
   if (mais && aCarregarMais.value) return
   const meu = mais ? pedido : ++pedido
   if (mais) aCarregarMais.value = true
-  const offset = mais ? lista.value.length : 0
-  const limit = mais ? POR_PAGINA : Math.min(Math.max(POR_PAGINA, lista.value.length), 100)
   try {
-    const { data } = await api.get('/app/reembolsos/', { params: { offset, limit } })
+    const data = mais
+      ? (await api.get('/app/reembolsos/', { params: { offset: lista.value.length, limit: POR_PAGINA } })).data
+      : await recarregarMostradas('/app/reembolsos/', {}, lista.value.length, POR_PAGINA)
     if (meu !== pedido) return
     if (mais) {
       const vistos = new Set(lista.value.map(r => r.id))
