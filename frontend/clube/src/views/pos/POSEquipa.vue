@@ -512,6 +512,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 
 export default {
   name: 'POSEquipa',
@@ -577,20 +578,26 @@ export default {
 
   created() {
     this.carregarEquipa()
+    // tempo real: membro criado/mudado/desactivado noutro aparelho (o dono pode ter o POS aberto em dois)
+    this.pararTempoReal = ouvirPOS('equipa', () => this.carregarEquipa({ silencioso: true }), { espera: 500 })
+  },
+
+  beforeUnmount() {
+    this.pararTempoReal?.()
   },
 
   methods: {
     // ── API ────────────────────────────────────────────────────────
-    async carregarEquipa() {
-      this.loading = true
-      this.error = null
+    async carregarEquipa({ silencioso = false } = {}) {
+      const pedido = (this.pedido = (this.pedido || 0) + 1)    // só a resposta do último pedido conta
+      if (!silencioso) { this.loading = true; this.error = null }
       try {
         const { data } = await api.get(`/api/pos/${this.posId}/equipa/`)
-        this.membros = data
+        if (pedido === this.pedido) this.membros = data
       } catch (err) {
-        this.error = err.response?.data?.detail || 'Erro ao carregar equipa'
+        if (!silencioso && pedido === this.pedido) this.error = err.response?.data?.detail || 'Erro ao carregar equipa'
       } finally {
-        this.loading = false
+        if (pedido === this.pedido) this.loading = false
       }
     },
 
@@ -613,7 +620,7 @@ export default {
 
         const { data } = await api.post(`/api/pos/${this.posId}/equipa/`, payload)
 
-        this.membros.push(data)
+        if (!this.membros.some(m => m.id === data.id)) this.membros.push(data)   // o tempo real pode já o ter trazido
         this.addSuccess = { password_gerada: data.password_gerada || null }
       } catch (err) {
         this.addError = err.response?.data?.detail || 'Erro ao criar membro'

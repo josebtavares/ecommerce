@@ -45,9 +45,13 @@ def _enviar(aviso):
         evento = {'type': 'subscricao.atualizada', 'subscricao': aviso}
         for uid in _destinatarios(aviso.get('loja_id'), aviso.get('pos_id')):
             async_to_sync(camada.group_send)(f'notif_{uid}', evento)
-        if aviso.get('pos_id'):                  # quem está no POS (dono e equipa) — utils/tempo_real_pos.py
-            from . import tempo_real_pos
-            tempo_real_pos._enviar(aviso['pos_id'], [{'tipo': 'subscricao', 'id': aviso.get('id'), 'pos_id': aviso['pos_id']}])
+        # quem está no POS (dono e equipa) — utils/tempo_real_pos.py; o plano "Loja + POS" é da loja: avisa os
+        # POS ligados a ela (só nas mensalidades e subscrições — as comissões não são do POS)
+        from . import tempo_real_pos
+        pos_ids = [aviso['pos_id']] if aviso.get('pos_id') else (
+            tempo_real_pos._pos_da_loja(aviso['loja_id']) if aviso.get('tipo') in ('mensalidade', 'subscricao') else [])
+        for pid in pos_ids:
+            tempo_real_pos._enviar(pid, [{'tipo': 'subscricao', 'id': aviso.get('id'), 'pos_id': pid}])
     except Exception:
         pass        # sem Redis/WebSocket: as páginas actualizam sozinhas de tempos a tempos
 

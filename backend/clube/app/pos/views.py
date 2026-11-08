@@ -494,6 +494,9 @@ def _conta_payload(conta, request=None):
         'criada_em': conta.criada_em,
         'fechada_em': conta.fechada_em,
         'fechada_por': conta.fechada_por,
+        'cancelada_em': conta.cancelada_em,              # tempo real: "cancelada por X às HH:MM" (ContaModal)
+        'cancelada_por': conta.cancelada_por,
+        'motivo_cancelamento': conta.motivo_cancelamento,
         # fatura que o POS emitiu no e-Fatura e registou aqui (Histórico); faturável = fechada com total > 0
         'nif_cliente': conta.nif_cliente,
         'referencia': f'V-{conta.id}',
@@ -614,6 +617,8 @@ def _dados_membro(membro):
             'nome':        membro.pos.nome,
             'codigo_pos':  membro.pos.codigo_pos,
             'modo':        membro.pos.modo,
+            'suspenso':    membro.pos.suspenso,          # o painel do membro mostra a suspensão (em tempo real)
+            'suspenso_motivo': membro.pos.suspenso_motivo,
             'loja_vinculada': {
                 'id': membro.pos.loja_vinculada.id,
                 'nome': membro.pos.loja_vinculada.nome,
@@ -1405,7 +1410,16 @@ def produto_apagar(request, pos_id, produto_id):
 @permission_classes([IsPOSAuthenticated])
 def mesas_listar(request, pos_id):
     pos, membro = _get_pos_for_request(request, pos_id)
-    mesas = Mesa.objects.filter(pos=pos, ativa=True).order_by('numero')
+    mesas = Mesa.objects.filter(pos=pos, ativa=True).select_related('atendente_atual__user').order_by('numero')
+    # quem está a atender: o nome fica na conta aberta (dono ou membro da equipa — a mesa só guarda o dono)
+    abertas = {c['mesa_id']: c for c in ContaMesa.objects.filter(pos=pos, status='aberta', mesa__isnull=False)
+               .values('id', 'mesa_id', 'atendente_nome', 'membro_id')}
+
+    def atendente(m, conta):
+        if conta and conta['atendente_nome']:
+            return {'id': conta['membro_id'] or (m.atendente_atual_id if m.atendente_atual_id else None),
+                    'nome': conta['atendente_nome'], 'membro': bool(conta['membro_id'])}
+        return {'id': m.atendente_atual.id, 'nome': m.atendente_atual.nome} if m.atendente_atual else None
 
     return Response([
         {
@@ -1413,9 +1427,10 @@ def mesas_listar(request, pos_id):
             'numero': m.numero,
             'capacidade': m.capacidade,
             'status': m.status,
-            'atendente_atual': {'id': m.atendente_atual.id, 'nome': m.atendente_atual.nome} if m.atendente_atual else None,
+            'atendente_atual': atendente(m, abertas.get(m.id)),
             'aberta_em': m.aberta_em,
-            'tem_conta_aberta': ContaMesa.objects.filter(mesa=m, status='aberta').exists(),
+            'tem_conta_aberta': m.id in abertas,
+            'conta_id': (abertas.get(m.id) or {}).get('id'),
         }
         for m in mesas
     ])
@@ -2138,7 +2153,7 @@ def pos_verificar_username(request, pos_id):
 # TEMPO REAL (ws/pos/ — app/pos/consumers.py, utils/tempo_real_pos.py)
 # ═══════════════════════════════════════════════════════════════════
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])      # GET: o admin a ver (token só de leitura) também liga
 @authentication_classes([POSAuthentication])
 @permission_classes([IsPOSAuthenticated])
 def pos_bilhete_ws(request, pos_id):

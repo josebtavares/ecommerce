@@ -18,7 +18,7 @@
 
     <template v-if="d">
       <!-- Caixa (turno) + agora -->
-      <CaixaCartao :pos-id="posId" @mudou="carregar">
+      <CaixaCartao :pos-id="posId" @mudou="carregar({ silencioso: true })">
         <p class="mt-1 text-xs font-semibold text-slate-500">
           Agora: {{ d.agora.contas_abertas }} {{ d.agora.contas_abertas === 1 ? 'conta aberta' : 'contas abertas' }}
           <template v-if="d.agora.contas_abertas"> · {{ dinheiro(d.agora.valor_aberto) }} por cobrar</template>
@@ -160,8 +160,9 @@
 // Painel do POS: vendas do período (com a variação face ao período anterior), caixa (turno), por hora,
 // por método, produtos, atendentes e mesas. Dono e membros com "ver relatórios"; a caixa é o CaixaCartao.
 import '@/assets/relatorios-claro.css'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import api from '@/services/api'
+import { ouvirPOS } from '@/utils/tempoRealPOS'
 import FiltroPeriodo from '@/components/relatorios/FiltroPeriodo.vue'
 import GraficoTempo from '@/components/relatorios/GraficoTempo.vue'
 import CaixaCartao from './components/CaixaCartao.vue'
@@ -214,17 +215,17 @@ const kpis = computed(() => {
 })
 
 let pedido = 0
-async function carregar () {
+// silencioso (tempo real): os números mudam no sítio, sem esbater o painel
+async function carregar ({ silencioso = false } = {}) {
   const meu = ++pedido
-  carregando.value = true
-  erro.value = ''
+  if (!silencioso) { carregando.value = true; erro.value = '' }
   try {
     const { data } = await api.get(`/api/pos/${props.posId}/painel/`, {
       params: { data_inicio: periodo.value.inicio, data_fim: periodo.value.fim },
     })
     if (meu === pedido) d.value = data
   } catch (e) {
-    if (meu === pedido) erro.value = e.response?.data?.detail || 'Não foi possível carregar o painel.'
+    if (meu === pedido && !silencioso) erro.value = e.response?.data?.detail || 'Não foi possível carregar o painel.'
   } finally {
     if (meu === pedido) carregando.value = false
   }
@@ -233,4 +234,8 @@ async function carregar () {
 function mudarPeriodo (p) { periodo.value = p; carregar() }
 
 onMounted(carregar)
+// tempo real: conta cobrada/cancelada, artigo retirado, caixa aberta/fechada noutro aparelho
+const parar = ouvirPOS(['conta', 'turno'], () => carregar({ silencioso: true }),
+                       { espera: 1500, maximo: 6000, filtro: (a) => a.tipo === 'turno' || a.status !== 'aberta' })
+onBeforeUnmount(parar)
 </script>
