@@ -2133,3 +2133,24 @@ def pos_verificar_username(request, pos_id):
         if candidato not in existentes and len(sugestoes) < 3:
             sugestoes.append(candidato)
     return Response({'disponivel': False, 'sugestoes': sugestoes})
+
+# ═══════════════════════════════════════════════════════════════════
+# TEMPO REAL (ws/pos/ — app/pos/consumers.py, utils/tempo_real_pos.py)
+# ═══════════════════════════════════════════════════════════════════
+
+@api_view(['POST'])
+@authentication_classes([POSAuthentication])
+@permission_classes([IsPOSAuthenticated])
+def pos_bilhete_ws(request, pos_id):
+    """Bilhete de uso único (60 s) para abrir o WebSocket do POS: dono, membro da equipa ou admin a ver.
+    Os membros não são utilizadores do site, por isso não servem os bilhetes de /api/ws/bilhete/."""
+    import secrets
+    from django.core.cache import cache
+    pos, membro, _ = _resolve_pos_request(request, pos_id, permitir_suspenso=True)   # suspenso: vê a suspensão
+    bilhete = secrets.token_urlsafe(32)
+    cache.set(f'ws_bilhete_pos:{bilhete}', {
+        'pos_id': pos.id,
+        'membro_id': membro.id if membro else None,
+        'user_id': None if membro else request.user.pk,
+    }, 60)
+    return Response({'bilhete': bilhete})

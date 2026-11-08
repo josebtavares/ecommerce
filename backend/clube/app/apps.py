@@ -28,6 +28,8 @@ class AppConfig(AppConfig):
         tempo_real_subscricoes.ligar()
         from .utils import tempo_real_faturacao
         tempo_real_faturacao.ligar()
+        from .utils import tempo_real_pos              # POS: mesas, contas, turnos, equipa… (ws/pos/)
+        tempo_real_pos.ligar()
         from .utils import tempo_real_painel
         tempo_real_painel.ligar()
         # cache pública da borda (clube/borda.py): o que a loja muda aparece logo aos visitantes
