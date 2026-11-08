@@ -38,10 +38,12 @@ def _processado_por(codigo):
         return codigo
 
 
-def _cliente(p, utilizador, morada=''):
+def _cliente(p, utilizador, morada='', nif=''):
     """Nome, email, telefone e morada de quem pagou (contrato SISP, cl.3: o recibo identifica o titular)."""
     user = utilizador.user
     p.linha('Nome', user.get_full_name() or user.username)
+    if nif:
+        p.linha('NIF', nif)
     if user.email:
         p.linha('Email', user.email)
     if utilizador.telefone:
@@ -183,7 +185,7 @@ def pdf_comprovativo_encomenda(enc):
     p = _Pdf('Comprovativo de pagamento', f'E-{enc.id}', f'Encomenda #{enc.id} em {loja.nome}')
     _vendedor(p, loja, online)
     p.seccao('Cliente')
-    _cliente(p, enc.comprador, enc.morada_entrega)
+    _cliente(p, enc.comprador, enc.morada_entrega, enc.cliente_nif)
     p.linha('Data da encomenda', _data(enc.data_criacao))
 
     itens = list(enc.itens.select_related('produto'))

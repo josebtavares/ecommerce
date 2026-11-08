@@ -80,6 +80,7 @@ class EntregaSerializer(serializers.ModelSerializer):
     comprador_email    = serializers.SerializerMethodField()
     comprador_telefone = serializers.SerializerMethodField()
     morada_entrega     = serializers.CharField(source='encomenda.morada_entrega', read_only=True)
+    cliente_nif        = serializers.CharField(source='encomenda.cliente_nif', read_only=True)
     notas              = serializers.CharField(source='encomenda.notas', read_only=True)
     tipo_entrega       = serializers.CharField(source='encomenda.tipo_entrega', read_only=True)
     metodo_pagamento   = serializers.SerializerMethodField()
@@ -118,7 +119,7 @@ class EntregaSerializer(serializers.ModelSerializer):
             'status',
             'data_criacao', 'data_entrega',
             'comprador_nome', 'comprador_email', 'comprador_telefone',
-            'morada_entrega', 'notas', 'tipo_entrega', 'metodo_pagamento',
+            'morada_entrega', 'cliente_nif', 'notas', 'tipo_entrega', 'metodo_pagamento',
             'comprador_id', 'itens', 'valor_a_cobrar', 'pago', 'encomenda_status', 'agendada_para', 'agendada_texto',
             'motivo_falha', 'motivo_falha_texto', 'nota_falha',
             'opcao_entrega_nome', 'opcao_entrega_tempo', 'opcao_entrega_preco',

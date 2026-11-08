@@ -104,6 +104,10 @@
                  class="text-zinc-300 hover:text-red-300 transition">Email: {{ entrega.comprador_email }}</a>
               <a v-if="entrega.comprador_telefone" :href="`tel:${entrega.comprador_telefone}`"
                  class="text-zinc-300 hover:text-red-300 transition">Contato: {{ entrega.comprador_telefone }}</a>
+              <!-- NIF para a fatura (o condutor não precisa) -->
+              <span v-if="entrega.cliente_nif && !isCondutor" class="text-zinc-300" data-teste="entrega-cliente-nif">
+                NIF: <span class="font-mono select-all">{{ entrega.cliente_nif }}</span>
+              </span>
             </div>
           </div>
 

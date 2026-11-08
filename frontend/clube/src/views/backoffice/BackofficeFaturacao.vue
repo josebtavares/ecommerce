@@ -113,6 +113,7 @@
             <div class="min-w-[140px]">
               <p class="text-sm text-zinc-300 truncate">{{ v.cliente.nome }}</p>
               <p v-if="v.cliente.email" class="text-[11px] text-zinc-500 truncate">{{ v.cliente.email }}</p>
+              <p v-if="v.cliente.nif && v.origem !== 'pos'" class="text-[11px] text-zinc-400 truncate" data-teste="fat-cliente-nif">NIF {{ v.cliente.nif }}</p>
             </div>
             <div class="text-right">
               <p class="text-sm font-bold tabular-nums text-zinc-100">{{ dinheiro(v.valor) }}</p>

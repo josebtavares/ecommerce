@@ -115,6 +115,33 @@
               </svg>
               {{ loadingProfile ? 'A guardar…' : 'Guardar alterações' }}
             </button>
+
+            <!-- Dados de faturação (opcionais): vêm preenchidos no checkout quando se pede fatura com NIF -->
+            <div class="mt-8 pt-5 border-t" :class="isDark ? 'border-zinc-800' : 'border-gray-200'" data-teste="dados-faturacao">
+              <h3 class="text-sm font-bold uppercase tracking-wider mb-1"
+                  :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Dados de faturação</h3>
+              <p class="text-xs mb-4" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
+                Opcional. Usamos estes dados quando pedes fatura com NIF. Sem NIF, a loja passa um talão de consumidor final.
+                Nas compras de 20 000$00 ou mais, a fatura leva sempre o NIF de quem compra.
+              </p>
+              <div class="space-y-3">
+                <div v-for="campo in camposFiscais" :key="campo.key">
+                  <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ campo.label }}</label>
+                  <input v-model="formFiscal[campo.key]" :inputmode="campo.key === 'nif' ? 'numeric' : 'text'"
+                    :maxlength="campo.max" :placeholder="campo.placeholder" :data-teste="`fiscal-${campo.key}`"
+                    class="w-full px-3 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500"
+                    :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder-zinc-600'
+                                   : 'bg-gray-50 border-gray-300 text-zinc-900 placeholder-zinc-400'" />
+                </div>
+                <p v-if="fiscalErro" class="text-xs text-red-400" data-teste="fiscal-erro">{{ fiscalErro }}</p>
+              </div>
+              <button @click="guardarFiscal" :disabled="aGuardarFiscal" data-teste="fiscal-guardar"
+                class="w-full mt-4 py-2.5 rounded-xl font-bold text-sm border transition"
+                :class="isDark ? 'border-zinc-700 text-zinc-200 hover:border-zinc-500'
+                               : 'border-gray-300 text-zinc-700 hover:border-gray-400'">
+                {{ aGuardarFiscal ? 'A guardar…' : 'Guardar dados de faturação' }}
+              </button>
+            </div>
           </div>
 
           <!-- ═══ TAB: PASSWORD ═══ -->
@@ -339,6 +366,10 @@
                         <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Morada</span>
                         <span class="text-right" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhesEncomenda[enc.id].morada_entrega }}</span>
                       </div>
+                      <div v-if="detalhesEncomenda[enc.id].cliente_nif" class="flex items-start justify-between text-xs gap-2" data-teste="enc-meu-nif">
+                        <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Fatura com NIF</span>
+                        <span class="text-right" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhesEncomenda[enc.id].cliente_nif }}</span>
+                      </div>
                       <div v-if="detalhesEncomenda[enc.id].notas" class="flex items-start justify-between text-xs gap-2">
                         <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Notas</span>
                         <span class="text-right italic" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhesEncomenda[enc.id].notas }}</span>
@@ -541,9 +572,11 @@ function lerGuardada () {
   const u = utilizadorGuardado()
   if (!u) return
   const intacto = formIntacto()     // nunca por cima do que a pessoa está a escrever
+  const fiscalIntacto = camposFiscais.every(c => (formFiscal.value[c.key] || '') === (conta.value?.[c.key] || ''))
   conta.value = u
   previewUrl.value = u.foto || DEFAULT_UTILIZADOR
   if (intacto) initForm()
+  if (fiscalIntacto) initFiscal()
 }
 onMounted(() => window.addEventListener(EVENTO, lerGuardada))
 onBeforeUnmount(() => window.removeEventListener(EVENTO, lerGuardada))
@@ -573,6 +606,41 @@ const profileFields = [
 ]
 
 const form         = ref({ first_name: '', last_name: '', username: '', email: '', telefone: '', morada: '' })
+
+// dados de faturação: gravam-se à parte (vazio também vale — é assim que se apagam)
+const camposFiscais = [
+  { key: 'nif',           label: 'NIF',                         max: 11,  placeholder: '9 dígitos' },
+  { key: 'nome_fiscal',   label: 'Nome na fatura',              max: 200, placeholder: 'O teu nome ou o da empresa' },
+  { key: 'morada_fiscal', label: 'Morada fiscal',               max: 300, placeholder: 'Rua, localidade, ilha' },
+]
+const formFiscal     = ref({ nif: '', nome_fiscal: '', morada_fiscal: '' })
+const fiscalErro     = ref('')
+const aGuardarFiscal = ref(false)
+function initFiscal() {
+  formFiscal.value = Object.fromEntries(camposFiscais.map(c => [c.key, conta.value?.[c.key] || '']))
+}
+async function guardarFiscal() {
+  fiscalErro.value = ''
+  const nif = formFiscal.value.nif.replace(/\D/g, '')
+  if (nif && nif.length !== 9) { fiscalErro.value = 'O NIF tem 9 dígitos.'; return }
+  aGuardarFiscal.value = true
+  try {
+    const fd = new FormData()
+    fd.append('nif', nif)
+    fd.append('nome_fiscal', formFiscal.value.nome_fiscal.trim())
+    fd.append('morada_fiscal', formFiscal.value.morada_fiscal.trim())
+    const { data } = await api.put('/app/utilizador/me/editar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    const novos = { nif: data.nif || '', nome_fiscal: data.nome_fiscal || '', morada_fiscal: data.morada_fiscal || '' }
+    conta.value = { ...conta.value, ...novos }
+    formFiscal.value = { ...novos }
+    atualizarGuardado(novos)
+    toast.success('Dados de faturação guardados!', { autoClose: 1500 })
+  } catch (e) {
+    const d = e.response?.data
+    const msg = d && typeof d === 'object' && Object.values(d).flat()[0]
+    fiscalErro.value = (typeof msg === 'string' && msg) || 'Não foi possível guardar os dados de faturação.'
+  } finally { aGuardarFiscal.value = false }
+}
 const formPassword = ref({ atual: '', password: '', confirm: '' })
 const verPassword  = ref(false)
 // contas Google sem password não têm "password actual" — o servidor diz (tem_password)
@@ -729,12 +797,14 @@ onMounted(() => {
   document.documentElement.style.setProperty('--acoes-n-perfil', autenticado.value ? '2' : '1')
   previewUrl.value = props.data.foto || DEFAULT_UTILIZADOR
   initForm()
+  initFiscal()
 })
 
 watch(() => props.data, () => {
   conta.value = props.data
   previewUrl.value = props.data.foto || DEFAULT_UTILIZADOR
   initForm()
+  initFiscal()
 }, { deep: true })
 
 function triggerFileSelect() { fileInput.value?.click() }

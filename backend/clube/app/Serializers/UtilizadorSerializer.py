@@ -18,6 +18,8 @@ class UtilizadorSerializer(serializers.ModelSerializer):
     first_name      = serializers.CharField(source='user.first_name', read_only=True)
     last_name       = serializers.CharField(source='user.last_name', read_only=True)
     foto_url        = serializers.SerializerMethodField()
+    # o NIF pode vir com espaços ("123 456 789"): limpa-se em validate_nif antes de contar os 9 dígitos
+    nif             = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     # ── Escrita (write-only) — usados no registo/update ──────
     password        = serializers.CharField(write_only=True, required=False)
@@ -37,6 +39,7 @@ class UtilizadorSerializer(serializers.ModelSerializer):
             'new_username', 'new_email', 'new_first_name', 'new_last_name', 'password',
             # do Utilizador
             'telefone', 'morada', 'foto', 'foto_url',
+            'nif', 'nome_fiscal', 'morada_fiscal',
             'verificado', 'rating',
             'role_admin', 
             'data_criacao', 'data_atualizacao', 'status',
@@ -67,6 +70,19 @@ class UtilizadorSerializer(serializers.ModelSerializer):
         if not mesmo and descartavel(value):
             raise serializers.ValidationError(MSG_DESCARTAVEL)
         return value
+
+    def validate_nif(self, value):
+        from ..utils.fiscal import limpar_nif, nif_valido, MSG_NIF
+        nif = limpar_nif(value)
+        if not nif_valido(nif):
+            raise serializers.ValidationError(MSG_NIF)
+        return nif
+
+    def validate_nome_fiscal(self, value):
+        return (value or '').strip()[:200]
+
+    def validate_morada_fiscal(self, value):
+        return (value or '').strip()[:300]
 
     # registo e alteração de password no perfil usam as mesmas regras do staff
     def validate_password(self, value):
