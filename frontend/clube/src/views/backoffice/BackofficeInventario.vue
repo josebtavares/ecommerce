@@ -211,6 +211,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import VariantesStockEditor from '@/components/inventario/VariantesStockEditor.vue'
 
 export default {
@@ -247,7 +248,12 @@ export default {
     },
   },
 
-  async created () { await this.fetchInventario() },
+  async created () {
+    // o stock muda com as vendas (site, POS), as devoluções e o resto da equipa
+    this.pararTempoReal = ouvirListas(['inventario', 'produto'], () => this.fetchInventario(this.page, true), { lojaId: this.lojaId })
+    await this.fetchInventario()
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     formatPrice (val) { return formatarDinheiro(val || 0) },

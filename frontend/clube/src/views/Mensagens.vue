@@ -24,7 +24,7 @@
 
 <script>
 import ChatPainel from '@/components/chat/ChatPainel.vue'
-import { chat, iniciarChat } from '@/services/chat'
+import { chat, iniciarChat, escolherCaixa, abrirConversaPorId } from '@/services/chat'
 import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
@@ -39,6 +39,11 @@ export default {
     this.medir()
     window.addEventListener('resize', this.medir)
     if (!chat.pronto) await iniciarChat()
+    await this.abrirDoEndereco()
+  },
+
+  watch: {
+    '$route.query.conversa' () { this.abrirDoEndereco() },
   },
 
   beforeUnmount () {
@@ -47,6 +52,12 @@ export default {
 
   methods: {
     medir () { this.ecraPequeno = window.innerWidth < 768 },
+    // ?caixa=&conversa= — vindo de um aviso no sino ou de um email
+    async abrirDoEndereco () {
+      const caixa = Number(this.$route.query.caixa) || null
+      if (caixa && caixa !== chat.caixaId && chat.caixas.some(c => c.caixa_id === caixa)) await escolherCaixa(caixa)
+      if (this.$route.query.conversa) await abrirConversaPorId(this.$route.query.conversa)
+    },
     voltar () {
       if (window.history.length > 1) this.$router.back()
       else this.$router.push('/Home')

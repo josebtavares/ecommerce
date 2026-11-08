@@ -162,7 +162,7 @@
 <script>
 import api, { urlWebSocketComBilhete } from '@/services/api'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO, marcarLigacao } from '@/composables/useTempoRealReembolsos'
-import { EVENTO_ENCOMENDA, EVENTO_FATURACAO, EVENTO_PAINEL, EVENTO_SUBSCRICAO } from '@/utils/tempoRealEncomendas'
+import { EVENTO_ENCOMENDA, EVENTO_FATURACAO, EVENTO_LISTA, EVENTO_PAINEL, EVENTO_SUBSCRICAO } from '@/utils/tempoRealEncomendas'
 import { estaAutenticado } from '@/services/sessao'
 // ícone Font Awesome (solid) + cores por tipo de notificação
 const ICONES = {
@@ -189,6 +189,7 @@ const ICONES = {
   vinti4:                   { icon: 'credit-card',         bg: 'bg-sky-500/20 text-sky-500' },
   cobranca_comissoes:       { icon: 'receipt',             bg: 'bg-amber-500/20 text-amber-400' },
   qualidade_catalogo:       { icon: 'clipboard-check',     bg: 'bg-amber-500/20 text-amber-500'   },
+  chat_mensagem:            { icon: 'comment-dots',        bg: 'bg-emerald-500/20 text-emerald-500' },
 }
 
 export default {
@@ -354,6 +355,8 @@ export default {
           if (msg.type === 'subscricao') window.dispatchEvent(new CustomEvent(EVENTO_SUBSCRICAO, { detail: msg.subscricao }))
           if (msg.type === 'faturacao') window.dispatchEvent(new CustomEvent(EVENTO_FATURACAO, { detail: msg.faturacao }))
           if (msg.type === 'painel') window.dispatchEvent(new CustomEvent(EVENTO_PAINEL, { detail: msg.painel }))
+          // produtos, inventário e listas do admin (utils/tempoRealEncomendas.js ouvirListas)
+          if (msg.type === 'lista') window.dispatchEvent(new CustomEvent(EVENTO_LISTA, { detail: msg.lista }))
         } catch (err) { /* silencioso */ }
       }
 

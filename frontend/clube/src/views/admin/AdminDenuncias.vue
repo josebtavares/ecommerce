@@ -72,6 +72,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 
 export default {
   name: 'AdminDenuncias',
@@ -84,14 +85,18 @@ export default {
     }
   },
 
-  mounted () { this.carregar() },
+  mounted () {
+    this.pararTempoReal = ouvirListas('denuncia', () => this.carregar(true))
+    this.carregar()
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     data (iso) {
       return iso ? new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
     },
-    async carregar () {
-      this.aCarregar = true
+    async carregar (silencioso = false) {
+      this.aCarregar = !silencioso
       this.erro = ''
       try {
         const { data } = await api.get('/api/chat/denuncias/', { params: { estado: this.estado } })

@@ -199,6 +199,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import BackofficeProdutoModal from './BackofficeProdutoModal.vue'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { criarVigia, emCurso, eVideo, reprocessarVideo } from '@/utils/videoEstado'
@@ -249,10 +250,13 @@ export default {
       }
       this.vigiarVideos()
     })
+    // os produtos e o stock mudam com as vendas (site, POS), as devoluções e o resto da equipa
+    this.pararTempoReal = ouvirListas(['produto', 'inventario'], () => this.fetchProdutos(this.page, true), { lojaId: this.lojaId })
     await Promise.all([this.fetchTipos(), this.fetchProdutos()])
   },
 
   beforeUnmount () {
+    this.pararTempoReal?.()
     this.vigia?.parar()
   },
 
@@ -310,9 +314,9 @@ export default {
     },
 
     // ── Produtos ─────────────────────────────────────────────
-    async fetchProdutos (pagina = this.page) {
+    async fetchProdutos (pagina = this.page, silencioso = false) {
       this.page    = pagina
-      this.loading = true
+      if (!silencioso) this.loading = true
       try {
         const params = {
           limit:  this.limit,

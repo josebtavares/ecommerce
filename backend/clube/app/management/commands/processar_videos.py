@@ -306,6 +306,14 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(f'  marcações: ciclo falhou: {e}')
         try:
+            # mensagens do chat por ler há alguns minutos: aviso no sino e depois email (app/chat/avisos.py)
+            from app.chat.avisos import avisar_por_ler
+            sinos, emails = avisar_por_ler()
+            if sinos or emails:
+                self.stdout.write(f'  chat: {sinos} aviso(s) no sino, {emails} email(s) de mensagens por ler')
+        except Exception as e:
+            self.stderr.write(f'  chat: avisos falharam: {e}')
+        try:
             from app.utils.devolucoes import escalar_sem_resposta
             n = escalar_sem_resposta()
             if n:

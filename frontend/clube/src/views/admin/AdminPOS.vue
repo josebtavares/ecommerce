@@ -297,6 +297,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import { toast } from 'vue3-toastify'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import { passwordValida } from '@/utils/password'
@@ -357,7 +358,11 @@ export default {
   // a ficha aberta vem do endereço (/admin/pos/<id>): refresh, voltar e links das notificações
   watch: { '$route.params.ficha' () { this.carregarFicha() } },
 
-  created () { this.fetchLista(); this.carregarFicha() },
+  created () {
+    this.pararTempoReal = ouvirListas('pos', () => this.fetchLista(this.page, true))     // POS novos, suspensos, vendas
+    this.fetchLista(); this.carregarFicha()
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     passwordValida,
@@ -377,9 +382,9 @@ export default {
       this.debounceTimer = setTimeout(() => this.fetchLista(1), 350)
     },
 
-    async fetchLista (pagina = this.page) {
+    async fetchLista (pagina = this.page, silencioso = false) {
       this.page = pagina
-      this.loading = true
+      if (!silencioso) this.loading = true
       this.erro = ''
       try {
         const params = { offset: (this.page - 1) * this.limit, limit: this.limit }
