@@ -199,28 +199,29 @@
           </div>
         </div>
 
-        <!-- Fatura: com NIF se o cliente pedir, ou sempre a partir de 20 000$00 (TVE do e-Fatura). Sem NIF: consumidor final -->
+        <!-- Fatura: o NIF é sempre opcional (a loja pode pedi-lo depois; o cliente pode juntá-lo na encomenda). Sem NIF: consumidor final -->
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5" data-teste="checkout-fatura">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Fatura</h2>
-          <label class="flex items-start gap-2.5 text-sm text-zinc-200"
-                 :class="nifObrigatorioPorValor ? 'cursor-default' : 'cursor-pointer'">
-            <input v-model="querFaturaNif" type="checkbox" :disabled="nifObrigatorioPorValor" data-teste="checkout-quer-nif"
+          <label class="flex items-start gap-2.5 text-sm text-zinc-200 cursor-pointer">
+            <input v-model="querFaturaNif" type="checkbox" data-teste="checkout-quer-nif"
                    class="mt-0.5 w-4 h-4 flex-shrink-0 accent-red-600" />
             <span>
               Quero fatura com NIF
-              <span class="block text-xs text-zinc-500 mt-0.5">
-                <template v-if="nifObrigatorioPorValor">Nas compras de 20 000$00 ou mais a fatura leva sempre o NIF de quem compra.</template>
-                <template v-else>Sem NIF, a loja passa um talão de venda a consumidor final.</template>
-              </span>
+              <span class="block text-xs text-zinc-500 mt-0.5">Sem NIF, a loja passa um talão de venda a consumidor final.
+                Também podes juntar o NIF mais tarde, na tua encomenda.</span>
             </span>
           </label>
-          <div v-if="pedeNif" class="grid sm:grid-cols-2 gap-3 mt-4">
+          <p v-if="nifRecomendado" class="mt-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2"
+             data-teste="aviso-nif-20k">
+            Nas compras de 20 000$00 ou mais a fatura costuma levar o NIF de quem compra. Se não o indicares agora, a loja pode pedir-to.
+          </p>
+          <div v-if="querFaturaNif" class="grid sm:grid-cols-2 gap-3 mt-4">
             <div>
               <input v-model="nif" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="NIF (9 dígitos)"
                 data-teste="checkout-nif"
                 :class="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition',
                          nifInvalido ? 'border-red-500' : 'border-zinc-700']" />
-              <p v-if="nifInvalido" class="text-[11px] text-red-400 mt-1">O NIF tem 9 dígitos.</p>
+              <p v-if="nifInvalido" class="text-[11px] text-red-400 mt-1">O NIF tem 9 dígitos — corrige-o ou apaga-o.</p>
             </div>
             <input v-model="nomeFiscal" maxlength="200" autocomplete="name" placeholder="Nome na fatura (opcional)"
               data-teste="checkout-nome-fiscal"
@@ -324,8 +325,8 @@
               </svg>
               Introduz a morada de entrega
             </p>
-            <p v-if="faltaNif" class="text-xs text-yellow-500" data-teste="falta-nif">
-              {{ nifObrigatorioPorValor ? 'Compras de 20 000$00 ou mais: indica o teu NIF' : 'Indica o NIF para a fatura' }}
+            <p v-if="nifInvalido" class="text-xs text-yellow-500" data-teste="nif-invalido">
+              O NIF tem 9 dígitos — corrige-o ou apaga-o
             </p>
           </div>
 
@@ -483,12 +484,10 @@ export default {
     precisaTelefone () { return this.pagaOnline && !this.perfilTelefone.trim() },
     // a morada de entrega serve; no levantamento usa-se a do perfil
     precisaMorada ()   { return this.pagaOnline && this.tipoEntrega !== 'entrega' && !this.moradaPerfil.trim() },
-    // a partir de 20 000$00 o NIF de quem compra é obrigatório (utils/fiscal.py LIMITE_NIF_CLIENTE)
-    nifObrigatorioPorValor () { return this.total >= LIMITE_NIF_CLIENTE },
-    pedeNif ()     { return this.querFaturaNif || this.nifObrigatorioPorValor },
+    // NIF sempre opcional; a partir de 20 000$00 só se recomenda (utils/fiscal.py LIMITE_NIF_CLIENTE)
+    nifRecomendado () { return this.total >= LIMITE_NIF_CLIENTE && !(this.querFaturaNif && this.nifLimpo.length === 9) },
     nifLimpo ()    { return (this.nif || '').replace(/\D/g, '') },
-    nifInvalido () { return this.pedeNif && !!this.nifLimpo && this.nifLimpo.length !== 9 },
-    faltaNif ()    { return this.pedeNif && this.nifLimpo.length !== 9 },
+    nifInvalido () { return this.querFaturaNif && !!this.nifLimpo && this.nifLimpo.length !== 9 },
     dadosFiscaisMudaram () {
       const p = this.fiscaisPerfil
       return this.nifLimpo !== p.nif || this.nomeFiscal.trim() !== p.nome_fiscal || this.moradaFiscal.trim() !== p.morada_fiscal
@@ -512,7 +511,7 @@ export default {
       if (!this.tipoEntrega || this.itens.length === 0 || !this.metodoPagamento) return false
       if (!this.aceitaTermos) return false
       if (this.faltaDadosCartao) return false
-      if (this.faltaNif) return false
+      if (this.nifInvalido) return false             // só um NIF mal escrito; sem NIF passa sempre
       if (this.tipoEntrega === 'entrega') {
         if (!this.opcaoEntregaId) return false
         if (!this.moradaEntrega.trim()) return false
@@ -652,7 +651,7 @@ export default {
           notas:          this.notas,
           aceita_termos:  this.aceitaTermos,
         }
-        if (this.pedeNif) {
+        if (this.querFaturaNif) {
           Object.assign(payload, {
             fatura_nif: this.querFaturaNif, nif: this.nifLimpo,
             nome_fiscal: this.nomeFiscal.trim(), morada_fiscal: this.moradaFiscal.trim(),
@@ -675,7 +674,7 @@ export default {
             this.erro = d.detail
             return
           }
-          if (['nif_obrigatorio', 'nif_invalido'].includes(d?.codigo)) {   // ex.: o total passou dos 20 000$00
+          if (d?.codigo === 'nif_invalido') {
             this.erro = d.detail
             return
           }

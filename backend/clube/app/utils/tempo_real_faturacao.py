@@ -16,7 +16,7 @@ from django.db.models.signals import post_init, post_save
 
 # campos que mudam o que a Faturação mostra (estado faturável, valor, fatura em vigor)
 CAMPOS = {
-    'loja':      ('status', 'valor_total', 'fatura_numero', 'fatura_registada_em'),
+    'loja':      ('status', 'valor_total', 'fatura_numero', 'fatura_registada_em', 'cliente_nif'),   # NIF: "NIF em falta"
     'marcacoes': ('estado', 'pago', 'preco_final', 'valor_pago', 'valor_reembolsado', 'fatura_numero', 'fatura_registada_em'),
     'pos':       ('status', 'total', 'gorjeta', 'loja_id', 'fatura_numero', 'fatura_registada_em'),
 }
