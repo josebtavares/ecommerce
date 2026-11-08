@@ -3,6 +3,7 @@ Views/Endpoints do Sistema POS
 Gestão de autenticação, configuração, mesas, contas, produtos híbridos e operações POS.
 """
 import json
+import logging
 from decimal import Decimal
 
 from django.contrib.auth import authenticate
@@ -42,6 +43,8 @@ from app.models import (
     CategoriaLoja,
     Subscricao,
 )
+
+logger = logging.getLogger(__name__)
 
 try:
     from app.models import Inventario
@@ -439,7 +442,27 @@ def _pos_response(pos):
     }
 
 
+def _ler_stock(valor):
+    """Stock vindo do formulário: inteiro >= 0 (vazio = 0). Devolve (stock, resposta de erro)."""
+    try:
+        stock = int(str(valor).strip() or 0) if valor is not None else 0
+    except (TypeError, ValueError):
+        return None, Response({'detail': 'O stock tem de ser um número inteiro.'}, status=status.HTTP_400_BAD_REQUEST)
+    if stock < 0:
+        return None, Response({'detail': 'O stock não pode ser negativo.'}, status=status.HTTP_400_BAD_REQUEST)
+    return stock, None
+
+
+def _loja_suspensa_resposta(pos):
+    """O catálogo de uma loja suspensa pela plataforma não se altera pelo POS (vender também não)."""
+    return Response({'detail': f'A loja "{pos.loja_vinculada.nome}" foi suspensa pela plataforma: '
+                               f'os produtos dela não se podem alterar no POS.'},
+                    status=status.HTTP_403_FORBIDDEN)
+
+
 def _verificar_permissao_loja_produtos(loja, utilizador):
+    if not utilizador:
+        return False
     if loja.dono_id == utilizador.id:
         return True
     try:
@@ -772,6 +795,12 @@ def pos_register(request):
                 {'detail': 'Email já registado com password diferente. Usa Login.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        # como o login: uma conta suspensa/banida não recebe sessão
+        from app.autenticacao import conta_ativa
+        if not conta_ativa(user):
+            from app.utils.moderacao import mensagem_bloqueio
+            return Response({'detail': mensagem_bloqueio(user.utilizador), 'code': 'conta_inativa'},
+                            status=status.HTTP_403_FORBIDDEN)
 
         return Response({
             **_sessao_principal(user.utilizador, request),
@@ -805,9 +834,10 @@ def pos_register(request):
                 'mensagem': 'Conta criada com sucesso',
             }, status=status.HTTP_201_CREATED)
 
-    except Exception as e:
+    except Exception:
+        logger.exception('pos_register: erro ao criar conta')
         return Response(
-            {'detail': f'Erro ao criar conta: {str(e)}'},
+            {'detail': 'Não foi possível criar a conta. Tenta novamente.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -896,7 +926,12 @@ def pos_detalhe(request, pos_id):
     if request.method == 'PATCH':
         _bloquear_se_suspenso(pos)
         if 'nome' in request.data:
-            pos.nome = request.data['nome']
+            nome = str(request.data['nome'] or '').strip()
+            if not nome:
+                return Response({'detail': 'O nome do POS é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+            if len(nome) > ConfiguracaoPOS._meta.get_field('nome').max_length:
+                return Response({'detail': 'O nome do POS é demasiado longo.'}, status=status.HTTP_400_BAD_REQUEST)
+            pos.nome = nome
 
         if 'modo' in request.data:
             modo = request.data['modo']
@@ -944,6 +979,19 @@ def pos_dados_fiscais(request, pos_id):
     return Response(_pos_response(pos))
 
 
+def _recusa_contas_da_loja(pos, exceto_loja=None):
+    """Como no admin (desligar loja): com contas abertas que têm artigos da loja ligada não se desliga nem se
+    troca de loja — a venda ficava no arquivo errado e o stock desses artigos deixava de ser deste POS."""
+    qs = (ItemContaMesa.objects.filter(conta__pos=pos, conta__status='aberta', produto__isnull=False)
+          .exclude(status='cancelado'))
+    if exceto_loja is not None:
+        qs = qs.exclude(produto__loja=exceto_loja)
+    if qs.exists():
+        return Response({'detail': 'Há contas abertas com produtos da loja. Cobra-as ou cancela-as primeiro.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    return None
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def pos_conectar_loja(request, pos_id):
@@ -975,6 +1023,9 @@ def pos_conectar_loja(request, pos_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    erro = _recusa_contas_da_loja(pos, exceto_loja=loja)
+    if erro:
+        return erro
     pos.conectar_loja(loja, modo=modo)
     ao_ligar_loja(pos, request.user)
     from ..utils.subscricoes_pos import sincronizar_pos
@@ -990,6 +1041,9 @@ def pos_desconectar_loja(request, pos_id):
     utilizador = request.user.utilizador
     pos = get_object_or_404(ConfiguracaoPOS, id=pos_id, dono=utilizador)
     _bloquear_se_suspenso(pos)
+    erro = _recusa_contas_da_loja(pos)
+    if erro:
+        return erro
     pos.desconectar_loja()
     from ..utils.subscricoes_pos import sincronizar_pos
     sincronizar_pos(pos)          # saiu do plano Loja + POS da loja → 30 dias até ao seu plano
@@ -1111,7 +1165,9 @@ def produto_criar(request, pos_id):
     ativo          = _str_to_bool(request.data.get('ativo'), True)
     disponivel_pos = _str_to_bool(request.data.get('disponivel_pos'), True)
     controlar_stock = _str_to_bool(request.data.get('controlar_stock'), False)
-    stock          = int(request.data.get('stock', 0) or 0)
+    stock, erro_stock = _ler_stock(request.data.get('stock'))
+    if erro_stock:
+        return erro_stock
 
     if not nome or preco is None:
         return Response({'detail': 'Nome e preço são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1168,6 +1224,8 @@ def produto_criar(request, pos_id):
 
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'POS precisa estar integrado ou híbrido.'}, status=status.HTTP_400_BAD_REQUEST)
+        if _loja_suspensa(pos):
+            return _loja_suspensa_resposta(pos)
 
         loja = pos.loja_vinculada
         if not _verificar_permissao_loja_produtos(loja, utilizador):
@@ -1252,8 +1310,16 @@ def produto_atualizar(request, pos_id, produto_id):
                 setattr(produto, campo, _str_to_bool(request.data.get(campo), getattr(produto, campo)))
             elif campo == 'stock':
                 # com stock por variação o total é a soma das variações
+                stock, erro_stock = _ler_stock(request.data.get('stock'))
+                if erro_stock:
+                    return erro_stock
                 if not produto.stock_por_variante:
-                    produto.stock = int(request.data.get('stock') or 0)
+                    produto.stock = stock
+            elif campo == 'nome':
+                nome = str(request.data['nome'] or '').strip()
+                if not nome:
+                    return Response({'detail': 'O nome do produto é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+                produto.nome = nome[:ProdutoPOS._meta.get_field('nome').max_length]
             else:
                 setattr(produto, campo, request.data[campo])
 
@@ -1299,6 +1365,8 @@ def produto_atualizar(request, pos_id, produto_id):
 
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'Este POS não está ligado a uma loja.'}, status=status.HTTP_400_BAD_REQUEST)
+        if _loja_suspensa(pos):
+            return _loja_suspensa_resposta(pos)
 
         loja = pos.loja_vinculada
         if not _verificar_permissao_loja_produtos(loja, utilizador):
@@ -1309,7 +1377,17 @@ def produto_atualizar(request, pos_id, produto_id):
         if aviso:
             return Response(aviso, status=status.HTTP_409_CONFLICT)
 
-        for campo in ('nome', 'descricao', 'sku'):
+        if 'nome' in request.data:
+            nome = str(request.data['nome'] or '').strip()
+            if not nome:
+                return Response({'detail': 'O nome do produto é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+            produto.nome = nome[:Produto._meta.get_field('nome').max_length]
+        stock_loja = None
+        if 'stock' in request.data:
+            stock_loja, erro_stock = _ler_stock(request.data.get('stock'))
+            if erro_stock:
+                return erro_stock
+        for campo in ('descricao', 'sku'):
             if campo in request.data:
                 setattr(produto, campo, request.data[campo])
         if 'preco' in request.data:
@@ -1345,8 +1423,8 @@ def produto_atualizar(request, pos_id, produto_id):
         if erro_conj:
             transaction.set_rollback(True)
             return Response({'detail': erro_conj}, status=status.HTTP_400_BAD_REQUEST)
-        if 'stock' in request.data and not produto.e_conjunto:
-            _set_stock_loja(produto, int(request.data.get('stock') or 0))
+        if stock_loja is not None and not produto.e_conjunto:
+            _set_stock_loja(produto, stock_loja)
         # grelha de stock por variação enviada com o formulário (tudo-ou-nada)
         erro_grelha = None if produto.e_conjunto else aplicar_grelha_do_pedido(produto, request.data)
         if erro_grelha:
@@ -1381,8 +1459,14 @@ def produto_apagar(request, pos_id, produto_id):
         return Response({'detail': 'Produto POS desativado.', 'produto': _produto_pos_payload(produto, request, pos)})
 
     if origem == 'loja':
+        # como criar/editar: o catálogo online da loja é responsabilidade do dono
+        if membro:
+            return Response({'detail': 'Membros não podem gerir produtos da loja Bendi.'},
+                            status=status.HTTP_403_FORBIDDEN)
         if pos.modo not in ['integrado', 'hibrido'] or not pos.loja_vinculada:
             return Response({'detail': 'Este POS não está ligado a uma loja.'}, status=status.HTTP_400_BAD_REQUEST)
+        if _loja_suspensa(pos):
+            return _loja_suspensa_resposta(pos)
         loja = pos.loja_vinculada
         if not _verificar_permissao_loja_produtos(loja, utilizador):
             return Response({'detail': 'Sem permissão para gerir produtos desta loja.'}, status=status.HTTP_403_FORBIDDEN)
@@ -1444,11 +1528,20 @@ def mesa_criar(request, pos_id):
     if membro and not membro.pode_gerir_mesas:
         return Response({'detail': 'Sem permissão para criar mesas.'}, status=status.HTTP_403_FORBIDDEN)
 
-    numero     = request.data.get('numero')
+    numero     = str(request.data.get('numero') or '').strip()
     capacidade = request.data.get('capacidade', 4)
 
     if not numero:
         return Response({'detail': 'Número da mesa é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(numero) > Mesa._meta.get_field('numero').max_length:
+        return Response({'detail': f'O número da mesa tem no máximo {Mesa._meta.get_field("numero").max_length} caracteres.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        capacidade = int(capacidade if capacidade not in (None, '') else 4)
+    except (TypeError, ValueError):
+        capacidade = 0
+    if not 1 <= capacidade <= 100:
+        return Response({'detail': 'A capacidade da mesa vai de 1 a 100 lugares.'}, status=status.HTTP_400_BAD_REQUEST)
     existente = Mesa.objects.filter(pos=pos, numero=numero).first()
     if existente and existente.ativa:
         return Response({'detail': 'Já existe uma mesa com este número'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1584,7 +1677,12 @@ def conta_detalhe(request, pos_id, conta_id):
 @transaction.atomic
 def conta_adicionar_item(request, pos_id, conta_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
-    conta = get_object_or_404(ContaMesa, id=conta_id, pos=pos)
+    # lançar pedidos é de quem atende as mesas (a cozinha só vê e muda o estado)
+    erro = _sem_permissao(membro, 'pode_abrir_mesas', 'Sem permissão para lançar pedidos.')
+    if erro:
+        return erro
+    # bloqueada: um artigo não entra numa conta que está a ser cobrada/cancelada noutro aparelho
+    conta = get_object_or_404(ContaMesa.objects.select_for_update(), id=conta_id, pos=pos)
 
     if conta.status != 'aberta':
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1593,10 +1691,11 @@ def conta_adicionar_item(request, pos_id, conta_id):
     origem      = request.data.get('origem', 'loja')
     observacoes = request.data.get('observacoes', '')
     try:
-        quantidade = int(request.data.get('quantidade', 1) or 1)
+        bruto = request.data.get('quantidade')
+        quantidade = 1 if bruto in (None, '') else int(bruto)
     except (TypeError, ValueError):
         quantidade = 0
-    if quantidade < 1:
+    if not 1 <= quantidade <= 999:
         return Response({'detail': 'Quantidade inválida.'}, status=status.HTTP_400_BAD_REQUEST)
 
     if not produto_id:
@@ -1706,6 +1805,8 @@ def conta_fechar(request, pos_id, conta_id):
         return Response({'detail': 'Conta já está fechada/cancelada'}, status=status.HTTP_400_BAD_REQUEST)
 
     def recusar(msg):
+        # a gorjeta/desconto/NIF já gravados nesta tentativa não ficam na conta aberta
+        transaction.set_rollback(True)
         return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
     metodo_pagamento = request.data.get('metodo_pagamento')
@@ -1805,6 +1906,9 @@ def conta_cancelar(request, pos_id, conta_id):
 @permission_classes([IsPOSAuthenticated])
 def contas_ativas(request, pos_id):
     pos, membro, _ = _resolve_pos_request(request, pos_id)
+    erro = _sem_permissao(membro, 'pode_ver_pedidos', 'Sem permissão para ver os pedidos.')
+    if erro:
+        return erro
     contas = ContaMesa.objects.filter(pos=pos, status='aberta').select_related('mesa', 'atendente').prefetch_related('items').order_by('-criada_em')
     return Response([_conta_payload(c, request) for c in contas])
 
@@ -2027,6 +2131,30 @@ def turno_fechar(request, pos_id, turno_id):
 # EQUIPA POS
 # ═══════════════════════════════════════════════════════════════════
 
+PAPEIS_POS = ('gerente', 'empregado', 'cozinha', 'caixa')
+PASSWORD_MEMBRO_MIN = 6
+
+
+def _erro_username_membro(username):
+    if not username:
+        return 'Username é obrigatório'
+    if len(username) < 3:
+        return 'Username deve ter pelo menos 3 caracteres'
+    if len(username) > UtilizadorPOS._meta.get_field('username_pos').max_length:
+        return 'Username demasiado longo'
+    if not username.replace('_', '').replace('.', '').isalnum():
+        return 'Username só pode conter letras, números, _ e .'
+    return None
+
+
+def _erro_password_membro(password):
+    if len(password) < PASSWORD_MEMBRO_MIN:
+        return f'A password do membro tem de ter pelo menos {PASSWORD_MEMBRO_MIN} caracteres.'
+    if len(password) > 128:
+        return 'Password demasiado longa.'
+    return None
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def pos_equipa(request, pos_id):
@@ -2050,18 +2178,22 @@ def pos_equipa(request, pos_id):
 
     if not nome:
         return Response({'detail': 'Nome é obrigatório'}, status=400)
-    if not username:
-        return Response({'detail': 'Username é obrigatório'}, status=400)
-    if len(username) < 3:
-        return Response({'detail': 'Username deve ter pelo menos 3 caracteres'}, status=400)
-    if not username.replace('_', '').replace('.', '').isalnum():
-        return Response({'detail': 'Username só pode conter letras, números, _ e .'}, status=400)
-    if papel not in ['gerente', 'empregado', 'cozinha', 'caixa']:
+    erro = _erro_username_membro(username)
+    if erro:
+        return Response({'detail': erro}, status=400)
+    if papel not in PAPEIS_POS:
         return Response({'detail': 'Papel inválido'}, status=400)
+    if password:
+        erro = _erro_password_membro(password)
+        if erro:
+            return Response({'detail': erro}, status=400)
     if UtilizadorPOS.objects.filter(pos=pos, username_pos__iexact=username).exists():
         return Response({'detail': f'Username "{username}" já existe neste POS'}, status=400)
 
-    password_final = password or User.objects.make_random_password(length=10)
+    # sem password → gera uma (make_random_password saiu do Django 5.1)
+    from django.utils.crypto import get_random_string
+    password_final = password or get_random_string(10, 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789')
+    nome = nome[:UtilizadorPOS._meta.get_field('nome').max_length]
 
     membro = UtilizadorPOS(pos=pos, nome=nome, username_pos=username, papel=papel)
     membro.set_password(password_final)
@@ -2094,16 +2226,24 @@ def pos_equipa_membro(request, pos_id, membro_id):
 
     if request.method == 'PATCH':
         if 'nome' in request.data:
-            membro.nome = request.data['nome'].strip()
+            nome = str(request.data['nome'] or '').strip()
+            if not nome:
+                return Response({'detail': 'Nome é obrigatório'}, status=400)
+            membro.nome = nome[:UtilizadorPOS._meta.get_field('nome').max_length]
 
         if 'username_pos' in request.data:
-            novo_username = request.data['username_pos'].strip().lower()
+            novo_username = str(request.data['username_pos'] or '').strip().lower()
+            erro = _erro_username_membro(novo_username)
+            if erro:
+                return Response({'detail': erro}, status=400)
             if (novo_username != membro.username_pos and
                 UtilizadorPOS.objects.filter(pos=pos, username_pos__iexact=novo_username).exclude(id=membro.id).exists()):
                 return Response({'detail': f'Username "{novo_username}" já existe neste POS'}, status=400)
             membro.username_pos = novo_username
 
         if 'papel' in request.data:
+            if request.data['papel'] not in PAPEIS_POS:
+                return Response({'detail': 'Papel inválido'}, status=400)
             membro.papel = request.data['papel']
             membro.aplicar_permissoes_padrao()
 
@@ -2114,13 +2254,17 @@ def pos_equipa_membro(request, pos_id, membro_id):
             'pode_ver_pedidos', 'pode_atualizar_status_items',
         ]:
             if perm in request.data:
-                setattr(membro, perm, bool(request.data[perm]))
+                # "false"/"0" (formulário) contam como falso — bool("false") era True
+                setattr(membro, perm, _str_to_bool(request.data[perm], getattr(membro, perm)))
 
         if 'password' in request.data and request.data['password']:
-            membro.set_password(request.data['password'])
+            erro = _erro_password_membro(str(request.data['password']))
+            if erro:
+                return Response({'detail': erro}, status=400)
+            membro.set_password(str(request.data['password']))
 
         if 'ativo' in request.data:
-            membro.ativo = bool(request.data['ativo'])
+            membro.ativo = _str_to_bool(request.data['ativo'], membro.ativo)
 
         membro.save()
         return Response(membro.to_dict())

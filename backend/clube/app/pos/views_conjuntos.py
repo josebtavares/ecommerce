@@ -74,10 +74,10 @@ def conjunto_substituir_componente(request, pos_id, produto_id, componente_id):
         if comp.produto_id is None:
             return Response({'detail': 'Este produto já é do POS — escolhe outro para o substituir.'},
                             status=status.HTTP_400_BAD_REQUEST)
-        try:
-            stock = int(request.data.get('stock') or 0)
-        except (TypeError, ValueError):
-            return Response({'detail': 'Stock inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+        from .views import _ler_stock
+        stock, erro_stock = _ler_stock(request.data.get('stock'))
+        if erro_stock:
+            return erro_stock
         novo, variante_pos = _copia_no_pos(pos, comp, _str_to_bool(request.data.get('controlar_stock'), True), stock), None
     else:
         novo = get_object_or_404(ProdutoPOS, id=request.data.get('produto_pos_id'), pos=pos)

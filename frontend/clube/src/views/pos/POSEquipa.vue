@@ -295,7 +295,7 @@
               <div>
                 <label class="mb-2 block text-sm font-black text-slate-700">
                   Password
-                  <span class="ml-1 text-xs font-semibold text-slate-400">(opcional — gera automaticamente)</span>
+                  <span class="ml-1 text-xs font-semibold text-slate-400">(opcional — mínimo 6 caracteres; vazio gera uma)</span>
                 </label>
                 <input
                   v-model="addForm.password"
@@ -422,7 +422,7 @@
             <div>
               <label class="mb-2 block text-sm font-black text-slate-700">
                 Nova password
-                <span class="ml-1 text-xs font-semibold text-slate-400">(deixa vazio para não alterar)</span>
+                <span class="ml-1 text-xs font-semibold text-slate-400">(mínimo 6 caracteres; vazio não altera)</span>
               </label>
               <input
                 v-model="editForm.password"
