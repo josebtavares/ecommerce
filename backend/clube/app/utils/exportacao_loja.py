@@ -226,9 +226,11 @@ def escrever_zip(destino, exp):
             linhas.append([f'E-{e.id}', _quando(e.data_criacao), e.get_status_display(), *_pessoa(e.comprador),
                            e.get_tipo_entrega_display(), getattr(e.opcao_entrega, 'nome', ''), e.morada_entrega,
                            _v(e.valor_total), pag.get_status_display() if pag else '', _quando(pag.data_pagamento) if pag else '',
-                           e.fatura_numero, _quando(e.data_conclusao), e.notas])
+                           e.fatura_numero, _quando(e.data_conclusao), e.notas,
+                           e.cliente_nif, e.cliente_nome_fiscal, e.cliente_morada_fiscal])
         csv('encomendas.csv', ['Encomenda', 'Data', 'Estado', 'Cliente', 'Email', 'Telefone', 'Entrega', 'Opção de entrega',
-                               'Morada', 'Total (CVE)', 'Pagamento', 'Pago em', 'Fatura nº', 'Concluída em', 'Notas'], linhas)
+                               'Morada', 'Total (CVE)', 'Pagamento', 'Pago em', 'Fatura nº', 'Concluída em', 'Notas',
+                               'NIF do cliente', 'Nome fiscal', 'Morada fiscal'], linhas)
         csv('encomendas-itens.csv', ['Encomenda', 'Produto ID', 'Produto', 'Variante / opções', 'Quantidade',
                                      'Preço unitário (CVE)', 'Total (CVE)', 'Custo unitário (CVE)'],
             [[f'E-{i.encomenda_id}', i.produto_id or '', getattr(i.produto, 'nome', '(produto apagado)'),

@@ -57,10 +57,13 @@ export default {
   },
 
   watch: {
-    $route () { this.sincronizarSessao() },
+    $route () {
+      this.sincronizarSessao()
+      if (chat.aberto) this.$nextTick(() => { this.isDark = this.temaDoChat() })
+    },
     'chat.aberto' (aberto) {
       if (aberto) {
-        this.isDark = temaEscuro()
+        this.isDark = this.temaDoChat()
         carregarConversas().catch(() => {})
       }
     },
@@ -80,6 +83,12 @@ export default {
 
   methods: {
     medir () { this.ecraPequeno = window.innerWidth < 640 },
+    // Nos painéis (backoffice, admin) o tema claro já troca as cores escuras no <html class="tema-claro">:
+    // o chat usa então as classes escuras e a troca faz o resto. Com as classes claras por cima da troca,
+    // o texto (zinc-900) ficava branco no fundo claro.
+    temaDoChat () {
+      return temaEscuro() || document.documentElement.classList.contains('tema-claro')
+    },
     onTecla (e) { if (e.key === 'Escape' && chat.aberto) chat.aberto = false },
 
     // entrou → liga o chat; saiu → desliga e esquece tudo (nada de eventos da conta anterior)

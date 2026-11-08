@@ -195,6 +195,7 @@ def anonimizar(alvo, por=None, motivo=''):
         user.set_unusable_password()
         user.save()
         alvo.telefone = alvo.morada = alvo.motivo_estado = ''
+        alvo.nif = alvo.nome_fiscal = alvo.morada_fiscal = ''
         alvo.foto = 'utilizadores/default.png'
         alvo.google_id = None
         alvo.verificado = False

@@ -133,6 +133,29 @@
                    class="text-xs text-zinc-600 italic">Sem contacto disponível</div>
             </div>
 
+            <!-- ── FATURA: dados que o cliente deu no checkout (a loja passa a fatura com eles) ── -->
+            <div class="bg-zinc-800/50 rounded-xl p-3 space-y-1.5" data-teste="enc-dados-fatura">
+              <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Dados para a fatura</p>
+              <template v-if="detalhes[enc.id].cliente_nif">
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="text-zinc-500 w-16 flex-shrink-0">NIF:</span>
+                  <span class="text-zinc-100 font-semibold font-mono select-all" data-teste="enc-cliente-nif">{{ detalhes[enc.id].cliente_nif }}</span>
+                </div>
+                <div v-if="detalhes[enc.id].cliente_nome_fiscal" class="flex items-center gap-2 text-xs">
+                  <span class="text-zinc-500 w-16 flex-shrink-0">Nome:</span>
+                  <span class="text-zinc-200">{{ detalhes[enc.id].cliente_nome_fiscal }}</span>
+                </div>
+                <div v-if="detalhes[enc.id].cliente_morada_fiscal" class="flex items-start gap-2 text-xs">
+                  <span class="text-zinc-500 w-16 flex-shrink-0">Morada:</span>
+                  <span class="text-zinc-200">{{ detalhes[enc.id].cliente_morada_fiscal }}</span>
+                </div>
+                <p class="text-[11px] text-zinc-500">
+                  {{ detalhes[enc.id].fatura_pedida ? 'O cliente pediu fatura com NIF.' : 'Compra de 20 000$00 ou mais: a fatura leva o NIF do cliente.' }}
+                </p>
+              </template>
+              <p v-else class="text-xs text-zinc-400">Consumidor final, sem NIF (talão de venda).</p>
+            </div>
+
             <!-- Itens -->
             <div>
               <p class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Produtos</p>

@@ -59,6 +59,9 @@ def _build_user_payload(utilizador: Utilizador, request=None) -> dict:
         'last_name'      : utilizador.user.last_name,
         'telefone'       : utilizador.telefone,
         'morada'         : utilizador.morada,
+        'nif'            : utilizador.nif,
+        'nome_fiscal'    : utilizador.nome_fiscal,
+        'morada_fiscal'  : utilizador.morada_fiscal,
         'foto'           : foto_url,
         'verificado'     : utilizador.verificado,
         'email_confirmado': utilizador.email_confirmado,
@@ -256,6 +259,9 @@ def utilizador_update_me(request):
         'password'      : request.data.get('password'),
         'telefone'      : request.data.get('telefone'),
         'morada'        : request.data.get('morada'),
+        'nif'           : request.data.get('nif'),
+        'nome_fiscal'   : request.data.get('nome_fiscal'),
+        'morada_fiscal' : request.data.get('morada_fiscal'),
         'foto'          : request.FILES.get('foto'),
     }
     # remove campos None para não sobrescrever com vazio

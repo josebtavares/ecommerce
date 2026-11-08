@@ -10,6 +10,9 @@ export const EMISSOR_PUBLICO_URL = 'https://efatura.cv'
 // a fatura só se regista numa venda que aconteceu (backend: ESTADOS_FATURAVEIS)
 export const ESTADOS_FATURAVEIS = ['pago', 'preparando', 'enviado', 'concluido']
 
+// a partir daqui a fatura leva sempre o NIF de quem compra (backend: utils/fiscal.py LIMITE_NIF_CLIENTE)
+export const LIMITE_NIF_CLIENTE = 20000
+
 export function nifLimpo (nif = '') {
   return String(nif).replace(/\D/g, '')
 }

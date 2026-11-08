@@ -128,7 +128,7 @@
                   <td class="px-4 py-3"><p class="font-semibold text-zinc-200">{{ e.titulo }}</p>
                     <p class="text-[11px] text-zinc-500">{{ e.referencia }}<template v-if="e.pos && tipo === 'loja'"> · {{ e.pos.nome }}</template></p></td>
                   <td class="px-4 py-3 text-xs text-zinc-400">{{ quando(e.data) }}</td>
-                  <td class="px-4 py-3"><p class="text-zinc-300">{{ e.cliente.nome }}</p><p v-if="e.cliente.email" class="text-[11px] text-zinc-500">{{ e.cliente.email }}</p></td>
+                  <td class="px-4 py-3"><p class="text-zinc-300">{{ e.cliente.nome }}</p><p v-if="e.cliente.email" class="text-[11px] text-zinc-500">{{ e.cliente.email }}</p><p v-if="e.cliente.nif && e.origem !== 'pos'" class="text-[11px] text-zinc-400">NIF {{ e.cliente.nif }}</p></td>
                   <td class="px-4 py-3 text-right text-zinc-200">{{ dinheiro(e.valor) }}</td>
                   <td class="px-4 py-3 text-xs text-zinc-400">{{ e.status_nome }}</td>
                   <td class="px-4 py-3 text-xs">
