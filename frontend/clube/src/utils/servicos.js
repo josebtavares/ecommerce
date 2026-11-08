@@ -38,6 +38,18 @@ export const ESTADOS_MARCACAO = {
   expirada:   { nome: 'Expirada',   cor: 'bg-zinc-800/60 border-zinc-700 text-zinc-500',       ponto: 'bg-zinc-600' },
 }
 
+// cartão de uma marcação do cliente (página /minhas-marcacoes e separador Marcações do perfil)
+export const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+export function textoEstadoCliente (m) {
+  if (m.estado === 'pendente' && m.pagamento === 'antecipado' && !m.pago) return 'Por pagar'
+  if (m.estado === 'pendente') return 'À espera da confirmação da loja'
+  return m.estado_nome
+}
+export function corEstadoCliente (m) {
+  return { pendente: 'text-amber-500', confirmada: 'text-sky-400', concluida: 'text-green-500', cancelada: 'text-zinc-500',
+           falta: 'text-red-400', expirada: 'text-zinc-500' }[m.estado]
+}
+
 export function duracaoTexto (min) {
   const h = Math.floor(min / 60), m = min % 60
   return h ? `${h} h${m ? ' ' + m + ' min' : ''}` : `${m} min`

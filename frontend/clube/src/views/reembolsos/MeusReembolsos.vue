@@ -3,7 +3,7 @@
   <div class="min-h-screen" :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-gray-100 text-zinc-900'">
     <header class="sticky top-0 z-10 flex items-center gap-3 px-4 h-14 border-b"
             :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'">
-      <button type="button" aria-label="Voltar" @click="$router.push({ path: '/Home', query: { perfil: 'encomendas' } })"
+      <button type="button" aria-label="Voltar" @click="$router.push({ path: '/Home', query: { perfil: 'reembolsos' } })"
               class="h-9 w-9 rounded-lg flex items-center justify-center" :class="isDark ? 'hover:bg-zinc-800' : 'hover:bg-gray-100'">
         <font-awesome-icon :icon="['fas', 'arrow-left']" />
       </button>
@@ -20,20 +20,7 @@
         Podes pedi-lo nas tuas encomendas, no perfil.
       </div>
 
-      <button v-for="r in lista" :key="r.id" type="button" @click="$router.push(`/perfil/reembolsos/${r.id}`)"
-        class="w-full text-left rounded-2xl border p-4 flex items-center gap-3 transition"
-        :class="isDark ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-600' : 'bg-white border-gray-200 hover:border-gray-300'">
-        <div class="flex-1 min-w-0">
-          <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-500'">
-            Encomenda #{{ r.encomenda_id }} · {{ r.loja_nome }} · {{ dataHora(r.data_criacao) }}
-          </p>
-          <p class="text-sm font-semibold truncate">{{ r.tipo === 'cancelamento' && r.motivo !== 'esgotado' ? 'Cancelamento' : r.motivo_label }}</p>
-        </div>
-        <div class="text-right flex-shrink-0 space-y-1">
-          <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" :metodo="r.metodo" />
-          <p class="text-sm font-bold">{{ formatarDinheiro(r.valor_aprovado ?? r.valor_pedido) }}</p>
-        </div>
-      </button>
+      <CartaoReembolso v-for="r in lista" :key="r.id" :r="r" :isDark="isDark" @click="$router.push(`/perfil/reembolsos/${r.id}`)" />
 
       <div v-if="proximo !== null" class="text-center pt-2">
         <button type="button" @click="carregar(true)" :disabled="aCarregarMais"
@@ -48,9 +35,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '@/services/api'
-import { formatarDinheiro } from '@/utils/dinheiro'
-import { dataHora } from '@/utils/reembolsos'
-import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
+import CartaoReembolso from '@/components/reembolsos/CartaoReembolso.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 import { temaEscuro } from '@/utils/tema'

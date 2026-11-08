@@ -34,7 +34,7 @@ import { temaEscuro } from '@/utils/tema'
 
 // onde o balão aparece (fora: login/registo, checkout, POS, página /mensagens, pré-visualização de templates)
 const ROTAS = ['Home', 'Sobre', 'Loja', 'Backoffice', 'Admin', 'CriarLoja', 'Reembolso', 'Reembolsos',
-               'MinhasEncomendas', 'EncomendaCliente']
+               'MinhasEncomendas', 'EncomendaCliente', 'MinhasMarcacoes', 'MarcacaoCliente']
 
 export default {
   name: 'ChatFlutuante',

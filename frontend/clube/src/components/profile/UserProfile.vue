@@ -81,8 +81,20 @@
         <!-- Conteúdo scrollável -->
         <div class="flex-1 overflow-y-auto p-5">
 
-          <!-- ═══ TAB: DADOS PESSOAIS ═══ -->
-          <div v-if="activeTab === 'dados'">
+          <!-- ═══ TAB: PERFIL — sub-separadores Dados / Favoritos / Password ═══ -->
+          <div v-if="activeTab === 'dados'" role="tablist" class="flex gap-2 mb-5 overflow-x-auto perfil-tabs">
+            <button v-for="s in SUB_PERFIL" :key="s.key" type="button" role="tab" :aria-selected="subPerfil === s.key"
+              @click="subPerfil = s.key" :data-teste="`sub-perfil-${s.key}`"
+              class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition"
+              :class="subPerfil === s.key
+                ? 'bg-red-600 border-red-600 text-white'
+                : (isDark ? 'border-zinc-700 text-zinc-400 hover:text-zinc-200' : 'border-gray-300 text-zinc-500 hover:text-zinc-800')">
+              <font-awesome-icon :icon="['fas', s.icone]" class="text-[11px]" /> {{ s.label }}
+            </button>
+          </div>
+
+          <!-- Perfil › Dados -->
+          <div v-if="activeTab === 'dados' && subPerfil === 'dados'">
             <h3 class="text-sm font-bold uppercase tracking-wider mb-4"
                 :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Informações pessoais</h3>
             <div class="space-y-3">
@@ -144,8 +156,8 @@
             </div>
           </div>
 
-          <!-- ═══ TAB: PASSWORD ═══ -->
-          <div v-if="activeTab === 'password'">
+          <!-- Perfil › Password (e apagar a conta) -->
+          <div v-if="activeTab === 'dados' && subPerfil === 'password'">
             <h3 class="text-sm font-bold uppercase tracking-wider mb-4"
                 :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Alterar password</h3>
             <div class="space-y-3">
@@ -248,16 +260,6 @@
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h3 class="text-sm font-bold uppercase tracking-wider"
                   :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Histórico de encomendas</h3>
-              <div class="flex items-center gap-2">
-                <button type="button" @click="isOpen = false; $router.push('/minhas-marcacoes')" data-teste="link-marcacoes"
-                  :class="[botaoAtalho, 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors']">
-                  <font-awesome-icon :icon="['fas', 'calendar-check']" class="text-red-500" /> Marcações
-                </button>
-                <button type="button" @click="isOpen = false; $router.push('/perfil/reembolsos')" data-teste="link-reembolsos"
-                  :class="[botaoAtalho, 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors']">
-                  <font-awesome-icon :icon="['fas', 'rotate-left']" class="text-red-500" /> Reembolsos
-                </button>
-              </div>
             </div>
 
             <div v-if="loadingEncomendas" class="flex justify-center py-8">
@@ -340,8 +342,14 @@
             </div>
           </div>
 
-          <!-- ═══ TAB: FAVORITOS ═══ -->
-          <FavoritosPerfil v-if="activeTab === 'favoritos'" :isDark="isDark" @fechar="isOpen = false" />
+          <!-- Perfil › Favoritos -->
+          <FavoritosPerfil v-if="activeTab === 'dados' && subPerfil === 'favoritos'" :isDark="isDark" @fechar="isOpen = false" />
+
+          <!-- ═══ TAB: MARCAÇÕES (5 + "Ver todas") ═══ -->
+          <MarcacoesPerfil v-if="activeTab === 'marcacoes'" :isDark="isDark" @fechar="isOpen = false" />
+
+          <!-- ═══ TAB: REEMBOLSOS (5 + "Ver todos") ═══ -->
+          <ReembolsosPerfil v-if="activeTab === 'reembolsos'" :isDark="isDark" @fechar="isOpen = false" />
 
           <!-- ═══ TAB: LOJAS ═══ -->
           <div v-if="activeTab === 'lojas'">
@@ -448,6 +456,8 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import FavoritosPerfil from '@/components/favoritos/FavoritosPerfil.vue'
+import MarcacoesPerfil from '@/components/profile/MarcacoesPerfil.vue'
+import ReembolsosPerfil from '@/components/profile/ReembolsosPerfil.vue'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
@@ -490,11 +500,18 @@ const activeTab  = ref('dados')
 
 const tabs = [
   { key: 'dados',      label: 'Perfil'     },
-  { key: 'password',   label: 'Password'   },
   { key: 'encomendas', label: 'Encomendas' },
-  { key: 'favoritos',  label: 'Favoritos'  },
+  { key: 'marcacoes',  label: 'Marcações'  },
+  { key: 'reembolsos', label: 'Reembolsos' },
   { key: 'lojas',      label: 'Lojas'      },
 ]
+// dentro de "Perfil": os dados, os favoritos e a password (com "apagar a conta")
+const SUB_PERFIL = [
+  { key: 'dados',     label: 'Dados',     icone: 'user' },
+  { key: 'favoritos', label: 'Favoritos', icone: 'heart' },
+  { key: 'password',  label: 'Password',  icone: 'lock' },
+]
+const subPerfil = ref('dados')
 
 const profileFields = [
   { key: 'first_name', label: 'Primeiro nome' },
@@ -584,10 +601,6 @@ const loadingDetalhe    = ref(null)
 const encomendaOffset   = ref(0)
 const encomendaLimit    = ref(6)
 const encomendaTotal    = ref(0)
-// atalhos da aba Encomendas (Marcações, Reembolsos) com ar de botão
-const botaoAtalho = computed(() => props.isDark
-  ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600'
-  : 'bg-white border-gray-200 text-zinc-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm')
 
 const lojas       = ref([])
 const loadingLojas = ref(false)
@@ -660,8 +673,8 @@ function toggle() {
 watch(activeTab, (tab) => {
   if (tab === 'encomendas') fetchEncomendas(encomendas.value.length > 0)
   if (tab === 'lojas')      fetchLojas(lojas.value.length > 0)
-  if (tab === 'password') fetchTemPassword()
 })
+watch(subPerfil, (s) => { if (s === 'password') fetchTemPassword() })
 
 // o user guardado no browser pode ser de antes do tem_password — confirma no servidor
 async function fetchTemPassword() {
@@ -683,6 +696,7 @@ function initForm() {
 watch(() => route.query.perfil, (tab) => {
   if (!tab || !autenticado.value) return
   if (tabs.some(t => t.key === tab)) activeTab.value = tab
+  else if (SUB_PERFIL.some(s => s.key === tab)) { activeTab.value = 'dados'; subPerfil.value = tab }
   isOpen.value = true
   if (activeTab.value === 'encomendas') fetchEncomendas()
   const resto = { ...route.query }
