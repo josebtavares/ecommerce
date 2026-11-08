@@ -595,19 +595,38 @@ def encomenda_criar(request, loja_id):
     )
 
 
+# separadores da página /encomendas do cliente
+GRUPOS_CLIENTE = {
+    'em_curso':   ('pendente', 'pago', 'preparando', 'enviado'),
+    'concluidas': ('concluido',),
+    'canceladas': ('cancelado',),
+}
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def encomenda_list_comprador(request):
     """
-    GET /app/encomenda/?status=pendente&offset=0&limit=10
-    Encomendas do utilizador autenticado (comprador).
+    GET /app/encomenda/?status=pendente&grupo=em_curso|concluidas|canceladas&q=&offset=0&limit=10
+    Encomendas do utilizador autenticado (comprador) — gaveta do perfil e página /encomendas.
+    q: nº da encomenda (#123 ou 123) ou nome da loja.
     """
     utilizador = request.user.utilizador
-    qs = Encomenda.objects.filter(comprador=utilizador).order_by('-data_criacao')
+    qs = Encomenda.objects.filter(comprador=utilizador).select_related('loja').order_by('-data_criacao')
 
     s = request.GET.get('status')
     if s:
         qs = qs.filter(status=s)
+    grupo = GRUPOS_CLIENTE.get(request.GET.get('grupo') or '')
+    if grupo:
+        qs = qs.filter(status__in=grupo)
+    q = (request.GET.get('q') or '').strip()[:100]
+    if q:
+        num = q.lstrip('#').strip()
+        cond = Q(loja__nome__icontains=q)
+        if num.isdigit() and len(num) <= 12:
+            cond |= Q(id=int(num))
+        qs = qs.filter(cond)
 
     response, erro = paginar(request, qs, EncomendaMiniSerializer)
     if erro:
@@ -747,7 +766,7 @@ def encomenda_fatura(request, loja_id, id):
                 titulo=f'Fatura da encomenda #{encomenda.id} anulada',
                 mensagem=f'{loja.nome} anulou a fatura {numero}. Motivo: {motivo}',
                 loja=loja,
-                link='/perfil',
+                link=f'/encomendas/{encomenda.id}',
             )
             from ..utils.emails_fiscais import enviar_fatura_anulada
             enviar_fatura_anulada(encomenda, numero, motivo)
@@ -774,7 +793,7 @@ def encomenda_fatura(request, loja_id, id):
             titulo=f'Fatura da encomenda #{encomenda.id}',
             mensagem=f'{loja.nome} registou a fatura {numero} da tua encomenda.',
             loja=loja,
-            link='/perfil',
+            link=f'/encomendas/{encomenda.id}',
         )
     # email ao cliente com a fatura (também quando a loja a corrige)
     from ..utils.emails_fiscais import enviar_fatura_encomenda
@@ -842,7 +861,7 @@ def encomenda_atualizar_status(request, loja_id, id):
             titulo=f'{titulo} #{encomenda.id}',
             mensagem=msg,
             loja=encomenda.loja,
-            link='/perfil',
+            link=f'/encomendas/{encomenda.id}',
             email=prioridade,
             email_chave=f'enc:{encomenda.id}:{novo_status}' if prioridade else None,
         )
@@ -913,7 +932,7 @@ def encomenda_confirmar_transferencia(request, loja_id, id):
         titulo=f'Transferência recebida #{encomenda.id}',
         mensagem=f'{loja.nome} confirmou a tua transferência. A encomenda segue o seu caminho.',
         loja=loja,
-        link='/perfil',
+        link=f'/encomendas/{encomenda.id}',
     )
     comissao = getattr(encomenda, 'comissao', None)
     if comissao and comissao.valor_comissao:

@@ -307,7 +307,7 @@ def entrega_criar(request, loja_id, encomenda_id):
             mensagem=(f'A tua encomenda já tem condutor e será entregue {horarios.texto_agendada(encomenda.agendada_para)}.'
                       if futura else 'A tua encomenda já tem condutor. Avisamos-te quando sair para entrega.'),
             loja=loja,
-            link='/perfil',
+            link=f'/encomendas/{encomenda.id}',
         )
  
     if condutor:
@@ -452,7 +452,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 titulo=f'Encomenda #{encomenda.id} a caminho',
                 mensagem=f'A tua encomenda de {loja.nome} saiu para entrega.',
                 loja=loja,
-                link='/perfil',
+                link=f'/encomendas/{encomenda.id}',
                 email=FE.INFORMATIVO, email_validade=timedelta(hours=6),   # depois disto já chegou
                 email_chave=f'enc:{encomenda.id}:a_caminho',
             )
@@ -473,7 +473,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                     titulo=f'Encomenda #{encomenda.id} entregue!',
                     mensagem='A tua encomenda foi entregue. Obrigado pela compra!',
                     loja=encomenda.loja,
-                    link='/perfil',
+                    link=f'/encomendas/{encomenda.id}',
                     email=FE.INFORMATIVO, email_chave=f'enc:{encomenda.id}:concluido',
                 )
             # pagamento dinheiro pendente → aprova + regista comissão; o condutor fica com o dinheiro até o
@@ -533,7 +533,7 @@ def entrega_atualizar(request, loja_id, encomenda_id):
                 titulo=f'Não foi possível entregar a encomenda #{encomenda.id}',
                 mensagem=f'{entrega.get_motivo_falha_display()}. A loja vai tentar de novo ou falar contigo.',
                 loja=loja,
-                link='/perfil',
+                link=f'/encomendas/{encomenda.id}',
                 email=FE.IMPORTANTE,
             )
  
@@ -577,7 +577,7 @@ def entrega_morada(request, loja_id, encomenda_id):
             titulo=f'Morada da encomenda #{encomenda.id} actualizada',
             mensagem=f'A entrega vai para: {morada}. Se não estiver certa, fala com a loja pelo chat.',
             loja=loja,
-            link='/perfil',
+            link=f'/encomendas/{encomenda.id}',
             email=FE.INFORMATIVO,
         )
 

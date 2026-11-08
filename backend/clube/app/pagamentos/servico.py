@@ -191,7 +191,7 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
                                f'{formatar(encomenda.valor_total)}. Pagas em dinheiro '
                                + ('na entrega. Avisamos-te quando estiver a caminho.' if entrega
                                   else 'quando levantares na loja.'),
-                      loja=encomenda.loja, link='/perfil', email=fila_emails.IMPORTANTE,
+                      loja=encomenda.loja, link=f'/encomendas/{encomenda.id}', email=fila_emails.IMPORTANTE,
                       email_chave=f'enc:{encomenda.id}:recebida')
         return Inicio('pendente')
     if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir

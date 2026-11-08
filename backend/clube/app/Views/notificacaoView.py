@@ -59,7 +59,7 @@ def _empurrar_depois(notificacoes, loja=None):
 
 # rótulo do botão do email, pelo início do link do aviso
 BOTOES = (('/minhas-marcacoes', 'Ver a marcação'), ('/perfil/reembolsos', 'Ver o pedido'),
-          ('/perfil', 'Ver as minhas encomendas'), ('/encomenda/', 'Ver a encomenda'),
+          ('/perfil', 'Ver as minhas encomendas'), ('/encomendas/', 'Ver a encomenda'), ('/encomenda/', 'Ver a encomenda'),
           ('/loja/', 'Abrir o backoffice'), ('/pos/', 'Abrir o POS'), ('/admin', 'Abrir o admin'))
 
 

@@ -23,6 +23,7 @@ from ..pagamentos import servico as pagamentos
 from ..utils.banco import online_suspenso
 from ..utils.dinheiro import formatar, ler_valor
 from ..utils.horarios import fuso
+from ..utils.pagination import paginar_qs
 from . import agenda, cobranca, conversa, pacotes
 from . import marcacoes as ops
 from .marcacoes import ErroMarcacao, marcacao_payload
@@ -291,16 +292,17 @@ def marcar(request, loja_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def minhas(request):
-    """GET /app/marcacoes/?tipo=proximas|anteriores"""
+    """GET /app/marcacoes/?tipo=proximas|anteriores&offset=&limit= → {count, next_offset, results}
+    (o perfil pede 5, a página /minhas-marcacoes 20 de cada vez)"""
     u = request.user.utilizador
     ops.expirar_vencidas(cliente=u)
     qs = Marcacao.objects.filter(cliente=u).select_related('loja__config_servicos', 'profissional')
     agora = timezone.now()
     if request.GET.get('tipo') == 'anteriores':
-        qs = qs.filter(Q(fim__lt=agora) | ~Q(estado__in=Marcacao.ATIVOS)).order_by('-inicio')
+        qs = qs.filter(Q(fim__lt=agora) | ~Q(estado__in=Marcacao.ATIVOS)).order_by('-inicio', '-id')
     else:
-        qs = qs.filter(fim__gte=agora, estado__in=Marcacao.ATIVOS).order_by('inicio')
-    return Response([_cliente_payload(request, m) for m in qs[:100]])
+        qs = qs.filter(fim__gte=agora, estado__in=Marcacao.ATIVOS).order_by('inicio', 'id')
+    return paginar_qs(request, qs, lambda m: _cliente_payload(request, m))
 
 
 def _do_cliente(request, mid):
