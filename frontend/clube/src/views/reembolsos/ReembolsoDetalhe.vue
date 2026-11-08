@@ -29,7 +29,7 @@
       <section class="rounded-2xl border p-4 space-y-3" :class="cartao">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <p class="text-xs" :class="suave">Encomenda #{{ r.encomenda_id }} · {{ r.loja_nome }}</p>
+            <p class="text-xs" :class="suave"><router-link :to="`/encomendas/${r.encomenda_id}`" class="hover:underline" data-teste="link-encomenda">Encomenda #{{ r.encomenda_id }}</router-link> · {{ r.loja_nome }}</p>
             <p class="font-semibold">{{ r.motivo_label }}</p>
           </div>
           <EstadoReembolso :estado="r.estado" :valor="r.valor_aprovado ?? undefined" :metodo="r.metodo" />

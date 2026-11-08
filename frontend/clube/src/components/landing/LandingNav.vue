@@ -46,7 +46,7 @@
                :class="isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-stone-200 text-zinc-700'">
             <p class="sm:hidden px-4 py-2 text-xs font-semibold truncate" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Olá, {{ nome }}</p>
             <router-link to="/Home" class="item-menu" :class="hover"><font-awesome-icon :icon="['fas', 'store']" fixed-width class="mr-2 opacity-70" />Ir à loja Bende</router-link>
-            <router-link :to="{ path: '/Home', query: { perfil: 'encomendas' } }" class="item-menu" :class="hover">
+            <router-link to="/encomendas" class="item-menu" :class="hover">
               <font-awesome-icon :icon="['fas', 'bag-shopping']" fixed-width class="mr-2 opacity-70" />As minhas encomendas</router-link>
             <router-link v-for="l in lojas" :key="l.id" :to="`/loja/${l.id}/backoffice`" class="item-menu" :class="hover" data-teste="nav-backoffice">
               <font-awesome-icon :icon="['fas', 'shop']" fixed-width class="mr-2 opacity-70" /><span class="truncate">Backoffice · {{ l.nome }}</span></router-link>
