@@ -1457,8 +1457,13 @@ def mesa_abrir(request, pos_id, mesa_id):
     if membro and not membro.pode_abrir_mesas:
         return Response({'detail': 'Sem permissão para abrir mesas.'}, status=status.HTTP_403_FORBIDDEN)
 
-    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos, ativa=True)   # mesas removidas não abrem
+    with transaction.atomic():
+        # mesa bloqueada até ao fim: dois aparelhos a abrir a mesma mesa ao mesmo tempo ficam com a mesma conta
+        mesa = get_object_or_404(Mesa.objects.select_for_update(), id=mesa_id, pos=pos, ativa=True)   # mesas removidas não abrem
+        return _mesa_abrir_bloqueada(request, pos, membro, mesa)
 
+
+def _mesa_abrir_bloqueada(request, pos, membro, mesa):
     conta_existente = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
     if conta_existente:
         return Response({
@@ -1518,10 +1523,10 @@ def mesa_apagar(request, pos_id, mesa_id):
 @permission_classes([IsPOSAuthenticated])
 def conta_criar(request, pos_id, mesa_id):
     pos, membro, utilizador = _resolve_pos_request(request, pos_id)
-    mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
-    conta_aberta = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
 
     if request.method == 'GET':
+        mesa = get_object_or_404(Mesa, id=mesa_id, pos=pos)
+        conta_aberta = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
         if not conta_aberta:
             return Response({'detail': 'Esta mesa não tem conta aberta'}, status=status.HTTP_404_NOT_FOUND)
         return Response(_conta_payload(conta_aberta, request))
@@ -1529,6 +1534,14 @@ def conta_criar(request, pos_id, mesa_id):
     erro = _sem_permissao(membro, 'pode_abrir_mesas', 'Sem permissão para abrir mesas.')
     if erro:
         return erro
+    with transaction.atomic():
+        # mesa bloqueada: dois aparelhos a abrir a mesma mesa ao mesmo tempo ficam com a mesma conta
+        mesa = get_object_or_404(Mesa.objects.select_for_update(), id=mesa_id, pos=pos, ativa=True)
+        return _conta_criar_bloqueada(request, pos, membro, utilizador, mesa)
+
+
+def _conta_criar_bloqueada(request, pos, membro, utilizador, mesa):
+    conta_aberta = ContaMesa.objects.filter(mesa=mesa, status='aberta').first()
     if conta_aberta:
         return Response(_conta_payload(conta_aberta, request), status=status.HTTP_200_OK)
 
