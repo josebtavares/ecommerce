@@ -16,7 +16,7 @@
       {{ tipo === 'proximas' ? 'Não tens marcações por fazer.' : 'Ainda não tens marcações anteriores.' }}
     </p>
     <div v-else class="space-y-2">
-      <CartaoMarcacao v-for="m in lista.slice(0, MOSTRAR)" :key="m.id" :m="m" :isDark="isDark" @click="ir(`/minhas-marcacoes/${m.id}`)" />
+      <CartaoMarcacao v-for="m in lista" :key="m.id" :m="m" :isDark="isDark" @click="ir(`/minhas-marcacoes/${m.id}`)" />
     </div>
 
     <div class="text-center pt-4">
@@ -24,7 +24,7 @@
         data-teste="ver-todas-marcacoes"
         class="px-4 py-2 rounded-xl text-xs font-semibold transition"
         :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-white border border-gray-200 hover:bg-gray-50 text-zinc-600'">
-        Ver todas as marcações{{ lista.length > MOSTRAR ? ` (${lista.length})` : '' }}
+        Ver todas as marcações{{ total > MOSTRAR ? ` (${total})` : '' }}
       </button>
     </div>
   </div>
@@ -45,6 +45,7 @@ const MOSTRAR = 5
 const TIPOS = [{ k: 'proximas', n: 'Próximas' }, { k: 'anteriores', n: 'Anteriores' }]
 const tipo = ref('proximas')
 const lista = ref([])
+const total = ref(0)
 const carregando = ref(true)
 const erro = ref('')
 let pedido = 0
@@ -53,9 +54,10 @@ async function carregar (silencioso = false) {
   const meu = ++pedido
   if (!silencioso) carregando.value = true
   try {
-    const { data } = await api.get('/app/marcacoes/', { params: { tipo: tipo.value } })
+    const { data } = await api.get('/app/marcacoes/', { params: { tipo: tipo.value, offset: 0, limit: MOSTRAR } })
     if (meu !== pedido) return
-    lista.value = data
+    lista.value = data.results || []
+    total.value = data.count ?? lista.value.length
     erro.value = ''
   } catch (e) {
     if (meu === pedido && !silencioso) erro.value = 'Não foi possível carregar as marcações.'

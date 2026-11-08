@@ -46,14 +46,25 @@ const proximo       = ref(null)
 const carregando    = ref(true)
 const aCarregarMais = ref(false)
 
+// 20 de cada vez ("Ver mais"); o tempo real recarrega o que já estava mostrado, sem perder as páginas abertas
+const POR_PAGINA = 20
+let pedido = 0
 async function carregar (mais = false) {
+  if (mais && aCarregarMais.value) return
+  const meu = mais ? pedido : ++pedido
   if (mais) aCarregarMais.value = true
+  const offset = mais ? lista.value.length : 0
+  const limit = mais ? POR_PAGINA : Math.min(Math.max(POR_PAGINA, lista.value.length), 100)
   try {
-    const { data } = await api.get('/app/reembolsos/', { params: { offset: mais ? proximo.value : 0, limit: 20 } })
-    lista.value = mais ? [...lista.value, ...data.results] : data.results
-    proximo.value = data.next_offset
+    const { data } = await api.get('/app/reembolsos/', { params: { offset, limit } })
+    if (meu !== pedido) return
+    if (mais) {
+      const vistos = new Set(lista.value.map(r => r.id))
+      lista.value = [...lista.value, ...data.results.filter(r => !vistos.has(r.id))]
+    } else lista.value = data.results
+    proximo.value = data.count > lista.value.length ? lista.value.length : null
   } catch (e) { console.error(e) }
-  finally { carregando.value = false; aCarregarMais.value = false }
+  finally { carregando.value = false; if (mais) aCarregarMais.value = false }
 }
 
 onMounted(() => carregar())

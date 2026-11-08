@@ -18,6 +18,13 @@
       <p v-else-if="!lista.length" class="text-center text-sm py-10 text-zinc-500">
         {{ tipo === 'proximas' ? 'Não tens marcações por fazer.' : 'Ainda não tens marcações anteriores.' }}</p>
       <CartaoMarcacao v-for="m in lista" :key="m.id" :m="m" :isDark="isDark" @click="$router.push(`/minhas-marcacoes/${m.id}`)" />
+      <div v-if="!carregando && lista.length < total" class="pt-2 text-center">
+        <button type="button" @click="carregarMais" :disabled="aCarregarMais" data-teste="ver-mais-marcacoes"
+          class="px-4 py-2 rounded-xl text-xs font-semibold transition disabled:opacity-50"
+          :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-white border border-gray-200 hover:bg-gray-50 text-zinc-600'">
+          {{ aCarregarMais ? 'A carregar…' : `Ver mais (${total - lista.length} restantes)` }}
+        </button>
+      </div>
     </main>
   </div>
 </template>
@@ -29,12 +36,15 @@ import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import CartaoMarcacao from '@/components/servicos/CartaoMarcacao.vue'
 import { temaEscuro } from '@/utils/tema'
 
+const POR_PAGINA = 20
+
 export default {
   name: 'MinhasMarcacoes',
   components: { NotificacaoSino, CartaoMarcacao },
   data () {
     // ?tipo=anteriores (o "Ver todas" do perfil e o voltar da ficha abrem no mesmo separador)
-    return { lista: [], tipo: this.$route.query.tipo === 'anteriores' ? 'anteriores' : 'proximas', carregando: true, isDark: temaEscuro() }
+    return { lista: [], total: 0, aCarregarMais: false, tipo: this.$route.query.tipo === 'anteriores' ? 'anteriores' : 'proximas',
+             carregando: true, isDark: temaEscuro() }
   },
   created () { this.carregar() },
   // tempo real (utils/servicos.js ouvirMarcacoes): a loja confirmou, propôs outra hora, escreveu…
@@ -47,14 +57,30 @@ export default {
       this.$router.replace({ query: k === 'anteriores' ? { tipo: k } : {} })
       this.carregar()
     },
+    // 20 de cada vez; o tempo real recarrega sem spinner o que já estava mostrado (mantém o "Ver mais")
     async carregar (silencioso = false) {
       const pedido = (this.pedido || 0) + 1
       this.pedido = pedido
       if (!silencioso) this.carregando = true
+      const limit = silencioso ? Math.min(Math.max(POR_PAGINA, this.lista.length), 100) : POR_PAGINA
       try {
-        const { data } = await api.get('/app/marcacoes/', { params: { tipo: this.tipo } })
-        if (pedido === this.pedido) this.lista = data
+        const { data } = await api.get('/app/marcacoes/', { params: { tipo: this.tipo, offset: 0, limit } })
+        if (pedido !== this.pedido) return
+        this.lista = data.results || []
+        this.total = data.count ?? this.lista.length
       } catch (e) { /* fica o que havia */ } finally { if (pedido === this.pedido) this.carregando = false }
+    },
+    async carregarMais () {
+      if (this.aCarregarMais) return
+      this.aCarregarMais = true
+      const pedido = this.pedido
+      try {
+        const { data } = await api.get('/app/marcacoes/', { params: { tipo: this.tipo, offset: this.lista.length, limit: POR_PAGINA } })
+        if (pedido !== this.pedido) return
+        const vistos = new Set(this.lista.map(m => m.id))
+        this.lista = [...this.lista, ...(data.results || []).filter(m => !vistos.has(m.id))]
+        this.total = data.count ?? this.total
+      } catch (e) { /* pode tentar outra vez */ } finally { this.aCarregarMais = false }
     },
   },
 }
