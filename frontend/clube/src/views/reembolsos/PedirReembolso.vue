@@ -241,7 +241,7 @@ async function enviar () {
 
 function voltar () {
   if (window.history.length > 1) router.back()
-  else router.push({ path: '/Home', query: { perfil: 'encomendas' } })
+  else router.push(`/encomendas/${route.params.id}`)
 }
 
 onMounted(carregar)

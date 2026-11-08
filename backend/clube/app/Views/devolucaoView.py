@@ -37,7 +37,7 @@ from rest_framework.response import Response
 from ..models import Encomenda, Loja, Reembolso, FotoReembolso, Utilizador, UtilizadorLoja
 from ..utils import devolucoes as dev
 from ..utils.devolucoes import ErroReembolso
-from ..utils.pagination import paginar_lista
+from ..utils.pagination import paginar_lista, paginar_qs
 
 GRUPOS_LOJA = {
     'novos':      ('pedido',),
@@ -266,11 +266,12 @@ def pedir(request, id):
 @permission_classes([IsAuthenticated])
 def meus(request):
     qs = (Reembolso.objects.filter(comprador=request.user.utilizador)
-          .select_related('loja', 'comprador__user').order_by('-data_criacao'))
+          .select_related('loja', 'comprador__user').order_by('-data_criacao', '-id'))
     enc = request.GET.get('encomenda_id')
     if enc and enc.isdigit():
         qs = qs.filter(encomenda_id=int(enc))
-    return paginar_lista(request, [_resumo(r) for r in qs[:500]])
+    # só a página pedida é montada (o perfil pede 5, a página /perfil/reembolsos 20 de cada vez)
+    return paginar_qs(request, qs, _resumo)
 
 
 ACOES_CLIENTE = {

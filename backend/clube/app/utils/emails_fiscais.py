@@ -83,7 +83,7 @@ def enviar_comprovativo_encomenda(enc):
         f'{saudacao(user)}\n\n'
         f'O pagamento da tua encomenda #{enc.id} em {enc.loja.nome} foi confirmado. '
         f'Segue em anexo o comprovativo.\n\nA fatura é emitida pela loja e também te chega por email '
-        f'quando estiver disponível. Podes ver a encomenda aqui: {_link("/perfil")}',
+        f'quando estiver disponível. Podes ver a encomenda aqui: {_link(f"/encomendas/{enc.id}")}',
         [(documentos.nome_comprovativo_encomenda(enc), documentos.pdf_comprovativo_encomenda(enc))])
     if not ok:
         _libertar(type(enc), enc.pk)
@@ -112,7 +112,7 @@ def enviar_dados_transferencia(enc_id):
         f'Banco: {t["banco"]}\nTitular: {t["titular"]}\nIBAN: {t["iban"]}\n'
         f'Valor: {formatar(t["valor"])}\nDescritivo / referência: {t["referencia"]}\n\n'
         f'A loja confirma quando o dinheiro chegar. Se a transferência não for confirmada até '
-        f'{_hora(t["prazo"])}, a encomenda é cancelada. Podes ver a encomenda aqui: {_link("/perfil")}')
+        f'{_hora(t["prazo"])}, a encomenda é cancelada. Podes ver a encomenda aqui: {_link(f"/encomendas/{enc.id}")}')
 
 
 def enviar_fatura_encomenda(enc):
@@ -122,7 +122,7 @@ def enviar_fatura_encomenda(enc):
         user.email, f'Fatura {enc.fatura_numero} — encomenda #{enc.id} ({enc.loja.nome})',
         f'{saudacao(user)}\n\n'
         f'{enc.loja.nome} emitiu a fatura {enc.fatura_numero} da tua encomenda #{enc.id}.'
-        + (' Segue em anexo.' if pdf else '') + f'\n\nTambém a encontras na encomenda: {_link("/perfil")}',
+        + (' Segue em anexo.' if pdf else '') + f'\n\nTambém a encontras na encomenda: {_link(f"/encomendas/{enc.id}")}',
         [(f'fatura-encomenda-{enc.id}.pdf', pdf)] if pdf else [])
 
 
@@ -238,7 +238,7 @@ def enviar_fatura_anulada(obj, numero, motivo):
         user = obj.comprador.user
         para, assunto = user.email, f'Fatura {numero} anulada — encomenda #{obj.id} ({obj.loja.nome})'
         texto = (f'{saudacao(user)}\n\n{obj.loja.nome} anulou a fatura {numero} da tua encomenda '
-                 f'#{obj.id}. Motivo: {motivo}\n\nSe a loja emitir outra, recebes-a por email. Encomenda: {_link("/perfil")}')
+                 f'#{obj.id}. Motivo: {motivo}\n\nSe a loja emitir outra, recebes-a por email. Encomenda: {_link(f"/encomendas/{obj.id}")}')
     elif nome == 'marcacao':
         if not obj.cliente_id:
             return

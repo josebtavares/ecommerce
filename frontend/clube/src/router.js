@@ -110,6 +110,25 @@ const routes = [
         component: Checkout,        
         meta: { requiresAuth: true } 
     },
+    {
+        // as encomendas do cliente (a gaveta do perfil mostra só as primeiras) e a ficha de cada uma —
+        // os avisos e os emails sobre uma encomenda apontam para /encomendas/<id>
+        path: '/encomendas',
+        name: 'MinhasEncomendas',
+        component: () => import('@/views/encomendas/MinhasEncomendas.vue'),
+        meta: { requiresAuth: true }
+    },
+    {
+        path: '/encomendas/:id(\\d+)',
+        name: 'EncomendaCliente',
+        component: () => import('@/views/encomendas/EncomendaCliente.vue'),
+        meta: { requiresAuth: true }
+    },
+    {
+        // /encomendas/<qualquer outra coisa>: a lista
+        path: '/encomendas/:resto(.*)+',
+        redirect: '/encomendas'
+    },
     {   path: '/encomenda/:id/ok',  
         name: 'EncomendaSucesso', 
         component: EncomendaSucesso, 

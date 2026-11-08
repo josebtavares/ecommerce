@@ -81,8 +81,20 @@
         <!-- Conteúdo scrollável -->
         <div class="flex-1 overflow-y-auto p-5">
 
-          <!-- ═══ TAB: DADOS PESSOAIS ═══ -->
-          <div v-if="activeTab === 'dados'">
+          <!-- ═══ TAB: PERFIL — sub-separadores Dados / Favoritos / Password ═══ -->
+          <div v-if="activeTab === 'dados'" role="tablist" class="flex gap-2 mb-5 overflow-x-auto perfil-tabs">
+            <button v-for="s in SUB_PERFIL" :key="s.key" type="button" role="tab" :aria-selected="subPerfil === s.key"
+              @click="subPerfil = s.key" :data-teste="`sub-perfil-${s.key}`"
+              class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition"
+              :class="subPerfil === s.key
+                ? 'bg-red-600 border-red-600 text-white'
+                : (isDark ? 'border-zinc-700 text-zinc-400 hover:text-zinc-200' : 'border-gray-300 text-zinc-500 hover:text-zinc-800')">
+              <font-awesome-icon :icon="['fas', s.icone]" class="text-[11px]" /> {{ s.label }}
+            </button>
+          </div>
+
+          <!-- Perfil › Dados -->
+          <div v-if="activeTab === 'dados' && subPerfil === 'dados'">
             <h3 class="text-sm font-bold uppercase tracking-wider mb-4"
                 :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Informações pessoais</h3>
             <div class="space-y-3">
@@ -144,8 +156,8 @@
             </div>
           </div>
 
-          <!-- ═══ TAB: PASSWORD ═══ -->
-          <div v-if="activeTab === 'password'">
+          <!-- Perfil › Password (e apagar a conta) -->
+          <div v-if="activeTab === 'dados' && subPerfil === 'password'">
             <h3 class="text-sm font-bold uppercase tracking-wider mb-4"
                 :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Alterar password</h3>
             <div class="space-y-3">
@@ -248,16 +260,6 @@
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h3 class="text-sm font-bold uppercase tracking-wider"
                   :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Histórico de encomendas</h3>
-              <div class="flex items-center gap-2">
-                <button type="button" @click="isOpen = false; $router.push('/minhas-marcacoes')" data-teste="link-marcacoes"
-                  :class="[botaoAtalho, 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors']">
-                  <font-awesome-icon :icon="['fas', 'calendar-check']" class="text-red-500" /> Marcações
-                </button>
-                <button type="button" @click="isOpen = false; $router.push('/perfil/reembolsos')" data-teste="link-reembolsos"
-                  :class="[botaoAtalho, 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors']">
-                  <font-awesome-icon :icon="['fas', 'rotate-left']" class="text-red-500" /> Reembolsos
-                </button>
-              </div>
             </div>
 
             <div v-if="loadingEncomendas" class="flex justify-center py-8">
@@ -322,149 +324,32 @@
                     </svg>
                   </div>
                   <template v-else-if="detalhesEncomenda[enc.id]">
-                    <div>
-                      <p class="text-xs font-bold uppercase tracking-wider mb-2"
-                         :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Produtos</p>
-                      <div class="space-y-2">
-                        <div v-for="item in detalhesEncomenda[enc.id].itens" :key="item.id"
-                             class="flex items-center gap-3">
-                          <img v-img v-if="item.produto?.ficheiro_url" :src="$miniatura(item.produto.ficheiro_url)"
-                               class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-                          <div v-else class="w-10 h-10 rounded-lg flex-shrink-0"
-                               :class="isDark ? 'bg-zinc-800' : 'bg-gray-200'"></div>
-                          <div class="flex-1 min-w-0">
-                            <p class="text-sm truncate" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ item.produto?.nome }}</p>
-                            <p v-if="item.componentes?.length" class="text-[11px] leading-snug" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-                              Inclui: {{ item.componentes.map(c => (c.grupo ? c.grupo + ': ' : '') + c.quantidade + '× ' + c.nome).join(', ') }}
-                            </p>
-                            <p class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">x{{ item.quantidade }} · {{ formatPrice(item.preco) }} un.
-                              <span v-if="item.qtd_reembolsada" class="text-sky-500 font-semibold">· {{ item.qtd_reembolsada }} reembolsada{{ item.qtd_reembolsada > 1 ? 's' : '' }}</span>
-                            </p>
-                            <div v-if="temAtributos(item.atributos)" class="flex flex-wrap gap-1 mt-1">
-                              <span v-for="(val, key) in formatarAtributos(item.atributos)" :key="key"
-                                    class="px-1.5 py-0.5 text-[10px] rounded capitalize"
-                                    :class="isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-gray-200 text-zinc-600'">
-                                {{ key }}: <span class="font-medium">{{ val }}</span>
-                              </span>
-                            </div>
-                          </div>
-                          <span class="text-sm font-bold flex-shrink-0"
-                                :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ formatPrice(item.subtotal) }}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="border-t pt-3 space-y-2"
-                         :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
-                      <div class="flex items-center justify-between text-xs">
-                        <span :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Tipo de entrega</span>
-                        <span :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
-                          <font-awesome-icon :icon="['fas', detalhesEncomenda[enc.id].tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mr-1" />
-                          {{ detalhesEncomenda[enc.id].tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}
-                        </span>
-                      </div>
-                      <div v-if="detalhesEncomenda[enc.id].morada_entrega" class="flex items-start justify-between text-xs gap-2">
-                        <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Morada</span>
-                        <span class="text-right" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhesEncomenda[enc.id].morada_entrega }}</span>
-                      </div>
-                      <div v-if="detalhesEncomenda[enc.id].cliente_nif" class="flex items-start justify-between text-xs gap-2" data-teste="enc-meu-nif">
-                        <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Fatura com NIF</span>
-                        <span class="text-right" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhesEncomenda[enc.id].cliente_nif }}</span>
-                      </div>
-                      <!-- NIF para a fatura: o cliente pode juntá-lo ou corrigi-lo a qualquer momento (a loja é avisada) -->
-                      <div v-if="nifEnc.id === enc.id" class="space-y-2 pt-1" data-teste="enc-meu-nif-form">
-                        <input v-model="nifEnc.nif" inputmode="numeric" maxlength="11" placeholder="NIF (9 dígitos)" data-teste="enc-meu-nif-input"
-                          class="w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-red-500"
-                          :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder-zinc-600' : 'bg-gray-50 border-gray-300 text-zinc-900 placeholder-zinc-400'" />
-                        <input v-model="nifEnc.nome_fiscal" maxlength="200" placeholder="Nome na fatura (opcional)"
-                          class="w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-red-500"
-                          :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder-zinc-600' : 'bg-gray-50 border-gray-300 text-zinc-900 placeholder-zinc-400'" />
-                        <input v-model="nifEnc.morada_fiscal" maxlength="300" placeholder="Morada fiscal (opcional)"
-                          class="w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-red-500"
-                          :class="isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder-zinc-600' : 'bg-gray-50 border-gray-300 text-zinc-900 placeholder-zinc-400'" />
-                        <p v-if="detalhesEncomenda[enc.id].fatura" class="text-[11px]" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-                          A loja já registou a fatura: vamos avisá-la para a corrigir.</p>
-                        <p v-if="nifEnc.erro" class="text-[11px] text-red-400">{{ nifEnc.erro }}</p>
-                        <div class="flex gap-2">
-                          <button type="button" @click="guardarNifEnc(enc)" :disabled="nifEnc.aGuardar" data-teste="enc-meu-nif-guardar"
-                                  class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold disabled:opacity-60">
-                            {{ nifEnc.aGuardar ? 'A guardar…' : 'Guardar' }}</button>
-                          <button type="button" @click="nifEnc = { id: null }" class="px-3 py-1.5 rounded-lg text-xs"
-                                  :class="isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-800'">Cancelar</button>
-                        </div>
-                      </div>
-                      <button v-else-if="detalhesEncomenda[enc.id].status !== 'cancelado'" type="button" @click="abrirNifEnc(detalhesEncomenda[enc.id])"
-                              data-teste="enc-meu-nif-editar" class="text-xs font-semibold text-red-500 hover:text-red-400">
-                        {{ detalhesEncomenda[enc.id].cliente_nif ? 'Corrigir o NIF da fatura' : 'Adicionar NIF para a fatura' }}
-                      </button>
-                      <div v-if="detalhesEncomenda[enc.id].notas" class="flex items-start justify-between text-xs gap-2">
-                        <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Notas</span>
-                        <span class="text-right italic" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhesEncomenda[enc.id].notas }}</span>
-                      </div>
-                    </div>
-                    <div class="border-t pt-3 flex items-center justify-between"
-                         :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
-                      <span class="text-sm font-bold" :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Total</span>
-                      <span class="text-base font-bold text-red-500">{{ formatPrice(detalhesEncomenda[enc.id].valor_total) }}</span>
-                    </div>
-                    <div v-if="detalhesEncomenda[enc.id].valor_a_pagar && Number(detalhesEncomenda[enc.id].valor_a_pagar) !== Number(detalhesEncomenda[enc.id].valor_total)"
-                         class="flex items-center justify-between text-xs">
-                      <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">A pagar na entrega (sem os artigos esgotados)</span>
-                      <span class="font-bold" :class="isDark ? 'text-zinc-100' : 'text-zinc-900'">{{ formatPrice(detalhesEncomenda[enc.id].valor_a_pagar) }}</span>
-                    </div>
-                    <!-- por pagar por transferência: o IBAN da loja, o valor e a referência -->
-                    <DadosTransferencia v-if="detalhesEncomenda[enc.id].transferencia" :dados="detalhesEncomenda[enc.id].transferencia" :isDark="isDark" />
-                    <!-- fatura que a loja emitiu no e-Fatura e registou (backend utils/fiscal.py) -->
-                    <div v-if="['pago', 'preparando', 'enviado', 'concluido'].includes(enc.status)" data-teste="fatura-cliente"
-                         class="flex items-center justify-between gap-2 text-xs">
-                      <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Fatura</span>
-                      <span v-if="detalhesEncomenda[enc.id].fatura" class="flex items-center gap-2">
-                        <span class="font-semibold" :class="isDark ? 'text-zinc-200' : 'text-zinc-800'">{{ detalhesEncomenda[enc.id].fatura.numero }}</span>
-                        <a v-if="detalhesEncomenda[enc.id].fatura.pdf_url" :href="urlFicheiro(detalhesEncomenda[enc.id].fatura.pdf_url)"
-                           target="_blank" rel="noopener" class="font-semibold text-red-500 hover:text-red-400 underline">
-                          <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Descarregar
-                        </a>
-                      </span>
-                      <span v-else :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">A loja ainda não registou a fatura</span>
-                    </div>
-                    <!-- comprovativo do pagamento (documento interno do Bende, também enviado por email) -->
-                    <div v-if="['aprovado', 'reembolsado', 'reembolsado_parcial'].includes(detalhesEncomenda[enc.id].pagamento_status)"
-                         class="flex items-center justify-between gap-2 text-xs" data-teste="comprovativo-cliente">
-                      <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Comprovativo de pagamento</span>
-                      <button type="button" @click="descarregarComprovativoEncomenda(enc.id)"
-                        class="font-semibold text-red-500 hover:text-red-400 underline">
-                        <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Descarregar
-                      </button>
-                    </div>
-                    <!-- chat: conversa própria desta encomenda (o condutor da entrega também a vê) -->
-                    <button type="button" @click="falarSobreEncomenda(enc)"
-                      class="w-full py-2 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-2"
-                      :class="isDark ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'border-gray-300 text-zinc-600 hover:border-gray-400'">
-                      <font-awesome-icon :icon="['fas', 'comment-dots']" /> Falar com a loja sobre esta encomenda
-                    </button>
-                    <!-- cancelar / pedir reembolso / acompanhar o pedido -->
-                    <AcoesEncomenda :encomenda="detalhesEncomenda[enc.id]" :isDark="isDark"
-                      @atualizada="recarregarEncomenda(enc)" @navegar="isOpen = false" />
+                    <!-- o mesmo detalhe de /encomendas e /encomendas/<id> (components/encomendas/DetalheEncomendaCliente.vue) -->
+                    <DetalheEncomendaCliente :detalhe="detalhesEncomenda[enc.id]" :isDark="isDark" :estadoLinha="enc.status"
+                      @detalhe="d => aoNovoDetalhe(enc, d)" @atualizada="recarregarEncomenda(enc)" @navegar="isOpen = false" />
                   </template>
                 </div>
               </div>
 
+              <!-- mais encomendas, pesquisa e filtros: a página /encomendas -->
               <div class="pt-2 text-center">
-                <button v-if="temMais" @click="carregarMais" :disabled="loadingMais"
-                  class="px-4 py-2 rounded-xl text-xs transition disabled:opacity-50"
-                  :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200' : 'bg-gray-100 hover:bg-gray-200 text-zinc-500 hover:text-zinc-700'">
-                  <span v-if="loadingMais">A carregar...</span>
-                  <span v-else>Ver mais ({{ encomendaTotal - encomendas.length }} restantes)</span>
+                <button type="button" @click="isOpen = false; $router.push('/encomendas')" data-teste="ver-todas-encomendas"
+                  class="px-4 py-2 rounded-xl text-xs font-semibold transition"
+                  :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100' : 'bg-gray-100 hover:bg-gray-200 text-zinc-600 hover:text-zinc-800'">
+                  Ver todas as encomendas ({{ encomendaTotal }})
                 </button>
-                <p v-else-if="encomendas.length > 0" class="text-xs"
-                   :class="isDark ? 'text-zinc-600' : 'text-zinc-400'">
-                  Todas as encomendas carregadas
-                </p>
               </div>
             </div>
           </div>
 
-          <!-- ═══ TAB: FAVORITOS ═══ -->
-          <FavoritosPerfil v-if="activeTab === 'favoritos'" :isDark="isDark" @fechar="isOpen = false" />
+          <!-- Perfil › Favoritos -->
+          <FavoritosPerfil v-if="activeTab === 'dados' && subPerfil === 'favoritos'" :isDark="isDark" @fechar="isOpen = false" />
+
+          <!-- ═══ TAB: MARCAÇÕES (5 + "Ver todas") ═══ -->
+          <MarcacoesPerfil v-if="activeTab === 'marcacoes'" :isDark="isDark" @fechar="isOpen = false" />
+
+          <!-- ═══ TAB: REEMBOLSOS (5 + "Ver todos") ═══ -->
+          <ReembolsosPerfil v-if="activeTab === 'reembolsos'" :isDark="isDark" @fechar="isOpen = false" />
 
           <!-- ═══ TAB: LOJAS ═══ -->
           <div v-if="activeTab === 'lojas'">
@@ -571,18 +456,17 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import { toast } from 'vue3-toastify'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import FavoritosPerfil from '@/components/favoritos/FavoritosPerfil.vue'
+import MarcacoesPerfil from '@/components/profile/MarcacoesPerfil.vue'
+import ReembolsosPerfil from '@/components/profile/ReembolsosPerfil.vue'
 import PasswordForca from '@/components/forms/PasswordForca.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import EstadoDisponibilidade from '@/components/forms/EstadoDisponibilidade.vue'
-import AcoesEncomenda from '@/components/reembolsos/AcoesEncomenda.vue'
+import DetalheEncomendaCliente from '@/components/encomendas/DetalheEncomendaCliente.vue'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
-import DadosTransferencia from '@/components/loja/DadosTransferencia.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
-import { contactarLoja, contactarSuporte } from '@/services/chat'
+import { contactarSuporte } from '@/services/chat'
 import { passwordValida } from '@/utils/password'
-import { formatarAtributos, temAtributos } from '@/utils/atributos'
-import { descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
 import { atualizarGuardado } from '@/services/confirmarEmail'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
 
@@ -616,11 +500,18 @@ const activeTab  = ref('dados')
 
 const tabs = [
   { key: 'dados',      label: 'Perfil'     },
-  { key: 'password',   label: 'Password'   },
   { key: 'encomendas', label: 'Encomendas' },
-  { key: 'favoritos',  label: 'Favoritos'  },
+  { key: 'marcacoes',  label: 'Marcações'  },
+  { key: 'reembolsos', label: 'Reembolsos' },
   { key: 'lojas',      label: 'Lojas'      },
 ]
+// dentro de "Perfil": os dados, os favoritos e a password (com "apagar a conta")
+const SUB_PERFIL = [
+  { key: 'dados',     label: 'Dados',     icone: 'user' },
+  { key: 'favoritos', label: 'Favoritos', icone: 'heart' },
+  { key: 'password',  label: 'Password',  icone: 'lock' },
+]
+const subPerfil = ref('dados')
 
 const profileFields = [
   { key: 'first_name', label: 'Primeiro nome' },
@@ -710,12 +601,6 @@ const loadingDetalhe    = ref(null)
 const encomendaOffset   = ref(0)
 const encomendaLimit    = ref(6)
 const encomendaTotal    = ref(0)
-const loadingMais       = ref(false)
-const temMais = computed(() => encomendas.value.length < encomendaTotal.value)
-// atalhos da aba Encomendas (Marcações, Reembolsos) com ar de botão
-const botaoAtalho = computed(() => props.isDark
-  ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600'
-  : 'bg-white border-gray-200 text-zinc-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm')
 
 const lojas       = ref([])
 const loadingLojas = ref(false)
@@ -750,26 +635,9 @@ async function toggleEncomenda(id) {
   finally { if (loadingDetalhe.value === id) loadingDetalhe.value = null }
 }
 
-// NIF da fatura numa encomenda já feita (vem do perfil se a encomenda ainda não tem)
-const nifEnc = ref({ id: null })
-function abrirNifEnc(d) {
-  const c = conta.value || {}
-  nifEnc.value = { id: d.id, nif: d.cliente_nif || c.nif || '', nome_fiscal: d.cliente_nome_fiscal || c.nome_fiscal || '',
-                   morada_fiscal: d.cliente_morada_fiscal || c.morada_fiscal || '', erro: '', aGuardar: false }
-}
-async function guardarNifEnc(enc) {
-  const f = nifEnc.value
-  const nif = (f.nif || '').replace(/\D/g, '')
-  if (nif && nif.length !== 9) { f.erro = 'O NIF tem 9 dígitos.'; return }
-  f.erro = ''; f.aGuardar = true
-  try {
-    const { data } = await api.patch(`/app/encomenda/${enc.id}/nif/`, { nif, nome_fiscal: f.nome_fiscal, morada_fiscal: f.morada_fiscal })
-    detalhesEncomenda.value = { ...detalhesEncomenda.value, [enc.id]: data }
-    nifEnc.value = { id: null }
-    toast.success(nif ? 'NIF guardado. A loja foi avisada.' : 'NIF retirado.', { autoClose: 2000 })
-  } catch (e) {
-    f.erro = e.response?.data?.detail || 'Não foi possível guardar o NIF.'
-  } finally { f.aGuardar = false }
+// o detalhe mudou dentro do componente (NIF): guarda-se o que o servidor devolveu
+function aoNovoDetalhe(enc, data) {
+  detalhesEncomenda.value = { ...detalhesEncomenda.value, [enc.id]: data }
 }
 
 // depois de cancelar: o detalhe e a linha da lista mostram o novo estado
@@ -790,11 +658,6 @@ async function recarregarEncomenda(enc) {
 // visitante sem conta: o botão do perfil convida a entrar (o perfil e as encomendas pedem conta)
 const autenticado = ref(estaAutenticado())
 
-function falarSobreEncomenda(enc) {
-  isOpen.value = false
-  contactarLoja(enc.loja, { encomendaId: enc.id })
-}
-
 function toggle() {
   if (!autenticado.value) {
     pedirLogin('Entra ou cria conta para veres o teu perfil e as tuas encomendas.')
@@ -810,8 +673,8 @@ function toggle() {
 watch(activeTab, (tab) => {
   if (tab === 'encomendas') fetchEncomendas(encomendas.value.length > 0)
   if (tab === 'lojas')      fetchLojas(lojas.value.length > 0)
-  if (tab === 'password') fetchTemPassword()
 })
+watch(subPerfil, (s) => { if (s === 'password') fetchTemPassword() })
 
 // o user guardado no browser pode ser de antes do tem_password — confirma no servidor
 async function fetchTemPassword() {
@@ -833,6 +696,7 @@ function initForm() {
 watch(() => route.query.perfil, (tab) => {
   if (!tab || !autenticado.value) return
   if (tabs.some(t => t.key === tab)) activeTab.value = tab
+  else if (SUB_PERFIL.some(s => s.key === tab)) { activeTab.value = 'dados'; subPerfil.value = tab }
   isOpen.value = true
   if (activeTab.value === 'encomendas') fetchEncomendas()
   const resto = { ...route.query }
@@ -974,19 +838,6 @@ function aoMudarEncomenda() {
 }
 onMounted(() => { pararTempoReal = ouvirEncomendas(aoMudarEncomenda) })
 onBeforeUnmount(() => pararTempoReal?.())
-
-async function carregarMais() {
-  if (loadingMais.value || !temMais.value) return
-  loadingMais.value = true
-  try {
-    const { data } = await api.get('/app/encomenda/', { params: { limit: encomendaLimit.value, offset: encomendaOffset.value } })
-    const novas = data.results || data
-    encomendas.value = [...encomendas.value, ...novas]
-    encomendaOffset.value += novas.length
-    encomendaTotal.value = data.count ?? encomendaTotal.value
-  } catch (e) { console.error(e) }
-  finally { loadingMais.value = false }
-}
 
 async function fetchLojas(silencioso = false) {
   if (!silencioso) loadingLojas.value = true

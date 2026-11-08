@@ -38,6 +38,18 @@ export const ESTADOS_MARCACAO = {
   expirada:   { nome: 'Expirada',   cor: 'bg-zinc-800/60 border-zinc-700 text-zinc-500',       ponto: 'bg-zinc-600' },
 }
 
+// cartão de uma marcação do cliente (página /minhas-marcacoes e separador Marcações do perfil)
+export const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+export function textoEstadoCliente (m) {
+  if (m.estado === 'pendente' && m.pagamento === 'antecipado' && !m.pago) return 'Por pagar'
+  if (m.estado === 'pendente') return 'À espera da confirmação da loja'
+  return m.estado_nome
+}
+export function corEstadoCliente (m) {
+  return { pendente: 'text-amber-500', confirmada: 'text-sky-400', concluida: 'text-green-500', cancelada: 'text-zinc-500',
+           falta: 'text-red-400', expirada: 'text-zinc-500' }[m.estado]
+}
+
 export function duracaoTexto (min) {
   const h = Math.floor(min / 60), m = min % 60
   return h ? `${h} h${m ? ' ' + m + ' min' : ''}` : `${m} min`
@@ -46,12 +58,21 @@ export function duracaoTexto (min) {
 // tempo real: o sino de notificações (WebSocket) avisa que uma marcação mudou — { id, loja_id }
 export const EVENTO_MARCACAO = 'bendi:marcacao'
 
-// chama fn(detalhe) quando uma marcação muda (ou o WebSocket volta, sem detalhe); devolve o "desligar"
-export function ouvirMarcacoes (fn) {
+// chama fn(detalhe) quando uma marcação muda (ou o WebSocket volta, sem detalhe); devolve o "desligar".
+// semLigacao: listas só de leitura (cliente) — sem WebSocket verificam de 20 em 20 s, como as encomendas.
+// (não nos formulários do backoffice: recarregar a meio de uma edição perdia o que se escrevia)
+export function ouvirMarcacoes (fn, { semLigacao = false } = {}) {
   const aoMudar = (e) => fn(e.detail || null)
   window.addEventListener(EVENTO_MARCACAO, aoMudar)
   window.addEventListener('bendi:tempo-real-religado', aoMudar)
-  return () => { window.removeEventListener(EVENTO_MARCACAO, aoMudar); window.removeEventListener('bendi:tempo-real-religado', aoMudar) }
+  const recurso = semLigacao
+    ? setInterval(() => { if (!window.bendiTempoReal && document.visibilityState === 'visible') fn(null) }, 20000)
+    : null
+  return () => {
+    clearInterval(recurso)
+    window.removeEventListener(EVENTO_MARCACAO, aoMudar)
+    window.removeEventListener('bendi:tempo-real-religado', aoMudar)
+  }
 }
 
 export const CAMPO = 'w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500'
