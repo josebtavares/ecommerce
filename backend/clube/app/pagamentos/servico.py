@@ -140,6 +140,13 @@ def aprovar_encomenda(encomenda, metodo, transacao, fornecedor):
                      f'Comissão ({perc}%): {formatar(com)}.',
             loja=encomenda.loja, link='/admin',
         )
+    # o cliente também vê no sino que ficou paga (o email do comprovativo já segue à parte)
+    from ..Views.notificacaoView import notificar
+    notificar(utilizador=encomenda.comprador, tipo='encomenda_paga',
+              titulo=f'Pagamento confirmado #{encomenda.id}',
+              mensagem=f'{encomenda.loja.nome} recebeu o teu pagamento de {formatar(encomenda.valor_total)}. '
+                       'A loja vai preparar a tua encomenda.',
+              loja=encomenda.loja, link=f'/encomendas/{encomenda.id}')
     _limpar_carrinho(encomenda)
     return pagamento
 
@@ -181,6 +188,13 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
         if tipo_metodo == 'transferencia':  # o cliente recebe por email para onde transferir
             from ..utils.emails_fiscais import enviar_dados_transferencia
             transaction.on_commit(lambda: enviar_dados_transferencia(encomenda.pk))
+            # e no sino (sem email: o dos dados para a transferência já segue) — a ficha mostra o IBAN e a referência
+            from ..Views.notificacaoView import notificar
+            notificar(utilizador=encomenda.comprador, tipo='encomenda_atualizada',
+                      titulo=f'Encomenda recebida #{encomenda.id}',
+                      mensagem=f'{encomenda.loja.nome} recebeu a tua encomenda de {formatar(encomenda.valor_total)}. '
+                               'Faz a transferência com os dados da encomenda: ela segue quando a loja a confirmar.',
+                      loja=encomenda.loja, link=f'/encomendas/{encomenda.id}')
         else:                               # dinheiro: confirmação da encomenda (no sino e por email)
             from ..utils import fila_emails
             from ..Views.notificacaoView import notificar
