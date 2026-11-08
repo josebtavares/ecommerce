@@ -277,10 +277,12 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'reembolso', 'valor_reembolsado', 'valor_a_pagar', 'transferencia_por_confirmar', 'prazo_transferencia',
             'fatura',
+            'fatura_pedida', 'cliente_nif', 'cliente_nome_fiscal', 'cliente_morada_fiscal',
         ]
         read_only_fields = [
             'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem',
             'data_criacao', 'data_atualizacao',
+            'fatura_pedida', 'cliente_nif', 'cliente_nome_fiscal', 'cliente_morada_fiscal',
         ]
  
     def get_reembolso(self, obj):

@@ -379,9 +379,12 @@ def carrinho_limpar(request, loja_id):
 def encomenda_criar(request, loja_id):
     """
     POST /app/loja/<loja_id>/encomenda/criar/
-    Body: { tipo_entrega, morada_entrega?, notas?, aceita_termos: true }
+    Body: { tipo_entrega, morada_entrega?, notas?, aceita_termos: true,
+            fatura_nif?, nif?, nome_fiscal?, morada_fiscal?, guardar_dados_fiscais? }
     Converte o carrinho activo numa encomenda. aceita_termos: o cliente marcou "Aceito os Termos e a
     Política de devolução" — fica a hora na encomenda (prova para a SISP/banco em caso de disputa).
+    Fatura: NIF obrigatório se fatura_nif ou se o total for de 20 000$00 ou mais (utils/fiscal.dados_cliente);
+    guardar_dados_fiscais grava-os também no perfil.
     """
     # bloqueia a loja: se o dono/admin a fechar ao mesmo tempo, ou a encomenda é criada antes
     # (e cancelada com as outras pendentes) ou já não é criada — ver Loja.mudar_estado
@@ -524,6 +527,18 @@ def encomenda_criar(request, loja_id):
     # + custo da opção de entrega (validada lá em cima)
     valor_total = valor_produtos + custo_entrega
 
+    # ── Dados de faturação (NIF obrigatório com fatura pedida ou a partir de 20 000$00) ──
+    dados_fatura, erro_fatura = fiscal.dados_cliente(request.data, valor_total)
+    if erro_fatura:
+        transaction.set_rollback(True)     # as encomendas por pagar canceladas lá em cima voltam como estavam
+        return Response({'detail': erro_fatura['nif'], **erro_fatura, 'limite_nif': str(fiscal.LIMITE_NIF_CLIENTE)},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if dados_fatura['cliente_nif'] and fiscal._verdadeiro(request.data.get('guardar_dados_fiscais')):
+        utilizador.nif = dados_fatura['cliente_nif']
+        utilizador.nome_fiscal = dados_fatura['cliente_nome_fiscal']
+        utilizador.morada_fiscal = dados_fatura['cliente_morada_fiscal']
+        utilizador.save(update_fields=['nif', 'nome_fiscal', 'morada_fiscal'])
+
     encomenda = Encomenda.objects.create(
         comprador      = utilizador,
         loja           = loja,
@@ -537,6 +552,7 @@ def encomenda_criar(request, loja_id):
         agendamento_origem = origem,
         modelo_cobranca = loja.modelo_cobranca,   # comissão ou subscrição — fica o que estava em vigor
         termos_aceites_em = timezone.now(),
+        **dados_fatura,
     )
 
     # ── 2) Cria os itens e desconta o stock (uma vez por linha de stock, com F()) ──

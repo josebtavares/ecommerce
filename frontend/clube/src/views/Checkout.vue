@@ -199,6 +199,42 @@
           </div>
         </div>
 
+        <!-- Fatura: com NIF se o cliente pedir, ou sempre a partir de 20 000$00 (TVE do e-Fatura). Sem NIF: consumidor final -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5" data-teste="checkout-fatura">
+          <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3">Fatura</h2>
+          <label class="flex items-start gap-2.5 text-sm text-zinc-200"
+                 :class="nifObrigatorioPorValor ? 'cursor-default' : 'cursor-pointer'">
+            <input v-model="querFaturaNif" type="checkbox" :disabled="nifObrigatorioPorValor" data-teste="checkout-quer-nif"
+                   class="mt-0.5 w-4 h-4 flex-shrink-0 accent-red-600" />
+            <span>
+              Quero fatura com NIF
+              <span class="block text-xs text-zinc-500 mt-0.5">
+                <template v-if="nifObrigatorioPorValor">Nas compras de 20 000$00 ou mais a fatura leva sempre o NIF de quem compra.</template>
+                <template v-else>Sem NIF, a loja passa um talão de venda a consumidor final.</template>
+              </span>
+            </span>
+          </label>
+          <div v-if="pedeNif" class="grid sm:grid-cols-2 gap-3 mt-4">
+            <div>
+              <input v-model="nif" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="NIF (9 dígitos)"
+                data-teste="checkout-nif"
+                :class="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition',
+                         nifInvalido ? 'border-red-500' : 'border-zinc-700']" />
+              <p v-if="nifInvalido" class="text-[11px] text-red-400 mt-1">O NIF tem 9 dígitos.</p>
+            </div>
+            <input v-model="nomeFiscal" maxlength="200" autocomplete="name" placeholder="Nome na fatura (opcional)"
+              data-teste="checkout-nome-fiscal"
+              class="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+            <input v-model="moradaFiscal" maxlength="300" autocomplete="street-address" placeholder="Morada fiscal (opcional)"
+              data-teste="checkout-morada-fiscal"
+              class="sm:col-span-2 w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+            <label v-if="dadosFiscaisMudaram" class="sm:col-span-2 flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+              <input v-model="guardarFiscais" type="checkbox" data-teste="checkout-guardar-fiscais" class="w-4 h-4 accent-red-600" />
+              Guardar no meu perfil para as próximas compras
+            </label>
+          </div>
+        </div>
+
       </div>
 
       <!-- ═══ COLUNA DIREITA — Resumo ═══ -->
@@ -288,6 +324,9 @@
               </svg>
               Introduz a morada de entrega
             </p>
+            <p v-if="faltaNif" class="text-xs text-yellow-500" data-teste="falta-nif">
+              {{ nifObrigatorioPorValor ? 'Compras de 20 000$00 ou mais: indica o teu NIF' : 'Indica o NIF para a fatura' }}
+            </p>
           </div>
 
           <!-- Loja fechada (horário) -->
@@ -368,6 +407,7 @@ import LojaVendedor from '@/components/loja/LojaVendedor.vue'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
 import { porConfirmar } from '@/services/confirmarEmail'
+import { LIMITE_NIF_CLIENTE } from '@/utils/fiscal'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
@@ -418,6 +458,13 @@ export default {
       perfilTelefone: user.telefone || '',
       telefone:       '',
       moradaCliente:  '',
+      // fatura com NIF: vem dos "Dados de faturação" do perfil
+      querFaturaNif:  !!user.nif,
+      nif:            user.nif || '',
+      nomeFiscal:     user.nome_fiscal || '',
+      moradaFiscal:   user.morada_fiscal || '',
+      fiscaisPerfil:  { nif: user.nif || '', nome_fiscal: user.nome_fiscal || '', morada_fiscal: user.morada_fiscal || '' },
+      guardarFiscais: true,
     }
   },
 
@@ -436,6 +483,16 @@ export default {
     precisaTelefone () { return this.pagaOnline && !this.perfilTelefone.trim() },
     // a morada de entrega serve; no levantamento usa-se a do perfil
     precisaMorada ()   { return this.pagaOnline && this.tipoEntrega !== 'entrega' && !this.moradaPerfil.trim() },
+    // a partir de 20 000$00 o NIF de quem compra é obrigatório (utils/fiscal.py LIMITE_NIF_CLIENTE)
+    nifObrigatorioPorValor () { return this.total >= LIMITE_NIF_CLIENTE },
+    pedeNif ()     { return this.querFaturaNif || this.nifObrigatorioPorValor },
+    nifLimpo ()    { return (this.nif || '').replace(/\D/g, '') },
+    nifInvalido () { return this.pedeNif && !!this.nifLimpo && this.nifLimpo.length !== 9 },
+    faltaNif ()    { return this.pedeNif && this.nifLimpo.length !== 9 },
+    dadosFiscaisMudaram () {
+      const p = this.fiscaisPerfil
+      return this.nifLimpo !== p.nif || this.nomeFiscal.trim() !== p.nome_fiscal || this.moradaFiscal.trim() !== p.morada_fiscal
+    },
     faltaDadosCartao () {
       return (this.precisaTelefone && !this.telefone.trim()) || (this.precisaMorada && !this.moradaCliente.trim())
     },
@@ -455,6 +512,7 @@ export default {
       if (!this.tipoEntrega || this.itens.length === 0 || !this.metodoPagamento) return false
       if (!this.aceitaTermos) return false
       if (this.faltaDadosCartao) return false
+      if (this.faltaNif) return false
       if (this.tipoEntrega === 'entrega') {
         if (!this.opcaoEntregaId) return false
         if (!this.moradaEntrega.trim()) return false
@@ -494,6 +552,13 @@ export default {
       try {
         const { data } = await api.get('/app/utilizador/me/')
         this.perfilTelefone = data.telefone || ''
+        // dados de faturação actuais; não mexe no que a pessoa já escreveu
+        const f = { nif: data.nif || '', nome_fiscal: data.nome_fiscal || '', morada_fiscal: data.morada_fiscal || '' }
+        if (!this.dadosFiscaisMudaram) {
+          this.nif = f.nif; this.nomeFiscal = f.nome_fiscal; this.moradaFiscal = f.morada_fiscal
+          if (f.nif && !this.fiscaisPerfil.nif) this.querFaturaNif = true
+        }
+        this.fiscaisPerfil = f
         if (data.morada && !this.moradaPerfil) {
           this.moradaPerfil = data.morada
           if (!this.moradaEntrega) this.moradaEntrega = data.morada
@@ -587,6 +652,13 @@ export default {
           notas:          this.notas,
           aceita_termos:  this.aceitaTermos,
         }
+        if (this.pedeNif) {
+          Object.assign(payload, {
+            fatura_nif: this.querFaturaNif, nif: this.nifLimpo,
+            nome_fiscal: this.nomeFiscal.trim(), morada_fiscal: this.moradaFiscal.trim(),
+            guardar_dados_fiscais: this.dadosFiscaisMudaram && this.guardarFiscais,
+          })
+        }
         if (this.tipoEntrega === 'entrega' && this.opcaoEntregaId) {
           payload.opcao_entrega_id = this.opcaoEntregaId
         }
@@ -600,6 +672,10 @@ export default {
           // a loja fechou enquanto o cliente estava no checkout → mostra o aviso e pede para confirmar
           const d = e.response?.data
           if (porConfirmar(e)) {                        // conta nova sem o email confirmado (aviso no topo)
+            this.erro = d.detail
+            return
+          }
+          if (['nif_obrigatorio', 'nif_invalido'].includes(d?.codigo)) {   // ex.: o total passou dos 20 000$00
             this.erro = d.detail
             return
           }
@@ -617,6 +693,14 @@ export default {
           this.erro = e.response?.data?.detail || 'Erro ao criar a encomenda. Tenta novamente.'
           await this.fetchCarrinho()   // mostra o stock actualizado em cada item
           return
+        }
+
+        if (payload.guardar_dados_fiscais) {
+          const f = { nif: payload.nif, nome_fiscal: payload.nome_fiscal, morada_fiscal: payload.morada_fiscal }
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}')
+            localStorage.setItem('user', JSON.stringify({ ...user, ...f }))
+          } catch (e) { /* fica no servidor */ }
         }
 
         // 2 — pagar: dinheiro/transferência ficam por receber; online vai pelo fornecedor da plataforma

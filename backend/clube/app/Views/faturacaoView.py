@@ -827,7 +827,8 @@ def _linhas_vendas(alvo, qs, de, ate, request, origem='loja'):
          f'Declaração aceite: {_quando(alvo.dados_fiscais_aceites_em)}' if alvo.dados_fiscais_aceites_em else 'Declaração: por aceitar',
          periodo] + ([] if origem == 'loja' else [f'Vendas: {fv.NOMES[origem]}']),
         COLUNAS_CSV[origem] + ['Valor (CVE)', 'Estado', 'Fatura nº', 'Fatura registada em', 'PDF da fatura',
-                               'Faturas anuladas (motivo)'] + (['POS', 'Gorjeta (CVE, fora da fatura)'] if origem == 'pos' else []),
+                               'Faturas anuladas (motivo)'] + (['POS', 'Gorjeta (CVE, fora da fatura)'] if origem == 'pos' else [])
+        + (['NIF do cliente', 'Nome fiscal', 'Morada fiscal', 'Pediu fatura com NIF'] if origem == 'loja' else []),
     ]
     for o in qs:
         fat = fiscal.fatura_resumo(o, request)
@@ -837,7 +838,9 @@ def _linhas_vendas(alvo, qs, de, ate, request, origem='loja'):
                        f'{fv.valor_de(origem, o):.2f}'.replace('.', ','), fv.estado_nome(origem, o),
                        fat['numero'] if fat else '', _quando(fat['registada_em'], '%d/%m/%Y') if fat else '',
                        (fat or {}).get('pdf_url') or '', ' | '.join(anuladas.get(o.id, []))]
-                      + ([o.pos.nome, f'{o.gorjeta:.2f}'.replace('.', ',')] if origem == 'pos' else []))
+                      + ([o.pos.nome, f'{o.gorjeta:.2f}'.replace('.', ',')] if origem == 'pos' else [])
+                      + ([cli['nif'], cli['nome_fiscal'], cli['morada_fiscal'], 'Sim' if cli['fatura_pedida'] else 'Não']
+                         if origem == 'loja' else []))
     return linhas
 
 

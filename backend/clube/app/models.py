@@ -21,6 +21,10 @@ class Utilizador(models.Model):
  
     telefone        = models.CharField(max_length=30, blank=True, default='')
     morada          = models.CharField(max_length=300, blank=True, default='')
+    # dados de faturação (opcionais): vêm preenchidos no checkout quando o cliente pede fatura com NIF
+    nif             = models.CharField(max_length=9, blank=True, default='', db_default='')
+    nome_fiscal     = models.CharField(max_length=200, blank=True, default='', db_default='')
+    morada_fiscal   = models.CharField(max_length=300, blank=True, default='', db_default='')
     foto            = models.ImageField(
                         upload_to='utilizadores/%Y/%m/',
                         null=True, blank=True,
@@ -938,6 +942,12 @@ class Encomenda(models.Model):
     comprovativo_enviado_em = models.DateTimeField(null=True, blank=True)
     # o cliente marcou "Aceito os Termos e a Política de devolução" no checkout (prova, com a hora)
     termos_aceites_em = models.DateTimeField(null=True, blank=True)
+    # dados de faturação do cliente no momento da compra (a loja passa a fatura com eles). Sem NIF → consumidor final.
+    # fatura_pedida: o cliente pediu fatura com NIF (senão o NIF só lá está por a encomenda ser de 20 000$00 ou mais)
+    fatura_pedida         = models.BooleanField(default=False, db_default=False)
+    cliente_nif           = models.CharField(max_length=9, blank=True, default='', db_default='')
+    cliente_nome_fiscal   = models.CharField(max_length=200, blank=True, default='', db_default='')
+    cliente_morada_fiscal = models.CharField(max_length=300, blank=True, default='', db_default='')
 
     class Meta:
         ordering = ['-data_criacao']

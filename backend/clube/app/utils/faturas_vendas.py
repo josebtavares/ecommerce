@@ -153,6 +153,7 @@ def filtrar(origem, qs, q=''):
     cond = Q(fatura_numero__icontains=q) | Q(id__in=HistoricoFatura.objects.filter(tipo=tipo, numero__icontains=q).values(campo))
     if origem == 'loja':
         cond |= (Q(comprador__user__email__icontains=q) | Q(comprador__user__username__icontains=q) |
+                 Q(cliente_nif__icontains=q) | Q(cliente_nome_fiscal__icontains=q) |
                  Q(comprador__user__first_name__icontains=q) | Q(comprador__user__last_name__icontains=q))
         prefixo = 'e'
     elif origem == 'marcacoes':
@@ -194,16 +195,19 @@ def referencia(origem, obj):
 
 
 def cliente(origem, obj):
-    """{nome, email} de quem comprou (no POS: o NIF que o cliente pediu na fatura, se pediu)."""
+    """{nome, email, nif} de quem comprou (no POS: o NIF que o cliente pediu na fatura, se pediu).
+    Loja online: NIF, nome e morada fiscais da encomenda (vazios → consumidor final)."""
     if origem == 'loja':
         u = obj.comprador.user
-        return {'nome': u.get_full_name() or u.username, 'email': u.email}
+        return {'nome': u.get_full_name() or u.username, 'email': u.email, 'nif': obj.cliente_nif,
+                'nome_fiscal': obj.cliente_nome_fiscal, 'morada_fiscal': obj.cliente_morada_fiscal,
+                'fatura_pedida': obj.fatura_pedida}
     if origem == 'marcacoes':
         if obj.cliente_id:
             u = obj.cliente.user
             return {'nome': u.get_full_name() or u.username or obj.cliente_nome, 'email': u.email}
         return {'nome': obj.cliente_nome or '—', 'email': obj.cliente_telefone}
-    return {'nome': f'NIF {obj.nif_cliente}' if obj.nif_cliente else 'Consumidor final', 'email': ''}
+    return {'nome': f'NIF {obj.nif_cliente}' if obj.nif_cliente else 'Consumidor final', 'email': '', 'nif': obj.nif_cliente}
 
 
 def titulo(origem, obj):

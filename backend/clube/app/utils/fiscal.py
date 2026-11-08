@@ -28,6 +28,42 @@ def _verdadeiro(v):
     return v is True or str(v).strip().lower() in ('true', '1', 'on', 'sim')
 
 
+# ── Dados de faturação de quem compra ─────────────────────────────────────────────────────────────
+# Sem NIF a loja passa um talão de venda a consumidor final; no e-Fatura (TVE) o comprador tem de ser
+# identificado a partir de 20 000$00 — por isso, daí para cima, o checkout pede sempre o NIF.
+from decimal import Decimal
+LIMITE_NIF_CLIENTE = Decimal('20000')
+MSG_NIF = 'O NIF tem 9 dígitos.'
+
+
+def limpar_nif(v):
+    return re.sub(r'\D', '', str(v or ''))
+
+
+def nif_valido(nif):
+    return not nif or len(nif) == 9
+
+
+def dados_cliente(data, valor_total):
+    """Checkout: {fatura_nif, nif, nome_fiscal, morada_fiscal} → (dados para a Encomenda, erro|None).
+    O NIF é obrigatório se o cliente pede fatura com NIF ou se a encomenda é de 20 000$00 ou mais."""
+    pedida = _verdadeiro(data.get('fatura_nif'))
+    nif = limpar_nif(data.get('nif'))
+    obrigatorio = pedida or valor_total >= LIMITE_NIF_CLIENTE
+    if obrigatorio and not nif:
+        msg = ('Indica o NIF para a fatura.' if pedida else
+               'Nas compras de 20 000$00 ou mais a fatura leva o NIF de quem compra. Indica o teu NIF.')
+        return None, {'nif': msg, 'codigo': 'nif_obrigatorio'}
+    if not nif_valido(nif):
+        return None, {'nif': MSG_NIF, 'codigo': 'nif_invalido'}
+    if not obrigatorio:
+        # sem pedir fatura, abaixo do limite: consumidor final (não se guarda o que veio no formulário)
+        return {'fatura_pedida': False, 'cliente_nif': '', 'cliente_nome_fiscal': '', 'cliente_morada_fiscal': ''}, None
+    return {'fatura_pedida': pedida, 'cliente_nif': nif,
+            'cliente_nome_fiscal': str(data.get('nome_fiscal') or '').strip()[:200],
+            'cliente_morada_fiscal': str(data.get('morada_fiscal') or '').strip()[:300]}, None
+
+
 def validar_dados_fiscais(data):
     """data: request.data com nif, regime_fiscal, declaracao_fiscal. Devolve (dados, erros)."""
     erros = {}
