@@ -114,6 +114,8 @@
               <p class="text-sm text-zinc-300 truncate">{{ v.cliente.nome }}</p>
               <p v-if="v.cliente.email" class="text-[11px] text-zinc-500 truncate">{{ v.cliente.email }}</p>
               <p v-if="v.cliente.nif && v.origem !== 'pos'" class="text-[11px] text-zinc-400 truncate" data-teste="fat-cliente-nif">NIF {{ v.cliente.nif }}</p>
+              <p v-else-if="v.cliente.nif_em_falta" class="text-[11px] text-amber-400 truncate" data-teste="fat-nif-em-falta"
+                 title="Compra de 20 000$00 ou mais (ou fatura pedida) sem NIF — podes pedi-lo ao cliente">NIF em falta</p>
             </div>
             <div class="text-right">
               <p class="text-sm font-bold tabular-nums text-zinc-100">{{ dinheiro(v.valor) }}</p>

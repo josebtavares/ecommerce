@@ -149,11 +149,39 @@
                   <span class="text-zinc-500 w-16 flex-shrink-0">Morada:</span>
                   <span class="text-zinc-200">{{ detalhes[enc.id].cliente_morada_fiscal }}</span>
                 </div>
-                <p class="text-[11px] text-zinc-500">
-                  {{ detalhes[enc.id].fatura_pedida ? 'O cliente pediu fatura com NIF.' : 'Compra de 20 000$00 ou mais: a fatura leva o NIF do cliente.' }}
-                </p>
+                <p v-if="detalhes[enc.id].fatura_pedida" class="text-[11px] text-zinc-500">O cliente pediu fatura com NIF.</p>
               </template>
               <p v-else class="text-xs text-zinc-400">Consumidor final, sem NIF (talão de venda).</p>
+              <!-- só um aviso: a loja decide se emite a fatura com ou sem NIF -->
+              <div v-if="detalhes[enc.id].nif_em_falta" data-teste="enc-nif-em-falta"
+                   class="mt-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
+                <b>NIF em falta.</b> {{ detalhes[enc.id].fatura_pedida ? 'O cliente pediu fatura com NIF mas não o indicou.'
+                  : 'Compra de 20 000$00 ou mais: a fatura costuma levar o NIF de quem compra.' }}
+                Podes pedi-lo ao cliente; ele também o pode juntar na encomenda.
+                <button type="button" @click="falarSobreNif(detalhes[enc.id])" data-teste="enc-pedir-nif"
+                        class="ml-1 font-semibold underline hover:text-amber-200">Falar com o cliente</button>
+              </div>
+              <!-- a loja escreve o NIF que o cliente lhe deu -->
+              <div v-if="nifEdicao.id === enc.id" class="mt-2 space-y-2" data-teste="enc-nif-form">
+                <input v-model="nifEdicao.nif" inputmode="numeric" maxlength="11" placeholder="NIF (9 dígitos)" data-teste="enc-nif-input"
+                       class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500" />
+                <input v-model="nifEdicao.nome_fiscal" maxlength="200" placeholder="Nome na fatura (opcional)"
+                       class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500" />
+                <input v-model="nifEdicao.morada_fiscal" maxlength="300" placeholder="Morada fiscal (opcional)"
+                       class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500" />
+                <p v-if="nifEdicao.erro" class="text-[11px] text-red-400">{{ nifEdicao.erro }}</p>
+                <div class="flex gap-2">
+                  <button type="button" @click="guardarNif(enc)" :disabled="nifEdicao.aGuardar" data-teste="enc-nif-guardar"
+                          class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold disabled:opacity-60">
+                    {{ nifEdicao.aGuardar ? 'A guardar…' : 'Guardar' }}
+                  </button>
+                  <button type="button" @click="nifEdicao = { id: null }" class="px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-zinc-200">Cancelar</button>
+                </div>
+              </div>
+              <button v-else-if="detalhes[enc.id].status !== 'cancelado'" type="button" @click="editarNif(detalhes[enc.id])"
+                      data-teste="enc-nif-editar" class="text-[11px] font-semibold text-red-400 hover:text-red-300">
+                {{ detalhes[enc.id].cliente_nif ? 'Corrigir o NIF' : 'Escrever o NIF do cliente' }}
+              </button>
             </div>
 
             <!-- Itens -->
@@ -474,6 +502,7 @@ import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 import { formatarPrazo } from '@/utils/transferencia'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
 import AvisoMudouPorFora from '@/components/encomendas/AvisoMudouPorFora.vue'
+import { contactarCliente } from '@/services/chat'
 
 const TODOS_ESTADOS = [
   { value: 'pendente',   label: 'Pendente',   class: 'bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400', ringClass: 'ring-yellow-500/40 text-yellow-400'  },
@@ -497,6 +526,7 @@ export default {
 
   data () {
     return {
+      nifEdicao: { id: null },   // formulário do NIF do cliente (ficha aberta)
       aConfirmar: null,
       ESTADO_ENTREGA: { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada' },
       loading: true,
@@ -570,6 +600,26 @@ export default {
   beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
+    // NIF para a fatura: a loja pede-o no chat ou escreve o que o cliente lhe deu (nada fica bloqueado sem ele)
+    falarSobreNif (d) { contactarCliente(this.lojaId, d.comprador, d.id) },
+    editarNif (d) {
+      this.nifEdicao = { id: d.id, nif: d.cliente_nif || '', nome_fiscal: d.cliente_nome_fiscal || '',
+                         morada_fiscal: d.cliente_morada_fiscal || '', erro: '', aGuardar: false }
+    },
+    async guardarNif (enc) {
+      const f = this.nifEdicao
+      const nif = (f.nif || '').replace(/\D/g, '')
+      if (nif && nif.length !== 9) { f.erro = 'O NIF tem 9 dígitos.'; return }
+      f.erro = ''; f.aGuardar = true
+      try {
+        const { data } = await api.patch(`/app/encomenda/${enc.id}/nif/`,
+          { nif, nome_fiscal: f.nome_fiscal, morada_fiscal: f.morada_fiscal })
+        this.detalhes = { ...this.detalhes, [enc.id]: data }
+        this.nifEdicao = { id: null }
+      } catch (e) {
+        f.erro = e.response?.data?.detail || 'Não foi possível guardar o NIF.'
+      } finally { f.aGuardar = false }
+    },
     prazoTexto: formatarPrazo,
     faturavel (enc) { return ESTADOS_FATURAVEIS.includes(enc.status) },
     porFaturar (enc) { return this.regimeFiscal === 'atividade' && this.faturavel(enc) && !enc.fatura },
