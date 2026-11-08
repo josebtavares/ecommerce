@@ -383,8 +383,8 @@ def encomenda_criar(request, loja_id):
             fatura_nif?, nif?, nome_fiscal?, morada_fiscal?, guardar_dados_fiscais? }
     Converte o carrinho activo numa encomenda. aceita_termos: o cliente marcou "Aceito os Termos e a
     Política de devolução" — fica a hora na encomenda (prova para a SISP/banco em caso de disputa).
-    Fatura: NIF obrigatório se fatura_nif ou se o total for de 20 000$00 ou mais (utils/fiscal.dados_cliente);
-    guardar_dados_fiscais grava-os também no perfil.
+    Fatura: o NIF é opcional (utils/fiscal.dados_cliente) — sem ele a loja vê "NIF em falta" nas de 20 000$00
+    ou mais; guardar_dados_fiscais grava-os também no perfil.
     """
     # bloqueia a loja: se o dono/admin a fechar ao mesmo tempo, ou a encomenda é criada antes
     # (e cancelada com as outras pendentes) ou já não é criada — ver Loja.mudar_estado
@@ -527,12 +527,11 @@ def encomenda_criar(request, loja_id):
     # + custo da opção de entrega (validada lá em cima)
     valor_total = valor_produtos + custo_entrega
 
-    # ── Dados de faturação (NIF obrigatório com fatura pedida ou a partir de 20 000$00) ──
-    dados_fatura, erro_fatura = fiscal.dados_cliente(request.data, valor_total)
+    # ── Dados de faturação (opcionais; só um NIF mal escrito volta para trás) ──
+    dados_fatura, erro_fatura = fiscal.dados_cliente(request.data)
     if erro_fatura:
         transaction.set_rollback(True)     # as encomendas por pagar canceladas lá em cima voltam como estavam
-        return Response({'detail': erro_fatura['nif'], **erro_fatura, 'limite_nif': str(fiscal.LIMITE_NIF_CLIENTE)},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': erro_fatura['nif'], **erro_fatura}, status=status.HTTP_400_BAD_REQUEST)
     if dados_fatura['cliente_nif'] and fiscal._verdadeiro(request.data.get('guardar_dados_fiscais')):
         utilizador.nif = dados_fatura['cliente_nif']
         utilizador.nome_fiscal = dados_fatura['cliente_nome_fiscal']
@@ -636,6 +635,46 @@ def encomenda_get(request, id):
 
     serializer = EncomendaSerializer(encomenda, context={'request': request})
     return Response(serializer.data)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def encomenda_nif(request, id):
+    """
+    PATCH /app/encomenda/<id>/nif/   { nif, nome_fiscal?, morada_fiscal? }   (nif vazio → apaga)
+    O cliente junta/corrige o NIF da sua encomenda, ou a loja (gerir_encomendas ou gerir_faturacao) escreve o que o
+    cliente lhe deu. Sem prazo e sem bloquear nada: com a fatura já registada, a loja é avisada para a corrigir se quiser.
+    """
+    encomenda  = get_object_or_404(Encomenda.objects.select_for_update().select_related('loja', 'comprador__user'), id=id)
+    utilizador = request.user.utilizador
+    eh_comprador = encomenda.comprador_id == utilizador.id
+    if not eh_comprador:
+        _, erro = _exige_permissao(request, encomenda.loja, 'gerir_encomendas')
+        if erro:
+            _, erro = _exige_permissao(request, encomenda.loja, 'gerir_faturacao')
+        if erro:
+            return erro
+    nif = fiscal.limpar_nif(request.data.get('nif'))
+    if not fiscal.nif_valido(nif):
+        return Response({'nif': fiscal.MSG_NIF, 'detail': fiscal.MSG_NIF}, status=status.HTTP_400_BAD_REQUEST)
+    antes = encomenda.cliente_nif
+    encomenda.cliente_nif = nif
+    encomenda.cliente_nome_fiscal = str(request.data.get('nome_fiscal') or '').strip()[:200] if nif else ''
+    encomenda.cliente_morada_fiscal = str(request.data.get('morada_fiscal') or '').strip()[:300] if nif else ''
+    encomenda.save(update_fields=['cliente_nif', 'cliente_nome_fiscal', 'cliente_morada_fiscal', 'data_atualizacao'])
+    if eh_comprador and nif != antes:
+        loja = encomenda.loja
+        ja_faturada = bool(encomenda.fatura_registada_em)
+        notificar_staff(
+            loja=loja, roles=['dono', 'gestor', 'contabilista'], tipo='encomenda_atualizada',
+            titulo=f'NIF {"alterado" if antes else "juntado"} na encomenda #{encomenda.id}',
+            mensagem=(f'{encomenda.comprador.nome} indicou o NIF {nif} para a fatura.' if nif else
+                      f'{encomenda.comprador.nome} retirou o NIF da fatura.')
+                     + (' A fatura já estava registada: corrige-a se for preciso.' if ja_faturada else ''),
+            link=f'/loja/{loja.id}/backoffice/encomendas/{encomenda.id}',
+        )
+    return Response(EncomendaSerializer(encomenda, context={'request': request}).data)
 
 
 @api_view(['GET'])

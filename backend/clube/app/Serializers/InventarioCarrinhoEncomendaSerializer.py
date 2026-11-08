@@ -251,6 +251,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
     fatura             = serializers.SerializerMethodField()   # registada pela loja (utils/fiscal.py)
     comprovativo       = serializers.SerializerMethodField()   # do pagamento online (referência, data, valor)
     transferencia      = serializers.SerializerMethodField()   # banco/IBAN/valor/referência — por pagar, por transferência
+    nif_em_falta       = serializers.SerializerMethodField()   # ≥ 20 000$00 ou fatura pedida, sem NIF (só aviso)
  
     class Meta:
         model  = Encomenda
@@ -277,7 +278,7 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'comprador_nome', 'comprador_email', 'comprador_telefone',
             'reembolso', 'valor_reembolsado', 'valor_a_pagar', 'transferencia_por_confirmar', 'prazo_transferencia',
             'fatura',
-            'fatura_pedida', 'cliente_nif', 'cliente_nome_fiscal', 'cliente_morada_fiscal',
+            'fatura_pedida', 'cliente_nif', 'cliente_nome_fiscal', 'cliente_morada_fiscal', 'nif_em_falta',
         ]
         read_only_fields = [
             'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem',
@@ -306,6 +307,10 @@ class EncomendaSerializer(serializers.ModelSerializer):
 
     def get_comprovativo(self, obj):
         return _comprovativo(obj)
+
+    def get_nif_em_falta(self, obj):
+        from ..utils.fiscal import nif_em_falta
+        return nif_em_falta(obj)
 
     def get_transferencia(self, obj):
         from ..utils.banco import dados_transferencia

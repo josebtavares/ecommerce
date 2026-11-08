@@ -30,7 +30,7 @@ def _verdadeiro(v):
 
 # ── Dados de faturação de quem compra ─────────────────────────────────────────────────────────────
 # Sem NIF a loja passa um talão de venda a consumidor final; no e-Fatura (TVE) o comprador tem de ser
-# identificado a partir de 20 000$00 — por isso, daí para cima, o checkout pede sempre o NIF.
+# identificado a partir de 20 000$00 — é obrigação da loja ao emitir; a Bende só avisa (nada bloqueia).
 from decimal import Decimal
 LIMITE_NIF_CLIENTE = Decimal('20000')
 MSG_NIF = 'O NIF tem 9 dígitos.'
@@ -44,24 +44,29 @@ def nif_valido(nif):
     return not nif or len(nif) == 9
 
 
-def dados_cliente(data, valor_total):
+def dados_cliente(data, valor_total=None):
     """Checkout: {fatura_nif, nif, nome_fiscal, morada_fiscal} → (dados para a Encomenda, erro|None).
-    O NIF é obrigatório se o cliente pede fatura com NIF ou se a encomenda é de 20 000$00 ou mais."""
+    O NIF nunca é obrigatório (decisão do dono da Bende, 2026-11-08): passar a fatura com ou sem NIF é da
+    responsabilidade da loja, e recebê-la sem NIF é do cliente. Nas encomendas de 20 000$00 ou mais sem NIF a
+    loja vê o aviso "NIF em falta" e pode pedi-lo; o cliente pode juntá-lo depois (encomenda_nif).
+    Só um NIF escrito com o número errado de dígitos volta para trás (corrigir ou apagar)."""
     pedida = _verdadeiro(data.get('fatura_nif'))
     nif = limpar_nif(data.get('nif'))
-    obrigatorio = pedida or valor_total >= LIMITE_NIF_CLIENTE
-    if obrigatorio and not nif:
-        msg = ('Indica o NIF para a fatura.' if pedida else
-               'Nas compras de 20 000$00 ou mais a fatura leva o NIF de quem compra. Indica o teu NIF.')
-        return None, {'nif': msg, 'codigo': 'nif_obrigatorio'}
     if not nif_valido(nif):
-        return None, {'nif': MSG_NIF, 'codigo': 'nif_invalido'}
-    if not obrigatorio:
-        # sem pedir fatura, abaixo do limite: consumidor final (não se guarda o que veio no formulário)
+        return None, {'nif': MSG_NIF + ' Corrige-o ou apaga-o (podes juntá-lo depois).', 'codigo': 'nif_invalido'}
+    if not (pedida or nif):
         return {'fatura_pedida': False, 'cliente_nif': '', 'cliente_nome_fiscal': '', 'cliente_morada_fiscal': ''}, None
     return {'fatura_pedida': pedida, 'cliente_nif': nif,
             'cliente_nome_fiscal': str(data.get('nome_fiscal') or '').strip()[:200],
             'cliente_morada_fiscal': str(data.get('morada_fiscal') or '').strip()[:300]}, None
+
+
+def nif_em_falta(enc):
+    """Encomenda de 20 000$00 ou mais (ou com fatura pedida) ainda sem NIF: a loja deve pedi-lo antes de emitir
+    a fatura — é só um aviso, nada fica bloqueado."""
+    if enc.cliente_nif or enc.status in ('cancelado', 'pendente'):
+        return False
+    return bool(enc.fatura_pedida) or enc.valor_total >= LIMITE_NIF_CLIENTE
 
 
 def validar_dados_fiscais(data):

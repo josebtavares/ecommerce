@@ -201,7 +201,7 @@ def cliente(origem, obj):
         u = obj.comprador.user
         return {'nome': u.get_full_name() or u.username, 'email': u.email, 'nif': obj.cliente_nif,
                 'nome_fiscal': obj.cliente_nome_fiscal, 'morada_fiscal': obj.cliente_morada_fiscal,
-                'fatura_pedida': obj.fatura_pedida}
+                'fatura_pedida': obj.fatura_pedida, 'nif_em_falta': fiscal.nif_em_falta(obj)}
     if origem == 'marcacoes':
         if obj.cliente_id:
             u = obj.cliente.user

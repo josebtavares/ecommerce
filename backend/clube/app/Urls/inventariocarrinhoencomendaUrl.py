@@ -37,6 +37,8 @@ urlpatterns = [
 
     path('encomenda/<int:id>/',
          v.encomenda_get,                        name='encomenda-get'),
+    path('encomenda/<int:id>/nif/',
+         v.encomenda_nif,                        name='encomenda-nif'),
 
     # ── Encomenda — backoffice da loja ────────────────────────
     path('loja/<int:loja_id>/encomendas/',
