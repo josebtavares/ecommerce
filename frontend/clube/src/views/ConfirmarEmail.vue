@@ -6,7 +6,7 @@
        :class="isDark ? 'bg-zinc-950' : 'bg-stone-50'">
     <div class="w-full max-w-md rounded-2xl border p-8 text-center shadow-sm"
          :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-200'" data-teste="confirmar-email">
-      <img :src="isDark ? logoLight : logoDefault" alt="Bende" class="w-28 h-28 object-contain mx-auto mb-4" />
+      <img :src="$logo(isDark)" alt="Bende" class="w-28 h-28 object-contain mx-auto mb-4" />
 
       <template v-if="estado === 'a_confirmar'">
         <div class="h-8 w-8 mx-auto animate-spin rounded-full border-2 border-red-500/30 border-t-red-500"></div>
@@ -49,8 +49,6 @@
 import AvisoConfirmarEmail from '@/components/auth/AvisoConfirmarEmail.vue'
 import { confirmarLink, atualizarDoServidor, emailPorConfirmar } from '@/services/confirmarEmail'
 import { estaAutenticado } from '@/services/sessao'
-import logoDefault from '@/assets/img/login/logo_final_640.webp'
-import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import { temaEscuro } from '@/utils/tema'
 
 export default {
@@ -63,7 +61,7 @@ export default {
       // lido uma vez: o token sai do endereço
       token: this.$route.query.token || '',
       autenticado: estaAutenticado(), porConfirmar: emailPorConfirmar(),
-      isDark: temaEscuro(), logoDefault, logoLight,
+      isDark: temaEscuro(),
     }
   },
 

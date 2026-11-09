@@ -66,6 +66,10 @@ def protegido(nome):
 def em_uso(nome):
     # as versões leves (…__600.webp, …__480.mp4) estão em uso enquanto o ficheiro principal estiver
     nome = versoes_media.principal_de(nome) or nome
+    if nome.startswith('site/'):                 # ícones gerados a partir do logo (utils/aparencia.py)
+        from .aparencia import icones_em_uso
+        if nome in icones_em_uso():
+            return True
     return any(Modelo.objects.filter(**{campo: nome}).exists() for Modelo, campo in campos_ficheiro())
 
 

@@ -52,6 +52,8 @@
       </div>
     </div>
 
+    <AdminAparencia v-if="!loading" />
+
     <AdminEmails v-if="!loading" />
 
     <div v-if="!loading" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="cobrar-comissoes">
@@ -144,6 +146,7 @@
 
 <script>
 import api from '@/services/api'
+import AdminAparencia from '@/components/admin/AdminAparencia.vue'
 import AdminEmails from '@/components/admin/AdminEmails.vue'
 
 const CAMPOS = [
@@ -171,7 +174,7 @@ const SUGESTOES = [
 
 export default {
   name: 'AdminPlataforma',
-  components: { AdminEmails },
+  components: { AdminAparencia, AdminEmails },
   data () {
     return { CAMPOS, ident: {}, erroIdent: '', guardadoIdent: false,
              SUGESTOES, loading: true, aGuardar: false, guardado: false, erro: '',
