@@ -33,6 +33,8 @@ class Command(BaseCommand):
             usados.update(n for n in Modelo.objects.exclude(**{campo: ''})
                           .exclude(**{f'{campo}__isnull': True})
                           .values_list(campo, flat=True).iterator() if n)
+        from ...utils.aparencia import icones_em_uso      # ícones do logo (não estão num FileField)
+        usados |= icones_em_uso()
         limite = timezone.now() - timedelta(days=opts['dias'])
 
         orfaos, total_bytes = [], 0

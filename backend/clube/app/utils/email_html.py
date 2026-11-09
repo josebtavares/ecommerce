@@ -55,6 +55,18 @@ def _botao(rotulo, url):
             f'color:#ffffff;text-decoration:none;border-radius:10px">{rotulo}</a></td></tr></table>')
 
 
+def _icone():
+    """Ícone dos emails gerado do logo (Admin → Definições → Aparência), se for um endereço público."""
+    try:
+        from ..models import ConfiguracaoPlataforma
+        from django.core.files.storage import default_storage
+        nome = (ConfiguracaoPlataforma.atual().icones or {}).get('192')
+        url = default_storage.url(nome) if nome else None
+        return url if url and url.startswith('http') else None
+    except Exception:
+        return None
+
+
 def _html(assunto, texto, botao):
     url_botao = botao[1] if botao else None
     blocos, pos_botao = [], None
@@ -72,6 +84,7 @@ def _html(assunto, texto, botao):
                       f'copia este endereço para o browser:<br><a href="{url}" style="color:#71717a;word-break:break-all">{url}</a></p>')
     corpo = ''.join(blocos)
     site = html.escape(_site())
+    icone = html.escape(_icone() or f'{_site()}/icone-192.png')
     sup = html.escape(suporte())
     contacto = (f'Dúvidas? Responde a este email ou escreve para <a href="mailto:{sup}" style="color:#71717a">{sup}</a>.'
                 if sup else '')
@@ -82,7 +95,7 @@ def _html(assunto, texto, botao):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
 <tr><td style="padding:0 4px 16px">
-<a href="{site}" style="text-decoration:none"><img src="{site}/icone-192.png" width="40" height="40" alt="Bende"
+<a href="{site}" style="text-decoration:none"><img src="{icone}" width="40" height="40" alt="Bende"
  style="vertical-align:middle;border:0;border-radius:10px">
 <span style="vertical-align:middle;margin-left:8px;font-size:20px;font-weight:bold;color:#18181b">Bende</span></a>
 </td></tr>

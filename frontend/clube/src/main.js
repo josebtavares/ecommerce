@@ -4,6 +4,7 @@ import imgDirectiva from './directives/img';
 import { miniatura } from './utils/media';
 import App from './App.vue';
 import { formatarDinheiro } from './utils/dinheiro';
+import { aplicarIcones, carregarAparencia, logoPara } from './utils/aparencia';
 import router from './router'; // Import the router
 import '@/assets/toastify.css';
 import 'vue3-toastify/dist/index.css';
@@ -30,8 +31,13 @@ app.directive('video-visivel', videoVisivel); // vídeos só tocam quando visív
 app.directive('img', imgDirectiva); // imagens lazy + volta ao original se faltar a miniatura (directives/img.js)
 app.config.globalProperties.$miniatura = miniatura; // foto de 600 px para cartões e listas (utils/media.js)
 
+app.config.globalProperties.$logo = logoPara; // logótipo do site para o tema (escuro=true) — muda-se no admin (utils/aparencia.js)
 app.config.globalProperties.$dinheiro = formatarDinheiro; // 1250 → "1.250$00" em qualquer template
 
 app.use(router); // Use the router
 
 app.mount('#app');
+
+// logo, ícones e fundos do login mudados no admin (utils/aparencia.js): os guardados já, os actuais em segundo plano
+aplicarIcones();
+carregarAparencia();

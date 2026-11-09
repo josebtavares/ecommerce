@@ -20,7 +20,9 @@ from PIL import Image, ImageFilter, ImageOps
 
 LADO_FOTO = 1600
 # banners que ocupam a largura toda do ecrã: 1600 px ficava mole num monitor grande
-LADO_POR_CAMPO = {('loja', 'banner'): 1920, ('homeimagem', 'ficheiro'): 1920}
+LADO_POR_CAMPO = {('loja', 'banner'): 1920, ('homeimagem', 'ficheiro'): 1920,
+                  # logótipo do site (utils/aparencia.py já o entrega com 640 px)
+                  ('configuracaoplataforma', 'logo'): 640, ('configuracaoplataforma', 'logo_escuro'): 640}
 LADO_MINIATURA = 600
 # WebP 90/85: quase indistinguível do original nas fotos de comida/produtos (com 82/78 via-se perda nos detalhes)
 QUALIDADE = 90

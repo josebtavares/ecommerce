@@ -335,7 +335,7 @@
         <!-- ── FOOTER (Suporte/Legal/Contactos/titular: components/paginas/SiteRodape.vue) ── -->
         <SiteRodape :isDark="isDark">
           <template #marca>
-            <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="w-32 h-32 object-contain mb-3" />
+            <img :src="$logo(isDark)" alt="Logo" class="w-32 h-32 object-contain mb-3" />
             <p class="text-sm" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">A melhor plataforma para descobrir lojas e produtos incríveis.</p>
           </template>
           <template #colunas>
@@ -373,8 +373,6 @@ import HomeLojaDestaque from '@/components/home/HomeLojaDestaque.vue'
 import HomeCategorias from '@/components/home/HomeCategorias.vue'
 import HomeBanners from '@/components/home/HomeBanners.vue'
 import HomePublicidade from '@/components/home/HomePublicidade.vue'
-import logoDefault from '@/assets/img/login/logo_final_640.webp'
-import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import api, { terminarSessao } from '@/services/api'
 import { DEFAULT_BANNER, DEFAULT_PRODUTO } from '@/services/media'
 import { iconeCategoria } from '@/utils/icones'
@@ -405,8 +403,6 @@ export default {
       sidebarAberta: false,
       user: {},
       sectionRefs: {},
-      logoDefault,
-      logoLight,
     }
   },
 

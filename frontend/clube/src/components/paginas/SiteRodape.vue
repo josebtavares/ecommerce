@@ -9,7 +9,7 @@
       <div>
         <slot name="marca">
           <router-link to="/" aria-label="Página inicial">
-            <img :src="(temaEscuro ?? isDark) ? logoLight : logoDefault" alt="Logo" class="w-24 h-24 object-contain mb-2" />
+            <img :src="$logo(temaEscuro ?? isDark)" alt="Logo" class="w-24 h-24 object-contain mb-2" />
           </router-link>
         </slot>
       </div>
@@ -54,8 +54,6 @@
 </template>
 
 <script>
-import logoDefault from '@/assets/img/login/logo_final_640.webp'
-import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import { dadosPlataforma, listaContactos } from '@/utils/paginas'
 
 const SECCOES = [{ key: 'suporte', label: 'Suporte' }, { key: 'legal', label: 'Legal' }]
@@ -71,7 +69,7 @@ export default {
   },
 
   data () {
-    return { d: {}, logoDefault, logoLight, LOGOS: ['vinti4', 'VISA', 'Mastercard'], ano: new Date().getFullYear() }
+    return { d: {}, LOGOS: ['vinti4', 'VISA', 'Mastercard'], ano: new Date().getFullYear() }
   },
 
   computed: {

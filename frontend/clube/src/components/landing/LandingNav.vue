@@ -6,7 +6,7 @@
                                                     : 'bg-white/90 border-b border-stone-200 backdrop-blur-md shadow-sm')">
     <nav class="max-w-7xl mx-auto h-16 px-4 sm:px-6 flex items-center gap-3" aria-label="Secções">
       <a href="#hero" @click.prevent="ir('hero')" class="flex items-center flex-shrink-0" aria-label="Início">
-        <img :src="claro || isDark ? logoLight : logoDefault" alt="Bende" class="h-11 w-11 object-contain" />
+        <img :src="$logo(claro || isDark)" alt="Bende" class="h-11 w-11 object-contain" />
       </a>
 
       <ul class="hidden lg:flex items-center gap-1 ml-4">
@@ -92,8 +92,6 @@
 </template>
 
 <script>
-import logoDefault from '@/assets/img/login/logo_final_640.webp'
-import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 
 export default {
   name: 'LandingNav',
@@ -106,7 +104,7 @@ export default {
     sobreHero: { type: Boolean, default: false },   // no topo, por cima de um hero com imagem: letras brancas, sem fundo
   },
   emits: ['ir', 'entrar', 'registo', 'tema', 'sair'],
-  data () { return { aberto: false, menu: false, semFoto: false, logoDefault, logoLight } },
+  data () { return { aberto: false, menu: false, semFoto: false } },
   computed: {
     claro () { return this.sobreHero && !this.aberto },
     nome () { return this.user?.first_name || this.user?.username || '' },
