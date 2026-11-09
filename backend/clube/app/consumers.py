@@ -75,6 +75,10 @@ class NotificacaoConsumer(AsyncWebsocketConsumer):
         # algo mudou nos números da plataforma (Dashboard/Relatórios do admin): só {origem}
         await self.send(text_data=json.dumps({'type': 'painel', 'painel': event['painel']}))
 
+    async def lista_atualizada(self, event):
+        # uma lista mudou (produtos, inventário, lojas, utilizadores…): só {origem, loja_id} — utils/tempo_real_listas.py
+        await self.send(text_data=json.dumps({'type': 'lista', 'lista': event['lista']}))
+
     async def notificacao_contador(self, event):
         await self.send(text_data=json.dumps({
             "type":      "contador",

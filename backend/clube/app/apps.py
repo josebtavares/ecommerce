@@ -32,6 +32,8 @@ class AppConfig(AppConfig):
         tempo_real_pos.ligar()
         from .utils import tempo_real_painel
         tempo_real_painel.ligar()
+        from .utils import tempo_real_listas            # produtos, inventário e as listas do admin
+        tempo_real_listas.ligar()
         # cache pública da borda (clube/borda.py): o que a loja muda aparece logo aos visitantes
         from .utils import cache_publico
         cache_publico.ligar()

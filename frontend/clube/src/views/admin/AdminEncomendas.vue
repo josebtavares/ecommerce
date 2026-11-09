@@ -162,6 +162,7 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import { iconePagamento } from '@/utils/icones'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 export default {
@@ -192,8 +193,10 @@ export default {
     expandedId: { handler: 'abrirFicha', immediate: true },
   },
   async created () {
+    this.pararTempoReal = ouvirListas('encomenda', () => this.fetchEncomendas(this.page, true, true))
     await Promise.all([this.fetchLojas(), this.fetchEncomendas(1, true)])
   },
+  beforeUnmount () { this.pararTempoReal?.() },
   methods: {
     iconePagamento,
     formatPrice (val) {
@@ -220,8 +223,8 @@ export default {
         this.lojas = data.results || data
       } catch (e) { console.error(e) }
     },
-    async fetchEncomendas (pagina = this.page, manterFicha = false) {
-      this.page = pagina; this.loading = true
+    async fetchEncomendas (pagina = this.page, manterFicha = false, silencioso = false) {
+      this.page = pagina; if (!silencioso) this.loading = true
       if (this.expandedId && !manterFicha) { this.fixada = null; irParaFicha(this.$router, this.$route, null, true) }
       try {
         const params = { offset: (this.page - 1) * this.limit, limit: this.limit }

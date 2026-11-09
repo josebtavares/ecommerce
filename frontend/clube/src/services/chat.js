@@ -69,6 +69,15 @@ export async function abrirConversa (conversa) {
   marcarLida()
 }
 
+// abre uma conversa pelo id — o link de um aviso no sino (/mensagens?caixa=&conversa=, backoffice, suporte)
+export async function abrirConversaPorId (conversaId, caixaId = chat.caixaId) {
+  if (!conversaId || !caixaId || chat.conversa?.id === Number(conversaId)) return
+  try {
+    const { data } = await api.get(`/api/chat/conversas/${conversaId}/`, { params: { caixa: caixaId } })
+    await abrirConversa(data)
+  } catch { /* já não tem acesso (ou foi apagada): fica a lista */ }
+}
+
 export function fecharConversa () {
   chat.conversa = null
   chat.mensagens = []

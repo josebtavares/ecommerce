@@ -152,6 +152,7 @@ import { chat } from '@/services/chat'
 import NotificacaoSino   from '@/components/notificacao/notificacaoSino.vue'
 import { EVENTO_REEMBOLSO, EVENTO_RELIGADO } from '@/composables/useTempoRealReembolsos'
 import { COM_FICHA, enderecoCerto } from '@/utils/ficha'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import { temaPainel } from '@/utils/tema'
 import BotaoTema from '@/components/BotaoTema.vue'
 
@@ -267,7 +268,8 @@ export default {
     // denúncias por analisar no menu (só para quem modera)
     if (this.seccoes.some(s => s.key === 'denuncias')) {
       this.carregarPendentes()
-      this.temporizadorDenuncias = setInterval(this.carregarPendentes, 60000)
+      // muda logo que alguém denuncia ou uma denúncia é resolvida (sem ligação, verifica de 20 em 20 s)
+      this.pararDenuncias = ouvirListas('denuncia', () => this.carregarPendentes())
     }
     // reembolsos à espera da decisão da Bendi
     if (this.seccoes.some(s => s.key === 'devolucoes')) {
@@ -288,7 +290,7 @@ export default {
   },
 
   beforeUnmount () {
-    clearInterval(this.temporizadorDenuncias)
+    this.pararDenuncias?.()
     clearInterval(this.temporizadorDisputas)
     window.removeEventListener(EVENTO_REEMBOLSO, this.aoReembolso)
     window.removeEventListener(EVENTO_RELIGADO, this.aoReembolso)

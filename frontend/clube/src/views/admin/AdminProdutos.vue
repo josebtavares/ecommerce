@@ -103,6 +103,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 export default {
   name: 'AdminProdutos',
   data () {
@@ -122,8 +123,10 @@ export default {
     },
   },
   async created () {
+    this.pararTempoReal = ouvirListas('produto', () => this.fetchProdutos(this.page, true))
     await Promise.all([this.fetchLojas(), this.fetchProdutos()])
   },
+  beforeUnmount () { this.pararTempoReal?.() },
   methods: {
     debouncedFetch () {
       clearTimeout(this.debounceTimer)
@@ -135,8 +138,8 @@ export default {
         this.lojas = data.results || data
       } catch (e) { console.error(e) }
     },
-    async fetchProdutos (pagina = this.page) {
-      this.page = pagina; this.loading = true
+    async fetchProdutos (pagina = this.page, silencioso = false) {
+      this.page = pagina; if (!silencioso) this.loading = true
       try {
         const params = { offset: (this.page - 1) * this.limit, limit: this.limit }
         if (this.q) params.q = this.q
