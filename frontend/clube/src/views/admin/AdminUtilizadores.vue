@@ -140,6 +140,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 import UtilizadorFicha from '@/components/admin/UtilizadorFicha.vue'
 export default {
@@ -164,14 +165,18 @@ export default {
       return Array.from({ length: end - start + 1 }, (_, i) => start + i)
     },
   },
-  async created () { await this.fetchUtilizadores() },
+  async created () {
+    this.pararTempoReal = ouvirListas('utilizador', () => this.fetchUtilizadores(this.page, true))
+    await this.fetchUtilizadores()
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
   methods: {
     debouncedFetch () {
       clearTimeout(this.debounceTimer)
       this.debounceTimer = setTimeout(() => this.fetchUtilizadores(1), 350)
     },
-    async fetchUtilizadores (pagina = this.page) {
-      this.page = pagina; this.loading = true
+    async fetchUtilizadores (pagina = this.page, silencioso = false) {
+      this.page = pagina; if (!silencioso) this.loading = true
       try {
         const params = { offset: (this.page - 1) * this.limit, limit: this.limit }
         if (this.q) params.q = this.q

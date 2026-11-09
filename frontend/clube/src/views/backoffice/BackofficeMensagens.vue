@@ -37,7 +37,7 @@
 <script>
 import ChatPainel from '@/components/chat/ChatPainel.vue'
 import api from '@/services/api'
-import { chat, iniciarChat, carregarCaixas, escolherCaixa, carregarConversas, fecharConversa } from '@/services/chat'
+import { chat, iniciarChat, carregarCaixas, escolherCaixa, carregarConversas, fecharConversa, abrirConversaPorId } from '@/services/chat'
 
 export default {
   name: 'BackofficeMensagens',
@@ -70,7 +70,12 @@ export default {
       await api.post('/api/chat/conversas/', { caixa: this.caixaPessoal.caixa_id, destino: 'equipa_grupo', loja_id: this.lojaId })
         .catch(() => {})
     }
-    await this.mudar(this.caixaLoja ? 'clientes' : 'equipa')
+    await this.mudar(this.caixaLoja && this.$route.query.modo !== 'equipa' ? 'clientes' : 'equipa')
+    await this.abrirDoEndereco()
+  },
+
+  watch: {
+    '$route.query.conversa' () { this.abrirDoEndereco() },
   },
 
   beforeUnmount () {
@@ -85,6 +90,15 @@ export default {
 
   methods: {
     medir () { this.ecraPequeno = window.innerWidth < 900 },
+
+    // ?conversa=<id>[&modo=equipa] — vindo de um aviso no sino ou de um email
+    async abrirDoEndereco () {
+      const id = this.$route.query.conversa
+      if (!id) return
+      const modo = this.$route.query.modo === 'equipa' || !this.caixaLoja ? 'equipa' : 'clientes'
+      if (modo !== this.modo) await this.mudar(modo)
+      await abrirConversaPorId(id)
+    },
 
     async mudar (modo) {
       this.pronto = false

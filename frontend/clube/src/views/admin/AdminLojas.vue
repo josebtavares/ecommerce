@@ -412,6 +412,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 import AdminDocumentosLoja from '@/components/admin/AdminDocumentosLoja.vue'
 import AdminVinti4Loja from '@/components/admin/AdminVinti4Loja.vue'
@@ -483,14 +484,18 @@ export default {
     '$route.params.ficha': { handler: 'carregarFicha', immediate: true },
     'lojaDetalhe.id' () { this.banco = { carregado: false, aCarregar: false, dados: null, erro: '' } },
   },
-  async created () { await this.fetchLojas() },
+  async created () {
+    this.pararTempoReal = ouvirListas('loja', () => this.fetchLojas(this.page, true))     // lojas novas, aprovadas, suspensas…
+    await this.fetchLojas()
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
   methods: {
     debouncedFetch () {
       clearTimeout(this.debounceTimer)
       this.debounceTimer = setTimeout(() => this.fetchLojas(1), 350)
     },
-    async fetchLojas (pagina = this.page) {
-      this.page = pagina; this.loading = true
+    async fetchLojas (pagina = this.page, silencioso = false) {
+      this.page = pagina; if (!silencioso) this.loading = true
       try {
         const params = { offset: (this.page - 1) * this.limit, limit: this.limit }
         if (this.q) params.q = this.q

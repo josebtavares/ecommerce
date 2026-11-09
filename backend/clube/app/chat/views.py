@@ -3,7 +3,8 @@ API do chat — /api/chat/…  (as regras estão em regras.py)
 
 Cada pedido diz "como quem" age através de `caixa` (id de uma Caixa a que o utilizador tem acesso).
 """
-from django.db.models import Count, Q, Max
+from django.db.models import Count, F, Max, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_ratelimit.core import is_ratelimited
@@ -18,7 +19,7 @@ from django.http import FileResponse, HttpResponseRedirect
 from rest_framework.decorators import authentication_classes
 from rest_framework.permissions import AllowAny
 
-from . import regras, imagens
+from . import avisos, regras, imagens
 from .models import Caixa, Conversa, Participante, Mensagem, Bloqueio, Denuncia
 from .regras import ErroChat
 from .tempo_real import emitir
@@ -177,13 +178,17 @@ def caixas(request):
     regras.sincronizar_grupos(u)
     out = []
     for caixa, restrita in regras.caixas_de(u):
-        nao_lidas = 0
-        for conv in regras.conversas_visiveis(u, caixa).prefetch_related('participantes'):
-            eu = next((p for p in conv.participantes.all() if p.caixa_id == caixa.id), None)
-            nao_lidas += conv.mensagens.filter(id__gt=eu.ultima_lida if eu else 0, apagada=False) \
-                .exclude(remetente=caixa).count()
-        out.append({**perfil_caixa(request, caixa), 'restrita': restrita, 'nao_lidas': nao_lidas})
+        out.append({**perfil_caixa(request, caixa), 'restrita': restrita, 'nao_lidas': _nao_lidas_caixa(u, caixa)})
     return Response(out)
+
+
+def _nao_lidas_caixa(u, caixa):
+    """Mensagens por ler nas conversas que esta caixa vê — uma só consulta (antes era uma por conversa)."""
+    lida = Participante.objects.filter(conversa=OuterRef('conversa_id'), caixa=caixa).values('ultima_lida')[:1]
+    return (Mensagem.objects.filter(conversa_id__in=regras.conversas_visiveis(u, caixa).values('id'), apagada=False)
+            .exclude(remetente=caixa)
+            .annotate(lida=Coalesce(Subquery(lida), Value(0)))
+            .filter(id__gt=F('lida')).count())
 
 
 # ══════════════════════════════════════════════════════════════
@@ -380,6 +385,8 @@ def marcar_lida(request, conversa_id):
             # ✓✓ para quem enviou (e o contador desce noutros separadores de quem leu)
             emitir(conversa, {'tipo': 'lida', 'conversa_id': conversa.id, 'caixa_id': caixa.id,
                               'ultima_lida': p.ultima_lida})
+            if not conversa.mensagens.filter(id__gt=p.ultima_lida).exclude(remetente=caixa).exists():
+                avisos.limpar(conversa, caixa)       # leu tudo: os avisos no sino desta conversa ficam lidos
         return Response({'ultima_lida': p.ultima_lida})
     except ErroChat as e:
         return _erro(e)

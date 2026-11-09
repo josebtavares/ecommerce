@@ -58,7 +58,7 @@ def _empurrar_depois(notificacoes, loja=None):
 # ══════════════════════════════════════════════════════════════
 
 # rótulo do botão do email, pelo início do link do aviso
-BOTOES = (('/minhas-marcacoes', 'Ver a marcação'), ('/perfil/reembolsos', 'Ver o pedido'),
+BOTOES = (('/mensagens', 'Responder'), ('/minhas-marcacoes', 'Ver a marcação'), ('/perfil/reembolsos', 'Ver o pedido'),
           ('/perfil', 'Ver as minhas encomendas'), ('/encomendas/', 'Ver a encomenda'), ('/encomenda/', 'Ver a encomenda'),
           ('/loja/', 'Abrir o backoffice'), ('/pos/', 'Abrir o POS'), ('/admin', 'Abrir o admin'))
 
@@ -91,7 +91,8 @@ def _email(utilizador, tipo, titulo, mensagem, loja, link, prioridade, validade,
         texto = f'{saudacao(user)}\n\n{mensagem or titulo}'
         botao = None
         if link.startswith('/'):
-            rotulo = next((r for prefixo, r in BOTOES if link.startswith(prefixo)), 'Abrir na Bende')
+            rotulo = 'Responder' if '/mensagens?' in link else next(
+                (r for prefixo, r in BOTOES if link.startswith(prefixo)), 'Abrir na Bende')
             botao = (rotulo, settings.FRONTEND_BASE_URL.rstrip('/') + link)
         fila_emails.enfileirar(user.email, assunto, texto, tipo=f'aviso_{tipo}', prioridade=prioridade,
                                botao=botao, utilizador=utilizador, chave=chave, validade=validade)

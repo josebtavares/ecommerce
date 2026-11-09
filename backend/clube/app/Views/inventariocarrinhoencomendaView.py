@@ -974,7 +974,8 @@ def inventario_ajustar_stock(request, loja_id, produto_id):
     if erro:
         return erro
 
-    inventario = get_object_or_404(Inventario, loja=loja, produto_id=produto_id)
+    # bloqueado: uma venda ao mesmo tempo (que desconta com F()) não se perde por cima do ajuste
+    inventario = get_object_or_404(Inventario.objects.select_for_update(), loja=loja, produto_id=produto_id)
     if inventario.produto.e_conjunto:
         return Response({'detail': 'Um conjunto não tem stock próprio — o stock é o dos produtos que o compõem.'},
                         status=status.HTTP_400_BAD_REQUEST)
@@ -984,9 +985,8 @@ def inventario_ajustar_stock(request, loja_id, produto_id):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    try:
-        ajuste = int(request.data.get('ajuste', 0))
-    except ValueError:
+    ajuste = _inteiro(request.data.get('ajuste', 0))
+    if ajuste is None:
         return Response({'detail': 'ajuste deve ser um número inteiro.'}, status=400)
 
     nova_qty = inventario.quantidade + ajuste
@@ -998,7 +998,7 @@ def inventario_ajustar_stock(request, loja_id, produto_id):
 
     inventario.quantidade = nova_qty
     inventario.save(update_fields=['quantidade', 'data_atualizacao'])
-    if inventario.quantidade <= 5:
+    if ajuste < 0 and inventario.quantidade <= LIMITE_STOCK_BAIXO:   # só ao descer (repor stock não avisa)
         notificar_staff(
             loja=loja,
             roles=['dono', 'gestor'],

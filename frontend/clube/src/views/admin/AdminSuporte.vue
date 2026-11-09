@@ -24,7 +24,7 @@
 
 <script>
 import ChatPainel from '@/components/chat/ChatPainel.vue'
-import { chat, iniciarChat, carregarCaixas, escolherCaixa, carregarConversas, fecharConversa } from '@/services/chat'
+import { chat, iniciarChat, carregarCaixas, escolherCaixa, carregarConversas, fecharConversa, abrirConversaPorId } from '@/services/chat'
 
 export default {
   name: 'AdminSuporte',
@@ -49,6 +49,11 @@ export default {
     chat.filtroEstado = 'aberta'
     await carregarConversas()
     this.pronto = true
+    await abrirConversaPorId(this.$route.query.conversa)     // vindo de um aviso no sino
+  },
+
+  watch: {
+    '$route.query.conversa' (id) { if (this.pronto) abrirConversaPorId(id) },
   },
 
   beforeUnmount () {

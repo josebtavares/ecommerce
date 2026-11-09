@@ -125,6 +125,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 
 export default {
   name: 'AdminCatalogo',
@@ -152,7 +153,12 @@ export default {
     },
   },
 
-  created () { this.carregar() },
+  created () {
+    // a análise é pesada: junta os avisos de alguns segundos
+    this.pararTempoReal = ouvirListas(['produto', 'loja'], () => this.carregar(), { espera: 3000, maximo: 20000 })
+    this.carregar()
+  },
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     async carregar () {
