@@ -1,10 +1,7 @@
 <template>
   <div class="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden">
 
-    <video autoplay muted loop playsinline :poster="posterFundo"
-      class="absolute inset-0 w-full h-full object-cover">
-      <source :src="videoFundo" type="video/mp4">
-    </video>
+    <FundoConta qual="registo" />
     <div class="absolute inset-0 transition-all" :class="isDark ? 'bg-black/55' : 'bg-black/30'"></div>
 
     <button @click="isDark = !isDark"
@@ -28,7 +25,7 @@
            :style="isDark
              ? 'background: linear-gradient(160deg, rgba(0,0,0,0.95) 0%, rgba(20,0,0,0.92) 100%); border-right: 1px solid rgba(220,38,38,0.2);'
              : 'background: linear-gradient(160deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.96) 100%); border-right: 1px solid rgba(249,115,22,0.18);'">
-        <img :src="isDark ? logoLight : logoDefault" alt="Logo"
+        <img :src="$logo(isDark)" alt="Logo"
              class="w-60 h-60 object-contain mb-5 drop-shadow-lg" />
         <p class="text-sm mt-2 text-center leading-relaxed transition-colors"
            :class="isDark ? 'text-zinc-400' : 'text-zinc-700'">
@@ -57,7 +54,7 @@
              : 'background: rgba(255,255,255,0.97); backdrop-filter: blur(20px);'">
 
         <div class="flex sm:hidden items-center gap-3 justify-center">
-          <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="w-40 h-40 object-contain" />
+          <img :src="$logo(isDark)" alt="Logo" class="w-40 h-40 object-contain" />
         </div>
 
         <h2 class="text-xl font-bold mb-1 transition-colors"
@@ -74,17 +71,14 @@
 <script>
 import { caminhoSeguro } from '@/services/sessao'
 import FormRegisto from '@/components/auth/FormRegisto.vue'
-import logoDefault from '@/assets/img/login/logo_final_640.webp'
-import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import { temaEscuro, guardarTema } from '@/utils/tema'
-import { mediaUrl } from '@/services/media'
-import posterFundo from '@/assets/img/register/register_fundo3.png'
+import FundoConta from '@/components/auth/FundoConta.vue'
 
 export default {
   name: 'RegisterView',
-  components: { FormRegisto },
+  components: { FundoConta, FormRegisto },
   data () {
-    return { videoFundo: mediaUrl('videos/fundo-login.mp4'), posterFundo, isDark: temaEscuro(), logoDefault, logoLight }
+    return { isDark: temaEscuro() }
   },
   computed: {
     // página para onde voltar depois de criar a conta (só caminhos internos)

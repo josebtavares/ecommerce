@@ -1070,6 +1070,18 @@ class ConfiguracaoPlataforma(models.Model):
     # cobrança mensal das comissões às lojas (utils/cobranca_comissoes.py): vazio = desligada; ligada, só conta as
     # comissões registadas a partir deste instante (as de antes vêm de vendas com pagamento simulado)
     cobrar_comissoes_desde = models.DateTimeField(null=True, blank=True)
+    # Aparência (Admin → Definições, utils/aparencia.py). Vazio = o original do site.
+    #   fundos: imagem ou vídeo (HomeImagem, otimizados como a publicidade da home). *_novo: vídeo ainda a ser
+    #   otimizado — o site continua com o anterior e troca quando ficar pronto. fundo_registo vazio = o do login.
+    fundo_login         = models.ForeignKey('HomeImagem', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    fundo_login_novo    = models.ForeignKey('HomeImagem', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    fundo_registo       = models.ForeignKey('HomeImagem', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    fundo_registo_novo  = models.ForeignKey('HomeImagem', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    #   logótipo: para fundos claros (o principal) e para fundos escuros (tema escuro); WebP com transparência.
+    logo        = models.ImageField(upload_to='site/', blank=True, default='', db_default='')
+    logo_escuro = models.ImageField(upload_to='site/', blank=True, default='', db_default='')
+    #   ícones gerados a partir do logo (separador do browser, ecrã inicial do telemóvel, emails): {'32','180','192'}
+    icones      = models.JSONField(default=dict, blank=True, db_default={})
     data_atualizacao = models.DateTimeField(auto_now=True)
 
     class Meta:

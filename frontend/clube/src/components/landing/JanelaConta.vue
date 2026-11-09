@@ -11,7 +11,7 @@
           class="absolute right-3 top-3 w-9 h-9 rounded-lg text-lg transition-colors"
           :class="isDark ? 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900' : 'text-zinc-400 hover:text-zinc-700 hover:bg-stone-100'">✕</button>
 
-        <img :src="isDark ? logoLight : logoDefault" alt="Bende" class="w-16 h-16 object-contain mb-2" />
+        <img :src="$logo(isDark)" alt="Bende" class="w-16 h-16 object-contain mb-2" />
         <h2 class="text-xl font-bold mb-1" :class="isDark ? 'text-white' : 'text-zinc-900'">
           {{ modo === 'entrar' ? 'Bem-vindo de volta' : 'Criar conta' }}
         </h2>
@@ -31,8 +31,6 @@
 <script>
 import FormEntrar from '@/components/auth/FormEntrar.vue'
 import FormRegisto from '@/components/auth/FormRegisto.vue'
-import logoDefault from '@/assets/img/login/logo_final_640.webp'
-import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 
 export default {
   name: 'JanelaConta',
@@ -43,7 +41,6 @@ export default {
     seguinte: { type: String, default: '/sobre' },
   },
   emits: ['fechar', 'entrou', 'trocar'],
-  data () { return { logoDefault, logoLight } },
   mounted () {
     this.tecla = e => { if (e.key === 'Escape') this.$emit('fechar') }
     window.addEventListener('keydown', this.tecla)

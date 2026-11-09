@@ -62,7 +62,7 @@
             <div v-else class="w-full h-full flex flex-col"
                  :class="isDark ? 'bg-gradient-to-b from-red-600 to-zinc-950' : 'bg-gradient-to-b from-orange-400 to-rose-500'">
               <div class="flex-1 flex items-center justify-center">
-                <img :src="logo" alt="Bende" class="w-28 h-28 object-contain drop-shadow-lg" />
+                <img :src="$logo(true)" alt="Bende" class="w-28 h-28 object-contain drop-shadow-lg" />
               </div>
               <div class="px-4 pb-8 space-y-2" aria-hidden="true">
                 <span class="block h-10 rounded-xl bg-white/20"></span>
@@ -82,7 +82,6 @@ import { findIconDefinition } from '@fortawesome/fontawesome-svg-core'
 import revelar from './revelar'
 import LandingCabecalho from './LandingCabecalho.vue'
 import LandingFoto from './LandingFoto.vue'
-import logo from '@/assets/img/login/logo_final_640_light.webp'
 
 export default {
   name: 'LandingApp',
@@ -92,7 +91,6 @@ export default {
     s: { type: Object, required: true },
     isDark: { type: Boolean, default: false },
   },
-  data () { return { logo } },
   methods: {
     icone (i) { return i && findIconDefinition({ prefix: 'fas', iconName: i }) ? i : 'circle-check' },
   },

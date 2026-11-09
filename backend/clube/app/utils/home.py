@@ -148,6 +148,8 @@ def limpar_imagens():
                 usadas.update(x for x in (i.get('imagem_id'), i.get('imagem_movel_id')) if x)
     from . import landing           # o hero e a secção Para lojas da landing page (/sobre) usam as mesmas imagens
     usadas |= landing.medias_usadas()
+    from . import aparencia         # os fundos do login e do registo (Admin → Definições)
+    usadas |= aparencia.usadas()
     HomeImagem.objects.filter(criado_em__lt=timezone.now() - timedelta(days=1)).exclude(id__in=usadas).delete()
 
 

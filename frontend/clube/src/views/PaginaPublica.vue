@@ -5,7 +5,7 @@
     <header class="border-b px-6 md:px-12 py-3 flex items-center justify-between gap-3"
             :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-200'">
       <router-link to="/" class="flex items-center gap-2" aria-label="Página inicial">
-        <img :src="isDark ? logoLight : logoDefault" alt="Logo" class="h-12 w-12 object-contain" />
+        <img :src="$logo(isDark)" alt="Logo" class="h-12 w-12 object-contain" />
       </router-link>
       <button type="button" @click="isDark = !isDark" :aria-label="isDark ? 'Tema claro' : 'Tema escuro'"
         class="w-9 h-9 rounded-full flex items-center justify-center transition"
@@ -44,8 +44,6 @@
 import api from '@/services/api'
 import PaginaConteudo from '@/components/paginas/PaginaConteudo.vue'
 import SiteRodape from '@/components/paginas/SiteRodape.vue'
-import logoDefault from '@/assets/img/login/logo_final_640.webp'
-import logoLight from '@/assets/img/login/logo_final_640_light.webp'
 import { temaEscuro, guardarTema } from '@/utils/tema'
 
 export default {
@@ -53,7 +51,7 @@ export default {
   components: { PaginaConteudo, SiteRodape },
 
   data () {
-    return { isDark: temaEscuro(), pagina: null, loading: true, erro: '', logoDefault, logoLight }
+    return { isDark: temaEscuro(), pagina: null, loading: true, erro: '' }
   },
 
   watch: {
