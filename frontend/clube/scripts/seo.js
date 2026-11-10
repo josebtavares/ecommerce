@@ -3,7 +3,7 @@
 // Os dados das lojas e produtos vêm do backend (app/utils/seo.py) — tudo o que vem de lá é escapado.
 
 const DESCRICAO = 'Marketplace de Cabo Verde: descobre lojas locais, encomenda online e marca serviços na Bendi.'
-const IMAGEM = { url: '/og-bendi.png', largura: 1200, altura: 630, tipo: 'image/png' }
+const IMAGEM = { url: '/og-bendi.png?v=2', largura: 1200, altura: 630, tipo: 'image/png' }
 
 // páginas institucionais (router.js → /:slug) e as de entrada no site
 const PUBLICAS = {
