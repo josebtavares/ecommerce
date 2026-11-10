@@ -1,7 +1,7 @@
 <template>
   <div v-if="visivel">
     <!-- Balão -->
-    <button v-show="!chat.aberto || !ecraPequeno" type="button" @click="alternar"
+    <button v-show="(!chat.aberto || !ecraPequeno) && !chat.perfilAberto" type="button" @click="alternar"
             :aria-label="naoLidas ? `Mensagens (${naoLidas} por ler)` : 'Mensagens'"
             class="fixed bottom-5 right-5 z-[900] h-14 w-14 rounded-full shadow-2xl flex items-center justify-center text-white text-xl transition-transform hover:scale-105"
             :class="isDark ? 'bg-red-600' : 'bg-orange-500'">

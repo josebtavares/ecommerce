@@ -112,7 +112,7 @@
         <transition enter-active-class="transition duration-300" enter-from-class="-translate-x-full"
                     leave-active-class="transition duration-200" leave-to-class="-translate-x-full">
           <aside v-if="sidebarAberta"
-                 class="fixed left-0 top-0 h-screen w-64 overflow-y-auto z-30 pt-6"
+                 class="fixed left-0 top-0 h-[100dvh] w-64 overflow-y-auto overscroll-contain z-30 pt-6"
                  :class="isDark ? 'classico-painel border-r border-zinc-800' : 'bg-white border-r border-gray-200 shadow-xl'">
             <div class="flex items-center justify-between px-5 mb-5">
               <h3 class="text-sm font-bold" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">Navegar</h3>

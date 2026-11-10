@@ -9,6 +9,7 @@ import { estaAutenticado, pedirLogin } from '@/services/sessao'
 export const chat = reactive({
   pronto: false,
   aberto: false,               // janela flutuante
+  perfilAberto: false,         // painel do perfil aberto → o balão esconde-se (UserProfile.vue)
   caixas: [],                  // [{caixa_id, tipo, nome, foto, nao_lidas, restrita}]
   caixaId: null,               // caixa seleccionada na lista
   conversas: [],

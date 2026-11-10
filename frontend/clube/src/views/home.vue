@@ -50,7 +50,7 @@
       <transition enter-active-class="transition duration-300" enter-from-class="-translate-x-full"
                   leave-active-class="transition duration-200" leave-to-class="-translate-x-full">
         <aside v-if="sidebarAberta"
-               class="fixed left-0 top-0 h-screen w-64 overflow-y-auto z-30 border-r"
+               class="fixed left-0 top-0 h-[100dvh] w-64 overflow-y-auto overscroll-contain z-30 border-r"
                :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-200 shadow-xl'">
           <div class="p-6">
             <div class="flex items-center justify-between mb-6">
