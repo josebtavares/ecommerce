@@ -46,6 +46,13 @@ export function logoPara (escuro) {
   return d.logo || d.logo_escuro || logoClaroOriginal
 }
 
+/** Há um logótipo enviado no admin? Vem sem a margem transparente (cortada no servidor), por isso enche a caixa
+ *  toda — o login/registo mostram-no numa caixa menor do que a do original, que traz margem própria. */
+export function logoProprio () {
+  const d = aparencia.dados || {}
+  return !!(d.logo || d.logo_escuro)
+}
+
 /** Fundo do login / registo / recuperar senha: { tipo: 'imagem'|'video', url, poster }. */
 export function fundoPara (qual) {
   const d = aparencia.dados || {}
