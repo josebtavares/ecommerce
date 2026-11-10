@@ -203,7 +203,7 @@ export default {
     async aoMudar (novo, antigo) {
       if (this.$route.name !== 'Pesquisa') return
       this.filtros = this.lerFiltros()
-      document.title = this.q ? `${this.q} — Pesquisa — Bende` : 'Pesquisa — Bende'
+      document.title = this.q ? `${this.q} — Pesquisa — Bendi` : 'Pesquisa — Bendi'
       if (!this.q) { this.resultados = []; return }
       guardarRecente(this.q)
       // pesquisa nova: contar em cada separador e abrir o primeiro que tem resultados

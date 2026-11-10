@@ -1,5 +1,5 @@
 <!-- SeccaoVinti4.vue — Configurações da loja (só o dono): pagamento com cartão = contrato vinti4 da própria loja.
-     A SISP não deixa a Bende receber por conta das lojas: cada loja adere e recebe direto na conta dela.
+     A SISP não deixa a Bendi receber por conta das lojas: cada loja adere e recebe direto na conta dela.
      Backend: GET/POST/PUT /app/loja/<id>/vinti4/ (utils/vinti4.py). A chave nunca volta do servidor. -->
 <template>
   <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-vinti4">
@@ -12,7 +12,7 @@
     </div>
     <p class="text-xs text-zinc-600 mb-5">
       Para aceitar cartões online, a loja precisa do seu próprio contrato com a SISP (vinti4). O dinheiro das vendas com
-      cartão vai direto para a tua conta — a Bende não toca nele. Sem contrato, vendes com dinheiro ou transferência.
+      cartão vai direto para a tua conta — a Bendi não toca nele. Sem contrato, vendes com dinheiro ou transferência.
     </p>
 
     <!-- tarifário V.02 e cláusulas 4 e 6 do contrato MD050.02 — o que a loja deve saber antes de aderir -->
@@ -22,8 +22,8 @@
         <li>A SISP desconta a comissão dela em cada venda com cartão: <span class="text-zinc-200">0,70% + IVA</span> nos
             cartões vinti4 e <span class="text-zinc-200">2,5%</span> nos cartões internacionais. Recebes o valor da venda
             já sem essa comissão.</li>
-        <li>Esta comissão é da SISP e é diferente da comissão ou mensalidade da Bende. Os valores "líquidos" que vês na
-            Bende só descontam a comissão da Bende, não a da SISP.</li>
+        <li>Esta comissão é da SISP e é diferente da comissão ou mensalidade da Bendi. Os valores "líquidos" que vês na
+            Bendi só descontam a comissão da Bendi, não a da SISP.</li>
         <li>O dinheiro chega à tua conta <span class="text-zinc-200">no próprio dia</span> nos cartões vinti4 e
             <span class="text-zinc-200">4 dias úteis</span> depois nos cartões internacionais.</li>
         <li>Se um cliente reclamar no banco que não recebeu a encomenda ou o serviço, ou se a venda for fraudulenta, a SISP
@@ -38,7 +38,7 @@
 
     <template v-else>
       <p v-if="d.simulado" class="mb-4 text-[11px] text-amber-400/90" data-teste="vinti4-simulado">
-        Por agora os pagamentos com cartão na Bende são simulados. Podes já tratar da adesão.
+        Por agora os pagamentos com cartão na Bendi são simulados. Podes já tratar da adesão.
       </p>
 
       <!-- estado da adesão -->
@@ -98,7 +98,7 @@
         </button>
         <form v-else @submit.prevent="guardar" class="space-y-4" data-teste="vinti4-form">
           <p class="text-[11px] text-zinc-500">
-            São os dados que a SISP te envia depois de aprovar a adesão. Ao guardar, o cartão fica parado até a Bende
+            São os dados que a SISP te envia depois de aprovar a adesão. Ao guardar, o cartão fica parado até a Bendi
             os validar; recebes um email.
           </p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -120,7 +120,7 @@
                 :placeholder="d.adesao.chave_definida ? 'guardada — cola de novo para mudar' : ''"
                 class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 font-mono placeholder-zinc-600 focus:outline-none focus:border-red-500 transition" />
               <p v-if="erros.chave" class="mt-1 text-xs text-red-400">{{ erros.chave }}</p>
-              <p v-else class="mt-1 text-[11px] text-zinc-600">Fica cifrada e nunca é mostrada — nem a ti, nem à equipa da Bende.</p>
+              <p v-else class="mt-1 text-[11px] text-zinc-600">Fica cifrada e nunca é mostrada — nem a ti, nem à equipa da Bendi.</p>
             </div>
             <div v-if="d.pede_password" class="sm:col-span-2">
               <label class="text-xs text-zinc-500 mb-1 block" for="v4-password">A tua password (para confirmar)</label>
@@ -153,7 +153,7 @@ const COR = {
 }
 const TEXTO = {
   pedida: 'Pedido entregue na SISP. Quando a SISP aprovar, põe aqui as credenciais que te enviarem.',
-  por_validar: 'Credenciais recebidas — a Bende vai validá-las com a SISP.',
+  por_validar: 'Credenciais recebidas — a Bendi vai validá-las com a SISP.',
   teste: 'Em testes com a SISP. O cartão ainda não aparece aos clientes.',
   ativa: 'Ativo: os clientes podem pagar com cartão e o dinheiro vai direto para a tua conta.',
   suspensa: 'Suspenso: o cartão não aparece aos clientes.',

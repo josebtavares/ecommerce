@@ -106,7 +106,7 @@
       </span>
       <span v-else :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">A loja ainda não registou a fatura</span>
     </div>
-    <!-- comprovativo do pagamento (documento interno do Bende, também enviado por email) -->
+    <!-- comprovativo do pagamento (documento interno da Bendi, também enviado por email) -->
     <div v-if="['aprovado', 'reembolsado', 'reembolsado_parcial'].includes(detalhe.pagamento_status)"
          class="flex items-center justify-between gap-2 text-xs" data-teste="comprovativo-cliente">
       <span :class="isDark ? 'text-zinc-400' : 'text-zinc-600'">Comprovativo de pagamento</span>

@@ -1,7 +1,7 @@
-<!-- CobrancasComissoes.vue — backoffice (Subscrição): o que a loja paga à Bende pelas comissões, uma vez por mês.
+<!-- CobrancasComissoes.vue — backoffice (Subscrição): o que a loja paga à Bendi pelas comissões, uma vez por mês.
      A SISP não divide pagamentos: o dinheiro das vendas vai direto para a loja e a comissão cobra-se à parte.
      Backend: GET /app/loja/<id>/comissoes/cobrancas/, POST …/<cid>/pagar/ (utils/cobranca_comissoes.py).
-     Cada cobrança mostra os meses que inclui com a fatura do Bende de cada um e, paga, o comprovativo.
+     Cada cobrança mostra os meses que inclui com a fatura da Bendi de cada um e, paga, o comprovativo.
      versao (BackofficeSubscricao, tempo real) → volta a ler. -->
 <template>
   <div v-if="d && (d.ligada || d.cobrancas.length)" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden"
@@ -9,7 +9,7 @@
     <div class="px-6 pt-5 pb-3">
       <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider pb-1">Comissões a pagar</p>
       <p class="text-xs text-zinc-500">
-        O dinheiro das tuas vendas vai direto para ti. No início de cada mês a Bende cobra as comissões do mês anterior
+        O dinheiro das tuas vendas vai direto para ti. No início de cada mês a Bendi cobra as comissões do mês anterior
         (menos os créditos de reembolsos); tens {{ d.dias_para_pagar }} dias para pagar. Abaixo de {{ dinheiro(d.minimo) }} passa para o mês seguinte.
       </p>
     </div>
@@ -67,7 +67,7 @@
     <p v-else class="px-6 pb-5 text-xs text-zinc-500">Ainda não há cobranças.</p>
     <p v-if="msg" class="px-6 pb-4 text-xs" :class="msgOk ? 'text-green-400' : 'text-red-400'" role="status" data-teste="cobrancas-msg">{{ msg }}</p>
     <p v-if="d.cobrancas.some(c => c.estado === 'pendente')" class="px-6 pb-5 text-[11px] text-zinc-500">
-      Preferes transferência? Fala com a Bende pelo chat de suporte — registamos o pagamento quando recebermos.
+      Preferes transferência? Fala com a Bendi pelo chat de suporte — registamos o pagamento quando recebermos.
     </p>
   </div>
 </template>
@@ -123,7 +123,7 @@ export default {
     },
 
     async pagar (c) {
-      if (!confirm(`Pagar ${this.dinheiro(c.valor)} de comissões à Bende?\n\n(Pagamento simulado)`)) return
+      if (!confirm(`Pagar ${this.dinheiro(c.valor)} de comissões à Bendi?\n\n(Pagamento simulado)`)) return
       this.aPagar = c.id; this.msg = ''
       try {
         const { data } = await api.post(`/app/loja/${this.lojaId}/comissoes/cobrancas/${c.id}/pagar/`)

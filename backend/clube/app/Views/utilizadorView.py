@@ -499,9 +499,9 @@ def password_reset_request(request):
         from datetime import timedelta
         from ..utils import fila_emails
         from ..utils.email_html import saudacao
-        fila_emails.enfileirar(django_user.email, 'Recuperar a password da tua conta Bende',
+        fila_emails.enfileirar(django_user.email, 'Recuperar a password da tua conta Bendi',
               f'{saudacao(django_user)}\n\n'
-              f'Recebemos um pedido para escolher uma password nova para a tua conta Bende '
+              f'Recebemos um pedido para escolher uma password nova para a tua conta Bendi '
               f'({django_user.username}).\n\n{reset_link}\n\n'
               f'O link só pode ser usado uma vez. Se não foste tu a pedir, ignora este email: '
               f'a tua password não muda.',

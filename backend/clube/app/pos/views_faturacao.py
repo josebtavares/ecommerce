@@ -7,7 +7,7 @@ está ligado ficam só de leitura (faturam-se na Faturação da loja). O CSV é 
   GET /api/pos/<id>/faturacao/resumo/?de=&ate=     dados fiscais + totais (todas, por arquivo) + por faturar de sempre
   GET /api/pos/<id>/faturacao/vendas/?arquivo=pos|loja-<id>&de&ate&estado&q&min&max&limit&offset
   GET /api/pos/<id>/faturacao/vendas.csv?…         o que a lista mostra, em CSV
-  GET /api/pos/<id>/faturacao/exportar/?de=&ate=   ZIP do arquivo fiscal do POS (CSVs + faturas + documentos do Bende)
+  GET /api/pos/<id>/faturacao/exportar/?de=&ate=   ZIP do arquivo fiscal do POS (CSVs + faturas + documentos da Bendi)
   GET /api/pos/<id>/faturacao/pesquisa/?q=&limit=&offset=
   GET /api/pos/<id>/faturacao/historico/?ref=
 As faturas registam-se em /api/pos/<id>/contas/<conta_id>/fatura/ (views.conta_fatura).
@@ -32,7 +32,7 @@ TIPOS_PESQUISA = ('venda', 'anulada', 'mensalidade')
 
 def _acesso(request, pos_id):
     """(pos, membro, erro) — membro None na conta principal. A equipa vê as vendas, não a subscrição do dono
-    (mensalidades e documentos do Bende: aba Subscrição, só do dono)."""
+    (mensalidades e documentos da Bendi: aba Subscrição, só do dono)."""
     pos, membro, _ = _resolve_pos_request(request, pos_id, permitir_suspenso=True)
     return pos, membro, _sem_permissao(membro, 'pode_ver_relatorios', 'Sem permissão para ver a faturação.')
 

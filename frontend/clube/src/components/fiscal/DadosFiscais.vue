@@ -1,5 +1,5 @@
 <!-- DadosFiscais.vue — NIF, particular/atividade e declaração de responsabilidade (criar loja, backoffice, POS).
-     v-model: { nif, regime_fiscal, declaracao_fiscal }. tema 'escuro' (Bende) ou 'claro' (POS). -->
+     v-model: { nif, regime_fiscal, declaracao_fiscal }. tema 'escuro' (Bendi) ou 'claro' (POS). -->
 <template>
   <div class="space-y-4" data-teste="dados-fiscais">
     <div>

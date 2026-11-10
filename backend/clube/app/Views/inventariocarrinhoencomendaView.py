@@ -738,7 +738,7 @@ def encomenda_fatura(request, loja_id, id):
     """
     POST   /app/loja/<loja_id>/encomendas/<id>/fatura/   multipart: numero, pdf (opcional), motivo (se já há uma)
     DELETE /app/loja/<loja_id>/encomendas/<id>/fatura/   {motivo} — anula (o registo e o PDF ficam no histórico)
-    A loja emite a fatura no e-Fatura (fora do Bende) e regista-a aqui; o cliente vê-a na encomenda.
+    A loja emite a fatura no e-Fatura (fora da Bendi) e regista-a aqui; o cliente vê-a na encomenda.
     """
     loja = get_object_or_404(Loja, id=loja_id)
     _, erro = _exige_permissao(request, loja, 'gerir_encomendas')

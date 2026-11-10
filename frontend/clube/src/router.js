@@ -96,7 +96,7 @@ const routes = [
         meta: { requiresAuth: true }
     },
     {
-        // landing page da Bende (apresentação, tutoriais, planos) — conteúdo editado pelo admin (utils/landing.py)
+        // landing page da Bendi (apresentação, tutoriais, planos) — conteúdo editado pelo admin (utils/landing.py)
         path: '/sobre',
         name: 'Sobre',
         component: () => import('@/views/Sobre.vue'),
@@ -286,7 +286,7 @@ router.beforeEach((to, from, next) => {
 
 // título do separador: a página da loja escreve o seu (lojaPublica.vue); ao entrar no site fica o que veio do servidor
 router.afterEach((to, from) => {
-    if (from.name && to.name !== 'Loja') document.title = 'Bende';
+    if (from.name && to.name !== 'Loja') document.title = 'Bendi';
 });
 
 export default router;

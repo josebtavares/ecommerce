@@ -183,7 +183,7 @@
               <p class="flex items-start gap-2">
                 <font-awesome-icon :icon="['fas', 'lock']" class="w-3 h-3 mt-0.5 flex-shrink-0 text-green-400" />
                 <span>Pagas na página segura da SISP (vinti4, 3-D Secure), diretamente a <b class="text-zinc-300">{{ loja?.nome }}</b>.
-                  Os dados do cartão são introduzidos só na SISP: nem a Bende nem a loja os veem.
+                  Os dados do cartão são introduzidos só na SISP: nem a Bendi nem a loja os veem.
                   Valores em escudos (CVE), sem custos adicionais.</span>
               </p>
             </div>

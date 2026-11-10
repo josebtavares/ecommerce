@@ -116,7 +116,7 @@ def dados_transferencia(enc):
 
 def online_suspenso(loja):
     """Com pagamentos online a sério, só uma loja com contrato vinti4 ativo recebe pagamentos online (cartão,
-    marcações pagas antecipadamente): a SISP não deixa a Bende receber por conta das lojas (utils/vinti4.py).
+    marcações pagas antecipadamente): a SISP não deixa a Bendi receber por conta das lojas (utils/vinti4.py).
     Os outros métodos (dinheiro, transferência) continuam. Com o fornecedor simulado nunca se aplica."""
     from ..pagamentos import cobra_a_serio
     if not cobra_a_serio():

@@ -1,7 +1,7 @@
 """
 Emails com os documentos de cada pagamento (PDF anexado + link para o site):
 - ao cliente: comprovativo quando a encomenda (ou a marcação, paga online) é paga; fatura quando a loja a regista;
-- ao dono da loja/POS: comprovativo da mensalidade paga e da cobrança de comissões paga; fatura do Bende
+- ao dono da loja/POS: comprovativo da mensalidade paga e da cobrança de comissões paga; fatura da Bendi
   (mensalidade e comissões do mês).
 
 Os comprovativos saem sozinhos (signals em ligar(): qualquer caminho que aprove um pagamento passa
@@ -174,7 +174,7 @@ def _ao_gravar_pagamento(sender, instance, **kwargs):
         'loja', 'comprador__user', 'pagamento__metodo').get(pk=enc.pk)))
 
 
-# ── Subscrições e comissões (o Bende cobra às lojas/POS) ──────
+# ── Subscrições e comissões (a Bendi cobra às lojas/POS) ──────
 
 def enviar_comprovativo_subscricao(f):
     from .subscricoes import nome_alvo
@@ -184,7 +184,7 @@ def enviar_comprovativo_subscricao(f):
     ok = _enviar(
         _dono_email(alvo), f'Comprovativo de pagamento — {f.descricao}',
         f'Olá,\n\nRecebemos o pagamento da mensalidade "{f.descricao}" de {nome_alvo(alvo)}. '
-        f'Segue em anexo o comprovativo.\n\nA fatura do Bende chega-te por email quando for emitida. '
+        f'Segue em anexo o comprovativo.\n\nA fatura da Bendi chega-te por email quando for emitida. '
         f'Subscrição: {_link(_caminho_alvo(alvo, f.loja_id))}',
         [(documentos.nome_comprovativo_subscricao(f), documentos.pdf_comprovativo_subscricao(f))])
     if not ok:
@@ -197,7 +197,7 @@ def enviar_fatura_subscricao(f):
     pdf = _pdf_registado(f.fatura_pdf)
     _enviar(
         _dono_email(alvo), f'Fatura {f.fatura_numero} — {f.descricao}',
-        f'Olá,\n\nO Bende emitiu a fatura {f.fatura_numero} da mensalidade "{f.descricao}" de {nome_alvo(alvo)}.'
+        f'Olá,\n\nO Bendi emitiu a fatura {f.fatura_numero} da mensalidade "{f.descricao}" de {nome_alvo(alvo)}.'
         + (' Segue em anexo.' if pdf else '') + f'\n\nSubscrição: {_link(_caminho_alvo(alvo, f.loja_id))}',
         [(f'fatura-subscricao-{f.id}.pdf', pdf)] if pdf else [])
 
@@ -209,7 +209,7 @@ def enviar_comprovativo_cobranca(c):
     ok = _enviar(
         _dono_email(loja), f'Comprovativo de pagamento — comissões até {c.mes:%m/%Y} ({loja.nome})',
         f'Olá,\n\nRecebemos o pagamento das comissões da loja {loja.nome} até {c.mes:%m/%Y}. '
-        f'Segue em anexo o comprovativo.\n\nAs faturas do Bende das comissões de cada mês chegam-te por email '
+        f'Segue em anexo o comprovativo.\n\nAs faturas da Bendi das comissões de cada mês chegam-te por email '
         f'quando forem emitidas. Backoffice: {_link(f"/loja/{loja.id}/backoffice/subscricao")}',
         [(documentos.nome_comprovativo_cobranca(c), documentos.pdf_comprovativo_cobranca(c))])
     if not ok:
@@ -224,7 +224,7 @@ def enviar_fatura_comissoes(fc):
         anexos.insert(0, (f'fatura-comissoes-{loja.id}-{fc.mes:%Y-%m}.pdf', pdf))
     _enviar(
         _dono_email(loja), f'Fatura {fc.fatura_numero} — comissões de {fc.mes:%m/%Y} ({loja.nome})',
-        f'Olá,\n\nO Bende emitiu a fatura {fc.fatura_numero} das comissões de {fc.mes:%m/%Y} da loja {loja.nome}. '
+        f'Olá,\n\nO Bendi emitiu a fatura {fc.fatura_numero} das comissões de {fc.mes:%m/%Y} da loja {loja.nome}. '
         f'Seguem em anexo a fatura{"" if pdf else " (sem PDF)"} e o extrato das comissões.\n\n'
         f'Backoffice: {_link(f"/loja/{loja.id}/backoffice/subscricao")}',
         anexos)
@@ -250,12 +250,12 @@ def enviar_fatura_anulada(obj, numero, motivo):
     elif nome == 'faturasubscricao':
         alvo = obj.alvo
         para, assunto = _dono_email(alvo), f'Fatura {numero} anulada — {obj.descricao}'
-        texto = (f'Olá,\n\nO Bende anulou a fatura {numero} da mensalidade "{obj.descricao}" de {nome_alvo(alvo)}. '
+        texto = (f'Olá,\n\nO Bendi anulou a fatura {numero} da mensalidade "{obj.descricao}" de {nome_alvo(alvo)}. '
                  f'Motivo: {motivo}\n\nSubscrição: {_link(_caminho_alvo(alvo, obj.loja_id))}')
     else:
         loja = obj.loja
         para, assunto = _dono_email(loja), f'Fatura {numero} anulada — comissões de {obj.mes:%m/%Y} ({loja.nome})'
-        texto = (f'Olá,\n\nO Bende anulou a fatura {numero} das comissões de {obj.mes:%m/%Y} da loja {loja.nome}. '
+        texto = (f'Olá,\n\nO Bendi anulou a fatura {numero} das comissões de {obj.mes:%m/%Y} da loja {loja.nome}. '
                  f'Motivo: {motivo}\n\nBackoffice: {_link(f"/loja/{loja.id}/backoffice/subscricao")}')
     _enviar(para, assunto, texto)
 

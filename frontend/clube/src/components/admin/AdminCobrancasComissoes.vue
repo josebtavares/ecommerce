@@ -1,7 +1,7 @@
 <!-- AdminCobrancasComissoes.vue — Admin → Comissões: cobranças mensais às lojas (gerir_pagamentos).
      Registar um pagamento recebido por fora (transferência, dinheiro, oferta), anular (solta as comissões para a
      cobrança seguinte) ou emitir já as que faltam. Atraso não suspende nada sozinho — decide-se aqui.
-     Cada cobrança mostra os meses que inclui, com o extrato e a fatura do Bende de cada um (registar aqui = registar na
+     Cada cobrança mostra os meses que inclui, com o extrato e a fatura da Bendi de cada um (registar aqui = registar na
      Faturação), e o comprovativo quando está paga. Em tempo real (versao, de AdminComissoes).
      Backend: /app/admin/comissoes/cobrancas/ (Views/cobrancaComissoesView.py). -->
 <template>
@@ -55,7 +55,7 @@
           </button>
         </div>
 
-        <!-- meses incluídos: extrato e fatura do Bende de cada mês (a mesma da Faturação) -->
+        <!-- meses incluídos: extrato e fatura da Bendi de cada mês (a mesma da Faturação) -->
         <div v-if="c.meses?.length && c.estado !== 'anulada'" class="mt-2 space-y-1.5" data-teste="admin-cobranca-meses">
           <div v-for="m in c.meses" :key="m.mes" class="flex flex-wrap items-center gap-2 pl-3 border-l-2 border-zinc-800"
                :data-teste="`admin-cobranca-mes-${m.mes}`">

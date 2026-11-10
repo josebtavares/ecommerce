@@ -42,7 +42,7 @@ def _inteiro(v):
 
 def filtrar_cobrancas(request, qs):
     """
-    ?estado=pendente|paga|anulada|atraso  ?q= S-12 / 12 / descrição / nº da fatura do Bende / referência / notas
+    ?estado=pendente|paga|anulada|atraso  ?q= S-12 / 12 / descrição / nº da fatura da Bendi / referência / notas
     ?de=&ate= AAAA-MM-DD (início do período). Devolve (qs, erro).
     """
     from datetime import date

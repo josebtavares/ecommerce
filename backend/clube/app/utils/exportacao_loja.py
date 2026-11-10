@@ -327,9 +327,9 @@ def escrever_zip(destino, exp):
                               f'{LIMITE_MEDIA // 1024 ** 3} GB. Os restantes podem ser descarregados na loja.')
 
         leia = [
-            f'Dados da loja «{loja.nome}» (id {loja.id}) — exportados pelo Bende a {_quando(timezone.now())}.',
+            f'Dados da loja «{loja.nome}» (id {loja.id}) — exportados pela Bendi a {_quando(timezone.now())}.',
             'Ficheiros CSV separados por ; (abrem no Excel). Valores em escudos (CVE). Datas na hora de Cabo Verde.',
-            'Este ZIP serve para consultar e guardar os teus dados; não se importa de volta para o Bende.', '',
+            'Este ZIP serve para consultar e guardar os teus dados; não se importa de volta para a Bendi.', '',
             'loja.json                 dados da loja, horário, opções de entrega, categorias e políticas',
             'equipa.csv                quem tem acesso ao backoffice e com que função',
             'produtos.csv              catálogo (preço, custo, stock, conjuntos); variantes.csv as variantes com o stock',
@@ -339,7 +339,7 @@ def escrever_zip(destino, exp):
             'clientes.csv              quem comprou ou marcou na loja (contacto, nº de compras, total)',
             'servicos.csv, profissionais.csv, marcacoes.csv   serviços e marcações (se a loja os tiver)',
             'pos/                      contas, artigos e turnos de caixa dos POS ligados à loja (se houver)',
-            'faturacao/                arquivo fiscal: faturas, comprovativos e documentos do Bende (tem o seu LEIA-ME)',
+            'faturacao/                arquivo fiscal: faturas, comprovativos e documentos da Bendi (tem o seu LEIA-ME)',
             f'imagens/                  logótipo, banner e imagens dos produtos e serviços ({n_media} ficheiros)'
             if exp.com_imagens else 'imagens/                  (não incluídas — escolhe «com imagens» ao exportar)',
             '', 'Atenção: clientes.csv, encomendas.csv e marcacoes.csv têm dados pessoais. Guarda o ficheiro em lugar seguro.',
@@ -437,16 +437,16 @@ def escrever_zip_pos(destino, exp):
                               f'{LIMITE_MEDIA // 1024 ** 3} GB.')
 
         leia = [
-            f'Dados do POS «{pos.nome}» (id {pos.id}) — exportados pelo Bende a {_quando(timezone.now())}.',
+            f'Dados do POS «{pos.nome}» (id {pos.id}) — exportados pela Bendi a {_quando(timezone.now())}.',
             'Ficheiros CSV separados por ; (abrem no Excel). Valores em escudos (CVE). Datas na hora de Cabo Verde.',
-            'Este ZIP serve para consultar e guardar os dados; não se importa de volta para o Bende.', '',
+            'Este ZIP serve para consultar e guardar os dados; não se importa de volta para a Bendi.', '',
             'pos.json                  configuração do POS, dono, loja ligada e dados fiscais',
             'equipa.csv                membros da equipa (sem passwords) e papel',
             'mesas.csv                 mesas',
             'produtos.csv              produtos próprios do POS; variantes.csv as variantes com o stock',
             'contas.csv                vendas; contas-itens.csv os artigos de cada uma (se houver)',
             'turnos.csv                aberturas e fechos de caixa (se houver)',
-            'faturacao/                arquivo fiscal: faturas das vendas e documentos do Bende (tem o seu LEIA-ME)',
+            'faturacao/                arquivo fiscal: faturas das vendas e documentos da Bendi (tem o seu LEIA-ME)',
             f'imagens/                  imagens dos produtos ({n_media} ficheiros)'
             if exp.com_imagens else 'imagens/                  (não incluídas — escolhe «com imagens» ao exportar)',
         ]

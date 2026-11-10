@@ -59,7 +59,7 @@
     <div v-if="!loading" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="cobrar-comissoes">
       <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Cobrança mensal das comissões</h3>
       <p class="text-xs text-zinc-500 mt-1 mb-4">
-        A SISP não divide pagamentos: o dinheiro das vendas vai direto para a loja e a Bende cobra-lhe as comissões
+        A SISP não divide pagamentos: o dinheiro das vendas vai direto para a loja e a Bendi cobra-lhe as comissões
         uma vez por mês (Admin → Comissões). Ao ligar, só contam as comissões a partir desse momento.
         Liga só quando os pagamentos forem a sério — com o pagamento simulado as lojas seriam cobradas por vendas de teste.
       </p>
@@ -152,7 +152,7 @@ import AdminEmails from '@/components/admin/AdminEmails.vue'
 const CAMPOS = [
   { k: 'titular_nome',      label: 'Nome do titular (pessoa ou empresa)', ph: 'ex.: Maria Silva', max: 200 },
   { k: 'titular_nif',       label: 'NIF do titular', ph: '9 dígitos', max: 9, modo: 'numeric' },
-  { k: 'contacto_email',    label: 'Email de contacto', ph: 'ex.: suporte@bende.store', max: 254, tipo: 'email' },
+  { k: 'contacto_email',    label: 'Email de contacto', ph: 'ex.: suporte@e-bendi.cv', max: 254, tipo: 'email' },
   { k: 'contacto_telefone', label: 'Telefone', ph: 'ex.: +238 900 00 00', max: 40, tipo: 'tel' },
   { k: 'contacto_whatsapp', label: 'WhatsApp', ph: 'ex.: +238 900 00 00', max: 40, tipo: 'tel' },
   { k: 'contacto_horario',  label: 'Horário de atendimento', ph: 'ex.: Segunda a sexta, 9h–18h', max: 120 },

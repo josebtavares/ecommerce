@@ -95,7 +95,7 @@ export default {
 
         // ── 2. Fonte de verdade: API ──────────────────────────────────────────
         const data = await pedirLoja(lojaId)   // o mesmo pedido que o template faz a seguir (useLojaData)
-        document.title = `${data.nome} — Bende`
+        document.title = `${data.nome} — Bendi`
         templateId    = data.template_id    || templateId
         corPrimaria   = data.cor_primaria   || corPrimaria
         corSecundaria = data.cor_secundaria || corSecundaria

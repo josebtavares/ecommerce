@@ -1,4 +1,4 @@
-<!-- FormRegisto.vue — formulário de criar conta Bende (Turnstile + armadilha para bots, email por confirmar).
+<!-- FormRegisto.vue — formulário de criar conta Bendi (Turnstile + armadilha para bots, email por confirmar).
      Usado na página /Register e na janela da landing page (/sobre). Guarda a sessão e emite 'criou' (res.data);
      quem o usa decide para onde ir. modal=true: o link "Entrar" emite 'trocar' em vez de mudar de página. -->
 <template>

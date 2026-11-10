@@ -1,4 +1,4 @@
-<!-- LandingApp.vue — "Baixa a app": uma faixa com as cores da Bende e, por cima, um cartão claro com o título, as
+<!-- LandingApp.vue — "Baixa a app": uma faixa com as cores da Bendi e, por cima, um cartão claro com o título, as
      vantagens da app e os botões das lojas (Google Play sempre; App Store só com link). À direita, um telemóvel com a
      imagem da secção (uma captura da app) ou um ecrã com o logo. Sem link do Google Play → botão "Em breve".
      Começa escondida (utils/landing.py): o admin liga-a no editor quando a app estiver publicada. -->
@@ -62,7 +62,7 @@
             <div v-else class="w-full h-full flex flex-col"
                  :class="isDark ? 'bg-gradient-to-b from-red-600 to-zinc-950' : 'bg-gradient-to-b from-orange-400 to-rose-500'">
               <div class="flex-1 flex items-center justify-center">
-                <img :src="$logo(true)" alt="Bende" class="w-28 h-28 object-contain drop-shadow-lg" />
+                <img :src="$logo(true)" alt="Bendi" class="w-28 h-28 object-contain drop-shadow-lg" />
               </div>
               <div class="px-4 pb-8 space-y-2" aria-hidden="true">
                 <span class="block h-10 rounded-xl bg-white/20"></span>

@@ -1,6 +1,6 @@
-<!-- Sobre.vue — landing page da Bende (/sobre): apresenta a plataforma numa página só. O conteúdo vem de
+<!-- Sobre.vue — landing page da Bendi (/sobre): apresenta a plataforma numa página só. O conteúdo vem de
      GET /app/landing/ (o admin edita e publica — backend utils/landing.py). A navegação desliza até cada secção;
-     entrar e criar conta abrem uma janela por cima (a mesma conta da loja Bende) e a pessoa fica aqui.
+     entrar e criar conta abrem uma janela por cima (a mesma conta da loja Bendi) e a pessoa fica aqui.
      Links dos botões: "/caminho" (dentro do site), "https://…" (separador novo), "#secção", "#entrar", "#criar-conta". -->
 <template>
   <div class="min-h-screen" :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-stone-50 text-zinc-900'" data-teste="pagina-sobre">
@@ -144,7 +144,7 @@ export default {
   },
 
   created () {
-    document.title = 'Bende — compra e vende nas lojas de Cabo Verde'
+    document.title = 'Bendi — compra e vende nas lojas de Cabo Verde'
     this.carregar()
     if (this.user) { this.carregarLojas(); this.verPermissao() } else if (this.$route.query.editar) this.janela = 'entrar'
   },

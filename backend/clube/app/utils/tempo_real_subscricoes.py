@@ -1,6 +1,6 @@
 """
-Tempo real das mensalidades e das faturas do Bende (como utils/tempo_real_encomendas.py): quando uma mensalidade
-(FaturaSubscricao) muda — emitida, paga, adiada, anulada, fatura do Bende registada/substituída/anulada —, quando
+Tempo real das mensalidades e das faturas da Bendi (como utils/tempo_real_encomendas.py): quando uma mensalidade
+(FaturaSubscricao) muda — emitida, paga, adiada, anulada, fatura da Bendi registada/substituída/anulada —, quando
 uma subscrição muda de estado ou de plano, ou quando a fatura das comissões de um mês (FaturaComissoes) é
 registada/anulada, e nas comissões — uma comissão registada/recalculada/anulada/liquidada, um crédito de reembolso,
 uma cobrança mensal emitida/paga/anulada —, avisa pelo WebSocket das notificações (grupo notif_<user>):

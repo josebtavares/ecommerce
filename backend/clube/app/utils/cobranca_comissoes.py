@@ -2,12 +2,12 @@
 Cobrança mensal das comissões (models.CobrancaComissoes).
 
 A SISP não tem pagamento dividido: o dinheiro das vendas vai direto para a loja (contrato vinti4 dela, ou dinheiro/
-transferência) e a Bende não pode descontar a comissão no pagamento. Por isso cobra-se à parte, uma vez por mês:
+transferência) e a Bendi não pode descontar a comissão no pagamento. Por isso cobra-se à parte, uma vez por mês:
 
 • emitir (worker, a partir do dia 1): as comissões da loja ainda por cobrar, registadas até ao fim do mês anterior,
   menos os créditos de reembolsos por descontar. Abaixo de VALOR_MINIMO não se emite — passa para o mês seguinte.
   As comissões e os créditos ficam presos à cobrança (cobranca_id).
-• pagar: online (a Bende é aqui a comerciante — pagamentos.servico, referência com-<id>) ou registado pelo admin
+• pagar: online (a Bendi é aqui a comerciante — pagamentos.servico, referência com-<id>) ou registado pelo admin
   (transferência, dinheiro, oferta). As comissões ficam liquidadas e os créditos descontados.
 • anular (admin, com motivo): solta as comissões e os créditos — entram na cobrança seguinte.
 • reembolso de uma encomenda cuja comissão já está numa cobrança → crédito para a seguinte (utils/devolucoes),
@@ -234,7 +234,7 @@ def _avisar_dono(loja, titulo, mensagem, email=2):
 
 def meses_das_cobrancas(cobrancas):
     """Os meses (das comissões) que cada cobrança inclui — pode juntar meses que ficaram abaixo do mínimo — com a
-    fatura do Bende de cada um. {cobranca_id: [{mes: 'AAAA-MM', comissoes, total, fatura}]} (2 consultas)."""
+    fatura da Bendi de cada um. {cobranca_id: [{mes: 'AAAA-MM', comissoes, total, fatura}]} (2 consultas)."""
     from django.db.models import Count
     from django.db.models.functions import TruncMonth
     from ..models import Comissao, FaturaComissoes

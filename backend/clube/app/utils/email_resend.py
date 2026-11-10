@@ -3,7 +3,7 @@ Backend de email do Django que envia pela API HTTP do Resend (https://resend.com
 
 Usa HTTPS em vez de SMTP porque o Railway bloqueia o SMTP de saída nos planos mais baixos.
 Ativa-se com EMAIL_BACKEND=app.utils.email_resend.ResendBackend e RESEND_API_KEY no ambiente;
-o remetente vem de DEFAULT_FROM_EMAIL (tem de ser de um domínio verificado no Resend, ex.: noreply@bende.store).
+o remetente vem de DEFAULT_FROM_EMAIL (tem de ser de um domínio verificado no Resend, ex.: noreply@e-bendi.cv).
 """
 import base64
 import logging

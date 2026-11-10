@@ -1,6 +1,6 @@
 """
 Documentos legais da loja (models.DocumentoLoja): o dono envia, se quiser, o documento de identificação,
-o início de atividade / certidão comercial, o NIF, licenças… e a Bende verifica-os no Admin → Lojas.
+o início de atividade / certidão comercial, o NIF, licenças… e a Bendi verifica-os no Admin → Lojas.
 
 • Opcionais: quem vende coisas pessoais em casa não precisa. O admin pode torná-los obrigatórios para uma
   loja (Loja.documentos_obrigatorios) — então "Loja verificada" entra nos requisitos para publicar (prontidao.py).
@@ -9,7 +9,7 @@ o início de atividade / certidão comercial, o NIF, licenças… e a Bende veri
 • Ficheiros privados (bucket R2 privado / pasta privado/ na dev): PDF tal como vem (só se começa por %PDF-);
   JPG/PNG reconvertidos para JPEG sem metadados (o GPS das fotos), até 3000 px. Máx. 10 MB.
 • Abrem-se por link assinado de 2 minutos, pedido por quem pode (o dono ou admin com verificar_documentos);
-  cada abertura, envio, decisão e remoção fica em AcessoDocumentoLoja (o dono vê as consultas da Bende).
+  cada abertura, envio, decisão e remoção fica em AcessoDocumentoLoja (o dono vê as consultas da Bendi).
 • Apagar o documento (ou a loja, ou a conta do dono) apaga o ficheiro.
 """
 import logging
@@ -188,7 +188,7 @@ def acessos(loja, so_bende=False, n=20):
     if so_bende:
         qs = qs.filter(pela_bende=True)
     return [{'id': a.id, 'acao': a.acao, 'acao_nome': a.get_acao_display(), 'tipo': a.tipo,
-             'quem': a.nome if not so_bende else 'Bende', 'detalhe': a.detalhe, 'quando': _data(a.criado_em)}
+             'quem': a.nome if not so_bende else 'Bendi', 'detalhe': a.detalhe, 'quando': _data(a.criado_em)}
             for a in qs.select_related(None)[:n]]
 
 
@@ -332,7 +332,7 @@ def mudar_obrigatorios(request, loja, valor):
     loja.save(update_fields=['documentos_obrigatorios'])
     registar(request, loja, 'obrigatorios', pela_bende=True, detalhe='obrigatórios' if valor else 'opcionais')
     if valor and not verificada(loja):
-        notificar(loja.dono, 'documento_loja', 'Documentos pedidos pela Bende',
+        notificar(loja.dono, 'documento_loja', 'Documentos pedidos pela Bendi',
                   'Para publicar a loja, envia o documento de identificação e o início de atividade (ou certidão '
                   'comercial) em Configurações → Documentos.', loja=loja, link=f'/loja/{loja.id}/backoffice/configuracoes',
                   email=2)

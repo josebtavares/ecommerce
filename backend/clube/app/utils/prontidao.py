@@ -98,7 +98,7 @@ def avaliar(loja, com_produtos=False):
         requisitos.append({'chave': 'documentos', 'titulo': 'Loja verificada (documentos aprovados)',
                            'seccao': 'configuracoes', 'ok': verificada(loja),
                            'ajuda': 'Em Configurações → Documentos (só o dono): documento de identificação e início de '
-                                    'atividade ou certidão comercial, aprovados pela Bende.'})
+                                    'atividade ou certidão comercial, aprovados pela Bendi.'})
     feitos = sum(r['ok'] for r in requisitos)
     out = {
         'percentagem': round(100 * feitos / len(requisitos)),

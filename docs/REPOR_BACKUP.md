@@ -1,6 +1,6 @@
 # Repor um backup da base de dados
 
-Procedimento para recuperar a plataforma Bende a partir de um backup. Lê tudo antes de começar.
+Procedimento para recuperar a plataforma Bendi a partir de um backup. Lê tudo antes de começar.
 Repor **substitui** os dados — o que entrou depois do backup perde-se (encomendas, registos, pagamentos).
 
 > Ensaiado a 26/10/2026 com o backup automático `bende-20261026-142314-automatico.dump` (464 KB):

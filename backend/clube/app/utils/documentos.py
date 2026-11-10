@@ -1,7 +1,7 @@
 """
 Documentos internos em PDF (reportlab), gerados na hora — não são faturas:
 - comprovativo de pagamento de uma encomenda (cliente);
-- comprovativo de pagamento de uma marcação paga online (cliente) — as pagas no local não passam pelo Bende;
+- comprovativo de pagamento de uma marcação paga online (cliente) — as pagas no local não passam pela Bendi;
 - comprovativo de pagamento de uma mensalidade da subscrição (dono da loja/POS);
 - comprovativo de pagamento de uma cobrança mensal de comissões (dono da loja);
 - extrato mensal das comissões de uma loja.
@@ -86,7 +86,7 @@ class _Pdf:
         c.rect(0, self.h - 4 * mm, self.w, 4 * mm, stroke=0, fill=1)
         c.setFillColorRGB(0.09, 0.09, 0.11)
         c.setFont('Helvetica-Bold', 22)
-        c.drawString(self.mg, self.h - 24 * mm, 'Bende')
+        c.drawString(self.mg, self.h - 24 * mm, 'Bendi')
         c.setFont('Helvetica', 9)
         c.setFillColorRGB(0.44, 0.44, 0.48)
         c.drawString(self.mg, self.h - 30 * mm, self.subtitulo)
@@ -273,7 +273,7 @@ def pdf_comprovativo_subscricao(f):
     p.linha('Pago a', _data(f.paga_em))
     p.linha('Método', f.get_metodo_display() if f.metodo else '—')
     p.linha('Total pago', formatar(f.valor), destaque=True)
-    extra = 'A fatura do Bende é emitida no e-Fatura e fica disponível na subscrição.'
+    extra = 'A fatura da Bendi é emitida no e-Fatura e fica disponível na subscrição.'
     if f.metodo == 'simulado':
         extra = 'Pagamento simulado (ambiente de testes). ' + extra
     return p.fim(extra)
@@ -296,7 +296,7 @@ def pdf_comprovativo_cobranca(c):
     meses = meses_da_cobranca(c)
     if meses:
         p.seccao('Comissões incluídas')
-        p.tabela([('Mês', 40, 'l'), ('Vendas', 30, 'r'), ('Comissões', 50, 'r'), ('Fatura do Bende', 50, 'l')],
+        p.tabela([('Mês', 40, 'l'), ('Vendas', 30, 'r'), ('Comissões', 50, 'r'), ('Fatura da Bendi', 50, 'l')],
                  [[m['mes'][5:] + '/' + m['mes'][:4], m['comissoes'], formatar(m['total']),
                    (m['fatura'] or {}).get('numero') or 'por emitir'] for m in meses])
     p.linha('Comissões', formatar(c.valor_comissoes))
@@ -307,7 +307,7 @@ def pdf_comprovativo_cobranca(c):
     if c.referencia:
         p.linha('Referência', c.referencia)
     p.linha('Total pago', formatar(c.valor), destaque=True)
-    extra = 'As faturas do Bende das comissões de cada mês são emitidas no e-Fatura e chegam por email.'
+    extra = 'As faturas da Bendi das comissões de cada mês são emitidas no e-Fatura e chegam por email.'
     if c.metodo == 'simulado':
         extra = 'Pagamento simulado (ambiente de testes). ' + extra
     return p.fim(extra)
@@ -360,4 +360,4 @@ def pdf_extrato_comissoes(loja, mes):
         p.linha('Total líquido', formatar(total - total_cred), destaque=True)
     else:
         p.linha('Total de comissões', formatar(total), destaque=True)
-    return p.fim('A fatura do Bende relativa a estas comissões é emitida no e-Fatura.')
+    return p.fim('A fatura da Bendi relativa a estas comissões é emitida no e-Fatura.')

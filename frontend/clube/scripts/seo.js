@@ -2,20 +2,20 @@
 // O index.html traz as etiquetas por defeito com o atributo data-seo; aqui são trocadas pelas da página.
 // Os dados das lojas e produtos vêm do backend (app/utils/seo.py) — tudo o que vem de lá é escapado.
 
-const DESCRICAO = 'Marketplace de Cabo Verde: descobre lojas locais, encomenda online e marca serviços na Bende.'
-const IMAGEM = { url: '/og-bende.png', largura: 1200, altura: 630, tipo: 'image/png' }
+const DESCRICAO = 'Marketplace de Cabo Verde: descobre lojas locais, encomenda online e marca serviços na Bendi.'
+const IMAGEM = { url: '/og-bendi.png', largura: 1200, altura: 630, tipo: 'image/png' }
 
 // páginas institucionais (router.js → /:slug) e as de entrada no site
 const PUBLICAS = {
-  '/': 'Bende — Marketplace de Cabo Verde',
-  '/sobre': 'A Bende — compra e vende nas lojas de Cabo Verde',   // landing page (o título real vem da API)
-  '/ajuda': 'Ajuda — Bende',
-  '/contacto': 'Contacto — Bende',
-  '/faq': 'Perguntas frequentes — Bende',
-  '/termos': 'Termos e condições — Bende',
-  '/privacidade': 'Política de privacidade — Bende',
-  '/devolucoes': 'Devoluções — Bende',
-  '/entregas': 'Entregas — Bende',
+  '/': 'Bendi — Marketplace de Cabo Verde',
+  '/sobre': 'A Bendi — compra e vende nas lojas de Cabo Verde',   // landing page (o título real vem da API)
+  '/ajuda': 'Ajuda — Bendi',
+  '/contacto': 'Contacto — Bendi',
+  '/faq': 'Perguntas frequentes — Bendi',
+  '/termos': 'Termos e condições — Bendi',
+  '/privacidade': 'Política de privacidade — Bendi',
+  '/devolucoes': 'Devoluções — Bendi',
+  '/entregas': 'Entregas — Bendi',
 }
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => (
@@ -31,7 +31,7 @@ function etiquetas (site, p) {
     meta('description', p.descricao),
     p.indexar ? '' : meta('robots', 'noindex'),
     p.indexar ? `<link rel="canonical" href="${esc(url)}">` : '',
-    prop('og:site_name', 'Bende'),
+    prop('og:site_name', 'Bendi'),
     prop('og:locale', 'pt_PT'),
     prop('og:type', p.tipo === 'produto' ? 'product' : 'website'),
     prop('og:title', p.titulo),
@@ -41,7 +41,7 @@ function etiquetas (site, p) {
     prop('og:image:type', img.tipo),
     prop('og:image:width', img.largura),
     prop('og:image:height', img.altura),
-    prop('og:image:alt', p.nome || 'Bende'),
+    prop('og:image:alt', p.nome || 'Bendi'),
     meta('twitter:card', 'summary_large_image'),
   ]
   if (p.estruturados) {
@@ -65,7 +65,7 @@ function paginaFixa (caminho) {
   const c = caminho.replace(/\/+$/, '').toLowerCase() || '/'
   const destino = c === '/home' ? '/' : c
   const titulo = PUBLICAS[destino]
-  return { tipo: 'site', titulo: titulo || 'Bende', descricao: DESCRICAO, caminho: destino,
+  return { tipo: 'site', titulo: titulo || 'Bendi', descricao: DESCRICAO, caminho: destino,
            indexar: !!titulo }
 }
 

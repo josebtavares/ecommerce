@@ -245,15 +245,15 @@ def _enviar(email, assunto, texto):
 
 def _avisar_pedido(email, nome, quando):
     from .moderacao import data_curta
-    _enviar(email, 'Pedido para apagar a tua conta Bende',
-            f'Olá {nome},\n\nRecebemos o teu pedido para apagar a conta Bende. Vai ser apagada a '
+    _enviar(email, 'Pedido para apagar a tua conta Bendi',
+            f'Olá {nome},\n\nRecebemos o teu pedido para apagar a conta Bendi. Vai ser apagada a '
             f'{data_curta(quando)}.\n\nMudaste de ideias? Entra na tua conta antes dessa data e o pedido é '
             f'cancelado: {settings.FRONTEND_BASE_URL}/Login\n\nAs encomendas, faturas e pagamentos ficam '
             f'guardados sem o teu nome, como a lei obriga.')
 
 
 def _avisar_eliminada(email, nome):
-    _enviar(email, 'A tua conta Bende foi apagada',
-            f'Olá {nome},\n\nA tua conta Bende foi apagada: o nome, email, telefone, morada e foto já não '
+    _enviar(email, 'A tua conta Bendi foi apagada',
+            f'Olá {nome},\n\nA tua conta Bendi foi apagada: o nome, email, telefone, morada e foto já não '
             f'estão guardados. As encomendas, faturas e pagamentos ficam sem o teu nome, como a lei obriga, '
             f'e as tuas avaliações e mensagens aparecem como "Utilizador eliminado".')

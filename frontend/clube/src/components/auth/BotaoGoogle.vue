@@ -1,4 +1,4 @@
-<!-- BotaoGoogle.vue — "Continuar com Google" da conta Bende; volta a `seguinte` depois de entrar. -->
+<!-- BotaoGoogle.vue — "Continuar com Google" da conta Bendi; volta a `seguinte` depois de entrar. -->
 <template>
   <button type="button" @click="entrar" :disabled="aRedirecionar" data-teste="botao-google"
     class="w-full py-2.5 rounded-xl text-sm font-semibold border transition-all

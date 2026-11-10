@@ -40,7 +40,7 @@ export function descarregarComprovativoEncomenda (id) {
   return descarregarPdf(`/app/encomenda/${id}/comprovativo/`, `comprovativo-encomenda-${id}.pdf`)
 }
 
-// marcação paga online (as pagas no local não têm comprovativo do Bende)
+// marcação paga online (as pagas no local não têm comprovativo da Bendi)
 export function descarregarComprovativoMarcacao (id) {
   return descarregarPdf(`/app/marcacao/${id}/comprovativo/`, `comprovativo-marcacao-${id}.pdf`)
 }

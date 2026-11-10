@@ -2,7 +2,7 @@
 Cobrança mensal das comissões (utils/cobranca_comissoes.py).
 
   GET  /app/loja/<loja_id>/comissoes/cobrancas/                       → resumo (ver_subscricao)
-  POST /app/loja/<loja_id>/comissoes/cobrancas/<id>/pagar/            → pagamento online à Bende (pagar_subscricao)
+  POST /app/loja/<loja_id>/comissoes/cobrancas/<id>/pagar/            → pagamento online à Bendi (pagar_subscricao)
   GET  /app/admin/comissoes/cobrancas/?estado=pendente|paga|anulada|atraso&loja_id=   (gerir_pagamentos)
   POST /app/admin/comissoes/cobrancas/<id>/  { acao: pagar, metodo, referencia?, notas? } | { acao: anular, motivo }
   POST /app/admin/comissoes/cobrancas/emitir/  { loja_id? } → emite já as que faltam do mês anterior

@@ -5,13 +5,13 @@ Cliente/loja:
   GET  /app/encomenda/<id>/comprovativo/                    comprovativo da encomenda paga (PDF)
   GET  /app/marcacao/<id>/comprovativo/                     comprovativo da marcação paga online (PDF)
   GET  /app/subscricao/faturas/<id>/comprovativo/           comprovativo da mensalidade paga (PDF)
-  GET  /app/loja/<id>/comissoes/meses/?ano=&limit=&offset=  comissões por mês + fatura do Bende (paginadas)
+  GET  /app/loja/<id>/comissoes/meses/?ano=&limit=&offset=  comissões por mês + fatura da Bendi (paginadas)
   GET  /app/loja/<id>/comissoes/<AAAA-MM>/vendas/?q=        as vendas do mês com a comissão (paginadas)
   GET  /app/loja/<id>/comissoes/<AAAA-MM>/extrato/          extrato do mês (PDF)
 Admin (gerir_faturacao):
   GET  /app/admin/faturacao/vendedores/?q=&tipo=&regime=&dados=&por_faturar=&de=&ate=&limit=&offset=
                                                             lojas (com os seus POS) e POS sem loja, paginados
-  GET  /app/admin/faturacao/ficha/<loja|pos>/<id>/          ficha fiscal: dados + histórico, totais, documentos do Bende
+  GET  /app/admin/faturacao/ficha/<loja|pos>/<id>/          ficha fiscal: dados + histórico, totais, documentos da Bendi
   GET  /app/admin/faturacao/loja/<id>/vendas/?origem=loja|marcacoes|pos&de&ate&estado&q&min&max
                                                             vendas da loja (loja online, marcações ou POS ligados) com a fatura
   GET  /app/admin/faturacao/pos/<id>/vendas/?...            contas fechadas de um POS com a fatura
@@ -19,15 +19,15 @@ Admin (gerir_faturacao):
   GET  /app/admin/faturacao/pesquisa/?q=&loja=|pos=         qualquer documento, fatura, vendedor ou cliente (opcionalmente de uma loja/POS)
   GET  /app/admin/faturacao/abas/?q=&limit=&offset=&fixar=   lojas e POS sem loja para as abas, com o nº por faturar
   GET  /app/admin/faturacao/vendas.csv?loja=|pos=&origem=&de=&ate=   vendas com as faturas (para a DNRE)
-  GET  /app/admin/faturacao/bende/?de=AAAA-MM&ate=&q=&por_faturar=   o que o Bende tem de faturar, agrupado por loja (+ POS)
+  GET  /app/admin/faturacao/bende/?de=AAAA-MM&ate=&q=&por_faturar=   o que a Bendi tem de faturar, agrupado por loja (+ POS)
   GET  /app/admin/faturacao/exportar/<loja|pos>/<id>/?de=&ate=       ZIP para a DNRE (CSVs + todos os PDFs)
                                                             (mais de MAX_VENDAS_ZIP vendas → 202, vai para a fila)
-  GET  /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM    ZIP do Bende: mensalidades, comissões e cobranças
+  GET  /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM    ZIP da Bendi: mensalidades, comissões e cobranças
                                                             pagas de todas as lojas/POS (mais de MAX_DOCS_ZIP → fila)
   (arquivos preparados na fila: Views/arquivoFiscalView.py)
-  POST/DELETE /app/admin/faturacao/subscricoes/<id>/fatura/            fatura do Bende de uma mensalidade
+  POST/DELETE /app/admin/faturacao/subscricoes/<id>/fatura/            fatura da Bendi de uma mensalidade
               (substituir e DELETE pedem {motivo}: a anterior fica anulada no HistoricoFatura, nada se apaga)
-  POST/DELETE /app/admin/faturacao/comissoes/<loja>/<AAAA-MM>/fatura/   fatura do Bende das comissões do mês
+  POST/DELETE /app/admin/faturacao/comissoes/<loja>/<AAAA-MM>/fatura/   fatura da Bendi das comissões do mês
   GET  /app/admin/faturacao/comissoes/<loja>/<AAAA-MM>/extrato/
 """
 import csv
@@ -117,7 +117,7 @@ def marcacao_comprovativo(request, id):
     if not eh_cliente and not da_loja and _exige_admin(request, 'gerir_faturacao'):
         return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
     if not m.pago:
-        return Response({'detail': 'Esta marcação não foi paga online — o comprovativo é só dos pagamentos feitos no Bende.'},
+        return Response({'detail': 'Esta marcação não foi paga online — o comprovativo é só dos pagamentos feitos na Bendi.'},
                         status=status.HTTP_400_BAD_REQUEST)
     return _pdf(documentos.pdf_comprovativo_marcacao(m), documentos.nome_comprovativo_marcacao(m))
 
@@ -434,7 +434,7 @@ def procura_abas(q):
 
 
 def _comissoes_por_faturar():
-    """{loja_id: nº de meses com comissões e sem fatura do Bende} — agregado na base de dados."""
+    """{loja_id: nº de meses com comissões e sem fatura da Bendi} — agregado na base de dados."""
     from django.db.models.functions import TruncMonth
     faturadas = set(FaturaComissoes.objects.values_list('loja_id', 'mes'))
     n = {}
@@ -450,7 +450,7 @@ def _comissoes_por_faturar():
 def admin_abas(request):
     """
     Abas da Faturação: lojas (com os seus POS) e POS sem loja, com o nº de documentos por faturar
-    (vendas da loja, marcações e contas dos POS + mensalidades pagas e comissões mensais sem fatura do Bende).
+    (vendas da loja, marcações e contas dos POS + mensalidades pagas e comissões mensais sem fatura da Bendi).
     Pendentes primeiro, depois por nome.
     ?q= nome, NIF ou código do POS  ?limit=&offset=  ?fixar=loja-12
     """
@@ -524,7 +524,7 @@ def _origens(obj, tipo, de=None, ate=None, todas=False):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_ficha(request, tipo, id):
-    """Ficha fiscal de uma loja ou POS: dados + histórico, POS/loja ligados, totais e documentos do Bende."""
+    """Ficha fiscal de uma loja ou POS: dados + histórico, POS/loja ligados, totais e documentos da Bendi."""
     erro = _exige_admin(request, 'gerir_faturacao')
     if erro:
         return erro
@@ -869,7 +869,7 @@ def admin_vendas_csv(request):
     return r
 
 
-# ── Faturas do Bende, agrupadas por loja (com os seus POS) ──
+# ── Faturas da Bendi, agrupadas por loja (com os seus POS) ──
 
 def _intervalo_meses(request):
     """?de=AAAA-MM&ate=AAAA-MM (ou ?mes=) → (primeiro dia, dia 1 do mês seguinte ao último); máx. 24 meses."""
@@ -934,7 +934,7 @@ def _docs_bende(ini, fim, loja_ids=None, pos_ids=None):
 @permission_classes([IsAuthenticated])
 def admin_bende(request):
     """
-    O que o Bende tem de faturar: mensalidades pagas e comissões do mês, agrupadas por loja (com os seus POS)
+    O que a Bendi tem de faturar: mensalidades pagas e comissões do mês, agrupadas por loja (com os seus POS)
     e POS sem loja. ?de=AAAA-MM&ate=AAAA-MM (ou ?mes=)  ?q= nome/NIF/código/dono  ?por_faturar=1  ?limit=&offset=
     """
     erro = _exige_admin(request, 'gerir_faturacao')
@@ -1007,7 +1007,7 @@ def admin_exportar(request, tipo, id):
     """
     ZIP com tudo o que há de uma loja/POS no período (?de=&ate= AAAA-MM-DD; sem datas = desde sempre):
     dados fiscais (histórico), vendas (CSV + comprovativos + faturas em vigor e anuladas),
-    mensalidades e comissões do Bende (comprovativos/extratos + faturas). Para entregar à DNRE.
+    mensalidades e comissões da Bendi (comprovativos/extratos + faturas). Para entregar à DNRE.
     """
     erro = _exige_admin(request, 'gerir_faturacao')
     if erro:
@@ -1031,7 +1031,7 @@ def _grupos_arquivo(obj, tipo, de, ate):
 
 def arquivo_zip(request, obj, tipo, de, ate, com_bende=True, origem='admin', pedido_por=None, nome=''):
     """O ZIP do arquivo fiscal de uma loja/POS no período (admin e a própria loja).
-    com_bende=False: sem os documentos do Bende (a equipa do POS não vê a subscrição do dono).
+    com_bende=False: sem os documentos da Bendi (a equipa do POS não vê a subscrição do dono).
     Com mais de MAX_VENDAS_ZIP vendas não se faz na hora: vai para a fila do worker (utils/arquivo_fiscal.py),
     que avisa (notificação + email) quando estiver pronto → 202 com o pedido."""
     n = sum(qs.count() for _, qs in _grupos_arquivo(obj, tipo, de, ate))
@@ -1080,7 +1080,7 @@ def escrever_arquivo(zf, obj, tipo, de, ate, com_bende=True, request=None, prefi
             if pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial'):
                 zf.writestr(f'{pasta}/comprovativo-E-{e.id}.pdf', documentos.pdf_comprovativo_encomenda(e))
             _juntar_faturas(zf, pasta, e, faltas)
-    # marcações (comprovativo só das pagas online) e contas dos POS (só a fatura: o dinheiro não passa pelo Bende)
+    # marcações (comprovativo só das pagas online) e contas dos POS (só a fatura: o dinheiro não passa pela Bendi)
     for origem, qs in grupos:
         if origem == 'loja' or (tipo == 'loja' and not qs.exists()):
             continue
@@ -1092,7 +1092,7 @@ def escrever_arquivo(zf, obj, tipo, de, ate, com_bende=True, request=None, prefi
                 zf.writestr(f'{pasta}/comprovativo-M-{o.id}.pdf', documentos.pdf_comprovativo_marcacao(o))
             _juntar_faturas(zf, pasta, o, faltas)
 
-    # documentos do Bende
+    # documentos da Bendi
     subs = (FaturaSubscricao.objects.filter(Q(loja=obj) | Q(pos__loja_vinculada=obj)) if tipo == 'loja'
             else obj.faturas_subscricao.all())
     subs = subs.filter(estado='paga', valor__gt=0).select_related('loja', 'pos', 'plano')
@@ -1102,7 +1102,7 @@ def escrever_arquivo(zf, obj, tipo, de, ate, com_bende=True, request=None, prefi
         subs = subs.filter(paga_em__date__gte=de)
     if ate:
         subs = subs.filter(paga_em__date__lte=ate)
-    linhas = [['Documento', 'Tipo', 'Descrição', 'Data', 'Valor (CVE)', 'Fatura do Bende nº', 'Faturas anuladas']]
+    linhas = [['Documento', 'Tipo', 'Descrição', 'Data', 'Valor (CVE)', 'Fatura da Bendi nº', 'Faturas anuladas']]
     for f in subs.order_by('paga_em'):
         pasta = f'bende/mensalidades/S-{f.id}'
         zf.writestr(f'{pasta}/comprovativo-S-{f.id}.pdf', documentos.pdf_comprovativo_subscricao(f))
@@ -1135,14 +1135,14 @@ def escrever_arquivo(zf, obj, tipo, de, ate, com_bende=True, request=None, prefi
     periodo = f'{de:%d/%m/%Y} a {ate:%d/%m/%Y}' if de and ate else (f'desde {de:%d/%m/%Y}' if de else (f'até {ate:%d/%m/%Y}' if ate else 'desde sempre'))
     leia = [
         f'Arquivo fiscal — {obj.nome} ({"loja" if tipo == "loja" else "POS"}), NIF {obj.nif or "por preencher"}',
-        f'Período: {periodo}. Gerado pelo Bende a {_quando(timezone.now())}.', '',
+        f'Período: {periodo}. Gerado pela Bendi a {_quando(timezone.now())}.', '',
         'dados-fiscais.csv            NIF e regime declarados ao longo do tempo (quem gravou e quando)',
         'vendas.csv                   cada venda com o nº da fatura da loja e as faturas anuladas (motivo)',
-        'vendas/E-<nº>/               comprovativo de pagamento (Bende) + fatura(s) da loja (fatura-… em vigor, anulada-…)',
+        'vendas/E-<nº>/               comprovativo de pagamento (Bendi) + fatura(s) da loja (fatura-… em vigor, anulada-…)',
         'marcacoes.csv, marcacoes/M-<nº>/     marcações (serviços): comprovativo (as pagas online) + fatura(s) da loja',
         'vendas-pos.csv, vendas-pos/V-<nº>/   contas fechadas do POS (os POS ligados, numa loja) com a fatura',
-        'bende/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) do Bende',
-        'bende/comissoes/C-…/         extrato mensal das comissões + fatura(s) do Bende',
+        'bende/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) da Bendi',
+        'bende/comissoes/C-…/         extrato mensal das comissões + fatura(s) da Bendi',
         'bende/cobrancas/CC-<nº>/     comprovativo do pagamento das comissões (cobrança mensal)',
         '', 'Os comprovativos e extratos são documentos internos e não substituem a fatura.',
     ]
@@ -1152,7 +1152,7 @@ def escrever_arquivo(zf, obj, tipo, de, ate, com_bende=True, request=None, prefi
     return faltas
 
 
-MAX_DOCS_ZIP = 300        # documentos do Bende num ZIP feito na hora; acima disto vai para a fila
+MAX_DOCS_ZIP = 300        # documentos da Bendi num ZIP feito na hora; acima disto vai para a fila
 
 
 def _cobrancas_pagas(de=None, ate_excl=None):
@@ -1175,14 +1175,14 @@ def contar_docs_bende(ini, fim):
 
 
 def escrever_arquivo_bende(zf, ini, fim):
-    """Arquivo do Bende (mensalidades e comissões de todas as lojas e POS) dos meses [ini, fim). Uma pasta por
+    """Arquivo da Bendi (mensalidades e comissões de todas as lojas e POS) dos meses [ini, fim). Uma pasta por
     loja/POS. Devolve os ficheiros que faltaram no armazenamento."""
     grupos = _docs_bende(ini, fim)
     lojas = {l.id: l for l in Loja.objects.filter(id__in=[i for t, i in grupos if t == 'loja'] +
                                                   list(_cobrancas_pagas(ini, fim).values_list('loja_id', flat=True)))}
     poss = {p.id: p for p in ConfiguracaoPOS.objects.filter(id__in=[i for t, i in grupos if t == 'pos'])}
     faltas = []
-    cab = ['Loja/POS', 'Tipo', 'NIF', 'Documento', 'Descrição', 'Data', 'Valor (CVE)', 'Fatura do Bende nº', 'Faturas anuladas']
+    cab = ['Loja/POS', 'Tipo', 'NIF', 'Documento', 'Descrição', 'Data', 'Valor (CVE)', 'Fatura da Bendi nº', 'Faturas anuladas']
     linhas, por_faturar = [cab], [cab]
 
     def pasta_de(t, i):
@@ -1224,13 +1224,13 @@ def escrever_arquivo_bende(zf, ini, fim):
     zf.writestr('por-faturar.csv', _csv(por_faturar))
     ultimo = fim - timedelta(days=1)
     leia = [
-        f'Arquivo do Bende — mensalidades e comissões de {ini:%m/%Y} a {ultimo:%m/%Y}. Gerado a {_quando(timezone.now())}.', '',
-        'documentos-do-bende.csv          todos os documentos (loja/POS, NIF, valor, nº da fatura do Bende)',
-        'por-faturar.csv                  os que ainda não têm fatura do Bende (ou cuja fatura já não bate certo)',
-        'lojas/<id>-<nome>/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) do Bende (dos POS ligados também)',
-        'lojas/<id>-<nome>/comissoes/C-…/         extrato mensal das comissões + fatura(s) do Bende',
+        f'Arquivo da Bendi — mensalidades e comissões de {ini:%m/%Y} a {ultimo:%m/%Y}. Gerado a {_quando(timezone.now())}.', '',
+        'documentos-do-bende.csv          todos os documentos (loja/POS, NIF, valor, nº da fatura da Bendi)',
+        'por-faturar.csv                  os que ainda não têm fatura da Bendi (ou cuja fatura já não bate certo)',
+        'lojas/<id>-<nome>/mensalidades/S-<nº>/   comprovativo da mensalidade + fatura(s) da Bendi (dos POS ligados também)',
+        'lojas/<id>-<nome>/comissoes/C-…/         extrato mensal das comissões + fatura(s) da Bendi',
         'lojas/<id>-<nome>/cobrancas/CC-<nº>/     comprovativo do pagamento das comissões',
-        'pos/<id>-<nome>/mensalidades/S-<nº>/     POS sem loja: comprovativo + fatura(s) do Bende',
+        'pos/<id>-<nome>/mensalidades/S-<nº>/     POS sem loja: comprovativo + fatura(s) da Bendi',
         '', 'Faturas registadas só com o número (sem PDF) aparecem no CSV mas não têm ficheiro.',
         'Os comprovativos e extratos são documentos internos e não substituem a fatura.',
     ]
@@ -1256,7 +1256,7 @@ def nome_arquivo_bende(ini, fim):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_bende_arquivo(request):
-    """GET /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM — ZIP do Bende (na hora, ou 202 = fila)."""
+    """GET /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM — ZIP da Bendi (na hora, ou 202 = fila)."""
     erro = _exige_admin(request, 'gerir_faturacao')
     if erro:
         return erro
