@@ -465,7 +465,7 @@ import DetalheEncomendaCliente from '@/components/encomendas/DetalheEncomendaCli
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
-import { contactarSuporte } from '@/services/chat'
+import { chat, contactarSuporte } from '@/services/chat'
 import { passwordValida } from '@/utils/password'
 import { atualizarGuardado } from '@/services/confirmarEmail'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
@@ -494,6 +494,9 @@ onBeforeUnmount(() => window.removeEventListener(EVENTO, lerGuardada))
 const router     = useRouter()
 const route      = useRoute()
 const isOpen     = ref(false)
+// com o perfil aberto o balão do chat esconde-se: no telemóvel tapava o "Terminar sessão" (o perfil já tem "Mensagens")
+watch(isOpen, v => { chat.perfilAberto = v })
+onBeforeUnmount(() => { chat.perfilAberto = false })
 const fileInput  = ref(null)
 const previewUrl = ref('')
 const activeTab  = ref('dados')
