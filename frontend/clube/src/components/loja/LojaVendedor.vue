@@ -1,5 +1,5 @@
 <!-- LojaVendedor.vue — "Vendido por": quem vende, contactos e políticas da loja.
-     No checkout (compacto). Só mostra as políticas que a loja escreveu: as da Bende estão no rodapé do site. -->
+     No checkout (compacto). Só mostra as políticas que a loja escreveu: as da Bendi estão no rodapé do site. -->
 <template>
   <section :class="compacto ? '' : ['border-t py-8 px-6 md:px-12', isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-stone-50 border-stone-200']"
            data-teste="loja-vendedor">
@@ -28,7 +28,7 @@
       <div v-if="politicas.length || politicasBende.length" class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <button v-for="p in politicas" :key="p.chave" type="button" @click="aberta = p" :data-teste="'politica-' + p.chave"
           class="font-semibold text-red-500 hover:text-red-400 underline-offset-2 hover:underline">{{ p.titulo }}</button>
-        <!-- a loja não escreveu a sua: aplicam-se as da Bende (contrato SISP, cl.3: devoluções e entregas visíveis) -->
+        <!-- a loja não escreveu a sua: aplicam-se as da Bendi (contrato SISP, cl.3: devoluções e entregas visíveis) -->
         <router-link v-for="p in politicasBende" :key="p.chave" :to="'/' + p.chave" target="_blank" :data-teste="'politica-bende-' + p.chave"
           class="font-semibold text-red-500 hover:text-red-400 underline-offset-2 hover:underline">{{ p.titulo }}</router-link>
       </div>

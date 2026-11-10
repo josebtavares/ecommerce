@@ -298,10 +298,10 @@ def _avisar_falha(b):
                 else 'Podes tentar outra vez no painel de admin.')
     try:
         EmailMessage(
-            subject='Bende: o backup da base de dados falhou',
+            subject='Bendi: o backup da base de dados falhou',
             body=(f'O backup {b.get_tipo_display().lower()} de {timezone.localtime(b.criado_em):%d/%m/%Y %H:%M} falhou.\n\n'
                   f'Erro: {b.erro[-1500:]}\n\n{seguinte} Se continuar a falhar, '
-                  'a plataforma fica sem cópia de segurança recente.\n\nBende'),
+                  'a plataforma fica sem cópia de segurança recente.\n\nBendi'),
             from_email=settings.DEFAULT_FROM_EMAIL, to=para,
         ).send()
     except Exception:
@@ -576,10 +576,10 @@ def _avisar_ensaio(b):
         return
     try:
         EmailMessage(
-            subject='Bende: o ensaio de reposição de um backup falhou',
+            subject='Bendi: o ensaio de reposição de um backup falhou',
             body=(f'O backup {b.chave.rsplit("/", 1)[-1]} foi reposto numa base temporária para confirmar que serve '
                   f'e o ensaio falhou.\n\nErro: {b.ensaio_detalhe.get("erro", "")[-1500:]}\n\n'
-                  'A base da plataforma não foi tocada. Vê Admin → Backups e o procedimento em docs/REPOR_BACKUP.md.\n\nBende'),
+                  'A base da plataforma não foi tocada. Vê Admin → Backups e o procedimento em docs/REPOR_BACKUP.md.\n\nBendi'),
             from_email=settings.DEFAULT_FROM_EMAIL, to=para,
         ).send()
     except Exception:

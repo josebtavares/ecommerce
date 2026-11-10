@@ -88,7 +88,7 @@ def erro_formato(slug):
     if slug.isdigit():
         return 'O endereço precisa de ter pelo menos uma letra.'
     if slug in RESERVADOS:
-        return 'Esse endereço está reservado pelo Bende. Escolhe outro.'
+        return 'Esse endereço está reservado pela Bendi. Escolhe outro.'
     return None
 
 
@@ -100,9 +100,9 @@ def validar(slug, loja, admin=False):
         return e
     if _ocupado(slug, loja.pk):
         return 'Esse endereço já é usado por outra loja.'
-    # um endereço que o Bende retirou à loja (desligado pelo admin) — o dono não o pode voltar a pôr
+    # um endereço que a Bendi retirou à loja (desligado pelo admin) — o dono não o pode voltar a pôr
     if not admin and LojaEnderecoAntigo.objects.filter(loja=loja, slug=slug, ativo=False).exists():
-        return 'Esse endereço foi retirado pelo Bende. Escolhe outro.'
+        return 'Esse endereço foi retirado pela Bendi. Escolhe outro.'
     return None
 
 

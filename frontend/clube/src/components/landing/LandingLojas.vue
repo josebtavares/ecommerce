@@ -1,6 +1,6 @@
 <!-- LandingLojas.vue — "Para lojas": faixa no topo (a foto/vídeo da secção escurecida, ou um cinzento suave) com o
      letreiro e o título ao centro; os cartões brancos das funcionalidades começam dentro da faixa e saem dela.
-     Ao passar o rato, o cartão ganha a cor da Bende. Por baixo, o botão. -->
+     Ao passar o rato, o cartão ganha a cor da Bendi. Por baixo, o botão. -->
 <template>
   <section :id="s.tipo" class="landing-seccao" :data-teste="'landing-' + s.tipo" :class="{ visivel }">
     <div class="faixa relative overflow-hidden px-5 sm:px-8 pt-20 sm:pt-28 pb-44 sm:pb-52"

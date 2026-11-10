@@ -1,4 +1,4 @@
-<!-- SeccaoEndereco.vue — o endereço público da loja (bende.store/loja/<endereço>), utils/endereco_loja.py.
+<!-- SeccaoEndereco.vue — o endereço público da loja (e-bendi.cv/loja/<endereço>), utils/endereco_loja.py.
      Dono (Configurações): GET/POST /app/loja/<id>/endereco/ — o antigo continua a levar à loja; 3 mudanças / 30 dias.
      Admin (Lojas → detalhe, admin=true): /app/admin/lojas/<id>/endereco/ — sem limite, motivo (o dono é avisado),
      pode não manter o antigo e desligar endereços antigos (ex.: ofensivos); vê o histórico. -->
@@ -100,7 +100,7 @@
           <ul class="mt-2 space-y-1.5">
             <li v-for="(h, i) in d.historico" :key="i" class="text-[11px] text-zinc-400">
               <span class="text-zinc-300">/loja/{{ h.slug }}</span> deixado a {{ quando(h.criado_em) }}
-              · {{ h.por_admin ? `Bende${h.por ? ' (' + h.por + ')' : ''}` : 'dono' }}
+              · {{ h.por_admin ? `Bendi${h.por ? ' (' + h.por + ')' : ''}` : 'dono' }}
               <span v-if="!h.ativo" class="text-red-300"> · desligado</span>
               <span v-if="h.motivo" class="block text-zinc-500">Motivo: {{ h.motivo }}</span>
             </li>

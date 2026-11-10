@@ -1,6 +1,6 @@
 """
 Confirmação do email (decisões de 2026-10-30, contra contas de bots com emails falsos):
-- conta nova (registo da Bende ou do POS) começa por confirmar e recebe um link por email (vale 3 dias);
+- conta nova (registo da Bendi ou do POS) começa por confirmar e recebe um link por email (vale 3 dias);
 - sem o email confirmado navega e entra, mas não encomenda, não marca nem cria loja (exigir());
 - entrar com o Google confirma (o Google já verificou o email); mudar o email volta a pedir confirmação;
 - as contas que já existiam ficaram confirmadas (migração 0083);
@@ -77,9 +77,9 @@ def enviar(utilizador_id):
     from .email_html import saudacao
     url = link(user)
     try:
-        fila_emails.enfileirar(user.email, 'Confirma o teu email na Bende',
+        fila_emails.enfileirar(user.email, 'Confirma o teu email na Bendi',
               f'{saudacao(user)}\n\n'
-              f'Obrigado por criares conta na Bende. Confirma que este email é teu:\n\n{url}\n\n'
+              f'Obrigado por criares conta na Bendi. Confirma que este email é teu:\n\n{url}\n\n'
               f'O link vale {VALIDADE.days} dias. Até confirmares podes ver as lojas, mas não encomendar, '
               f'marcar serviços nem criar uma loja.\n\n'
               f'Não foste tu a criar a conta? Ignora este email: a conta é apagada ao fim de {DIAS_ABANDONO} dias.',

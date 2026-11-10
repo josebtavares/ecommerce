@@ -33,8 +33,8 @@
             <span :class="['text-[10px] font-bold px-1.5 py-0.5 rounded uppercase', roleColor]">
               {{ loja.minha_role }}
             </span>
-            <!-- documentos aprovados (utils/documentos_loja.py) — o público só o vê quando a Bende ligar o selo -->
-            <span v-if="loja.verificada" data-teste="backoffice-verificada" title="Documentos aprovados pela Bende"
+            <!-- documentos aprovados (utils/documentos_loja.py) — o público só o vê quando a Bendi ligar o selo -->
+            <span v-if="loja.verificada" data-teste="backoffice-verificada" title="Documentos aprovados pela Bendi"
                   class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">
               <font-awesome-icon :icon="['fas', 'circle-check']" class="mr-0.5" />Verificada
             </span>

@@ -314,7 +314,7 @@ def _pagar(m, fornecedor, referencia):
                 f'{m.servico_nome} a {quando_texto(m.inicio)} — {formatar(m.valor_pago)} pagos.', tipo='marcacao_nova',
                 email=2)
     from ..utils.emails_fiscais import comprovativo_marcacao_depois_do_commit
-    comprovativo_marcacao_depois_do_commit(m)       # o cliente recebe o comprovativo do Bende por email
+    comprovativo_marcacao_depois_do_commit(m)       # o cliente recebe o comprovativo da Bendi por email
     return m
 
 

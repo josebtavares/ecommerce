@@ -184,7 +184,7 @@
         <ResultadosPesquisa v-if="pRes" :res="pRes" :limit="LIMITE" :offset="pOffset" @ir="pesquisar" @abrir="abrirResultado" />
       </template>
 
-      <!-- ═══ FATURAS DO BENDE ═══ -->
+      <!-- ═══ FATURAS DO BENDI ═══ -->
       <template v-else>
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="ficha-mensalidades">
           <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pt-4 pb-3">Mensalidades pagas{{ tipo === 'loja' && ficha.pos.length ? ' (loja e POS)' : '' }}</p>
@@ -192,7 +192,7 @@
         </div>
         <div v-if="ficha.tipo === 'loja'" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="ficha-comissoes">
           <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider px-5 pt-4 pb-1">Comissões por mês</p>
-          <p class="text-[11px] text-zinc-500 px-5 pb-3">Uma fatura do Bende por mês; o extrato vai em anexo no email à loja.</p>
+          <p class="text-[11px] text-zinc-500 px-5 pb-3">Uma fatura da Bendi por mês; o extrato vai em anexo no email à loja.</p>
           <p v-if="!ficha.comissoes.length" class="text-sm text-zinc-500 px-5 pb-5">Sem comissões.</p>
           <div v-for="c in ficha.comissoes" :key="c.mes" class="px-5 py-3 border-t border-zinc-800 space-y-2">
             <div class="flex flex-wrap items-center gap-3">
@@ -267,12 +267,12 @@ export default {
   computed: {
     abas () {
       if (this.tipo !== 'loja') {
-        return [{ key: 'dados', label: 'Ficha' }, { key: 'vendas', label: 'Vendas e faturas' }, { key: 'bende', label: 'Faturas do Bende' },
+        return [{ key: 'dados', label: 'Ficha' }, { key: 'vendas', label: 'Vendas e faturas' }, { key: 'bende', label: 'Faturas da Bendi' },
           { key: 'pesquisa', label: 'Pesquisar' }]
       }
       return [{ key: 'dados', label: 'Ficha' }, { key: 'vendas', label: 'Vendas e faturas' },
         { key: 'pos', label: `POS (${this.ficha ? this.ficha.pos.length : '…'})` },
-        { key: 'bende', label: 'Faturas do Bende' }, { key: 'pesquisa', label: 'Pesquisar' }]
+        { key: 'bende', label: 'Faturas da Bendi' }, { key: 'pesquisa', label: 'Pesquisar' }]
     },
     pesquisaVendas () {
       return { loja: 'Nº encomenda, nº fatura (também anulada), cliente', marcacoes: 'M-…, nº fatura (também anulada), cliente, serviço',

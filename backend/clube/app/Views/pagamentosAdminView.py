@@ -7,7 +7,7 @@ Pagamentos dos clientes às lojas — encomendas e marcações pagas online, num
                                                            falhados, reembolsos por concluir
   GET /app/admin/pagamentos/abas/?q=&limit=&offset=&fixar= abas das lojas (contador = pagamentos pendentes)
   GET /app/admin/pagamentos.csv?…                          o que a lista mostra (todas as páginas)
-Recebimentos do Bende — mensalidades pagas e cobranças de comissões pagas (sem as ofertas/perdoadas):
+Recebimentos da Bendi — mensalidades pagas e cobranças de comissões pagas (sem as ofertas/perdoadas):
   GET /app/admin/pagamentos/bende/?tipo=mensalidade|cobranca&de=&ate=&q=&limit=&offset=
   GET /app/admin/pagamentos/bende.csv?…
 
@@ -78,7 +78,7 @@ def _qs_encomendas():
 
 
 def _qs_marcacoes():
-    """Só as de pagamento antecipado (online, pelo Bende); as pagas no local não passam por cá."""
+    """Só as de pagamento antecipado (online, pela Bendi); as pagas no local não passam por cá."""
     return Marcacao.objects.filter(pagamento='antecipado').annotate(
         x_origem=Value('marcacao', output_field=TXT), x_id=F('id'), x_ref=F('id'),
         x_loja=F('loja_id'), x_loja_nome=F('loja__nome'),
@@ -312,7 +312,7 @@ def lista_csv(request):
     return r
 
 
-# ── Recebimentos do Bende ──────────────────────────────────────────
+# ── Recebimentos da Bendi ──────────────────────────────────────────
 
 def _bende_partes(request):
     g = request.GET
@@ -414,7 +414,7 @@ def bende_csv(request):
     if len(linhas) > MAX_CSV:
         return Response({'detail': f'Mais de {MAX_CSV} recebimentos — escolhe um período mais curto.'},
                         status=status.HTTP_400_BAD_REQUEST)
-    out = [['Documento', 'Tipo', 'Loja/POS', 'Descrição', 'Pago em', 'Método', 'Valor (CVE)', 'Fatura do Bende nº']]
+    out = [['Documento', 'Tipo', 'Loja/POS', 'Descrição', 'Pago em', 'Método', 'Valor (CVE)', 'Fatura da Bendi nº']]
     for i in linhas:
         out.append([i['referencia'], 'Mensalidade' if i['tipo'] == 'mensalidade' else 'Cobrança de comissões', i['nome'],
                     i['descricao'], _quando(i['pago_em']), i['metodo_label'], i['valor'].replace('.', ','),

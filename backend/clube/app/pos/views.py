@@ -767,7 +767,7 @@ def pos_membro_login(request):
 @pos_ratelimit(key='ip', rate='5/h')
 def pos_register(request):
     """Registo de conta principal. Turnstile + armadilha + email descartável, e o link de confirmação
-    (utils/turnstile.py, utils/confirmar_email.py) — como o registo da Bende."""
+    (utils/turnstile.py, utils/confirmar_email.py) — como o registo da Bendi."""
     from ..utils import confirmar_email, turnstile
     if turnstile.armadilha(request):
         return Response({'detail': 'Pedido inválido.'}, status=status.HTTP_400_BAD_REQUEST)

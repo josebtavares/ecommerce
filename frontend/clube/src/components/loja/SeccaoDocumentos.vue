@@ -1,6 +1,6 @@
-<!-- SeccaoDocumentos.vue — Configurações da loja (só o dono): documentos legais opcionais que a Bende verifica.
+<!-- SeccaoDocumentos.vue — Configurações da loja (só o dono): documentos legais opcionais que a Bendi verifica.
      Backend: /app/loja/<id>/documentos/ (utils/documentos_loja.py). Ficheiros privados; abrem-se por um link
-     de 2 minutos e cada consulta da Bende aparece aqui. -->
+     de 2 minutos e cada consulta da Bendi aparece aqui. -->
 <template>
   <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-documentos">
     <div class="flex items-start justify-between gap-3 mb-1">
@@ -13,11 +13,11 @@
       </span>
     </div>
     <p class="text-xs text-zinc-600 mb-4">
-      <template v-if="resumo?.obrigatorios">A Bende pediu estes documentos para publicar a loja.</template>
+      <template v-if="resumo?.obrigatorios">A Bendi pediu estes documentos para publicar a loja.</template>
       <template v-else>Opcional.</template>
-      Mostram que a loja é legítima: a Bende verifica-os e a loja fica <b class="text-zinc-400">verificada</b> com o
+      Mostram que a loja é legítima: a Bendi verifica-os e a loja fica <b class="text-zinc-400">verificada</b> com o
       documento de identificação e o início de atividade (ou certidão comercial) aprovados.
-      São privados — só tu e a equipa da Bende os abrem, e cada consulta fica registada.
+      São privados — só tu e a equipa da Bendi os abrem, e cada consulta fica registada.
     </p>
 
     <p v-if="carregando" class="text-xs text-zinc-500">A carregar…</p>
@@ -98,14 +98,14 @@
             class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold transition">
             {{ aEnviar ? 'A enviar…' : 'Enviar' }}
           </button>
-          <span v-if="enviado" class="text-xs text-green-500" data-teste="documento-enviado">Enviado ✓ — a Bende vai verificá-lo.</span>
+          <span v-if="enviado" class="text-xs text-green-500" data-teste="documento-enviado">Enviado ✓ — a Bendi vai verificá-lo.</span>
         </div>
       </form>
       <p v-else class="text-xs text-zinc-500 border-t border-zinc-800 pt-4">O envio de documentos não está disponível de momento.</p>
 
-      <!-- consultas da Bende -->
+      <!-- consultas da Bendi -->
       <div v-if="consultas.length" class="mt-5 border-t border-zinc-800 pt-4" data-teste="documentos-consultas">
-        <p class="text-xs font-semibold text-zinc-400 mb-1.5">Atividade da Bende nos teus documentos</p>
+        <p class="text-xs font-semibold text-zinc-400 mb-1.5">Atividade da Bendi nos teus documentos</p>
         <p v-for="c in consultas" :key="c.id" class="text-[11px] text-zinc-500">
           {{ c.quando }} · {{ c.acao_nome }}<template v-if="c.tipo"> · {{ nomeTipo(c.tipo) }}</template>
         </p>

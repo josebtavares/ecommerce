@@ -12,7 +12,7 @@
     <div :class="['divide-y', claro ? 'divide-slate-200' : 'divide-zinc-800']">
       <div v-for="a in itens" :key="a.id" class="py-2 flex flex-wrap items-center gap-x-3 gap-y-1" :data-teste="`arquivo-${a.id}`">
         <div class="flex-1 min-w-[180px]">
-          <p :class="['text-sm', claro ? 'text-slate-800' : 'text-zinc-200']">{{ a.periodo }}<template v-if="!a.com_bende"> · sem documentos do Bende</template></p>
+          <p :class="['text-sm', claro ? 'text-slate-800' : 'text-zinc-200']">{{ a.periodo }}<template v-if="!a.com_bende"> · sem documentos da Bendi</template></p>
           <p :class="['text-[11px]', claro ? 'text-slate-500' : 'text-zinc-500']">
             Pedido a {{ quando(a.criado_em) }}<template v-if="a.pedido_por"> por {{ a.pedido_por }}</template>
             <template v-if="a.disponivel"> · {{ tamanho(a.tamanho) }} · até {{ quando(a.expira_em) }}</template>

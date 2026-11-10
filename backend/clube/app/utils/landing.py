@@ -1,5 +1,5 @@
 """
-Landing page da Bende (/sobre): apresenta a plataforma a quem ainda não a conhece.
+Landing page da Bendi (/sobre): apresenta a plataforma a quem ainda não a conhece.
 
 Uma página só, com secções fixas (TIPOS) que o admin (perm gerir_home) edita na própria página:
 o rascunho (LandingRascunho, uma linha) só chega aos visitantes ao publicar (LandingPublicacao).
@@ -60,12 +60,12 @@ def _b(texto, link):
 PADRAO = [
     {'tipo': 'hero', 'ativa': True, 'nav': '',
      'titulo': 'Tudo o que precisas, nas lojas de Cabo Verde',
-     'subtitulo': 'Compra nas lojas da tua ilha, marca serviços e recebe em casa. Para quem vende, a Bende junta '
+     'subtitulo': 'Compra nas lojas da tua ilha, marca serviços e recebe em casa. Para quem vende, a Bendi junta '
                   'loja online, POS, entregas e faturação num só lugar.',
-     'botao': _b('Ir à loja Bende', '/Home'), 'botao2': _b('Criar conta', '#criar-conta'),
+     'botao': _b('Ir à loja Bendi', '/Home'), 'botao2': _b('Criar conta', '#criar-conta'),
      'media': None, 'media_movel': None, 'escurecer': 45},
     {'tipo': 'clientes', 'ativa': True, 'nav': 'Para clientes',
-     'titulo': 'Comprar na Bende é simples',
+     'titulo': 'Comprar na Bendi é simples',
      'subtitulo': 'Do produto à tua porta, em poucos passos.',
      'passos': [
          {'icone': 'store', 'titulo': 'Descobre lojas', 'texto': 'Lojas, restaurantes e serviços perto de ti, '
@@ -79,7 +79,7 @@ PADRAO = [
      ],
      'botao': _b('Explorar lojas', '/Home'), 'media': None, 'media2': None},
     {'tipo': 'lojas', 'ativa': True, 'nav': 'Para lojas',
-     'titulo': 'Vende mais com a Bende',
+     'titulo': 'Vende mais com a Bendi',
      'subtitulo': 'Tudo o que a tua loja precisa para vender online e ao balcão.',
      'itens': [
          {'icone': 'shop', 'titulo': 'Loja online', 'texto': 'A tua loja com endereço próprio, catálogo, '
@@ -104,22 +104,22 @@ PADRAO = [
      'comissao_texto': 'Sem mensalidade: só pagas uma pequena percentagem quando vendes online.',
      'nota': 'Preços em escudos (CVE).', 'botao': _b('Criar a minha loja', '/loja/criar')},
     {'tipo': 'tutoriais', 'ativa': True, 'nav': 'Tutoriais',
-     'titulo': 'Tutoriais', 'subtitulo': 'Aprende a usar a Bende em poucos minutos.', 'videos': []},
+     'titulo': 'Tutoriais', 'subtitulo': 'Aprende a usar a Bendi em poucos minutos.', 'videos': []},
     {'tipo': 'faq', 'ativa': True, 'nav': 'Perguntas',
      'titulo': 'Perguntas frequentes', 'subtitulo': '',
      'perguntas': [
          {'pergunta': 'Preciso de conta para comprar?',
           'resposta': 'Sim. A conta é gratuita e serve para comprar, marcar serviços e acompanhar as encomendas.'},
          {'pergunta': 'Como abro a minha loja?',
-          'resposta': 'Cria uma conta, carrega em "Criar a minha loja" e preenche os dados. A equipa da Bende '
+          'resposta': 'Cria uma conta, carrega em "Criar a minha loja" e preenche os dados. A equipa da Bendi '
                       'revê a loja antes de ela aparecer.'},
-         {'pergunta': 'Quanto custa vender na Bende?',
+         {'pergunta': 'Quanto custa vender na Bendi?',
           'resposta': 'Podes pagar uma comissão por venda ou escolher um plano mensal. Vê os valores na secção '
                       'Planos e preços.'},
      ]},
     # começa escondida: o admin liga-a quando a app estiver nas lojas (sem link → "Em breve" no botão)
     {'tipo': 'app', 'ativa': False, 'nav': 'App',
-     'titulo': 'Baixa a app da Bende',
+     'titulo': 'Baixa a app da Bendi',
      'subtitulo': 'Compra, acompanha as encomendas e marca serviços no telemóvel, com notificações em tempo real.',
      'play_store': '', 'app_store': '',
      'itens': [
@@ -544,7 +544,7 @@ def info_youtube(texto):
     url = 'https://www.youtube.com/oembed?format=json&url=' + quote(f'https://www.youtube.com/watch?v={vid}', safe='')
     base = {'youtube': vid, 'titulo': '', 'autor': '', 'miniatura': miniatura_youtube(vid)}
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Bende/1.0'}), timeout=6) as r:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Bendi/1.0'}), timeout=6) as r:
             d = json.loads(r.read(200_000))
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):

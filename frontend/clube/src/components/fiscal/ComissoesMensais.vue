@@ -1,11 +1,11 @@
-<!-- ComissoesMensais.vue — backoffice (Subscrição): comissões do Bende por mês (12 por página, filtro por ano), extrato e fatura do Bende.
+<!-- ComissoesMensais.vue — backoffice (Subscrição): comissões da Bendi por mês (12 por página, filtro por ano), extrato e fatura da Bendi.
      Cada mês abre as suas vendas com a comissão de cada uma, paginadas e com procura pelo nº da encomenda. -->
 <template>
   <div v-if="count || ano" class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden" data-teste="comissoes-mensais">
     <div class="flex flex-wrap items-end justify-between gap-2 px-6 pt-5 pb-3">
       <div>
         <p class="text-xs font-bold text-zinc-400 uppercase tracking-wider pb-1">Comissões por mês</p>
-        <p class="text-xs text-zinc-500">O Bende emite uma fatura por mês com as comissões das tuas vendas.</p>
+        <p class="text-xs text-zinc-500">A Bendi emite uma fatura por mês com as comissões das tuas vendas.</p>
       </div>
       <select v-if="anos.length > 1" v-model="ano" @change="carregar(0)" aria-label="Ano" data-teste="comissoes-ano"
         class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-200 focus:outline-none focus:border-red-500">
@@ -32,7 +32,7 @@
           <SecaoDocumento tipo="fatura">
             <template v-if="m.fatura">
               <span class="text-xs text-green-400 font-semibold" data-teste="comissoes-fatura-numero">{{ m.fatura.numero }}</span>
-              <BotaoPdf v-if="m.fatura.pdf_url" :href="urlFicheiro(m.fatura.pdf_url)" titulo="Descarregar a fatura do Bende (PDF)" teste="comissoes-fatura-pdf" />
+              <BotaoPdf v-if="m.fatura.pdf_url" :href="urlFicheiro(m.fatura.pdf_url)" titulo="Descarregar a fatura da Bendi (PDF)" teste="comissoes-fatura-pdf" />
             </template>
             <span v-else class="text-[11px] text-zinc-500">Em breve</span>
           </SecaoDocumento>
@@ -91,7 +91,7 @@ export default {
   components: { SecaoDocumento, BotaoPdf, DiferencaComissoes, EstadoCobrancaMes, PaginacaoLista },
   props: {
     lojaId: { type: [String, Number], required: true },
-    versao: { type: Number, default: 0 },     // muda → volta a ler a página aberta (fatura do Bende registada/anulada)
+    versao: { type: Number, default: 0 },     // muda → volta a ler a página aberta (fatura da Bendi registada/anulada)
   },
   data () {
     return { meses: [], count: 0, anos: [], ano: '', offset: 0, aCarregar: false,

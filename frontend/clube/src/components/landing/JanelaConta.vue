@@ -1,4 +1,4 @@
-<!-- JanelaConta.vue — entrar ou criar conta por cima da landing page, sem sair dela (a mesma conta da loja Bende).
+<!-- JanelaConta.vue — entrar ou criar conta por cima da landing page, sem sair dela (a mesma conta da loja Bendi).
      modo: 'entrar' | 'registo'. Emite 'fechar' e 'entrou' (depois de guardar a sessão). -->
 <template>
   <Teleport to="body">
@@ -11,12 +11,12 @@
           class="absolute right-3 top-3 w-9 h-9 rounded-lg text-lg transition-colors"
           :class="isDark ? 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900' : 'text-zinc-400 hover:text-zinc-700 hover:bg-stone-100'">✕</button>
 
-        <img :src="$logo(isDark)" alt="Bende" class="w-16 h-16 object-contain mb-2" />
+        <img :src="$logo(isDark)" alt="Bendi" class="w-16 h-16 object-contain mb-2" />
         <h2 class="text-xl font-bold mb-1" :class="isDark ? 'text-white' : 'text-zinc-900'">
           {{ modo === 'entrar' ? 'Bem-vindo de volta' : 'Criar conta' }}
         </h2>
         <p class="text-xs mb-6" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">
-          {{ modo === 'entrar' ? 'Entra com a tua conta Bende — é a mesma da loja.' : 'Uma conta para comprar, marcar serviços e abrir a tua loja.' }}
+          {{ modo === 'entrar' ? 'Entra com a tua conta Bendi — é a mesma da loja.' : 'Uma conta para comprar, marcar serviços e abrir a tua loja.' }}
         </p>
 
         <FormEntrar v-if="modo === 'entrar'" :isDark="isDark" :seguinte="seguinte" modal

@@ -13,7 +13,7 @@ const { injetar, paginaFixa, sitemap } = require('./seo')
 
 const DIST = path.join(__dirname, '..', 'dist')
 const API = (process.env.VUE_APP_URL_BASE || 'http://localhost:8000').replace(/\/$/, '')
-const SITE = (process.env.SITE_URL || 'https://bende.store').replace(/\/$/, '')
+const SITE = (process.env.SITE_URL || 'https://e-bendi.cv').replace(/\/$/, '')
 const PORTA = process.env.PORT || 3000
 const ESPERA_API = 1500
 const VALIDADE = 5 * 60 * 1000
@@ -167,4 +167,4 @@ http.createServer((req, res) => {
     console.error('servidor:', req.url, e.message)
     if (!res.headersSent) { res.statusCode = 500; res.end() }
   }))
-}).listen(PORTA, () => console.log(`Bende a servir ${DIST} na porta ${PORTA} (API ${API})`))
+}).listen(PORTA, () => console.log(`Bendi a servir ${DIST} na porta ${PORTA} (API ${API})`))

@@ -192,7 +192,7 @@
               class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">
               <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Comprovativo
             </button>
-            <!-- fatura legal do Bende (e-Fatura), registada pelo admin -->
+            <!-- fatura legal da Bendi (e-Fatura), registada pelo admin -->
             <a v-if="f.fatura" :href="f.fatura.pdf_url ? urlFicheiro(f.fatura.pdf_url) : null" target="_blank" rel="noopener"
               class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
               <font-awesome-icon :icon="['fas', 'file-invoice']" class="mr-1" />Fatura {{ f.fatura.numero }}
@@ -253,7 +253,7 @@ export default {
 
   created () {
     this.carregar()
-    // tempo real (utils/tempoRealPOS.js): mensalidade emitida/paga, fatura do Bende, plano, suspensão
+    // tempo real (utils/tempoRealPOS.js): mensalidade emitida/paga, fatura da Bendi, plano, suspensão
     this.pararTempoReal = ouvirPOS(['subscricao', 'pos'], () => { this.carregar(true); this.versao++ }, { espera: 600 })
   },
   beforeUnmount () { this.pararTempoReal?.() },

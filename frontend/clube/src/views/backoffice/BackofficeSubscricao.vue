@@ -193,7 +193,7 @@
         </template>
       </div>
 
-      <!-- comissões do Bende por mês: extrato + fatura (components/fiscal) -->
+      <!-- comissões da Bendi por mês: extrato + fatura (components/fiscal) -->
       <ComissoesMensais :loja-id="lojaId" :versao="versao" />
 
       <!-- cobrança mensal das comissões (a SISP não divide pagamentos: paga-se à parte) -->
@@ -222,7 +222,7 @@
               class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold">
               <font-awesome-icon :icon="['fas', 'file-arrow-down']" class="mr-1" />Comprovativo
             </button>
-            <!-- fatura legal do Bende (e-Fatura), registada pelo admin -->
+            <!-- fatura legal da Bendi (e-Fatura), registada pelo admin -->
             <a v-if="f.fatura" :href="f.fatura.pdf_url ? urlFicheiro(f.fatura.pdf_url) : null" target="_blank" rel="noopener"
               :title="f.fatura.pdf_url ? 'Descarregar a fatura' : 'Fatura registada sem PDF'"
               class="px-3 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-400 text-xs font-semibold">

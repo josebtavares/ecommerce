@@ -1,5 +1,5 @@
 """
-Vendas que a loja/POS fatura (emite a fatura no e-Fatura e regista-a no Bende) — três origens:
+Vendas que a loja/POS fatura (emite a fatura no e-Fatura e regista-a na Bendi) — três origens:
   'loja'       Encomenda (loja online)        E-<id>   data da venda: data_criacao
   'marcacoes'  Marcacao (serviços da loja)    M-<id>   data: inicio (o dia do serviço)
   'pos'        ContaMesa (POS)                V-<id>   data: fechada_em
@@ -245,7 +245,7 @@ def linha(origem, obj, request=None, anuladas=0):
         d['comprovativo'] = bool(pag and pag.status in ('aprovado', 'reembolsado', 'reembolsado_parcial'))
         d['comprovativo_url'] = f'/app/encomenda/{obj.id}/comprovativo/' if d['comprovativo'] else None
     elif origem == 'marcacoes':
-        # só as pagas online (o pagamento passou pelo Bende)
+        # só as pagas online (o pagamento passou pela Bendi)
         d['comprovativo'] = bool(obj.pago)
         d['comprovativo_url'] = f'/app/marcacao/{obj.id}/comprovativo/' if obj.pago else None
     else:

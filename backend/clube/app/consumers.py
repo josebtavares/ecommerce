@@ -64,7 +64,7 @@ class NotificacaoConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({'type': 'encomenda', 'encomenda': event['encomenda']}))
 
     async def subscricao_atualizada(self, event):
-        # mensalidade, subscrição ou fatura do Bende mudou: só ids ({tipo, id, loja_id, pos_id})
+        # mensalidade, subscrição ou fatura da Bendi mudou: só ids ({tipo, id, loja_id, pos_id})
         await self.send(text_data=json.dumps({'type': 'subscricao', 'subscricao': event['subscricao']}))
 
     async def faturacao_atualizada(self, event):

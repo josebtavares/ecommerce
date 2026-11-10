@@ -4,7 +4,7 @@
   <FaturaVenda :documento="encomenda" :url="`/app/loja/${lojaId}/encomendas/${encomenda.id}/fatura/`"
     :cancelada="encomenda.status === 'cancelado'" teste="fatura-encomenda"
     dica="Emite a fatura no e-Fatura e regista-a aqui: o cliente vê-a na encomenda." @atualizada="d => $emit('atualizada', d)">
-    <!-- comprovativo do pagamento: o Bende gera-o e envia-o ao cliente; a fatura é da loja -->
+    <!-- comprovativo do pagamento: a Bendi gera-o e envia-o ao cliente; a fatura é da loja -->
     <template #acoes>
       <BotaoPdf v-if="pago" texto="Comprovativo de pagamento" titulo="Descarregar o comprovativo de pagamento (PDF)" teste="comprovativo-loja"
         @click="descarregarComprovativoEncomenda(encomenda.id)" />

@@ -3,7 +3,7 @@
 // juntam-se num só pedido; quando a ligação volta depois de cair, recarrega (pode ter perdido avisos); sem ligação,
 // verifica de 20 em 20 s.
 //   • encomendas e entregas (backend utils/tempo_real_encomendas.py): { id, loja_id }
-//   • mensalidades, subscrições e faturas do Bende (utils/tempo_real_subscricoes.py): { tipo, id, loja_id, pos_id }
+//   • mensalidades, subscrições e faturas da Bendi (utils/tempo_real_subscricoes.py): { tipo, id, loja_id, pos_id }
 //   • faturas das vendas e vendas que passam a faturáveis (utils/tempo_real_faturacao.py): { origem, id, loja_id, pos_id }
 //     (as comissões, créditos e cobranças de comissões vão pelas subscrições: { tipo: comissao|credito_comissao|cobranca_comissoes })
 //   • números da plataforma — Dashboard e Relatórios do admin (utils/tempo_real_painel.py): { origem }

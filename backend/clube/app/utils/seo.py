@@ -71,14 +71,14 @@ def _preco_produto(produto):
 
 def dados_loja(loja):
     onde = f' em {loja.localizacao}' if loja.localizacao else ''
-    descricao = _texto(loja.descricao) or _texto(f'{loja.categoria}{onde}. Vê os produtos e encomenda online na Bende.')
+    descricao = _texto(loja.descricao) or _texto(f'{loja.categoria}{onde}. Vê os produtos e encomenda online na Bendi.')
     estruturados = {
         '@context': 'https://schema.org', '@type': 'Store', 'name': loja.nome, 'description': descricao,
     }
     if loja.localizacao:
         estruturados['address'] = loja.localizacao
     return {
-        'tipo': 'loja', 'titulo': f'{loja.nome} — Bende', 'descricao': descricao, 'nome': loja.nome,
+        'tipo': 'loja', 'titulo': f'{loja.nome} — Bendi', 'descricao': descricao, 'nome': loja.nome,
         'caminho': f'/loja/{loja.slug}', 'imagem': _url_imagem('loja', loja, foto_loja(loja)),
         'indexar': not loja.demo, 'estruturados': estruturados,
     }
@@ -168,9 +168,9 @@ def dados_landing():
     _, seccoes = landing.publicada()
     por_tipo = {s['tipo']: s for s in seccoes}
     hero = por_tipo.get('hero') or {}
-    titulo = _texto(hero.get('titulo'), 90) or 'A Bende'
+    titulo = _texto(hero.get('titulo'), 90) or 'A Bendi'
     descricao = _texto(hero.get('subtitulo')) or _texto('Compra nas lojas de Cabo Verde, marca serviços e vende online '
-                                                         'com loja, POS, entregas e faturação na Bende.')
+                                                         'com loja, POS, entregas e faturação na Bendi.')
     im, foto = foto_landing()
     imagem = None
     if foto:
@@ -180,7 +180,7 @@ def dados_landing():
     redes = [u for u in (contactos.get('redes') or {}).values() if u] if contactos.get('ativa') else []
     from django.conf import settings
     site = settings.FRONTEND_BASE_URL.rstrip('/')
-    organizacao = {'@type': 'Organization', 'name': 'Bende', 'url': site + '/', 'description': descricao}
+    organizacao = {'@type': 'Organization', 'name': 'Bendi', 'url': site + '/', 'description': descricao}
     if redes:
         organizacao['sameAs'] = redes
     grafo = [organizacao]
@@ -191,7 +191,7 @@ def dados_landing():
             {'@type': 'Question', 'name': p['pergunta'],
              'acceptedAnswer': {'@type': 'Answer', 'text': p['resposta']}} for p in perguntas]})
     return {
-        'tipo': 'site', 'titulo': f'{titulo} — Bende', 'descricao': descricao, 'nome': 'Bende',
+        'tipo': 'site', 'titulo': f'{titulo} — Bendi', 'descricao': descricao, 'nome': 'Bendi',
         'caminho': '/sobre', 'imagem': imagem, 'indexar': True,
         'estruturados': {'@context': 'https://schema.org', '@graph': grafo},
     }

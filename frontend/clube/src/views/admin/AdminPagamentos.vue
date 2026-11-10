@@ -5,7 +5,7 @@
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-zinc-100">Pagamentos</h2>
-        <p class="text-xs text-zinc-500 mt-0.5">{{ vista === 'lojas' ? 'Pagamentos dos clientes às lojas: encomendas e marcações pagas online' : 'O dinheiro que é do Bende: mensalidades e comissões pagas' }}</p>
+        <p class="text-xs text-zinc-500 mt-0.5">{{ vista === 'lojas' ? 'Pagamentos dos clientes às lojas: encomendas e marcações pagas online' : 'O dinheiro que é da Bendi: mensalidades e comissões pagas' }}</p>
       </div>
       <div class="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1" role="tablist">
         <button v-for="t in VISTAS" :key="t.key" type="button" role="tab" :aria-selected="vista === t.key ? 'true' : 'false'"
@@ -120,7 +120,7 @@
               <div class="bg-zinc-800/60 rounded-xl p-3"><p class="text-[10px] text-zinc-500">Valor</p><p class="text-sm font-bold text-zinc-100">{{ euros(p.valor) }}</p></div>
               <div class="bg-zinc-800/60 rounded-xl p-3"><p class="text-[10px] text-zinc-500">Devolvido ao cliente</p>
                 <p :class="['text-sm font-bold', Number(p.reembolsado) ? 'text-sky-300' : 'text-zinc-500']">{{ Number(p.reembolsado) ? '− ' + euros(p.reembolsado) : '—' }}</p></div>
-              <div class="bg-zinc-800/60 rounded-xl p-3"><p class="text-[10px] text-zinc-500">Comissão do Bende</p>
+              <div class="bg-zinc-800/60 rounded-xl p-3"><p class="text-[10px] text-zinc-500">Comissão da Bendi</p>
                 <p :class="['text-sm font-bold', Number(p.comissao) ? 'text-red-300' : 'text-zinc-500']" data-teste="pag-comissao">{{ Number(p.comissao) ? '− ' + euros(p.comissao) : '—' }}</p></div>
               <div class="bg-zinc-800/60 rounded-xl p-3"><p class="text-[10px] text-zinc-500">Fica para a loja</p>
                 <p class="text-sm font-bold text-green-400" data-teste="pag-receita">{{ p.receita_loja !== null ? euros(p.receita_loja) : 'ainda não pago' }}</p></div>
@@ -147,11 +147,11 @@
       <PaginacaoLista :count="lista.count" :limit="LIMITE" :offset="offset" @ir="carregar" />
     </template>
 
-    <!-- ═══ RECEBIMENTOS DO BENDE ═══ -->
+    <!-- ═══ RECEBIMENTOS DO BENDI ═══ -->
     <template v-else>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" data-teste="bende-totais">
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 px-4 py-3">
-          <p class="text-[11px] text-zinc-500">Recebido pelo Bende</p>
+          <p class="text-[11px] text-zinc-500">Recebido pela Bendi</p>
           <p class="text-lg font-bold tabular-nums text-green-400">{{ bende ? euros(bende.totais.valor) : '…' }}</p>
           <p class="text-[11px] text-zinc-500">{{ bende ? `${bende.count} pagamento(s)` : '' }}</p>
         </div>
@@ -200,7 +200,7 @@
               <template v-if="r.tipo === 'mensalidade'">
                 <template v-if="r.fatura">
                   <span class="text-xs text-green-400 font-semibold">{{ r.fatura.numero }}</span>
-                  <BotaoPdf v-if="r.fatura.pdf_url" :href="urlFicheiro(r.fatura.pdf_url)" titulo="Descarregar a fatura do Bende (PDF)" />
+                  <BotaoPdf v-if="r.fatura.pdf_url" :href="urlFicheiro(r.fatura.pdf_url)" titulo="Descarregar a fatura da Bendi (PDF)" />
                 </template>
                 <span v-else class="text-[11px] text-amber-300">Por registar</span>
               </template>
@@ -230,7 +230,7 @@ import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
 
 const LIMITE = 20
-const VISTAS = [{ key: 'lojas', label: 'Pagamentos das lojas' }, { key: 'bende', label: 'Recebimentos do Bende' }]
+const VISTAS = [{ key: 'lojas', label: 'Pagamentos das lojas' }, { key: 'bende', label: 'Recebimentos da Bendi' }]
 const ESTADOS = { aprovado: 'Pago', pendente: 'Pendente', falhado: 'Falhado', reembolsado: 'Reembolsado',
   reembolsado_parcial: 'Reembolsado em parte', cancelado: 'Não pago' }
 const COR = { aprovado: 'bg-green-500/15 text-green-400', pendente: 'bg-amber-500/15 text-amber-300', falhado: 'bg-red-500/15 text-red-400',

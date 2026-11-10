@@ -1,4 +1,4 @@
-<!-- ListaMensalidades.vue — admin: mensalidades pagas (loja/POS) com comprovativo, fatura do Bende e histórico.
+<!-- ListaMensalidades.vue — admin: mensalidades pagas (loja/POS) com comprovativo, fatura da Bendi e histórico.
      mensalidades: itens da ficha (fatura_payload + referencia + anuladas). Emite 'alterado' depois de registar/substituir/anular. -->
 <template>
   <div>

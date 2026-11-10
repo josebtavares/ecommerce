@@ -77,7 +77,7 @@ def _texto(conversa, caixa, primeira, total):
     else:
         t = ' '.join((primeira.texto or '').split())
         excerto = f'{nome}: «{t[:140]}{"…" if len(t) > 140 else ""}»'
-    return titulo[:200], f'{excerto}\nResponde na Bende para continuar a conversa.'
+    return titulo[:200], f'{excerto}\nResponde na Bendi para continuar a conversa.'
 
 
 def _por_ler(conversa, caixa, ultima_lida):

@@ -243,7 +243,7 @@ def admin_loja_endereco(request, loja_id):
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
         loja.refresh_from_db(fields=['slug'])
         if loja.slug != antigo:
-            texto = f'O Bende mudou o endereço da tua loja para /loja/{loja.slug}.'
+            texto = f'A Bendi mudou o endereço da tua loja para /loja/{loja.slug}.'
             texto += ' O endereço antigo continua a levar à loja.' if manter else f' O endereço /loja/{antigo} deixou de funcionar.'
             if motivo:
                 texto += f' Motivo: {motivo}'

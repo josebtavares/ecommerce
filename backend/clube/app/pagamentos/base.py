@@ -26,7 +26,7 @@ class Cobranca:
     referencia: str                 # a nossa (servico.nova_referencia): diz o que se paga — enc-12-cartao-…
     valor: Decimal                  # em CVE; o fornecedor converte se não aceitar escudos (dinheiro.valor_cobranca)
     descricao: str
-    titulo: str = ''                # nome da loja / Bende, na página do fornecedor
+    titulo: str = ''                # nome da loja / Bendi, na página do fornecedor
     logo: str = ''
     cliente: dict = field(default_factory=dict)      # {email, nome, telefone}
     regresso: str = ''              # para onde o fornecedor manda o cliente depois de pagar

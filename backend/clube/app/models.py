@@ -71,7 +71,7 @@ class Utilizador(models.Model):
             'moderar_chat',      # chat: denúncias e bloqueios
             'gerir_plataforma',  # definições do site (fuso horário)
             'gerir_subscricoes', # planos, subscrições e faturas das lojas
-            'gerir_faturacao',   # dados fiscais, faturas registadas, faturas do Bende (utils/fiscal.py)
+            'gerir_faturacao',   # dados fiscais, faturas registadas, faturas da Bendi (utils/fiscal.py)
             'gerir_home',        # secções da página inicial
             'gerir_devolucoes',  # reembolsos: disputas e decisões finais
             'ver_relatorios',    # relatórios financeiros e exportações (Excel, PDF, CSV)
@@ -888,7 +888,7 @@ def caminho_fatura_encomenda(instance, filename):
 
 
 def caminho_fatura_bende(instance, filename):
-    # faturas que o Bende emite às lojas/POS (subscrições e comissões)
+    # faturas que a Bendi emite às lojas/POS (subscrições e comissões)
     return f'faturas/bende/{uuid.uuid4().hex}.pdf'
 
 
@@ -933,7 +933,7 @@ class Encomenda(models.Model):
     modelo_cobranca = models.CharField(max_length=10, blank=True, default='', db_default='')
     # quando passou a "concluido" (entregue/levantada) — conta o prazo para pedir devolução
     data_conclusao  = models.DateTimeField(null=True, blank=True)
-    # fatura emitida pela loja no e-Fatura (ela emite fora do Bende e regista aqui — utils/fiscal.py)
+    # fatura emitida pela loja no e-Fatura (ela emite fora da Bendi e regista aqui — utils/fiscal.py)
     fatura_numero   = models.CharField(max_length=60, blank=True, default='', db_default='')
     fatura_pdf      = models.FileField(upload_to=caminho_fatura_encomenda, blank=True, default='', db_default='',
                                        validators=[FileExtensionValidator(['pdf'])])
@@ -1355,7 +1355,7 @@ def chat_upload(instance, filename):
 
 class ComissaoQuerySet(models.QuerySet):
     def receita(self):
-        """As que contam como receita da Bende: sem as perdoadas (cobrança paga como oferta — não entrou dinheiro)."""
+        """As que contam como receita da Bendi: sem as perdoadas (cobrança paga como oferta — não entrou dinheiro)."""
         return self.exclude(cobranca__estado='paga', cobranca__metodo='oferta')
 
 
@@ -1435,7 +1435,7 @@ class Comissao(models.Model):
 
 class FaturaComissoes(models.Model):
     """
-    Fatura legal (e-Fatura) que o Bende emite a uma loja pelas comissões de um mês — uma por loja/mês.
+    Fatura legal (e-Fatura) que a Bendi emite a uma loja pelas comissões de um mês — uma por loja/mês.
     O extrato (documento interno com as comissões do mês) é gerado na hora (utils/documentos.py);
     aqui fica só a fatura que o admin registou.
     """
@@ -1458,15 +1458,15 @@ class FaturaComissoes(models.Model):
 
 class HistoricoFatura(models.Model):
     """
-    Arquivo de todas as faturas registadas (vendas das lojas, dos POS e marcações, e faturas do Bende) — nada se apaga.
+    Arquivo de todas as faturas registadas (vendas das lojas, dos POS e marcações, e faturas da Bendi) — nada se apaga.
     Alterar ou remover uma fatura ANULA o registo (quem, quando, motivo) e o PDF fica aqui guardado
     (limpeza.em_uso vê este FileField, por isso o ficheiro nunca vai para a fila de limpeza).
     A fatura em vigor continua também nos campos fatura_* do documento (utils/fiscal.py).
     """
     TIPOS = [
         ('encomenda',   'Venda da loja'),
-        ('mensalidade', 'Mensalidade (Bende)'),
-        ('comissoes',   'Comissões do mês (Bende)'),
+        ('mensalidade', 'Mensalidade (Bendi)'),
+        ('comissoes',   'Comissões do mês (Bendi)'),
         ('venda_pos',   'Venda do POS'),
         ('marcacao',    'Marcação (serviço)'),
     ]
@@ -2085,7 +2085,7 @@ class FaturaSubscricao(models.Model):
     # avisos já enviados ('d3', 'd0', 'atraso', 'a7'…, 'suspensa') — o worker não os repete
     avisos         = models.JSONField(default=list, blank=True)
     data_criacao   = models.DateTimeField(auto_now_add=True)
-    # fatura legal do Bende (e-Fatura) registada pelo admin — utils/fiscal.py; o comprovativo é automático
+    # fatura legal da Bendi (e-Fatura) registada pelo admin — utils/fiscal.py; o comprovativo é automático
     fatura_numero  = models.CharField(max_length=60, blank=True, default='', db_default='')
     fatura_pdf     = models.FileField(upload_to=caminho_fatura_bende, blank=True, default='', db_default='',
                                       validators=[FileExtensionValidator(['pdf'])])
@@ -2407,12 +2407,12 @@ class CreditoComissao(models.Model):
 
 
 class CobrancaComissoes(models.Model):
-    """O que a loja paga à Bende pelas comissões (utils/cobranca_comissoes.py). A SISP não divide pagamentos: o
+    """O que a loja paga à Bendi pelas comissões (utils/cobranca_comissoes.py). A SISP não divide pagamentos: o
     dinheiro das vendas vai direto para a loja e a comissão cobra-se à parte, uma vez por mês — as comissões ainda por
     cobrar até ao fim do mês anterior, menos os créditos de reembolsos. Registo financeiro: nunca se apaga (anula-se)."""
     ESTADOS = [('pendente', 'Por pagar'), ('paga', 'Paga'), ('anulada', 'Anulada')]
     METODOS = [('simulado', 'Pagamento simulado'), ('online', 'Pagamento online'), ('transferencia', 'Transferência'),
-               ('dinheiro', 'Dinheiro'), ('oferta', 'Perdoada pela Bende'), ('outro', 'Outro')]
+               ('dinheiro', 'Dinheiro'), ('oferta', 'Perdoada pela Bendi'), ('outro', 'Outro')]
 
     loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, related_name='cobrancas_comissoes')
     mes             = models.DateField()        # dia 1 do último mês incluído
@@ -2566,11 +2566,11 @@ class ExportacaoLoja(models.Model):
 class ArquivoFiscal(models.Model):
     """
     ZIP do arquivo fiscal preparado pelo worker (utils/arquivo_fiscal.py) quando é grande demais para descarregar
-    na hora: de uma loja ou de um POS (vendas + faturas + comprovativos) ou o arquivo do Bende (mensalidades e
+    na hora: de uma loja ou de um POS (vendas + faturas + comprovativos) ou o arquivo da Bendi (mensalidades e
     comissões de todas as lojas/POS). Vai para o bucket privado dos backups e apaga-se ao fim de DIAS_VALIDADE.
     """
     ESTADOS = ExportacaoLoja.ESTADOS
-    ALVOS = [('loja', 'Loja'), ('pos', 'POS'), ('bende', 'Bende')]
+    ALVOS = [('loja', 'Loja'), ('pos', 'POS'), ('bende', 'Bendi')]
     ORIGENS = [('admin', 'Admin'), ('loja', 'Backoffice'), ('pos', 'POS')]
 
     alvo        = models.CharField(max_length=5, choices=ALVOS)
@@ -2579,7 +2579,7 @@ class ArquivoFiscal(models.Model):
                                     related_name='arquivos_fiscais')
     de          = models.DateField(null=True, blank=True)
     ate         = models.DateField(null=True, blank=True)
-    com_bende   = models.BooleanField(default=True)        # a equipa do POS não vê os documentos do Bende
+    com_bende   = models.BooleanField(default=True)        # a equipa do POS não vê os documentos da Bendi
     origem      = models.CharField(max_length=5, choices=ORIGENS)
     pedido_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='arquivos_fiscais')
     pedido_por_nome = models.CharField(max_length=150, blank=True, default='')   # membros do POS não são User

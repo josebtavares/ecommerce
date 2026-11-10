@@ -50,7 +50,7 @@
             <div class="flex justify-between"><span>Devolução a processar</span><span>{{ dinheiro(m.reembolso_por_concluir.valor) }}</span></div>
             <p class="text-xs" :class="suave">Houve um atraso a processar a devolução. Estamos a tratar disso — não precisas de fazer nada.</p>
           </div>
-          <!-- pago online: comprovativo do Bende (também chegou por email) -->
+          <!-- pago online: comprovativo da Bendi (também chegou por email) -->
           <div v-if="m.pago" class="flex justify-between gap-3" data-teste="comprovativo-cliente"><span :class="suave">Comprovativo</span>
             <button type="button" @click="comprovativo" class="text-red-500 underline text-xs font-semibold">Descarregar PDF</button></div>
           <p v-if="m.preco_final && m.preco_final_motivo" class="text-xs pt-1" :class="suave">Preço final: {{ m.preco_final_motivo }}</p>

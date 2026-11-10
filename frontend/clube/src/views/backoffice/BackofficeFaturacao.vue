@@ -1,6 +1,6 @@
 <!-- BackofficeFaturacao.vue — aba Faturação da loja (gerir_faturacao: dono, gestor, contabilista).
      Todas as vendas da loja — loja online (E-), marcações (M-) e contas do POS vendidas em nome da loja (V-) — com o
-     comprovativo do Bende (só o que foi pago no Bende) e a fatura que a loja emitiu no e-Fatura (registar, substituir,
+     comprovativo da Bendi (só o que foi pago na Bendi) e a fatura que a loja emitiu no e-Fatura (registar, substituir,
      anular, histórico). Período, filtros, pesquisa de documentos, paginação, CSV e ZIP do arquivo fiscal.
      Backend: app/Views/faturacaoLojaView.py -->
 <template>
@@ -66,7 +66,7 @@
         {{ t.label }}
       </button>
       <button type="button" @click="$emit('ver-subscricao')" class="px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap text-zinc-500 hover:text-zinc-300"
-        title="As faturas que o Bende emite à loja (mensalidades e comissões) estão na Subscrição">Faturas do Bende ↗</button>
+        title="As faturas que a Bendi emite à loja (mensalidades e comissões) estão na Subscrição">Faturas da Bendi ↗</button>
     </div>
 
     <!-- ═══ VENDAS ═══ -->
@@ -125,7 +125,7 @@
               <span v-if="v.fatura" class="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[11px] font-bold">Fatura {{ v.fatura.numero }}</span>
               <span v-else-if="v.faturavel" class="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[11px] font-bold">Por faturar</span>
               <span v-if="v.anuladas" class="px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 text-[11px] font-bold">{{ v.anuladas }} anulada(s)</span>
-              <BotaoPdf v-if="v.comprovativo_url" texto="Comprovativo" titulo="Descarregar o comprovativo de pagamento do Bende (PDF)"
+              <BotaoPdf v-if="v.comprovativo_url" texto="Comprovativo" titulo="Descarregar o comprovativo de pagamento da Bendi (PDF)"
                 teste="comprovativo" @click="comprovativo(v)" />
               <button type="button" @click="alternar(v, 'fatura')" :aria-expanded="aberto[v.referencia] === 'fatura' ? 'true' : 'false'" data-teste="abrir-fatura"
                 class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold">Fatura</button>
@@ -156,7 +156,7 @@
           class="flex-1 min-w-[220px] px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-red-500" />
         <button type="submit" :disabled="pq.length < 2" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold">Pesquisar</button>
       </form>
-      <p class="text-[11px] text-zinc-500">Em todos os documentos da loja, de sempre: vendas, faturas em vigor e anuladas, mensalidades e comissões do Bende.</p>
+      <p class="text-[11px] text-zinc-500">Em todos os documentos da loja, de sempre: vendas, faturas em vigor e anuladas, mensalidades e comissões da Bendi.</p>
       <ResultadosPesquisa v-if="pRes" :res="pRes" :limit="LIMITE" :offset="pOffset" @ir="pesquisar" @abrir="abrirResultado" />
     </template>
   </div>
@@ -330,7 +330,7 @@ export default {
         .then(({ data }) => { this.pRes = data })
         .catch(e => { this.erro = e.response?.data?.detail || 'Não foi possível pesquisar.' })
     },
-    // resultado → a venda na lista (todas as datas, pesquisa pela referência); documentos do Bende → Subscrição
+    // resultado → a venda na lista (todas as datas, pesquisa pela referência); documentos da Bendi → Subscrição
     abrirResultado (r) {
       const ref = r.referencia || ''
       if (r.tipo === 'venda' || (r.tipo === 'anulada' && /^[EMV]-/i.test(ref))) {
