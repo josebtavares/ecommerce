@@ -21,7 +21,7 @@
     <transition enter-active-class="transition duration-300" enter-from-class="translate-x-full"
                 leave-active-class="transition duration-200" leave-to-class="translate-x-full">
       <div v-if="isOpen"
-           class="fixed top-0 right-0 w-full max-w-sm md:max-w-lg h-screen flex flex-col z-50 shadow-2xl overflow-hidden"
+           class="fixed top-0 right-0 w-full max-w-sm md:max-w-lg h-[100dvh] flex flex-col z-50 shadow-2xl overflow-hidden"
            :class="isDark
              ? 'bg-zinc-950 border-l border-zinc-800'
              : 'bg-white border-l border-gray-200'">
@@ -79,7 +79,7 @@
         </div>
 
         <!-- Conteúdo scrollável -->
-        <div class="flex-1 overflow-y-auto p-5">
+        <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5">
 
           <!-- ═══ TAB: PERFIL — sub-separadores Dados / Favoritos / Password ═══ -->
           <div v-if="activeTab === 'dados'" role="tablist" class="flex gap-2 mb-5 overflow-x-auto perfil-tabs">
@@ -410,7 +410,7 @@
         </div>
 
         <!-- Footer — logout -->
-        <div class="border-t p-4 flex-shrink-0"
+        <div class="border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex-shrink-0"
              :class="isDark ? 'border-zinc-800' : 'border-gray-200'">
           <div class="grid grid-cols-2 gap-2 mb-2">
             <button type="button" @click="isOpen = false; $router.push('/mensagens')"
@@ -465,7 +465,7 @@ import DetalheEncomendaCliente from '@/components/encomendas/DetalheEncomendaCli
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import { criarVerificador } from '@/services/disponibilidade'
 import { estaAutenticado, pedirLogin } from '@/services/sessao'
-import { contactarSuporte } from '@/services/chat'
+import { chat, contactarSuporte } from '@/services/chat'
 import { passwordValida } from '@/utils/password'
 import { atualizarGuardado } from '@/services/confirmarEmail'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
@@ -494,6 +494,9 @@ onBeforeUnmount(() => window.removeEventListener(EVENTO, lerGuardada))
 const router     = useRouter()
 const route      = useRoute()
 const isOpen     = ref(false)
+// com o perfil aberto o balão do chat esconde-se: no telemóvel tapava o "Terminar sessão" (o perfil já tem "Mensagens")
+watch(isOpen, v => { chat.perfilAberto = v })
+onBeforeUnmount(() => { chat.perfilAberto = false })
 const fileInput  = ref(null)
 const previewUrl = ref('')
 const activeTab  = ref('dados')
