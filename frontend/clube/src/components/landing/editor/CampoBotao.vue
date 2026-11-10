@@ -16,7 +16,7 @@
 
 <script>
 export const DESTINOS = [
-  { link: '/Home', nome: 'Loja Bende (página inicial)' },
+  { link: '/Home', nome: 'Loja Bendi (página inicial)' },
   { link: '/loja/criar', nome: 'Criar loja' },
   { link: '#criar-conta', nome: 'Janela: criar conta' },
   { link: '#entrar', nome: 'Janela: entrar' },

@@ -26,7 +26,7 @@ from . import backups
 log = logging.getLogger(__name__)
 
 DIAS_VALIDADE = 7
-MAX_POR_DIA = 10          # por loja / POS / Bende
+MAX_POR_DIA = 10          # por loja / POS / Bendi
 ENCRAVADO = timedelta(hours=2)
 
 
@@ -47,7 +47,7 @@ def filtro(alvo, obj=None):
 
 
 def _nome_alvo(a):
-    return 'Bende' if a.alvo == 'bende' else (a.loja.nome if a.alvo == 'loja' else f'POS {a.pos.nome}')
+    return 'Bendi' if a.alvo == 'bende' else (a.loja.nome if a.alvo == 'loja' else f'POS {a.pos.nome}')
 
 
 def periodo(a):
@@ -95,7 +95,7 @@ def item(a, admin=False):
     return {
         'id': a.id, 'alvo': a.alvo, 'estado': a.estado, 'estado_label': a.get_estado_display(),
         'de': a.de, 'ate': a.ate, 'periodo': periodo(a), 'com_bende': a.com_bende,
-        'pedido_por': ('Equipa Bende' if a.origem == 'admin' and not admin else a.pedido_por_nome),
+        'pedido_por': ('Equipa Bendi' if a.origem == 'admin' and not admin else a.pedido_por_nome),
         'criado_em': a.criado_em, 'concluido_em': a.concluido_em, 'expira_em': a.expira_em,
         'tamanho': a.tamanho, 'descargas': a.descargas,
         'avisos': len([x for x in a.avisos.splitlines() if x.strip()]),
@@ -188,7 +188,7 @@ def link(a):
 
 
 def _avisar(a):
-    """Notificação + email a quem pediu (os membros do POS não têm conta Bende: veem na lista)."""
+    """Notificação + email a quem pediu (os membros do POS não têm conta Bendi: veem na lista)."""
     u = a.pedido_por
     if not u:
         return

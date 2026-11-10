@@ -1,4 +1,4 @@
-<!-- RegistarFaturaBende.vue — admin: registar, substituir ou anular a fatura do Bende (mensalidade ou comissões do mês).
+<!-- RegistarFaturaBende.vue — admin: registar, substituir ou anular a fatura da Bendi (mensalidade ou comissões do mês).
      Substituir/anular pede o motivo: a anterior fica no histórico (nada se apaga).
      url: POST/DELETE …/fatura/. Emite 'atualizado' com a resposta do backend. -->
 <template>

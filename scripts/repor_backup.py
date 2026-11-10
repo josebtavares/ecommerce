@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Repor a base de dados da Bende a partir de um backup — corre no teu computador.
+Repor a base de dados da Bendi a partir de um backup — corre no teu computador.
 
   python scripts/repor_backup.py --dev --listar        backups da dev
   python scripts/repor_backup.py --dev                 escolhe e repõe na dev (Docker)
@@ -130,7 +130,7 @@ def reiniciar_servicos():
 
 def main():
     sys.stdout.reconfigure(line_buffering=True)     # as mensagens daqui e as do docker na ordem certa
-    p = argparse.ArgumentParser(description='Repor a base de dados da Bende a partir de um backup assinado.')
+    p = argparse.ArgumentParser(description='Repor a base de dados da Bendi a partir de um backup assinado.')
     alvo = p.add_mutually_exclusive_group(required=True)
     alvo.add_argument('--dev', action='store_true', help='base da dev (Docker)')
     alvo.add_argument('--prod', action='store_true', help='base da PRODUÇÃO')

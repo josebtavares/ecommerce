@@ -1,9 +1,9 @@
 """
 Pagamento com cartão (vinti4) — contrato de cada loja com a SISP (models.AdesaoVinti4).
 
-A SISP não tem pagamento dividido nem sub-comerciantes: a Bende não pode receber por conta das lojas
+A SISP não tem pagamento dividido nem sub-comerciantes: a Bendi não pode receber por conta das lojas
 (contrato MD050.03, cláusula 4ª n.º 2). Cada loja adere em nome próprio (licença comercial em nome + NIF, ou
-certidão comercial, + identificação de quem assina) e o dinheiro vai direto para a conta dela. A comissão da Bende
+certidão comercial, + identificação de quem assina) e o dinheiro vai direto para a conta dela. A comissão da Bendi
 cobra-se à parte (fatura de comissões).
 
 Percurso:
@@ -91,11 +91,11 @@ def requisitos(loja):
 
 
 def ficha(loja):
-    """Os dados da ficha de adesão da SISP (FROP020.01), já preenchidos com o que a Bende sabe."""
+    """Os dados da ficha de adesão da SISP (FROP020.01), já preenchidos com o que a Bendi sabe."""
     from ..models import DadosBancarios
     from . import banco
     d = DadosBancarios.objects.filter(loja=loja).first()
-    base = (getattr(settings, 'FRONTEND_BASE_URL', '') or 'https://bende.store').rstrip('/')
+    base = (getattr(settings, 'FRONTEND_BASE_URL', '') or 'https://e-bendi.cv').rstrip('/')
     dono = loja.dono
     nome_dono = ' '.join(x for x in (dono.user.first_name, dono.user.last_name) if x) or dono.user.username
     return [
@@ -108,7 +108,7 @@ def ficha(loja):
         {'campo': 'Nome do estabelecimento', 'valor': loja.nome},
         {'campo': 'Tipo de atividade', 'valor': loja.categoria},
         {'campo': 'Mercadorias / serviços', 'valor': (loja.descricao or '')[:300]},
-        {'campo': 'Modalidade', 'valor': 'Site próprio (loja na plataforma Bende)'},
+        {'campo': 'Modalidade', 'valor': 'Site próprio (loja na plataforma Bendi)'},
         {'campo': 'Cartões', 'valor': 'vinti4 e internacionais'},
         {'campo': 'Banco de apoio', 'valor': f'{d.banco} — {banco.formatar_iban(d.nib)}' if d else ''},
         {'campo': 'Anexos', 'valor': 'Licença comercial (ou certidão comercial) e documento de identificação de quem assina'},
@@ -212,7 +212,7 @@ def guardar_credenciais(request, loja, pos_id, merchant_id, chave):
         from .horarios import fuso
         quando = timezone.now().astimezone(fuso()).strftime('%d/%m/%Y %H:%M')
         texto = (f'As credenciais vinti4 da loja "{loja.nome}" foram alteradas por {request.user.username} em {quando} '
-                 f'(POS ID {pos_id}). O pagamento com cartão fica parado até a Bende as validar. '
+                 f'(POS ID {pos_id}). O pagamento com cartão fica parado até a Bendi as validar. '
                  'Se não foste tu, muda a tua password e contacta o suporte.')
         _avisar_dono(loja, 'Credenciais vinti4 alteradas', texto, email=True)
         _avisar_admins(loja, 'Credenciais vinti4 para validar', f'A loja "{loja.nome}" enviou as credenciais vinti4.')
@@ -238,7 +238,7 @@ def decidir(request, loja, acao, motivo=''):
         a.save()
         _registar(loja, acao, a, {'estado_anterior': antes, 'motivo': motivo})
         textos = {
-            'teste':     ('Cartão vinti4 em testes', 'A Bende está a testar o pagamento com cartão da tua loja com a SISP.'),
+            'teste':     ('Cartão vinti4 em testes', 'A Bendi está a testar o pagamento com cartão da tua loja com a SISP.'),
             'ativar':    ('Cartão vinti4 ativo', 'A tua loja já aceita pagamentos com cartão. O dinheiro vai direto para a '
                                                  'conta do teu contrato vinti4.'),
             'suspender': ('Cartão vinti4 suspenso', f'O pagamento com cartão da tua loja foi suspenso: {motivo}'),

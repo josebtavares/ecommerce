@@ -1,7 +1,7 @@
 """
 Dados fiscais de quem vende (loja ou POS) e faturas registadas nas encomendas.
 
-O Bende ainda não emite faturas pelo e-Fatura: cada vendedor emite as suas (Emissor Público da DNRE
+A Bendi ainda não emite faturas pelo e-Fatura: cada vendedor emite as suas (Emissor Público da DNRE
 ou o seu programa) e regista o número/PDF na encomenda. Aqui fica:
 - NIF + regime ('particular' = vendas ocasionais, 'atividade' = atividade declarada) + a declaração
   de responsabilidade aceite no registo;
@@ -30,7 +30,7 @@ def _verdadeiro(v):
 
 # ── Dados de faturação de quem compra ─────────────────────────────────────────────────────────────
 # Sem NIF a loja passa um talão de venda a consumidor final; no e-Fatura (TVE) o comprador tem de ser
-# identificado a partir de 20 000$00 — é obrigação da loja ao emitir; a Bende só avisa (nada bloqueia).
+# identificado a partir de 20 000$00 — é obrigação da loja ao emitir; a Bendi só avisa (nada bloqueia).
 from decimal import Decimal
 LIMITE_NIF_CLIENTE = Decimal('20000')
 MSG_NIF = 'O NIF tem 9 dígitos.'
@@ -46,7 +46,7 @@ def nif_valido(nif):
 
 def dados_cliente(data, valor_total=None):
     """Checkout: {fatura_nif, nif, nome_fiscal, morada_fiscal} → (dados para a Encomenda, erro|None).
-    O NIF nunca é obrigatório (decisão do dono da Bende, 2026-11-08): passar a fatura com ou sem NIF é da
+    O NIF nunca é obrigatório (decisão do dono da Bendi, 2026-11-08): passar a fatura com ou sem NIF é da
     responsabilidade da loja, e recebê-la sem NIF é do cliente. Nas encomendas de 20 000$00 ou mais sem NIF a
     loja vê o aviso "NIF em falta" e pode pedi-lo; o cliente pode juntá-lo depois (encomenda_nif).
     Só um NIF escrito com o número errado de dígitos volta para trás (corrigir ou apagar)."""

@@ -1,6 +1,6 @@
 """
-Emails da Bende para clientes e lojas: versão texto + versão HTML com a marca (logótipo, botão, rodapé),
-e "Responder para" o suporte (EMAIL_SUPORTE, ex.: suporte@bende.store — Email Routing da Cloudflare).
+Emails da Bendi para clientes e lojas: versão texto + versão HTML com a marca (logótipo, botão, rodapé),
+e "Responder para" o suporte (EMAIL_SUPORTE, ex.: suporte@e-bendi.cv — Email Routing da Cloudflare).
 
 Os filtros (sobretudo o Outlook) desconfiam de emails só de texto, curtos e com um link comprido à vista:
 aqui o link principal vira um botão e o endereço completo fica só numa linha pequena no fim.
@@ -10,7 +10,7 @@ Os emails internos (backups, avisos ao admin) continuam só de texto.
     msg.send()
 
 `texto` é o corpo em texto simples (parágrafos separados por linha em branco), sem a assinatura —
-a assinatura "Bende" é acrescentada aqui. Uma linha só com o URL do botão não aparece no HTML.
+a assinatura "Bendi" é acrescentada aqui. Uma linha só com o URL do botão não aparece no HTML.
 """
 import html
 import re
@@ -23,7 +23,7 @@ _URL = re.compile(r'(https?://[^\s<>"]+)')
 
 
 def _site():
-    return (getattr(settings, 'FRONTEND_BASE_URL', '') or 'https://bende.store').rstrip('/')
+    return (getattr(settings, 'FRONTEND_BASE_URL', '') or 'https://e-bendi.cv').rstrip('/')
 
 
 def suporte():
@@ -95,16 +95,16 @@ def _html(assunto, texto, botao):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
 <tr><td style="padding:0 4px 16px">
-<a href="{site}" style="text-decoration:none"><img src="{icone}" width="40" height="40" alt="Bende"
+<a href="{site}" style="text-decoration:none"><img src="{icone}" width="40" height="40" alt="Bendi"
  style="vertical-align:middle;border:0;border-radius:10px">
-<span style="vertical-align:middle;margin-left:8px;font-size:20px;font-weight:bold;color:#18181b">Bende</span></a>
+<span style="vertical-align:middle;margin-left:8px;font-size:20px;font-weight:bold;color:#18181b">Bendi</span></a>
 </td></tr>
 <tr><td style="background:#ffffff;border:1px solid #e4e4e7;border-radius:14px;padding:28px 26px">
 {corpo}
-<p style="margin:8px 0 0;font-size:15px;color:#27272a">Bende</p>
+<p style="margin:8px 0 0;font-size:15px;color:#27272a">Bendi</p>
 </td></tr>
 <tr><td style="padding:16px 6px;font-size:12px;line-height:1.5;color:#71717a">
-Recebeste este email por causa da tua conta na Bende. {contacto}<br>
+Recebeste este email por causa da tua conta na Bendi. {contacto}<br>
 <a href="{site}" style="color:#71717a">{site.replace("https://", "")}</a>
 </td></tr>
 </table></td></tr></table></body></html>'''
@@ -114,7 +114,7 @@ def criar(para, assunto, texto, *, botao=None, anexos=()):
     """EmailMultiAlternatives com texto + HTML e Reply-To do suporte. `para`: um email ou uma lista."""
     para = [para] if isinstance(para, str) else list(para)
     texto = texto.strip()
-    corpo_texto = texto + '\n\nBende'
+    corpo_texto = texto + '\n\nBendi'
     if suporte():
         corpo_texto += f'\nDúvidas? Responde a este email ou escreve para {suporte()}.'
     msg = EmailMultiAlternatives(subject=assunto, body=corpo_texto, from_email=settings.DEFAULT_FROM_EMAIL,

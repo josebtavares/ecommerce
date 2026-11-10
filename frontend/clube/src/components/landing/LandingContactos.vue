@@ -1,5 +1,5 @@
 <!-- LandingContactos.vue — "Fala connosco": a toda a largura, a foto da secção à esquerda (ou um bloco com as cores da
-     Bende) e um painel suave à direita com o letreiro, o título, os contactos (email, telefone, WhatsApp, morada,
+     Bendi) e um painel suave à direita com o letreiro, o título, os contactos (email, telefone, WhatsApp, morada,
      horário — os vazios vêm dos contactos da plataforma, utils/landing.py), os botões e as redes sociais. -->
 <template>
   <section id="contactos" class="landing-seccao grid lg:grid-cols-[5fr_7fr]" data-teste="landing-contactos" :class="{ visivel }">

@@ -1,7 +1,7 @@
 <!-- DiferencaComissoes.vue — um mês de comissões: créditos à loja (reembolsos depois de a comissão estar liquidada)
-     e diferença para a fatura do Bende já registada (reembolsos depois da fatura → nota de crédito).
+     e diferença para a fatura da Bendi já registada (reembolsos depois da fatura → nota de crédito).
      item: { creditos, liquido, valor_faturado, diferenca } do backend (faturacaoView.resumo_comissoes).
-     admin: texto para quem emite a fatura (Bende) ou para a loja. -->
+     admin: texto para quem emite a fatura (Bendi) ou para a loja. -->
 <template>
   <p v-if="item.diferenca" class="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200"
      data-teste="comissoes-diferenca" role="status">
@@ -11,7 +11,7 @@
     </template>
     <template v-else>
       Depois da fatura houve reembolsos: o mês passou de {{ dinheiro(item.valor_faturado) }} para {{ dinheiro(item.liquido) }}.
-      O Bende acerta a diferença ({{ dinheiro(item.diferenca) }}) com uma nota de crédito.
+      A Bendi acerta a diferença ({{ dinheiro(item.diferenca) }}) com uma nota de crédito.
     </template>
   </p>
   <p v-else-if="Number(item.creditos)" class="w-full text-[11px] text-zinc-500" data-teste="comissoes-creditos">

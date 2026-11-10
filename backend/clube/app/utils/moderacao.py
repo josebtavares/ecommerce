@@ -221,20 +221,20 @@ def _avisar(alvo, acao, motivo, ate):
     linha_motivo = f'\nMotivo: {motivo}\n' if motivo else ''
     suporte = getattr(settings, 'EMAIL_SUPORTE', '')
     contacto = ('Se achas que é um engano, responde a este email.' if suporte
-                else 'Se achas que é um engano, contacta a equipa do Bende.')
+                else 'Se achas que é um engano, contacta a equipa da Bendi.')
     if acao == 'suspender':
         quando = f' até {data_curta(ate)}' if ate else ''
-        assunto = 'A tua conta Bende foi suspensa'
-        texto = (f'Olá {nome},\n\nA tua conta Bende foi suspensa{quando}.\n{linha_motivo}\n'
+        assunto = 'A tua conta Bendi foi suspensa'
+        texto = (f'Olá {nome},\n\nA tua conta Bendi foi suspensa{quando}.\n{linha_motivo}\n'
                  f'Enquanto estiver suspensa não consegues entrar no site nem no POS.'
                  + (' Volta a funcionar sozinha no fim da suspensão.' if ate else '') + f'\n\n{contacto}')
     elif acao == 'banir':
-        assunto = 'A tua conta Bende foi banida'
-        texto = (f'Olá {nome},\n\nA tua conta Bende foi banida e deixou de ter acesso ao site e ao POS.\n'
+        assunto = 'A tua conta Bendi foi banida'
+        texto = (f'Olá {nome},\n\nA tua conta Bendi foi banida e deixou de ter acesso ao site e ao POS.\n'
                  f'{linha_motivo}\n{contacto}')
     else:
-        assunto = 'A tua conta Bende foi reactivada'
-        texto = (f'Olá {nome},\n\nA tua conta Bende voltou a estar activa. Já podes entrar em '
+        assunto = 'A tua conta Bendi foi reactivada'
+        texto = (f'Olá {nome},\n\nA tua conta Bendi voltou a estar activa. Já podes entrar em '
                  f'{settings.FRONTEND_BASE_URL}/Login')
     from . import fila_emails
     try:

@@ -198,12 +198,12 @@ def _avisar(b, alvo, copia, quem):
         return
     try:
         EmailMessage(
-            subject='Bende: a base de dados foi reposta a partir de um backup',
+            subject='Bendi: a base de dados foi reposta a partir de um backup',
             body=(f'A base de dados ({alvo}) foi reposta a partir do backup {b["nome"]} '
                   f'({timezone.localtime(b["quando"]):%d/%m/%Y %H:%M}).\n\nFeito por: {quem}\n'
                   f'Estado anterior guardado em: {copia or "(não foi guardado)"}\n\n'
                   'Tudo o que entrou depois da hora do backup deixou de existir na plataforma. '
-                  'Se não foste tu, muda já as passwords e as chaves do Railway e do Cloudflare.\n\nBende'),
+                  'Se não foste tu, muda já as passwords e as chaves do Railway e do Cloudflare.\n\nBendi'),
             from_email=settings.DEFAULT_FROM_EMAIL, to=para,
         ).send()
     except Exception:

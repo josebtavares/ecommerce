@@ -126,8 +126,8 @@ def aprovar_encomenda(encomenda, metodo, transacao, fornecedor):
         loja=encomenda.loja, roles=['dono', 'gestor'], tipo='pagamento_aprovado',
         titulo=f'Pagamento confirmado — Encomenda #{encomenda.id}',
         mensagem=f'{formatar(encomenda.valor_total)} recebido ({obter(fornecedor).nome}). '
-                 + (f'Depois da comissão da Bende: {formatar(encomenda.valor_total - com)}. ' if com
-                    else 'Sem comissão da Bende (subscrição). ')
+                 + (f'Depois da comissão da Bendi: {formatar(encomenda.valor_total - com)}. ' if com
+                    else 'Sem comissão da Bendi (subscrição). ')
                  + 'A comissão da SISP pelo cartão é descontada à parte, no valor que te chega à conta. '
                    'Já podes preparar a encomenda.',
         link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}',
@@ -208,7 +208,7 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
                       loja=encomenda.loja, link=f'/encomendas/{encomenda.id}', email=fila_emails.IMPORTANTE,
                       email_chave=f'enc:{encomenda.id}:recebida')
         return Inicio('pendente')
-    if online_suspenso(encomenda.loja):         # sem dados bancários a Bende não sabe para onde transferir
+    if online_suspenso(encomenda.loja):         # sem dados bancários a Bendi não sabe para onde transferir
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')
     exigir_dados_cliente(utilizador, encomenda.morada_entrega)
     f = ativo()
@@ -310,7 +310,7 @@ def iniciar_fatura(fatura, utilizador):
     f = ativo()
     inicio = f.iniciar(Cobranca(
         referencia=nova_referencia('fat', fatura.id, 'cartao'), valor=fatura.valor,
-        descricao=fatura.descricao[:100], titulo='Bende', cliente=_cliente(utilizador), regresso=_regresso()))
+        descricao=fatura.descricao[:100], titulo='Bendi', cliente=_cliente(utilizador), regresso=_regresso()))
     if inicio.estado == 'aprovado':
         subs.pagar(fatura, _metodo_fatura(f), referencia=inicio.transacao)
     return inicio
@@ -350,7 +350,7 @@ def _confirmar_fatura(f, conf, oid, _metodo):
     return _resultado('fatura', fatura, 'pago', destino)
 
 
-# ── cobrança mensal das comissões (a Bende é a comerciante: a loja paga-lhe) ──
+# ── cobrança mensal das comissões (a Bendi é a comerciante: a loja paga-lhe) ──
 
 def iniciar_cobranca_comissoes(c, utilizador):
     if c.estado != 'pendente':
@@ -359,7 +359,7 @@ def iniciar_cobranca_comissoes(c, utilizador):
     f = ativo()
     inicio = f.iniciar(Cobranca(
         referencia=nova_referencia('com', c.id, 'cartao'), valor=c.valor,
-        descricao=f'Comissões até {c.mes:%m/%Y} — {c.loja.nome}'[:100], titulo='Bende', cliente=_cliente(utilizador),
+        descricao=f'Comissões até {c.mes:%m/%Y} — {c.loja.nome}'[:100], titulo='Bendi', cliente=_cliente(utilizador),
         regresso=_regresso()))
     if inicio.estado == 'aprovado':
         cc.pagar(c, _metodo_fatura(f), referencia=inicio.transacao)
@@ -399,7 +399,7 @@ def confirmar(f, conf):
     """Confirmacao verificada no fornecedor → {tipo, id, estado: pago|reembolso, destino}. ErroPagamento se não serve."""
     lido = ler_referencia(conf.referencia)
     if not lido:
-        raise ErroPagamento('Esta transacção não é de um pagamento do Bende.')
+        raise ErroPagamento('Esta transacção não é de um pagamento da Bendi.')
     if not conf.sucesso:
         raise ErroPagamento('Pagamento cancelado.' if conf.motivo == 'cancelado'
                             else f'O pagamento não foi confirmado ({conf.motivo or "sem resposta"}).')

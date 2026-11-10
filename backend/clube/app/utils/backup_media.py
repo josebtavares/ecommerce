@@ -285,11 +285,11 @@ def _enviar(assunto, corpo):
 
 
 def _avisar(c):
-    _enviar('Bende: a cópia das fotos e vídeos falhou',
+    _enviar('Bendi: a cópia das fotos e vídeos falhou',
             f'A cópia {c.get_tipo_display().lower()} das fotos e vídeos de '
             f'{timezone.localtime(c.criado_em):%d/%m/%Y %H:%M} falhou.\n\n{c.erro[-1500:]}\n\n'
             'O worker volta a tentar daqui a 30 minutos (até 3 vezes por dia). Os ficheiros que já estavam '
-            'copiados continuam guardados. Vê Admin → Backups.\n\nBende')
+            'copiados continuam guardados. Vê Admin → Backups.\n\nBendi')
 
 
 def _avisar_espaco(c):
@@ -298,7 +298,7 @@ def _avisar_espaco(c):
         return
     if CopiaMedia.objects.filter(aviso_espaco=True, criado_em__gte=timezone.now() - AVISO_ESPACO_CADA).exists():
         return
-    if _enviar('Bende: os backups estão perto do limite grátis do R2',
+    if _enviar('Bendi: os backups estão perto do limite grátis do R2',
                f'O armazenamento de backups tem {c.bytes_total / 1e9:.1f} GB (o aviso está nos '
                f'{settings.BACKUP_LIMITE_GB:g} GB; o Cloudflare R2 dá 10 GB por mês grátis e depois cobra cerca de '
                '0,015 USD por GB por mês).\n\n'
@@ -306,6 +306,6 @@ def _avisar_espaco(c):
                f'Fotos e vídeos: {c.bytes / 1e9:.2f} GB\n'
                f'Fotos e vídeos apagados pelas lojas (guardados {settings.BACKUP_MEDIA_APAGADOS_DIAS} dias): '
                f'{c.bytes_apagados / 1e9:.2f} GB\n\n'
-               'Nada deixa de funcionar: só passa a haver custo. Vê Admin → Backups.\n\nBende'):
+               'Nada deixa de funcionar: só passa a haver custo. Vê Admin → Backups.\n\nBendi'):
         CopiaMedia.objects.filter(pk=c.pk).update(aviso_espaco=True)
         c.aviso_espaco = True

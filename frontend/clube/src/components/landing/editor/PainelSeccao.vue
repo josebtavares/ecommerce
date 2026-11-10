@@ -39,7 +39,7 @@
       <template v-if="tipo === 'hero'">
         <div>
           <label class="rot">Vídeo ou imagem de fundo</label>
-          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem fundo (usa as cores da Bende)"
+          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem fundo (usa as cores da Bendi)"
                       @media="m => guardarMedia(m)" />
         </div>
         <div>
@@ -70,16 +70,16 @@
         </ListaItens>
         <div v-if="tipo === 'lojas'">
           <label class="rot">Imagem ou vídeo de fundo do topo <span class="text-zinc-500 font-normal">(opcional)</span></label>
-          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem fundo (usa as cores da Bende)" @media="m => guardarMedia(m)" />
+          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem fundo (usa as cores da Bendi)" @media="m => guardarMedia(m)" />
         </div>
         <template v-if="tipo === 'clientes'">
           <div>
             <label class="rot">Foto principal <span class="text-zinc-500 font-normal">(opcional)</span></label>
-            <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem foto (usa as cores da Bende)" @media="m => guardarMedia(m)" />
+            <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem foto (usa as cores da Bendi)" @media="m => guardarMedia(m)" />
           </div>
           <div>
             <label class="rot">Foto pequena, por cima <span class="text-zinc-500 font-normal">(opcional)</span></label>
-            <CampoMedia v-model="f.media2" :media="mediaDe(f.media2)" nome="media2" :limites="limites" vazio="Sem foto (usa as cores da Bende)" @media="m => guardarMedia(m)" />
+            <CampoMedia v-model="f.media2" :media="mediaDe(f.media2)" nome="media2" :limites="limites" vazio="Sem foto (usa as cores da Bendi)" @media="m => guardarMedia(m)" />
           </div>
         </template>
         <CampoBotao v-model="f.botao" nome="botao" />
@@ -172,7 +172,7 @@
         </ListaItens>
         <div>
           <label class="rot">Ecrã do telemóvel <span class="text-zinc-500 font-normal">(opcional: uma captura da app, ao alto)</span></label>
-          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem captura (mostra o logo da Bende)" @media="m => guardarMedia(m)" />
+          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem captura (mostra o logo da Bendi)" @media="m => guardarMedia(m)" />
         </div>
       </template>
 
@@ -192,7 +192,7 @@
         </div>
         <div>
           <label class="rot">Foto ao lado <span class="text-zinc-500 font-normal">(opcional)</span></label>
-          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem foto (usa as cores da Bende)" @media="m => guardarMedia(m)" />
+          <CampoMedia v-model="f.media" :media="mediaDe(f.media)" nome="media" :limites="limites" vazio="Sem foto (usa as cores da Bendi)" @media="m => guardarMedia(m)" />
         </div>
       </template>
     </div>

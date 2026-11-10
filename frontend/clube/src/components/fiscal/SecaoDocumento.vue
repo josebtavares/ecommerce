@@ -1,5 +1,5 @@
 <template>
-  <!-- Separa os dois downloads de um documento: o documento interno do Bende (comprovativo / extrato — fundo neutro)
+  <!-- Separa os dois downloads de um documento: o documento interno da Bendi (comprovativo / extrato — fundo neutro)
        e a fatura legal (fundo verde). Cada caixa tem o seu título pequeno. -->
   <div role="group" :aria-label="titulo" :data-teste="`secao-${tipo}`"
     :class="['inline-flex flex-wrap items-center gap-2 rounded-xl border px-2.5 py-1.5', tipo === 'fatura'
@@ -19,7 +19,7 @@ export default {
     rotulo: { type: String, default: '' },
   },
   computed: {
-    titulo () { return this.rotulo || (this.tipo === 'fatura' ? 'Fatura do Bende' : 'Documento interno') },
+    titulo () { return this.rotulo || (this.tipo === 'fatura' ? 'Fatura da Bendi' : 'Documento interno') },
   },
 }
 </script>

@@ -35,7 +35,7 @@ def _e_dono(request, loja):
 
 def _item(e, admin):
     if e.pelo_admin and not admin:
-        por = 'Equipa Bende'
+        por = 'Equipa Bendi'
     else:
         por = (e.pedido_por.get_full_name() or e.pedido_por.username) if e.pedido_por else ''
     return {

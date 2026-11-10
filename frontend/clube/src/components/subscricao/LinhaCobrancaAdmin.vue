@@ -1,5 +1,5 @@
 <!-- LinhaCobrancaAdmin.vue — uma cobrança (FaturaSubscricao) em Admin → Subscrições, com as ações.
-     Emite 'acao' com (tipo, f): pagar | adiar | anular | recibo | faturacao | faturada (fatura do Bende registada/substituída/
+     Emite 'acao' com (tipo, f): pagar | adiar | anular | recibo | faturacao | faturada (fatura da Bendi registada/substituída/
      anulada aqui). mostrarAlvo: mostra a loja/POS. -->
 <template>
   <div :class="['flex flex-wrap items-center gap-3', embutida ? 'px-4 sm:px-6 py-3' : 'bg-zinc-900 rounded-2xl border border-zinc-800 px-4 py-3']"
@@ -29,9 +29,9 @@
     <SecaoDocumento v-else-if="f.estado === 'paga'">
       <BotaoPdf texto="Comprovativo" :titulo="`Descarregar o comprovativo do pagamento ${f.id} (PDF)`" @click="$emit('acao', 'recibo', f)" />
     </SecaoDocumento>
-    <!-- fatura legal do Bende: regista-se aqui ou em Admin → Faturação (o mesmo registo; as duas páginas actualizam-se) -->
+    <!-- fatura legal da Bendi: regista-se aqui ou em Admin → Faturação (o mesmo registo; as duas páginas actualizam-se) -->
     <template v-if="f.estado === 'paga' && Number(f.valor) > 0">
-      <span v-if="!f.fatura" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300" data-teste="cobranca-por-faturar">Fatura do Bende por registar</span>
+      <span v-if="!f.fatura" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300" data-teste="cobranca-por-faturar">Fatura da Bendi por registar</span>
       <SecaoDocumento tipo="fatura">
         <RegistarFaturaBende :fatura="f.fatura" :url="`/app/admin/faturacao/subscricoes/${f.id}/fatura/`" @atualizado="$emit('acao', 'faturada', f)" />
       </SecaoDocumento>

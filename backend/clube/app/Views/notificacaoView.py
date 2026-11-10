@@ -92,7 +92,7 @@ def _email(utilizador, tipo, titulo, mensagem, loja, link, prioridade, validade,
         botao = None
         if link.startswith('/'):
             rotulo = 'Responder' if '/mensagens?' in link else next(
-                (r for prefixo, r in BOTOES if link.startswith(prefixo)), 'Abrir na Bende')
+                (r for prefixo, r in BOTOES if link.startswith(prefixo)), 'Abrir na Bendi')
             botao = (rotulo, settings.FRONTEND_BASE_URL.rstrip('/') + link)
         fila_emails.enfileirar(user.email, assunto, texto, tipo=f'aviso_{tipo}', prioridade=prioridade,
                                botao=botao, utilizador=utilizador, chave=chave, validade=validade)

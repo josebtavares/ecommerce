@@ -1,7 +1,7 @@
 """
 Faturação no backoffice da loja (permissão gerir_faturacao: dono, gestor, contabilista) — a ficha do admin, só
 desta loja: as vendas das três origens (loja online, marcações, contas do POS vendidas em nome da loja) com o
-comprovativo do Bende (só o que foi pago no Bende) e a fatura que a loja emitiu no e-Fatura.
+comprovativo da Bendi (só o que foi pago na Bendi) e a fatura que a loja emitiu no e-Fatura.
 
   GET  /app/loja/<id>/faturacao/resumo/?de=&ate=              dados fiscais + totais por origem no período
                                                                (+ por faturar de sempre)

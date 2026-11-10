@@ -6,7 +6,7 @@
        :class="isDark ? 'bg-zinc-950' : 'bg-stone-50'">
     <div class="w-full max-w-md rounded-2xl border p-8 text-center shadow-sm"
          :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-stone-200'" data-teste="confirmar-email">
-      <img :src="$logo(isDark)" alt="Bende" class="w-28 h-28 object-contain mx-auto mb-4" />
+      <img :src="$logo(isDark)" alt="Bendi" class="w-28 h-28 object-contain mx-auto mb-4" />
 
       <template v-if="estado === 'a_confirmar'">
         <div class="h-8 w-8 mx-auto animate-spin rounded-full border-2 border-red-500/30 border-t-red-500"></div>

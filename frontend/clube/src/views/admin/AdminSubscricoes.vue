@@ -212,7 +212,7 @@
       </div>
     </template>
 
-    <!-- ═══ COBRANÇAS (mensalidades: FaturaSubscricao), paginadas no servidor — a fatura legal do Bende regista-se na linha ou em Faturação ═══ -->
+    <!-- ═══ COBRANÇAS (mensalidades: FaturaSubscricao), paginadas no servidor — a fatura legal da Bendi regista-se na linha ou em Faturação ═══ -->
     <template v-else-if="tab === 'faturas'">
       <div class="flex flex-wrap items-center gap-2">
         <select v-model="tipoFatura" aria-label="Lojas ou POS" data-teste="cobrancas-tipo"
@@ -429,7 +429,7 @@ export default {
 
   created () {
     this.escolherPeriodo('este_mes'); this.carregarPlanos()
-    // mensalidade paga/anulada, fatura do Bende registada (aqui ou em Faturação), subscrição mudada… por outra pessoa
+    // mensalidade paga/anulada, fatura da Bendi registada (aqui ou em Faturação), subscrição mudada… por outra pessoa
     this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal())
   },
   beforeUnmount () { this.pararTempoReal?.() },
@@ -511,7 +511,7 @@ export default {
                      form: { metodo: 'transferencia', notas: '' } }
     },
     recibo (f) { descarregarComprovativoSubscricao(f) },
-    // a fatura legal do Bende regista-se na linha da cobrança ou em Admin → Faturação (lá também o histórico)
+    // a fatura legal da Bendi regista-se na linha da cobrança ou em Admin → Faturação (lá também o histórico)
     verNaFaturacao (f) {
       this.$router.push({ path: '/admin/faturacao', query: { ficha: f.loja_id ? `loja-${f.loja_id}` : `pos-${f.pos_id}`, aba: 'bende' } })
     },

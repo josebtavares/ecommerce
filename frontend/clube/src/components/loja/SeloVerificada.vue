@@ -1,9 +1,9 @@
-<!-- SeloVerificada.vue — selo "Loja verificada" (documentos aprovados pela Bende — utils/documentos_loja.py).
+<!-- SeloVerificada.vue — selo "Loja verificada" (documentos aprovados pela Bendi — utils/documentos_loja.py).
      Só aparece com loja.verificada === true, o que a API só devolve quando o admin liga o selo para o público
      (Definições da plataforma). Herda a cor do sítio onde está (hero dos templates, cards, rodapé). -->
 <template>
   <span v-if="loja && loja.verificada === true" class="selo-verificada" :class="{ 'selo-verificada--icone': icone }"
-        title="A Bende verificou os documentos desta loja" data-teste="selo-verificada">
+        title="A Bendi verificou os documentos desta loja" data-teste="selo-verificada">
     <font-awesome-icon :icon="['fas', 'circle-check']" />
     <span v-if="!icone">Loja verificada</span>
   </span>

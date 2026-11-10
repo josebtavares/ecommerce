@@ -1,4 +1,4 @@
-<!-- FormEntrar.vue — formulário de entrar na conta Bende (username/email + password, ou Google).
+<!-- FormEntrar.vue — formulário de entrar na conta Bendi (username/email + password, ou Google).
      Usado na página /Login e na janela da landing page (/sobre). Guarda a sessão e emite 'entrou' (res.data);
      quem o usa decide para onde ir. modal=true: o link "Regista-te" emite 'trocar' em vez de mudar de página. -->
 <template>

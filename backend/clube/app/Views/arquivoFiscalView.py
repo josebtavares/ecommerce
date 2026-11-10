@@ -2,12 +2,12 @@
 Arquivos fiscais preparados em segundo plano (utils/arquivo_fiscal.py): lista e descarga (link de 5 minutos).
 
 Admin (gerir_faturacao):
-  GET  /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM      ZIP do Bende (na hora, ou 202 = fila) — faturacaoView
+  GET  /app/admin/faturacao/bende/arquivo/?de=AAAA-MM&ate=AAAA-MM      ZIP da Bendi (na hora, ou 202 = fila) — faturacaoView
   GET  /app/admin/faturacao/arquivos/?alvo=bende|loja|pos&id=          lista
   POST /app/admin/faturacao/arquivos/<aid>/descarregar/
 Loja (gerir_faturacao):
   GET  /app/loja/<id>/faturacao/arquivos/            POST /app/loja/<id>/faturacao/arquivos/<aid>/descarregar/
-POS (quem vê a faturação; a equipa só os seus, sem os documentos do Bende):
+POS (quem vê a faturação; a equipa só os seus, sem os documentos da Bendi):
   GET  /app/pos/<id>/faturacao/arquivos/             POST /app/pos/<id>/faturacao/arquivos/<aid>/descarregar/
 Dev (sem R2):
   GET  /app/faturacao/arquivos/ficheiro/<token>/

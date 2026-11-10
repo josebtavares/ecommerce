@@ -1,6 +1,6 @@
 <!-- LandingClientes.vue — "Para clientes": colagem de duas fotos à esquerda (a pequena por cima da grande, com o selo
      dos passos), e à direita o letreiro, o título, o texto, os passos e os botões. Sem fotos, blocos com as cores da
-     Bende ocupam o lugar delas. -->
+     Bendi ocupam o lugar delas. -->
 <template>
   <section :id="s.tipo" class="landing-seccao py-20 sm:py-28 px-5 sm:px-8 overflow-hidden" :data-teste="'landing-' + s.tipo"
            :class="[alternado ? (isDark ? 'bg-zinc-900/60' : 'bg-white') : '', { visivel }]">

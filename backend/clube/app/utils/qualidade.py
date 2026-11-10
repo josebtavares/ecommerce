@@ -156,7 +156,7 @@ def texto_aviso(r):
     if r['produtos_com_problemas']:
         tipos = ', '.join(f"{TITULOS[c].lower()} ({n})" for c, n in sorted(r['por_tipo'].items(), key=lambda x: -x[1]))
         partes.append(f"{r['produtos_com_problemas']} produto(s) a rever: {tipos}.")
-    return ('A equipa da Bende reviu a tua loja. ' + ' '.join(partes)
+    return ('A equipa da Bendi reviu a tua loja. ' + ' '.join(partes)
             + ' Vê os detalhes na barra do topo do backoffice da loja.')
 
 

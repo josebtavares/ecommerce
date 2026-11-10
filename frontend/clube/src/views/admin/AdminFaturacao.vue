@@ -1,12 +1,12 @@
 <template>
   <!-- Admin → Faturação (como Admin → Comissões): uma aba por loja (e POS sem loja) com a sua vista — ficha, vendas, POS,
-       faturas do Bende, pesquisa; "Todas" = visão geral (vendedores, pesquisa global, faturas do Bende). Backend faturacaoView.py -->
+       faturas da Bendi, pesquisa; "Todas" = visão geral (vendedores, pesquisa global, faturas da Bendi). Backend faturacaoView.py -->
   <div class="space-y-5">
     <div>
       <h2 class="text-lg font-bold text-zinc-100">Faturação</h2>
       <p class="text-xs text-zinc-500 mt-0.5">Arquivo fiscal de todas as lojas e POS — nada se apaga: faturas substituídas ou anuladas ficam no histórico</p>
     </div>
-    <AbasVendedores ref="abas" url="/app/admin/faturacao/abas/" :ativo="abaAtiva" titulo="Documentos por faturar (vendas + faturas do Bende)" @selecionar="selecionar" />
+    <AbasVendedores ref="abas" url="/app/admin/faturacao/abas/" :ativo="abaAtiva" titulo="Documentos por faturar (vendas + faturas da Bendi)" @selecionar="selecionar" />
 
     <FaturacaoFicha v-if="ficha" :key="ficha.tipo + ficha.id" :tipo="ficha.tipo" :id="ficha.id" :aba-inicial="ficha.aba" :q-inicial="ficha.q" :atualizar="atualizar"
       @abrir="abrirFicha" @alterado="carregarAbas" @carregada="f => lojaDoPos = f.tipo === 'pos' && f.loja ? f.loja.id : null" />
@@ -97,10 +97,10 @@
         <ResultadosPesquisa v-if="pRes" :res="pRes" :limit="LIMITE" :offset="pOffset" @ir="pesquisar" @abrir="abrirResultado" />
       </template>
 
-      <!-- ═══ FATURAS DO BENDE (agrupadas por loja, com os seus POS) ═══ -->
+      <!-- ═══ FATURAS DO BENDI (agrupadas por loja, com os seus POS) ═══ -->
       <template v-else>
         <form @submit.prevent="carregarBende(0)" class="flex flex-wrap items-end gap-2">
-          <input v-model.trim="fb.q" type="search" placeholder="Loja, POS, NIF ou dono" aria-label="Pesquisar nas faturas do Bende" data-teste="bende-q"
+          <input v-model.trim="fb.q" type="search" placeholder="Loja, POS, NIF ou dono" aria-label="Pesquisar nas faturas da Bendi" data-teste="bende-q"
             class="flex-1 min-w-[200px] px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-red-500" />
           <span class="flex items-center gap-1.5 text-[11px] text-zinc-500">De
             <SeletorMes v-model="fb.de" @change="carregarBende(0)" rotulo="Mês inicial" teste="bende-de" /></span>
@@ -111,9 +111,9 @@
           </label>
           <button type="submit" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold">Procurar</button>
         </form>
-        <!-- arquivo do Bende: comprovativos, extratos, faturas (em vigor e anuladas) e cobranças pagas de todas as lojas e POS -->
+        <!-- arquivo da Bendi: comprovativos, extratos, faturas (em vigor e anuladas) e cobranças pagas de todas as lojas e POS -->
         <div class="flex flex-wrap items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3" data-teste="bende-arquivo">
-          <span class="text-xs text-zinc-300 font-semibold mr-1"><font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1" />Arquivo do Bende (ZIP)</span>
+          <span class="text-xs text-zinc-300 font-semibold mr-1"><font-awesome-icon :icon="['fas', 'file-zipper']" class="mr-1" />Arquivo da Bendi (ZIP)</span>
           <span class="text-[11px] text-zinc-500">{{ fb.de === fb.ate ? mesTexto(fb.de) : `${mesTexto(fb.de)} a ${mesTexto(fb.ate)}` }}</span>
           <select v-model="anoZip" @change="escolherAno" aria-label="Ano inteiro" data-teste="bende-ano"
             class="px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200">
@@ -201,7 +201,7 @@ import { ouvirFaturacao, ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
 const TABS = [
   { key: 'vendedores', label: 'Vendedores' },
   { key: 'pesquisa',   label: 'Pesquisar documentos' },
-  { key: 'bende',      label: 'Faturas do Bende' },
+  { key: 'bende',      label: 'Faturas da Bendi' },
 ]
 const LIMITE = 20
 
@@ -241,8 +241,8 @@ export default {
     // ?ficha=loja-12&aba=bende (ex.: "Ver na Faturação" em Subscrições → Cobranças)
     const m = /^(loja|pos)-(\d+)$/.exec(this.$route.query.ficha || '')
     if (m) this.abrirFicha(m[1], Number(m[2]), this.$route.query.aba || '', this.$route.query.q || '')
-    else if (this.$route.query.tab === 'bende') this.mudarTab('bende')      // aviso "arquivo do Bende pronto"
-    // mensalidade paga, fatura do Bende registada/anulada (aqui, em Subscrições ou por outro admin)
+    else if (this.$route.query.tab === 'bende') this.mudarTab('bende')      // aviso "arquivo da Bendi pronto"
+    // mensalidade paga, fatura da Bendi registada/anulada (aqui, em Subscrições ou por outro admin)
     this.pararTempoReal = ouvirSubscricoes(() => this.atualizarEmTempoReal())
     // fatura de uma venda registada/anulada pela loja ou pelo POS, venda nova por faturar
     this.pararFaturacao = ouvirFaturacao(a => this.atualizarEmTempoReal(a, true))
