@@ -415,6 +415,8 @@ def _reembolso_falhou(m, falta, erro):
     from ..Views.notificacaoView import notificar_admins
     primeira = not m.reembolso_erro
     incerto = getattr(erro, 'incerto', False)
+    if getattr(erro, 'estorno_loja', False):
+        return _estorno_pela_loja(m, falta, erro, primeira)
     m.reembolso_tentativas += 1
     m.reembolso_erro = (str(erro) or 'O fornecedor recusou o reembolso.')[:255]
     m.reembolso_incerto = incerto
@@ -451,6 +453,48 @@ def _reembolso_falhou(m, falta, erro):
                          mensagem=f'{m.loja.nome} · {formatar(falta)} · {porque}: {m.reembolso_erro}',
                          loja=m.loja, link='/admin/devolucoes?grupo=por_concluir', email=2)
     return Decimal('0')
+
+
+def _estorno_pela_loja(m, falta, erro, primeira):
+    """Cartão vinti4 da loja: fica por concluir até a loja fazer o estorno no Portal do Comerciante e o marcar
+    (estorno_feito). Não se volta a tentar sozinho."""
+    from ..utils.registo import registar
+    m.reembolso_tentativas += 1
+    m.reembolso_erro = (str(erro) or 'Estorno no Portal do Comerciante.')[:255]
+    m.reembolso_incerto, m.reembolso_proxima = False, None
+    Marcacao.objects.filter(pk=m.pk).update(reembolso_erro=m.reembolso_erro, reembolso_tentativas=m.reembolso_tentativas,
+                                            reembolso_proxima=None, reembolso_incerto=False)
+    registar('marcacao', 'estorno_pedido', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
+             metodo=m.pagamento, dados={'referencia': m.pagamento_referencia})
+    if primeira:
+        texto = f'A loja vai devolver {formatar(falta)} ao cartão com que pagaste. Os bancos podem demorar alguns dias.'
+        if m.cliente_id:
+            from .models import MensagemMarcacao
+            from ..Views.notificacaoView import notificar
+            MensagemMarcacao.objects.create(marcacao=m, papel='sistema', texto=texto)
+            notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='Reembolso a caminho',
+                      mensagem=f'{m.servico_nome}: {texto}', loja=m.loja, link=f'/minhas-marcacoes/{m.id}',
+                      email=FE.INFORMATIVO)
+        avisar_loja(m, 'Faz o estorno no cartão', f'{m.servico_nome}: devolve {formatar(falta)} ao cliente — no Portal '
+                                                  f'do Comerciante da SISP, faz o estorno da transação '
+                                                  f'{m.pagamento_referencia} e marca "Estorno feito" na marcação.', email=2)
+    return Decimal('0')
+
+
+def estorno_feito(m, referencia, nota=''):
+    """A loja fez o estorno do cartão vinti4 no Portal do Comerciante (referência do estorno obrigatória)."""
+    if m.pagamento_fornecedor != 'vinti4':
+        raise ErroMarcacao('Esta marcação não foi paga com cartão vinti4.')
+    referencia, nota = (referencia or '').strip(), (nota or '').strip()
+    m = _bloqueada(m)
+    falta = por_reembolsar(m)
+    if not falta:
+        raise ErroMarcacao('Esta marcação não tem reembolso por concluir.')
+    if not 3 <= len(referencia) <= 100:
+        raise ErroMarcacao('Indica a referência do estorno (do Portal do Comerciante).')
+    _reembolso_feito(m, falta, referencia, texto=f'A loja devolveu {formatar(falta)} ao teu cartão (estorno '
+                                                 f'{referencia}).' + (f' {nota}' if nota else ''))
+    return m
 
 
 def por_reembolsar(m):
@@ -613,6 +657,7 @@ def marcacao_payload(m, completo=False):
     # incerto: o fornecedor não respondeu — a loja não pode tentar, a Bendi confirma primeiro
     d['reembolso_por_concluir'] = ({'valor': str(falta), 'erro': m.reembolso_erro, 'tentativas': m.reembolso_tentativas,
                                     'incerto': m.reembolso_incerto,
+                                    'estorno_loja': m.pagamento_fornecedor == 'vinti4',
                                     'proxima_tentativa': m.reembolso_proxima.astimezone(tz).isoformat()
                                     if m.reembolso_proxima else None} if falta else None)
     if completo:

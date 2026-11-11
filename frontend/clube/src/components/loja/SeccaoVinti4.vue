@@ -166,6 +166,49 @@
             <button type="button" @click="editar = false" class="text-sm text-zinc-400 hover:text-zinc-200">Cancelar</button>
           </div>
         </form>
+
+        <!-- Portal do Comerciante (opcional): a Bendi pergunta à SISP pelos pagamentos que ficaram sem resposta -->
+        <div v-if="d.adesao.pos_id" class="mt-5 pt-4 border-t border-zinc-800" data-teste="vinti4-portal">
+          <p class="text-xs text-zinc-400">
+            Portal do Comerciante: <span class="text-zinc-200">{{ d.adesao.portal_definido ? `ligado (${d.adesao.portal_id})` : 'não indicado' }}</span>
+          </p>
+          <p class="text-[11px] text-zinc-500 mt-0.5">
+            Opcional. Com ele confirmamos sozinhos os pagamentos em que o cliente não voltou da página da SISP.
+            Os estornos (reembolsos) fazes tu nesse portal.
+          </p>
+          <button v-if="!editarPortal" type="button" @click="abrirPortal" data-teste="vinti4-portal-abrir"
+            class="mt-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold">
+            {{ d.adesao.portal_definido ? 'Alterar' : 'Indicar o acesso' }}
+          </button>
+          <form v-else @submit.prevent="guardarPortal" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block" for="v4-portal-id">Portal ID</label>
+              <input id="v4-portal-id" v-model="portal.portal_id" autocomplete="off" maxlength="60" data-teste="vinti4-portal-id"
+                class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 font-mono focus:outline-none focus:border-red-500" />
+              <p v-if="erros.portal_id" class="mt-1 text-xs text-red-400">{{ erros.portal_id }}</p>
+            </div>
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block" for="v4-portal-pw">Password do portal</label>
+              <input id="v4-portal-pw" v-model="portal.portal_password" type="password" autocomplete="off" maxlength="200" data-teste="vinti4-portal-password"
+                class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 font-mono focus:outline-none focus:border-red-500" />
+              <p v-if="erros.portal_password" class="mt-1 text-xs text-red-400">{{ erros.portal_password }}</p>
+              <p v-else class="mt-1 text-[11px] text-zinc-600">Fica cifrada e nunca é mostrada. Deixa os dois vazios para apagar.</p>
+            </div>
+            <div v-if="d.pede_password" class="sm:col-span-2">
+              <label class="text-xs text-zinc-500 mb-1 block" for="v4-portal-conf">A tua password (para confirmar)</label>
+              <input id="v4-portal-conf" v-model="portal.password" type="password" autocomplete="current-password"
+                class="w-full sm:w-72 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500" />
+              <p v-if="erros.password" class="mt-1 text-xs text-red-400">{{ erros.password }}</p>
+            </div>
+            <div class="sm:col-span-2 flex items-center gap-3">
+              <button type="submit" :disabled="aGuardar" data-teste="vinti4-portal-guardar"
+                class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold">
+                {{ aGuardar ? 'A guardar…' : 'Guardar acesso' }}
+              </button>
+              <button type="button" @click="editarPortal = false" class="text-sm text-zinc-400 hover:text-zinc-200">Cancelar</button>
+            </div>
+          </form>
+        </div>
       </template>
       <p v-if="erroGeral" class="mt-3 text-xs text-red-400" data-teste="vinti4-erro">{{ erroGeral }}</p>
       <p v-if="guardado" class="mt-3 text-xs text-green-500" data-teste="vinti4-guardado">{{ guardado }}</p>
@@ -215,6 +258,7 @@ export default {
       modo: 'pedido', comprovativo: null, aEnviarComp: false, erroComp: '',
       carregando: true, d: null, editar: false, aGuardar: false, guardado: '', copiado: false,
       form: { pos_id: '', merchant_id: '', chave: '', password: '' }, erros: {}, erroGeral: '',
+      editarPortal: false, portal: { portal_id: '', portal_password: '', password: '' },
     }
   },
 
@@ -291,6 +335,25 @@ export default {
         if (r && typeof r === 'object' && !r.detail) this.erros = r
         else this.erroGeral = r?.detail || 'Não foi possível guardar.'
       } finally { this.aGuardar = false; this.form.password = '' }
+    },
+
+    abrirPortal () {
+      this.portal = { portal_id: this.d.adesao?.portal_id || '', portal_password: '', password: '' }
+      this.erros = {}; this.erroGeral = ''; this.guardado = ''
+      this.editarPortal = true
+    },
+
+    async guardarPortal () {
+      this.aGuardar = true; this.erros = {}; this.erroGeral = ''; this.guardado = ''
+      try {
+        this.d = (await api.post(`/app/loja/${this.lojaId}/vinti4/`, { acao: 'portal', ...this.portal })).data
+        this.editarPortal = false
+        this.guardado = 'Acesso ao portal guardado ✓'
+      } catch (e) {
+        const r = e.response?.data
+        if (r && typeof r === 'object' && !r.detail) this.erros = r
+        else this.erroGeral = r?.detail || 'Não foi possível guardar.'
+      } finally { this.aGuardar = false; this.portal.password = ''; this.portal.portal_password = '' }
     },
 
     async copiar () {

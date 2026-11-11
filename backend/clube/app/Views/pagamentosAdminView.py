@@ -19,6 +19,7 @@ import re
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.db.models import (Case, CharField, Count, DateTimeField, DecimalField, F, IntegerField, OuterRef, Q,
                               Subquery, Sum, Value, When)
 from django.db.models.functions import Coalesce
@@ -422,3 +423,151 @@ def bende_csv(request):
     r = HttpResponse(_csv(out), content_type='text/csv; charset=utf-8')
     r['Content-Disposition'] = f'attachment; filename="recebimentos-bende-{timezone.localdate()}.csv"'
     return r
+
+
+# ── Cartão (vinti4): cada ida à página da SISP, com o que a SISP respondeu ──
+#   GET /app/admin/pagamentos/vinti4/?estado=&credenciais=bendi|lojas&de=&ate=&q=&limit=&offset=
+#   GET /app/admin/pagamentos/vinti4/<id>/      (com as respostas guardadas)
+
+def _v4_item(t, completo=False):
+    from ..pagamentos.servico import TIPOS, destino, ler_referencia
+    lido = ler_referencia(t.referencia)
+    d = {'id': t.id, 'ref': t.ref, 'referencia': t.referencia, 'tipo': TIPOS.get(lido[0], '') if lido else '',
+         'loja': {'id': t.loja_id, 'nome': t.loja.nome} if t.loja_id else None,
+         'pos_id': t.pos_id, 'pagador': (t.utilizador.get_full_name() or t.utilizador.username) if t.utilizador_id else '',
+         'valor': str(t.valor), 'montante': t.montante, 'descricao': t.descricao,
+         'estado': t.estado, 'estado_nome': t.get_estado_display(), 'transacao': t.transacao if t.tid else '',
+         'pan': t.pan, 'erro_codigo': t.erro_codigo, 'erro': t.erro, 'mensagem': t.mensagem,
+         'dcc': t.dcc, 'confirmada_por': t.confirmada_por, 'efeito': t.efeito, 'consultas': t.consultas,
+         'criada_em': _quando(t.criada_em), 'terminada_em': _quando(t.terminada_em),
+         'reconciliada_em': _quando(t.reconciliada_em), 'estornada_em': _quando(t.estornada_em),
+         'comissao_sisp': str(t.comissao_sisp) if t.comissao_sisp is not None else '', 'tipo_cartao': t.tipo_cartao}
+    if completo:          # o caminho no site pede uma consulta por linha: só na ficha
+        d['destino'] = destino(t.referencia)[1]
+        d['respostas'] = t.respostas
+    return d
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vinti4_lista(request):
+    from ..models import TransacaoVinti4
+    erro = _exige(request)
+    if erro:
+        return erro
+    de, ate, erro = _datas(request)
+    if erro:
+        return erro
+    qs = TransacaoVinti4.objects.select_related('loja', 'utilizador').order_by('-criada_em')
+    estados = dict(TransacaoVinti4.ESTADOS)
+    estado = request.GET.get('estado')
+    if estado in estados:
+        qs = qs.filter(estado=estado)
+    cred = request.GET.get('credenciais')
+    if cred == 'bendi':
+        qs = qs.filter(loja__isnull=True)
+    elif cred == 'lojas':
+        qs = qs.filter(loja__isnull=False)
+    if request.GET.get('reconciliacao') == 'falta':        # pagas cá que nenhum ficheiro VBVT confirmou ainda
+        qs = qs.filter(estado='paga', reconciliada_em__isnull=True)
+    if de:
+        qs = qs.filter(criada_em__date__gte=de)
+    if ate:
+        qs = qs.filter(criada_em__date__lte=ate)
+    q = str(request.GET.get('q') or '').strip()[:60]
+    if q:
+        qs = qs.filter(Q(ref__icontains=q) | Q(referencia__icontains=q) | Q(descricao__icontains=q)
+                       | Q(loja__nome__icontains=q) | Q(utilizador__username__icontains=q) | Q(utilizador__email__icontains=q))
+    contagem = dict(qs.order_by().values_list('estado').annotate(n=Count('id')))
+    pagina, total = _paginar(request, qs)
+    return Response({'count': total, 'results': [_v4_item(t) for t in pagina],
+                     'estados': [{'valor': k, 'nome': v, 'n': contagem.get(k, 0)} for k, v in TransacaoVinti4.ESTADOS]})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vinti4_detalhe(request, tx_id):
+    from django.shortcuts import get_object_or_404
+    from ..models import TransacaoVinti4
+    erro = _exige(request)
+    if erro:
+        return erro
+    t = get_object_or_404(TransacaoVinti4.objects.select_related('loja', 'utilizador'), id=tx_id)
+    return Response(_v4_item(t, completo=True))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def vinti4_consultar(request, tx_id):
+    """POST /app/admin/pagamentos/vinti4/<id>/consultar/ — pergunta já à API de estado da SISP (Plan Test 39–41)."""
+    from django.shortcuts import get_object_or_404
+    from ..models import TransacaoVinti4
+    from ..pagamentos import ErroPagamento
+    from ..pagamentos import vinti4
+    erro = _exige(request)
+    if erro:
+        return erro
+    get_object_or_404(TransacaoVinti4, id=tx_id)
+    try:
+        tx, resultado, corpo = vinti4.consultar_agora(tx_id)
+    except ErroPagamento as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    tx = TransacaoVinti4.objects.select_related('loja', 'utilizador').get(id=tx.id)
+    return Response({'resultado': resultado, 'resposta': corpo, 'transacao': _v4_item(tx, completo=True)})
+
+
+# ── ficheiros de reconciliação VBVT (pagamentos/vbvt.py) ──
+
+def _vbvt_item(f, completo=False):
+    from ..pagamentos import vbvt
+    d = {'id': f.id, 'nome': f.nome, 'merchant_id': f.merchant_id, 'dono': f.loja.nome if f.loja_id else 'Bendi',
+         'data': f.data.isoformat() if f.data else '', 'sequencia': f.sequencia,
+         'data_anterior': f.data_anterior.isoformat() if f.data_anterior else '', 'sequencia_anterior': f.sequencia_anterior,
+         'estado': f.estado, 'estado_nome': f.get_estado_display(), 'forcado': f.forcado,
+         'n_erros': len(f.erros), 'n_avisos': len(f.avisos), 'resumo': f.resumo,
+         'carregado_por': f.carregado_por.username if f.carregado_por_id else '', 'carregado_em': _quando(f.carregado_em)}
+    if completo:
+        d.update(erros=f.erros, avisos=f.avisos, linhas=f.linhas, relatorio=vbvt.relatorio(f),
+                 resultados=vbvt.RESULTADOS, problemas=list(vbvt.PROBLEMAS))
+    return d
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def vbvt(request):
+    """GET  /app/admin/pagamentos/vbvt/  → ficheiros carregados (mais recentes primeiro)
+       POST /app/admin/pagamentos/vbvt/  multipart { ficheiro, forcar? } → processa (aplicado ou rejeitado)"""
+    from ..models import FicheiroVBVT
+    from ..pagamentos import vbvt as leitor
+    erro = _exige(request)
+    if erro:
+        return erro
+    if request.method == 'GET':
+        qs = FicheiroVBVT.objects.select_related('loja', 'carregado_por').order_by('-carregado_em')
+        pagina, total = _paginar(request, qs)
+        return Response({'count': total, 'results': [_vbvt_item(f) for f in pagina],
+                         'merchant_id_bendi': bool(settings.VINTI4_MERCHANT_ID.strip())})
+    ficheiro = request.FILES.get('ficheiro')
+    if not ficheiro:
+        return Response({'detail': 'Escolhe o ficheiro VBVT descarregado do Portal do Comerciante.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if ficheiro.size > leitor.TAMANHO_MAX:
+        return Response({'detail': 'O ficheiro é demasiado grande (máximo 5 MB).'}, status=status.HTTP_400_BAD_REQUEST)
+    forcar = str(request.data.get('forcar') or '').lower() in ('1', 'true', 'sim')
+    try:
+        f = leitor.processar(ficheiro.read(), nome=ficheiro.name, utilizador=request.user, forcar=forcar)
+    except leitor.ErroVBVT as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(_vbvt_item(f, completo=True), status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vbvt_detalhe(request, ficheiro_id):
+    from django.shortcuts import get_object_or_404
+    from ..models import FicheiroVBVT
+    erro = _exige(request)
+    if erro:
+        return erro
+    f = get_object_or_404(FicheiroVBVT.objects.select_related('loja', 'carregado_por'), id=ficheiro_id)
+    return Response(_vbvt_item(f, completo=True))

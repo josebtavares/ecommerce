@@ -12,6 +12,7 @@ urlpatterns = [
     # ── Pagamento (app/pagamentos: o fornecedor é o da plataforma) ──
      path('pagamento/iniciar/',               v.pagamento_iniciar,   name='pagamento-iniciar'),
      path('pagamento/regresso/',              v.pagamento_regresso,  name='pagamento-regresso'),
+     path('pagamento/vinti4/resposta/',       v.vinti4_resposta,     name='vinti4-resposta'),
      path('pagamento/<slug:fornecedor>/aviso/', v.pagamento_aviso,   name='pagamento-aviso'),
 
     # ── Antigos (checkout aberto durante um deploy; webhook configurado no Flutterwave) ──

@@ -18,7 +18,7 @@ from django.db import transaction
 
 from ..utils.banco import online_suspenso
 from ..utils.dinheiro import formatar, valor_cobranca
-from . import ativo, obter
+from . import ativo, ativo_bendi, obter
 from .base import Cobranca, ErroPagamento
 
 # pagos fora da plataforma (a loja confirma quando recebe) e pagos online pelo fornecedor da plataforma.
@@ -48,24 +48,43 @@ def ler_referencia(ref):
 
 
 class DadosClienteEmFalta(ErroPagamento):
-    """Pagar com cartão pede o perfil do cliente completo (contrato SISP, cl.3: nome, morada, telefone, email)."""
+    """Pagar com cartão pede o perfil do cliente completo (contrato SISP, cl.3: nome, morada, telefone, email;
+    o 3DS pede também a cidade — billAddrCity)."""
     codigo = 'dados_cliente'
 
     def __init__(self, campos):
         self.campos = campos
-        nomes = {'telefone': 'o telefone', 'morada': 'a morada'}
-        super().__init__(f'Para pagar com cartão, indica {" e ".join(nomes[c] for c in campos)} no teu perfil.')
+        nomes = {'telefone': 'o telefone', 'morada': 'a morada', 'cidade': 'o concelho ou a cidade'}
+        lista = [nomes[c] for c in campos]
+        texto = lista[0] if len(lista) == 1 else ', '.join(lista[:-1]) + ' e ' + lista[-1]
+        super().__init__(f'Para pagar com cartão, indica {texto} no teu perfil.')
+
+
+def tem_cidade(utilizador):
+    """Em Cabo Verde chega o concelho; fora dele, a cidade escrita."""
+    from ..utils import geografia
+    if str(getattr(utilizador, 'cidade', '') or '').strip():
+        return True
+    return (getattr(utilizador, 'pais', 'CV') or 'CV') == 'CV' and bool(geografia.concelho(getattr(utilizador, 'concelho', '')))
 
 
 def exigir_dados_cliente(utilizador, morada=''):
-    """Telefone e morada (a de entrega serve) de quem paga online → DadosClienteEmFalta."""
+    """Telefone, morada (a de entrega serve) e cidade de quem paga online → DadosClienteEmFalta."""
     falta = []
     if not str(getattr(utilizador, 'telefone', '') or '').strip():
         falta.append('telefone')
     if not str(morada or getattr(utilizador, 'morada', '') or '').strip():
         falta.append('morada')
+    if not tem_cidade(utilizador):
+        falta.append('cidade')
     if falta:
         raise DadosClienteEmFalta(falta)
+
+
+def _iniciar(f, cobranca):
+    inicio = f.iniciar(cobranca)
+    inicio.fornecedor = f.codigo
+    return inicio
 
 
 def _regresso():
@@ -208,15 +227,16 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
                       loja=encomenda.loja, link=f'/encomendas/{encomenda.id}', email=fila_emails.IMPORTANTE,
                       email_chave=f'enc:{encomenda.id}:recebida')
         return Inicio('pendente')
-    if online_suspenso(encomenda.loja):         # sem dados bancários a Bendi não sabe para onde transferir
+    if online_suspenso(encomenda.loja, utilizador):      # sem contrato vinti4 ativo (em testes: só a equipa)
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')
     exigir_dados_cliente(utilizador, encomenda.morada_entrega)
     f = ativo()
     loja = encomenda.loja
-    inicio = f.iniciar(Cobranca(
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('enc', encomenda.id, tipo_metodo), valor=encomenda.valor_total,
         descricao=f'Encomenda #{encomenda.id}', titulo=loja.nome, logo=loja.logo.url if loja.logo else '',
-        cliente=_cliente(utilizador), regresso=_regresso()))
+        cliente=_cliente(utilizador), regresso=_regresso(), pagador=utilizador, loja=loja,
+        morada=encomenda.morada_entrega))
     if inicio.estado == 'aprovado':
         aprovar_encomenda(encomenda, metodo, inicio.transacao, f.codigo)
     return inicio
@@ -256,14 +276,14 @@ def iniciar_marcacao(m, utilizador):
     """→ (Inicio, marcação). Simulado: fica paga já."""
     from ..servicos import marcacoes as ops
     ops.verificar_pagavel(m)
-    if online_suspenso(m.loja):
+    if online_suspenso(m.loja, utilizador):
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — a marcação não pode ser paga agora.')
     exigir_dados_cliente(utilizador)
     f = ativo()
-    inicio = f.iniciar(Cobranca(
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('mar', m.id, 'cartao'), valor=m.preco_indicado,
         descricao=f'Marcação: {m.servico_nome}', titulo=m.loja.nome, logo=m.loja.logo.url if m.loja.logo else '',
-        cliente=_cliente(utilizador), regresso=_regresso()))
+        cliente=_cliente(utilizador), regresso=_regresso(), pagador=utilizador, loja=m.loja))
     if inicio.estado == 'aprovado':
         m = ops.pagar(m, fornecedor=f.codigo, referencia=inicio.transacao)
     return inicio, m
@@ -307,10 +327,11 @@ def iniciar_fatura(fatura, utilizador):
     from ..utils import subscricoes as subs
     if fatura.estado != 'pendente':
         raise ErroPagamento('Esta fatura já não está por pagar.')
-    f = ativo()
-    inicio = f.iniciar(Cobranca(
+    f = ativo_bendi()
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('fat', fatura.id, 'cartao'), valor=fatura.valor,
-        descricao=fatura.descricao[:100], titulo='Bendi', cliente=_cliente(utilizador), regresso=_regresso()))
+        descricao=fatura.descricao[:100], titulo='Bendi', cliente=_cliente(utilizador), regresso=_regresso(),
+        pagador=utilizador))
     if inicio.estado == 'aprovado':
         subs.pagar(fatura, _metodo_fatura(f), referencia=inicio.transacao)
     return inicio
@@ -356,11 +377,11 @@ def iniciar_cobranca_comissoes(c, utilizador):
     if c.estado != 'pendente':
         raise ErroPagamento('Esta cobrança já não está por pagar.')
     from ..utils import cobranca_comissoes as cc
-    f = ativo()
-    inicio = f.iniciar(Cobranca(
+    f = ativo_bendi()
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('com', c.id, 'cartao'), valor=c.valor,
         descricao=f'Comissões até {c.mes:%m/%Y} — {c.loja.nome}'[:100], titulo='Bendi', cliente=_cliente(utilizador),
-        regresso=_regresso()))
+        regresso=_regresso(), pagador=utilizador))
     if inicio.estado == 'aprovado':
         cc.pagar(c, _metodo_fatura(f), referencia=inicio.transacao)
     return inicio
@@ -408,10 +429,35 @@ def confirmar(f, conf):
             'com': _confirmar_cobranca}[tipo](f, conf, oid, metodo)
 
 
+def destino(referencia):
+    """(tipo, caminho no site) do que a referência pagava — para o regresso de um pagamento que falhou."""
+    lido = ler_referencia(referencia)
+    if not lido:
+        return '', ''
+    tipo, oid, _ = lido
+    if tipo == 'enc':
+        return 'encomenda', f'/encomendas/{oid}'
+    if tipo == 'mar':
+        return 'marcacao', f'/minhas-marcacoes/{oid}'
+    if tipo == 'fat':
+        from ..models import FaturaSubscricao
+        fatura = FaturaSubscricao.objects.filter(pk=oid).only('pos_id', 'loja_id').first()
+        return 'fatura', _destino_fatura(fatura) if fatura else ''
+    from ..models import CobrancaComissoes
+    loja_id = CobrancaComissoes.objects.filter(pk=oid).values_list('loja_id', flat=True).first()
+    return 'comissoes', f'/loja/{loja_id}/backoffice/subscricao' if loja_id else ''
+
+
+def erro_para_frontend(e):
+    """ErroPagamento → corpo da resposta 400 (dados do cliente em falta: o frontend pede-os ali mesmo)."""
+    extra = {'codigo': e.codigo, 'campos': e.campos} if isinstance(e, DadosClienteEmFalta) else {}
+    return {'detail': str(e), **extra}
+
+
 def para_frontend(inicio, **extra):
     """Inicio → o que o frontend precisa (utils/pagamentoOnline.js segue o redirecionamento)."""
     corpo = {'estado': inicio.estado, **extra}
     if inicio.estado == 'redirecionar':
         corpo['redirecionar'] = {'url': inicio.url, 'metodo': inicio.metodo_http, 'campos': inicio.campos,
-                                 'fornecedor': ativo().codigo}
+                                 'fornecedor': inicio.fornecedor or ativo().codigo}
     return corpo

@@ -217,6 +217,21 @@ VOYAGE_RERANK       = os.environ.get('VOYAGE_RERANK', 'rerank-3')   # vazio desl
 EMAIL_SUPORTE       = os.environ.get('EMAIL_SUPORTE', '')
 # fornecedor dos pagamentos online da plataforma (app/pagamentos): simulado até haver contrato (SISP)
 PAGAMENTOS_FORNECEDOR = os.environ.get('PAGAMENTOS_FORNECEDOR', 'simulado')
+# o das cobranças da própria Bendi (faturas de subscrição, comissões) — pode ir para o vinti4 antes das vendas das lojas
+PAGAMENTOS_FORNECEDOR_BENDI = os.environ.get('PAGAMENTOS_FORNECEDOR_BENDI', '') or PAGAMENTOS_FORNECEDOR
+# vinti4 / SISP (app/pagamentos/vinti4.py). Credenciais da Bendi (CV PRIME STORE): recebem só comissões e
+# subscrições — as vendas das lojas usam as credenciais de cada loja (AdesaoVinti4). Sem POS ID → desligado.
+VINTI4_URL          = os.environ.get('VINTI4_URL', 'https://3dsteste.vinti4net.cv/3ds_middleware_php/public/3ds_init.php')
+VINTI4_POS_ID       = os.environ.get('VINTI4_POS_ID', '')
+VINTI4_POS_AUT_CODE = os.environ.get('VINTI4_POS_AUT_CODE', '')
+# Merchant ID da Bendi (não é secreto): identifica os ficheiros de reconciliação VBVT dela (pagamentos/vbvt.py)
+VINTI4_MERCHANT_ID  = os.environ.get('VINTI4_MERCHANT_ID', '')
+# API de estado (Portal do Comerciante): confirma as transacções sem resposta ao fim de 8 minutos
+VINTI4_ESTADO_URL   = os.environ.get('VINTI4_ESTADO_URL', 'https://comerciante.teste.sisp.cv/pos/transaction-status')
+VINTI4_PORTAL_ID    = os.environ.get('VINTI4_PORTAL_ID', '')
+VINTI4_PORTAL_PASSWORD = os.environ.get('VINTI4_PORTAL_PASSWORD', '')
+# endereço público desta API (a SISP manda a resposta para <isto>/app/pagamento/vinti4/resposta/), ex.: https://api.e-bendi.cv
+API_BASE_URL        = os.environ.get('API_BASE_URL', 'http://localhost:8000')
 
 
 # ══════════════════════════════════════════════════════════════

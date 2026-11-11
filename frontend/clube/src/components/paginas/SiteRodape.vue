@@ -44,22 +44,21 @@
         </p>
         <p>Preços em escudos cabo-verdianos (CVE). © {{ ano }} Todos os direitos reservados.</p>
       </div>
-      <!-- logótipos dos cartões: só depois do contrato com a SISP (trocar pelos do kit oficial) -->
-      <div v-if="d.mostrar_logos_pagamento" class="flex items-center gap-2" data-teste="rodape-logos" aria-label="Cartões aceites">
-        <span v-for="l in LOGOS" :key="l" class="px-2 py-1 rounded-md border text-[11px] font-bold tracking-wide"
-              :class="isDark ? 'border-zinc-700 text-zinc-300 bg-zinc-800' : 'border-stone-200 text-zinc-600 bg-stone-50'">{{ l }}</span>
-      </div>
+      <!-- logótipos oficiais dos cartões (Admin → Definições liga-os quando o cartão está activo) -->
+      <MarcasCartao v-if="d.mostrar_logos_pagamento" data-teste="rodape-logos" />
     </div>
   </footer>
 </template>
 
 <script>
+import MarcasCartao from '@/components/pagamento/MarcasCartao.vue'
 import { dadosPlataforma, listaContactos } from '@/utils/paginas'
 
 const SECCOES = [{ key: 'suporte', label: 'Suporte' }, { key: 'legal', label: 'Legal' }]
 
 export default {
   name: 'SiteRodape',
+  components: { MarcasCartao },
 
   props: {
     isDark: { type: Boolean, default: true },
@@ -69,7 +68,7 @@ export default {
   },
 
   data () {
-    return { d: {}, LOGOS: ['vinti4', 'VISA', 'Mastercard'], ano: new Date().getFullYear() }
+    return { d: {}, ano: new Date().getFullYear() }
   },
 
   computed: {

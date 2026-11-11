@@ -292,6 +292,13 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(f'  encomendas: expirar falhou: {e}')
         try:
+            from app.pagamentos.vinti4 import rever_sem_resposta
+            n = rever_sem_resposta()
+            if n:
+                self.stdout.write(f'  vinti4: {n} pagamento(s) sem resposta revisto(s) (API de estado / 8 min)')
+        except Exception as e:
+            self.stderr.write(f'  vinti4: rever sem resposta falhou: {e}')
+        try:
             from app.utils.encomendas import expirar_transferencias
             lembradas, canceladas = expirar_transferencias()
             if lembradas or canceladas:

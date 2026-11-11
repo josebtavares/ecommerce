@@ -37,7 +37,9 @@
         <ReembolsoPorConcluir v-if="m.reembolso_por_concluir && podeGerir" :valor="m.reembolso_por_concluir.valor"
           :erro="m.reembolso_por_concluir.erro" :tentativas="m.reembolso_por_concluir.tentativas"
           :proxima="m.reembolso_por_concluir.proxima_tentativa" :incerto="m.reembolso_por_concluir.incerto"
-          :podeTentar="!m.reembolso_por_concluir.incerto" :aEnviar="aGuardar" @tentar="tentarReembolso" />
+          :podeTentar="!m.reembolso_por_concluir.incerto && !m.reembolso_por_concluir.estorno_loja"
+          :estornoLoja="!!m.reembolso_por_concluir.estorno_loja" :porFora="!!m.reembolso_por_concluir.estorno_loja"
+          :aEnviar="aGuardar" @tentar="tentarReembolso" @por-fora="estornoFeito" />
         <p v-if="m.notas_cliente" class="text-xs text-zinc-300 rounded-xl bg-zinc-800/50 px-3 py-2"><span class="text-zinc-500">Nota do cliente:</span> {{ m.notas_cliente }}</p>
         <p v-if="m.estado === 'cancelada'" class="text-xs text-zinc-400">Cancelada por {{ m.cancelada_por || '—' }}<template v-if="m.cancelada_motivo">: {{ m.cancelada_motivo }}</template></p>
 
@@ -220,6 +222,9 @@ export default {
         corpo.motivo = this.motivoPreco
       }
       this.acao(corpo, 'Serviço concluído.')
+    },
+    async estornoFeito ({ referencia, nota }) {
+      await this.acao({ acao: 'estorno_feito', referencia, nota }, 'Estorno registado.')
     },
     async tentarReembolso () {
       await this.acao({ acao: 'tentar_reembolso' }, 'Reembolso feito.')

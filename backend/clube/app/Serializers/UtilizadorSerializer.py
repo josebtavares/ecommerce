@@ -39,6 +39,7 @@ class UtilizadorSerializer(serializers.ModelSerializer):
             'new_username', 'new_email', 'new_first_name', 'new_last_name', 'password',
             # do Utilizador
             'telefone', 'morada', 'foto', 'foto_url',
+            'pais', 'concelho', 'cidade', 'codigo_postal',
             'nif', 'nome_fiscal', 'morada_fiscal',
             'verificado', 'rating',
             'role_admin', 
@@ -77,6 +78,38 @@ class UtilizadorSerializer(serializers.ModelSerializer):
         if not nif_valido(nif):
             raise serializers.ValidationError(MSG_NIF)
         return nif
+
+    # ── onde fica a morada (utils/geografia.py) ──
+    def validate_pais(self, value):
+        from ..utils import geografia
+        value = (value or '').strip().upper() or 'CV'
+        if not geografia.pais(value):
+            raise serializers.ValidationError('País inválido.')
+        return value
+
+    def validate_concelho(self, value):
+        from ..utils import geografia
+        value = (value or '').strip().upper()
+        if value and not geografia.concelho(value):
+            raise serializers.ValidationError('Concelho inválido.')
+        return value
+
+    def validate_cidade(self, value):
+        return ' '.join((value or '').split())[:60]
+
+    def validate_codigo_postal(self, value):
+        import re
+        value = ' '.join((value or '').split())
+        if value and not re.fullmatch(r'[A-Za-z0-9 -]{2,16}', value):
+            raise serializers.ValidationError('Código postal inválido (letras, números, espaço e hífen).')
+        return value
+
+    def validate(self, attrs):
+        # fora de Cabo Verde não há concelho; em Cabo Verde a cidade é opcional (o concelho chega)
+        pais = attrs.get('pais', getattr(self.instance, 'pais', 'CV') if self.instance else 'CV')
+        if pais != 'CV' and ('pais' in attrs or 'concelho' in attrs):
+            attrs['concelho'] = ''
+        return attrs
 
     def validate_nome_fiscal(self, value):
         return (value or '').strip()[:200]

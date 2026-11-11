@@ -3,6 +3,7 @@ Pagamento com cartão (vinti4) — a adesão de cada loja à SISP (utils/vinti4.
 
   GET  /app/loja/<loja_id>/vinti4/       → { adesao, requisitos, ficha, pode_pedir, pede_password, simulado }   (dono)
   POST /app/loja/<loja_id>/vinti4/       { acao: 'pedir' | 'contrato' }  (contrato = já tem contrato com a SISP)  (dono)
+                                          { acao: 'portal', portal_id, portal_password, password }  Portal do Comerciante
   PUT  /app/loja/<loja_id>/vinti4/       { pos_id, merchant_id, chave, password } → por_validar                  (dono)
   GET  /app/admin/lojas/<loja_id>/vinti4/                                                                       (gerir_pagamentos)
   POST /app/admin/lojas/<loja_id>/vinti4/ { acao: teste|ativar|suspender|recusar, motivo? }                     (gerir_pagamentos)
@@ -56,6 +57,17 @@ def loja_vinti4(request, loja_id):
     try:
         if request.method == 'POST':
             acao = request.data.get('acao')
+            if acao == 'portal':
+                if request.user.has_usable_password():
+                    from .utilizadorView import _password_errada
+                    erro_password = _password_errada(request, request.data.get('password'))
+                    if erro_password:
+                        return Response({'password': erro_password}, status=status.HTTP_400_BAD_REQUEST)
+                _, erros = vinti4.guardar_portal(request, loja, request.data.get('portal_id'),
+                                                 request.data.get('portal_password'))
+                if erros:
+                    return Response(erros, status=status.HTTP_400_BAD_REQUEST)
+                return Response(_lista_loja(request, loja))
             if acao not in ('pedir', 'contrato'):
                 return Response({'detail': 'Acção inválida.'}, status=status.HTTP_400_BAD_REQUEST)
             vinti4.pedir(loja, 'contrato' if acao == 'contrato' else 'pedido')

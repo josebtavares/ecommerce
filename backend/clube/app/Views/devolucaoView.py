@@ -137,6 +137,7 @@ def _detalhe(request, r, papel):
         'escalado_em': _data(r.escalado_em),
         'entregue_em': _data(r.entregue_em),
         'por_transferencia': dev._pagou_por_transferencia(r.encomenda),
+        'como_devolve': dev.como_devolve(r.encomenda),          # cartao (estorno da loja) | transferencia | dinheiro
         'recebido_em': _data(r.recebido_em),
         'recebido_auto': r.recebido_auto,
         'nao_recebido_em': _data(r.nao_recebido_em),

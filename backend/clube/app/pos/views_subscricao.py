@@ -19,7 +19,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 
 from app.models import ConfiguracaoPlataforma, FaturaSubscricao, Subscricao
-from ..pagamentos import ErroPagamento
+from ..pagamentos import ErroPagamento, bendi_cobra_a_serio
 from ..pagamentos import servico as pagamentos
 from ..utils import subscricoes as subs
 from ..utils import subscricoes_pos as subs_pos
@@ -87,6 +87,7 @@ def _resumo(pos):
         'por_pagar': str(sum((f.valor for f in pendentes), Decimal('0'))),
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos(('pos',))],
         'suspenso': pos.suspenso,
+        'pagamento_simulado': not bendi_cobra_a_serio(),
         'loja': _loja_ligada(pos),
     }
 
@@ -162,8 +163,11 @@ def pos_fatura_pagar(request, pos_id, fatura_id):
         return erro
     fatura = get_object_or_404(FaturaSubscricao, id=fatura_id, pos=pos)
     try:
-        inicio = pagamentos.iniciar_fatura(fatura, None)
-    except (subs.ErroFatura, ErroPagamento) as e:
+        # quem paga é o dono do POS (o vinti4 pede os dados dele para o 3DS)
+        inicio = pagamentos.iniciar_fatura(fatura, conta_principal(request))
+    except ErroPagamento as e:
+        return Response(pagamentos.erro_para_frontend(e), status=status.HTTP_400_BAD_REQUEST)
+    except subs.ErroFatura as e:
         return _erro(str(e))
     if inicio.estado == 'redirecionar':          # paga na página do fornecedor
         return Response(pagamentos.para_frontend(inicio))
