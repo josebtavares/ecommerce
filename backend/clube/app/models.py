@@ -2347,6 +2347,12 @@ class Reembolso(models.Model):
     recebido_auto   = models.BooleanField(default=False)
     # o cliente diz que não recebeu o dinheiro (em mão, ou do gateway depois de 10 dias) → Bendi
     nao_recebido_em = models.DateTimeField(null=True, blank=True)
+    # cartão vinti4 (o dinheiro está na loja): como a loja devolveu — estorno no cartão (com a referência em
+    # `referencia`) ou, quando o estorno não deu, outra forma com prova em foto; o cliente confirma "Recebi"
+    COMO_DEVOLVEU = [('estorno', 'Estorno no cartão'), ('outro', 'Outra forma (com prova)')]
+    devolvido_como  = models.CharField(max_length=8, choices=COMO_DEVOLVEU, blank=True, default='', db_default='')
+    # o ficheiro VBVT da SISP mostrou o estorno (reforço opcional: o reembolso nunca espera por ele)
+    confirmado_sisp_em = models.DateTimeField(null=True, blank=True)
     # por_reembolsar: tentativas no fornecedor, o último erro e quando o worker volta a tentar (vazio = parou)
     tentativas      = models.PositiveSmallIntegerField(default=0, db_default=0)
     erro_reembolso  = models.CharField(max_length=255, blank=True, default='', db_default='')
@@ -2742,6 +2748,7 @@ class TransacaoVinti4(models.Model):
     comissao_sisp   = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     tipo_cartao     = models.CharField(max_length=5, blank=True, default='')     # vint4 | visa | MCARD | AMEX…
     estornada_em    = models.DateTimeField(null=True, blank=True)                # estorno aprovado no VBVT
+    valor_estornado = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_default=0)   # soma dos estornos no VBVT
 
     class Meta:
         ordering = ['-criada_em']

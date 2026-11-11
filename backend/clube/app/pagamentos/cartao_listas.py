@@ -98,7 +98,8 @@ def item(t, completo=False, destino_loja=None):
          'dcc': t.dcc, 'confirmada_por': t.confirmada_por, 'efeito': t.efeito, 'consultas': t.consultas,
          'criada_em': _quando(t.criada_em), 'terminada_em': _quando(t.terminada_em),
          'reconciliada_em': _quando(t.reconciliada_em), 'estornada_em': _quando(t.estornada_em),
-         'comissao_sisp': str(t.comissao_sisp) if t.comissao_sisp is not None else '', 'tipo_cartao': t.tipo_cartao}
+         'comissao_sisp': str(t.comissao_sisp) if t.comissao_sisp is not None else '', 'tipo_cartao': t.tipo_cartao,
+         'valor_estornado': str(t.valor_estornado)}
     if completo:          # o caminho no site pede uma consulta por linha: só na ficha
         d['destino'] = destino_loja(lido[0], lido[1]) if (destino_loja and lido) else destino(t.referencia)[1]
         d['respostas'] = t.respostas
@@ -119,16 +120,14 @@ def reembolsos(t, lido, loja=False):
     from ..utils.dinheiro import formatar
     tipo, oid = lido[0], lido[1]
     if tipo == 'enc':
-        from ..models import Reembolso
-        qs = Reembolso.objects.filter(encomenda_id=oid).order_by('id')
-        if t.efeito == 'reembolso':             # cobrada depois de cancelada / a dobrar: só o pedido dela
-            qs = qs.filter(motivo='pagamento_tardio', descricao=f'Transacção cobrada: {t.transacao}')
-        else:
-            qs = qs.exclude(motivo='pagamento_tardio')
+        from ..utils.devolucoes import reembolsos_da_transacao
+        qs = reembolsos_da_transacao(t, oid).order_by('id')
         return [{'id': r.id, 'titulo': f'Pedido de reembolso #{r.id} · {r.get_motivo_display()}',
                  'estado': r.estado, 'estado_nome': r.get_estado_display(),
                  'valor': formatar(r.valor_aprovado if r.valor_aprovado is not None else r.valor_pedido),
-                 'referencia': r.referencia, 'em': _quando(r.data_reembolso),
+                 'referencia': r.referencia if r.metodo == 'manual' else '', 'em': _quando(r.data_reembolso),
+                 'como': r.get_devolvido_como_display() if r.devolvido_como else '',
+                 'confirmado_sisp': _quando(r.confirmado_sisp_em),
                  'link': f'/loja/{r.loja_id}/backoffice/devolucoes/{r.id}' if loja else f'/admin/devolucoes/{r.id}'}
                 for r in qs]
     if tipo == 'mar':
@@ -144,6 +143,7 @@ def reembolsos(t, lido, loja=False):
                  else 'Reembolso por concluir', 'pedido': 'A devolver'}
         return [{'id': m.id, 'titulo': f'Reembolso da marcação #{m.id}', 'estado': estado, 'estado_nome': nomes[estado],
                  'valor': formatar(m.reembolso_devido), 'referencia': '', 'em': _quando(m.reembolsado_em) if devolvido else '',
+                 'como': '', 'confirmado_sisp': '',
                  'link': f'/loja/{m.loja_id}/backoffice/servicos' if loja else '/admin/devolucoes?grupo=por_concluir'}]
     return []
 

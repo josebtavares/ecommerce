@@ -140,7 +140,8 @@
             <p v-if="aberto.reconciliada_em">No ficheiro VBVT: <span class="text-zinc-200">{{ aberto.reconciliada_em }}
               <template v-if="aberto.tipo_cartao"> · {{ aberto.tipo_cartao }}</template>
               <template v-if="aberto.comissao_sisp"> · comissão SISP {{ aberto.comissao_sisp }} CVE</template></span></p>
-            <p v-if="aberto.estornada_em">Estorno no VBVT: <span class="text-zinc-200">{{ aberto.estornada_em }}</span></p>
+            <p v-if="aberto.estornada_em">Estorno no VBVT: <span class="text-zinc-200">{{ aberto.estornada_em }}
+              <template v-if="Number(aberto.valor_estornado)"> · {{ dinheiro(aberto.valor_estornado) }}</template></span></p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <button v-if="podeAgir" type="button" @click="perguntar" :disabled="perguntando" data-teste="v4-perguntar"
@@ -158,7 +159,9 @@
                 ? 'bg-emerald-500/15 text-emerald-300' : ['recusado', 'cancelado'].includes(r.estado)
                   ? 'bg-zinc-700/60 text-zinc-300' : 'bg-amber-500/15 text-amber-300']">{{ r.estado_nome }}</span>
               <span class="tabular-nums text-zinc-300">{{ r.valor }}</span>
-              <span v-if="r.referencia" class="text-zinc-500">· estorno {{ r.referencia }}</span>
+              <span v-if="r.como" class="text-zinc-500">· {{ r.como }}</span>
+              <span v-if="r.referencia" class="text-zinc-500">· ref. {{ r.referencia }}</span>
+              <span v-if="r.confirmado_sisp" class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300">Confirmado pela SISP</span>
               <span v-if="r.em" class="text-zinc-500">· {{ r.em }}</span>
               <span class="ml-auto text-zinc-400">Abrir →</span>
             </router-link>
