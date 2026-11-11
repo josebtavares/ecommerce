@@ -137,4 +137,5 @@ def ligar():
         if TransacaoVinti4.objects.filter(referencia__startswith=f'enc-{r.encomenda_id}-', estado='paga').exists():
             return r.loja_id
         return None
-    ligar_modelo('cartao', Reembolso, loja_de=loja_se_cartao, so_campos={'estado', 'referencia', 'data_reembolso'})
+    ligar_modelo('cartao', Reembolso, loja_de=loja_se_cartao, so_campos={'estado', 'referencia', 'data_reembolso', 'entregue_em',
+                                                                      'devolvido_como', 'confirmado_sisp_em'})

@@ -924,12 +924,13 @@ def reembolsos_da_transacao(tx, encomenda_id):
     return qs.exclude(motivo='pagamento_tardio')
 
 
-def confirmar_estornos_sisp(tx, data_ficheiro=None):
+def confirmar_estornos_sisp(tx, data_ficheiro=None, numeros=()):
     """
     O ficheiro VBVT mostrou estornos desta transacção (tx.valor_estornado = soma de todos até agora). Reforço,
     nunca obrigatório: o reembolso não espera por isto (a loja marca, o cliente confirma). Cada pedido devolvido
     "em mão" desta transacção, por ordem, fica "Confirmado pela SISP" enquanto a soma chegar para ele; um ainda por
-    fechar (a devolver, ou o cliente disse que não recebeu) fecha como reembolsado. Marcação: conclui o estorno
+    fechar (a devolver, ou o cliente disse que não recebeu) fecha como reembolsado. numeros: os nºs dos estornos na
+    SISP (período-tid) — preenchem a referência que a loja não escreveu. Marcação: conclui o estorno
     por fazer. Chama-se dentro da transacção do ficheiro. → quantos ficaram confirmados.
     """
     from django.db.models import Sum
@@ -939,7 +940,7 @@ def confirmar_estornos_sisp(tx, data_ficheiro=None):
         return 0
     quando = f' (ficheiro de reconciliação de {data_ficheiro:%d/%m/%Y})' if data_ficheiro else ''
     if lido[0] == 'mar':
-        return _confirmar_estorno_marcacao(tx, lido[1], quando)
+        return _confirmar_estorno_marcacao(tx, lido[1], quando, numeros)
     if lido[0] != 'enc':
         return 0
     qs = reembolsos_da_transacao(tx, lido[1]).filter(metodo='manual', valor_aprovado__gt=0)
@@ -957,9 +958,11 @@ def confirmar_estornos_sisp(tx, data_ficheiro=None):
         n += 1
         agora = timezone.now()
         r.confirmado_sisp_em = agora
+        if r.referencia in ('', 'dinheiro') and numeros:     # a loja não escreveu a referência: fica a da SISP
+            r.referencia = ('SISP ' + ', '.join(numeros))[:255]
         valor = formatar(r.valor_aprovado)
         if r.estado == 'reembolsado':
-            r.save(update_fields=['confirmado_sisp_em', 'data_atualizacao'])
+            r.save(update_fields=['confirmado_sisp_em', 'referencia', 'data_atualizacao'])
             mensagem(r, 'sistema', f'A SISP confirmou o estorno de {valor} para o cartão{quando}.')
             continue
         r.estado = 'reembolsado'
@@ -975,7 +978,7 @@ def confirmar_estornos_sisp(tx, data_ficheiro=None):
     return n
 
 
-def _confirmar_estorno_marcacao(tx, marcacao_id, quando):
+def _confirmar_estorno_marcacao(tx, marcacao_id, quando, numeros=()):
     from ..servicos import marcacoes as ops
     from ..servicos.models import Marcacao
     m = Marcacao.objects.select_for_update(of=('self',)).filter(pk=marcacao_id).first()
@@ -984,7 +987,8 @@ def _confirmar_estorno_marcacao(tx, marcacao_id, quando):
     falta = ops.por_reembolsar(m)
     if not falta or tx.valor_estornado < falta:
         return 0
-    ops.estorno_feito(m, f'SISP {tx.transacao}', nota=f'Confirmado pela SISP{quando}.')
+    ref = ('SISP ' + ', '.join(numeros)) if numeros else f'SISP {tx.transacao}'
+    ops.estorno_feito(m, ref[:100], nota=f'Confirmado pela SISP{quando}.')
     return 1
 
 

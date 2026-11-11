@@ -324,7 +324,7 @@ def processar(conteudo, nome='', utilizador=None, forcar=False, loja=None):
                    .filter(ref__in=[r for r in refs if len(r) <= 15])}
             por_id = {t.id: t for t in txs.values()}
             agora = timezone.now()
-            mudadas, estornadas = {}, set()
+            mudadas, estornadas = {}, {}       # estornadas: tx.pk → nº das transacções de estorno na SISP
             for n, tipo, c in lido['detalhes']:
                 linha = _comparar(n, tipo, c, txs)
                 linhas.append(linha)
@@ -345,7 +345,7 @@ def processar(conteudo, nome='', utilizador=None, forcar=False, loja=None):
                 elif tipo == '2' and linha['resultado'] == 'estorno':
                     tx.estornada_em = tx.estornada_em or agora
                     tx.valor_estornado += c['valor']        # um ficheiro só se aplica uma vez: não conta a dobrar
-                    estornadas.add(tx.pk)
+                    estornadas.setdefault(tx.pk, []).append(f'{c["periodo"]}-{c["tid"]}')
                     mudadas[tx.pk] = tx
             for tx in mudadas.values():
                 tx._sem_tempo_real = True       # o tempo real avisa uma vez, pelo FicheiroVBVT criado
@@ -353,8 +353,8 @@ def processar(conteudo, nome='', utilizador=None, forcar=False, loja=None):
                                        'message_id', 'pan', 'estornada_em', 'valor_estornado'])
             # reforço dos reembolsos: o estorno que a SISP fez confirma (e fecha) o pedido de reembolso
             from ..utils.devolucoes import avisar_estornos_em_falta, confirmar_estornos_sisp
-            for pk in estornadas:
-                confirmar_estornos_sisp(mudadas[pk], h.get('data'))
+            for pk, numeros in estornadas.items():
+                confirmar_estornos_sisp(mudadas[pk], h.get('data'), numeros)
             avisar_estornos_em_falta(lojas_do_mid(mid), h.get('data'))
             compras = [(l, c) for l, (_, t, c) in zip(linhas, lido['detalhes']) if t == '1' and c['rt'] == '0']
             estornos = [(l, c) for l, (_, t, c) in zip(linhas, lido['detalhes']) if t == '2' and c['rt'] == '0']

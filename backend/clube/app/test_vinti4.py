@@ -1472,9 +1472,15 @@ class DevolucaoComCartao(TestCase):
     def test_sem_marcar_tambem_fecha(self):
         """A loja esqueceu-se de marcar, mas carregou o VBVT: o estorno da SISP chega."""
         from .pagamentos import vbvt
-        vbvt.processar(_vbvt([_estorno('BEST000000009', self.tx.ref, 2300)], mid='9000101'), loja=self.loja)
+        with mock.patch('app.utils.tempo_real_listas.emitir') as emitir,                 mock.patch('app.utils.devolucoes._enviar') as enviar:
+            with self.captureOnCommitCallbacks(execute=True):
+                vbvt.processar(_vbvt([_estorno('BEST000000009', self.tx.ref, 2300)], mid='9000101'), loja=self.loja)
         self.r.refresh_from_db()
         self.assertEqual((self.r.estado, self.r.devolvido_como), ('reembolsado', 'estorno'))
+        self.assertTrue(self.r.referencia.startswith('SISP 988-'), self.r.referencia)   # a referência vem da SISP
+        # tempo real: a ficha do cartão (backoffice → Pagamentos) e o pedido (cliente, loja, Bendi)
+        self.assertIn(('cartao', self.loja.id), [c.args for c in emitir.call_args_list])
+        self.assertTrue(any(c.args[0].id == self.r.id for c in enviar.call_args_list))
 
     def test_estorno_parcial_nao_chega(self):
         from .pagamentos import vbvt

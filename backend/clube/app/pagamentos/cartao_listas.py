@@ -125,7 +125,7 @@ def reembolsos(t, lido, loja=False):
         return [{'id': r.id, 'titulo': f'Pedido de reembolso #{r.id} · {r.get_motivo_display()}',
                  'estado': r.estado, 'estado_nome': r.get_estado_display(),
                  'valor': formatar(r.valor_aprovado if r.valor_aprovado is not None else r.valor_pedido),
-                 'referencia': r.referencia if r.metodo == 'manual' else '', 'em': _quando(r.data_reembolso),
+                 'referencia': r.referencia if r.metodo == 'manual' and r.referencia != 'dinheiro' else '', 'em': _quando(r.data_reembolso),
                  'como': r.get_devolvido_como_display() if r.devolvido_como else '',
                  'confirmado_sisp': _quando(r.confirmado_sisp_em),
                  'link': f'/loja/{r.loja_id}/backoffice/devolucoes/{r.id}' if loja else f'/admin/devolucoes/{r.id}'}
