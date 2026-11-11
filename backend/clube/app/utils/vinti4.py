@@ -145,6 +145,7 @@ def payload(a, admin=False):
         'estado': a.estado, 'estado_nome': a.get_estado_display(), 'motivo': a.motivo,
         'modo': a.modo, 'modo_nome': a.get_modo_display(),
         'pos_id': a.pos_id, 'merchant_id': a.merchant_id, 'chave_definida': bool(a.chave_cifrada),
+        'portal_id': a.portal_id, 'portal_definido': bool(a.portal_id and a.portal_password_cifrada),
         'pedida_em': a.pedida_em.isoformat() if a.pedida_em else None,
         'credenciais_em': a.credenciais_em.isoformat() if a.credenciais_em else None,
         'decidido_em': a.decidido_em.isoformat() if a.decidido_em else None,
@@ -243,6 +244,44 @@ def guardar_credenciais(request, loja, pos_id, merchant_id, chave):
         _avisar_dono(loja, 'Credenciais vinti4 alteradas', texto, email=True)
         _avisar_admins(loja, 'Credenciais vinti4 para validar', f'A loja "{loja.nome}" enviou as credenciais vinti4.')
     return a, None
+
+
+_PORTAL = re.compile(r'^[A-Za-z0-9_.@-]{1,60}$')
+
+
+def guardar_portal(request, loja, portal_id, password):
+    """Acesso da loja ao Portal do Comerciante (API de estado). Só serve para perguntar à SISP se um pagamento
+    sem resposta foi feito — não mexe no dinheiro, não volta a pedir validação. Os dois vazios apagam-no."""
+    portal_id, password = str(portal_id or '').strip(), str(password or '').strip()
+    if portal_id or password:
+        erros = {}
+        if not _PORTAL.match(portal_id):
+            erros['portal_id'] = 'O Portal ID tem só letras, números, . @ - ou _ (até 60).'
+        if not 4 <= len(password) <= 200 or any(c.isspace() for c in password):
+            erros['portal_password'] = 'Cola a password do Portal do Comerciante tal como a SISP a enviou.'
+        if erros:
+            return None, erros
+    with transaction.atomic():
+        a = _bloquear(loja)
+        if not a:
+            raise ErroVinti4('Primeiro marca a adesão como pedida.')
+        a.portal_id = portal_id
+        a.portal_password_cifrada = cifrar(password) if password else ''
+        a.save(update_fields=['portal_id', 'portal_password_cifrada', 'atualizado_em'])
+        _registar(loja, 'portal', a, {'portal_id': portal_id, 'apagado': not portal_id})
+        _avisar_dono(loja, 'Acesso ao Portal do Comerciante alterado',
+                     f'O acesso ao Portal do Comerciante da loja "{loja.nome}" foi '
+                     f'{"apagado" if not portal_id else "alterado"} por {request.user.username}. '
+                     'Se não foste tu, muda a tua password e contacta o suporte.', email=True)
+    return a, None
+
+
+def portal(loja):
+    """(portal_id, password) da loja para a API de estado, ou None."""
+    a = adesao(loja)
+    if not a or not (a.portal_id and a.portal_password_cifrada):
+        return None
+    return a.portal_id, decifrar(a.portal_password_cifrada)
 
 
 def decidir(request, loja, acao, motivo=''):

@@ -210,6 +210,7 @@
       <p v-if="erro" class="text-sm font-bold text-red-600" role="alert">{{ erro }}</p>
       <p v-if="aviso" class="text-sm font-bold text-emerald-600" role="status">{{ aviso }}</p>
     </template>
+    <DadosPagador :campos="faltaDados" @guardado="repetirPagamento" @fechar="faltaDados = []" />
   </div>
 </template>
 
@@ -219,16 +220,17 @@ import api from '@/services/api'
 import { descarregarComprovativoSubscricao, urlFicheiro } from '@/utils/documentos'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import DadosPagador from '@/components/forms/DadosPagador.vue'
 import { ouvirPOS } from '@/utils/tempoRealPOS'
 
 export default {
   name: 'POSSubscricao',
-  components: { ListaCobrancas },
+  components: { DadosPagador, ListaCobrancas },
   props: { posId: { type: [String, Number], required: true } },
   emits: ['alterado'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, separar: { loja: null, pos: null }, versao: 0 }
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, separar: { loja: null, pos: null }, versao: 0, faltaDados: [], aRepetir: null }
   },
 
   computed: {
@@ -290,12 +292,18 @@ export default {
         if (ok) this.aviso = ok
         this.$emit('alterado', data)
       } catch (e) {
+        if (e.response?.data?.codigo === 'dados_cliente' && this.aRepetir) { this.faltaDados = e.response.data.campos || []; return }
         this.erro = e.response?.data?.detail || 'Não foi possível concluir.'
       }
     },
-    async pagar (f) {
-      if (!confirm(`Pagar ${this.euros(f.valor)} — ${f.descricao}?\n\n(Pagamento simulado)`)) return
+    repetirPagamento () {
+      this.faltaDados = []
+      if (this.aRepetir) this.pagar(this.aRepetir, true)
+    },
+    async pagar (f, semPerguntar = false) {
+      if (!semPerguntar && !confirm(`Pagar ${this.euros(f.valor)} — ${f.descricao}?${this.dados?.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)) return
       this.aPagar = f.id
+      this.aRepetir = f            // faltam dados do dono (cartão): pede-os e volta a tentar
       await this.enviar(() => api.post(`/api/pos/${this.posId}/subscricao/faturas/${f.id}/pagar/`), 'Pagamento recebido. Obrigado!')
       this.aPagar = null
     },

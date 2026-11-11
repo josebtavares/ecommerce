@@ -5,7 +5,7 @@
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-zinc-100">Pagamentos</h2>
-        <p class="text-xs text-zinc-500 mt-0.5">{{ vista === 'lojas' ? 'Pagamentos dos clientes às lojas: encomendas e marcações pagas online' : 'O dinheiro que é da Bendi: mensalidades e comissões pagas' }}</p>
+        <p class="text-xs text-zinc-500 mt-0.5">{{ SUBTITULOS[vista] }}</p>
       </div>
       <div class="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1" role="tablist">
         <button v-for="t in VISTAS" :key="t.key" type="button" role="tab" :aria-selected="vista === t.key ? 'true' : 'false'"
@@ -214,6 +214,9 @@
       </div>
       <PaginacaoLista v-if="bende" :count="bende.count" :limit="LIMITE" :offset="bOffset" @ir="carregarBende" />
     </template>
+
+    <!-- ═══ CARTÃO (vinti4) ═══ -->
+    <PagamentosVinti4 v-if="vista === 'cartao'" ref="vinti4" :datas="datas" />
   </div>
 </template>
 
@@ -228,9 +231,16 @@ import AbasVendedores from '@/components/fiscal/AbasVendedores.vue'
 import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 import PaginacaoLista from '@/components/fiscal/PaginacaoLista.vue'
 import SecaoDocumento from '@/components/fiscal/SecaoDocumento.vue'
+import PagamentosVinti4 from '@/components/admin/PagamentosVinti4.vue'
 
 const LIMITE = 20
-const VISTAS = [{ key: 'lojas', label: 'Pagamentos das lojas' }, { key: 'bende', label: 'Recebimentos da Bendi' }]
+const VISTAS = [{ key: 'lojas', label: 'Pagamentos das lojas' }, { key: 'bende', label: 'Recebimentos da Bendi' },
+  { key: 'cartao', label: 'Cartão (vinti4)' }]
+const SUBTITULOS = {
+  lojas: 'Pagamentos dos clientes às lojas: encomendas e marcações pagas online',
+  bende: 'O dinheiro que é da Bendi: mensalidades e comissões pagas',
+  cartao: 'Cada ida à página de pagamento da SISP e o que a SISP respondeu',
+}
 const ESTADOS = { aprovado: 'Pago', pendente: 'Pendente', falhado: 'Falhado', reembolsado: 'Reembolsado',
   reembolsado_parcial: 'Reembolsado em parte', cancelado: 'Não pago' }
 const COR = { aprovado: 'bg-green-500/15 text-green-400', pendente: 'bg-amber-500/15 text-amber-300', falhado: 'bg-red-500/15 text-red-400',
@@ -240,12 +250,12 @@ const METODOS = [{ v: 'cartao', t: 'Cartão' }, { v: 'transferencia', t: 'Transf
 
 export default {
   name: 'AdminPagamentos',
-  components: { AbasVendedores, BotaoPdf, PaginacaoLista, SecaoDocumento },
+  components: { AbasVendedores, BotaoPdf, PagamentosVinti4, PaginacaoLista, SecaoDocumento },
   emits: ['ir'],
   data () {
     const [de, ate] = intervalo('mes')
     return {
-      LIMITE, VISTAS, ESTADOS, COR, METODOS, PERIODOS,
+      LIMITE, VISTAS, SUBTITULOS, ESTADOS, COR, METODOS, PERIODOS,
       vista: 'lojas', periodo: 'mes', de, ate,
       res: null, lista: { count: 0, results: [] }, offset: 0, fornecedores: [], aberto: '',
       f: { q: '', origem: '', estado: '', metodo: '', fornecedor: '' }, loja: null,
@@ -287,7 +297,8 @@ export default {
         this.carregarResumo()
         this.carregar(this.offset, silencioso)
         if (silencioso) this.$refs.abas?.recarregar()
-      } else this.carregarBende(this.bOffset, silencioso)
+      } else if (this.vista === 'bende') this.carregarBende(this.bOffset, silencioso)
+      else if (silencioso) this.$refs.vinti4?.recarregar()      // a vista do cartão lê sozinha quando muda o período
     },
     filtrarEstado (e) { this.f.estado = e; this.carregar(0) },
     selecionarLoja (v) { this.loja = v; this.carregarResumo(); this.carregar(0) },

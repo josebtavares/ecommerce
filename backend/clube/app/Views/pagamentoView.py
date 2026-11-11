@@ -4,6 +4,7 @@ Pagamentos das encomendas e regresso/avisos dos fornecedores (a lógica está em
 POST /app/pagamento/iniciar/            { encomenda_id, metodo } → { estado: aprovado|pendente|redirecionar, redirecionar? }
 POST /app/pagamento/regresso/           { fornecedor, ...o que o fornecedor pôs no endereço de regresso }
 POST /app/pagamento/<fornecedor>/aviso/ webhook do fornecedor (sem utilizador: a autenticidade vem da assinatura)
+POST /app/pagamento/vinti4/resposta/    a SISP devolve o cliente (form com resultFingerPrint) → /pagamento/callback
 
 Antigos, mantidos para quem tem o checkout aberto durante um deploy e para o webhook já configurado no
 Flutterwave: pagamento/dinheiro/, pagamento/mbway/, pagamento/flutterwave/verificar/ e /webhook/.
@@ -12,6 +13,8 @@ import logging
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from django_ratelimit.core import is_ratelimited
 
 from rest_framework import status
@@ -147,7 +150,11 @@ def _confirmar(f, ler):
             return Response({'detail': 'ok'})
         resultado = pagamentos.confirmar(f, conf)
     except ErroPagamento as e:
-        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        tipo, destino = pagamentos.destino(e.destino_ref) if getattr(e, 'destino_ref', '') else ('', '')
+        corpo = {'detail': str(e), 'tipo': tipo, 'destino': destino}
+        if getattr(e, 'pendente', False):
+            corpo['codigo'] = 'pendente'
+        return Response(corpo, status=status.HTTP_400_BAD_REQUEST)
     if resultado['estado'] == 'reembolso':
         return Response({**resultado, 'codigo': 'reembolso',
                          'detail': 'O pagamento chegou depois de já não poder ser aceite. '
@@ -211,3 +218,31 @@ def flutterwave_webhook(request):
 def verificar_pagamento_flutterwave(request):
     """Antigo: { transaction_id, tx_ref }."""
     return _regresso(request, 'flutterwave')
+
+
+# ══════════════════════════════════════════════════════════════
+# VINTI4 — a SISP devolve o cliente com um POST (form) para aqui
+# ══════════════════════════════════════════════════════════════
+
+@csrf_exempt
+@require_POST
+def vinti4_resposta(request):
+    """
+    POST /app/pagamento/vinti4/resposta/ (urlMerchantResponse) — vem do browser do cliente, enviado pela página da
+    SISP. A autenticidade vem do resultFingerPrint (pagamentos/vinti4.processar_resposta); o pagamento fica aplicado
+    aqui, antes de o cliente voltar ao site. Depois segue para /pagamento/callback, que pergunta o resultado.
+    """
+    from urllib.parse import urlencode
+    from django.conf import settings
+    from django.http import HttpResponseRedirect
+    from ..pagamentos import vinti4
+    # sem limite por IP: a resposta de um pagamento verdadeiro não pode ficar por tratar (é barata — uma linha
+    # procurada pelo merchantRef aleatório; o que não tem FingerPrint certo não muda nada)
+    try:
+        tx = vinti4.processar_resposta(request.POST.dict())
+        ref = tx.ref if tx else ''
+    except Exception:                   # nunca deixar o cliente numa página de erro do servidor (o worker volta a ela)
+        log.exception('vinti4: falha a processar a resposta da SISP')
+        ref = str(request.POST.get('merchantRespMerchantRef') or request.POST.get('merchantRef') or '')[:15]
+    destino = f'{settings.FRONTEND_BASE_URL.rstrip("/")}/pagamento/callback?{urlencode({"fornecedor": "vinti4", "ref": ref})}'
+    return HttpResponseRedirect(destino, status=303)

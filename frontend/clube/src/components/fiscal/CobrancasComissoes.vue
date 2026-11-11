@@ -69,6 +69,7 @@
     <p v-if="d.cobrancas.some(c => c.estado === 'pendente')" class="px-6 pb-5 text-[11px] text-zinc-500">
       Preferes transferência? Fala com a Bendi pelo chat de suporte — registamos o pagamento quando recebermos.
     </p>
+    <DadosPagador :campos="faltaDados" @guardado="repetirPagamento" @fechar="faltaDados = []" />
   </div>
 </template>
 
@@ -76,6 +77,7 @@
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import DadosPagador from '@/components/forms/DadosPagador.vue'
 import { descarregarPdf, urlFicheiro } from '@/utils/documentos'
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
@@ -90,8 +92,9 @@ export default {
 
   emits: ['alterado'],
 
+  components: { DadosPagador },
   data () {
-    return { d: null, aPagar: null, msg: '', msgOk: false, pedido: 0 }
+    return { d: null, aPagar: null, msg: '', msgOk: false, pedido: 0, faltaDados: [], aRepetir: null }
   },
 
   watch: { versao () { this.carregar() } },
@@ -122,8 +125,13 @@ export default {
       descarregarPdf(`/app/comissoes/cobrancas/${c.id}/comprovativo/`, `comprovativo-comissoes-${c.id}.pdf`)
     },
 
-    async pagar (c) {
-      if (!confirm(`Pagar ${this.dinheiro(c.valor)} de comissões à Bendi?\n\n(Pagamento simulado)`)) return
+    repetirPagamento () {
+      this.faltaDados = []
+      if (this.aRepetir) this.pagar(this.aRepetir, true)
+    },
+    async pagar (c, semPerguntar = false) {
+      if (!semPerguntar && !confirm(`Pagar ${this.dinheiro(c.valor)} de comissões à Bendi?${this.d?.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)) return
+      this.aRepetir = null
       this.aPagar = c.id; this.msg = ''
       try {
         const { data } = await api.post(`/app/loja/${this.lojaId}/comissoes/cobrancas/${c.id}/pagar/`)
@@ -132,6 +140,7 @@ export default {
         this.msg = 'Pagamento recebido. Obrigado!'; this.msgOk = true
         this.$emit('alterado')
       } catch (e) {
+        if (e.response?.data?.codigo === 'dados_cliente') { this.aRepetir = c; this.faltaDados = e.response.data.campos || []; return }
         this.msg = e.response?.data?.detail || 'Não foi possível pagar.'; this.msgOk = false
       } finally { this.aPagar = null }
     },

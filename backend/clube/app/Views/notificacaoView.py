@@ -128,6 +128,7 @@ def notificar_staff(loja, roles, tipo, titulo, mensagem='', link='', excluir=Non
 PERMISSAO_AVISO = {
     'comissao_recebida':    'gerir_pagamentos',
     'pagamento_reembolsar': 'gerir_pagamentos',
+    'pagamento_erro': 'gerir_pagamentos',
     'cobranca_comissoes':   'gerir_pagamentos',
     'dados_bancarios':      'gerir_pagamentos',
     'vinti4':               'gerir_pagamentos',

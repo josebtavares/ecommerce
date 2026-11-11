@@ -55,3 +55,20 @@ export function dataHora (iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
+
+// Como a loja devolve um reembolso que fica do lado dela (backend devolucoes.como_devolve): o dinheiro foi direto
+// para a loja — em mão, por transferência ou com cartão vinti4 (estorno no Portal do Comerciante da SISP).
+const DEVOLUCAO_LOJA = {
+  dinheiro:      { como: 'em mão', pagou: 'Pagaste em dinheiro', pagouLoja: 'em dinheiro', botao: 'Dinheiro entregue ao cliente',
+                   aceite: 'Aceite — devolve o dinheiro em mão.', feito: 'Devolvido em mão pela loja' },
+  transferencia: { como: 'por transferência', pagou: 'Pagaste por transferência', pagouLoja: 'por transferência', botao: 'Transferência feita',
+                   aceite: 'Aceite — devolve o valor por transferência.', feito: 'Devolvido por transferência pela loja' },
+  cartao:        { como: 'com estorno no cartão', pagou: 'Pagaste com cartão', pagouLoja: 'com cartão (vinti4)', botao: 'Estorno feito',
+                   aceite: 'Aceite — faz o estorno no Portal do Comerciante da SISP.', feito: 'Devolvido ao cartão pela loja',
+                   ajuda: 'Faz o estorno desta transação no Portal do Comerciante da SISP (o dinheiro está na conta da loja).' },
+}
+
+export function devolucaoLoja (r) {
+  const chave = r?.como_devolve || (r?.por_transferencia ? 'transferencia' : 'dinheiro')
+  return DEVOLUCAO_LOJA[chave] || DEVOLUCAO_LOJA.dinheiro
+}
