@@ -554,7 +554,8 @@ class Vinti4(Fornecedor):
             'por_confirmar': 'Ainda não temos a confirmação da SISP. Se pagaste, avisamos-te quando chegar.',
             'expirada': 'O pagamento não foi concluído.',
         }
-        raise ErroPagamento(mensagens.get(tx.estado, 'O pagamento não foi concluído.'), destino_ref=tx.referencia)
+        raise ErroPagamento(mensagens.get(tx.estado, 'O pagamento não foi concluído.'), destino_ref=tx.referencia,
+                            pendente=tx.estado in ('iniciada', 'por_confirmar'))
 
     def reembolsar(self, transacao, valor, chave=''):
         raise ErroPagamento('Os pagamentos com cartão vinti4 devolvem-se com um estorno no Portal do Comerciante '

@@ -127,12 +127,13 @@ export default {
     dataCurta (iso) { return iso ? iso.split('-').reverse().join('/') : '' },
     async carregar (offset = this.offset) {
       this.offset = offset
-      this.carregando = true
+      const silencioso = !!this.d          // tempo real: recarrega por baixo, sem esconder a lista
+      if (!silencioso) this.carregando = true
       try {
         const { data } = await api.get('/app/admin/pagamentos/vbvt/', { params: { limit: LIMITE, offset } })
         this.d = data
       } catch (e) {
-        this.erro = e.response?.data?.detail || 'Não foi possível carregar os ficheiros.'
+        if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar os ficheiros.'
       } finally { this.carregando = false }
     },
     async enviar () {

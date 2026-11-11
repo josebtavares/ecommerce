@@ -11,6 +11,24 @@
         <p class="text-zinc-400 text-sm">A verificar o pagamento…</p>
       </div>
 
+      <!-- Ainda sem resposta do fornecedor (vinti4): a página volta a perguntar sozinha -->
+      <div v-else-if="estado === 'pendente'" data-teste="pagamento-pendente">
+        <svg class="animate-spin h-12 w-12 text-amber-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
+          <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
+        </svg>
+        <h1 class="text-xl font-extrabold text-white mb-2">À espera da confirmação</h1>
+        <p class="text-zinc-400 text-sm mb-2">{{ mensagemErro }}</p>
+        <p class="text-zinc-500 text-xs mb-6">
+          {{ esgotado ? 'Avisamos-te quando a confirmação chegar — podes fechar esta página.'
+                      : 'Esta página atualiza-se sozinha. Não pagues outra vez.' }}
+        </p>
+        <button @click="continuar"
+          class="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold transition">
+          {{ destino ? textoBotao : 'Voltar ao início' }}
+        </button>
+      </div>
+
       <!-- Sucesso -->
       <div v-else-if="estado === 'sucesso'">
         <div class="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
@@ -61,6 +79,7 @@ export default {
       mensagemErro: '',
       tipo:         '',
       destino:      '',
+      esgotado:     false,
     }
   },
 
@@ -71,30 +90,44 @@ export default {
     },
   },
 
-  async created () {
-    const dados = Object.fromEntries(new URLSearchParams(window.location.search))
+  created () {
+    this.dados = Object.fromEntries(new URLSearchParams(window.location.search))
     // o vinti4 volta com ?fornecedor=vinti4&ref= (o backend já tratou a resposta da SISP); o Flutterwave com
     // ?transaction_id=&tx_ref=; os outros dizem-se no localStorage
     const doLocal = fornecedorDoRegresso()
-    dados.fornecedor = dados.fornecedor || doLocal || (dados.tx_ref ? 'flutterwave' : '')
-    try {
-      const { data } = await api.post('/app/pagamento/regresso/', dados)
-      this.tipo = data.tipo
-      this.destino = data.destino
-      if (data.tipo === 'encomenda') {
-        window.dispatchEvent(new CustomEvent('carrinho-limpo', { detail: { lojaId: null } }))
-      }
-      this.estado = 'sucesso'
-    } catch (e) {
-      const d = e.response?.data || {}
-      this.tipo = d.tipo || ''
-      this.destino = d.destino || ''
-      this.mensagemErro = d.detail || 'Erro ao verificar o pagamento.'
-      this.estado = d.codigo === 'reembolso' ? 'reembolso' : 'erro'
-    }
+    this.dados.fornecedor = this.dados.fornecedor || doLocal || (this.dados.tx_ref ? 'flutterwave' : '')
+    this.verificar()
   },
 
+  beforeUnmount () { clearTimeout(this.temporizador) },
+
   methods: {
+    // sem resposta ainda (codigo 'pendente'): volta a perguntar de 15 em 15 s durante 10 minutos — a confirmação
+    // pode chegar pela resposta atrasada da SISP, pelo worker (API de estado) ou pelo admin ("Perguntar à SISP")
+    async verificar (tentativa = 0) {
+      try {
+        const { data } = await api.post('/app/pagamento/regresso/', this.dados)
+        this.tipo = data.tipo
+        this.destino = data.destino
+        if (data.tipo === 'encomenda') {
+          window.dispatchEvent(new CustomEvent('carrinho-limpo', { detail: { lojaId: null } }))
+        }
+        this.estado = 'sucesso'
+      } catch (e) {
+        const d = e.response?.data || {}
+        this.tipo = d.tipo || ''
+        this.destino = d.destino || ''
+        this.mensagemErro = d.detail || 'Erro ao verificar o pagamento.'
+        if (d.codigo === 'pendente' || (!e.response && this.estado === 'pendente')) {   // sem rede: tenta outra vez
+          this.estado = 'pendente'
+          if (tentativa < 40) this.temporizador = setTimeout(() => this.verificar(tentativa + 1), 15000)
+          else this.esgotado = true
+          return
+        }
+        this.estado = d.codigo === 'reembolso' ? 'reembolso' : 'erro'
+      }
+    },
+
     continuar () {
       this.$router.push(this.destino || { name: 'Home' })
     },

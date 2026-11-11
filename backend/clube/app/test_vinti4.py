@@ -832,3 +832,43 @@ class PerguntarASisp(TestCase):
         self.assertEqual((r.json()['resultado'], r.json()['transacao']['estado']), ('paga', 'paga'))
         api.force_authenticate(_utilizador('naoadmin2').user)
         self.assertEqual(api.post(f'/app/admin/pagamentos/vinti4/{paga.id}/consultar/').status_code, 403)
+
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID)
+class TempoRealCartao(TestCase):
+    """O admin vê as idas à SISP mudar sem recarregar; o cliente sem resposta fica à espera e a página volta a perguntar."""
+
+    def setUp(self):
+        self.u = _utilizador()
+
+    def _tx(self):
+        inicio = obter('vinti4').iniciar(Cobranca(referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T',
+                                                  pagador=self.u))
+        return TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+
+    def test_avisos_do_painel(self):
+        from .pagamentos import vbvt
+        with mock.patch('app.utils.tempo_real_painel.emitir') as emitir:
+            tx = self._tx()
+            self.assertEqual([c.args[0] for c in emitir.call_args_list], ['cartao'])        # criada
+            emitir.reset_mock()
+            tx.respostas = [{'x': 1}]
+            tx.save(update_fields=['respostas'])                                              # só a resposta: não avisa
+            emitir.assert_not_called()
+            v4.processar_resposta({'merchantRef': tx.ref, 'UserCancelled': 'true'})           # cancelada: avisa
+            self.assertEqual([c.args[0] for c in emitir.call_args_list], ['cartao'])
+            emitir.reset_mock()
+            TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga')
+            vbvt.processar(_vbvt([_compra(tx.ref, 1500), _compra('XOUTRA', 10)]))             # um aviso pelo ficheiro
+            self.assertEqual([c.args[0] for c in emitir.call_args_list], ['vbvt'])
+
+    def test_regresso_pendente(self):
+        from rest_framework.test import APIClient
+        tx = self._tx()
+        api = APIClient()
+        r = api.post('/app/pagamento/regresso/', {'fornecedor': 'vinti4', 'ref': tx.ref}, format='json')
+        self.assertEqual((r.status_code, r.json().get('codigo')), (400, 'pendente'))
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='cancelada')
+        r = api.post('/app/pagamento/regresso/', {'fornecedor': 'vinti4', 'ref': tx.ref}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertNotIn('codigo', r.json())

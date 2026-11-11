@@ -7,7 +7,7 @@
         :class="['px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition',
                  aba === a.key ? 'border-red-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300']">{{ a.label }}</button>
     </div>
-    <ReconciliacaoVBVT v-if="aba === 'vbvt'" @mudou="carregar(offset, true)" />
+    <ReconciliacaoVBVT v-if="aba === 'vbvt'" ref="vbvt" @mudou="carregar(offset, true)" />
     <template v-else>
     <div class="flex flex-wrap gap-2">
       <button v-for="e in estados" :key="e.valor" type="button" @click="filtrar(e.valor)" :data-teste="`v4-estado-${e.valor}`"
@@ -128,7 +128,17 @@ export default {
     formatar (o) { try { return JSON.stringify(o, null, 2) } catch (e) { return String(o) } },
     filtrar (e) { this.f.estado = e; this.carregar(0) },
     porReconciliar () { this.f.reconciliacao = this.f.reconciliacao ? '' : 'falta'; this.carregar(0) },
-    recarregar () { return this.carregar(this.offset, true) },
+    // tempo real (AdminPagamentos → ouvirPainel): a lista, a ficha aberta e a aba de reconciliação
+    recarregar () {
+      if (this.aba === 'vbvt') return this.$refs.vbvt?.carregar()
+      if (this.aberto && !this.perguntando) {
+        const id = this.aberto.id
+        api.get(`/app/admin/pagamentos/vinti4/${id}/`)
+          .then(({ data }) => { if (this.aberto?.id === id) this.aberto = data })
+          .catch(() => {})
+      }
+      return this.carregar(this.offset, true)
+    },
     async carregar (offset = this.offset, silencioso = false) {
       this.offset = offset
       if (!silencioso) { this.carregando = true; this.erro = '' }

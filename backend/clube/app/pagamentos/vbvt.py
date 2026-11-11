@@ -311,6 +311,7 @@ def processar(conteudo, nome='', utilizador=None, forcar=False):
                     tx.estornada_em = agora
                     mudadas[tx.pk] = tx
             for tx in mudadas.values():
+                tx._sem_tempo_real = True       # o tempo real avisa uma vez, pelo FicheiroVBVT criado
                 tx.save(update_fields=['reconciliada_em', 'comissao_sisp', 'tipo_cartao', 'periodo', 'tid',
                                        'message_id', 'pan', 'estornada_em'])
             compras = [(l, c) for l, (_, t, c) in zip(linhas, lido['detalhes']) if t == '1' and c['rt'] == '0']

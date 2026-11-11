@@ -151,7 +151,10 @@ def _confirmar(f, ler):
         resultado = pagamentos.confirmar(f, conf)
     except ErroPagamento as e:
         tipo, destino = pagamentos.destino(e.destino_ref) if getattr(e, 'destino_ref', '') else ('', '')
-        return Response({'detail': str(e), 'tipo': tipo, 'destino': destino}, status=status.HTTP_400_BAD_REQUEST)
+        corpo = {'detail': str(e), 'tipo': tipo, 'destino': destino}
+        if getattr(e, 'pendente', False):
+            corpo['codigo'] = 'pendente'
+        return Response(corpo, status=status.HTTP_400_BAD_REQUEST)
     if resultado['estado'] == 'reembolso':
         return Response({**resultado, 'codigo': 'reembolso',
                          'detail': 'O pagamento chegou depois de já não poder ser aceite. '
