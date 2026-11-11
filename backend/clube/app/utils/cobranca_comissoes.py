@@ -288,6 +288,7 @@ def tem_comprovativo(c):
 def resumo_loja(loja):
     """Para o backoffice: cobranças + o que se está a acumular este mês (ainda não cobrado)."""
     from ..models import Comissao, CreditoComissao
+    from ..pagamentos import bendi_cobra_a_serio
     inicio = desde()
     if inicio:
         acumular = _q(Comissao.objects.filter(loja=loja, status='pendente', cobranca__isnull=True, data_criacao__gte=inicio)
@@ -301,4 +302,5 @@ def resumo_loja(loja):
     return {'cobrancas': [payload(c, meses=meses) for c in cobrancas],
             'a_acumular': f'{acumular:.2f}', 'creditos': f'{creditos:.2f}',
             'por_pagar': f'{sum((c.valor for c in cobrancas if c.estado == "pendente"), Decimal("0")):.2f}',
-            'dias_para_pagar': DIAS_PARA_PAGAR, 'minimo': f'{VALOR_MINIMO:.2f}', 'ligada': bool(inicio)}
+            'dias_para_pagar': DIAS_PARA_PAGAR, 'minimo': f'{VALOR_MINIMO:.2f}', 'ligada': bool(inicio),
+            'pagamento_simulado': not bendi_cobra_a_serio()}

@@ -907,13 +907,27 @@ def _executar_no_gateway(r, valor, metodo, pagamento=None):
     return pagamentos.reembolsar(p.fornecedor if p else '', p.referencia_transacao if p else '', valor, chave=r.id)
 
 
+def _pagou_com_cartao_loja(encomenda):
+    """Cartão vinti4: o dinheiro foi direto para a conta da loja (contrato dela com a SISP) — a Bendi não o tem.
+    É a loja que devolve, com um estorno no Portal do Comerciante, como devolve uma transferência."""
+    p = pagamento_de(encomenda)
+    return bool(p and p.fornecedor == 'vinti4')
+
+
+def como_devolve(encomenda):
+    """'cartao' | 'transferencia' | 'dinheiro' — como a loja devolve um reembolso que fica do lado dela."""
+    if _pagou_com_cartao_loja(encomenda):
+        return 'cartao'
+    return 'transferencia' if _pagou_por_transferencia(encomenda) else 'dinheiro'
+
+
 def _pagou_por_transferencia(encomenda):
     p = pagamento_de(encomenda)
     return bool(p and p.metodo_id and p.metodo.tipo == 'transferencia')
 
 
 def _como_devolve(r):
-    return 'por transferência' if _pagou_por_transferencia(r.encomenda) else 'em mão'
+    return {'cartao': 'com estorno no cartão', 'transferencia': 'por transferência'}.get(como_devolve(r.encomenda), 'em mão')
 
 
 def _concluir(r, valor):
@@ -925,7 +939,7 @@ def _concluir(r, valor):
         # dinheiro e transferência foram direitos à loja: é ela que devolve (nenhum fornecedor tem esse dinheiro).
         # O cartão do checkout simulado também passa pelo endpoint do dinheiro, mas volta ao meio de pagamento usado
         tipo = p.metodo.tipo if p and p.metodo_id else ('dinheiro' if p and p.referencia_transacao == 'dinheiro' else '')
-        metodo = 'manual' if tipo in ('dinheiro', 'transferencia') else 'gateway'
+        metodo = 'manual' if tipo in ('dinheiro', 'transferencia') or _pagou_com_cartao_loja(enc) else 'gateway'
         if metodo == 'gateway':
             return _pelo_fornecedor(r, valor, p)
         r.referencia = _executar_no_gateway(r, valor, metodo, p)
@@ -977,6 +991,15 @@ def _acertar(r, valor, metodo, p):
     if valor <= 0:
         mensagem(r, 'sistema', 'Cancelamento aceite — não havia nada pago para reembolsar.')
         _avisar_cliente(r, 'Cancelamento aceite', 'A encomenda foi cancelada. Não foi cobrado nada.')
+        return r
+    if metodo == 'manual' and _pagou_com_cartao_loja(enc):
+        mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite — pagaste com cartão, a loja devolve-te com um '
+                               f'estorno para o mesmo cartão.')
+        _avisar_cliente(r, 'Reembolso aceite', f'A loja vai devolver {formatar(valor)} ao teu cartão. Os bancos podem '
+                                               f'demorar alguns dias a mostrá-lo — quando vires, confirma no pedido.')
+        _avisar_loja(r, 'Faz o estorno no cartão', f'Devolve {formatar(valor)} ao cliente até {_hora(r.prazo_resposta)}: '
+                                                   f'no Portal do Comerciante da SISP, faz o estorno da transação '
+                                                   f'{p.referencia_transacao if p else ""} e marca "Estorno feito" no pedido.')
         return r
     if metodo == 'manual' and _pagou_por_transferencia(enc):
         mensagem(r, 'sistema', f'Reembolso de {formatar(valor)} aceite — pagaste por transferência, a loja devolve-te '

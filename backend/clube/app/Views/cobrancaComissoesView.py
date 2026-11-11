@@ -47,7 +47,9 @@ def loja_cobranca_pagar(request, loja_id, cobranca_id):
     c = get_object_or_404(CobrancaComissoes.objects.select_related('loja'), id=cobranca_id, loja=loja)
     try:
         inicio = pagamentos.iniciar_cobranca_comissoes(c, request.user.utilizador)
-    except (cc.ErroCobranca, ErroPagamento) as e:
+    except ErroPagamento as e:
+        return Response(pagamentos.erro_para_frontend(e), status=status.HTTP_400_BAD_REQUEST)
+    except cc.ErroCobranca as e:
         return _erro(str(e))
     if inicio.estado == 'redirecionar':
         return Response(pagamentos.para_frontend(inicio))

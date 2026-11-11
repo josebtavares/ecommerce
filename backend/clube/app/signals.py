@@ -124,3 +124,29 @@ def ligar_limpeza_ao_apagar():
     for Modelo in {m for m, _ in limpeza.campos_ficheiro()}:
         post_delete.connect(_registo_apagado, sender=Modelo, weak=False,
                             dispatch_uid=f'limpeza_apagado_{Modelo._meta.label}')
+
+
+# ── data da última mudança de password (3DS da SISP: acctInfo.chAccPwChange) ──────────────
+
+def _password_antes(sender, instance, update_fields=None, **kwargs):
+    instance._password_mudou = False
+    if not instance.pk or (update_fields is not None and 'password' not in update_fields):
+        return
+    antiga = sender.objects.filter(pk=instance.pk).values_list('password', flat=True).first()
+    instance._password_mudou = antiga is not None and antiga != instance.password
+
+
+def _password_depois(sender, instance, created=False, **kwargs):
+    if getattr(instance, '_password_mudou', False):
+        instance._password_mudou = False
+        from django.utils import timezone
+        from .models import Utilizador
+        Utilizador.objects.filter(user_id=instance.pk).update(password_alterada_em=timezone.now())
+
+
+def ligar_password_alterada():
+    """Qualquer save do User com a password trocada (perfil, recuperação, admin) grava a data no Utilizador.
+    O login só grava last_login (update_fields) e não conta."""
+    from django.contrib.auth.models import User
+    pre_save.connect(_password_antes, sender=User, weak=False, dispatch_uid='password_alterada_antes')
+    post_save.connect(_password_depois, sender=User, weak=False, dispatch_uid='password_alterada_depois')

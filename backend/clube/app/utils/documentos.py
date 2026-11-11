@@ -64,6 +64,59 @@ def _vendedor(p, loja, online):
                 p.linha(rotulo, v)
 
 
+def _cartao_vinti4(p, prefixo, oid):
+    """Recibo de um pagamento com cartão (SISP, "Validação de site do Merchant", pontos 7 e 8): comerciante,
+    contactos, URL, referência única, cartão, data/hora e, com DCC, a conversão. → True se havia transacção paga."""
+    from django.conf import settings
+    from ..models import ConfiguracaoPlataforma, TransacaoVinti4
+    tx = (TransacaoVinti4.objects.select_related('loja').filter(referencia__startswith=f'{prefixo}-{oid}-', estado='paga')
+          .order_by('-terminada_em').first())
+    if not tx:
+        return False
+    site = settings.FRONTEND_BASE_URL.rstrip('/')
+    p.seccao('Comerciante')
+    if tx.loja_id:                    # venda de uma loja: o comerciante é ela (contrato vinti4 dela)
+        loja = tx.loja
+        p.linha('Comerciante', loja.nome)
+        for rotulo, v in (('Telefone', loja.contacto_telefone), ('Email', loja.contacto_email)):
+            if v:
+                p.linha(rotulo, v)
+        p.linha('Loja virtual', f'{site}/loja/{getattr(loja, "slug", "") or loja.id}')
+        cfg = ConfiguracaoPlataforma.atual()
+    else:                             # comissões e subscrições: o comerciante é a Bendi
+        cfg = ConfiguracaoPlataforma.atual()
+        p.linha('Comerciante', f'Bendi — {cfg.titular_nome}' if cfg.titular_nome else 'Bendi')
+        for rotulo, v in (('Telefone', cfg.contacto_telefone), ('Email', cfg.contacto_email)):
+            if v:
+                p.linha(rotulo, v)
+        p.linha('Loja virtual', site)
+    apoio = ' · '.join(filter(None, (cfg.contacto_email, cfg.contacto_whatsapp and f'WhatsApp {cfg.contacto_whatsapp}',
+                                     cfg.contacto_horario)))
+    if apoio:
+        p.linha('Apoio ao cliente', apoio)
+    p.seccao('Pagamento com cartão — rede vinti4')
+    p.linha('Referência do pagamento', tx.ref)
+    if tx.tid:
+        p.linha('Nº da transação', f'{tx.periodo}-{tx.tid}')
+    if tx.pan:
+        p.linha('Cartão', tx.pan)
+    p.linha('Data e hora', _hora(tx.terminada_em))
+    p.linha('Descrição', tx.descricao or '—')
+    dcc = tx.dcc or {}
+    if dcc.get('dccCurrency') and dcc.get('dccAmount'):
+        moeda = dcc['dccCurrency']
+        p.seccao('Conversão de moeda (DCC)')
+        p.linha('Taxa de conversão / Currency Conversion Rate', f'1 {moeda} = {dcc.get("dccRate", "")} CVE')
+        p.linha('Taxa do serviço DCC / DCC Markup', f'{dcc.get("dccMarkup", "")} %')
+        p.linha('Moeda de transação / Transaction Currency', moeda)
+        p.linha('[ ] TOTAL', f'{tx.montante} CVE')
+        p.linha('[x] TOTAL', f'{dcc["dccAmount"]} {moeda}', destaque=True)
+        p.texto(f'I have been offered choice of currencies and agreed to pay in {moeda}.')
+        p.texto('Dynamic Currency Conversion (DCC) offered by rede vinti4.')
+        p.texto('Exchange rate provided by Banco de Cabo Verde.')
+    return True
+
+
 class _Pdf:
     """Folha A4 simples: cabeçalho, blocos de linhas rótulo/valor, tabela e rodapé."""
 
@@ -156,6 +209,14 @@ class _Pdf:
             self.y -= 6 * mm
         self.y -= 3 * mm
 
+    def texto(self, t, tamanho=8):
+        """Uma linha de texto corrido (avisos obrigatórios do recibo)."""
+        self._quebra(6 * self.mm)
+        self.c.setFont('Helvetica', tamanho)
+        self.c.setFillColorRGB(0.30, 0.30, 0.34)
+        self.c.drawString(self.mg, self.y, str(t)[:120])
+        self.y -= 5 * self.mm
+
     def _rodape(self, extra=''):
         c, mm = self.c, self.mm
         c.setFont('Helvetica-Bold', 8)
@@ -210,6 +271,7 @@ def pdf_comprovativo_encomenda(enc):
             p.linha('Referência da transação', pag.referencia_transacao[:60] or '—')
             p.linha('Estado', pag.get_status_display())
     p.linha('Total pago (CVE)', formatar(enc.valor_devido), destaque=True)
+    _cartao_vinti4(p, 'enc', enc.id)
     nota = 'Pagamento simulado (ambiente de testes). ' if pag and pag.fornecedor == 'simulado' else ''
     return p.fim(nota + 'A fatura legal é emitida pela loja no e-Fatura e fica disponível na encomenda.')
 
@@ -273,6 +335,7 @@ def pdf_comprovativo_subscricao(f):
     p.linha('Pago a', _data(f.paga_em))
     p.linha('Método', f.get_metodo_display() if f.metodo else '—')
     p.linha('Total pago', formatar(f.valor), destaque=True)
+    _cartao_vinti4(p, 'fat', f.id)
     extra = 'A fatura da Bendi é emitida no e-Fatura e fica disponível na subscrição.'
     if f.metodo == 'simulado':
         extra = 'Pagamento simulado (ambiente de testes). ' + extra
@@ -307,6 +370,7 @@ def pdf_comprovativo_cobranca(c):
     if c.referencia:
         p.linha('Referência', c.referencia)
     p.linha('Total pago', formatar(c.valor), destaque=True)
+    _cartao_vinti4(p, 'com', c.id)
     extra = 'As faturas da Bendi das comissões de cada mês são emitidas no e-Fatura e chegam por email.'
     if c.metodo == 'simulado':
         extra = 'Pagamento simulado (ambiente de testes). ' + extra

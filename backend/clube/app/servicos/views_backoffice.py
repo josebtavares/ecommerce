@@ -793,6 +793,7 @@ def marcacao_acao(request, loja_id, marcacao_id):
       { acao: 'propor_preco', valor, motivo? }   (o cliente aceita ou recusa na conversa)
       { acao: 'concluir', preco_final?, motivo? } · { acao: 'falta' }   (também o profissional da marcação)
       { acao: 'tentar_reembolso' }   (devolução recusada pelo fornecedor — reembolso_por_concluir)
+      { acao: 'estorno_feito', referencia, nota? }   (cartão vinti4: a loja devolveu no Portal do Comerciante)
     """
     loja = get_object_or_404(Loja, id=loja_id)
     membro = _get_membro(request, loja)
@@ -867,6 +868,8 @@ def marcacao_acao(request, loja_id, marcacao_id):
             if is_ratelimited(request=request, group='reembolso_tentar', key='user', rate='5/m', method='POST', increment=True):
                 return _erro('Demasiadas tentativas — espera um minuto.', 429)
             m = ops.tentar_reembolso(m)
+        elif acao == 'estorno_feito':          # cartão vinti4: a loja fez o estorno no Portal do Comerciante
+            m = ops.estorno_feito(m, d.get('referencia'), d.get('nota', ''))
         elif acao == 'notas':
             notas, e = _texto(d, 'notas_internas', 500)
             if e:

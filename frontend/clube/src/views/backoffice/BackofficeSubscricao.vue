@@ -242,6 +242,7 @@
       <p v-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
       <p v-if="aviso" class="text-sm text-green-400" role="status">{{ aviso }}</p>
     </template>
+    <DadosPagador :campos="faltaDados" @guardado="repetirPagamento" @fechar="faltaDados = []" />
   </div>
 </template>
 
@@ -253,16 +254,17 @@ import ComissoesMensais from '@/components/fiscal/ComissoesMensais.vue'
 import CobrancasComissoes from '@/components/fiscal/CobrancasComissoes.vue'
 import ListaCobrancas from '@/components/subscricao/ListaCobrancas.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import DadosPagador from '@/components/forms/DadosPagador.vue'
 import { ouvirSubscricoes } from '@/utils/tempoRealEncomendas'
 
 export default {
   name: 'BackofficeSubscricao',
-  components: { ComissoesMensais, CobrancasComissoes, ListaCobrancas },
+  components: { ComissoesMensais, CobrancasComissoes, DadosPagador, ListaCobrancas },
   props: { lojaId: { type: [String, Number], required: true } },
   emits: ['alterado'],
 
   data () {
-    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, novoPlano: null, novoPlanoServ: null, versao: 0 }
+    return { dados: null, carregando: true, erro: '', aviso: '', aPagar: null, aGuardar: false, novoPlano: null, novoPlanoServ: null, versao: 0, faltaDados: [], aRepetir: null }
   },
 
   computed: {
@@ -351,9 +353,13 @@ export default {
         this.carregando = false
       }
     },
-    async pagar (f) {
-      if (!confirm(`Pagar ${this.euros(f.valor)} — ${f.descricao}?\n\n(Pagamento simulado)`)) return
-      this.erro = ''; this.aviso = ''
+    repetirPagamento () {
+      this.faltaDados = []
+      if (this.aRepetir) this.pagar(this.aRepetir, true)
+    },
+    async pagar (f, semPerguntar = false) {
+      if (!semPerguntar && !confirm(`Pagar ${this.euros(f.valor)} — ${f.descricao}?${this.dados?.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)) return
+      this.erro = ''; this.aviso = ''; this.aRepetir = null
       this.aPagar = f.id
       try {
         const { data } = await api.post(`/app/loja/${this.lojaId}/subscricao/faturas/${f.id}/pagar/`)
@@ -363,6 +369,7 @@ export default {
         this.aviso = 'Pagamento recebido. Obrigado!'
         this.$emit('alterado')      // o layout volta a ler a loja (pode ter sido reactivada) e a faixa
       } catch (e) {
+        if (e.response?.data?.codigo === 'dados_cliente') { this.aRepetir = f; this.faltaDados = e.response.data.campos || []; return }
         this.erro = e.response?.data?.detail || 'Não foi possível pagar.'
       } finally {
         this.aPagar = null

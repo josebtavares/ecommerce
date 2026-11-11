@@ -16,9 +16,16 @@ class ErroPagamento(Exception):
     não se volta a tentar sozinho: a Bendi confirma primeiro no painel do fornecedor (utils/devolucoes).
     """
 
-    def __init__(self, mensagem='', incerto=False):
+    def __init__(self, mensagem='', incerto=False, destino_ref='', estorno_loja=False, pendente=False):
         super().__init__(mensagem)
         self.incerto = incerto
+        # regresso do cliente: o fornecedor ainda não respondeu (vinti4 iniciada / por confirmar) — a página de
+        # regresso continua a perguntar e muda sozinha quando chegar a confirmação
+        self.pendente = pendente
+        # cartão vinti4 de uma loja: o dinheiro está na conta dela — é a loja que faz o estorno no Portal do
+        # Comerciante da SISP e o marca como feito (nada a tentar de novo do nosso lado)
+        self.estorno_loja = estorno_loja
+        self.destino_ref = destino_ref      # a nossa referência do que se pagava: o regresso mostra o caminho de volta
 
 
 @dataclass
@@ -30,6 +37,9 @@ class Cobranca:
     logo: str = ''
     cliente: dict = field(default_factory=dict)      # {email, nome, telefone}
     regresso: str = ''              # para onde o fornecedor manda o cliente depois de pagar
+    pagador: object = None          # Utilizador que paga (vinti4: dados 3DS do perfil)
+    loja: object = None             # a loja que recebe; None = a Bendi (vinti4: credenciais de quem recebe)
+    morada: str = ''                # morada desta compra (a de entrega), se não for a do perfil
 
 
 @dataclass
@@ -43,6 +53,7 @@ class Inicio:
     url: str = ''
     metodo_http: str = 'GET'
     campos: dict = field(default_factory=dict)
+    fornecedor: str = ''            # código de quem o devolveu (servico.para_frontend)
 
 
 @dataclass

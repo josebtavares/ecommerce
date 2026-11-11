@@ -309,8 +309,18 @@ export default {
         const { data } = await api.post(`/app/lojas/${this.lojaId}/servicos/marcar/`, {
           servico_id: this.servico.id, profissional_id: this.profId, inicio: this.escolhida, pagamento: this.pagamentoEfetivo, notas: this.notas.trim() })
         let m = data
-        if (m.pagamento === 'antecipado' && !m.pago && confirm(`Pagar ${formatarDinheiro(Number(m.preco_indicado))}?\n\n(Pagamento simulado)`)) {
-          const { data: pago } = await api.post(`/app/marcacoes/${m.id}/acao/`, { acao: 'pagar' })
+        if (m.pagamento === 'antecipado' && !m.pago && confirm(`Pagar ${formatarDinheiro(Number(m.preco_indicado))}?${m.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)) {
+          let pago = null
+          try {
+            pago = (await api.post(`/app/marcacoes/${m.id}/acao/`, { acao: 'pagar' })).data
+          } catch (e) {
+            // a marcação ficou feita: o pagamento continua na página dela (pede lá os dados em falta)
+            if (e.response?.data?.codigo === 'dados_cliente') {
+              this.$router.push({ path: `/minhas-marcacoes/${m.id}`, query: { nova: 1 } })
+              return
+            }
+            throw e
+          }
           if (seguirPagamento(pago)) return       // paga na página do fornecedor e volta a /pagamento/callback
           m = pago
         }

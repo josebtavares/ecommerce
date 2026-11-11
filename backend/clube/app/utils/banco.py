@@ -114,12 +114,19 @@ def dados_transferencia(enc):
             'valor': f'{p.valor:.2f}', 'referencia': f'Encomenda {enc.id}', 'prazo': prazo.isoformat()}
 
 
-def online_suspenso(loja):
+def online_suspenso(loja, utilizador=None):
     """Com pagamentos online a sério, só uma loja com contrato vinti4 ativo recebe pagamentos online (cartão,
     marcações pagas antecipadamente): a SISP não deixa a Bendi receber por conta das lojas (utils/vinti4.py).
+    Adesão em testes: só a equipa da loja (utilizador membro) paga com cartão, para experimentar.
     Os outros métodos (dinheiro, transferência) continuam. Com o fornecedor simulado nunca se aplica."""
     from ..pagamentos import cobra_a_serio
     if not cobra_a_serio():
         return False
-    from .vinti4 import ativa
-    return not ativa(loja)
+    from .vinti4 import adesao
+    a = adesao(loja)
+    if a and a.estado == 'ativa':
+        return False
+    if a and a.estado == 'teste' and utilizador is not None:
+        from ..models import UtilizadorLoja
+        return not UtilizadorLoja.obter_membro(loja, utilizador)
+    return True
