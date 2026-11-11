@@ -1430,9 +1430,17 @@ class DevolucaoComCartao(TestCase):
         return self.api.post(f'/app/loja/{self.loja.id}/reembolsos/{self.r.id}/acao/', {'acao': 'dinheiro_entregue', **dados},
                              format='multipart' if multipart else 'json')
 
-    def test_estorno_pede_referencia(self):
+    def test_estorno_sem_referencia(self):
+        """A referência é opcional: sem ela o estorno fica marcado na mesma (o cliente confirma ou diz que não recebeu)."""
+        r = self._acao({})
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        d = r.json()
+        self.assertEqual((d['devolvido_como'], d['referencia_devolucao']), ('estorno', ''))
+        self.assertTrue(d['entregue_em'])
+
+    def test_estorno_com_referencia(self):
         self.assertEqual((self.r.estado, self.r.metodo), ('a_devolver', 'manual'))
-        self.assertEqual(self._acao({}).status_code, 400)
+        self.assertEqual(self._acao({'como': 'estorno', 'referencia': 'AB'}).status_code, 400)      # demasiado curta
         r = self._acao({'como': 'estorno', 'referencia': 'EST-998877'})
         self.assertEqual(r.status_code, 200, r.content[:300])
         d = r.json()

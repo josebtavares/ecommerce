@@ -181,7 +181,7 @@
               <template v-if="como === 'estorno'">
                 <input v-model="referencia" maxlength="100" placeholder="Referência do estorno (Portal do Comerciante)" data-teste="estorno-referencia"
                   class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-amber-500" />
-                <p class="text-[11px] text-zinc-500">Se carregares o ficheiro VBVT em Pagamentos, a SISP confirma o estorno e o pedido fecha sozinho.</p>
+                <p class="text-[11px] text-zinc-500">Opcional — ajuda o cliente a encontrar o estorno no banco. Se carregares o ficheiro VBVT em Pagamentos, a SISP confirma o estorno e o pedido fecha sozinho.</p>
               </template>
               <template v-else>
                 <p class="text-xs text-zinc-400">Só quando o estorno não for possível (ex.: cartão cancelado) ou se combinaste outra forma com o cliente nas mensagens.</p>
@@ -260,7 +260,7 @@ const notaDevolucao = ref('')
 const provas = ref([])
 const podeMarcar = computed(() => {
   if (r.value?.como_devolve !== 'cartao') return true
-  if (como.value === 'estorno') return referencia.value.trim().length >= 3
+  if (como.value === 'estorno') return referencia.value.trim().length === 0 || referencia.value.trim().length >= 3
   return notaDevolucao.value.trim().length >= 5 && provas.value.length > 0
 })
 

@@ -620,8 +620,8 @@ def loja_dinheiro_entregue(r, utilizador, como='', referencia='', nota='', fotos
     """
     A loja indica que devolveu o dinheiro. O cliente confirma ("Recebi") ou, passado o prazo, fica confirmado.
     Pago com cartão vinti4 (o dinheiro está na loja):
-    • como='estorno' (o normal): a referência do estorno do Portal do Comerciante é obrigatória (fica no pedido;
-      se a loja carregar o VBVT, a SISP confirma-o — confirmar_estornos_sisp);
+    • como='estorno' (o normal): a referência do estorno do Portal do Comerciante é opcional — ajuda o cliente a
+      encontrá-lo no banco (sem ela, se a loja carregar o VBVT, fica a da SISP — confirmar_estornos_sisp);
     • como='outro': o estorno não deu (ex.: cartão cancelado) e a loja devolveu por outro meio — diz como e junta
       a prova em foto (obrigatória); o cliente vê-a e confirma.
     fotos: já preparadas (preparar_fotos), ficam na mensagem da loja.
@@ -635,11 +635,12 @@ def loja_dinheiro_entregue(r, utilizador, como='', referencia='', nota='', fotos
     if como_devolve(r.encomenda) == 'cartao':
         como = como or 'estorno'
         if como == 'estorno':
-            if not 3 <= len(referencia) <= 100:
-                raise ErroReembolso('Indica a referência do estorno (do Portal do Comerciante da SISP).')
+            if referencia and not 3 <= len(referencia) <= 100:
+                raise ErroReembolso('A referência do estorno tem de ter entre 3 e 100 caracteres (ou deixa-a vazia).')
             r.referencia = referencia
-            texto = f'A loja fez o estorno de {valor} no cartão do cliente (referência {referencia}).'
-            para_cliente = (f'A loja diz que fez o estorno de {valor} para o teu cartão (referência {referencia}). '
+            com_ref = f' (referência {referencia})' if referencia else ''
+            texto = f'A loja fez o estorno de {valor} no cartão do cliente{com_ref}.'
+            para_cliente = (f'A loja diz que fez o estorno de {valor} para o teu cartão{com_ref}. '
                             f'Os bancos podem demorar alguns dias a mostrá-lo.')
         elif como == 'outro':
             if len(nota) < 5:
