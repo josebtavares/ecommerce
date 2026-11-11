@@ -24,7 +24,9 @@ ADMIN = {
     'encomenda':  ('gerir_encomendas',),
     'denuncia':   ('moderar_chat',),
 }
-DA_LOJA = ('produto', 'inventario')                       # também para a equipa da loja
+# também para a equipa da loja (e o dono): 'loja' = dados da loja, documentos e adesão vinti4 — a secção
+# "Pagamento com cartão (vinti4)" e os Documentos das Configurações recarregam sozinhos
+DA_LOJA = ('produto', 'inventario', 'loja')
 
 
 def _admins(permissoes):
@@ -38,7 +40,7 @@ def _enviar(itens):
     try:
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
-        from ..models import UtilizadorLoja
+        from ..models import Loja, UtilizadorLoja
         camada = get_channel_layer()
         if camada is None:
             return
@@ -53,6 +55,7 @@ def _enviar(itens):
             if origem in DA_LOJA and loja_id:
                 ids |= set(UtilizadorLoja.objects.filter(loja_id=loja_id, ativo=True)
                            .values_list('utilizador__user_id', flat=True))
+                ids |= {u for u in Loja.objects.filter(pk=loja_id).values_list('dono__user_id', flat=True) if u}
             evento = {'type': 'lista.atualizada', 'lista': {'origem': origem, 'loja_id': loja_id}}
             for uid in ids:
                 async_to_sync(camada.group_send)(f'notif_{uid}', evento)
@@ -94,7 +97,7 @@ def _ao_mudar(origem, loja_de=lambda o: getattr(o, 'loja_id', None), so_campos=N
 
 def ligar():
     from django.contrib.auth.models import User
-    from ..models import Encomenda, Inventario, Loja, Produto, Utilizador, VarianteProduto
+    from ..models import AdesaoVinti4, DocumentoLoja, Encomenda, Inventario, Loja, Produto, Utilizador, VarianteProduto
     from ..chat.models import Denuncia
     from ..pos.models import ConfiguracaoPOS, ContaMesa
 
@@ -108,6 +111,8 @@ def ligar():
     ligar_modelo('inventario', VarianteProduto,          # stock por variação
                  loja_de=lambda o: Produto.objects.filter(pk=o.produto_id).values_list('loja_id', flat=True).first())
     ligar_modelo('loja', Loja, loja_de=lambda o: o.pk)
+    ligar_modelo('loja', DocumentoLoja)              # envio / aprovação / recusa dos documentos
+    ligar_modelo('loja', AdesaoVinti4)               # pedido, credenciais e decisões da Bendi
     ligar_modelo('utilizador', Utilizador, loja_de=lambda o: None)
     # o login grava só o last_login: não conta
     ligar_modelo('utilizador', User, loja_de=lambda o: None,

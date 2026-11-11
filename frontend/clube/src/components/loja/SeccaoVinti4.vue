@@ -1,6 +1,7 @@
 <!-- SeccaoVinti4.vue — Configurações da loja (só o dono): pagamento com cartão = contrato vinti4 da própria loja.
      A SISP não deixa a Bendi receber por conta das lojas: cada loja adere e recebe direto na conta dela.
-     Backend: GET/POST/PUT /app/loja/<id>/vinti4/ (utils/vinti4.py). A chave nunca volta do servidor. -->
+     Backend: GET/POST/PUT /app/loja/<id>/vinti4/ (utils/vinti4.py). A chave nunca volta do servidor.
+     Tempo real: recarrega quando a loja, os documentos ou a adesão mudam (aviso 'loja' — utils/tempo_real_listas.py). -->
 <template>
   <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-vinti4">
     <div class="flex items-center justify-between gap-3 mb-1">
@@ -146,6 +147,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 
 const COR = {
   pedida: 'bg-sky-500/15 text-sky-400', por_validar: 'bg-amber-500/15 text-amber-300', teste: 'bg-violet-500/15 text-violet-300',
@@ -177,13 +179,22 @@ export default {
   },
 
   async created () {
+    this.pararTempoReal = ouvirListas('loja', () => this.recarregar(), { lojaId: this.lojaId })
     try {
       this.d = (await api.get(`/app/loja/${this.lojaId}/vinti4/`)).data
     } catch (e) { this.erroGeral = e.response?.data?.detail || '' }
     finally { this.carregando = false }
   },
 
+  beforeUnmount () { this.pararTempoReal?.() },
+
   methods: {
+    // em silêncio: guardar o NIF ou os contactos, ou a Bendi aprovar um documento, atualiza os requisitos sem refresh
+    async recarregar () {
+      if (this.aGuardar) return
+      try { this.d = (await api.get(`/app/loja/${this.lojaId}/vinti4/`)).data } catch { /* fica o que estava */ }
+    },
+
     abrir () {
       const a = this.d.adesao || {}
       this.form = { pos_id: a.pos_id || '', merchant_id: a.merchant_id || '', chave: '', password: '' }
