@@ -13,11 +13,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='adesaovinti4',
             name='portal_id',
-            field=models.CharField(blank=True, default='', max_length=60),
+            field=models.CharField(blank=True, db_default='', default='', max_length=60),
         ),
         migrations.AddField(
             model_name='adesaovinti4',
             name='portal_password_cifrada',
-            field=models.TextField(blank=True, default=''),
+            field=models.TextField(blank=True, db_default='', default=''),
         ),
     ]
