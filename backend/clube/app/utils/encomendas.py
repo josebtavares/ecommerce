@@ -326,7 +326,42 @@ def prazo_pagamento(encomenda):
 
 def pagamento_expirado(encomenda, agora=None):
     from django.utils import timezone
-    return encomenda.status == 'pendente' and (agora or timezone.now()) >= prazo_pagamento(encomenda)
+    agora = agora or timezone.now()
+    return (encomenda.status == 'pendente' and agora >= prazo_pagamento(encomenda)
+            and not cartao_a_decorrer(encomenda, agora))
+
+
+def cartao_a_decorrer(encomenda, agora=None):
+    """O cliente está na página da SISP a pagar (cartão vinti4 iniciado há menos de 8 minutos, sem resposta): a
+    encomenda espera por ele — cancelá-la agora fazia o pagamento chegar a uma encomenda cancelada (reembolso)."""
+    from django.utils import timezone
+    from ..models import TransacaoVinti4
+    from ..pagamentos.vinti4 import TEMPO_LIMITE
+    agora = agora or timezone.now()
+    return TransacaoVinti4.objects.filter(referencia__startswith=f'enc-{encomenda.id}-', estado='iniciada',
+                                          criada_em__gt=agora - TEMPO_LIMITE).exists()
+
+
+def minutos_cartao_a_decorrer(utilizador, loja, agora=None):
+    """Uma nova encomenda substitui as por pagar (cancelar_anteriores_por_pagar) — mas não se o cliente está a pagar
+    uma delas na página da SISP: o pagamento chegava a uma encomenda cancelada e ficava cobrado a dobrar.
+    → minutos até poder tentar outra vez (0 = nada a decorrer)."""
+    from django.utils import timezone
+    from ..models import Encomenda, TransacaoVinti4
+    from ..pagamentos.vinti4 import TEMPO_LIMITE
+    agora = agora or timezone.now()
+    ids = list(Encomenda.objects.filter(comprador=utilizador, loja=loja, status='pendente').values_list('id', flat=True))
+    if not ids:
+        return 0
+    from django.db.models import Q
+    filtro = Q()
+    for i in ids:
+        filtro |= Q(referencia__startswith=f'enc-{i}-')
+    aberta = (TransacaoVinti4.objects.filter(filtro, estado='iniciada', criada_em__gt=agora - TEMPO_LIMITE)
+              .order_by('-criada_em').first())
+    if not aberta:
+        return 0
+    return max(1, int((aberta.criada_em + TEMPO_LIMITE - agora).total_seconds() // 60) + 1)
 
 
 def _cancelar_por_pagar(encomenda, mensagem_cliente=None, avisar_loja=True):
