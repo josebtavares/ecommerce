@@ -193,6 +193,32 @@ def dono(merchant_id):
     return None
 
 
+def lojas_do_mid(mid):
+    """Ids das lojas cujo contrato vinti4 tem este Merchant ID (a loja da CV PRIME partilha o da Bendi)."""
+    from ..models import AdesaoVinti4
+    mid = _normalizar_mid(mid)
+    return [a.loja_id for a in AdesaoVinti4.objects.exclude(merchant_id='').only('loja_id', 'merchant_id')
+            if mid and _normalizar_mid(a.merchant_id) == mid]
+
+
+def mid_da_loja(loja):
+    from ..models import AdesaoVinti4
+    a = AdesaoVinti4.objects.filter(loja=loja).only('merchant_id').first()
+    return _normalizar_mid(a.merchant_id) if a else ''
+
+
+def transacoes_do_mid(mid):
+    """As transacções que um ficheiro deste Merchant ID pode reconciliar: as das lojas com esse contrato e, se for o
+    da Bendi, as da Bendi (loja vazia). Um ficheiro nunca toca nas transacções de outro comerciante."""
+    from django.db.models import Q
+    from ..models import TransacaoVinti4
+    mid = _normalizar_mid(mid)
+    filtro = Q(loja_id__in=lojas_do_mid(mid))
+    if mid and mid == _normalizar_mid(settings.VINTI4_MERCHANT_ID):
+        filtro |= Q(loja__isnull=True)
+    return TransacaoVinti4.objects.filter(filtro)
+
+
 def _ultimo(mid):
     from ..models import FicheiroVBVT
     return (FicheiroVBVT.objects.filter(merchant_id=mid, estado='aplicado')
@@ -242,8 +268,9 @@ def _comparar(n, tipo, c, txs):
     return linha
 
 
-def processar(conteudo, nome='', utilizador=None, forcar=False):
-    """Valida e aplica um ficheiro VBVT → FicheiroVBVT (aplicado ou rejeitado; fica sempre registado)."""
+def processar(conteudo, nome='', utilizador=None, forcar=False, loja=None):
+    """Valida e aplica um ficheiro VBVT → FicheiroVBVT (aplicado ou rejeitado; fica sempre registado).
+    loja: carregado no backoffice dessa loja — só se aceita o ficheiro do Merchant ID do contrato dela."""
     from ..models import FicheiroVBVT, TransacaoVinti4
     from ..utils.registo import registar
     if len(conteudo) > TAMANHO_MAX:
@@ -254,6 +281,7 @@ def processar(conteudo, nome='', utilizador=None, forcar=False):
     h = lido['header'] or {}
     mid = _normalizar_mid(h.get('merchant_id')) if h else ''
     quem = None
+    mid_registo = mid          # carregado por uma loja com o ficheiro de outro comerciante: fica registado na loja
     with transaction.atomic():
         # um ficheiro de cada vez por Merchant ID (a sequência depende do último aplicado)
         if mid:
@@ -261,7 +289,11 @@ def processar(conteudo, nome='', utilizador=None, forcar=False):
                 cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', [f'vbvt:{mid}'])
         if h:
             quem = dono(mid)
-            if quem is None:
+            if loja is not None and mid != mid_da_loja(loja):
+                mid_registo, quem = mid_da_loja(loja), ('loja', loja)
+                erros.append({'linha': 1, 'erro': f'Este ficheiro é do Merchant ID {mid}, que não é o do contrato vinti4 '
+                                                  f'desta loja — descarrega o ficheiro no Portal do Comerciante da loja.'})
+            elif quem is None:
                 erros.append({'linha': 1, 'erro': f'Merchant ID {mid} desconhecido: não é o da Bendi (VINTI4_MERCHANT_ID) '
                                                   f'nem o de nenhuma loja com contrato vinti4.'})
             repetido = FicheiroVBVT.objects.filter(hash=hash_, estado='aplicado').first()
@@ -288,10 +320,11 @@ def processar(conteudo, nome='', utilizador=None, forcar=False):
             refs = set()
             for _, tipo, c in lido['detalhes']:
                 refs.update(r for r in (c['ref'], c.get('ref_original')) if r)
-            txs = {t.ref: t for t in TransacaoVinti4.objects.select_for_update().filter(ref__in=[r for r in refs if len(r) <= 15])}
+            txs = {t.ref: t for t in transacoes_do_mid(mid).select_for_update()
+                   .filter(ref__in=[r for r in refs if len(r) <= 15])}
             por_id = {t.id: t for t in txs.values()}
             agora = timezone.now()
-            mudadas = {}
+            mudadas, estornadas = {}, {}       # estornadas: tx.pk → nº das transacções de estorno na SISP
             for n, tipo, c in lido['detalhes']:
                 linha = _comparar(n, tipo, c, txs)
                 linhas.append(linha)
@@ -303,17 +336,26 @@ def processar(conteudo, nome='', utilizador=None, forcar=False):
                     tx.comissao_sisp = c.get('comissao')
                     tx.tipo_cartao = (c.get('cartao') or '')[:5]
                     if not tx.tid:          # confirmada pela API de estado: o ficheiro traz o nº da transacção
-                        tx.periodo, tx.tid = str(c['periodo']), str(c['tid'])
+                        # o período e o tid NÃO se mudam: tx.transacao ('v4_<ref>' sem tid) já foi gravado no
+                        # Pagamento/Fatura e é a chave que reconhece o mesmo pagamento num regresso posterior —
+                        # mudá-lo fazia parecer um pagamento a dobrar. O nº da SISP fica na linha do ficheiro.
                         tx.message_id = tx.message_id or c['message_id'][:20]
                         tx.pan = tx.pan or (c.get('pan') or '')[:21]
                     mudadas[tx.pk] = tx
-                elif tipo == '2' and linha['resultado'] == 'estorno' and not tx.estornada_em:
-                    tx.estornada_em = agora
+                elif tipo == '2' and linha['resultado'] == 'estorno':
+                    tx.estornada_em = tx.estornada_em or agora
+                    tx.valor_estornado += c['valor']        # um ficheiro só se aplica uma vez: não conta a dobrar
+                    estornadas.setdefault(tx.pk, []).append(f'{c["periodo"]}-{c["tid"]}')
                     mudadas[tx.pk] = tx
             for tx in mudadas.values():
                 tx._sem_tempo_real = True       # o tempo real avisa uma vez, pelo FicheiroVBVT criado
                 tx.save(update_fields=['reconciliada_em', 'comissao_sisp', 'tipo_cartao', 'periodo', 'tid',
-                                       'message_id', 'pan', 'estornada_em'])
+                                       'message_id', 'pan', 'estornada_em', 'valor_estornado'])
+            # reforço dos reembolsos: o estorno que a SISP fez confirma (e fecha) o pedido de reembolso
+            from ..utils.devolucoes import avisar_estornos_em_falta, confirmar_estornos_sisp
+            for pk, numeros in estornadas.items():
+                confirmar_estornos_sisp(mudadas[pk], h.get('data'), numeros)
+            avisar_estornos_em_falta(lojas_do_mid(mid), h.get('data'))
             compras = [(l, c) for l, (_, t, c) in zip(linhas, lido['detalhes']) if t == '1' and c['rt'] == '0']
             estornos = [(l, c) for l, (_, t, c) in zip(linhas, lido['detalhes']) if t == '2' and c['rt'] == '0']
             total = sum((c['valor'] for _, c in compras), Decimal('0'))
@@ -327,7 +369,7 @@ def processar(conteudo, nome='', utilizador=None, forcar=False):
                       'liquido': str(total - estornado - comissoes), 'resultados': contagem,
                       'problemas': sum(contagem.get(k, 0) for k in PROBLEMAS)}
         f = FicheiroVBVT.objects.create(
-            nome=str(nome or '')[:200], hash=hash_, merchant_id=mid[:15],
+            nome=str(nome or '')[:200], hash=hash_, merchant_id=mid_registo[:15],
             loja=quem[1] if quem else None, data=h.get('data'), sequencia=h.get('sequencia'),
             data_anterior=h.get('data_anterior'), sequencia_anterior=h.get('sequencia_anterior'),
             estado='rejeitado' if erros else 'aplicado', forcado=bool(forcar and avisos and not erros),
@@ -337,7 +379,30 @@ def processar(conteudo, nome='', utilizador=None, forcar=False):
                  referencia=f'vbvt-{mid}-{h.get("data") or ""}-{h.get("sequencia") or ""}',
                  dados={'nome': f.nome[:80], 'hash': hash_[:16], 'erros': len(erros), 'forcado': f.forcado,
                         'problemas': resumo.get('problemas', 0)})
+        if f.estado == 'aplicado':
+            _avisar_diferencas(f, mid)
     return f
+
+
+# as diferenças que são dinheiro (não as linhas que não são nossas): avisam o dono do contrato e os admins
+DINHEIRO = ('paga_so_na_sisp', 'paga_so_ca', 'valor_diferente')
+
+
+def _avisar_diferencas(f, mid):
+    from ..models import Loja
+    from ..utils.fila_emails import IMPORTANTE
+    from ..Views.notificacaoView import notificar_admins, notificar_staff
+    n = sum((f.resumo.get('resultados') or {}).get(k, 0) for k in DINHEIRO)
+    if not n:
+        return
+    titulo = f'Reconciliação do cartão: {n} pagamento(s) com diferenças'
+    msg = (f'O ficheiro VBVT de {_d(f.data)} nº {(f.sequencia or 0):03d} tem {n} pagamento(s) que não batem com o site '
+           f'(ex.: aprovado na SISP e não pago cá). Abre a reconciliação e usa "Perguntar à SISP".')
+    chave = f'vbvt:{f.id}'
+    for loja in Loja.objects.filter(id__in=lojas_do_mid(mid)):
+        notificar_staff(loja, ['dono'], 'vinti4', titulo, msg, link=f'/loja/{loja.id}/backoffice/pagamentos',
+                        email=IMPORTANTE, email_chave=chave)
+    notificar_admins('vinti4', titulo, msg, loja=f.loja, link='/admin/pagamentos', email=IMPORTANTE, email_chave=chave)
 
 
 def relatorio(f):

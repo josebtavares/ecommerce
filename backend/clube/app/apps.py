@@ -38,3 +38,7 @@ class AppConfig(AppConfig):
         # cache pública da borda (clube/borda.py): o que a loja muda aparece logo aos visitantes
         from .utils import cache_publico
         cache_publico.ligar()
+        # vinti4 em produção com os endereços de teste da SISP → erro no arranque (pagamentos/vinti4.py)
+        from django.core.checks import register
+        from .pagamentos.vinti4 import verificar_configuracao
+        register(verificar_configuracao, 'bendi')

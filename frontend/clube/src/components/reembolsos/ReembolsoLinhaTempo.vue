@@ -74,9 +74,15 @@ const passos = computed(() => {
   // dinheiro em mão: aceite → a loja entrega → o cliente confirma
   if (r.metodo === 'manual' && r.data_reembolso) {
     out.push({ chave: 'aceite', estado: 'feito', titulo: `Reembolso aceite: ${formatarDinheiro(r.valor_aprovado)} ${devolucaoLoja(r).como}`, texto: dataHora(r.data_reembolso) })
-    out.push({ chave: 'entregue', titulo: r.entregue_em ? 'A loja devolveu o dinheiro' : 'A loja devolve o dinheiro',
-               texto: r.entregue_em ? dataHora(r.entregue_em) : (r.estado === 'a_devolver' ? `Até ${dataHora(r.prazo_resposta)}` : ''),
+    const comoFoi = r.devolvido_como === 'estorno' ? 'A loja fez o estorno no cartão'
+      : (r.devolvido_como === 'outro' ? 'A loja devolveu de outra forma' : 'A loja devolveu o dinheiro')
+    out.push({ chave: 'entregue', titulo: r.entregue_em ? comoFoi : 'A loja devolve o dinheiro',
+               texto: r.entregue_em ? dataHora(r.entregue_em) + (r.referencia_devolucao ? ` · ref. ${r.referencia_devolucao}` : '')
+                 : (r.estado === 'a_devolver' ? `Até ${dataHora(r.prazo_resposta)}` : ''),
                estado: r.entregue_em ? 'feito' : (r.estado === 'a_devolver' ? 'atual' : 'futuro') })
+    if (r.confirmado_sisp_em) {
+      out.push({ chave: 'sisp', estado: 'feito', titulo: 'Estorno confirmado pela SISP', texto: dataHora(r.confirmado_sisp_em) })
+    }
     if (r.nao_recebido_em) {
       out.push({ chave: 'nao', estado: 'falhou', titulo: cliente ? 'Disseste que não recebeste' : 'O cliente diz que não recebeu', texto: dataHora(r.nao_recebido_em) })
     } else if (disputaDepois) {

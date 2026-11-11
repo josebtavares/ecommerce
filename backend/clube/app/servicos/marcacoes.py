@@ -389,6 +389,9 @@ def _reembolso_feito(m, falta, referencia, texto=''):
                                             reembolso_incerto=False)
     from ..utils import tempo_real_faturacao          # update() não dispara o sinal: a receita da marcação mudou
     tempo_real_faturacao.emitir('marcacoes', m.pk, m.loja_id)
+    if m.pagamento_fornecedor == 'vinti4':            # backoffice → Pagamentos: a ficha da transacção mostra o estorno
+        from ..utils.tempo_real_listas import emitir as emitir_lista
+        emitir_lista('cartao', m.loja_id)
     from ..utils.registo import registar
     registar('marcacao', 'reembolsada', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
              metodo=m.pagamento, referencia=referencia, dados={'total_reembolsado': f'{m.valor_reembolsado:.2f}'})
@@ -455,17 +458,20 @@ def _reembolso_falhou(m, falta, erro):
     return Decimal('0')
 
 
-def _estorno_pela_loja(m, falta, erro, primeira):
+def _estorno_pela_loja(m, falta, erro, primeira, transacao=None):
     """Cartão vinti4 da loja: fica por concluir até a loja fazer o estorno no Portal do Comerciante e o marcar
-    (estorno_feito). Não se volta a tentar sozinho."""
+    (estorno_feito). Não se volta a tentar sozinho. transacao: a que se estorna (por omissão a do pagamento)."""
     from ..utils.registo import registar
+    from ..utils.tempo_real_listas import emitir as emitir_lista
+    transacao = transacao or m.pagamento_referencia
     m.reembolso_tentativas += 1
     m.reembolso_erro = (str(erro) or 'Estorno no Portal do Comerciante.')[:255]
     m.reembolso_incerto, m.reembolso_proxima = False, None
     Marcacao.objects.filter(pk=m.pk).update(reembolso_erro=m.reembolso_erro, reembolso_tentativas=m.reembolso_tentativas,
                                             reembolso_proxima=None, reembolso_incerto=False)
     registar('marcacao', 'estorno_pedido', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
-             metodo=m.pagamento, dados={'referencia': m.pagamento_referencia})
+             metodo=m.pagamento, dados={'referencia': transacao})
+    emitir_lista('cartao', m.loja_id)           # backoffice → Pagamentos: a ficha da transacção mostra o estorno
     if primeira:
         texto = f'A loja vai devolver {formatar(falta)} ao cartão com que pagaste. Os bancos podem demorar alguns dias.'
         if m.cliente_id:
@@ -477,8 +483,50 @@ def _estorno_pela_loja(m, falta, erro, primeira):
                       email=FE.INFORMATIVO)
         avisar_loja(m, 'Faz o estorno no cartão', f'{m.servico_nome}: devolve {formatar(falta)} ao cliente — no Portal '
                                                   f'do Comerciante da SISP, faz o estorno da transação '
-                                                  f'{m.pagamento_referencia} e marca "Estorno feito" na marcação.', email=2)
+                                                  f'{transacao} e marca "Estorno feito" na marcação.', email=2)
     return Decimal('0')
+
+
+@transaction.atomic
+def pago_sem_efeito(m, fornecedor, transacao, valor, motivo=''):
+    """
+    O fornecedor cobrou uma marcação que já não podia ser paga (expirou, foi cancelada, a loja deixou de aceitar)
+    ou que já estava paga com outra transacção (a dobrar). O dinheiro fica registado na própria marcação, todo
+    devido de volta, e devolve-se pelo caminho de sempre (Devoluções → por concluir, ficha da marcação):
+    cartão vinti4 → a loja faz o estorno no Portal do Comerciante e marca "Estorno feito"; outro fornecedor →
+    devolução automática (e as novas tentativas do worker). O cliente e a loja são avisados.
+    → True se ficou registado; False se não dá (a dobrar noutro fornecedor: a Bendi trata à mão).
+    """
+    m = _bloqueada(m)
+    transacao, valor = (transacao or '')[:100], Decimal(valor)
+    if m.pago and m.pagamento_referencia == transacao:
+        return True
+    if not m.pago:
+        m.pago, m.pago_em, m.valor_pago = True, timezone.now(), valor
+        m.pagamento_fornecedor, m.pagamento_referencia = fornecedor, transacao
+        m.reembolso_devido = m.valor_reembolsado + valor
+        a_dobrar = False
+    elif fornecedor == 'vinti4' and m.pagamento_fornecedor == 'vinti4':
+        # o estorno faz-se à mão no Portal (com o n.º desta transacção): não precisa de a guardar como a do pagamento
+        m.valor_pago += valor
+        m.reembolso_devido = max(m.reembolso_devido, m.valor_reembolsado) + valor
+        a_dobrar = True
+    else:
+        return False
+    m.save(update_fields=['pago', 'pago_em', 'valor_pago', 'pagamento_fornecedor', 'pagamento_referencia',
+                          'reembolso_devido', 'data_atualizacao'])
+    texto = (f'O pagamento de {formatar(valor)} ({transacao}) ' + ('foi cobrado a mais — a marcação já estava paga.'
+             if a_dobrar else f'chegou quando a marcação já não podia ser paga ({motivo}).') + ' Vai ser devolvido.')
+    if m.cliente_id:
+        from .models import MensagemMarcacao
+        MensagemMarcacao.objects.create(marcacao=m, papel='sistema', texto=texto[:500])
+    if fornecedor == 'vinti4':
+        from ..pagamentos.base import ErroPagamento
+        _estorno_pela_loja(m, valor, ErroPagamento('Estorno no Portal do Comerciante da SISP.', estorno_loja=True),
+                           primeira=True, transacao=transacao)
+    else:
+        reembolsar(m)
+    return True
 
 
 def estorno_feito(m, referencia, nota=''):
