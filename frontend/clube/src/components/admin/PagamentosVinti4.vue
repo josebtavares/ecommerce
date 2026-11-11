@@ -8,6 +8,12 @@
         :class="['px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition',
                  aba === a.key ? 'border-red-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300']">{{ a.label }}</button>
     </div>
+    <p v-if="admin && d?.ambiente" data-teste="v4-ambiente"
+       :class="['text-[11px] px-3 py-1.5 rounded-lg border', d.ambiente === 'teste'
+         ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-green-500/30 bg-green-500/10 text-green-300']">
+      Ambiente da SISP: <strong>{{ d.ambiente === 'teste' ? 'TESTE' : 'Produção' }}</strong>
+      · vinti4 {{ d.ligado ? 'ligado' : 'desligado (pagamentos simulados)' }}
+    </p>
     <ReconciliacaoVBVT v-if="aba === 'vbvt'" ref="vbvt" :base="vbvtBase" :base-cartao="base" :admin="admin"
                        :lojas="lojas" :pode-agir="podeAgir" @mudou="carregar(offset, true)" />
     <template v-else>

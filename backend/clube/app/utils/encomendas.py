@@ -326,7 +326,20 @@ def prazo_pagamento(encomenda):
 
 def pagamento_expirado(encomenda, agora=None):
     from django.utils import timezone
-    return encomenda.status == 'pendente' and (agora or timezone.now()) >= prazo_pagamento(encomenda)
+    agora = agora or timezone.now()
+    return (encomenda.status == 'pendente' and agora >= prazo_pagamento(encomenda)
+            and not cartao_a_decorrer(encomenda, agora))
+
+
+def cartao_a_decorrer(encomenda, agora=None):
+    """O cliente está na página da SISP a pagar (cartão vinti4 iniciado há menos de 8 minutos, sem resposta): a
+    encomenda espera por ele — cancelá-la agora fazia o pagamento chegar a uma encomenda cancelada (reembolso)."""
+    from django.utils import timezone
+    from ..models import TransacaoVinti4
+    from ..pagamentos.vinti4 import TEMPO_LIMITE
+    agora = agora or timezone.now()
+    return TransacaoVinti4.objects.filter(referencia__startswith=f'enc-{encomenda.id}-', estado='iniciada',
+                                          criada_em__gt=agora - TEMPO_LIMITE).exists()
 
 
 def _cancelar_por_pagar(encomenda, mensagem_cliente=None, avisar_loja=True):

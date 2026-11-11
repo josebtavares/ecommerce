@@ -695,7 +695,8 @@ def admin_decidir(r, utilizador, decisao, valor=None, devolver_produto=False, no
     mensagem(r, 'admin', f'A Bendi decidiu reembolsar {formatar(valor)}.' + (f' {nota}' if nota else ''),
              utilizador)
     enc = r.encomenda
-    if r.tipo == 'cancelamento' and enc.status not in ('cancelado', 'concluido'):
+    # um pagamento tardio/a dobrar devolve só essa cobrança: a encomenda (já cancelada, ou paga e válida) fica como está
+    if r.tipo == 'cancelamento' and r.motivo != 'pagamento_tardio' and enc.status not in ('cancelado', 'concluido'):
         _cancelar_encomenda(enc)
     if r.tipo == 'devolucao' and devolver_produto and r.motivo in ('defeito', 'errado', 'mudei_ideias'):
         r.devolver_produto = True
@@ -848,23 +849,27 @@ def ao_avancar_encomenda(encomenda, utilizador=None):
                         f'{txt} Se não concordas, podes pedir ajuda à Bendi.')
 
 
-def pago_depois_de_cancelada(encomenda, valor, referencia):
+def pago_depois_de_cancelada(encomenda, valor, referencia, cartao_loja=False):
     """
-    O gateway cobrou depois de a encomenda ser cancelada (não há Pagamento): fica um pedido para a Bendi
-    devolver o dinheiro (com gateway real, é a Bendi que confirma o reembolso). Um por encomenda.
+    O fornecedor cobrou uma encomenda que já não o podia ser: cancelada (não há Pagamento) ou já paga (pagamento a
+    dobrar). Fica um pedido para a Bendi decidir — um por transacção cobrada. cartao_loja: cartão vinti4 do
+    contrato da loja — o dinheiro está na conta dela e é ela que faz o estorno (_pagou_com_cartao_loja).
     """
     from ..models import Reembolso
-    if Reembolso.objects.filter(encomenda=encomenda, motivo='pagamento_tardio').exists():
+    descricao = f'Transacção cobrada: {referencia}'
+    if Reembolso.objects.filter(encomenda=encomenda, motivo='pagamento_tardio', descricao=descricao).exists():
         return None
     r = _criar(encomenda, 'cancelamento', 'pagamento_tardio', 'sistema', valor, Decimal('0'),
-               descricao=f'Transacção cobrada: {referencia}', itens={})
+               descricao=descricao, itens={})
     r.estado = 'em_disputa'
     r.escalado_em = timezone.now()
     r.save()
-    mensagem(r, 'sistema', f'O pagamento de {formatar(valor)} chegou depois de a encomenda ser cancelada. '
-                           f'A equipa da Bendi vai devolver o dinheiro.')
-    _avisar_cliente(r, 'Vais ser reembolsado', f'O pagamento de {formatar(valor)} chegou depois de a encomenda '
-                                               f'ser cancelada. A equipa da Bendi vai devolver-te o dinheiro.')
+    porque = ('chegou depois de a encomenda ser cancelada' if encomenda.status == 'cancelado'
+              else 'foi cobrado a mais (a encomenda já estava paga)')
+    quem = ('A loja vai devolver-te o dinheiro com um estorno no cartão' if cartao_loja
+            else 'A equipa da Bendi vai devolver-te o dinheiro')
+    mensagem(r, 'sistema', f'O pagamento de {formatar(valor)} {porque} ({referencia}). {quem.replace("-te", "")}.')
+    _avisar_cliente(r, 'Vais ser reembolsado', f'O pagamento de {formatar(valor)} {porque}. {quem}.')
     return r
 
 
@@ -909,9 +914,14 @@ def _executar_no_gateway(r, valor, metodo, pagamento=None):
 
 def _pagou_com_cartao_loja(encomenda):
     """Cartão vinti4: o dinheiro foi direto para a conta da loja (contrato dela com a SISP) — a Bendi não o tem.
-    É a loja que devolve, com um estorno no Portal do Comerciante, como devolve uma transferência."""
+    É a loja que devolve, com um estorno no Portal do Comerciante, como devolve uma transferência.
+    Também quando não há Pagamento (cobrado depois de a encomenda ser cancelada): conta a transacção paga."""
     p = pagamento_de(encomenda)
-    return bool(p and p.fornecedor == 'vinti4')
+    if p:
+        return p.fornecedor == 'vinti4'
+    from ..models import TransacaoVinti4
+    return TransacaoVinti4.objects.filter(loja_id=encomenda.loja_id, estado='paga',
+                                          referencia__startswith=f'enc-{encomenda.id}-').exists()
 
 
 def como_devolve(encomenda):

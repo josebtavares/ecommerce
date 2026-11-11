@@ -259,11 +259,13 @@ def _confirmar_encomenda(f, conf, oid, tipo_metodo):
         raise ErroPagamento('Esta transacção já foi usada noutra encomenda.')
     # cobrado, mas a encomenda foi cancelada (expirou / a loja fechou) ou já estava paga → devolve-se
     if enc.status != 'pendente' or atual:
-        pago_depois_de_cancelada(enc, enc.valor_total, conf.transacao)
-        _avisar_reembolso(f'Reembolso necessário — Encomenda #{enc.id}',
+        cartao_loja = f.codigo == 'vinti4'          # o dinheiro foi para a conta da loja (contrato dela com a SISP)
+        pago_depois_de_cancelada(enc, enc.valor_total, conf.transacao, cartao_loja=cartao_loja)
+        _avisar_reembolso(f'Reembolso necessário — Encomenda #{enc.id} ({conf.transacao})',
                           f'{f.nome} confirmou {formatar(enc.valor_total)} (tx {conf.transacao}) para uma encomenda '
                           f'{"cancelada" if enc.status == "cancelado" else "já paga"} da loja {enc.loja.nome}. '
-                          f'Reembolsa o cliente.', loja=enc.loja)
+                          + ('Resolve o pedido em Devoluções: a loja faz o estorno no Portal do Comerciante da SISP.'
+                             if cartao_loja else 'Reembolsa o cliente.'), loja=enc.loja)
         return _resultado('encomenda', enc, 'reembolso', destino)
     metodo = MetodoPagamento.objects.filter(loja=enc.loja, tipo=tipo_metodo).first()
     aprovar_encomenda(enc, metodo, conf.transacao, f.codigo)
@@ -310,9 +312,11 @@ def _confirmar_marcacao(f, conf, oid, _metodo):
         # cobrado, mas a marcação já não pode ser paga (expirou, foi cancelada, já estava paga) → devolve-se
         registar('marcacao', 'pago_sem_efeito', objeto_id=m.id, loja_id=m.loja_id, valor=m.preco_indicado,
                            metodo=f.codigo, referencia=conf.transacao, dados={'motivo': str(e)})
-        _avisar_reembolso(f'Reembolso necessário — Marcação #{m.id}',
+        _avisar_reembolso(f'Reembolso necessário — Marcação #{m.id} ({conf.transacao})',
                           f'{f.nome} confirmou {formatar(m.preco_indicado)} (tx {conf.transacao}) para uma marcação '
-                          f'que já não pode ser paga ({e}). Reembolsa o cliente.', loja=m.loja)
+                          f'que já não pode ser paga ({e}). '
+                          + ('O dinheiro está na conta da loja (cartão vinti4): pede-lhe o estorno no Portal do '
+                             'Comerciante da SISP.' if f.codigo == 'vinti4' else 'Reembolsa o cliente.'), loja=m.loja)
         return _resultado('marcacao', m, 'reembolso', destino)
     return _resultado('marcacao', m, 'pago', destino)
 

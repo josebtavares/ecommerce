@@ -15,7 +15,7 @@ from django.utils import timezone
 from .models import TransacaoVinti4, Utilizador
 from .pagamentos import ErroPagamento, obter
 from .pagamentos import vinti4 as v4
-from .pagamentos.base import Cobranca
+from .pagamentos.base import Cobranca, Confirmacao
 from .pagamentos.servico import DadosClienteEmFalta
 
 CHAVE = '123456789A'
@@ -784,8 +784,9 @@ class PerguntarASisp(TestCase):
         self.u = _utilizador()
 
     def _tx(self, minutos=9):
-        inicio = obter('vinti4').iniciar(Cobranca(referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T',
-                                                  pagador=self.u))
+        self.n = getattr(self, 'n', 6) + 1          # uma fatura por transacção (só uma a decorrer de cada vez)
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'fat-{self.n}-cartao-1', valor=Decimal('1500'),
+                                                  descricao='T', pagador=self.u))
         tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
         TransacaoVinti4.objects.filter(pk=tx.pk).update(criada_em=timezone.now() - timedelta(minutes=minutos))
         return tx
@@ -1054,3 +1055,128 @@ class PagamentosDaLoja(TestCase):
 def _ficheiro(conteudo, nome='VBVT.txt'):
     from django.core.files.uploadedfile import SimpleUploadedFile
     return SimpleUploadedFile(nome, conteudo, content_type='text/plain')
+
+
+@override_settings(**CRED)
+class UmPagamentoDeCadaVez(TestCase):
+    """Com um pagamento com cartão ainda na página da SISP, não se começa outro para a mesma coisa."""
+
+    def setUp(self):
+        self.u = _utilizador()
+        self.f = obter('vinti4')
+
+    def _iniciar(self, ref='enc-12-cartao-1'):
+        return self.f.iniciar(Cobranca(referencia=ref, valor=Decimal('1500'), descricao='T', pagador=self.u))
+
+    def test_bloqueia_e_liberta(self):
+        primeiro = TransacaoVinti4.objects.get(ref=self._iniciar().campos['merchantRef'])
+        with self.assertRaisesMessage(ErroPagamento, 'Já há um pagamento com cartão a decorrer'):
+            self._iniciar('enc-12-cartao-2')
+        self._iniciar('enc-13-cartao-1')                    # outra encomenda: pode
+        self._iniciar('mar-12-cartao-1')                    # uma marcação com o mesmo número: pode
+        v4.processar_resposta({'merchantRef': primeiro.ref, 'UserCancelled': 'true'})
+        self._iniciar('enc-12-cartao-3')                    # cancelou na SISP: fica livre logo
+        TransacaoVinti4.objects.filter(referencia__startswith='enc-12-').update(
+            criada_em=timezone.now() - timedelta(minutes=9))
+        self._iniciar('enc-12-cartao-4')                    # passaram os 8 minutos: fica livre
+
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID)
+class IdentificadorEstavel(TestCase):
+    """Confirmada pela API de estado e depois reconciliada pelo VBVT: o regresso do cliente continua a reconhecer o
+    mesmo pagamento (não vira um pagamento a dobrar com pedido de reembolso)."""
+
+    def test_vbvt_nao_muda_a_transacao(self):
+        from .pagamentos import vbvt
+        u = _utilizador()
+        inicio = obter('vinti4').iniciar(Cobranca(referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T',
+                                                  pagador=u))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga', confirmada_por='estado', efeito='pago')
+        antes = TransacaoVinti4.objects.get(pk=tx.pk).transacao
+        f = vbvt.processar(_vbvt([_compra(tx.ref, 1500, comissao=Decimal('10'))]))
+        self.assertEqual(f.estado, 'aplicado', f.erros)
+        tx.refresh_from_db()
+        self.assertIsNotNone(tx.reconciliada_em)
+        self.assertEqual(tx.transacao, antes)
+        self.assertEqual(f.linhas[0]['transacao'], '987-26')            # o nº da SISP fica na linha do ficheiro
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4', PAGAMENTOS_FORNECEDOR_BENDI='vinti4')
+class PagamentoTardioDaLoja(TestCase):
+    """Cartão vinti4 da loja cobrado depois de a encomenda ser cancelada, ou a dobrar: o dinheiro está na conta da
+    loja — é ela que faz o estorno (nunca o simulado), e a encomenda paga não é cancelada."""
+
+    def setUp(self):
+        from .models import Encomenda
+        self.dono = _utilizador('donotardio')
+        self.loja = _loja(self.dono)
+        self.cliente = _utilizador('clientetardio')
+        self.enc = Encomenda.objects.create(comprador=self.cliente, loja=self.loja, valor_total=Decimal('2300'))
+        self.admin = _utilizador('admintardio')
+        self.admin.user.is_staff = True
+        self.admin.user.save(update_fields=['is_staff'])
+
+    def _paga(self, n):
+        from .pagamentos import servico
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'enc-{self.enc.id}-cartao-{n}', valor=Decimal('2300'),
+                                                  descricao='E', pagador=self.cliente, loja=self.loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga', tid=str(100 + n), periodo='987')
+        tx.refresh_from_db()
+        conf = Confirmacao(sucesso=True, referencia=tx.referencia, transacao=tx.transacao, valor=Decimal('2300'),
+                           moeda=v4._moeda())
+        return servico.confirmar(v4.FORNECEDOR, conf), tx
+
+    def test_cancelada_depois_paga(self):
+        from .models import Reembolso
+        from .utils import devolucoes
+        self.enc.status = 'cancelado'
+        self.enc.save(update_fields=['status'])
+        res, tx = self._paga(1)
+        self.assertEqual(res['estado'], 'reembolso')
+        r = Reembolso.objects.get(encomenda=self.enc)
+        from .models import MensagemReembolso
+        self.assertIn('A loja vai devolver', MensagemReembolso.objects.filter(reembolso=r).first().texto)
+        self.assertTrue(devolucoes._pagou_com_cartao_loja(self.enc))
+        self._paga(1)                                           # o mesmo regresso outra vez: não repete o pedido
+        self.assertEqual(Reembolso.objects.filter(encomenda=self.enc).count(), 1)
+        devolucoes.admin_decidir(r, self.admin, 'reembolsar')
+        r.refresh_from_db()
+        # a loja devolve com estorno (manual), nunca "reembolsado" pelo simulado
+        self.assertEqual((r.estado, r.metodo), ('a_devolver', 'manual'))
+
+    def test_pago_a_dobrar_nao_cancela(self):
+        from .models import Reembolso
+        from .utils import devolucoes
+        res, _ = self._paga(1)
+        self.assertEqual(res['estado'], 'pago')
+        res, segunda = self._paga(2)
+        self.assertEqual(res['estado'], 'reembolso')
+        r = Reembolso.objects.get(encomenda=self.enc, motivo='pagamento_tardio')
+        self.assertIn(segunda.transacao, r.descricao)
+        devolucoes.admin_decidir(r, self.admin, 'reembolsar')
+        self.enc.refresh_from_db()
+        r.refresh_from_db()
+        self.assertEqual(self.enc.status, 'pago')               # a encomenda paga continua
+        self.assertEqual((r.estado, r.metodo), ('a_devolver', 'manual'))
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4')
+class EncomendaEsperaPeloCartao(TestCase):
+    """Passados os 30 minutos, uma encomenda com o cliente ainda na página da SISP não é cancelada."""
+
+    def test_espera(self):
+        from .models import Encomenda
+        from .utils.encomendas import expirar_por_pagar
+        dono, cliente = _utilizador('donoespera'), _utilizador('clienteespera')
+        loja = _loja(dono)
+        enc = Encomenda.objects.create(comprador=cliente, loja=loja, valor_total=Decimal('900'))
+        Encomenda.objects.filter(pk=enc.pk).update(data_criacao=timezone.now() - timedelta(minutes=35))
+        obter('vinti4').iniciar(Cobranca(referencia=f'enc-{enc.id}-cartao-1', valor=Decimal('900'), descricao='E',
+                                         pagador=cliente, loja=loja))
+        self.assertEqual(expirar_por_pagar(), 0)
+        enc.refresh_from_db()
+        self.assertEqual(enc.status, 'pendente')
+        # 8 minutos depois sem resposta: já cancela
+        self.assertEqual(expirar_por_pagar(timezone.now() + timedelta(minutes=9)), 1)

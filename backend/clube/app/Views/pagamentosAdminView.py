@@ -474,8 +474,10 @@ def vinti4_lista(request):
     pagina, total = _paginar(request, qs)
     lojas = (TransacaoVinti4.objects.filter(loja__isnull=False).order_by('loja__nome')
              .values_list('loja_id', 'loja__nome').distinct())        # para o filtro "Loja"
+    from ..pagamentos import vinti4
     return Response({'count': total, 'results': [_v4_item(t) for t in pagina], **cartao_listas.contagens(base),
-                     'lojas': [{'id': i, 'nome': n} for i, n in lojas]})
+                     'lojas': [{'id': i, 'nome': n} for i, n in lojas],
+                     'ambiente': vinti4.ambiente(), 'ligado': vinti4.em_uso()})
 
 
 @api_view(['GET'])

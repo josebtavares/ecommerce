@@ -114,6 +114,40 @@ def _igual(a, b):
     return bool(a) and bool(b) and hmac.compare_digest(str(a).strip(), str(b).strip())
 
 
+# ── ambiente (teste / produção) ─────────────────────────────────
+
+def em_uso():
+    """O vinti4 está ligado (vendas das lojas ou cobranças da Bendi)."""
+    return 'vinti4' in (getattr(settings, 'PAGAMENTOS_FORNECEDOR', ''), getattr(settings, 'PAGAMENTOS_FORNECEDOR_BENDI', ''))
+
+
+def ambiente():
+    """'teste' se algum endereço da SISP é o do ambiente de teste (os valores por omissão), senão 'producao'."""
+    urls = (settings.VINTI4_URL, settings.VINTI4_ESTADO_URL)
+    return 'teste' if any('teste' in str(u or '').lower() for u in urls) else 'producao'
+
+
+def verificar_configuracao(app_configs=None, **kwargs):
+    """System check (python manage.py check, arranque): em produção (DEBUG=False) com o vinti4 ligado, os
+    endereços da SISP têm de ser os de produção — por omissão são os de teste e os pagamentos iam lá parar."""
+    from django.core.checks import Warning as Aviso      # aviso, não erro: um erro parava o worker e os comandos
+    import sys
+    if not em_uso() or settings.DEBUG or 'test' in sys.argv[1:2]:       # os testes correm com DEBUG=False
+        return []
+    problemas = []
+    if ambiente() == 'teste':
+        problemas.append(Aviso('vinti4 ligado em produção com os endereços de TESTE da SISP',
+                               hint='Define VINTI4_URL e VINTI4_ESTADO_URL com os endereços de produção que a SISP enviar.',
+                               id='bendi.vinti4.W000'))
+    if not settings.VINTI4_MERCHANT_ID.strip():
+        problemas.append(Aviso('VINTI4_MERCHANT_ID por definir: os ficheiros VBVT da Bendi são recusados',
+                               id='bendi.vinti4.W001'))
+    if not (settings.VINTI4_PORTAL_ID.strip() and settings.VINTI4_PORTAL_PASSWORD.strip()):
+        problemas.append(Aviso('VINTI4_PORTAL_ID/VINTI4_PORTAL_PASSWORD por definir: os pagamentos sem resposta '
+                               'ficam por confirmar (sem API de estado)', id='bendi.vinti4.W002'))
+    return problemas
+
+
 # ── credenciais ─────────────────────────────────────────────────
 
 @dataclass
@@ -499,6 +533,24 @@ def consultar_agora(tx_id):
     return tx, resultado, corpo
 
 
+def _sem_outro_a_decorrer(referencia):
+    """Um pagamento com cartão de cada vez para a mesma encomenda/marcação/fatura/cobrança: com outro ainda na
+    página da SISP (iniciado há menos de 8 minutos, sem resposta) podiam ficar os dois cobrados. Quem cancela na
+    página da SISP fica livre logo; quem só fecha a página espera o fim dos 8 minutos."""
+    from ..models import TransacaoVinti4
+    from .servico import ler_referencia
+    lido = ler_referencia(referencia)
+    if not lido:
+        return
+    agora = timezone.now()
+    aberta = (TransacaoVinti4.objects.filter(referencia__startswith=f'{lido[0]}-{lido[1]}-', estado='iniciada',
+                                             criada_em__gt=agora - TEMPO_LIMITE).order_by('-criada_em').first())
+    if aberta:
+        falta = max(1, int((aberta.criada_em + TEMPO_LIMITE - agora).total_seconds() // 60) + 1)
+        raise ErroPagamento(f'Já há um pagamento com cartão a decorrer para isto. Se fechaste a página da SISP sem '
+                            f'pagar, tenta outra vez dentro de {falta} min — assim não pagas duas vezes.')
+
+
 # ── o fornecedor ────────────────────────────────────────────────
 
 class Vinti4(Fornecedor):
@@ -517,6 +569,7 @@ class Vinti4(Fornecedor):
         if cobrar <= 1:                         # a SISP recusa valores iguais ou abaixo de 1$00
             raise ErroPagamento('O valor é demasiado baixo para pagar com cartão.')
         cred = credenciais(cobranca.loja)
+        _sem_outro_a_decorrer(cobranca.referencia)
         tx = TransacaoVinti4.objects.create(
             ref=_novo('B'), sessao=_novo('S'), referencia=cobranca.referencia[:80], loja=cobranca.loja,
             pos_id=cred.pos_id, utilizador=pagador.user, valor=valor, montante=cobrar,

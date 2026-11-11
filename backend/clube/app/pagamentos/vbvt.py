@@ -336,7 +336,9 @@ def processar(conteudo, nome='', utilizador=None, forcar=False, loja=None):
                     tx.comissao_sisp = c.get('comissao')
                     tx.tipo_cartao = (c.get('cartao') or '')[:5]
                     if not tx.tid:          # confirmada pela API de estado: o ficheiro traz o nº da transacção
-                        tx.periodo, tx.tid = str(c['periodo']), str(c['tid'])
+                        # o período e o tid NÃO se mudam: tx.transacao ('v4_<ref>' sem tid) já foi gravado no
+                        # Pagamento/Fatura e é a chave que reconhece o mesmo pagamento num regresso posterior —
+                        # mudá-lo fazia parecer um pagamento a dobrar. O nº da SISP fica na linha do ficheiro.
                         tx.message_id = tx.message_id or c['message_id'][:20]
                         tx.pan = tx.pan or (c.get('pan') or '')[:21]
                     mudadas[tx.pk] = tx
