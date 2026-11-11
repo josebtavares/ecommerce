@@ -116,6 +116,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 
 export default {
   name: 'SeccaoDocumentos',
@@ -138,7 +139,13 @@ export default {
     hojeIso () { return new Date().toISOString().slice(0, 10) },
   },
 
-  created () { this.carregar() },
+  created () {
+    this.carregar()
+    // a Bendi aprova ou recusa um documento → a lista e o resumo mudam sem refresh (utils/tempo_real_listas.py)
+    this.pararTempoReal = ouvirListas('loja', () => { if (!this.aEnviar) this.carregar() }, { lojaId: this.lojaId })
+  },
+
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
     aplicar (data) {
