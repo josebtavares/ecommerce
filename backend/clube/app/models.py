@@ -2660,7 +2660,11 @@ class AdesaoVinti4(models.Model):
         ('ativa',       'Ativa'),
         ('suspensa',    'Suspensa'),
     ]
+    # pedido = a loja pediu a adesão pela Bendi (todos os requisitos + ficha); contrato = já tinha contrato com a
+    # SISP (só NIF, contactos e o comprovativo do contrato, que a Bendi aprova antes de ligar o cartão)
+    MODOS = [('pedido', 'Pedido de adesão'), ('contrato', 'Já tinha contrato')]
     loja            = models.OneToOneField(Loja, on_delete=models.CASCADE, related_name='vinti4')
+    modo            = models.CharField(max_length=8, choices=MODOS, default='pedido', db_default='pedido')
     estado          = models.CharField(max_length=12, choices=ESTADOS, default='pedida')
     pos_id          = models.CharField(max_length=40, blank=True, default='')
     merchant_id     = models.CharField(max_length=40, blank=True, default='')
@@ -2705,6 +2709,7 @@ class DocumentoLoja(models.Model):
         ('nif',           'Cartão de contribuinte (NIF)'),
         ('licenca',       'Licença ou alvará'),
         ('banco',         'Comprovativo do NIB/IBAN'),
+        ('contrato_sisp', 'Contrato ou comprovativo de adesão vinti4 (SISP)'),
         ('outro',         'Outro documento'),
     ]
     ESTADOS = [('pendente', 'Por verificar'), ('aprovado', 'Aprovado'), ('rejeitado', 'Rejeitado')]
