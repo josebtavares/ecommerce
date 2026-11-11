@@ -23,10 +23,12 @@ ADMIN = {
     'pos':        ('ver_pos',),
     'encomenda':  ('gerir_encomendas',),
     'denuncia':   ('moderar_chat',),
+    'cartao':     (),                                     # o admin já recebe pelo painel (tempo_real_painel)
 }
 # também para a equipa da loja (e o dono): 'loja' = dados da loja, documentos e adesão vinti4 — a secção
 # "Pagamento com cartão (vinti4)" e os Documentos das Configurações recarregam sozinhos
-DA_LOJA = ('produto', 'inventario', 'loja')
+# 'cartao' = backoffice → Pagamentos: transacções vinti4 da loja e ficheiros VBVT do contrato dela
+DA_LOJA = ('produto', 'inventario', 'loja', 'cartao')
 
 
 def _admins(permissoes):
@@ -97,7 +99,8 @@ def _ao_mudar(origem, loja_de=lambda o: getattr(o, 'loja_id', None), so_campos=N
 
 def ligar():
     from django.contrib.auth.models import User
-    from ..models import AdesaoVinti4, DocumentoLoja, Encomenda, Inventario, Loja, Produto, Utilizador, VarianteProduto
+    from ..models import (AdesaoVinti4, DocumentoLoja, Encomenda, FicheiroVBVT, Inventario, Loja, Produto,
+                          TransacaoVinti4, Utilizador, VarianteProduto)
     from ..chat.models import Denuncia
     from ..pos.models import ConfiguracaoPOS, ContaMesa
 
@@ -121,3 +124,10 @@ def ligar():
     ligar_modelo('denuncia', Denuncia, loja_de=lambda o: None)
     ligar_modelo('pos', ConfiguracaoPOS, loja_de=lambda o: None)
     ligar_modelo('pos', ContaMesa, loja_de=lambda o: None, so_campos={'status'})
+    # só o que se vê na lista (estado, VBVT, estorno) — as respostas e consultas gravadas não avisam
+    ligar_modelo('cartao', TransacaoVinti4, so_campos={'estado', 'reconciliada_em', 'estornada_em'})
+
+    def loja_do_ficheiro(f):
+        from ..pagamentos.vbvt import lojas_do_mid
+        return f.loja_id or next(iter(lojas_do_mid(f.merchant_id)), None)
+    ligar_modelo('cartao', FicheiroVBVT, loja_de=loja_do_ficheiro)

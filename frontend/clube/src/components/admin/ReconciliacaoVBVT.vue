@@ -1,8 +1,9 @@
 <template>
-  <!-- Admin → Pagamentos → Cartão (vinti4) → Reconciliação: ficheiros VBVT diários da SISP (Plan Test 36–37).
-       Backend: Views/pagamentosAdminView.py vbvt / vbvt_detalhe, pagamentos/vbvt.py -->
+  <!-- Reconciliação: ficheiros VBVT diários da SISP (Plan Test 36–37). Admin → Pagamentos → Cartão (todos:
+       Views/pagamentosAdminView.py vbvt) e backoffice da loja → Pagamentos (só os do contrato da loja:
+       Views/lojaCartaoView.py vbvt). Leitura e comparação: pagamentos/vbvt.py -->
   <div class="space-y-4" data-teste="vbvt">
-    <form class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-3" @submit.prevent="enviar">
+    <form v-if="podeAgir" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-3" @submit.prevent="enviar">
       <div>
         <p class="text-sm font-semibold text-zinc-200">Carregar ficheiro de reconciliação (VBVT)</p>
         <p class="text-[11px] text-zinc-500 mt-0.5">
@@ -13,6 +14,9 @@
       </div>
       <p v-if="semMerchantId" class="text-[11px] text-amber-300">
         O Merchant ID da Bendi não está definido (variável VINTI4_MERCHANT_ID): só se aceitam ficheiros das lojas com contrato.
+      </p>
+      <p v-if="lojaSemMerchantId" class="text-[11px] text-amber-300" data-teste="vbvt-sem-mid">
+        A loja ainda não tem o Merchant ID do contrato vinti4 — preenche-o em Configurações → Pagamento com cartão.
       </p>
       <div class="flex flex-wrap items-center gap-3">
         <input ref="ficheiro" type="file" accept=".txt,.dat,.vbvt,text/plain" @change="escolhido = $event.target.files[0] || null"
@@ -28,6 +32,22 @@
       </div>
       <p v-if="erro" class="text-sm text-red-400" role="alert">{{ erro }}</p>
     </form>
+
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="text-[11px] text-zinc-500">Estado
+        <select v-model="filtro.estado" @change="carregar(0)" data-teste="vbvt-filtro-estado"
+                class="block mt-1 px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200">
+          <option value="">Todos</option><option value="aplicado">Aplicados</option><option value="rejeitado">Rejeitados</option>
+        </select>
+      </label>
+      <label v-if="admin" class="text-[11px] text-zinc-500">De quem
+        <select v-model="filtro.dono" @change="carregar(0)" data-teste="vbvt-filtro-dono"
+                class="block mt-1 px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 max-w-[12rem]">
+          <option value="">Todos</option><option value="bendi">Bendi</option>
+          <option v-for="l in lojas" :key="l.id" :value="String(l.id)">{{ l.nome }}</option>
+        </select>
+      </label>
+    </div>
 
     <div v-if="carregando && !d" class="h-32 bg-zinc-900 rounded-2xl animate-pulse"></div>
     <div v-else-if="d" class="bg-zinc-900 rounded-2xl border border-zinc-800 divide-y divide-zinc-800" data-teste="vbvt-lista">
@@ -79,7 +99,7 @@
                   <td class="pr-3 text-right tabular-nums whitespace-nowrap">{{ l.valor }}<template v-if="l.valor_nosso"> (cá {{ l.valor_nosso }})</template></td>
                   <td class="pr-3">{{ aberto.resultados[l.resultado] || l.resultado }}</td>
                   <td>
-                    <button v-if="l.resultado === 'paga_so_na_sisp' && l.tx_id" type="button" :disabled="perguntando === l.tx_id"
+                    <button v-if="podeAgir && l.resultado === 'paga_so_na_sisp' && l.tx_id" type="button" :disabled="perguntando === l.tx_id"
                             @click="perguntar(l)" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 whitespace-nowrap">
                       {{ perguntando === l.tx_id ? 'A perguntar…' : 'Perguntar à SISP' }}</button>
                     <span v-if="respostas[l.tx_id]" class="block text-zinc-400">{{ respostas[l.tx_id] }}</span>
@@ -112,14 +132,23 @@ export default {
   name: 'ReconciliacaoVBVT',
   components: { PaginacaoLista },
   emits: ['mudou'],
+  props: {
+    base: { type: String, default: '/app/admin/pagamentos/vbvt' },
+    baseCartao: { type: String, default: '/app/admin/pagamentos/vinti4' },      // "Perguntar à SISP" por linha
+    admin: { type: Boolean, default: true },
+    lojas: { type: Array, default: () => [] },
+    podeAgir: { type: Boolean, default: true },
+  },
   data () {
     return {
       LIMITE, d: null, offset: 0, carregando: false, erro: '', escolhido: null, enviando: false, forcar: false,
+      filtro: { estado: '', dono: '' },
       sequenciaPartida: false, aberto: null, copiado: false, perguntando: null, respostas: {},
     }
   },
   computed: {
-    semMerchantId () { return this.d && this.d.merchant_id_bendi === false },
+    semMerchantId () { return this.admin && this.d && this.d.merchant_id_bendi === false },
+    lojaSemMerchantId () { return !this.admin && this.d?.contrato && !this.d.contrato.merchant_id },
   },
   created () { this.carregar(0) },
   methods: {
@@ -130,7 +159,9 @@ export default {
       const silencioso = !!this.d          // tempo real: recarrega por baixo, sem esconder a lista
       if (!silencioso) this.carregando = true
       try {
-        const { data } = await api.get('/app/admin/pagamentos/vbvt/', { params: { limit: LIMITE, offset } })
+        const params = { limit: LIMITE, offset }
+        for (const [k, v] of Object.entries(this.filtro)) if (v) params[k] = v
+        const { data } = await api.get(`${this.base}/`, { params })
         this.d = data
       } catch (e) {
         if (!silencioso) this.erro = e.response?.data?.detail || 'Não foi possível carregar os ficheiros.'
@@ -144,7 +175,7 @@ export default {
         const fd = new FormData()
         fd.append('ficheiro', this.escolhido)
         if (this.forcar) fd.append('forcar', '1')
-        const { data } = await api.post('/app/admin/pagamentos/vbvt/', fd)
+        const { data } = await api.post(`${this.base}/`, fd)
         this.sequenciaPartida = data.estado === 'rejeitado' && data.erros.some(e => e.erro.startsWith('Sequência'))
         this.forcar = false
         if (data.estado === 'aplicado') {
@@ -161,7 +192,7 @@ export default {
     async abrir (f) {
       if (this.aberto?.id === f.id) { this.aberto = null; return }
       try {
-        const { data } = await api.get(`/app/admin/pagamentos/vbvt/${f.id}/`)
+        const { data } = await api.get(`${this.base}/${f.id}/`)
         this.aberto = data
         this.copiado = false
       } catch (e) { this.erro = e.response?.data?.detail || 'Não foi possível abrir o ficheiro.' }
@@ -175,7 +206,7 @@ export default {
     async perguntar (l) {
       this.perguntando = l.tx_id
       try {
-        const { data } = await api.post(`/app/admin/pagamentos/vinti4/${l.tx_id}/consultar/`)
+        const { data } = await api.post(`${this.baseCartao}/${l.tx_id}/consultar/`)
         this.respostas = { ...this.respostas, [l.tx_id]: `${data.resposta?.msg || ''} → ${data.transacao.estado_nome}` }
         this.$emit('mudou')
       } catch (e) {

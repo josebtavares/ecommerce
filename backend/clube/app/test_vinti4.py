@@ -872,3 +872,185 @@ class TempoRealCartao(TestCase):
         r = api.post('/app/pagamento/regresso/', {'fornecedor': 'vinti4', 'ref': tx.ref}, format='json')
         self.assertEqual(r.status_code, 400)
         self.assertNotIn('codigo', r.json())
+
+
+# ── backoffice da loja → Pagamentos (Views/lojaCartaoView.py) e o VBVT separado por comerciante ──
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID, PAGAMENTOS_FORNECEDOR='vinti4', PAGAMENTOS_FORNECEDOR_BENDI='vinti4')
+class PagamentosDaLoja(TestCase):
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+        from .models import AdesaoVinti4
+        self.dono = _utilizador('donoa')
+        self.loja = _loja(self.dono)
+        self.outro = _utilizador('donob')
+        self.outra = _loja(self.outro, pos_id='90077')
+        AdesaoVinti4.objects.filter(loja=self.loja).update(merchant_id='9000101')
+        AdesaoVinti4.objects.filter(loja=self.outra).update(merchant_id='9000202')
+        self.cliente = _utilizador('comprador')
+        self.f = obter('vinti4')
+        self.api = APIClient()
+        self.api.force_authenticate(self.dono.user)
+
+    def _tx(self, loja=None, referencia='enc-5-cartao-1', estado='paga', valor=2300):
+        inicio = self.f.iniciar(Cobranca(referencia=referencia, valor=Decimal(valor), descricao='Compra',
+                                         pagador=self.cliente, loja=loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado=estado)
+        tx.refresh_from_db()
+        return tx
+
+    def _url(self, resto='', loja=None):
+        return f'/app/loja/{(loja or self.loja).id}/cartao/{resto}'
+
+    def test_so_ve_as_suas(self):
+        minha = self._tx(self.loja)
+        self._tx(self.outra)
+        self._tx(None, referencia='fat-7-cartao-1')                     # mensalidade da Bendi
+        r = self.api.get(self._url())
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        d = r.json()
+        self.assertEqual([t['id'] for t in d['results']], [minha.id])
+        self.assertNotIn('lojas', d)                                     # a lista de lojas é só do admin
+        self.assertEqual(d['totais']['pagas'], 1)
+        self.assertEqual(d['totais']['valor_pago'], '2300.00')
+        self.assertTrue(d['contrato']['merchant_id'])
+        # a ficha, o CSV e o "Perguntar à SISP" de outra loja dão 404 / 403
+        alheia = TransacaoVinti4.objects.exclude(loja=self.loja).first()
+        self.assertEqual(self.api.get(self._url(f'{alheia.id}/')).status_code, 404)
+        self.assertEqual(self.api.post(self._url(f'{alheia.id}/consultar/')).status_code, 404)
+        self.assertEqual(self.api.get(self._url(loja=self.outra)).status_code, 403)
+        csv = self.api.get(self._url('csv/'))
+        self.assertEqual(csv.status_code, 200)
+        self.assertIn(minha.ref, csv.content.decode('utf-8'))
+        self.assertNotIn(alheia.ref, csv.content.decode('utf-8'))
+        ficha = self.api.get(self._url(f'{minha.id}/')).json()
+        self.assertEqual(ficha['destino'], f'/loja/{self.loja.id}/backoffice/encomendas/5')
+
+    def test_so_o_dono(self):
+        from rest_framework.test import APIClient
+        from .models import UtilizadorLoja
+        gestor = _utilizador('gestora')
+        UtilizadorLoja.objects.create(loja=self.loja, utilizador=gestor, role='gestor', ativo=True)
+        api = APIClient()
+        api.force_authenticate(gestor.user)
+        self.assertEqual(api.get(self._url()).status_code, 403)
+        self.assertEqual(api.get(self._url('vbvt/')).status_code, 403)
+
+    def test_filtros_e_contagens(self):
+        paga = self._tx(self.loja)
+        self._tx(self.loja, estado='por_confirmar')
+        self._tx(self.loja, referencia='mar-3-cartao-1', estado='falhada')
+        d = self.api.get(self._url(), {'estado': 'paga'}).json()
+        self.assertEqual([t['id'] for t in d['results']], [paga.id])
+        # as contagens dos botões não dependem do estado escolhido
+        self.assertEqual({e['valor']: e['n'] for e in d['estados']}['falhada'], 1)
+        self.assertEqual(d['totais']['por_confirmar'], 1)
+        self.assertEqual(self.api.get(self._url(), {'tipo': 'marcacao'}).json()['count'], 1)
+        self.assertEqual(self.api.get(self._url(), {'reconciliacao': 'falta'}).json()['count'], 1)
+        self.assertEqual(self.api.get(self._url(), {'reconciliacao': 'feita'}).json()['count'], 0)
+        self.assertEqual(self.api.get(self._url(), {'q': paga.ref}).json()['count'], 1)
+        hoje = timezone.localdate().isoformat()
+        self.assertEqual(self.api.get(self._url(), {'de': hoje, 'ate': hoje}).json()['count'], 3)
+        for mau in ({'estado': 'xpto'}, {'tipo': 'xpto'}, {'reconciliacao': 'x'}, {'de': '2026-13-01'},
+                    {'de': '2026-11-10', 'ate': '2026-11-01'}):
+            self.assertEqual(self.api.get(self._url(), mau).status_code, 400, mau)
+        p = self.api.get(self._url(), {'limit': 2, 'offset': 2}).json()
+        self.assertEqual((p['count'], len(p['results'])), (3, 1))
+
+    def test_vbvt_so_do_contrato_da_loja(self):
+        from .models import FicheiroVBVT
+        minha = self._tx(self.loja)
+        alheia = self._tx(self.outra)
+        # o ficheiro de outro comerciante é recusado e fica registado na loja que o carregou, não na outra
+        r = self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(alheia.ref, 2300)], mid='9000202'))})
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.json()['estado'], 'rejeitado')
+        self.assertIn('não é o do contrato vinti4 desta loja', r.json()['erros'][0]['erro'])
+        alheia.refresh_from_db()
+        self.assertIsNone(alheia.reconciliada_em)
+        from rest_framework.test import APIClient
+        api_b = APIClient()
+        api_b.force_authenticate(self.outro.user)
+        self.assertEqual(api_b.get(self._url('vbvt/', loja=self.outra)).json()['count'], 0)
+        # o ficheiro dela é aplicado; uma linha com a referência de outra loja não lhe toca ("não é nossa")
+        r = self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(minha.ref, 2300, comissao=10),
+                                                                            _compra(alheia.ref, 2300)], mid='9000101'))})
+        d = r.json()
+        self.assertEqual(d['estado'], 'aplicado', d['erros'])
+        self.assertEqual([l['resultado'] for l in d['linhas']], ['ok', 'desconhecida'])
+        minha.refresh_from_db()
+        alheia.refresh_from_db()
+        self.assertIsNotNone(minha.reconciliada_em)
+        self.assertIsNone(alheia.reconciliada_em)
+        lista = self.api.get(self._url('vbvt/')).json()
+        self.assertEqual([f['estado'] for f in lista['results']], ['aplicado', 'rejeitado'])
+        self.assertEqual(self.api.get(self._url('vbvt/'), {'estado': 'aplicado'}).json()['count'], 1)
+        alheio = FicheiroVBVT.objects.create(nome='x', hash='h', merchant_id='9000202', estado='aplicado')
+        self.assertEqual(self.api.get(self._url(f'vbvt/{alheio.id}/')).status_code, 404)
+        # os totais já contam a comissão da SISP
+        self.assertEqual(self.api.get(self._url()).json()['totais']['liquido'], '2290.00')
+
+    def test_ficheiro_da_bendi_nao_toca_nas_lojas(self):
+        from .pagamentos import vbvt
+        da_loja = self._tx(self.loja)
+        da_bendi = self._tx(None, referencia='fat-7-cartao-1')
+        f = vbvt.processar(_vbvt([_compra(da_loja.ref, 2300), _compra(da_bendi.ref, 2300)]))     # Merchant ID da Bendi
+        self.assertEqual([l['resultado'] for l in f.linhas], ['desconhecida', 'ok'])
+        da_loja.refresh_from_db()
+        self.assertIsNone(da_loja.reconciliada_em)
+
+    def test_avisa_o_dono_e_os_admins(self):
+        from .models import Notificacao
+        from .models import EmailEnviado
+        admin = _utilizador('adminpag')
+        admin.user.is_staff = True
+        admin.user.save(update_fields=['is_staff'])
+        admin.role_admin = next(r for r, p in Utilizador.PERMISSOES_ADMIN.items() if 'gerir_pagamentos' in p)
+        admin.email_confirmado = True
+        admin.save(update_fields=['role_admin', 'email_confirmado'])
+        Utilizador.objects.filter(pk=self.dono.pk).update(email_confirmado=True)
+        nao_paga = self._tx(self.loja, estado='por_confirmar')
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(nao_paga.ref, 2300)], mid='9000101'))})
+        self.assertEqual(r.json()['linhas'][0]['resultado'], 'paga_so_na_sisp')
+        avisos = Notificacao.objects.filter(tipo='vinti4')
+        self.assertEqual(set(avisos.values_list('utilizador_id', flat=True)), {self.dono.id, admin.id})
+        self.assertEqual(avisos.get(utilizador=self.dono).link, f'/loja/{self.loja.id}/backoffice/pagamentos')
+        self.assertEqual(EmailEnviado.objects.filter(tipo='aviso_vinti4').count(), 2)
+        # um ficheiro sem diferenças de dinheiro não avisa
+        Notificacao.objects.all().delete()
+        ok = self._tx(self.loja)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(ok.ref, 2300)], mid='9000101', data='20261113',
+                                                                          ant='20261112', seq_ant=1))})
+        self.assertFalse(Notificacao.objects.filter(tipo='vinti4').exists())
+
+    def test_tempo_real_da_loja(self):
+        with mock.patch('app.utils.tempo_real_listas.emitir') as emitir:
+            tx = self._tx(self.loja)
+            self.assertIn(mock.call('cartao', self.loja.id), emitir.call_args_list)
+            emitir.reset_mock()
+            tx.respostas = [{'x': 1}]
+            tx.save(update_fields=['respostas'])                       # só a resposta guardada: não avisa
+            self.assertNotIn(mock.call('cartao', self.loja.id), emitir.call_args_list)
+            tx.estado = 'cancelada'
+            tx.save(update_fields=['estado'])
+            self.assertIn(mock.call('cartao', self.loja.id), emitir.call_args_list)
+
+    def test_admin_filtra_por_loja(self):
+        api = _admin_api('adminfiltro')
+        self._tx(self.loja)
+        self._tx(self.outra)
+        d = api.get('/app/admin/pagamentos/vinti4/', {'loja_id': self.loja.id}).json()
+        self.assertEqual(d['count'], 1)
+        self.assertEqual({l['id'] for l in d['lojas']}, {self.loja.id, self.outra.id})
+        self.assertEqual(api.get('/app/admin/pagamentos/vinti4/', {'loja_id': 'x'}).status_code, 400)
+        self.assertEqual(api.get('/app/admin/pagamentos/vinti4/csv/').status_code, 200)
+        self.assertEqual(api.get('/app/admin/pagamentos/vbvt/', {'dono': self.loja.id}).status_code, 200)
+
+
+def _ficheiro(conteudo, nome='VBVT.txt'):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    return SimpleUploadedFile(nome, conteudo, content_type='text/plain')

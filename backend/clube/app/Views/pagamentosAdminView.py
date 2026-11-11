@@ -425,63 +425,75 @@ def bende_csv(request):
     return r
 
 
-# ── Cartão (vinti4): cada ida à página da SISP, com o que a SISP respondeu ──
-#   GET /app/admin/pagamentos/vinti4/?estado=&credenciais=bendi|lojas&de=&ate=&q=&limit=&offset=
+# ── Cartão (vinti4): cada ida à página da SISP, com o que a SISP respondeu (pagamentos/cartao_listas.py) ──
+#   GET /app/admin/pagamentos/vinti4/?estado=&reconciliacao=&tipo=&credenciais=bendi|lojas&loja_id=&de=&ate=&q=&limit=&offset=
+#   GET /app/admin/pagamentos/vinti4/csv/   (os mesmos filtros)
 #   GET /app/admin/pagamentos/vinti4/<id>/      (com as respostas guardadas)
 
 def _v4_item(t, completo=False):
-    from ..pagamentos.servico import TIPOS, destino, ler_referencia
-    lido = ler_referencia(t.referencia)
-    d = {'id': t.id, 'ref': t.ref, 'referencia': t.referencia, 'tipo': TIPOS.get(lido[0], '') if lido else '',
-         'loja': {'id': t.loja_id, 'nome': t.loja.nome} if t.loja_id else None,
-         'pos_id': t.pos_id, 'pagador': (t.utilizador.get_full_name() or t.utilizador.username) if t.utilizador_id else '',
-         'valor': str(t.valor), 'montante': t.montante, 'descricao': t.descricao,
-         'estado': t.estado, 'estado_nome': t.get_estado_display(), 'transacao': t.transacao if t.tid else '',
-         'pan': t.pan, 'erro_codigo': t.erro_codigo, 'erro': t.erro, 'mensagem': t.mensagem,
-         'dcc': t.dcc, 'confirmada_por': t.confirmada_por, 'efeito': t.efeito, 'consultas': t.consultas,
-         'criada_em': _quando(t.criada_em), 'terminada_em': _quando(t.terminada_em),
-         'reconciliada_em': _quando(t.reconciliada_em), 'estornada_em': _quando(t.estornada_em),
-         'comissao_sisp': str(t.comissao_sisp) if t.comissao_sisp is not None else '', 'tipo_cartao': t.tipo_cartao}
-    if completo:          # o caminho no site pede uma consulta por linha: só na ficha
-        d['destino'] = destino(t.referencia)[1]
-        d['respostas'] = t.respostas
-    return d
+    from ..pagamentos import cartao_listas
+    return cartao_listas.item(t, completo=completo)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def vinti4_lista(request):
+def _v4_filtrado(request):
+    """→ (qs, base, erro)"""
     from ..models import TransacaoVinti4
-    erro = _exige(request)
-    if erro:
-        return erro
+    from ..pagamentos import cartao_listas
     de, ate, erro = _datas(request)
     if erro:
-        return erro
-    qs = TransacaoVinti4.objects.select_related('loja', 'utilizador').order_by('-criada_em')
-    estados = dict(TransacaoVinti4.ESTADOS)
-    estado = request.GET.get('estado')
-    if estado in estados:
-        qs = qs.filter(estado=estado)
+        return None, None, erro
+    qs = TransacaoVinti4.objects.select_related('loja', 'utilizador')
     cred = request.GET.get('credenciais')
     if cred == 'bendi':
         qs = qs.filter(loja__isnull=True)
     elif cred == 'lojas':
         qs = qs.filter(loja__isnull=False)
-    if request.GET.get('reconciliacao') == 'falta':        # pagas cá que nenhum ficheiro VBVT confirmou ainda
-        qs = qs.filter(estado='paga', reconciliada_em__isnull=True)
-    if de:
-        qs = qs.filter(criada_em__date__gte=de)
-    if ate:
-        qs = qs.filter(criada_em__date__lte=ate)
-    q = str(request.GET.get('q') or '').strip()[:60]
-    if q:
-        qs = qs.filter(Q(ref__icontains=q) | Q(referencia__icontains=q) | Q(descricao__icontains=q)
-                       | Q(loja__nome__icontains=q) | Q(utilizador__username__icontains=q) | Q(utilizador__email__icontains=q))
-    contagem = dict(qs.order_by().values_list('estado').annotate(n=Count('id')))
+    loja_id = request.GET.get('loja_id')
+    if loja_id:
+        if not str(loja_id).isdigit():
+            return None, None, Response({'detail': 'Loja inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+        qs = qs.filter(loja_id=int(loja_id))
+    try:
+        qs, base = cartao_listas.filtrar(qs, request.GET, de, ate, admin=True)
+    except cartao_listas.FiltroInvalido as e:
+        return None, None, Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return qs, base, None
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vinti4_lista(request):
+    from ..pagamentos import cartao_listas
+    erro = _exige(request)
+    if erro:
+        return erro
+    qs, base, erro = _v4_filtrado(request)
+    if erro:
+        return erro
+    from ..models import TransacaoVinti4
     pagina, total = _paginar(request, qs)
-    return Response({'count': total, 'results': [_v4_item(t) for t in pagina],
-                     'estados': [{'valor': k, 'nome': v, 'n': contagem.get(k, 0)} for k, v in TransacaoVinti4.ESTADOS]})
+    lojas = (TransacaoVinti4.objects.filter(loja__isnull=False).order_by('loja__nome')
+             .values_list('loja_id', 'loja__nome').distinct())        # para o filtro "Loja"
+    return Response({'count': total, 'results': [_v4_item(t) for t in pagina], **cartao_listas.contagens(base),
+                     'lojas': [{'id': i, 'nome': n} for i, n in lojas]})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vinti4_csv(request):
+    from ..pagamentos import cartao_listas
+    erro = _exige(request)
+    if erro:
+        return erro
+    qs, _, erro = _v4_filtrado(request)
+    if erro:
+        return erro
+    if qs.count() > cartao_listas.MAX_CSV:
+        return Response({'detail': f'Mais de {cartao_listas.MAX_CSV} transações — escolhe um período mais curto.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    r = HttpResponse(_csv(cartao_listas.csv_linhas(qs, admin=True)), content_type='text/csv; charset=utf-8')
+    r['Content-Disposition'] = f'attachment; filename="cartao-vinti4-{timezone.localdate()}.csv"'
+    return r
 
 
 @api_view(['GET'])
@@ -544,6 +556,16 @@ def vbvt(request):
         return erro
     if request.method == 'GET':
         qs = FicheiroVBVT.objects.select_related('loja', 'carregado_por').order_by('-carregado_em')
+        dono = request.GET.get('dono')                  # bendi | <loja_id>
+        if dono == 'bendi':
+            qs = qs.filter(loja__isnull=True)
+        elif dono and str(dono).isdigit():
+            from ..pagamentos.vbvt import mid_da_loja
+            loja = Loja.objects.filter(id=int(dono)).first()
+            qs = qs.filter(merchant_id=mid_da_loja(loja)) if loja and mid_da_loja(loja) else qs.none()
+        estado = request.GET.get('estado')
+        if estado in ('aplicado', 'rejeitado'):
+            qs = qs.filter(estado=estado)
         pagina, total = _paginar(request, qs)
         return Response({'count': total, 'results': [_vbvt_item(f) for f in pagina],
                          'merchant_id_bendi': bool(settings.VINTI4_MERCHANT_ID.strip())})

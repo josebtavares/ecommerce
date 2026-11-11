@@ -460,6 +460,7 @@ class UtilizadorLoja(models.Model):
             'gerir_servicos',
             'gerir_marcacoes',
             'gerir_faturacao',         # aba Faturação: comprovativos e faturas de todas as vendas
+            'ver_pagamentos_cartao',   # aba Pagamentos: cartão vinti4 (contrato da loja), VBVT — só o dono
         ],
         'gestor': [
             'ver_loja',

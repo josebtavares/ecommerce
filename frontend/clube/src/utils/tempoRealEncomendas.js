@@ -52,7 +52,7 @@ export function ouvirAvisos (evento, fn, { filtro = () => true, espera = 400, ma
 export function ouvirEncomendas (fn, opcoes) { return ouvirAvisos(EVENTO_ENCOMENDA, fn, opcoes) }
 export function ouvirSubscricoes (fn, opcoes) { return ouvirAvisos(EVENTO_SUBSCRICAO, fn, opcoes) }
 export function ouvirFaturacao (fn, opcoes) { return ouvirAvisos(EVENTO_FATURACAO, fn, opcoes) }
-// origens: uma ou várias ('produto', 'inventario', 'loja', 'utilizador', 'pos', 'encomenda', 'denuncia');
+// origens: uma ou várias ('produto', 'inventario', 'loja', 'utilizador', 'pos', 'encomenda', 'denuncia', 'cartao');
 // lojaId: só os avisos dessa loja. Com muitos avisos seguidos (vendas), recarrega no máximo de 5 em 5 s.
 export function ouvirListas (origens, fn, { lojaId = null, ...opcoes } = {}) {
   const lista = [].concat(origens)
