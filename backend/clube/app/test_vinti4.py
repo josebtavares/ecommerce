@@ -351,3 +351,60 @@ class Perfil(TestCase):
         self.assertFalse(UtilizadorSerializer(u, data={'concelho': 'XX'}, partial=True).is_valid())
         self.assertFalse(UtilizadorSerializer(u, data={'pais': 'ZZ'}, partial=True).is_valid())
         self.assertFalse(UtilizadorSerializer(u, data={'codigo_postal': '<script>'}, partial=True).is_valid())
+
+
+# ── fase 2: cobranças da Bendi (faturas de subscrição, comissões) pelo vinti4, vendas das lojas à parte ──
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='simulado', PAGAMENTOS_FORNECEDOR_BENDI='vinti4')
+class CobrancasBendi(TestCase):
+
+    def setUp(self):
+        self.u = _utilizador()
+
+    def test_fornecedores_separados(self):
+        from .pagamentos import ativo, ativo_bendi, bendi_cobra_a_serio, cobra_a_serio
+        self.assertEqual(ativo().codigo, 'simulado')
+        self.assertEqual(ativo_bendi().codigo, 'vinti4')
+        self.assertFalse(cobra_a_serio())
+        self.assertTrue(bendi_cobra_a_serio())
+        with override_settings(PAGAMENTOS_FORNECEDOR_BENDI=''):
+            self.assertEqual(ativo_bendi().codigo, 'simulado')       # por omissão, o mesmo das vendas
+
+    def test_fatura_vai_ao_vinti4(self):
+        from types import SimpleNamespace
+        from .pagamentos import servico
+        fatura = SimpleNamespace(id=31, estado='pendente', valor=Decimal('2500.00'), descricao='Plano Loja — 11/2026')
+        inicio = servico.iniciar_fatura(fatura, self.u)
+        self.assertEqual(inicio.estado, 'redirecionar')
+        corpo = servico.para_frontend(inicio)
+        self.assertEqual(corpo['redirecionar']['fornecedor'], 'vinti4')
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        self.assertIsNone(tx.loja_id)                    # credenciais da Bendi
+        self.assertEqual(tx.pos_id, '90051')
+        self.assertTrue(tx.referencia.startswith('fat-31-'))
+        self.assertEqual(inicio.campos['amount'], '2500')
+
+    def test_comissoes_vao_ao_vinti4(self):
+        from datetime import date
+        from types import SimpleNamespace
+        from .pagamentos import servico
+        c = SimpleNamespace(id=8, estado='pendente', valor=Decimal('730.40'), mes=date(2026, 10, 1),
+                            loja=SimpleNamespace(nome='Loja X'))
+        inicio = servico.iniciar_cobranca_comissoes(c, self.u)
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        self.assertTrue(tx.referencia.startswith('com-8-'))
+        self.assertEqual(inicio.campos['amount'], '730')          # escudos inteiros (arredonda a metade para cima)
+
+    def test_sem_dados_pede_os(self):
+        from types import SimpleNamespace
+        from .pagamentos import servico
+        u = _utilizador('semdados', telefone='', concelho='')
+        fatura = SimpleNamespace(id=32, estado='pendente', valor=Decimal('1000'), descricao='POS')
+        with self.assertRaises(DadosClienteEmFalta) as ctx:
+            servico.iniciar_fatura(fatura, u)
+        corpo = servico.erro_para_frontend(ctx.exception)
+        self.assertEqual(corpo['codigo'], 'dados_cliente')
+        self.assertEqual(corpo['campos'], ['telefone', 'cidade'])
+        self.assertFalse(TransacaoVinti4.objects.filter(referencia__startswith='fat-32-').exists())
+        with self.assertRaises(ErroPagamento):                    # POS sem dono (nunca deve acontecer)
+            servico.iniciar_fatura(fatura, None)

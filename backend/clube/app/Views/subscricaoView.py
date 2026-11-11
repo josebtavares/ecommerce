@@ -15,7 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import FaturaSubscricao, Loja, PlanoSubscricao, Subscricao
-from ..pagamentos import ErroPagamento
+from ..pagamentos import ErroPagamento, bendi_cobra_a_serio
 from ..pagamentos import servico as pagamentos
 from ..utils import subscricoes as subs
 from ..utils.pagination import paginar_lista
@@ -164,6 +164,7 @@ def _resumo_loja(loja, membro):
         'servicos': {**cobranca.resumo(loja),
                      'aviso': subs.aviso_loja(sub_serv, pend_serv) if sub_serv else None},
         'pode_pagar': membro.pode('pagar_subscricao'),
+        'pagamento_simulado': not bendi_cobra_a_serio(),
         'planos': [subs.plano_payload(p) for p in subs.planos_ativos()],
         # os POS do dono ligados a esta loja (o plano Loja + POS inclui-os)
         'pos_ligados': [{'id': p.id, 'nome': p.nome, 'codigo': p.codigo_pos,
@@ -219,7 +220,9 @@ def loja_fatura_pagar(request, loja_id, fatura_id):
     fatura = get_object_or_404(FaturaSubscricao, id=fatura_id, loja=loja)
     try:
         inicio = pagamentos.iniciar_fatura(fatura, request.user.utilizador)
-    except (subs.ErroFatura, ErroPagamento) as e:
+    except ErroPagamento as e:
+        return Response(pagamentos.erro_para_frontend(e), status=status.HTTP_400_BAD_REQUEST)
+    except subs.ErroFatura as e:
         return _erro(str(e))
     if inicio.estado == 'redirecionar':          # paga na página do fornecedor
         return Response(pagamentos.para_frontend(inicio))

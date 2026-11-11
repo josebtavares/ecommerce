@@ -47,6 +47,7 @@ class Inicio:
     url: str = ''
     metodo_http: str = 'GET'
     campos: dict = field(default_factory=dict)
+    fornecedor: str = ''            # código de quem o devolveu (servico.para_frontend)
 
 
 @dataclass

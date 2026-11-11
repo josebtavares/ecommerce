@@ -18,7 +18,7 @@ from django.db import transaction
 
 from ..utils.banco import online_suspenso
 from ..utils.dinheiro import formatar, valor_cobranca
-from . import ativo, obter
+from . import ativo, ativo_bendi, obter
 from .base import Cobranca, ErroPagamento
 
 # pagos fora da plataforma (a loja confirma quando recebe) e pagos online pelo fornecedor da plataforma.
@@ -79,6 +79,12 @@ def exigir_dados_cliente(utilizador, morada=''):
         falta.append('cidade')
     if falta:
         raise DadosClienteEmFalta(falta)
+
+
+def _iniciar(f, cobranca):
+    inicio = f.iniciar(cobranca)
+    inicio.fornecedor = f.codigo
+    return inicio
 
 
 def _regresso():
@@ -226,7 +232,7 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
     exigir_dados_cliente(utilizador, encomenda.morada_entrega)
     f = ativo()
     loja = encomenda.loja
-    inicio = f.iniciar(Cobranca(
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('enc', encomenda.id, tipo_metodo), valor=encomenda.valor_total,
         descricao=f'Encomenda #{encomenda.id}', titulo=loja.nome, logo=loja.logo.url if loja.logo else '',
         cliente=_cliente(utilizador), regresso=_regresso(), pagador=utilizador, loja=loja,
@@ -274,7 +280,7 @@ def iniciar_marcacao(m, utilizador):
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — a marcação não pode ser paga agora.')
     exigir_dados_cliente(utilizador)
     f = ativo()
-    inicio = f.iniciar(Cobranca(
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('mar', m.id, 'cartao'), valor=m.preco_indicado,
         descricao=f'Marcação: {m.servico_nome}', titulo=m.loja.nome, logo=m.loja.logo.url if m.loja.logo else '',
         cliente=_cliente(utilizador), regresso=_regresso(), pagador=utilizador, loja=m.loja))
@@ -321,8 +327,8 @@ def iniciar_fatura(fatura, utilizador):
     from ..utils import subscricoes as subs
     if fatura.estado != 'pendente':
         raise ErroPagamento('Esta fatura já não está por pagar.')
-    f = ativo()
-    inicio = f.iniciar(Cobranca(
+    f = ativo_bendi()
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('fat', fatura.id, 'cartao'), valor=fatura.valor,
         descricao=fatura.descricao[:100], titulo='Bendi', cliente=_cliente(utilizador), regresso=_regresso(),
         pagador=utilizador))
@@ -371,8 +377,8 @@ def iniciar_cobranca_comissoes(c, utilizador):
     if c.estado != 'pendente':
         raise ErroPagamento('Esta cobrança já não está por pagar.')
     from ..utils import cobranca_comissoes as cc
-    f = ativo()
-    inicio = f.iniciar(Cobranca(
+    f = ativo_bendi()
+    inicio = _iniciar(f, Cobranca(
         referencia=nova_referencia('com', c.id, 'cartao'), valor=c.valor,
         descricao=f'Comissões até {c.mes:%m/%Y} — {c.loja.nome}'[:100], titulo='Bendi', cliente=_cliente(utilizador),
         regresso=_regresso(), pagador=utilizador))
@@ -442,10 +448,16 @@ def destino(referencia):
     return 'comissoes', f'/loja/{loja_id}/backoffice/subscricao' if loja_id else ''
 
 
+def erro_para_frontend(e):
+    """ErroPagamento → corpo da resposta 400 (dados do cliente em falta: o frontend pede-os ali mesmo)."""
+    extra = {'codigo': e.codigo, 'campos': e.campos} if isinstance(e, DadosClienteEmFalta) else {}
+    return {'detail': str(e), **extra}
+
+
 def para_frontend(inicio, **extra):
     """Inicio → o que o frontend precisa (utils/pagamentoOnline.js segue o redirecionamento)."""
     corpo = {'estado': inicio.estado, **extra}
     if inicio.estado == 'redirecionar':
         corpo['redirecionar'] = {'url': inicio.url, 'metodo': inicio.metodo_http, 'campos': inicio.campos,
-                                 'fornecedor': ativo().codigo}
+                                 'fornecedor': inicio.fornecedor or ativo().codigo}
     return corpo

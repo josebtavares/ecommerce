@@ -7,7 +7,8 @@ Pagamentos online — uma só porta para todos os fornecedores.
   vinti4.py       SISP (Pagamento Web 3DS): formulário para a SISP, resposta com FingerPrint, API de estado
   servico.py      o que acontece a seguir: encomenda/marcação/fatura paga, reembolsos
 
-O fornecedor é da PLATAFORMA (settings.PAGAMENTOS_FORNECEDOR), nunca da loja: a loja só escolhe que
+O fornecedor é da PLATAFORMA (settings.PAGAMENTOS_FORNECEDOR; o das cobranças da Bendi — faturas de subscrição e
+comissões — é settings.PAGAMENTOS_FORNECEDOR_BENDI, por omissão o mesmo), nunca da loja: a loja só escolhe que
 métodos aceita (cartão, mobile money…) e dá os dados bancários. No vinti4 as credenciais é que mudam:
 as da Bendi para comissões e subscrições, as da adesão de cada loja para as vendas dela.
 """
@@ -18,7 +19,7 @@ from .flutterwave import Flutterwave
 from .simulado import Simulado
 from .vinti4 import FORNECEDOR as VINTI4
 
-__all__ = ['Cobranca', 'Confirmacao', 'ErroPagamento', 'Fornecedor', 'Inicio', 'FORNECEDORES', 'obter', 'ativo', 'cobra_a_serio']
+__all__ = ['Cobranca', 'Confirmacao', 'ErroPagamento', 'Fornecedor', 'Inicio', 'FORNECEDORES', 'obter', 'ativo', 'ativo_bendi', 'cobra_a_serio', 'bendi_cobra_a_serio']
 
 FORNECEDORES = {f.codigo: f for f in (Simulado(), Flutterwave(), VINTI4)}
 
@@ -32,6 +33,15 @@ def obter(codigo):
 
 def ativo():
     return obter(getattr(settings, 'PAGAMENTOS_FORNECEDOR', 'simulado'))
+
+
+def ativo_bendi():
+    """O que cobra à loja/POS o que deve à Bendi (faturas de subscrição, comissões)."""
+    return obter(getattr(settings, 'PAGAMENTOS_FORNECEDOR_BENDI', '') or getattr(settings, 'PAGAMENTOS_FORNECEDOR', 'simulado'))
+
+
+def bendi_cobra_a_serio():
+    return ativo_bendi().codigo != 'simulado'
 
 
 def cobra_a_serio():

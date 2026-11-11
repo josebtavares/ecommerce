@@ -217,6 +217,8 @@ VOYAGE_RERANK       = os.environ.get('VOYAGE_RERANK', 'rerank-3')   # vazio desl
 EMAIL_SUPORTE       = os.environ.get('EMAIL_SUPORTE', '')
 # fornecedor dos pagamentos online da plataforma (app/pagamentos): simulado até haver contrato (SISP)
 PAGAMENTOS_FORNECEDOR = os.environ.get('PAGAMENTOS_FORNECEDOR', 'simulado')
+# o das cobranças da própria Bendi (faturas de subscrição, comissões) — pode ir para o vinti4 antes das vendas das lojas
+PAGAMENTOS_FORNECEDOR_BENDI = os.environ.get('PAGAMENTOS_FORNECEDOR_BENDI', '') or PAGAMENTOS_FORNECEDOR
 # vinti4 / SISP (app/pagamentos/vinti4.py). Credenciais da Bendi (CV PRIME STORE): recebem só comissões e
 # subscrições — as vendas das lojas usam as credenciais de cada loja (AdesaoVinti4). Sem POS ID → desligado.
 VINTI4_URL          = os.environ.get('VINTI4_URL', 'https://3dsteste.vinti4net.cv/3ds_middleware_php/public/3ds_init.php')
