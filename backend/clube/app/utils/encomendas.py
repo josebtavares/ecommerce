@@ -342,6 +342,28 @@ def cartao_a_decorrer(encomenda, agora=None):
                                           criada_em__gt=agora - TEMPO_LIMITE).exists()
 
 
+def minutos_cartao_a_decorrer(utilizador, loja, agora=None):
+    """Uma nova encomenda substitui as por pagar (cancelar_anteriores_por_pagar) — mas não se o cliente está a pagar
+    uma delas na página da SISP: o pagamento chegava a uma encomenda cancelada e ficava cobrado a dobrar.
+    → minutos até poder tentar outra vez (0 = nada a decorrer)."""
+    from django.utils import timezone
+    from ..models import Encomenda, TransacaoVinti4
+    from ..pagamentos.vinti4 import TEMPO_LIMITE
+    agora = agora or timezone.now()
+    ids = list(Encomenda.objects.filter(comprador=utilizador, loja=loja, status='pendente').values_list('id', flat=True))
+    if not ids:
+        return 0
+    from django.db.models import Q
+    filtro = Q()
+    for i in ids:
+        filtro |= Q(referencia__startswith=f'enc-{i}-')
+    aberta = (TransacaoVinti4.objects.filter(filtro, estado='iniciada', criada_em__gt=agora - TEMPO_LIMITE)
+              .order_by('-criada_em').first())
+    if not aberta:
+        return 0
+    return max(1, int((aberta.criada_em + TEMPO_LIMITE - agora).total_seconds() // 60) + 1)
+
+
 def _cancelar_por_pagar(encomenda, mensagem_cliente=None, avisar_loja=True):
     """Cancela uma encomenda por pagar (já bloqueada com select_for_update) e repõe o stock."""
     from ..Views.notificacaoView import notificar, notificar_staff

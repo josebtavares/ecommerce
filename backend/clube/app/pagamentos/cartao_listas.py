@@ -102,7 +102,50 @@ def item(t, completo=False, destino_loja=None):
     if completo:          # o caminho no site pede uma consulta por linha: só na ficha
         d['destino'] = destino_loja(lido[0], lido[1]) if (destino_loja and lido) else destino(t.referencia)[1]
         d['respostas'] = t.respostas
+        d['reembolsos'] = reembolsos(t, lido, loja=destino_loja is not None) if lido else []
     return d
+
+
+def reembolsos(t, lido, loja=False):
+    """
+    O dinheiro desta transacção que volta (ou vai voltar) ao cliente — para a ficha mostrar o pedido de reembolso e
+    o estado dele, com o caminho para o tratar (Devoluções no backoffice da loja ou no admin):
+    • encomenda: os pedidos de reembolso dela (o de um pagamento tardio/a dobrar é o desta transacção);
+    • marcação: o reembolso guardado na própria marcação (cancelamento, preço mais baixo, pagamento tardio).
+    Só de transacções pagas (as outras não cobraram nada).
+    """
+    if t.estado != 'paga':
+        return []
+    from ..utils.dinheiro import formatar
+    tipo, oid = lido[0], lido[1]
+    if tipo == 'enc':
+        from ..models import Reembolso
+        qs = Reembolso.objects.filter(encomenda_id=oid).order_by('id')
+        if t.efeito == 'reembolso':             # cobrada depois de cancelada / a dobrar: só o pedido dela
+            qs = qs.filter(motivo='pagamento_tardio', descricao=f'Transacção cobrada: {t.transacao}')
+        else:
+            qs = qs.exclude(motivo='pagamento_tardio')
+        return [{'id': r.id, 'titulo': f'Pedido de reembolso #{r.id} · {r.get_motivo_display()}',
+                 'estado': r.estado, 'estado_nome': r.get_estado_display(),
+                 'valor': formatar(r.valor_aprovado if r.valor_aprovado is not None else r.valor_pedido),
+                 'referencia': r.referencia, 'em': _quando(r.data_reembolso),
+                 'link': f'/loja/{r.loja_id}/backoffice/devolucoes/{r.id}' if loja else f'/admin/devolucoes/{r.id}'}
+                for r in qs]
+    if tipo == 'mar':
+        from ..servicos.marcacoes import por_reembolsar
+        from ..servicos.models import Marcacao
+        m = Marcacao.objects.filter(pk=oid).first()
+        if not m or not m.reembolso_devido:
+            return []
+        falta = por_reembolsar(m)
+        devolvido = m.valor_reembolsado >= m.reembolso_devido
+        estado = 'reembolsado' if devolvido else 'por_reembolsar' if falta else 'pedido'
+        nomes = {'reembolsado': 'Devolvido', 'por_reembolsar': 'Estorno por fazer' if m.pagamento_fornecedor == 'vinti4'
+                 else 'Reembolso por concluir', 'pedido': 'A devolver'}
+        return [{'id': m.id, 'titulo': f'Reembolso da marcação #{m.id}', 'estado': estado, 'estado_nome': nomes[estado],
+                 'valor': formatar(m.reembolso_devido), 'referencia': '', 'em': _quando(m.reembolsado_em) if devolvido else '',
+                 'link': f'/loja/{m.loja_id}/backoffice/servicos' if loja else '/admin/devolucoes?grupo=por_concluir'}]
+    return []
 
 
 def csv_linhas(qs, admin=False):

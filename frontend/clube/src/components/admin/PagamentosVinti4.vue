@@ -149,6 +149,20 @@
               {{ perguntando ? 'A perguntar…' : 'Perguntar à SISP' }}</button>
             <span v-if="consulta" :class="consulta.erro ? 'text-red-300' : 'text-zinc-300'" data-teste="v4-consulta">{{ consulta.texto }}</span>
           </div>
+          <div v-if="aberto.reembolsos?.length" class="space-y-1" data-teste="v4-reembolsos">
+            <p class="font-semibold text-zinc-300">Reembolsos deste pagamento</p>
+            <router-link v-for="r in aberto.reembolsos" :key="r.titulo" :to="r.link" :data-teste="`v4-reembolso-${r.estado}`"
+                         class="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-zinc-800 px-2 py-1.5 hover:bg-zinc-900">
+              <span class="text-zinc-200">{{ r.titulo }}</span>
+              <span :class="['px-1.5 py-0.5 rounded-full text-[10px] font-semibold', r.estado === 'reembolsado'
+                ? 'bg-emerald-500/15 text-emerald-300' : ['recusado', 'cancelado'].includes(r.estado)
+                  ? 'bg-zinc-700/60 text-zinc-300' : 'bg-amber-500/15 text-amber-300']">{{ r.estado_nome }}</span>
+              <span class="tabular-nums text-zinc-300">{{ r.valor }}</span>
+              <span v-if="r.referencia" class="text-zinc-500">· estorno {{ r.referencia }}</span>
+              <span v-if="r.em" class="text-zinc-500">· {{ r.em }}</span>
+              <span class="ml-auto text-zinc-400">Abrir →</span>
+            </router-link>
+          </div>
           <p v-if="!admin && aberto.estado === 'paga'" class="text-zinc-500">
             Para devolver o dinheiro ao cliente usa Devoluções; o estorno do cartão faz-se no Portal do Comerciante da SISP.</p>
           <p v-if="aberto.erro" class="text-amber-300">Detalhe: {{ aberto.erro }}</p>

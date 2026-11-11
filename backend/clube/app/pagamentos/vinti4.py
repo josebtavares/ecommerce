@@ -46,6 +46,10 @@ ERRO = '6'
 TEMPO_LIMITE = timedelta(minutes=8)          # MOP021 2.2.2.3 / Plan Test 38
 CONSULTAS_MAX = 12                           # por_confirmar: tenta a API de 10 em 10 minutos durante 2 horas
 INTERVALO_CONSULTAS = timedelta(minutes=10)
+# depois das 12: continua a perguntar, devagar (o Portal pode ser indicado mais tarde, a API pode ter estado em baixo)
+INTERVALO_LENTO = timedelta(hours=6)
+PRAZO_CONSULTAS = timedelta(days=30)         # depois disto, só o "Perguntar à SISP" (à mão)
+CAMPOS_SESSAO = ('merchantSession', 'merchantRespMerchantSession')     # segredo: não se mostra nas respostas guardadas
 _ALFANUM = string.ascii_uppercase + string.digits
 
 
@@ -296,7 +300,8 @@ def erro_do_comerciante(mensagem):
 
 def _guardar_resposta(tx, origem, campos):
     """Junta o que a SISP mandou a tx.respostas (texto curto por campo, as últimas MAX_RESPOSTAS)."""
-    limpos = {str(k)[:60]: (v if isinstance(v, (bool, int, float)) or v is None else str(v)[:400])
+    limpos = {str(k)[:60]: ('…' if k in CAMPOS_SESSAO and v else
+                            v if isinstance(v, (bool, int, float)) or v is None else str(v)[:400])
               for k, v in list((campos or {}).items())[:60]}
     tx.respostas = (list(tx.respostas or []) + [{'em': timezone.now().isoformat(timespec='seconds'),
                                                   'origem': origem, 'campos': limpos}])[-MAX_RESPOSTAS:]
@@ -304,6 +309,29 @@ def _guardar_resposta(tx, origem, campos):
 
 def _cancelou(d):
     return _txt(d.get('userCancelled') or d.get('UserCancelled')).lower() == 'true'
+
+
+def _sessao_certa(tx, d):
+    """O cancelamento da SISP não leva FingerPrint, mas traz o merchantSession (aleatório, só foi no formulário
+    para a SISP — nunca nos endereços do site): sem ele certo, quem só sabe o merchantRef não cancela nada."""
+    return bool(tx.sessao) and _igual(_txt(d.get('merchantSession') or d.get('merchantRespMerchantSession')), tx.sessao)
+
+
+def _avisar_assinatura_invalida(tx, tipo):
+    """Resposta com o resultFingerPrint errado (alguém a forjar uma resposta, ou a chave mal configurada):
+    fica no registo e os admins são avisados — um aviso por hora."""
+    from datetime import timedelta
+    from ..models import Notificacao
+    from ..Views.notificacaoView import notificar_admins
+    titulo = 'vinti4: resposta com assinatura inválida'
+    if Notificacao.objects.filter(tipo='pagamento_erro', titulo__startswith=titulo,
+                                  data_criacao__gte=timezone.now() - timedelta(hours=1)).exists():
+        return
+    notificar_admins(tipo='pagamento_erro', titulo=f'{titulo} — {tx.ref}',
+                     mensagem=f'Chegou uma resposta de {tipo} para {tx.ref} ({tx.referencia}) com o resultFingerPrint '
+                              f'errado — foi ignorada. Se se repetir, confirma o posAutCode'
+                              + (' do contrato da loja.' if tx.loja_id else ' da Bendi (VINTI4_POS_AUT_CODE).'),
+                     loja=tx.loja, link='/admin/pagamentos', email=2)
 
 
 def _avisar_admins(titulo, mensagem, loja=None):
@@ -375,6 +403,7 @@ def processar_resposta(d):
             if not _igual(d.get('resultFingerPrint'), fingerprint_sucesso(chave, d)):
                 log.warning('vinti4: resultFingerPrint inválido na resposta de sucesso de %s', tx.ref)
                 _registar(tx, 'cartao_assinatura_invalida', anterior)
+                _avisar_assinatura_invalida(tx, 'sucesso')
                 return tx
             if tx.estado == 'paga':                     # a mesma resposta outra vez
                 return tx
@@ -403,6 +432,8 @@ def processar_resposta(d):
             chave = _credenciais_da(tx).chave
             if not _igual(d.get('resultFingerPrint'), fingerprint_erro(chave, d)):
                 log.warning('vinti4: resultFingerPrint inválido na resposta de erro de %s', tx.ref)
+                _registar(tx, 'cartao_assinatura_invalida', anterior)
+                _avisar_assinatura_invalida(tx, 'erro')
                 return tx
             if tx.estado == 'paga':
                 return tx
@@ -422,6 +453,10 @@ def processar_resposta(d):
                 _avisar_erro_comerciante(tx)
             return tx
         if _cancelou(d):
+            if not _sessao_certa(tx, d):
+                log.warning('vinti4: cancelamento sem o merchantSession certo para %s', tx.ref)
+                _registar(tx, 'cartao_cancelamento_invalido', anterior)
+                return tx
             if tx.estado in ('iniciada', 'por_confirmar'):
                 tx.estado, tx.terminada_em = 'cancelada', timezone.now()
                 tx.save(update_fields=['estado', 'terminada_em'])
@@ -466,13 +501,15 @@ def consultar(tx):
 
 def rever_sem_resposta(agora=None):
     """Worker, uma vez por minuto: as transacções sem resposta há mais de 8 minutos. → quantas mudaram."""
-    from django.db.models import Q
+    from django.db.models import F, Q
     from ..models import TransacaoVinti4
     agora = agora or timezone.now()
-    candidatas = TransacaoVinti4.objects.filter(
-        Q(estado='iniciada', criada_em__lt=agora - TEMPO_LIMITE)
-        | Q(estado='por_confirmar', consultas__lt=CONSULTAS_MAX, consultada_em__lt=agora - INTERVALO_CONSULTAS)
-    ).values_list('id', flat=True)[:50]
+    por_confirmar = Q(estado='por_confirmar', criada_em__gt=agora - PRAZO_CONSULTAS) & (
+        Q(consultada_em__isnull=True)
+        | Q(consultas__lt=CONSULTAS_MAX, consultada_em__lt=agora - INTERVALO_CONSULTAS)
+        | Q(consultas__gte=CONSULTAS_MAX, consultada_em__lt=agora - INTERVALO_LENTO))
+    candidatas = (TransacaoVinti4.objects.filter(Q(estado='iniciada', criada_em__lt=agora - TEMPO_LIMITE) | por_confirmar)
+                  .order_by(F('consultada_em').asc(nulls_first=True), 'id').values_list('id', flat=True)[:50])
     mudaram = 0
     for tid in list(candidatas):
         tx = TransacaoVinti4.objects.select_related('loja').get(pk=tid)
@@ -484,7 +521,7 @@ def rever_sem_resposta(agora=None):
             anterior = tx.estado
             if corpo is not None:
                 _guardar_resposta(tx, 'estado', corpo)
-            tx.consultas += 1
+                tx.consultas += 1           # sem Portal configurado (corpo None) não conta: quando chegar, pergunta-se
             tx.consultada_em = agora
             _mudar_pela_consulta(tx, resultado, agora)
             if tx.estado == anterior and resultado is None:

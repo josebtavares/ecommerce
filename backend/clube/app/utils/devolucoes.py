@@ -870,6 +870,11 @@ def pago_depois_de_cancelada(encomenda, valor, referencia, cartao_loja=False):
             else 'A equipa da Bendi vai devolver-te o dinheiro')
     mensagem(r, 'sistema', f'O pagamento de {formatar(valor)} {porque} ({referencia}). {quem.replace("-te", "")}.')
     _avisar_cliente(r, 'Vais ser reembolsado', f'O pagamento de {formatar(valor)} {porque}. {quem}.')
+    if cartao_loja:     # o dinheiro está na conta da loja: fica a saber já que vai ter um estorno para fazer
+        _avisar_loja(r, 'Pagamento com cartão a devolver',
+                     f'O cartão do cliente foi cobrado em {formatar(valor)} ({referencia}) e o pagamento {porque}. '
+                     f'A Bendi está a analisar; quando aprovar, faz o estorno no Portal do Comerciante da SISP e marca '
+                     f'"Estorno feito" no pedido.', email=None)
     return r
 
 

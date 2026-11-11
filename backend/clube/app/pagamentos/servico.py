@@ -309,14 +309,26 @@ def _confirmar_marcacao(f, conf, oid, _metodo):
         m.refresh_from_db()
         if m.pago and m.pagamento_referencia == conf.transacao:     # o aviso e o regresso chegaram ao mesmo tempo
             return _resultado('marcacao', m, 'pago', destino)
-        # cobrado, mas a marcação já não pode ser paga (expirou, foi cancelada, já estava paga) → devolve-se
+        # cobrado, mas a marcação já não pode ser paga (expirou, foi cancelada, já estava paga) → devolve-se:
+        # fica na marcação como reembolso por concluir (marcacoes.pago_sem_efeito), uma vez por transacção
+        from ..models import RegistoTransacao
+        if RegistoTransacao.objects.filter(tipo='marcacao', evento='pago_sem_efeito', objeto_id=m.id,
+                                           referencia=conf.transacao[:255]).exists():
+            return _resultado('marcacao', m, 'reembolso', destino)
         registar('marcacao', 'pago_sem_efeito', objeto_id=m.id, loja_id=m.loja_id, valor=m.preco_indicado,
-                           metodo=f.codigo, referencia=conf.transacao, dados={'motivo': str(e)})
+                 metodo=f.codigo, referencia=conf.transacao, dados={'motivo': str(e)})
+        registado = ops.pago_sem_efeito(m, f.codigo, conf.transacao, m.preco_indicado, str(e))
+        if f.codigo == 'vinti4':
+            como = ('Ficou na marcação como reembolso por concluir: a loja já foi avisada para fazer o estorno no '
+                    'Portal do Comerciante da SISP e marcar "Estorno feito" (Devoluções → por concluir).')
+        elif registado:
+            como = ('Ficou na marcação como reembolso: a devolução foi pedida ao fornecedor '
+                    '(Devoluções → por concluir, se falhar).')
+        else:
+            como = 'Reembolsa o cliente.'
         _avisar_reembolso(f'Reembolso necessário — Marcação #{m.id} ({conf.transacao})',
                           f'{f.nome} confirmou {formatar(m.preco_indicado)} (tx {conf.transacao}) para uma marcação '
-                          f'que já não pode ser paga ({e}). '
-                          + ('O dinheiro está na conta da loja (cartão vinti4): pede-lhe o estorno no Portal do '
-                             'Comerciante da SISP.' if f.codigo == 'vinti4' else 'Reembolsa o cliente.'), loja=m.loja)
+                          f'que já não pode ser paga ({e}). {como}', loja=m.loja)
         return _resultado('marcacao', m, 'reembolso', destino)
     return _resultado('marcacao', m, 'pago', destino)
 

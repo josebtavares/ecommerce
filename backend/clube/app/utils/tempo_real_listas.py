@@ -100,7 +100,7 @@ def _ao_mudar(origem, loja_de=lambda o: getattr(o, 'loja_id', None), so_campos=N
 def ligar():
     from django.contrib.auth.models import User
     from ..models import (AdesaoVinti4, DocumentoLoja, Encomenda, FicheiroVBVT, Inventario, Loja, Produto,
-                          TransacaoVinti4, Utilizador, VarianteProduto)
+                          Reembolso, TransacaoVinti4, Utilizador, VarianteProduto)
     from ..chat.models import Denuncia
     from ..pos.models import ConfiguracaoPOS, ContaMesa
 
@@ -131,3 +131,10 @@ def ligar():
         from ..pagamentos.vbvt import lojas_do_mid
         return f.loja_id or next(iter(lojas_do_mid(f.merchant_id)), None)
     ligar_modelo('cartao', FicheiroVBVT, loja_de=loja_do_ficheiro)
+
+    def loja_se_cartao(r):
+        """Pedido de reembolso de uma encomenda paga com cartão vinti4: a ficha da transacção mostra-o."""
+        if TransacaoVinti4.objects.filter(referencia__startswith=f'enc-{r.encomenda_id}-', estado='paga').exists():
+            return r.loja_id
+        return None
+    ligar_modelo('cartao', Reembolso, loja_de=loja_se_cartao, so_campos={'estado', 'referencia', 'data_reembolso'})
