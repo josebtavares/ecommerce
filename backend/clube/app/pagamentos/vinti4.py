@@ -452,11 +452,8 @@ def rever_sem_resposta(agora=None):
                 _guardar_resposta(tx, 'estado', corpo)
             tx.consultas += 1
             tx.consultada_em = agora
-            if resultado == 'paga':
-                tx.estado, tx.confirmada_por, tx.terminada_em = 'paga', 'estado', agora
-            elif resultado == 'nao_paga':
-                tx.estado, tx.terminada_em, tx.mensagem = 'expirada', agora, 'Sem resposta da SISP: o pagamento não foi feito.'
-            else:
+            _mudar_pela_consulta(tx, resultado, agora)
+            if tx.estado == anterior and resultado is None:
                 tx.estado = 'por_confirmar'
             tx.save()
             if tx.estado != anterior:
@@ -465,6 +462,41 @@ def rever_sem_resposta(agora=None):
             if tx.estado == 'paga':
                 _aplicar(tx)
     return mudaram
+
+
+def _mudar_pela_consulta(tx, resultado, agora):
+    """Transacção ainda em aberto + o que a API de estado disse → muda o estado (não grava)."""
+    if resultado == 'paga':
+        tx.estado, tx.confirmada_por, tx.terminada_em = 'paga', 'estado', agora
+    elif resultado == 'nao_paga':
+        tx.estado, tx.terminada_em, tx.mensagem = 'expirada', agora, 'Sem resposta da SISP: o pagamento não foi feito.'
+
+
+def consultar_agora(tx_id):
+    """Admin → "Perguntar à SISP" (Plan Test 39–41, e as que ficaram por confirmar ou que o VBVT diz aprovadas).
+    Pergunta sempre, mesmo a uma transacção já terminada (fica só registado o que a SISP disse); muda o estado só
+    se estiver em aberto: paga → aplica o pagamento; não paga → sem resposta, mas só passados os 8 minutos (antes
+    disso o cliente pode ainda estar na página da SISP). → (tx, resultado, corpo)."""
+    from ..models import TransacaoVinti4
+    tx = TransacaoVinti4.objects.select_related('loja').get(pk=tx_id)
+    resultado, corpo = consultar(tx)
+    if corpo is None:
+        raise ErroPagamento('A API de estado não está configurada: falta o Portal ID e a password do Portal do '
+                            'Comerciante' + (' desta loja.' if tx.loja_id else ' (VINTI4_PORTAL_ID / VINTI4_PORTAL_PASSWORD).'))
+    agora = timezone.now()
+    with transaction.atomic():
+        tx = TransacaoVinti4.objects.select_for_update(of=('self',)).select_related('loja').get(pk=tx_id)
+        anterior = tx.estado
+        _guardar_resposta(tx, 'estado', {**corpo, 'pedido_por': 'admin'})
+        if tx.estado in ('iniciada', 'por_confirmar'):
+            if resultado == 'paga' or (resultado == 'nao_paga' and tx.criada_em <= agora - TEMPO_LIMITE):
+                _mudar_pela_consulta(tx, resultado, agora)
+        tx.save()
+        if tx.estado != anterior:
+            _registar(tx, f'cartao_{tx.estado}', anterior)
+        if tx.estado == 'paga' and anterior != 'paga':
+            _aplicar(tx)
+    return tx, resultado, corpo
 
 
 # ── o fornecedor ────────────────────────────────────────────────

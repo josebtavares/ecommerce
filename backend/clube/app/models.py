@@ -2736,6 +2736,11 @@ class TransacaoVinti4(models.Model):
     respostas       = models.JSONField(default=list, blank=True)
     criada_em       = models.DateTimeField(auto_now_add=True, db_index=True)
     terminada_em    = models.DateTimeField(null=True, blank=True)
+    # do ficheiro de reconciliação VBVT (pagamentos/vbvt.py): a SISP conta-a como aprovada no fecho do dia
+    reconciliada_em = models.DateTimeField(null=True, blank=True)
+    comissao_sisp   = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    tipo_cartao     = models.CharField(max_length=5, blank=True, default='')     # vint4 | visa | MCARD | AMEX…
+    estornada_em    = models.DateTimeField(null=True, blank=True)                # estorno aprovado no VBVT
 
     class Meta:
         ordering = ['-criada_em']
@@ -2747,6 +2752,37 @@ class TransacaoVinti4(models.Model):
     def transacao(self):
         """Identificador da transacção na rede vinti4 (periodo + tid), com prefixo — vai para Pagamento/Fatura."""
         return f'v4_{self.periodo}-{self.tid}' if self.tid else f'v4_{self.ref}'
+
+
+class FicheiroVBVT(models.Model):
+    """
+    Ficheiro de reconciliação diário da SISP (MOP021 3; Plan Test 36–37), carregado no admin. Fica sempre registado,
+    também quando é rejeitado (o resultado do processamento manda-se à SISP na certificação). Só os aplicados contam
+    para a sequência (data + sequência do anterior, por Merchant ID).
+    """
+    ESTADOS = [('aplicado', 'Aplicado'), ('rejeitado', 'Rejeitado')]
+    nome            = models.CharField(max_length=200, blank=True, default='')
+    hash            = models.CharField(max_length=64, db_index=True)            # sha256 do conteúdo
+    merchant_id     = models.CharField(max_length=15, blank=True, default='', db_index=True)   # sem zeros à esquerda
+    loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, null=True, blank=True, related_name='ficheiros_vbvt')
+    data            = models.DateField(null=True, blank=True)
+    sequencia       = models.PositiveSmallIntegerField(null=True, blank=True)
+    data_anterior   = models.DateField(null=True, blank=True)
+    sequencia_anterior = models.PositiveSmallIntegerField(null=True, blank=True)
+    estado          = models.CharField(max_length=10, choices=ESTADOS)
+    forcado         = models.BooleanField(default=False)                         # aceite com a sequência partida
+    erros           = models.JSONField(default=list, blank=True)                 # [{linha, erro}]
+    avisos          = models.JSONField(default=list, blank=True)
+    resumo          = models.JSONField(default=dict, blank=True)
+    linhas          = models.JSONField(default=list, blank=True)                 # registos de detalhe + resultado
+    carregado_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    carregado_em    = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-carregado_em']
+
+    def __str__(self):
+        return f'VBVT {self.merchant_id} {self.data} #{self.sequencia} ({self.estado})'
 
 
 class DadosBancarios(models.Model):

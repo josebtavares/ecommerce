@@ -224,6 +224,8 @@ PAGAMENTOS_FORNECEDOR_BENDI = os.environ.get('PAGAMENTOS_FORNECEDOR_BENDI', '') 
 VINTI4_URL          = os.environ.get('VINTI4_URL', 'https://3dsteste.vinti4net.cv/3ds_middleware_php/public/3ds_init.php')
 VINTI4_POS_ID       = os.environ.get('VINTI4_POS_ID', '')
 VINTI4_POS_AUT_CODE = os.environ.get('VINTI4_POS_AUT_CODE', '')
+# Merchant ID da Bendi (não é secreto): identifica os ficheiros de reconciliação VBVT dela (pagamentos/vbvt.py)
+VINTI4_MERCHANT_ID  = os.environ.get('VINTI4_MERCHANT_ID', '')
 # API de estado (Portal do Comerciante): confirma as transacções sem resposta ao fim de 8 minutos
 VINTI4_ESTADO_URL   = os.environ.get('VINTI4_ESTADO_URL', 'https://comerciante.teste.sisp.cv/pos/transaction-status')
 VINTI4_PORTAL_ID    = os.environ.get('VINTI4_PORTAL_ID', '')

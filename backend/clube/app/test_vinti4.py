@@ -639,3 +639,196 @@ class VendasDasLojas(TestCase):
         self.assertEqual(a.estado, 'ativa')                       # não volta a pedir validação
         adesoes.guardar_portal(pedido, loja, '', '')
         self.assertIsNone(adesoes.portal(loja))
+
+
+# ── ficheiro de reconciliação VBVT (Plan Test 36–37) e "Perguntar à SISP" (39–41) ──
+
+MID = '9000058'
+
+
+def _vbvt(detalhes, data='20261112', seq=1, ant='00000000', seq_ant=0, mid=MID, trailer=None, versao='01', moeda='132'):
+    linhas = [f'0VBVT{versao}{mid:0>15}{data}{seq:03d}{ant}{seq_ant:03d}{moeda}'] + list(detalhes)
+    linhas.append(f'9{(len(detalhes) if trailer is None else trailer):08d}')
+    return ('\r\n'.join(linhas) + '\r\n').encode('latin-1')
+
+
+def _compra(ref, valor, rt='0', comissao=0, cp=987, tid=26, cartao='visa', pan='************3101'):
+    return (f'1{ref:<20}{"MSG" + ref:<20}{rt}20261111153000{cp:04d}{tid:08d}{pan:<16}{int(valor * 100):013d}'
+            f'{int(comissao * 100):013d}{cartao:<5}')
+
+
+def _estorno(ref, original, valor, rt='0'):
+    return (f'2{ref:<20}{"EST" + ref:<20}{rt}20261111160000{988:04d}{30:08d}{int(valor * 100):013d}'
+            f'{"************3101":<16}{original:<20}{987:04d}{26:08d}{0:013d}{"visa":<5}')
+
+
+def _admin_api(nome):
+    admin = _utilizador(nome)
+    admin.user.is_staff = True
+    admin.user.save(update_fields=['is_staff'])
+    admin.role_admin = next(r for r, perms in Utilizador.PERMISSOES_ADMIN.items() if 'gerir_pagamentos' in perms)
+    admin.save(update_fields=['role_admin'])
+    from rest_framework.test import APIClient
+    api = APIClient()
+    api.force_authenticate(admin.user)
+    return api
+
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID)
+class ReconciliacaoVBVT(TestCase):
+
+    def setUp(self):
+        self.u = _utilizador()
+
+    def _tx(self, estado='paga', valor=1500):
+        inicio = obter('vinti4').iniciar(Cobranca(referencia='fat-7-cartao-1', valor=Decimal(valor), descricao='T',
+                                                  pagador=self.u))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado=estado)
+        tx.refresh_from_db()
+        return tx
+
+    def test_ler_e_reconciliar(self):
+        from .pagamentos import vbvt
+        ok, dif, so_sisp, so_ca, recusada = (self._tx(), self._tx(), self._tx('por_confirmar'), self._tx(),
+                                             self._tx('falhada'))
+        f = vbvt.processar(_vbvt([
+            _compra(ok.ref, 1500, comissao=Decimal('22.50')), _compra(dif.ref, 1400), _compra(so_sisp.ref, 1500),
+            _compra(so_ca.ref, 1500, rt='2'), _compra(recusada.ref, 1500, rt='2'), _compra('XNAOENOSSA', 900),
+            _estorno('BEST000000001', ok.ref, 1500),
+        ]), nome='VBVT_20261112.txt', utilizador=self.u.user)
+        self.assertEqual(f.estado, 'aplicado', f.erros)
+        res = {l['ref']: l['resultado'] for l in f.linhas if l['tipo'] == 'compra'}
+        self.assertEqual(res, {ok.ref: 'ok', dif.ref: 'valor_diferente', so_sisp.ref: 'paga_so_na_sisp',
+                               so_ca.ref: 'paga_so_ca', recusada.ref: 'recusada', 'XNAOENOSSA': 'desconhecida'})
+        self.assertEqual(f.linhas[-1]['resultado'], 'estorno')
+        self.assertEqual(f.resumo['problemas'], 4)
+        self.assertEqual((f.resumo['total_compras'], f.resumo['total_estornos']), ('5300.00', '1500.00'))
+        ok.refresh_from_db()
+        so_sisp.refresh_from_db()
+        self.assertIsNotNone(ok.reconciliada_em)
+        self.assertIsNotNone(ok.estornada_em)
+        self.assertEqual((ok.comissao_sisp, ok.tipo_cartao), (Decimal('22.50'), 'visa'))
+        self.assertEqual(so_sisp.estado, 'por_confirmar')          # o ficheiro nunca dá nada como pago
+        self.assertIsNone(so_sisp.reconciliada_em)
+        self.assertIn('Diferenças', vbvt.relatorio(f))
+
+    def test_sequencia(self):
+        from .pagamentos import vbvt
+        conteudo = _vbvt([], data='20261112', seq=1)
+        self.assertEqual(vbvt.processar(conteudo).estado, 'aplicado')
+        repetido = vbvt.processar(conteudo)
+        self.assertEqual(repetido.estado, 'rejeitado')
+        self.assertIn('já foi processado', repetido.erros[0]['erro'])
+        # o seguinte certo
+        self.assertEqual(vbvt.processar(_vbvt([], data='20261113', seq=1, ant='20261112', seq_ant=1)).estado, 'aplicado')
+        # falta o de dia 14: rejeitado, a não ser que o admin o aceite assim
+        salto = _vbvt([], data='20261115', seq=1, ant='20261114', seq_ant=1)
+        f = vbvt.processar(salto)
+        self.assertEqual(f.estado, 'rejeitado')
+        self.assertIn('Sequência', f.erros[0]['erro'])
+        f = vbvt.processar(salto, forcar=True)
+        self.assertEqual((f.estado, f.forcado, len(f.avisos)), ('aplicado', True, 1))
+        # mesma data e sequência com outro conteúdo
+        f = vbvt.processar(_vbvt([_compra('BX', 10)], data='20261115', seq=1, ant='20261113', seq_ant=1))
+        self.assertEqual(f.estado, 'rejeitado')
+
+    def test_erros_de_estrutura(self):
+        from .pagamentos import vbvt
+        casos = {
+            'trailer': _vbvt([_compra('BA', 10)], trailer=3),
+            'numérico': _vbvt([_compra('BA', 10).replace('0987', '09X7')]),
+            'VBVT': _vbvt([]).replace(b'VBVT', b'XXXX'),
+            'Versão': _vbvt([], versao='02'),
+            'Moeda': _vbvt([], moeda='978'),
+            'desconhecido': _vbvt([], mid='111'),
+            'Falta o trailer': _vbvt([]).rsplit(b'9', 1)[0],
+        }
+        for palavra, conteudo in casos.items():
+            f = vbvt.processar(conteudo)
+            self.assertEqual(f.estado, 'rejeitado', palavra)
+            self.assertTrue(any(palavra.lower() in e['erro'].lower() for e in f.erros), (palavra, f.erros))
+        self.assertFalse(TransacaoVinti4.objects.filter(reconciliada_em__isnull=False).exists())
+        self.assertEqual(vbvt.processar(b'').erros[0]['erro'], 'O ficheiro está vazio.')
+
+    def test_ficheiro_de_uma_loja(self):
+        from .models import AdesaoVinti4
+        from .pagamentos import vbvt
+        loja = _loja(_utilizador('donovbvt'))
+        AdesaoVinti4.objects.filter(loja=loja).update(merchant_id='000000000777')
+        f = vbvt.processar(_vbvt([], mid='777'))
+        self.assertEqual((f.estado, f.loja_id, f.merchant_id), ('aplicado', loja.id, '777'))
+
+    def test_endpoints_vbvt(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        tx = self._tx()
+        api = _admin_api('adminvbvt')
+        r = api.post('/app/admin/pagamentos/vbvt/',
+                     {'ficheiro': SimpleUploadedFile('VBVT.txt', _vbvt([_compra(tx.ref, 1500)]))}, format='multipart')
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        self.assertEqual(r.json()['estado'], 'aplicado')
+        self.assertIn('Confere: 1', r.json()['relatorio'])
+        lista = api.get('/app/admin/pagamentos/vbvt/').json()
+        self.assertEqual((lista['count'], lista['merchant_id_bendi']), (1, True))
+        self.assertEqual(api.get(f'/app/admin/pagamentos/vbvt/{r.json()["id"]}/').status_code, 200)
+        self.assertEqual(api.get('/app/admin/pagamentos/vinti4/', {'reconciliacao': 'falta'}).json()['count'], 0)
+        api.force_authenticate(_utilizador('naoadminvbvt').user)
+        self.assertEqual(api.get('/app/admin/pagamentos/vbvt/').status_code, 403)
+
+
+@override_settings(**CRED)
+class PerguntarASisp(TestCase):
+    """Admin → "Perguntar à SISP" (Plan Test 39–41)."""
+
+    def setUp(self):
+        self.u = _utilizador()
+
+    def _tx(self, minutos=9):
+        inicio = obter('vinti4').iniciar(Cobranca(referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T',
+                                                  pagador=self.u))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(criada_em=timezone.now() - timedelta(minutes=minutos))
+        return tx
+
+    def test_sem_api(self):
+        with self.assertRaises(ErroPagamento):
+            v4.consultar_agora(self._tx().id)
+
+    @override_settings(VINTI4_PORTAL_ID='1', VINTI4_PORTAL_PASSWORD='abc123')
+    @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
+    @mock.patch('app.pagamentos.vinti4.requests.post')
+    def test_respostas(self, post, confirmar):
+        def resposta(corpo):
+            r = mock.Mock()
+            r.json.return_value = corpo
+            return r
+        sucesso = {'result': True, 'msg': 'Consulta efetuado', 'transactionSuccess': True,
+                   'transactionStatusDescription': 'C-SUCESSO'}
+        erro = {'result': True, 'msg': 'Consulta efetuado', 'transactionSuccess': False,
+                'transactionStatusDescription': 'E-ERRO'}
+        login = {'result': False, 'msg': 'Portal ID ou Password errado', 'transactionSuccess': False,
+                 'transactionStatusDescription': ''}
+        # 39: login errado → nada muda, fica registado
+        post.return_value = resposta(login)
+        tx, resultado, corpo = v4.consultar_agora(self._tx().id)
+        self.assertEqual((resultado, tx.estado, tx.respostas[-1]['campos']['msg']), (None, 'iniciada', login['msg']))
+        # 41: não paga — há menos de 8 minutos não mexe; depois passa a sem resposta
+        post.return_value = resposta(erro)
+        nova = self._tx(minutos=2)
+        self.assertEqual(v4.consultar_agora(nova.id)[0].estado, 'iniciada')
+        self.assertEqual(v4.consultar_agora(tx.id)[0].estado, 'expirada')
+        # 40: paga → aplica o pagamento uma vez; perguntar outra vez só regista
+        post.return_value = resposta(sucesso)
+        paga = self._tx()
+        tx2, resultado, _ = v4.consultar_agora(paga.id)
+        self.assertEqual((resultado, tx2.estado, tx2.confirmada_por), ('paga', 'paga', 'estado'))
+        v4.consultar_agora(paga.id)
+        self.assertEqual(confirmar.call_count, 1)
+        self.assertEqual(len(TransacaoVinti4.objects.get(pk=paga.pk).respostas), 2)
+        # endpoint
+        api = _admin_api('adminconsulta')
+        r = api.post(f'/app/admin/pagamentos/vinti4/{paga.id}/consultar/')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertEqual((r.json()['resultado'], r.json()['transacao']['estado']), ('paga', 'paga'))
+        api.force_authenticate(_utilizador('naoadmin2').user)
+        self.assertEqual(api.post(f'/app/admin/pagamentos/vinti4/{paga.id}/consultar/').status_code, 403)

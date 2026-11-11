@@ -62,6 +62,10 @@ urlpatterns = [
     path('admin/pagamentos/bende/',             pagamentosAdminView.bende,           name='admin-pagamentos-bende'),
     path('admin/pagamentos/vinti4/',            pagamentosAdminView.vinti4_lista,    name='admin-pagamentos-vinti4'),
     path('admin/pagamentos/vinti4/<int:tx_id>/', pagamentosAdminView.vinti4_detalhe, name='admin-pagamentos-vinti4-detalhe'),
+    path('admin/pagamentos/vinti4/<int:tx_id>/consultar/', pagamentosAdminView.vinti4_consultar,
+         name='admin-pagamentos-vinti4-consultar'),
+    path('admin/pagamentos/vbvt/',               pagamentosAdminView.vbvt,           name='admin-pagamentos-vbvt'),
+    path('admin/pagamentos/vbvt/<int:ficheiro_id>/', pagamentosAdminView.vbvt_detalhe, name='admin-pagamentos-vbvt-detalhe'),
     path('admin/pagamentos/bende.csv',          pagamentosAdminView.bende_csv,       name='admin-pagamentos-bende-csv'),
 
     # ── Tipos de produto globais ──────────────────────────────
