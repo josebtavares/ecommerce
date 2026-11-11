@@ -46,6 +46,10 @@ ERRO = '6'
 TEMPO_LIMITE = timedelta(minutes=8)          # MOP021 2.2.2.3 / Plan Test 38
 CONSULTAS_MAX = 12                           # por_confirmar: tenta a API de 10 em 10 minutos durante 2 horas
 INTERVALO_CONSULTAS = timedelta(minutes=10)
+# depois das 12: continua a perguntar, devagar (o Portal pode ser indicado mais tarde, a API pode ter estado em baixo)
+INTERVALO_LENTO = timedelta(hours=6)
+PRAZO_CONSULTAS = timedelta(days=30)         # depois disto, só o "Perguntar à SISP" (à mão)
+CAMPOS_SESSAO = ('merchantSession', 'merchantRespMerchantSession')     # segredo: não se mostra nas respostas guardadas
 _ALFANUM = string.ascii_uppercase + string.digits
 
 
@@ -112,6 +116,40 @@ def fingerprint_erro(chave, d):
 
 def _igual(a, b):
     return bool(a) and bool(b) and hmac.compare_digest(str(a).strip(), str(b).strip())
+
+
+# ── ambiente (teste / produção) ─────────────────────────────────
+
+def em_uso():
+    """O vinti4 está ligado (vendas das lojas ou cobranças da Bendi)."""
+    return 'vinti4' in (getattr(settings, 'PAGAMENTOS_FORNECEDOR', ''), getattr(settings, 'PAGAMENTOS_FORNECEDOR_BENDI', ''))
+
+
+def ambiente():
+    """'teste' se algum endereço da SISP é o do ambiente de teste (os valores por omissão), senão 'producao'."""
+    urls = (settings.VINTI4_URL, settings.VINTI4_ESTADO_URL)
+    return 'teste' if any('teste' in str(u or '').lower() for u in urls) else 'producao'
+
+
+def verificar_configuracao(app_configs=None, **kwargs):
+    """System check (python manage.py check, arranque): em produção (DEBUG=False) com o vinti4 ligado, os
+    endereços da SISP têm de ser os de produção — por omissão são os de teste e os pagamentos iam lá parar."""
+    from django.core.checks import Warning as Aviso      # aviso, não erro: um erro parava o worker e os comandos
+    import sys
+    if not em_uso() or settings.DEBUG or 'test' in sys.argv[1:2]:       # os testes correm com DEBUG=False
+        return []
+    problemas = []
+    if ambiente() == 'teste':
+        problemas.append(Aviso('vinti4 ligado em produção com os endereços de TESTE da SISP',
+                               hint='Define VINTI4_URL e VINTI4_ESTADO_URL com os endereços de produção que a SISP enviar.',
+                               id='bendi.vinti4.W000'))
+    if not settings.VINTI4_MERCHANT_ID.strip():
+        problemas.append(Aviso('VINTI4_MERCHANT_ID por definir: os ficheiros VBVT da Bendi são recusados',
+                               id='bendi.vinti4.W001'))
+    if not (settings.VINTI4_PORTAL_ID.strip() and settings.VINTI4_PORTAL_PASSWORD.strip()):
+        problemas.append(Aviso('VINTI4_PORTAL_ID/VINTI4_PORTAL_PASSWORD por definir: os pagamentos sem resposta '
+                               'ficam por confirmar (sem API de estado)', id='bendi.vinti4.W002'))
+    return problemas
 
 
 # ── credenciais ─────────────────────────────────────────────────
@@ -262,7 +300,8 @@ def erro_do_comerciante(mensagem):
 
 def _guardar_resposta(tx, origem, campos):
     """Junta o que a SISP mandou a tx.respostas (texto curto por campo, as últimas MAX_RESPOSTAS)."""
-    limpos = {str(k)[:60]: (v if isinstance(v, (bool, int, float)) or v is None else str(v)[:400])
+    limpos = {str(k)[:60]: ('…' if k in CAMPOS_SESSAO and v else
+                            v if isinstance(v, (bool, int, float)) or v is None else str(v)[:400])
               for k, v in list((campos or {}).items())[:60]}
     tx.respostas = (list(tx.respostas or []) + [{'em': timezone.now().isoformat(timespec='seconds'),
                                                   'origem': origem, 'campos': limpos}])[-MAX_RESPOSTAS:]
@@ -270,6 +309,29 @@ def _guardar_resposta(tx, origem, campos):
 
 def _cancelou(d):
     return _txt(d.get('userCancelled') or d.get('UserCancelled')).lower() == 'true'
+
+
+def _sessao_certa(tx, d):
+    """O cancelamento da SISP não leva FingerPrint, mas traz o merchantSession (aleatório, só foi no formulário
+    para a SISP — nunca nos endereços do site): sem ele certo, quem só sabe o merchantRef não cancela nada."""
+    return bool(tx.sessao) and _igual(_txt(d.get('merchantSession') or d.get('merchantRespMerchantSession')), tx.sessao)
+
+
+def _avisar_assinatura_invalida(tx, tipo):
+    """Resposta com o resultFingerPrint errado (alguém a forjar uma resposta, ou a chave mal configurada):
+    fica no registo e os admins são avisados — um aviso por hora."""
+    from datetime import timedelta
+    from ..models import Notificacao
+    from ..Views.notificacaoView import notificar_admins
+    titulo = 'vinti4: resposta com assinatura inválida'
+    if Notificacao.objects.filter(tipo='pagamento_erro', titulo__startswith=titulo,
+                                  data_criacao__gte=timezone.now() - timedelta(hours=1)).exists():
+        return
+    notificar_admins(tipo='pagamento_erro', titulo=f'{titulo} — {tx.ref}',
+                     mensagem=f'Chegou uma resposta de {tipo} para {tx.ref} ({tx.referencia}) com o resultFingerPrint '
+                              f'errado — foi ignorada. Se se repetir, confirma o posAutCode'
+                              + (' do contrato da loja.' if tx.loja_id else ' da Bendi (VINTI4_POS_AUT_CODE).'),
+                     loja=tx.loja, link='/admin/pagamentos', email=2)
 
 
 def _avisar_admins(titulo, mensagem, loja=None):
@@ -341,6 +403,7 @@ def processar_resposta(d):
             if not _igual(d.get('resultFingerPrint'), fingerprint_sucesso(chave, d)):
                 log.warning('vinti4: resultFingerPrint inválido na resposta de sucesso de %s', tx.ref)
                 _registar(tx, 'cartao_assinatura_invalida', anterior)
+                _avisar_assinatura_invalida(tx, 'sucesso')
                 return tx
             if tx.estado == 'paga':                     # a mesma resposta outra vez
                 return tx
@@ -369,6 +432,8 @@ def processar_resposta(d):
             chave = _credenciais_da(tx).chave
             if not _igual(d.get('resultFingerPrint'), fingerprint_erro(chave, d)):
                 log.warning('vinti4: resultFingerPrint inválido na resposta de erro de %s', tx.ref)
+                _registar(tx, 'cartao_assinatura_invalida', anterior)
+                _avisar_assinatura_invalida(tx, 'erro')
                 return tx
             if tx.estado == 'paga':
                 return tx
@@ -388,6 +453,10 @@ def processar_resposta(d):
                 _avisar_erro_comerciante(tx)
             return tx
         if _cancelou(d):
+            if not _sessao_certa(tx, d):
+                log.warning('vinti4: cancelamento sem o merchantSession certo para %s', tx.ref)
+                _registar(tx, 'cartao_cancelamento_invalido', anterior)
+                return tx
             if tx.estado in ('iniciada', 'por_confirmar'):
                 tx.estado, tx.terminada_em = 'cancelada', timezone.now()
                 tx.save(update_fields=['estado', 'terminada_em'])
@@ -432,13 +501,15 @@ def consultar(tx):
 
 def rever_sem_resposta(agora=None):
     """Worker, uma vez por minuto: as transacções sem resposta há mais de 8 minutos. → quantas mudaram."""
-    from django.db.models import Q
+    from django.db.models import F, Q
     from ..models import TransacaoVinti4
     agora = agora or timezone.now()
-    candidatas = TransacaoVinti4.objects.filter(
-        Q(estado='iniciada', criada_em__lt=agora - TEMPO_LIMITE)
-        | Q(estado='por_confirmar', consultas__lt=CONSULTAS_MAX, consultada_em__lt=agora - INTERVALO_CONSULTAS)
-    ).values_list('id', flat=True)[:50]
+    por_confirmar = Q(estado='por_confirmar', criada_em__gt=agora - PRAZO_CONSULTAS) & (
+        Q(consultada_em__isnull=True)
+        | Q(consultas__lt=CONSULTAS_MAX, consultada_em__lt=agora - INTERVALO_CONSULTAS)
+        | Q(consultas__gte=CONSULTAS_MAX, consultada_em__lt=agora - INTERVALO_LENTO))
+    candidatas = (TransacaoVinti4.objects.filter(Q(estado='iniciada', criada_em__lt=agora - TEMPO_LIMITE) | por_confirmar)
+                  .order_by(F('consultada_em').asc(nulls_first=True), 'id').values_list('id', flat=True)[:50])
     mudaram = 0
     for tid in list(candidatas):
         tx = TransacaoVinti4.objects.select_related('loja').get(pk=tid)
@@ -450,7 +521,7 @@ def rever_sem_resposta(agora=None):
             anterior = tx.estado
             if corpo is not None:
                 _guardar_resposta(tx, 'estado', corpo)
-            tx.consultas += 1
+                tx.consultas += 1           # sem Portal configurado (corpo None) não conta: quando chegar, pergunta-se
             tx.consultada_em = agora
             _mudar_pela_consulta(tx, resultado, agora)
             if tx.estado == anterior and resultado is None:
@@ -499,6 +570,24 @@ def consultar_agora(tx_id):
     return tx, resultado, corpo
 
 
+def _sem_outro_a_decorrer(referencia):
+    """Um pagamento com cartão de cada vez para a mesma encomenda/marcação/fatura/cobrança: com outro ainda na
+    página da SISP (iniciado há menos de 8 minutos, sem resposta) podiam ficar os dois cobrados. Quem cancela na
+    página da SISP fica livre logo; quem só fecha a página espera o fim dos 8 minutos."""
+    from ..models import TransacaoVinti4
+    from .servico import ler_referencia
+    lido = ler_referencia(referencia)
+    if not lido:
+        return
+    agora = timezone.now()
+    aberta = (TransacaoVinti4.objects.filter(referencia__startswith=f'{lido[0]}-{lido[1]}-', estado='iniciada',
+                                             criada_em__gt=agora - TEMPO_LIMITE).order_by('-criada_em').first())
+    if aberta:
+        falta = max(1, int((aberta.criada_em + TEMPO_LIMITE - agora).total_seconds() // 60) + 1)
+        raise ErroPagamento(f'Já há um pagamento com cartão a decorrer para isto. Se fechaste a página da SISP sem '
+                            f'pagar, tenta outra vez dentro de {falta} min — assim não pagas duas vezes.')
+
+
 # ── o fornecedor ────────────────────────────────────────────────
 
 class Vinti4(Fornecedor):
@@ -517,6 +606,7 @@ class Vinti4(Fornecedor):
         if cobrar <= 1:                         # a SISP recusa valores iguais ou abaixo de 1$00
             raise ErroPagamento('O valor é demasiado baixo para pagar com cartão.')
         cred = credenciais(cobranca.loja)
+        _sem_outro_a_decorrer(cobranca.referencia)
         tx = TransacaoVinti4.objects.create(
             ref=_novo('B'), sessao=_novo('S'), referencia=cobranca.referencia[:80], loja=cobranca.loja,
             pos_id=cred.pos_id, utilizador=pagador.user, valor=valor, montante=cobrar,

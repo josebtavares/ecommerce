@@ -171,14 +171,39 @@
               e marca aqui. Se não marcares, o pedido vai para a equipa da Bendi.
             </p>
             <p v-if="devolucaoLoja(r).ajuda" class="text-xs text-amber-200/80">{{ devolucaoLoja(r).ajuda }}</p>
-            <button type="button" @click="acao('dinheiro_entregue')" :disabled="aEnviar"
+            <!-- cartão vinti4: estorno com a referência (o normal) ou, se o estorno não deu, outra forma com prova -->
+            <template v-if="r.como_devolve === 'cartao'">
+              <div class="flex gap-1 rounded-xl bg-zinc-900 p-1 text-xs" role="tablist" data-teste="devolver-como">
+                <button v-for="o in COMO" :key="o.v" type="button" role="tab" :aria-selected="como === o.v" @click="como = o.v"
+                  :class="['flex-1 py-1.5 rounded-lg font-semibold', como === o.v ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200']">
+                  {{ o.t }}</button>
+              </div>
+              <template v-if="como === 'estorno'">
+                <input v-model="referencia" maxlength="100" placeholder="Referência do estorno (Portal do Comerciante)" data-teste="estorno-referencia"
+                  class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-amber-500" />
+                <p class="text-[11px] text-zinc-500">Opcional — ajuda o cliente a encontrar o estorno no banco. Se carregares o ficheiro VBVT em Pagamentos, a SISP confirma o estorno e o pedido fecha sozinho.</p>
+              </template>
+              <template v-else>
+                <p class="text-xs text-zinc-400">Só quando o estorno não for possível (ex.: cartão cancelado) ou se combinaste outra forma com o cliente nas mensagens.</p>
+                <textarea v-model="notaDevolucao" rows="2" maxlength="500" placeholder="Como devolveste? (ex.: transferência para a conta do cliente)" data-teste="outra-forma-nota"
+                  class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-amber-500 resize-none"></textarea>
+                <input v-model="referencia" maxlength="100" placeholder="Referência (opcional)"
+                  class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-amber-500" />
+              </template>
+              <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                <span class="px-3 py-1.5 rounded-lg border border-zinc-700 hover:bg-zinc-800">{{ como === 'outro' ? 'Juntar prova (obrigatório)' : 'Juntar comprovativo (opcional)' }}</span>
+                <span class="text-zinc-500">{{ provas.length ? `${provas.length} ficheiro(s)` : '' }}</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="hidden" data-teste="devolucao-prova" @change="juntarProva" />
+              </label>
+            </template>
+            <button type="button" @click="devolvido" :disabled="aEnviar || !podeMarcar" data-teste="dinheiro-entregue"
               class="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-60">
-              {{ devolucaoLoja(r).botao }}
+              {{ r.como_devolve === 'cartao' && como === 'outro' ? 'Devolvi de outra forma' : devolucaoLoja(r).botao }}
             </button>
           </template>
           <p v-else class="text-sm text-zinc-300">
-            Devolveste {{ dinheiro(r.valor_aprovado) }} {{ devolucaoLoja(r).como }} a {{ dataHora(r.entregue_em) }}. À espera da confirmação do cliente —
-            fica confirmado sozinho a {{ dataHora(r.prazo_resposta) }}.
+            Devolveste {{ dinheiro(r.valor_aprovado) }} {{ r.devolvido_como === 'outro' ? 'de outra forma' : devolucaoLoja(r).como }} a {{ dataHora(r.entregue_em) }}<template v-if="r.referencia_devolucao"> (referência {{ r.referencia_devolucao }})</template>.
+            À espera da confirmação do cliente — fica confirmado sozinho a {{ dataHora(r.prazo_resposta) }}.
           </p>
         </section>
 
@@ -227,6 +252,37 @@ const modo       = ref('total')
 const valorProposta = ref('')
 const devolverProduto = ref(false)
 const reporStock = ref(false)
+// devolução de um pagamento com cartão: estorno (com a referência) ou outra forma (com prova)
+const COMO = [{ v: 'estorno', t: 'Estorno no cartão' }, { v: 'outro', t: 'Devolvi de outra forma' }]
+const como = ref('estorno')
+const referencia = ref('')
+const notaDevolucao = ref('')
+const provas = ref([])
+const podeMarcar = computed(() => {
+  if (r.value?.como_devolve !== 'cartao') return true
+  if (como.value === 'estorno') return referencia.value.trim().length === 0 || referencia.value.trim().length >= 3
+  return notaDevolucao.value.trim().length >= 5 && provas.value.length > 0
+})
+
+function juntarProva (ev) {
+  const novos = [...ev.target.files].filter(f => {
+    if (f.size > 10 * 1024 * 1024) { toast.error('Cada foto pode ter até 10 MB.'); return false }
+    return true
+  })
+  ev.target.value = ''
+  provas.value = [...provas.value, ...novos].slice(0, 5)
+}
+
+function devolvido () {
+  if (r.value?.como_devolve !== 'cartao') return acao('dinheiro_entregue')
+  const fd = new FormData()
+  fd.append('acao', 'dinheiro_entregue')
+  fd.append('como', como.value)
+  fd.append('referencia', referencia.value.trim())
+  if (como.value === 'outro') fd.append('nota', notaDevolucao.value.trim())
+  provas.value.forEach(f => fd.append('fotos', f))
+  return acao('dinheiro_entregue', fd)
+}
 
 const dinheiro = v => formatarDinheiro(v || 0)
 const textoAtributos = a => temAtributos(a) ? Object.values(formatarAtributos(a)).join(' · ') : ''
@@ -280,8 +336,11 @@ function aceitar () {
 async function acao (nome, extra = {}) {
   aEnviar.value = true
   try {
-    const { data } = await api.post(`/app/loja/${props.lojaId}/reembolsos/${r.value.id}/acao/`, { acao: nome, ...extra })
+    const corpo = extra instanceof FormData ? extra : { acao: nome, ...extra }
+    const { data } = await api.post(`/app/loja/${props.lojaId}/reembolsos/${r.value.id}/acao/`, corpo,
+                                    extra instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined)
     r.value = data
+    if (data.entregue_em) { referencia.value = ''; notaDevolucao.value = ''; provas.value = [] }
     aRecusar.value = false
     motivoRecusa.value = ''
     if (nome === 'tentar_reembolso' && data.estado === 'por_reembolsar') {

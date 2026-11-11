@@ -206,6 +206,8 @@
         <BackofficeMensagens     v-else-if="activeSection === 'mensagens'"     :loja-id="lojaId" />
         <BackofficeFaturacao     v-else-if="activeSection === 'faturacao'"     :loja-id="lojaId"
                                  @ver-subscricao="navegarPara('subscricao')" />
+        <BackofficePagamentos    v-else-if="activeSection === 'pagamentos'"    :loja-id="lojaId"
+                                 @configurar="navegarPara('configuracoes')" />
         <BackofficeServicos      v-else-if="activeSection === 'servicos'"      :loja-id="lojaId"
                                  :so-agenda="!permissoes.includes('gerir_marcacoes')"
                                  @ver-subscricao="navegarPara('subscricao')" />
@@ -246,6 +248,7 @@ const BackofficeSubscricao     = defineAsyncComponent(() => import('./Backoffice
 const BackofficeDevolucoes     = defineAsyncComponent(() => import('./BackofficeDevolucoes.vue'))
 const BackofficeServicos       = defineAsyncComponent(() => import('./BackofficeServicos.vue'))
 const BackofficeFaturacao      = defineAsyncComponent(() => import('./BackofficeFaturacao.vue'))
+const BackofficePagamentos     = defineAsyncComponent(() => import('./BackofficePagamentos.vue'))
 const ModuloRelatorios         = defineAsyncComponent(() => import('@/components/relatorios/ModuloRelatorios.vue'))
 
 const PERMISSOES = {
@@ -255,6 +258,7 @@ const PERMISSOES = {
     'atribuir_condutor','gerir_pagamentos','gerir_entregas',
     'ver_relatorios','gerir_metodos_pagamento','gerir_opcoes_entrega','gerir_template',
     'ver_subscricao','pagar_subscricao','gerir_servicos','gerir_marcacoes','gerir_faturacao',
+    'ver_pagamentos_cartao',   // aba Pagamentos (cartão vinti4 do contrato da loja) — só o dono
   ],
   gestor: [
     'ver_loja','editar_loja','gerir_staff',
@@ -274,6 +278,7 @@ const SECCOES = [
   { key: 'encomendas',    label: 'Encomendas',        icon: 'order',     permissao: 'gerir_encomendas' },
   { key: 'devolucoes',    label: 'Devoluções',        icon: 'refund',    permissao: 'gerir_devolucoes' },
   { key: 'faturacao',     label: 'Faturação',         icon: 'invoice',   permissao: 'gerir_faturacao'  },
+  { key: 'pagamentos',    label: 'Pagamentos',        icon: 'payments',  permissao: 'ver_pagamentos_cartao' },
   { key: 'entregas',      label: 'Entregas',          icon: 'delivery',  permissao: 'gerir_entregas'   },
   { key: 'mensagens',     label: 'Mensagens',         icon: 'chat',      permissao: null               },   // todos os membros (equipa); clientes só quem atende
   { key: 'avaliacoes',    label: 'Avaliações',        icon: 'star',      permissao: 'ver_loja'         },
@@ -297,6 +302,7 @@ export default {
     BackofficeStaff, BackofficeTipos, NotificacaoSino, AvisoFaturacao, BarraProntidao,
     BackofficeEntregas, BackofficeAvaliacoes, BackofficeCategorias,
     BackofficeTemplates, BackofficeMensagens, BackofficeDevolucoes, BackofficeServicos, BackofficeFaturacao,
+    BackofficePagamentos,
   },
 
   data () {

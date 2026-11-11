@@ -616,18 +616,55 @@ def _fechar_em_mao(r, auto=False):
         mensagem(r, 'sistema', f'Sem resposta do cliente em {PRAZO_DINHEIRO_DIAS} dias — o dinheiro ficou dado como recebido.')
 
 
-def loja_dinheiro_entregue(r, utilizador):
+def loja_dinheiro_entregue(r, utilizador, como='', referencia='', nota='', fotos=None):
+    """
+    A loja indica que devolveu o dinheiro. O cliente confirma ("Recebi") ou, passado o prazo, fica confirmado.
+    Pago com cartão vinti4 (o dinheiro está na loja):
+    • como='estorno' (o normal): a referência do estorno do Portal do Comerciante é opcional — ajuda o cliente a
+      encontrá-lo no banco (sem ela, se a loja carregar o VBVT, fica a da SISP — confirmar_estornos_sisp);
+    • como='outro': o estorno não deu (ex.: cartão cancelado) e a loja devolveu por outro meio — diz como e junta
+      a prova em foto (obrigatória); o cliente vê-a e confirma.
+    fotos: já preparadas (preparar_fotos), ficam na mensagem da loja.
+    """
     if r.estado != 'a_devolver':
         raise ErroReembolso('Este pedido não está à espera de que a loja devolva o dinheiro.')
     if r.entregue_em:
         raise ErroReembolso('Já indicaste que entregaste o dinheiro.')
+    referencia, nota, fotos = (referencia or '').strip(), (nota or '').strip(), fotos or []
+    valor = formatar(r.valor_aprovado)
+    if como_devolve(r.encomenda) == 'cartao':
+        como = como or 'estorno'
+        if como == 'estorno':
+            if referencia and not 3 <= len(referencia) <= 100:
+                raise ErroReembolso('A referência do estorno tem de ter entre 3 e 100 caracteres (ou deixa-a vazia).')
+            r.referencia = referencia
+            com_ref = f' (referência {referencia})' if referencia else ''
+            texto = f'A loja fez o estorno de {valor} no cartão do cliente{com_ref}.'
+            para_cliente = (f'A loja diz que fez o estorno de {valor} para o teu cartão{com_ref}. '
+                            f'Os bancos podem demorar alguns dias a mostrá-lo.')
+        elif como == 'outro':
+            if len(nota) < 5:
+                raise ErroReembolso('Diz como devolveste o dinheiro (ex.: transferência para a conta do cliente).')
+            if not fotos:
+                raise ErroReembolso('Junta a prova da devolução (foto ou captura do comprovativo).')
+            r.referencia = referencia[:255]
+            texto = f'A loja devolveu {valor} de outra forma: {nota}' + (f' (referência {referencia})' if referencia else '') + '.'
+            para_cliente = (f'A loja diz que te devolveu {valor} de outra forma: {nota}. A prova está nas mensagens do '
+                            f'pedido.')
+        else:
+            raise ErroReembolso('Escolhe como devolveste: estorno no cartão ou outra forma.')
+        r.devolvido_como = como
+    else:
+        texto = f'A loja devolveu {valor} {_como_devolve(r)} ao cliente.'
+        para_cliente = f'A loja diz que te devolveu {valor} {_como_devolve(r)}.'
     r.entregue_em = timezone.now()
     r.prazo_resposta = r.entregue_em + timedelta(days=PRAZO_DINHEIRO_DIAS)
     r.save()
-    mensagem(r, 'loja', f'A loja devolveu {formatar(r.valor_aprovado)} {_como_devolve(r)} ao cliente.', utilizador)
+    m = mensagem(r, 'loja', texto, utilizador)
+    if fotos:
+        gravar_fotos(r, fotos, utilizador, m)
     _avisar_cliente(r, 'A loja devolveu-te o dinheiro',
-                    f'A loja diz que te devolveu {formatar(r.valor_aprovado)} {_como_devolve(r)}. Se não recebeste, diz-nos até '
-                    f'{_hora(r.prazo_resposta)} — depois disso fica confirmado.')
+                    f'{para_cliente} Se não recebeste, diz-nos até {_hora(r.prazo_resposta)} — depois disso fica confirmado.')
     return r
 
 
@@ -695,7 +732,8 @@ def admin_decidir(r, utilizador, decisao, valor=None, devolver_produto=False, no
     mensagem(r, 'admin', f'A Bendi decidiu reembolsar {formatar(valor)}.' + (f' {nota}' if nota else ''),
              utilizador)
     enc = r.encomenda
-    if r.tipo == 'cancelamento' and enc.status not in ('cancelado', 'concluido'):
+    # um pagamento tardio/a dobrar devolve só essa cobrança: a encomenda (já cancelada, ou paga e válida) fica como está
+    if r.tipo == 'cancelamento' and r.motivo != 'pagamento_tardio' and enc.status not in ('cancelado', 'concluido'):
         _cancelar_encomenda(enc)
     if r.tipo == 'devolucao' and devolver_produto and r.motivo in ('defeito', 'errado', 'mudei_ideias'):
         r.devolver_produto = True
@@ -848,24 +886,139 @@ def ao_avancar_encomenda(encomenda, utilizador=None):
                         f'{txt} Se não concordas, podes pedir ajuda à Bendi.')
 
 
-def pago_depois_de_cancelada(encomenda, valor, referencia):
+def pago_depois_de_cancelada(encomenda, valor, referencia, cartao_loja=False):
     """
-    O gateway cobrou depois de a encomenda ser cancelada (não há Pagamento): fica um pedido para a Bendi
-    devolver o dinheiro (com gateway real, é a Bendi que confirma o reembolso). Um por encomenda.
+    O fornecedor cobrou uma encomenda que já não o podia ser: cancelada (não há Pagamento) ou já paga (pagamento a
+    dobrar). Fica um pedido para a Bendi decidir — um por transacção cobrada. cartao_loja: cartão vinti4 do
+    contrato da loja — o dinheiro está na conta dela e é ela que faz o estorno (_pagou_com_cartao_loja).
     """
     from ..models import Reembolso
-    if Reembolso.objects.filter(encomenda=encomenda, motivo='pagamento_tardio').exists():
+    descricao = f'Transacção cobrada: {referencia}'
+    if Reembolso.objects.filter(encomenda=encomenda, motivo='pagamento_tardio', descricao=descricao).exists():
         return None
     r = _criar(encomenda, 'cancelamento', 'pagamento_tardio', 'sistema', valor, Decimal('0'),
-               descricao=f'Transacção cobrada: {referencia}', itens={})
+               descricao=descricao, itens={})
     r.estado = 'em_disputa'
     r.escalado_em = timezone.now()
     r.save()
-    mensagem(r, 'sistema', f'O pagamento de {formatar(valor)} chegou depois de a encomenda ser cancelada. '
-                           f'A equipa da Bendi vai devolver o dinheiro.')
-    _avisar_cliente(r, 'Vais ser reembolsado', f'O pagamento de {formatar(valor)} chegou depois de a encomenda '
-                                               f'ser cancelada. A equipa da Bendi vai devolver-te o dinheiro.')
+    porque = ('chegou depois de a encomenda ser cancelada' if encomenda.status == 'cancelado'
+              else 'foi cobrado a mais (a encomenda já estava paga)')
+    quem = ('A loja vai devolver-te o dinheiro com um estorno no cartão' if cartao_loja
+            else 'A equipa da Bendi vai devolver-te o dinheiro')
+    mensagem(r, 'sistema', f'O pagamento de {formatar(valor)} {porque} ({referencia}). {quem.replace("-te", "")}.')
+    _avisar_cliente(r, 'Vais ser reembolsado', f'O pagamento de {formatar(valor)} {porque}. {quem}.')
+    if cartao_loja:     # o dinheiro está na conta da loja: fica a saber já que vai ter um estorno para fazer
+        _avisar_loja(r, 'Pagamento com cartão a devolver',
+                     f'O cartão do cliente foi cobrado em {formatar(valor)} ({referencia}) e o pagamento {porque}. '
+                     f'A Bendi está a analisar; quando aprovar, faz o estorno no Portal do Comerciante da SISP e marca '
+                     f'"Estorno feito" no pedido.', email=None)
     return r
+
+
+def reembolsos_da_transacao(tx, encomenda_id):
+    """Os pedidos de reembolso cujo dinheiro sai desta transacção com cartão: a cobrada depois de cancelada / a
+    dobrar → só o pedido dela (pagamento_tardio); a que pagou a encomenda → os outros."""
+    from ..models import Reembolso
+    qs = Reembolso.objects.filter(encomenda_id=encomenda_id)
+    if tx.efeito == 'reembolso':
+        return qs.filter(motivo='pagamento_tardio', descricao=f'Transacção cobrada: {tx.transacao}')
+    return qs.exclude(motivo='pagamento_tardio')
+
+
+def confirmar_estornos_sisp(tx, data_ficheiro=None, numeros=()):
+    """
+    O ficheiro VBVT mostrou estornos desta transacção (tx.valor_estornado = soma de todos até agora). Reforço,
+    nunca obrigatório: o reembolso não espera por isto (a loja marca, o cliente confirma). Cada pedido devolvido
+    "em mão" desta transacção, por ordem, fica "Confirmado pela SISP" enquanto a soma chegar para ele; um ainda por
+    fechar (a devolver, ou o cliente disse que não recebeu) fecha como reembolsado. numeros: os nºs dos estornos na
+    SISP (período-tid) — preenchem a referência que a loja não escreveu. Marcação: conclui o estorno
+    por fazer. Chama-se dentro da transacção do ficheiro. → quantos ficaram confirmados.
+    """
+    from django.db.models import Sum
+    from ..pagamentos.servico import ler_referencia
+    lido = ler_referencia(tx.referencia)
+    if not lido or tx.valor_estornado <= 0:
+        return 0
+    quando = f' (ficheiro de reconciliação de {data_ficheiro:%d/%m/%Y})' if data_ficheiro else ''
+    if lido[0] == 'mar':
+        return _confirmar_estorno_marcacao(tx, lido[1], quando, numeros)
+    if lido[0] != 'enc':
+        return 0
+    qs = reembolsos_da_transacao(tx, lido[1]).filter(metodo='manual', valor_aprovado__gt=0)
+    ja = qs.filter(confirmado_sisp_em__isnull=False).aggregate(s=Sum('valor_aprovado'))['s'] or Decimal('0')
+    disponivel = tx.valor_estornado - ja
+    n = 0
+    for r in (qs.select_for_update(of=('self',)).select_related('loja', 'comprador', 'encomenda')
+              .filter(confirmado_sisp_em__isnull=True, estado__in=('a_devolver', 'reembolsado', 'em_disputa'))
+              .order_by('id')):
+        if r.estado == 'em_disputa' and not r.data_reembolso:     # ainda a decidir o valor: não é deste caso
+            continue
+        if r.valor_aprovado > disponivel:
+            break
+        disponivel -= r.valor_aprovado
+        n += 1
+        agora = timezone.now()
+        r.confirmado_sisp_em = agora
+        if r.referencia in ('', 'dinheiro') and numeros:     # a loja não escreveu a referência: fica a da SISP
+            r.referencia = ('SISP ' + ', '.join(numeros))[:255]
+        valor = formatar(r.valor_aprovado)
+        if r.estado == 'reembolsado':
+            r.save(update_fields=['confirmado_sisp_em', 'referencia', 'data_atualizacao'])
+            mensagem(r, 'sistema', f'A SISP confirmou o estorno de {valor} para o cartão{quando}.')
+            continue
+        r.estado = 'reembolsado'
+        r.entregue_em = r.entregue_em or agora
+        r.devolvido_como = r.devolvido_como or 'estorno'
+        r.recebido_em, r.recebido_auto, r.prazo_resposta = agora, False, None
+        r.save()
+        mensagem(r, 'sistema', f'A SISP confirmou o estorno de {valor} para o cartão{quando}. O reembolso está concluído.')
+        _avisar_cliente(r, 'Reembolso confirmado', f'A SISP confirmou o estorno de {valor} para o teu cartão. Os bancos '
+                                                   f'podem demorar alguns dias a mostrá-lo no extrato.')
+        _avisar_loja(r, 'Estorno confirmado pela SISP', f'O estorno de {valor} apareceu no ficheiro VBVT — o reembolso '
+                                                        f'está concluído.', email=None)
+    return n
+
+
+def _confirmar_estorno_marcacao(tx, marcacao_id, quando, numeros=()):
+    from ..servicos import marcacoes as ops
+    from ..servicos.models import Marcacao
+    m = Marcacao.objects.select_for_update(of=('self',)).filter(pk=marcacao_id).first()
+    if not m or m.pagamento_fornecedor != 'vinti4':
+        return 0
+    falta = ops.por_reembolsar(m)
+    if not falta or tx.valor_estornado < falta:
+        return 0
+    ref = ('SISP ' + ', '.join(numeros)) if numeros else f'SISP {tx.transacao}'
+    ops.estorno_feito(m, ref[:100], nota=f'Confirmado pela SISP{quando}.')
+    return 1
+
+
+def avisar_estornos_em_falta(lojas, data_ficheiro, margem_dias=2):
+    """
+    Depois de um VBVT da loja: um estorno que a loja marcou há mais de `margem_dias` antes da data do ficheiro e
+    que ainda não apareceu em nenhum → avisa o dono e a Bendi (uma vez por pedido). Só com ficheiros posteriores:
+    quem não carrega o VBVT nunca recebe este aviso.
+    """
+    from ..models import Notificacao, Reembolso
+    from ..Views.notificacaoView import notificar_admins
+    if not lojas or not data_ficheiro:
+        return 0
+    limite = data_ficheiro - timedelta(days=margem_dias)
+    n = 0
+    for r in (Reembolso.objects.select_related('loja', 'encomenda')
+              .filter(loja__in=lojas, devolvido_como='estorno', confirmado_sisp_em__isnull=True,
+                      entregue_em__date__lt=limite, estado__in=('a_devolver', 'reembolsado', 'em_disputa'))[:100]):
+        titulo = f'Estorno não aparece no VBVT — Encomenda #{r.encomenda_id}'
+        if Notificacao.objects.filter(Q(titulo=titulo) | Q(titulo__startswith=f'{titulo} (')).exists():
+            continue
+        texto = (f'A loja marcou o estorno de {formatar(r.valor_aprovado)} a {_hora(r.entregue_em)} (referência '
+                 f'{r.referencia or "—"}), mas não aparece nos ficheiros VBVT carregados até {data_ficheiro:%d/%m/%Y}. '
+                 f'Confirma no Portal do Comerciante da SISP.')
+        _avisar_loja(r, 'Estorno não aparece no VBVT', texto, tipo='vinti4')
+        notificar_admins(tipo='vinti4', titulo=f'{titulo} ({r.loja.nome})', mensagem=texto, loja=r.loja,
+                         link=f'/admin/devolucoes/{r.id}', email=None)
+        n += 1
+    return n
 
 
 def escalar_sem_resposta(agora=None, lote=200):
@@ -909,9 +1062,14 @@ def _executar_no_gateway(r, valor, metodo, pagamento=None):
 
 def _pagou_com_cartao_loja(encomenda):
     """Cartão vinti4: o dinheiro foi direto para a conta da loja (contrato dela com a SISP) — a Bendi não o tem.
-    É a loja que devolve, com um estorno no Portal do Comerciante, como devolve uma transferência."""
+    É a loja que devolve, com um estorno no Portal do Comerciante, como devolve uma transferência.
+    Também quando não há Pagamento (cobrado depois de a encomenda ser cancelada): conta a transacção paga."""
     p = pagamento_de(encomenda)
-    return bool(p and p.fornecedor == 'vinti4')
+    if p:
+        return p.fornecedor == 'vinti4'
+    from ..models import TransacaoVinti4
+    return TransacaoVinti4.objects.filter(loja_id=encomenda.loja_id, estado='paga',
+                                          referencia__startswith=f'enc-{encomenda.id}-').exists()
 
 
 def como_devolve(encomenda):

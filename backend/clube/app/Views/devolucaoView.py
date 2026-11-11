@@ -152,6 +152,10 @@ def _detalhe(request, r, papel):
                           'pode_por_fora': papel == 'admin' and _financeiro(request)}
                          if r.estado == 'por_reembolsar' else None),
         'referencia': r.referencia if papel == 'admin' else '',      # transacção do reembolso (para o admin verificar)
+        # cartão vinti4: como a loja devolveu (a referência do estorno vêem todos) e se a SISP já o confirmou (VBVT)
+        'devolvido_como': r.devolvido_como,
+        'referencia_devolucao': r.referencia if r.metodo == 'manual' and r.devolvido_como else '',
+        'confirmado_sisp_em': _data(r.confirmado_sisp_em),
         'pode_escalar': papel == 'cliente' and dev.pode_escalar(r),
         'pode_nao_recebi': papel == 'cliente' and dev.pode_nao_recebi(r),
         'nao_recebi_a_partir': (_data(r.data_reembolso + dev.timedelta(days=dev.DIAS_NAO_RECEBI))
@@ -434,6 +438,10 @@ def acao_loja(request, loja_id, id):
         return Response({'detail': 'Sem permissão: gerir_devolucoes'}, status=status.HTTP_403_FORBIDDEN)
     u, d = request.user.utilizador, request.data
     try:
+        fotos = []
+        if d.get('acao') == 'dinheiro_entregue' and _ficheiros(request):     # prova (antes da transacção: é lento)
+            ja = Reembolso.objects.filter(id=id, loja=loja).first()
+            fotos = dev.preparar_fotos(_ficheiros(request), ja_tem=ja.fotos.count() if ja else 0)
         with transaction.atomic():
             r = _reembolso_bloqueado(id)
             if r.loja_id != loja.id:
@@ -446,7 +454,7 @@ def acao_loja(request, loja_id, id):
             elif acao == 'recebido':
                 dev.loja_recebido(r, u, _sim(d.get('repor_stock')))
             elif acao == 'dinheiro_entregue':
-                dev.loja_dinheiro_entregue(r, u)
+                dev.loja_dinheiro_entregue(r, u, d.get('como', ''), d.get('referencia', ''), d.get('nota', ''), fotos)
             elif acao == 'tentar_reembolso':
                 if _limitado(request, 'tentar', '5/m'):
                     raise ErroReembolso('Demasiadas tentativas — espera um minuto.', 429)

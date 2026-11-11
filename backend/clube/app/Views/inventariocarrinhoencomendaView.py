@@ -29,8 +29,9 @@ from ..Serializers.InventarioCarrinhoEncomendaSerializer import (
 )
 from ..utils.pagination import paginar
 from ..utils.variantes import resolver_variante, atualizar_total_inventario
-from ..utils.encomendas import (repor_stock, cancelar_anteriores_por_pagar, cancelar_entrega, fechar_entrega,
-                                aprovar_dinheiro, confirmar_transferencia, transferencia_por_confirmar)
+from ..utils.encomendas import (repor_stock, cancelar_anteriores_por_pagar, minutos_cartao_a_decorrer,
+                                cancelar_entrega, fechar_entrega, aprovar_dinheiro, confirmar_transferencia,
+                                transferencia_por_confirmar)
 from ..utils import conjuntos as conj
 from ..utils import horarios
 from ..utils import devolucoes
@@ -464,6 +465,12 @@ def encomenda_criar(request, loja_id):
 
     # ── 0) Encomendas deste cliente nesta loja ainda por pagar (o pagamento falhou e está a
     #       tentar de novo): a nova substitui-as e o stock delas volta antes de validar o desta ──
+    falta = minutos_cartao_a_decorrer(utilizador, loja)
+    if falta:
+        return Response({'detail': f'Tens um pagamento com cartão a decorrer numa encomenda desta loja. Termina-o na '
+                                   f'página da SISP ou, se a fechaste sem pagar, tenta outra vez dentro de {falta} min '
+                                   f'— assim não pagas duas vezes.', 'codigo': 'cartao_a_decorrer'},
+                        status=status.HTTP_409_CONFLICT)
     cancelar_anteriores_por_pagar(utilizador, loja)
 
     # ── 1) Bloqueia e valida o stock de TODOS os itens antes de escrever ──

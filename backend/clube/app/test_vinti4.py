@@ -15,7 +15,7 @@ from django.utils import timezone
 from .models import TransacaoVinti4, Utilizador
 from .pagamentos import ErroPagamento, obter
 from .pagamentos import vinti4 as v4
-from .pagamentos.base import Cobranca
+from .pagamentos.base import Cobranca, Confirmacao
 from .pagamentos.servico import DadosClienteEmFalta
 
 CHAVE = '123456789A'
@@ -784,8 +784,9 @@ class PerguntarASisp(TestCase):
         self.u = _utilizador()
 
     def _tx(self, minutos=9):
-        inicio = obter('vinti4').iniciar(Cobranca(referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T',
-                                                  pagador=self.u))
+        self.n = getattr(self, 'n', 6) + 1          # uma fatura por transacção (só uma a decorrer de cada vez)
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'fat-{self.n}-cartao-1', valor=Decimal('1500'),
+                                                  descricao='T', pagador=self.u))
         tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
         TransacaoVinti4.objects.filter(pk=tx.pk).update(criada_em=timezone.now() - timedelta(minutes=minutos))
         return tx
@@ -855,7 +856,7 @@ class TempoRealCartao(TestCase):
             tx.respostas = [{'x': 1}]
             tx.save(update_fields=['respostas'])                                              # só a resposta: não avisa
             emitir.assert_not_called()
-            v4.processar_resposta({'merchantRef': tx.ref, 'UserCancelled': 'true'})           # cancelada: avisa
+            v4.processar_resposta({'merchantRef': tx.ref, 'merchantSession': tx.sessao, 'UserCancelled': 'true'})           # cancelada: avisa
             self.assertEqual([c.args[0] for c in emitir.call_args_list], ['cartao'])
             emitir.reset_mock()
             TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga')
@@ -872,3 +873,685 @@ class TempoRealCartao(TestCase):
         r = api.post('/app/pagamento/regresso/', {'fornecedor': 'vinti4', 'ref': tx.ref}, format='json')
         self.assertEqual(r.status_code, 400)
         self.assertNotIn('codigo', r.json())
+
+
+# ── backoffice da loja → Pagamentos (Views/lojaCartaoView.py) e o VBVT separado por comerciante ──
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID, PAGAMENTOS_FORNECEDOR='vinti4', PAGAMENTOS_FORNECEDOR_BENDI='vinti4')
+class PagamentosDaLoja(TestCase):
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+        from .models import AdesaoVinti4
+        self.dono = _utilizador('donoa')
+        self.loja = _loja(self.dono)
+        self.outro = _utilizador('donob')
+        self.outra = _loja(self.outro, pos_id='90077')
+        AdesaoVinti4.objects.filter(loja=self.loja).update(merchant_id='9000101')
+        AdesaoVinti4.objects.filter(loja=self.outra).update(merchant_id='9000202')
+        self.cliente = _utilizador('comprador')
+        self.f = obter('vinti4')
+        self.api = APIClient()
+        self.api.force_authenticate(self.dono.user)
+
+    def _tx(self, loja=None, referencia='enc-5-cartao-1', estado='paga', valor=2300):
+        inicio = self.f.iniciar(Cobranca(referencia=referencia, valor=Decimal(valor), descricao='Compra',
+                                         pagador=self.cliente, loja=loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado=estado)
+        tx.refresh_from_db()
+        return tx
+
+    def _url(self, resto='', loja=None):
+        return f'/app/loja/{(loja or self.loja).id}/cartao/{resto}'
+
+    def test_so_ve_as_suas(self):
+        minha = self._tx(self.loja)
+        self._tx(self.outra)
+        self._tx(None, referencia='fat-7-cartao-1')                     # mensalidade da Bendi
+        r = self.api.get(self._url())
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        d = r.json()
+        self.assertEqual([t['id'] for t in d['results']], [minha.id])
+        self.assertNotIn('lojas', d)                                     # a lista de lojas é só do admin
+        self.assertEqual(d['totais']['pagas'], 1)
+        self.assertEqual(d['totais']['valor_pago'], '2300.00')
+        self.assertTrue(d['contrato']['merchant_id'])
+        # a ficha, o CSV e o "Perguntar à SISP" de outra loja dão 404 / 403
+        alheia = TransacaoVinti4.objects.exclude(loja=self.loja).first()
+        self.assertEqual(self.api.get(self._url(f'{alheia.id}/')).status_code, 404)
+        self.assertEqual(self.api.post(self._url(f'{alheia.id}/consultar/')).status_code, 404)
+        self.assertEqual(self.api.get(self._url(loja=self.outra)).status_code, 403)
+        csv = self.api.get(self._url('csv/'))
+        self.assertEqual(csv.status_code, 200)
+        self.assertIn(minha.ref, csv.content.decode('utf-8'))
+        self.assertNotIn(alheia.ref, csv.content.decode('utf-8'))
+        ficha = self.api.get(self._url(f'{minha.id}/')).json()
+        self.assertEqual(ficha['destino'], f'/loja/{self.loja.id}/backoffice/encomendas/5')
+
+    def test_so_o_dono(self):
+        from rest_framework.test import APIClient
+        from .models import UtilizadorLoja
+        gestor = _utilizador('gestora')
+        UtilizadorLoja.objects.create(loja=self.loja, utilizador=gestor, role='gestor', ativo=True)
+        api = APIClient()
+        api.force_authenticate(gestor.user)
+        self.assertEqual(api.get(self._url()).status_code, 403)
+        self.assertEqual(api.get(self._url('vbvt/')).status_code, 403)
+
+    def test_filtros_e_contagens(self):
+        paga = self._tx(self.loja)
+        self._tx(self.loja, estado='por_confirmar')
+        self._tx(self.loja, referencia='mar-3-cartao-1', estado='falhada')
+        d = self.api.get(self._url(), {'estado': 'paga'}).json()
+        self.assertEqual([t['id'] for t in d['results']], [paga.id])
+        # as contagens dos botões não dependem do estado escolhido
+        self.assertEqual({e['valor']: e['n'] for e in d['estados']}['falhada'], 1)
+        self.assertEqual(d['totais']['por_confirmar'], 1)
+        self.assertEqual(self.api.get(self._url(), {'tipo': 'marcacao'}).json()['count'], 1)
+        self.assertEqual(self.api.get(self._url(), {'reconciliacao': 'falta'}).json()['count'], 1)
+        self.assertEqual(self.api.get(self._url(), {'reconciliacao': 'feita'}).json()['count'], 0)
+        self.assertEqual(self.api.get(self._url(), {'q': paga.ref}).json()['count'], 1)
+        hoje = timezone.localdate().isoformat()
+        self.assertEqual(self.api.get(self._url(), {'de': hoje, 'ate': hoje}).json()['count'], 3)
+        for mau in ({'estado': 'xpto'}, {'tipo': 'xpto'}, {'reconciliacao': 'x'}, {'de': '2026-13-01'},
+                    {'de': '2026-11-10', 'ate': '2026-11-01'}):
+            self.assertEqual(self.api.get(self._url(), mau).status_code, 400, mau)
+        p = self.api.get(self._url(), {'limit': 2, 'offset': 2}).json()
+        self.assertEqual((p['count'], len(p['results'])), (3, 1))
+
+    def test_vbvt_so_do_contrato_da_loja(self):
+        from .models import FicheiroVBVT
+        minha = self._tx(self.loja)
+        alheia = self._tx(self.outra)
+        # o ficheiro de outro comerciante é recusado e fica registado na loja que o carregou, não na outra
+        r = self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(alheia.ref, 2300)], mid='9000202'))})
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.json()['estado'], 'rejeitado')
+        self.assertIn('não é o do contrato vinti4 desta loja', r.json()['erros'][0]['erro'])
+        alheia.refresh_from_db()
+        self.assertIsNone(alheia.reconciliada_em)
+        from rest_framework.test import APIClient
+        api_b = APIClient()
+        api_b.force_authenticate(self.outro.user)
+        self.assertEqual(api_b.get(self._url('vbvt/', loja=self.outra)).json()['count'], 0)
+        # o ficheiro dela é aplicado; uma linha com a referência de outra loja não lhe toca ("não é nossa")
+        r = self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(minha.ref, 2300, comissao=10),
+                                                                            _compra(alheia.ref, 2300)], mid='9000101'))})
+        d = r.json()
+        self.assertEqual(d['estado'], 'aplicado', d['erros'])
+        self.assertEqual([l['resultado'] for l in d['linhas']], ['ok', 'desconhecida'])
+        minha.refresh_from_db()
+        alheia.refresh_from_db()
+        self.assertIsNotNone(minha.reconciliada_em)
+        self.assertIsNone(alheia.reconciliada_em)
+        lista = self.api.get(self._url('vbvt/')).json()
+        self.assertEqual([f['estado'] for f in lista['results']], ['aplicado', 'rejeitado'])
+        self.assertEqual(self.api.get(self._url('vbvt/'), {'estado': 'aplicado'}).json()['count'], 1)
+        alheio = FicheiroVBVT.objects.create(nome='x', hash='h', merchant_id='9000202', estado='aplicado')
+        self.assertEqual(self.api.get(self._url(f'vbvt/{alheio.id}/')).status_code, 404)
+        # os totais já contam a comissão da SISP
+        self.assertEqual(self.api.get(self._url()).json()['totais']['liquido'], '2290.00')
+
+    def test_ficheiro_da_bendi_nao_toca_nas_lojas(self):
+        from .pagamentos import vbvt
+        da_loja = self._tx(self.loja)
+        da_bendi = self._tx(None, referencia='fat-7-cartao-1')
+        f = vbvt.processar(_vbvt([_compra(da_loja.ref, 2300), _compra(da_bendi.ref, 2300)]))     # Merchant ID da Bendi
+        self.assertEqual([l['resultado'] for l in f.linhas], ['desconhecida', 'ok'])
+        da_loja.refresh_from_db()
+        self.assertIsNone(da_loja.reconciliada_em)
+
+    def test_avisa_o_dono_e_os_admins(self):
+        from .models import Notificacao
+        from .models import EmailEnviado
+        admin = _utilizador('adminpag')
+        admin.user.is_staff = True
+        admin.user.save(update_fields=['is_staff'])
+        admin.role_admin = next(r for r, p in Utilizador.PERMISSOES_ADMIN.items() if 'gerir_pagamentos' in p)
+        admin.email_confirmado = True
+        admin.save(update_fields=['role_admin', 'email_confirmado'])
+        Utilizador.objects.filter(pk=self.dono.pk).update(email_confirmado=True)
+        nao_paga = self._tx(self.loja, estado='por_confirmar')
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(nao_paga.ref, 2300)], mid='9000101'))})
+        self.assertEqual(r.json()['linhas'][0]['resultado'], 'paga_so_na_sisp')
+        avisos = Notificacao.objects.filter(tipo='vinti4')
+        self.assertEqual(set(avisos.values_list('utilizador_id', flat=True)), {self.dono.id, admin.id})
+        self.assertEqual(avisos.get(utilizador=self.dono).link, f'/loja/{self.loja.id}/backoffice/pagamentos')
+        self.assertEqual(EmailEnviado.objects.filter(tipo='aviso_vinti4').count(), 2)
+        # um ficheiro sem diferenças de dinheiro não avisa
+        Notificacao.objects.all().delete()
+        ok = self._tx(self.loja)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.api.post(self._url('vbvt/'), {'ficheiro': _ficheiro(_vbvt([_compra(ok.ref, 2300)], mid='9000101', data='20261113',
+                                                                          ant='20261112', seq_ant=1))})
+        self.assertFalse(Notificacao.objects.filter(tipo='vinti4').exists())
+
+    def test_tempo_real_da_loja(self):
+        with mock.patch('app.utils.tempo_real_listas.emitir') as emitir:
+            tx = self._tx(self.loja)
+            self.assertIn(mock.call('cartao', self.loja.id), emitir.call_args_list)
+            emitir.reset_mock()
+            tx.respostas = [{'x': 1}]
+            tx.save(update_fields=['respostas'])                       # só a resposta guardada: não avisa
+            self.assertNotIn(mock.call('cartao', self.loja.id), emitir.call_args_list)
+            tx.estado = 'cancelada'
+            tx.save(update_fields=['estado'])
+            self.assertIn(mock.call('cartao', self.loja.id), emitir.call_args_list)
+
+    def test_admin_filtra_por_loja(self):
+        api = _admin_api('adminfiltro')
+        self._tx(self.loja)
+        self._tx(self.outra)
+        d = api.get('/app/admin/pagamentos/vinti4/', {'loja_id': self.loja.id}).json()
+        self.assertEqual(d['count'], 1)
+        self.assertEqual({l['id'] for l in d['lojas']}, {self.loja.id, self.outra.id})
+        self.assertEqual(api.get('/app/admin/pagamentos/vinti4/', {'loja_id': 'x'}).status_code, 400)
+        self.assertEqual(api.get('/app/admin/pagamentos/vinti4/csv/').status_code, 200)
+        self.assertEqual(api.get('/app/admin/pagamentos/vbvt/', {'dono': self.loja.id}).status_code, 200)
+
+
+def _ficheiro(conteudo, nome='VBVT.txt'):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    return SimpleUploadedFile(nome, conteudo, content_type='text/plain')
+
+
+@override_settings(**CRED)
+class UmPagamentoDeCadaVez(TestCase):
+    """Com um pagamento com cartão ainda na página da SISP, não se começa outro para a mesma coisa."""
+
+    def setUp(self):
+        self.u = _utilizador()
+        self.f = obter('vinti4')
+
+    def _iniciar(self, ref='enc-12-cartao-1'):
+        return self.f.iniciar(Cobranca(referencia=ref, valor=Decimal('1500'), descricao='T', pagador=self.u))
+
+    def test_bloqueia_e_liberta(self):
+        primeiro = TransacaoVinti4.objects.get(ref=self._iniciar().campos['merchantRef'])
+        with self.assertRaisesMessage(ErroPagamento, 'Já há um pagamento com cartão a decorrer'):
+            self._iniciar('enc-12-cartao-2')
+        self._iniciar('enc-13-cartao-1')                    # outra encomenda: pode
+        self._iniciar('mar-12-cartao-1')                    # uma marcação com o mesmo número: pode
+        v4.processar_resposta({'merchantRef': primeiro.ref, 'merchantSession': primeiro.sessao, 'UserCancelled': 'true'})
+        self._iniciar('enc-12-cartao-3')                    # cancelou na SISP: fica livre logo
+        TransacaoVinti4.objects.filter(referencia__startswith='enc-12-').update(
+            criada_em=timezone.now() - timedelta(minutes=9))
+        self._iniciar('enc-12-cartao-4')                    # passaram os 8 minutos: fica livre
+
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID)
+class IdentificadorEstavel(TestCase):
+    """Confirmada pela API de estado e depois reconciliada pelo VBVT: o regresso do cliente continua a reconhecer o
+    mesmo pagamento (não vira um pagamento a dobrar com pedido de reembolso)."""
+
+    def test_vbvt_nao_muda_a_transacao(self):
+        from .pagamentos import vbvt
+        u = _utilizador()
+        inicio = obter('vinti4').iniciar(Cobranca(referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T',
+                                                  pagador=u))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga', confirmada_por='estado', efeito='pago')
+        antes = TransacaoVinti4.objects.get(pk=tx.pk).transacao
+        f = vbvt.processar(_vbvt([_compra(tx.ref, 1500, comissao=Decimal('10'))]))
+        self.assertEqual(f.estado, 'aplicado', f.erros)
+        tx.refresh_from_db()
+        self.assertIsNotNone(tx.reconciliada_em)
+        self.assertEqual(tx.transacao, antes)
+        self.assertEqual(f.linhas[0]['transacao'], '987-26')            # o nº da SISP fica na linha do ficheiro
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4', PAGAMENTOS_FORNECEDOR_BENDI='vinti4')
+class PagamentoTardioDaLoja(TestCase):
+    """Cartão vinti4 da loja cobrado depois de a encomenda ser cancelada, ou a dobrar: o dinheiro está na conta da
+    loja — é ela que faz o estorno (nunca o simulado), e a encomenda paga não é cancelada."""
+
+    def setUp(self):
+        from .models import Encomenda
+        self.dono = _utilizador('donotardio')
+        self.loja = _loja(self.dono)
+        self.cliente = _utilizador('clientetardio')
+        self.enc = Encomenda.objects.create(comprador=self.cliente, loja=self.loja, valor_total=Decimal('2300'))
+        self.admin = _utilizador('admintardio')
+        self.admin.user.is_staff = True
+        self.admin.user.save(update_fields=['is_staff'])
+
+    def _paga(self, n):
+        from .pagamentos import servico
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'enc-{self.enc.id}-cartao-{n}', valor=Decimal('2300'),
+                                                  descricao='E', pagador=self.cliente, loja=self.loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga', tid=str(100 + n), periodo='987')
+        tx.refresh_from_db()
+        conf = Confirmacao(sucesso=True, referencia=tx.referencia, transacao=tx.transacao, valor=Decimal('2300'),
+                           moeda=v4._moeda())
+        return servico.confirmar(v4.FORNECEDOR, conf), tx
+
+    def test_cancelada_depois_paga(self):
+        from .models import Reembolso
+        from .utils import devolucoes
+        self.enc.status = 'cancelado'
+        self.enc.save(update_fields=['status'])
+        res, tx = self._paga(1)
+        self.assertEqual(res['estado'], 'reembolso')
+        r = Reembolso.objects.get(encomenda=self.enc)
+        from .models import MensagemReembolso
+        self.assertIn('A loja vai devolver', MensagemReembolso.objects.filter(reembolso=r).first().texto)
+        self.assertTrue(devolucoes._pagou_com_cartao_loja(self.enc))
+        self._paga(1)                                           # o mesmo regresso outra vez: não repete o pedido
+        self.assertEqual(Reembolso.objects.filter(encomenda=self.enc).count(), 1)
+        devolucoes.admin_decidir(r, self.admin, 'reembolsar')
+        r.refresh_from_db()
+        # a loja devolve com estorno (manual), nunca "reembolsado" pelo simulado
+        self.assertEqual((r.estado, r.metodo), ('a_devolver', 'manual'))
+
+    def test_pago_a_dobrar_nao_cancela(self):
+        from .models import Reembolso
+        from .utils import devolucoes
+        res, _ = self._paga(1)
+        self.assertEqual(res['estado'], 'pago')
+        res, segunda = self._paga(2)
+        self.assertEqual(res['estado'], 'reembolso')
+        r = Reembolso.objects.get(encomenda=self.enc, motivo='pagamento_tardio')
+        self.assertIn(segunda.transacao, r.descricao)
+        devolucoes.admin_decidir(r, self.admin, 'reembolsar')
+        self.enc.refresh_from_db()
+        r.refresh_from_db()
+        self.assertEqual(self.enc.status, 'pago')               # a encomenda paga continua
+        self.assertEqual((r.estado, r.metodo), ('a_devolver', 'manual'))
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4')
+class EncomendaEsperaPeloCartao(TestCase):
+    """Passados os 30 minutos, uma encomenda com o cliente ainda na página da SISP não é cancelada."""
+
+    def test_espera(self):
+        from .models import Encomenda
+        from .utils.encomendas import expirar_por_pagar
+        dono, cliente = _utilizador('donoespera'), _utilizador('clienteespera')
+        loja = _loja(dono)
+        enc = Encomenda.objects.create(comprador=cliente, loja=loja, valor_total=Decimal('900'))
+        Encomenda.objects.filter(pk=enc.pk).update(data_criacao=timezone.now() - timedelta(minutes=35))
+        obter('vinti4').iniciar(Cobranca(referencia=f'enc-{enc.id}-cartao-1', valor=Decimal('900'), descricao='E',
+                                         pagador=cliente, loja=loja))
+        self.assertEqual(expirar_por_pagar(), 0)
+        enc.refresh_from_db()
+        self.assertEqual(enc.status, 'pendente')
+        # 8 minutos depois sem resposta: já cancela
+        self.assertEqual(expirar_por_pagar(timezone.now() + timedelta(minutes=9)), 1)
+
+
+# ── auditoria 2: cancelamento com sessão, assinaturas inválidas, por confirmar sem Portal, encomenda nova com o
+#    cartão a decorrer, marcação paga tarde e a ficha do cartão ligada ao reembolso ──
+
+@override_settings(**CRED)
+class CancelamentoComSessao(TestCase):
+    """O cancelamento da SISP não leva FingerPrint: só vale com o merchantSession certo (que nunca anda nos
+    endereços do site); a sessão também não fica à vista nas respostas guardadas."""
+
+    def test_sem_a_sessao_nao_cancela(self):
+        from .models import RegistoTransacao
+        u = _utilizador()
+        tx = TransacaoVinti4.objects.get(ref=obter('vinti4').iniciar(Cobranca(
+            referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T', pagador=u)).campos['merchantRef'])
+        for falso in ({}, {'merchantSession': 'SERRADA0000000'}):
+            v4.processar_resposta({'merchantRef': tx.ref, 'UserCancelled': 'true', **falso})
+            tx.refresh_from_db()
+            self.assertEqual(tx.estado, 'iniciada')
+        self.assertEqual(RegistoTransacao.objects.filter(evento='cartao_cancelamento_invalido', objeto_id=tx.id).count(), 2)
+        v4.processar_resposta({'merchantRef': tx.ref, 'merchantSession': tx.sessao, 'UserCancelled': 'true'})
+        tx.refresh_from_db()
+        self.assertEqual(tx.estado, 'cancelada')
+        self.assertNotIn(tx.sessao, str(tx.respostas))
+
+
+@override_settings(**CRED)
+class AssinaturaInvalida(TestCase):
+    """Uma resposta (de sucesso ou de erro) com o resultFingerPrint errado fica no registo e avisa os admins."""
+
+    def test_erro_com_assinatura_errada(self):
+        from .models import RegistoTransacao
+        u = _utilizador()
+        tx = TransacaoVinti4.objects.get(ref=obter('vinti4').iniciar(Cobranca(
+            referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T', pagador=u)).campos['merchantRef'])
+        with mock.patch('app.Views.notificacaoView.notificar_admins') as notificar:
+            v4.processar_resposta(_resposta_erro(tx, chave='OUTRACHAVE'))
+            v4.processar_resposta(_resposta_sucesso(tx, chave='OUTRACHAVE'))
+        tx.refresh_from_db()
+        self.assertEqual(tx.estado, 'iniciada')
+        self.assertEqual(RegistoTransacao.objects.filter(evento='cartao_assinatura_invalida', objeto_id=tx.id).count(), 2)
+        self.assertEqual(notificar.call_args.kwargs['tipo'], 'pagamento_erro')
+        self.assertIn('assinatura inválida', notificar.call_args.kwargs['titulo'])
+
+
+@override_settings(**CRED)
+class PorConfirmarSemPortal(TestCase):
+    """Sem Portal configurado as voltas do worker não gastam consultas; depois das 12, continua devagar."""
+
+    def _tx(self):
+        u = _utilizador()
+        tx = TransacaoVinti4.objects.get(ref=obter('vinti4').iniciar(Cobranca(
+            referencia='fat-7-cartao-1', valor=Decimal('1500'), descricao='T', pagador=u)).campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(criada_em=timezone.now() - timedelta(minutes=9))
+        return tx
+
+    def test_sem_portal_nao_conta(self):
+        tx = self._tx()
+        v4.rever_sem_resposta()
+        for _ in range(3):
+            TransacaoVinti4.objects.filter(pk=tx.pk).update(consultada_em=timezone.now() - timedelta(minutes=11))
+            v4.rever_sem_resposta()
+        tx.refresh_from_db()
+        self.assertEqual((tx.estado, tx.consultas), ('por_confirmar', 0))
+
+    @override_settings(VINTI4_PORTAL_ID='1', VINTI4_PORTAL_PASSWORD='abc123')
+    @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
+    @mock.patch('app.pagamentos.vinti4.requests.post')
+    def test_depois_das_12_continua_devagar(self, post, _confirmar):
+        tx = self._tx()
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='por_confirmar', consultas=v4.CONSULTAS_MAX,
+                                                        consultada_em=timezone.now() - timedelta(hours=1))
+        post.return_value.json.return_value = {'result': True, 'transactionSuccess': True}
+        v4.rever_sem_resposta()
+        post.assert_not_called()                         # 1 hora: ainda não
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(consultada_em=timezone.now() - timedelta(hours=7))
+        v4.rever_sem_resposta()
+        tx.refresh_from_db()
+        self.assertEqual(tx.estado, 'paga')
+        # mais de 30 dias: só à mão ("Perguntar à SISP")
+        post.reset_mock()
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='por_confirmar', consultada_em=None,
+                                                        criada_em=timezone.now() - timedelta(days=31))
+        v4.rever_sem_resposta()
+        post.assert_not_called()
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4')
+class NovaEncomendaComCartaoADecorrer(TestCase):
+    """O cliente a pagar na SISP uma encomenda por pagar: uma nova encomenda na mesma loja não a cancela."""
+
+    def test_minutos(self):
+        from .models import Encomenda
+        from .utils.encomendas import minutos_cartao_a_decorrer
+        dono, cliente = _utilizador('dononova'), _utilizador('clientenova')
+        loja = _loja(dono)
+        enc = Encomenda.objects.create(comprador=cliente, loja=loja, valor_total=Decimal('900'))
+        self.assertEqual(minutos_cartao_a_decorrer(cliente, loja), 0)
+        obter('vinti4').iniciar(Cobranca(referencia=f'enc-{enc.id}-cartao-1', valor=Decimal('900'), descricao='E',
+                                         pagador=cliente, loja=loja))
+        self.assertEqual(minutos_cartao_a_decorrer(cliente, loja), 8)
+        outra = _loja(_utilizador('donooutra'), pos_id='90088')
+        self.assertEqual(minutos_cartao_a_decorrer(cliente, outra), 0)          # noutra loja: pode
+        self.assertEqual(minutos_cartao_a_decorrer(cliente, loja, timezone.now() + timedelta(minutes=9)), 0)
+
+
+def _marcacao(loja, cliente, estado='expirada', pago=False):
+    from .servicos.models import ConfigServicos, Marcacao, Profissional, Servico
+    ConfigServicos.objects.get_or_create(loja=loja, defaults={'ativo': True})
+    prof = Profissional.objects.create(loja=loja, nome='Ana')
+    serv = Servico.objects.create(loja=loja, nome='Corte', duracao_min=30, preco=Decimal('1200'), pagamento='antecipado')
+    inicio = timezone.now() + timedelta(days=2)
+    return Marcacao.objects.create(loja=loja, servico=serv, profissional=prof, cliente=cliente, servico_nome='Corte',
+                                   duracao_min=30, inicio=inicio, fim=inicio + timedelta(minutes=30),
+                                   ocupado_ate=inicio + timedelta(minutes=30), estado=estado,
+                                   preco_indicado=Decimal('1200'), pagamento='antecipado', pago=pago)
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4')
+class MarcacaoPagaTarde(TestCase):
+    """Cartão da loja cobrado numa marcação que já não podia ser paga: fica na marcação como reembolso por concluir
+    (a loja faz o estorno e marca "Estorno feito"), o cliente e a loja são avisados, a ficha do cartão mostra-o."""
+
+    def setUp(self):
+        self.dono = _utilizador('donomar')
+        self.loja = _loja(self.dono)
+        self.cliente = _utilizador('clientemar')
+
+    def _paga(self, m, n=1):
+        from .pagamentos import servico
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'mar-{m.id}-cartao-{n}', valor=Decimal('1200'),
+                                                  descricao='M', pagador=self.cliente, loja=self.loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga', tid=str(200 + n), periodo='987',
+                                                        efeito='reembolso')
+        tx.refresh_from_db()
+        conf = Confirmacao(sucesso=True, referencia=tx.referencia, transacao=tx.transacao, valor=Decimal('1200'),
+                           moeda=v4._moeda())
+        return servico.confirmar(v4.FORNECEDOR, conf), tx
+
+    def test_expirada_depois_paga(self):
+        from .models import Notificacao
+        from .pagamentos import cartao_listas
+        from .servicos import marcacoes as ops
+        from .servicos.models import MensagemMarcacao
+        m = _marcacao(self.loja, self.cliente)
+        res, tx = self._paga(m)
+        self.assertEqual(res['estado'], 'reembolso')
+        m.refresh_from_db()
+        self.assertEqual((m.pago, m.valor_pago, m.reembolso_devido, m.pagamento_referencia),
+                         (True, Decimal('1200'), Decimal('1200'), tx.transacao))
+        self.assertEqual(ops.por_reembolsar(m), Decimal('1200'))
+        self.assertTrue(MensagemMarcacao.objects.filter(marcacao=m, texto__contains='Vai ser devolvido').exists())
+        self.assertTrue(Notificacao.objects.filter(utilizador=self.cliente, titulo='Reembolso a caminho').exists())
+        self.assertTrue(Notificacao.objects.filter(utilizador=self.dono, titulo='Faz o estorno no cartão').exists())
+        self._paga(m)                                    # o mesmo pagamento outra vez: nada muda
+        m.refresh_from_db()
+        self.assertEqual(m.reembolso_devido, Decimal('1200'))
+        ficha = cartao_listas.item(tx, completo=True, destino_loja=lambda t, i: '')
+        self.assertEqual([(r['estado'], r['valor']) for r in ficha['reembolsos']], [('por_reembolsar', '1.200$00')])
+        ops.estorno_feito(m, 'EST-123')
+        m.refresh_from_db()
+        self.assertEqual(ops.por_reembolsar(m), Decimal('0'))
+        ficha = cartao_listas.item(tx, completo=True)
+        self.assertEqual(ficha['reembolsos'][0]['estado'], 'reembolsado')
+
+    def test_a_dobrar(self):
+        from .servicos import marcacoes as ops
+        m = _marcacao(self.loja, self.cliente, estado='confirmada', pago=True)
+        primeira = 'v4_987-101'
+        from .servicos.models import Marcacao
+        Marcacao.objects.filter(pk=m.pk).update(valor_pago=Decimal('1200'), pagamento_fornecedor='vinti4',
+                                                pagamento_referencia=primeira)
+        res, segunda = self._paga(m, 2)
+        self.assertEqual(res['estado'], 'reembolso')
+        m.refresh_from_db()
+        self.assertEqual((m.valor_pago, m.reembolso_devido, m.pagamento_referencia),
+                         (Decimal('2400'), Decimal('1200'), primeira))
+        self.assertNotEqual(segunda.transacao, primeira)
+        self.assertEqual(ops.por_reembolsar(m), Decimal('1200'))
+
+
+@override_settings(**CRED)
+class FichaComReembolso(TestCase):
+    """A ficha do cartão de uma encomenda mostra o pedido de reembolso dela, com o caminho certo (loja/admin)."""
+
+    def test_pedido_na_ficha(self):
+        from .models import Encomenda
+        from .pagamentos import cartao_listas
+        dono, cliente = _utilizador('donoficha'), _utilizador('clienteficha')
+        loja = _loja(dono)
+        enc = Encomenda.objects.create(comprador=cliente, loja=loja, valor_total=Decimal('2300'), status='cancelado')
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'enc-{enc.id}-cartao-1', valor=Decimal('2300'),
+                                                  descricao='E', pagador=cliente, loja=loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga', tid='301', periodo='987', efeito='reembolso')
+        tx.refresh_from_db()
+        from .utils.devolucoes import pago_depois_de_cancelada
+        from .models import Notificacao
+        with mock.patch('app.utils.tempo_real_listas.emitir') as emitir:
+            r = pago_depois_de_cancelada(enc, Decimal('2300'), tx.transacao, cartao_loja=True)
+        self.assertIn(('cartao', loja.id), [c.args for c in emitir.call_args_list])
+        self.assertTrue(Notificacao.objects.filter(utilizador=dono, titulo__startswith='Pagamento com cartão a devolver').exists())
+        loja_ficha = cartao_listas.item(tx, completo=True, destino_loja=lambda t, i: '')
+        self.assertEqual(loja_ficha['reembolsos'][0]['link'], f'/loja/{loja.id}/backoffice/devolucoes/{r.id}')
+        self.assertEqual(loja_ficha['reembolsos'][0]['estado'], 'em_disputa')
+        self.assertEqual(cartao_listas.item(tx, completo=True)['reembolsos'][0]['link'], f'/admin/devolucoes/{r.id}')
+
+
+# ── reembolsos com cartão: a loja indica como devolveu (estorno com referência / outra forma com prova) e o VBVT,
+#    se a loja o carregar, confirma o estorno (reforço opcional) ──
+
+def _png():
+    import io
+    from PIL import Image
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    b = io.BytesIO()
+    Image.new('RGB', (4, 4), (200, 10, 10)).save(b, 'PNG')
+    return SimpleUploadedFile('prova.png', b.getvalue(), content_type='image/png')
+
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID, PAGAMENTOS_FORNECEDOR='vinti4')
+class DevolucaoComCartao(TestCase):
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+        from .models import AdesaoVinti4, Encomenda, Pagamento
+        from .utils import devolucoes
+        self.dono = _utilizador('donodev')
+        self.loja = _loja(self.dono)
+        AdesaoVinti4.objects.filter(loja=self.loja).update(merchant_id='9000101')
+        self.cliente = _utilizador('clientedev')
+        self.enc = Encomenda.objects.create(comprador=self.cliente, loja=self.loja, valor_total=Decimal('2300'),
+                                            status='pago')
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'enc-{self.enc.id}-cartao-1', valor=Decimal('2300'),
+                                                  descricao='E', pagador=self.cliente, loja=self.loja))
+        self.tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=self.tx.pk).update(estado='paga', tid='77', periodo='987', efeito='pago')
+        self.tx.refresh_from_db()
+        Pagamento.objects.create(encomenda=self.enc, valor=Decimal('2300'), status='aprovado', fornecedor='vinti4',
+                                 referencia_transacao=self.tx.transacao)
+        self.r = devolucoes.ao_cancelar_pela_loja(self.enc, self.dono)
+        self.r.refresh_from_db()
+        self.api = APIClient()
+        self.api.force_authenticate(self.dono.user)
+
+    def _acao(self, dados, multipart=False):
+        return self.api.post(f'/app/loja/{self.loja.id}/reembolsos/{self.r.id}/acao/', {'acao': 'dinheiro_entregue', **dados},
+                             format='multipart' if multipart else 'json')
+
+    def test_estorno_sem_referencia(self):
+        """A referência é opcional: sem ela o estorno fica marcado na mesma (o cliente confirma ou diz que não recebeu)."""
+        r = self._acao({})
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        d = r.json()
+        self.assertEqual((d['devolvido_como'], d['referencia_devolucao']), ('estorno', ''))
+        self.assertTrue(d['entregue_em'])
+
+    def test_estorno_com_referencia(self):
+        self.assertEqual((self.r.estado, self.r.metodo), ('a_devolver', 'manual'))
+        self.assertEqual(self._acao({'como': 'estorno', 'referencia': 'AB'}).status_code, 400)      # demasiado curta
+        r = self._acao({'como': 'estorno', 'referencia': 'EST-998877'})
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        d = r.json()
+        self.assertEqual((d['devolvido_como'], d['referencia_devolucao']), ('estorno', 'EST-998877'))
+        self.assertTrue(d['entregue_em'])
+        # o cliente vê a referência e confirma
+        from rest_framework.test import APIClient
+        api = APIClient()
+        api.force_authenticate(self.cliente.user)
+        self.assertEqual(api.get(f'/app/reembolsos/{self.r.id}/').json()['referencia_devolucao'], 'EST-998877')
+
+    def test_outra_forma_pede_prova(self):
+        self.assertEqual(self._acao({'como': 'outro', 'nota': 'Transferência BCA'}).status_code, 400)       # sem foto
+        self.assertEqual(self._acao({'como': 'outro', 'fotos': _png()}, multipart=True).status_code, 400)  # sem nota
+        r = self._acao({'como': 'outro', 'nota': 'Transferência BCA para a conta do cliente', 'fotos': _png()},
+                       multipart=True)
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.r.refresh_from_db()
+        self.assertEqual((self.r.devolvido_como, self.r.fotos.count()), ('outro', 1))
+        self.assertEqual(self.r.fotos.first().mensagem.papel, 'loja')
+
+    def test_vbvt_confirma_e_fecha(self):
+        from .models import Notificacao
+        from .pagamentos import vbvt
+        self._acao({'como': 'estorno', 'referencia': 'EST-1'})
+        f = vbvt.processar(_vbvt([_estorno('BEST000000009', self.tx.ref, 2300)], mid='9000101'), loja=self.loja)
+        self.assertEqual(f.estado, 'aplicado', f.erros)
+        self.r.refresh_from_db()
+        self.tx.refresh_from_db()
+        self.assertEqual(self.tx.valor_estornado, Decimal('2300'))
+        self.assertEqual(self.r.estado, 'reembolsado')
+        self.assertIsNotNone(self.r.confirmado_sisp_em)
+        self.assertTrue(Notificacao.objects.filter(utilizador=self.cliente, titulo__startswith='Reembolso confirmado').exists())
+        from .pagamentos import cartao_listas
+        self.assertTrue(cartao_listas.item(self.tx, completo=True)['reembolsos'][0]['confirmado_sisp'])
+
+    def test_sem_marcar_tambem_fecha(self):
+        """A loja esqueceu-se de marcar, mas carregou o VBVT: o estorno da SISP chega."""
+        from .pagamentos import vbvt
+        with mock.patch('app.utils.tempo_real_listas.emitir') as emitir,                 mock.patch('app.utils.devolucoes._enviar') as enviar:
+            with self.captureOnCommitCallbacks(execute=True):
+                vbvt.processar(_vbvt([_estorno('BEST000000009', self.tx.ref, 2300)], mid='9000101'), loja=self.loja)
+        self.r.refresh_from_db()
+        self.assertEqual((self.r.estado, self.r.devolvido_como), ('reembolsado', 'estorno'))
+        self.assertTrue(self.r.referencia.startswith('SISP 988-'), self.r.referencia)   # a referência vem da SISP
+        # tempo real: a ficha do cartão (backoffice → Pagamentos) e o pedido (cliente, loja, Bendi)
+        self.assertIn(('cartao', self.loja.id), [c.args for c in emitir.call_args_list])
+        self.assertTrue(any(c.args[0].id == self.r.id for c in enviar.call_args_list))
+
+    def test_estorno_parcial_nao_chega(self):
+        from .pagamentos import vbvt
+        vbvt.processar(_vbvt([_estorno('BEST000000009', self.tx.ref, 1000)], mid='9000101'), loja=self.loja)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'a_devolver')
+        self.assertIsNone(self.r.confirmado_sisp_em)
+        # o resto no ficheiro do dia seguinte: a soma chega
+        vbvt.processar(_vbvt([_estorno('BEST000000010', self.tx.ref, 1300)], mid='9000101', data='20261113',
+                             ant='20261112', seq_ant=1), loja=self.loja)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'reembolsado')
+
+    def test_sem_vbvt_nada_muda(self):
+        """O VBVT é opcional: sem ele, a loja marca, o cliente confirma — como sempre."""
+        from .utils import devolucoes
+        self._acao({'como': 'estorno', 'referencia': 'EST-1'})
+        self.r.refresh_from_db()
+        devolucoes.cliente_recebi(self.r, self.cliente)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'reembolsado')
+        self.assertIsNone(self.r.confirmado_sisp_em)
+
+    def test_avisa_estorno_que_nao_aparece(self):
+        from .models import Notificacao, Reembolso
+        from .pagamentos import vbvt
+        self._acao({'como': 'estorno', 'referencia': 'EST-1'})
+        Reembolso.objects.filter(pk=self.r.pk).update(entregue_em=timezone.now() - timedelta(days=10))
+        # um ficheiro de dias depois sem o estorno → avisa (uma vez)
+        outra = self._compra_qualquer()
+        for data, ant, seq in (('20261112', '00000000', 0), ('20261113', '20261112', 1)):
+            vbvt.processar(_vbvt([_compra(outra.ref, 500)], mid='9000101', data=data, ant=ant, seq_ant=seq), loja=self.loja)
+        avisos = Notificacao.objects.filter(titulo__startswith=f'Estorno não aparece no VBVT — Encomenda #{self.enc.id}')
+        self.assertEqual(set(avisos.values_list('utilizador_id', flat=True)), {self.dono.id})
+
+    def _compra_qualquer(self):
+        inicio = obter('vinti4').iniciar(Cobranca(referencia='mar-999-cartao-1', valor=Decimal('500'), descricao='X',
+                                                  pagador=self.cliente, loja=self.loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga')
+        return tx
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4')
+class MarcacaoEstornoNoVBVT(TestCase):
+
+    def test_vbvt_conclui_o_estorno_da_marcacao(self):
+        from .models import AdesaoVinti4
+        from .pagamentos import vbvt
+        from .servicos import marcacoes as ops
+        dono, cliente = _utilizador('donomv'), _utilizador('clientemv')
+        loja = _loja(dono)
+        AdesaoVinti4.objects.filter(loja=loja).update(merchant_id='9000101')
+        m = _marcacao(loja, cliente)
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'mar-{m.id}-cartao-1', valor=Decimal('1200'),
+                                                  descricao='M', pagador=cliente, loja=loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='paga', tid='55', periodo='987', efeito='reembolso')
+        tx.refresh_from_db()
+        ops.pago_sem_efeito(m, 'vinti4', tx.transacao, Decimal('1200'), 'expirou')
+        m.refresh_from_db()
+        self.assertEqual(ops.por_reembolsar(m), Decimal('1200'))
+        vbvt.processar(_vbvt([_estorno('BEST000000011', tx.ref, 1200)], mid='9000101'), loja=loja)
+        m.refresh_from_db()
+        self.assertEqual(ops.por_reembolsar(m), Decimal('0'))
+        self.assertEqual(m.valor_reembolsado, Decimal('1200'))
