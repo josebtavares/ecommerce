@@ -1,6 +1,7 @@
 <!-- SeccaoVinti4.vue — Configurações da loja (só o dono): pagamento com cartão = contrato vinti4 da própria loja.
      A SISP não deixa a Bendi receber por conta das lojas: cada loja adere e recebe direto na conta dela.
-     Backend: GET/POST/PUT /app/loja/<id>/vinti4/ (utils/vinti4.py). A chave nunca volta do servidor. -->
+     Backend: GET/POST/PUT /app/loja/<id>/vinti4/ (utils/vinti4.py). A chave nunca volta do servidor.
+     Tempo real: recarrega quando a loja, os documentos ou a adesão mudam (aviso 'loja' — utils/tempo_real_listas.py). -->
 <template>
   <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-vinti4">
     <div class="flex items-center justify-between gap-3 mb-1">
@@ -43,30 +44,54 @@
 
       <!-- estado da adesão -->
       <div v-if="d.adesao" class="mb-5 rounded-xl bg-zinc-800/50 p-4 text-sm space-y-1" data-teste="vinti4-adesao">
-        <p class="text-zinc-200">{{ TEXTO[d.adesao.estado] }}</p>
+        <p class="text-zinc-200">{{ TEXTO[d.adesao.estado === 'pedida' && d.adesao.modo === 'contrato' ? 'pedida_contrato' : d.adesao.estado] }}</p>
         <p v-if="d.adesao.motivo" class="text-xs text-amber-400">Motivo: {{ d.adesao.motivo }}</p>
         <p v-if="d.adesao.pos_id" class="text-xs text-zinc-500">
           POS ID {{ d.adesao.pos_id }} · Merchant ID {{ d.adesao.merchant_id }} · chave {{ d.adesao.chave_definida ? 'guardada' : 'em falta' }}
         </p>
       </div>
 
+      <!-- dois caminhos: pedir a adesão pela Bendi, ou já ter contrato com a SISP -->
+      <div v-if="!d.adesao" class="mb-5">
+        <p class="text-xs font-bold text-zinc-400 mb-2">Já tens contrato vinti4 com a SISP?</p>
+        <div class="inline-flex rounded-xl bg-zinc-800 p-1 gap-1" role="tablist">
+          <button v-for="o in MODOS" :key="o.v" type="button" role="tab" :aria-selected="modo === o.v"
+            @click="modo = o.v" :data-teste="`vinti4-modo-${o.v}`"
+            :class="['px-3 py-1.5 rounded-lg text-xs font-semibold transition',
+                     modo === o.v ? 'bg-zinc-600 text-white' : 'text-zinc-400 hover:text-zinc-200']">{{ o.t }}</button>
+        </div>
+      </div>
+
       <!-- requisitos -->
       <div v-if="!d.adesao || d.adesao.estado === 'pedida'" class="mb-5">
-        <p class="text-xs font-bold text-zinc-400 mb-2">O que a SISP pede</p>
+        <p class="text-xs font-bold text-zinc-400 mb-2">{{ modoAtual === 'contrato' ? 'O que precisas' : 'O que a SISP pede' }}</p>
         <ul class="space-y-1.5" data-teste="vinti4-requisitos">
-          <li v-for="r in d.requisitos" :key="r.chave" class="flex items-start gap-2 text-sm">
+          <li v-for="r in requisitosAtuais" :key="r.chave" class="flex items-start gap-2 text-sm" :data-req="r.chave">
             <font-awesome-icon :icon="['fas', r.ok ? 'circle-check' : 'circle-xmark']"
                                :class="['mt-0.5 flex-shrink-0', r.ok ? 'text-green-500' : 'text-zinc-600']" />
-            <span>
+            <span class="min-w-0 flex-1">
               <span :class="r.ok ? 'text-zinc-300' : 'text-zinc-100'">{{ r.titulo }}</span>
+              <span v-if="r.chave === 'comprovativo' && d.comprovativo && r.ok" class="ml-1 text-[11px] text-zinc-500">
+                ({{ d.comprovativo.estado === 'aprovado' ? 'aprovado' : 'enviado — a Bendi vai verificar' }})
+              </span>
               <span v-if="!r.ok" class="block text-[11px] text-zinc-500">{{ r.ajuda }}</span>
+              <!-- o comprovativo envia-se aqui mesmo (fica nos Documentos da loja, privado) -->
+              <span v-if="r.chave === 'comprovativo' && !r.ok" class="mt-2 flex flex-wrap items-center gap-2" data-teste="vinti4-comprovativo">
+                <input ref="comprovativo" type="file" accept="application/pdf,image/jpeg,image/png" @change="escolherComprovativo"
+                  class="text-xs text-zinc-400 file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-zinc-700 file:text-zinc-100 file:text-xs" />
+                <button type="button" @click="enviarComprovativo" :disabled="!comprovativo || aEnviarComp" data-teste="vinti4-comprovativo-enviar"
+                  class="px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 text-zinc-100 text-xs font-semibold transition">
+                  {{ aEnviarComp ? 'A enviar…' : 'Enviar' }}
+                </button>
+                <span v-if="erroComp" class="w-full text-[11px] text-red-400">{{ erroComp }}</span>
+              </span>
             </span>
           </li>
         </ul>
       </div>
 
-      <!-- ficha de adesão -->
-      <details class="mb-5 rounded-xl border border-zinc-800" data-teste="vinti4-ficha">
+      <!-- ficha de adesão (só para quem pede a adesão pela Bendi) -->
+      <details v-if="modoAtual === 'pedido'" class="mb-5 rounded-xl border border-zinc-800" data-teste="vinti4-ficha">
         <summary class="px-4 py-3 text-sm text-zinc-300 cursor-pointer select-none">Dados para a ficha de adesão da SISP</summary>
         <div class="px-4 pb-4 space-y-3">
           <p class="text-[11px] text-zinc-500">
@@ -85,9 +110,13 @@
         </div>
       </details>
 
-      <button v-if="!d.adesao" type="button" @click="pedir" :disabled="!d.pode_pedir || aGuardar" data-teste="vinti4-pedir"
+      <button v-if="!d.adesao && modo === 'pedido'" type="button" @click="pedir('pedir')" :disabled="!d.pode_pedir || aGuardar" data-teste="vinti4-pedir"
         class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-bold transition">
         Já entreguei o pedido na SISP
+      </button>
+      <button v-else-if="!d.adesao" type="button" @click="pedir('contrato')" :disabled="!d.pode_contrato || aGuardar" data-teste="vinti4-contrato"
+        class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-bold transition">
+        Continuar e pôr as credenciais
       </button>
 
       <!-- credenciais -->
@@ -146,6 +175,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 
 const COR = {
   pedida: 'bg-sky-500/15 text-sky-400', por_validar: 'bg-amber-500/15 text-amber-300', teste: 'bg-violet-500/15 text-violet-300',
@@ -153,11 +183,14 @@ const COR = {
 }
 const TEXTO = {
   pedida: 'Pedido entregue na SISP. Quando a SISP aprovar, põe aqui as credenciais que te enviarem.',
+  pedida_contrato: 'Põe aqui as credenciais do teu contrato vinti4 (POS ID, Merchant ID e chave).',
   por_validar: 'Credenciais recebidas — a Bendi vai validá-las com a SISP.',
   teste: 'Em testes com a SISP. O cartão ainda não aparece aos clientes.',
   ativa: 'Ativo: os clientes podem pagar com cartão e o dinheiro vai direto para a tua conta.',
   suspensa: 'Suspenso: o cartão não aparece aos clientes.',
 }
+
+const MODOS = [{ v: 'pedido', t: 'Ainda não' }, { v: 'contrato', t: 'Sim, já tenho' }]
 
 export default {
   name: 'SeccaoVinti4',
@@ -168,22 +201,40 @@ export default {
 
   emits: ['alterado'],
 
+  computed: {
+    // depois de escolher o caminho, manda o da adesão; antes, o que o dono escolheu
+    modoAtual () { return this.d?.adesao?.modo || this.modo },
+    requisitosAtuais () {
+      return (this.modoAtual === 'contrato' ? this.d?.requisitos_contrato : this.d?.requisitos) || []
+    },
+  },
+
   data () {
     return {
-      COR, TEXTO,
+      COR, TEXTO, MODOS,
+      modo: 'pedido', comprovativo: null, aEnviarComp: false, erroComp: '',
       carregando: true, d: null, editar: false, aGuardar: false, guardado: '', copiado: false,
       form: { pos_id: '', merchant_id: '', chave: '', password: '' }, erros: {}, erroGeral: '',
     }
   },
 
   async created () {
+    this.pararTempoReal = ouvirListas('loja', () => this.recarregar(), { lojaId: this.lojaId })
     try {
       this.d = (await api.get(`/app/loja/${this.lojaId}/vinti4/`)).data
     } catch (e) { this.erroGeral = e.response?.data?.detail || '' }
     finally { this.carregando = false }
   },
 
+  beforeUnmount () { this.pararTempoReal?.() },
+
   methods: {
+    // em silêncio: guardar o NIF ou os contactos, ou a Bendi aprovar um documento, atualiza os requisitos sem refresh
+    async recarregar () {
+      if (this.aGuardar) return
+      try { this.d = (await api.get(`/app/loja/${this.lojaId}/vinti4/`)).data } catch { /* fica o que estava */ }
+    },
+
     abrir () {
       const a = this.d.adesao || {}
       this.form = { pos_id: a.pos_id || '', merchant_id: a.merchant_id || '', chave: '', password: '' }
@@ -191,14 +242,41 @@ export default {
       this.editar = true
     },
 
-    async pedir () {
+    async pedir (acao) {
       this.aGuardar = true; this.erroGeral = ''; this.guardado = ''
       try {
-        this.d = (await api.post(`/app/loja/${this.lojaId}/vinti4/`, { acao: 'pedir' })).data
-        this.guardado = 'Registado ✓'
+        this.d = (await api.post(`/app/loja/${this.lojaId}/vinti4/`, { acao })).data
         this.$emit('alterado')
+        if (acao === 'contrato') this.abrir()         // segue logo para as credenciais
+        else this.guardado = 'Registado ✓'
       } catch (e) { this.erroGeral = e.response?.data?.detail || 'Não foi possível registar.' }
       finally { this.aGuardar = false }
+    },
+
+    escolherComprovativo (e) {
+      this.comprovativo = e.target.files?.[0] || null
+      this.erroComp = ''
+      if (this.comprovativo && this.comprovativo.size > 10 * 1024 * 1024) {
+        this.erroComp = 'O ficheiro tem mais de 10 MB.'
+        this.comprovativo = null
+        e.target.value = ''
+      }
+    },
+
+    // vai para os Documentos da loja (privado; a Bendi aprova-o antes de ligar o cartão)
+    async enviarComprovativo () {
+      if (!this.comprovativo) return
+      this.aEnviarComp = true; this.erroComp = ''
+      const corpo = new FormData()
+      corpo.append('tipo', 'contrato_sisp')
+      corpo.append('ficheiro', this.comprovativo)
+      try {
+        await api.post(`/app/loja/${this.lojaId}/documentos/`, corpo)
+        this.comprovativo = null
+        await this.recarregar()
+        this.$emit('alterado')
+      } catch (e) { this.erroComp = e.response?.data?.detail || 'Não foi possível enviar o ficheiro.' }
+      finally { this.aEnviarComp = false }
     },
 
     async guardar () {

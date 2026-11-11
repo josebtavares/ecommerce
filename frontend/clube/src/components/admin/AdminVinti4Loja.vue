@@ -13,6 +13,12 @@
       <div v-else class="text-xs space-y-0.5 text-zinc-400">
         <p>POS ID <span class="font-mono text-zinc-200">{{ a.pos_id || '—' }}</span> · Merchant ID
           <span class="font-mono text-zinc-200">{{ a.merchant_id || '—' }}</span> · chave {{ a.chave_definida ? 'guardada' : 'em falta' }}</p>
+        <p data-teste="admin-vinti4-modo">{{ a.modo === 'contrato' ? 'A loja já tinha contrato com a SISP' : 'Pedido de adesão feito pela Bendi' }}</p>
+        <p v-if="a.modo === 'contrato'" data-teste="admin-vinti4-comprovativo"
+           :class="d.comprovativo?.estado === 'aprovado' ? 'text-green-400' : 'text-amber-400'">
+          Comprovativo do contrato: {{ d.comprovativo ? d.comprovativo.estado_nome : 'não enviado' }}
+          <span v-if="d.comprovativo?.estado !== 'aprovado'" class="text-zinc-500">— abre-o e aprova-o nos Documentos da loja antes de ativar.</span>
+        </p>
         <p v-if="a.credenciais_em">Credenciais de {{ data(a.credenciais_em) }} por {{ a.credenciais_por || '—' }}</p>
         <p v-if="a.decidido_em">Última decisão {{ data(a.decidido_em) }} por {{ a.decidido_por || '—' }}</p>
         <p v-if="a.motivo" class="text-amber-400">Motivo: {{ a.motivo }}</p>
@@ -39,6 +45,7 @@
 
 <script>
 import api from '@/services/api'
+import { ouvirListas } from '@/utils/tempoRealEncomendas'
 
 const COR = {
   pedida: 'bg-sky-500/15 text-sky-400', por_validar: 'bg-amber-500/15 text-amber-300', teste: 'bg-violet-500/15 text-violet-300',
@@ -69,9 +76,20 @@ export default {
 
   watch: { lojaId () { this.carregar() } },
 
-  created () { this.carregar() },
+  created () {
+    this.carregar()
+    // aprovar o comprovativo nos Documentos (ou a loja mudar as credenciais) atualiza este cartão sem refresh
+    this.pararTempoReal = ouvirListas('loja', () => this.recarregar(), { filtro: a => a.origem === 'loja' && String(a.loja_id) === String(this.lojaId) })
+  },
+
+  beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
+    async recarregar () {
+      if (this.aGuardar) return
+      try { this.d = (await api.get(`/app/admin/lojas/${this.lojaId}/vinti4/`)).data } catch { /* fica o que estava */ }
+    },
+
     data (iso) { return new Date(iso).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) },
 
     async carregar () {

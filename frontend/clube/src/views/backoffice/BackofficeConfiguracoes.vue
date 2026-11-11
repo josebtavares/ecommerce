@@ -1,4 +1,3 @@
-          this.initForm(l)
 <template>
   <div class="space-y-6 max-w-2xl">
 
@@ -80,6 +79,7 @@
           </div>
         </div>
       </div>
+      <BarraGuardarSeccao seccao="info" v-bind="barra('info')" @guardar="guardarSeccao('info')" />
     </div>
 
     <!-- Endereço público (/loja/<endereço>) -->
@@ -106,19 +106,21 @@
                    focus:outline-none focus:border-red-500 transition" />
         </div>
       </div>
+      <BarraGuardarSeccao seccao="contactos" v-bind="barra('contactos')" @guardar="guardarSeccao('contactos')" />
     </div>
 
     <!-- Entrega -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
-      <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-5">Entrega & Takeaway</h2>
-      <div class="space-y-4">
+      <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1">Entrega & Takeaway</h2>
+      <p class="text-xs text-zinc-600 mb-5">Fica guardado logo que ligas ou desligas.</p>
+      <div class="space-y-4" data-teste="entrega-takeaway">
         <div class="flex items-center justify-between p-3 bg-zinc-800/50 rounded-xl">
           <div>
             <p class="text-sm font-medium text-zinc-200">Entrega ao domicílio</p>
             <p class="text-xs text-zinc-500">Activar entrega para os clientes</p>
           </div>
-          <button @click="form.entrega_ativa = !form.entrega_ativa"
-            :class="['w-11 h-6 rounded-full transition-colors relative', form.entrega_ativa ? 'bg-red-600' : 'bg-zinc-700']">
+          <button type="button" @click="alternarEntrega('entrega_ativa')" :disabled="aAlternar" data-teste="toggle-entrega"
+            :class="['w-11 h-6 rounded-full transition-colors relative', form.entrega_ativa ? 'bg-red-600' : 'bg-zinc-700', aAlternar ? 'opacity-50' : '']">
             <span :class="['absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform', form.entrega_ativa ? 'left-5.5 translate-x-0.5' : 'left-0.5']" style="transition: left 0.2s"></span>
           </button>
         </div>
@@ -127,12 +129,13 @@
             <p class="text-sm font-medium text-zinc-200">Takeaway / Levantamento</p>
             <p class="text-xs text-zinc-500">Clientes podem levantar na loja</p>
           </div>
-          <button @click="form.levantamento_ativo = !form.levantamento_ativo"
-            :class="['w-11 h-6 rounded-full transition-colors relative', form.levantamento_ativo ? 'bg-red-600' : 'bg-zinc-700']">
+          <button type="button" @click="alternarEntrega('levantamento_ativo')" :disabled="aAlternar" data-teste="toggle-takeaway"
+            :class="['w-11 h-6 rounded-full transition-colors relative', form.levantamento_ativo ? 'bg-red-600' : 'bg-zinc-700', aAlternar ? 'opacity-50' : '']">
             <span :class="['absolute top-0.5 w-5 h-5 rounded-full bg-white shadow', form.levantamento_ativo ? 'left-5.5' : 'left-0.5']" style="transition: left 0.2s"></span>
           </button>
         </div>
       </div>
+      <p v-if="erroEntrega" class="mt-3 text-xs text-red-400" role="alert">{{ erroEntrega }}</p>
     </div>
 
     <!-- Horário (abre/fecha) -->
@@ -275,6 +278,7 @@
         <span class="text-sm text-zinc-400">%</span>
       </div>
       <p class="text-xs text-zinc-600 mt-1">Em Cabo Verde a taxa normal é 15%. 0 = a loja não cobra IVA.</p>
+      <BarraGuardarSeccao seccao="impostos" v-bind="barra('impostos')" @guardar="guardarSeccao('impostos')" />
     </div>
 
     <!-- Políticas da loja -->
@@ -323,18 +327,8 @@
                   focus:outline-none focus:border-red-500 transition resize-none"></textarea>
         </div>
       </div>
+      <BarraGuardarSeccao seccao="politicas" v-bind="barra('politicas')" @guardar="guardarSeccao('politicas')" />
     </div>
-
-    <!-- Guardar -->
-    <button @click="guardarLoja" :disabled="loadingSave"
-      :class="['w-full py-3 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2',
-               loadingSave ? 'bg-red-700 cursor-not-allowed opacity-70 text-white' : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20']">
-      <svg v-if="loadingSave" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
-        <path d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor" class="opacity-75"/>
-      </svg>
-      {{ loadingSave ? 'A guardar…' : 'Guardar configurações' }}
-    </button>
 
     <!-- Exportar os dados da loja (só o dono) -->
     <div v-if="podeFiscal" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-teste="seccao-exportar">
@@ -384,7 +378,6 @@
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
-import { useAsyncAction } from '@/composables/useAsyncAction'
 import { iconePagamento } from '@/utils/icones'
 import { criarVigia, emCurso, reprocessarVideo } from '@/utils/videoEstado'
 import HorarioEditor from '@/components/horario/HorarioEditor.vue'
@@ -394,10 +387,38 @@ import SeccaoDocumentos from '@/components/loja/SeccaoDocumentos.vue'
 import SeccaoVinti4 from '@/components/loja/SeccaoVinti4.vue'
 import SeccaoEndereco from '@/components/loja/SeccaoEndereco.vue'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
+import BarraGuardarSeccao from '@/components/loja/BarraGuardarSeccao.vue'
 
 // campos de texto que o dono pode apagar (os outros vazios não se enviam)
 const LIMPAVEIS = ['localizacao', 'politica_devolucao', 'termos_servico', 'politica_privacidade', 'politica_entregas',
                    'contacto_email', 'contacto_telefone']
+// cada secção guarda só os seus campos, com o seu botão (Entrega & Takeaway guarda ao ligar/desligar)
+const SECCOES = {
+  info:      ['nome', 'descricao', 'categoria', 'localizacao'],
+  contactos: ['contacto_email', 'contacto_telefone'],
+  impostos:  ['percentagem_iva'],
+  politicas: ['prazo_devolucao_dias', 'politica_devolucao', 'politica_entregas', 'termos_servico', 'politica_privacidade'],
+}
+const ENTREGA = ['entrega_ativa', 'levantamento_ativo']
+
+function valoresDaLoja (l) {
+  return {
+    nome:                 l.nome                 || '',
+    descricao:            l.descricao            || '',
+    categoria:            l.categoria            || '',
+    localizacao:          l.localizacao          || '',
+    entrega_ativa:        l.entrega_ativa        || false,
+    levantamento_ativo:   l.levantamento_ativo   || false,
+    politica_devolucao:   l.politica_devolucao   || '',
+    termos_servico:       l.termos_servico       || '',
+    politica_privacidade: l.politica_privacidade || '',
+    politica_entregas:    l.politica_entregas    || '',
+    contacto_email:       l.contacto_email       || '',
+    contacto_telefone:    l.contacto_telefone    || '',
+    prazo_devolucao_dias: l.prazo_devolucao_dias ?? 14,
+    percentagem_iva:      Number(l.percentagem_iva ?? 0),
+  }
+}
 
 // o que a loja pode ligar; os pagos online passam pelo fornecedor da plataforma (backend app/pagamentos)
 const METODOS = [
@@ -419,7 +440,7 @@ function isVideo (url) {
 
 export default {
   name: 'BackofficeConfiguracoes',
-  components: { ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos, SeccaoVinti4, SeccaoEndereco },
+  components: { BarraGuardarSeccao, ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos, SeccaoVinti4, SeccaoEndereco },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },
@@ -430,13 +451,14 @@ export default {
   },
   emits: ['updated'],
 
-  setup () {
-    const { loading: loadingSave, wrap } = useAsyncAction()
-    return { loadingSave, wrap }
-  },
-
   data () {
     return {
+      original:   {},      // o que está guardado — compara com o form para saber que secções têm alterações
+      aGuardar:   '',      // secção a guardar
+      guardado:   '',      // secção acabada de guardar ("Guardado ✓")
+      errosSeccao: {},
+      aAlternar:  false,   // Entrega & Takeaway
+      erroEntrega: '',
       form: {
         nome: '', descricao: '', categoria: '', localizacao: '',
         entrega_ativa: false, levantamento_ativo: false,
@@ -473,6 +495,15 @@ export default {
     metodosVisiveis () {
       return [...METODOS, ...ANTIGOS.filter(m => this.metodoActivo(m.tipo))]
     },
+    alterado () {
+      const r = {}
+      for (const [s, campos] of Object.entries(SECCOES)) {
+        r[s] = campos.some(c => String(this.form[c] ?? '') !== String(this.original[c] ?? ''))
+      }
+      r.info = r.info || !!this.logoFicheiro || !!this.bannerFicheiro
+      return r
+    },
+    algumAlterado () { return Object.values(this.alterado).some(Boolean) },
   },
 
   watch: {
@@ -488,9 +519,11 @@ export default {
 
   beforeUnmount () {
     this.vigia?.parar()
+    window.removeEventListener('beforeunload', this.avisarSaida)
   },
 
   async created () {
+    window.addEventListener('beforeunload', this.avisarSaida)
     this.vigia = criarVigia(this.lojaId, data => {
       if (!data.banner || this.bannerFicheiro) return
       this.bannerEstado  = data.banner.estado
@@ -511,26 +544,24 @@ export default {
       return formatarDinheiro(val || 0)
     },
 
+    // A loja volta a chegar depois de guardar uma secção (ou de outra mudança): as secções com alterações por
+    // guardar mantêm o que o dono escreveu; as outras ficam com o que está guardado.
     initForm (l) {
-      this.form = {
-        nome:                 l.nome                || '',
-        descricao:            l.descricao           || '',
-        categoria:            l.categoria           || '',
-        localizacao:          l.localizacao         || '',
-        entrega_ativa:        l.entrega_ativa       || false,
-        levantamento_ativo:   l.levantamento_ativo  || false,
-        politica_devolucao:   l.politica_devolucao  || '',
-        termos_servico:       l.termos_servico      || '',
-        politica_privacidade: l.politica_privacidade|| '',
-        politica_entregas:    l.politica_entregas   || '',
-        contacto_email:       l.contacto_email      || '',
-        contacto_telefone:    l.contacto_telefone   || '',
-        prazo_devolucao_dias: l.prazo_devolucao_dias ?? 14,
-        percentagem_iva: Number(l.percentagem_iva ?? 0),
+      const novo = valoresDaLoja(l)
+      const alterado = this.alterado
+      const form = { ...this.form }
+      const original = { ...this.original }
+      for (const [s, campos] of Object.entries(SECCOES)) {
+        if (alterado[s] && Object.keys(this.original).length) continue
+        for (const c of campos) { form[c] = novo[c]; original[c] = novo[c] }
       }
-      this.logoPreview   = l.logo_url   || ''
+      for (const c of ENTREGA) { form[c] = novo[c]; original[c] = novo[c] }
+      this.form = form
+      this.original = original
+      if (!this.logoFicheiro) this.logoPreview = l.logo_url || ''
+      if (this.bannerFicheiro) return
       this.bannerPreview = l.banner_url || ''
-      this.isBannerVideo  = isVideo(l.banner_url || '') 
+      this.isBannerVideo  = isVideo(l.banner_url || '')
       this.bannerEstado  = l.banner_estado     || ''
       this.bannerPoster  = l.banner_poster_url || ''
       if (emCurso(this.bannerEstado)) this.vigia?.vigiar([], true)
@@ -614,44 +645,84 @@ export default {
 
     // ── Loja ──────────────────────────────────────────────────
 
-    async guardarLoja () {
-      const prazo = this.form.prazo_devolucao_dias
-      if (!Number.isInteger(prazo) || prazo < 0 || prazo > 365) {
-        alert('O prazo de devoluções tem de ser um número de dias entre 0 e 365.')
-        return
+    barra (s) {
+      return { alterado: this.alterado[s], aGuardar: this.aGuardar === s, guardado: this.guardado === s,
+               erro: this.errosSeccao[s] || '' }
+    },
+
+    avisarSaida (e) {
+      if (!this.algumAlterado) return
+      e.preventDefault()
+      e.returnValue = ''
+    },
+
+    validar (s) {
+      if (s === 'politicas') {
+        const prazo = this.form.prazo_devolucao_dias
+        if (!Number.isInteger(prazo) || prazo < 0 || prazo > 365) return 'O prazo de devoluções tem de ser um número de dias entre 0 e 365.'
       }
-      const iva = this.form.percentagem_iva
-      if (typeof iva !== 'number' || Number.isNaN(iva) || iva < 0 || iva > 100) {
-        alert('A taxa de IVA tem de estar entre 0 e 100%.')
-        return
+      if (s === 'impostos') {
+        const iva = this.form.percentagem_iva
+        if (typeof iva !== 'number' || Number.isNaN(iva) || iva < 0 || iva > 100) return 'A taxa de IVA tem de estar entre 0 e 100%.'
       }
-      await this.wrap(async () => {
-        const fd = new FormData()
-        Object.entries(this.form).forEach(([k, v]) => {
-          if (typeof v === 'boolean') fd.append(k, v ? 'true' : 'false')
-          else if (v !== null && (v !== '' || LIMPAVEIS.includes(k))) fd.append(k, v)   // estes podem ficar vazios
+      if (s === 'info' && !String(this.form.nome || '').trim()) return 'A loja precisa de um nome.'
+      return ''
+    },
+
+    async guardarSeccao (s) {
+      if (this.aGuardar) return
+      const erro = this.validar(s)
+      this.errosSeccao = { ...this.errosSeccao, [s]: erro }
+      if (erro) return
+      const fd = new FormData()
+      for (const k of SECCOES[s]) {
+        const v = this.form[k]
+        if (v !== null && (v !== '' || LIMPAVEIS.includes(k))) fd.append(k, v)   // estes podem ficar vazios
+      }
+      if (s === 'info' && this.logoFicheiro)   fd.append('logo',   this.logoFicheiro)
+      if (s === 'info' && this.bannerFicheiro) fd.append('banner', this.bannerFicheiro)
+      this.aGuardar = s; this.guardado = ''
+      try {
+        const { data } = await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
         })
-        if (this.logoFicheiro)   fd.append('logo',   this.logoFicheiro)
-        if (this.bannerFicheiro) fd.append('banner', this.bannerFicheiro)
-        let data
-        try {
-          ({ data } = await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          }))
-        } catch (e) {
-          const d = e.response?.data
-          alert(d?.detail || Object.values(d || {}).flat()[0] || 'Não foi possível guardar.')
-          return
+        const novo = valoresDaLoja(data || {})
+        for (const k of SECCOES[s]) { this.form[k] = novo[k]; this.original[k] = novo[k] }
+        if (s === 'info') {
+          this.logoFicheiro = null
+          if (data?.logo_url) this.logoPreview = data.logo_url
+          if (this.bannerFicheiro) {
+            // o vídeo novo entra na fila de otimização; o estado aparece no banner
+            this.bannerFicheiro = null
+            this.bannerEstado   = data?.banner_estado || ''
+            this.bannerPoster   = ''
+            if (emCurso(this.bannerEstado)) this.vigia?.vigiar([], true)
+          }
         }
-        if (this.bannerFicheiro) {
-          // o vídeo novo entra na fila de otimização; o estado aparece no banner
-          this.bannerFicheiro = null
-          this.bannerEstado   = data?.banner_estado || ''
-          this.bannerPoster   = ''
-          if (emCurso(this.bannerEstado)) this.vigia?.vigiar([], true)
-        }
+        this.guardado = s
         this.$emit('updated')
-      })
+      } catch (e) {
+        const d = e.response?.data
+        this.errosSeccao = { ...this.errosSeccao, [s]: d?.detail || Object.values(d || {}).flat()[0] || 'Não foi possível guardar.' }
+      } finally { this.aGuardar = '' }
+    },
+
+    // Entrega ao domicílio / Takeaway: guarda logo, como os métodos de pagamento
+    async alternarEntrega (campo) {
+      if (this.aAlternar) return
+      const valor = !this.form[campo]
+      this.form[campo] = valor
+      this.aAlternar = true; this.erroEntrega = ''
+      try {
+        const fd = new FormData()
+        fd.append(campo, valor ? 'true' : 'false')
+        await api.patch(`/app/loja/${this.lojaId}/editar/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        this.original[campo] = valor
+        this.$emit('updated')
+      } catch (e) {
+        this.form[campo] = !valor
+        this.erroEntrega = e.response?.data?.detail || 'Não foi possível guardar.'
+      } finally { this.aAlternar = false }
     },
 
     // ── Opções de entrega ─────────────────────────────────────
