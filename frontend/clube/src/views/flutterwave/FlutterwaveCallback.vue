@@ -66,14 +66,17 @@ export default {
 
   computed: {
     textoBotao () {
-      return { encomenda: 'Ver encomenda', marcacao: 'Ver marcação', fatura: 'Ver subscrição' }[this.tipo] || 'Continuar'
+      return { encomenda: 'Ver encomenda', marcacao: 'Ver marcação', fatura: 'Ver subscrição',
+               comissoes: 'Ver subscrição' }[this.tipo] || 'Continuar'
     },
   },
 
   async created () {
     const dados = Object.fromEntries(new URLSearchParams(window.location.search))
-    // o Flutterwave volta com ?transaction_id=&tx_ref=; os outros dizem-se no localStorage
-    dados.fornecedor = fornecedorDoRegresso() || (dados.tx_ref ? 'flutterwave' : '')
+    // o vinti4 volta com ?fornecedor=vinti4&ref= (o backend já tratou a resposta da SISP); o Flutterwave com
+    // ?transaction_id=&tx_ref=; os outros dizem-se no localStorage
+    const doLocal = fornecedorDoRegresso()
+    dados.fornecedor = dados.fornecedor || doLocal || (dados.tx_ref ? 'flutterwave' : '')
     try {
       const { data } = await api.post('/app/pagamento/regresso/', dados)
       this.tipo = data.tipo

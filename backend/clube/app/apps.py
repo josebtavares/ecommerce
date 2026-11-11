@@ -9,6 +9,7 @@ class AppConfig(AppConfig):
         # ficheiros substituídos/apagados vão para a fila de limpeza; vídeos são otimizados
         from . import signals, uploads
         signals.ligar_limpeza_ao_apagar()
+        signals.ligar_password_alterada()   # data da última password (3DS do vinti4)
         uploads.ligar()   # só imagens/vídeos (e com tamanho máximo) em todos os uploads públicos
         # comprovativos por email quando um pagamento é aprovado (encomendas e mensalidades)
         from .utils import emails_fiscais

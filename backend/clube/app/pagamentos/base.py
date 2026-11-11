@@ -16,9 +16,10 @@ class ErroPagamento(Exception):
     não se volta a tentar sozinho: a Bendi confirma primeiro no painel do fornecedor (utils/devolucoes).
     """
 
-    def __init__(self, mensagem='', incerto=False):
+    def __init__(self, mensagem='', incerto=False, destino_ref=''):
         super().__init__(mensagem)
         self.incerto = incerto
+        self.destino_ref = destino_ref      # a nossa referência do que se pagava: o regresso mostra o caminho de volta
 
 
 @dataclass
@@ -30,6 +31,9 @@ class Cobranca:
     logo: str = ''
     cliente: dict = field(default_factory=dict)      # {email, nome, telefone}
     regresso: str = ''              # para onde o fornecedor manda o cliente depois de pagar
+    pagador: object = None          # Utilizador que paga (vinti4: dados 3DS do perfil)
+    loja: object = None             # a loja que recebe; None = a Bendi (vinti4: credenciais de quem recebe)
+    morada: str = ''                # morada desta compra (a de entrega), se não for a do perfil
 
 
 @dataclass

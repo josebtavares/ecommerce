@@ -21,6 +21,14 @@ class Utilizador(models.Model):
  
     telefone        = models.CharField(max_length=30, blank=True, default='')
     morada          = models.CharField(max_length=300, blank=True, default='')
+    # onde fica a morada (utils/geografia.py): em Cabo Verde escolhe-se o concelho; fora dele escreve-se a cidade.
+    # Pagar com cartão pede-a (3DS da SISP: billAddrCountry/City/State/PostCode); o código postal é opcional.
+    pais            = models.CharField(max_length=2, blank=True, default='CV', db_default='CV')
+    concelho        = models.CharField(max_length=3, blank=True, default='', db_default='')
+    cidade          = models.CharField(max_length=60, blank=True, default='', db_default='')
+    codigo_postal   = models.CharField(max_length=16, blank=True, default='', db_default='')
+    # última mudança de password (signals: pre_save do User) — o 3DS pede-a (acctInfo.chAccPwChange)
+    password_alterada_em = models.DateTimeField(null=True, blank=True)
     # dados de faturação (opcionais): vêm preenchidos no checkout quando o cliente pede fatura com NIF
     nif             = models.CharField(max_length=9, blank=True, default='', db_default='')
     nome_fiscal     = models.CharField(max_length=200, blank=True, default='', db_default='')
@@ -2681,6 +2689,59 @@ class AdesaoVinti4(models.Model):
         return f'vinti4 {self.loja_id} ({self.estado})'
 
 
+class TransacaoVinti4(models.Model):
+    """
+    Cada ida de um cliente à página de pagamento da SISP (pagamentos/vinti4.py). Registo financeiro: nunca se apaga.
+    ref é o merchantRef (até 15 caracteres, a SISP não aceita mais) e liga à nossa referência (enc-/mar-/fat-/com-…).
+    Sem loja = credenciais da Bendi (comissões e subscrições); com loja = as da AdesaoVinti4 dela.
+    """
+    ESTADOS = [
+        ('iniciada',      'Iniciada'),          # o cliente foi para a SISP
+        ('paga',          'Paga'),
+        ('falhada',       'Recusada'),          # a SISP respondeu com erro (messageType 6)
+        ('cancelada',     'Cancelada'),         # o cliente desistiu na página da SISP
+        ('expirada',      'Sem resposta'),      # 8 min sem resposta e a SISP confirma que não foi paga
+        ('por_confirmar', 'Por confirmar'),     # 8 min sem resposta e não deu para perguntar à SISP
+    ]
+    ref             = models.CharField(max_length=15, unique=True)
+    sessao          = models.CharField(max_length=15)
+    referencia      = models.CharField(max_length=80, db_index=True)
+    loja            = models.ForeignKey(Loja, on_delete=models.PROTECT, null=True, blank=True, related_name='transacoes_vinti4')
+    pos_id          = models.CharField(max_length=40)
+    utilizador      = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    valor           = models.DecimalField(max_digits=12, decimal_places=2)     # o que se cobra (Encomenda.valor_total…)
+    montante        = models.PositiveIntegerField()                            # o que vai à SISP: escudos inteiros
+    descricao       = models.CharField(max_length=100, blank=True, default='')
+    estado          = models.CharField(max_length=14, choices=ESTADOS, default='iniciada', db_index=True)
+    # da resposta da SISP
+    message_type    = models.CharField(max_length=2, blank=True, default='')
+    periodo         = models.CharField(max_length=10, blank=True, default='')    # merchantRespCP
+    tid             = models.CharField(max_length=10, blank=True, default='')    # merchantRespTid
+    message_id      = models.CharField(max_length=20, blank=True, default='')
+    pan             = models.CharField(max_length=21, blank=True, default='')    # ************1234
+    erro_codigo     = models.CharField(max_length=2, blank=True, default='')
+    erro            = models.CharField(max_length=300, blank=True, default='')   # descrição + detalhe (para a Bendi)
+    mensagem        = models.CharField(max_length=200, blank=True, default='')   # para mostrar ao cliente
+    dcc             = models.JSONField(default=dict, blank=True)                 # se o cliente pagou noutra moeda
+    confirmada_por  = models.CharField(max_length=10, blank=True, default='')    # resposta | estado (API) | admin
+    efeito          = models.CharField(max_length=12, blank=True, default='')    # pago | reembolso | erro (servico.confirmar)
+    consultas       = models.PositiveSmallIntegerField(default=0)                # perguntas à API de estado
+    consultada_em   = models.DateTimeField(null=True, blank=True)
+    criada_em       = models.DateTimeField(auto_now_add=True, db_index=True)
+    terminada_em    = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-criada_em']
+
+    def __str__(self):
+        return f'vinti4 {self.ref} {self.referencia} ({self.estado})'
+
+    @property
+    def transacao(self):
+        """Identificador da transacção na rede vinti4 (periodo + tid), com prefixo — vai para Pagamento/Fatura."""
+        return f'v4_{self.periodo}-{self.tid}' if self.tid else f'v4_{self.ref}'
+
+
 class DadosBancarios(models.Model):
     """Conta para onde vai o dinheiro das vendas da loja (utils/banco.py). Só o dono vê e altera;
     cada alteração fica no registo de transações (utils/registo.py) e o dono recebe um email."""
@@ -2774,7 +2835,7 @@ class RegistoTransacao(models.Model):
         ('pos',        'Venda no POS'),
         ('comissao',   'Comissão'),
         ('banco',      'Dados bancários'),
-        ('vinti4',     'Contrato vinti4 da loja'),
+        ('vinti4',     'vinti4 (contrato da loja e pagamentos com cartão)'),
         ('acerto',     'Dinheiro entregue pelo condutor'),
     ]
     criado_em      = models.DateTimeField(db_index=True)

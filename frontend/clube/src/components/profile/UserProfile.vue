@@ -109,6 +109,11 @@
                 <EstadoDisponibilidade v-if="verificadores[field.key]" :verificador="verificadores[field.key]" :isDark="isDark"
                   @usar="v => { form[field.key] = v; verificarCampo(field.key) }" />
               </div>
+              <!-- onde fica a morada: concelho (Cabo Verde) ou cidade, e código postal — pagar com cartão pede-o -->
+              <CampoLocalizacao v-model="localizacao" :colunas="false"
+                :classeRotulo="isDark ? 'text-zinc-500' : 'text-zinc-400'"
+                :classeCampo="['w-full px-3 py-2 rounded-lg text-sm border transition focus:outline-none focus:border-red-500',
+                               isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-gray-50 border-gray-300 text-zinc-900']" />
               <!-- mudar o email pede a password actual (com o email trocado, um token roubado tomava a conta) -->
               <div v-if="mudaEmail">
                 <label class="text-xs mb-1 block" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Password actual (para mudar o email)</label>
@@ -469,6 +474,8 @@ import { chat, contactarSuporte } from '@/services/chat'
 import { passwordValida } from '@/utils/password'
 import { atualizarGuardado } from '@/services/confirmarEmail'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
+import CampoLocalizacao from '@/components/forms/CampoLocalizacao.vue'
+import { localizacaoDe } from '@/utils/geografia'
 
 const props = defineProps({
   data:   { type: Object,  default: () => ({}) },
@@ -688,10 +695,13 @@ async function fetchTemPassword() {
 }
 
 const CAMPOS_FORM = ['first_name', 'last_name', 'username', 'email', 'telefone', 'morada']
+const localizacao = ref(localizacaoDe(props.data))
 const formIntacto = () => CAMPOS_FORM.every(k => (form.value[k] || '') === (conta.value[k] || ''))
+  && JSON.stringify(localizacao.value) === JSON.stringify(localizacaoDe(conta.value))
 
 function initForm() {
   form.value = Object.fromEntries(CAMPOS_FORM.map(k => [k, conta.value[k] || '']))
+  localizacao.value = localizacaoDe(conta.value)
   valoresAtuais.value = { username: form.value.username, email: form.value.email }
 }
 
@@ -758,6 +768,8 @@ async function saveProfile() {
   await wrapProfile(async () => {
     const fd = new FormData()
     Object.entries(form.value).forEach(([k, v]) => { if (v) fd.append(k, v) })
+    // vazio também vale (trocar de país apaga a cidade/concelho de antes)
+    Object.entries(localizacao.value).forEach(([k, v]) => fd.append(k, (v || '').trim()))
     if (mudaEmail.value) fd.append('password_atual', passwordEmail.value)
     let resposta
     try {
@@ -769,8 +781,10 @@ async function saveProfile() {
       return
     }
     const user = JSON.parse(localStorage.getItem('user') || '{}')
-    Object.assign(user, form.value)
+    Object.assign(user, form.value, localizacaoDe(resposta))
     localStorage.setItem('user', JSON.stringify(user))
+    conta.value = { ...conta.value, ...localizacaoDe(resposta) }
+    localizacao.value = localizacaoDe(resposta)
     // email novo: volta a ter de ser confirmado — o aviso do topo aparece (services/confirmarEmail.js)
     const emailNovo = resposta?.email_confirmado === false && form.value.email !== valoresAtuais.value.email
     atualizarGuardado({ email_confirmado: resposta?.email_confirmado ?? user.email_confirmado })

@@ -187,7 +187,7 @@
                   Valores em escudos (CVE), sem custos adicionais.</span>
               </p>
             </div>
-            <div v-if="precisaTelefone || precisaMorada" class="grid sm:grid-cols-2 gap-3" data-teste="checkout-dados-cliente">
+            <div v-if="precisaTelefone || precisaMorada || precisaCidade" class="grid sm:grid-cols-2 gap-3" data-teste="checkout-dados-cliente">
               <p class="sm:col-span-2 text-xs text-zinc-500">Para pagar com cartão precisamos de completar o teu perfil (fica guardado).</p>
               <input v-if="precisaTelefone" v-model="telefone" type="tel" maxlength="30" inputmode="tel" autocomplete="tel"
                 placeholder="Telefone" data-teste="checkout-telefone"
@@ -195,6 +195,8 @@
               <input v-if="precisaMorada" v-model="moradaCliente" maxlength="300" autocomplete="street-address"
                 placeholder="A tua morada" data-teste="checkout-morada"
                 :class="['w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition', precisaTelefone ? '' : 'sm:col-span-2']" />
+              <CampoLocalizacao v-if="precisaCidade" v-model="localizacao" :rotulos="false" class="sm:col-span-2"
+                classeCampo="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
             </div>
           </div>
         </div>
@@ -317,7 +319,7 @@
               Selecciona uma opção de entrega
             </p>
             <p v-if="faltaDadosCartao" class="text-xs text-yellow-500" data-teste="falta-dados-cartao">
-              Para pagar com cartão, indica o telefone e a morada
+              Para pagar com cartão, completa o telefone, a morada e o concelho (ou a cidade)
             </p>
             <p v-if="tipoEntrega === 'entrega' && !moradaEntrega.trim()" class="text-xs text-yellow-500 flex items-center gap-1">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -409,6 +411,8 @@ import SiteRodape from '@/components/paginas/SiteRodape.vue'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
 import { porConfirmar } from '@/services/confirmarEmail'
 import { LIMITE_NIF_CLIENTE } from '@/utils/fiscal'
+import CampoLocalizacao from '@/components/forms/CampoLocalizacao.vue'
+import { localizacaoCompleta, localizacaoDe } from '@/utils/geografia'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
@@ -428,7 +432,7 @@ const METODOS_ONLINE = ['cartao', 'mobile_money', 'mbway', 'flutterwave', 'strip
 export default {
   name: 'CheckoutPage',
   mixins: [temaPainel],
-  components: { BotaoTema, EscolherHora, LojaVendedor, SiteRodape },
+  components: { BotaoTema, CampoLocalizacao, EscolherHora, LojaVendedor, SiteRodape },
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()
@@ -459,6 +463,9 @@ export default {
       perfilTelefone: user.telefone || '',
       telefone:       '',
       moradaCliente:  '',
+      // concelho/cidade (3DS da SISP): o do perfil e o que se escreve aqui quando falta
+      perfilLocalizacao: localizacaoDe(user),
+      localizacao:       localizacaoDe(user),
       // fatura com NIF: vem dos "Dados de faturação" do perfil
       querFaturaNif:  !!user.nif,
       nif:            user.nif || '',
@@ -484,6 +491,7 @@ export default {
     precisaTelefone () { return this.pagaOnline && !this.perfilTelefone.trim() },
     // a morada de entrega serve; no levantamento usa-se a do perfil
     precisaMorada ()   { return this.pagaOnline && this.tipoEntrega !== 'entrega' && !this.moradaPerfil.trim() },
+    precisaCidade ()   { return this.pagaOnline && !localizacaoCompleta(this.perfilLocalizacao) },
     // NIF sempre opcional; a partir de 20 000$00 só se recomenda (utils/fiscal.py LIMITE_NIF_CLIENTE)
     nifRecomendado () { return this.total >= LIMITE_NIF_CLIENTE && !(this.querFaturaNif && this.nifLimpo.length === 9) },
     nifLimpo ()    { return (this.nif || '').replace(/\D/g, '') },
@@ -494,6 +502,7 @@ export default {
     },
     faltaDadosCartao () {
       return (this.precisaTelefone && !this.telefone.trim()) || (this.precisaMorada && !this.moradaCliente.trim())
+        || (this.precisaCidade && !localizacaoCompleta(this.localizacao))
     },
     // horário da loja (utils/horarios.py no servidor) — fechada: agendar para a abertura ou não aceitar
     lojaFechada ()   { return !!(this.loja?.horario?.ativo && !this.loja.horario.aberta) },
@@ -551,6 +560,8 @@ export default {
       try {
         const { data } = await api.get('/app/utilizador/me/')
         this.perfilTelefone = data.telefone || ''
+        this.perfilLocalizacao = localizacaoDe(data)
+        if (!localizacaoCompleta(this.localizacao)) this.localizacao = localizacaoDe(data)
         // dados de faturação actuais; não mexe no que a pessoa já escreveu
         const f = { nif: data.nif || '', nome_fiscal: data.nome_fiscal || '', morada_fiscal: data.morada_fiscal || '' }
         if (!this.dadosFiscaisMudaram) {
@@ -619,22 +630,28 @@ export default {
     },
 
     async guardarDadosCliente () {
-      if (!this.precisaTelefone && !this.precisaMorada) return true
+      if (!this.precisaTelefone && !this.precisaMorada && !this.precisaCidade) return true
       const fd = new FormData()
       if (this.precisaTelefone) fd.append('telefone', this.telefone.trim())
       if (this.precisaMorada) fd.append('morada', this.moradaCliente.trim())
+      if (this.precisaCidade) {
+        Object.entries(this.localizacao).forEach(([k, v]) => fd.append(k, (v || '').trim()))
+      }
       try {
         const { data } = await api.patch('/app/utilizador/me/editar/', fd)
         try {
           const user = JSON.parse(localStorage.getItem('user') || '{}')
-          localStorage.setItem('user', JSON.stringify({ ...user, telefone: data.telefone ?? user.telefone, morada: data.morada ?? user.morada }))
+          localStorage.setItem('user', JSON.stringify({ ...user, telefone: data.telefone ?? user.telefone, morada: data.morada ?? user.morada,
+                                                        ...localizacaoDe(data) }))
         } catch (e) { /* sem localStorage: fica no servidor */ }
         this.perfilTelefone = data.telefone || this.telefone.trim()
         this.moradaPerfil = data.morada || this.moradaCliente.trim() || this.moradaPerfil
+        this.perfilLocalizacao = localizacaoDe(data)
         return true
       } catch (e) {
         const d = e.response?.data || {}
-        this.erro = [d.telefone, d.morada, d.detail].flat().filter(Boolean)[0] || 'Não foi possível guardar o telefone e a morada.'
+        this.erro = [d.telefone, d.morada, d.pais, d.concelho, d.cidade, d.codigo_postal, d.detail].flat().filter(Boolean)[0]
+          || 'Não foi possível guardar os teus dados.'
         return false
       }
     },

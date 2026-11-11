@@ -4,20 +4,23 @@ Pagamentos online — uma só porta para todos os fornecedores.
   base.py         o contrato de um fornecedor (iniciar, confirmar regresso/aviso, reembolsar)
   simulado.py     o activo enquanto não houver contrato (aprova logo, não cobra)
   flutterwave.py  página alojada do Flutterwave
+  vinti4.py       SISP (Pagamento Web 3DS): formulário para a SISP, resposta com FingerPrint, API de estado
   servico.py      o que acontece a seguir: encomenda/marcação/fatura paga, reembolsos
 
 O fornecedor é da PLATAFORMA (settings.PAGAMENTOS_FORNECEDOR), nunca da loja: a loja só escolhe que
-métodos aceita (cartão, mobile money…) e dá os dados bancários.
+métodos aceita (cartão, mobile money…) e dá os dados bancários. No vinti4 as credenciais é que mudam:
+as da Bendi para comissões e subscrições, as da adesão de cada loja para as vendas dela.
 """
 from django.conf import settings
 
 from .base import Cobranca, Confirmacao, ErroPagamento, Fornecedor, Inicio
 from .flutterwave import Flutterwave
 from .simulado import Simulado
+from .vinti4 import FORNECEDOR as VINTI4
 
 __all__ = ['Cobranca', 'Confirmacao', 'ErroPagamento', 'Fornecedor', 'Inicio', 'FORNECEDORES', 'obter', 'ativo', 'cobra_a_serio']
 
-FORNECEDORES = {f.codigo: f for f in (Simulado(), Flutterwave())}
+FORNECEDORES = {f.codigo: f for f in (Simulado(), Flutterwave(), VINTI4)}
 
 
 def obter(codigo):
