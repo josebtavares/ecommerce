@@ -405,10 +405,14 @@ def consultar_estado(tx):
 
 
 def consultar(tx):
-    """→ (resultado, corpo da resposta da API ou None). Só para as transacções da Bendi: as das lojas pedem o
-    portal de cada uma (fase das lojas)."""
-    portal, password = settings.VINTI4_PORTAL_ID.strip(), settings.VINTI4_PORTAL_PASSWORD.strip()
-    if tx.loja_id is not None or not (portal and password and settings.VINTI4_ESTADO_URL):
+    """→ (resultado, corpo da resposta da API ou None). Bendi: o Portal das settings; loja: o Portal que ela indicou
+    na adesão (utils/vinti4.guardar_portal) — sem ele, a transacção fica por confirmar."""
+    if tx.loja_id is None:
+        portal, password = settings.VINTI4_PORTAL_ID.strip(), settings.VINTI4_PORTAL_PASSWORD.strip()
+    else:
+        from ..utils import vinti4 as adesoes
+        portal, password = adesoes.portal(tx.loja) or ('', '')
+    if not (portal and password and settings.VINTI4_ESTADO_URL):
         return None, None
     try:
         cred = _credenciais_da(tx)
@@ -521,7 +525,8 @@ class Vinti4(Fornecedor):
         raise ErroPagamento(mensagens.get(tx.estado, 'O pagamento não foi concluído.'), destino_ref=tx.referencia)
 
     def reembolsar(self, transacao, valor, chave=''):
-        raise ErroPagamento('Os pagamentos com cartão vinti4 devolvem-se no Portal do Comerciante da SISP.')
+        raise ErroPagamento('Os pagamentos com cartão vinti4 devolvem-se com um estorno no Portal do Comerciante '
+                            'da SISP.', estorno_loja=True)
 
 
 def _moeda():

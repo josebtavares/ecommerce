@@ -64,7 +64,7 @@ def publico(request, loja_id):
     ativos = {p.id: p for p in loja.profissionais.filter(ativo=True)}
     # sem dados bancários (com pagamentos a sério) não há pagamento antecipado: "ambos" passa a só no local
     # e os serviços só antecipados não se podem marcar (utils/banco.online_suspenso)
-    suspenso = online_suspenso(loja)
+    suspenso = online_suspenso(loja, getattr(request.user, 'utilizador', None) if request.user.is_authenticated else None)
     if suspenso:
         servicos = [s for s in servicos if s.pagamento != 'antecipado']
     return Response({
@@ -194,6 +194,8 @@ def _cliente_payload(request, m, completo=False):
     d = marcacao_payload(m, completo=False)
     for k in ('notas_internas', 'criada_por'):
         d.pop(k, None)
+    from ..pagamentos import cobra_a_serio
+    d['pagamento_simulado'] = not cobra_a_serio()
     if d.get('reembolso_por_concluir'):     # o cliente só sabe que está a ser tratado (sem o erro do fornecedor)
         d['reembolso_por_concluir'] = {'valor': d['reembolso_por_concluir']['valor']}
     cfg = m.loja.config_servicos
@@ -261,7 +263,7 @@ def marcar(request, loja_id):
     pagamento = d.get('pagamento') or ('local' if s.pagamento == 'local' else 'antecipado')
     if pagamento not in ('antecipado', 'local') or (s.pagamento != 'ambos' and pagamento != s.pagamento):
         return _erro('Forma de pagamento inválida para este serviço.')
-    if pagamento == 'antecipado' and online_suspenso(loja):
+    if pagamento == 'antecipado' and online_suspenso(loja, request.user.utilizador):
         return _erro('Esta loja ainda não recebe pagamentos online — este serviço não pode ser marcado agora.'
                      if s.pagamento == 'antecipado' else 'Esta loja ainda não recebe pagamentos online — escolhe pagar no local.')
     notas, e = _texto(d, 'notas', 500)
@@ -370,7 +372,9 @@ def minha_acao(request, marcacao_id):
             m = conversa.responder(m, pid, acao == 'aceitar_proposta', request.user.utilizador)
         else:
             return _erro('Acção inválida.')
-    except (ErroMarcacao, ErroPagamento) as e:
+    except ErroPagamento as e:              # dados do cliente em falta (cartão): o frontend pede-os e repete
+        return Response(pagamentos.erro_para_frontend(e), status=status.HTTP_400_BAD_REQUEST)
+    except ErroMarcacao as e:
         return _erro(str(e))
     except conversa.ErroConversa as e:
         return _erro(e.mensagem, e.status)

@@ -227,7 +227,7 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
                       loja=encomenda.loja, link=f'/encomendas/{encomenda.id}', email=fila_emails.IMPORTANTE,
                       email_chave=f'enc:{encomenda.id}:recebida')
         return Inicio('pendente')
-    if online_suspenso(encomenda.loja):         # sem dados bancários a Bendi não sabe para onde transferir
+    if online_suspenso(encomenda.loja, utilizador):      # sem contrato vinti4 ativo (em testes: só a equipa)
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — escolhe outro método de pagamento.')
     exigir_dados_cliente(utilizador, encomenda.morada_entrega)
     f = ativo()
@@ -276,7 +276,7 @@ def iniciar_marcacao(m, utilizador):
     """→ (Inicio, marcação). Simulado: fica paga já."""
     from ..servicos import marcacoes as ops
     ops.verificar_pagavel(m)
-    if online_suspenso(m.loja):
+    if online_suspenso(m.loja, utilizador):
         raise ErroPagamento('Esta loja ainda não recebe pagamentos online — a marcação não pode ser paga agora.')
     exigir_dados_cliente(utilizador)
     f = ativo()

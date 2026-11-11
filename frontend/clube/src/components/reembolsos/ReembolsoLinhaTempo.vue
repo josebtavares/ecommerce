@@ -28,7 +28,7 @@
 <script setup>
 import { computed } from 'vue'
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { dataHora } from '@/utils/reembolsos'
+import { dataHora, devolucaoLoja } from '@/utils/reembolsos'
 
 const props = defineProps({
   reembolso: { type: Object, required: true },
@@ -73,7 +73,7 @@ const passos = computed(() => {
   }
   // dinheiro em mão: aceite → a loja entrega → o cliente confirma
   if (r.metodo === 'manual' && r.data_reembolso) {
-    out.push({ chave: 'aceite', estado: 'feito', titulo: `Reembolso aceite: ${formatarDinheiro(r.valor_aprovado)} ${r.por_transferencia ? 'por transferência' : 'em mão'}`, texto: dataHora(r.data_reembolso) })
+    out.push({ chave: 'aceite', estado: 'feito', titulo: `Reembolso aceite: ${formatarDinheiro(r.valor_aprovado)} ${devolucaoLoja(r).como}`, texto: dataHora(r.data_reembolso) })
     out.push({ chave: 'entregue', titulo: r.entregue_em ? 'A loja devolveu o dinheiro' : 'A loja devolve o dinheiro',
                texto: r.entregue_em ? dataHora(r.entregue_em) : (r.estado === 'a_devolver' ? `Até ${dataHora(r.prazo_resposta)}` : ''),
                estado: r.entregue_em ? 'feito' : (r.estado === 'a_devolver' ? 'atual' : 'futuro') })

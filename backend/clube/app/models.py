@@ -2678,6 +2678,9 @@ class AdesaoVinti4(models.Model):
     pos_id          = models.CharField(max_length=40, blank=True, default='')
     merchant_id     = models.CharField(max_length=40, blank=True, default='')
     chave_cifrada   = models.TextField(blank=True, default='')
+    # Portal do Comerciante da loja (opcional): a API de estado confirma os pagamentos que ficaram sem resposta
+    portal_id       = models.CharField(max_length=60, blank=True, default='')
+    portal_password_cifrada = models.TextField(blank=True, default='')
     motivo          = models.CharField(max_length=300, blank=True, default='')
     pedida_em       = models.DateTimeField(auto_now_add=True)
     credenciais_em  = models.DateTimeField(null=True, blank=True)

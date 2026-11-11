@@ -65,7 +65,7 @@
         <!-- pagar -->
         <div v-if="porPagar" class="space-y-2">
           <p class="text-xs text-amber-500">Paga até às {{ hora(m.expira_em) }} — depois o horário é libertado.</p>
-          <button type="button" @click="acao({ acao: 'pagar' }, 'Pago. Obrigado!', `Pagar ${dinheiro(m.preco_indicado)}?\n\n(Pagamento simulado)`)" :disabled="aEnviar"
+          <button type="button" @click="acao({ acao: 'pagar' }, 'Pago. Obrigado!', `Pagar ${dinheiro(m.preco_indicado)}?${m.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)" :disabled="aEnviar"
             class="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold" data-teste="pagar">Pagar {{ dinheiro(m.preco_indicado) }}</button>
         </div>
       </section>
@@ -109,6 +109,7 @@
         @responder="responder" @mudou="carregar(true)" />
       <p v-if="erro" class="text-sm text-red-500" role="alert">{{ erro }}</p>
     </main>
+    <DadosPagador :campos="faltaDados" @guardado="repetirPagar" @fechar="faltaDados = []" />
   </div>
 </template>
 
@@ -124,12 +125,13 @@ import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { ouvirMarcacoes } from '@/utils/servicos'
 import { temaEscuro } from '@/utils/tema'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
+import DadosPagador from '@/components/forms/DadosPagador.vue'
 
 export default {
   name: 'MarcacaoCliente',
-  components: { BotaoPdf, MarcacaoConversa, NotificacaoSino },
+  components: { BotaoPdf, MarcacaoConversa, NotificacaoSino, DadosPagador },
   data () {
-    return { m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
+    return { faltaDados: [], m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
              novoDia: null, horas: [], novaHora: null, versao: 0, isDark: temaEscuro(), DIAS_CURTOS }
   },
   computed: {
@@ -194,9 +196,17 @@ export default {
         this.versao++
         toast.success(ok)
       } catch (e) {
+        if (corpo.acao === 'pagar' && e.response?.data?.codigo === 'dados_cliente') {   // cartão: faltam dados do perfil
+          this.faltaDados = e.response.data.campos || []
+          return
+        }
         this.erro = e.response?.data?.detail || 'Não foi possível.'
         if (corpo.acao === 'pagar') this.carregar(true)
       } finally { this.aEnviar = false }
+    },
+    repetirPagar () {
+      this.faltaDados = []
+      this.acao({ acao: 'pagar' }, 'Pago. Obrigado!')
     },
     responder ({ id, aceitar }) {
       this.acao({ acao: aceitar ? 'aceitar_proposta' : 'recusar_proposta', proposta_id: id }, aceitar ? 'Preço aceite.' : 'Proposta recusada.')

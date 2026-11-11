@@ -523,3 +523,119 @@ class Certificacao(TestCase):
         cliente = _utilizador('naoadmin')
         api.force_authenticate(cliente.user)
         self.assertEqual(api.get('/app/admin/pagamentos/vinti4/').status_code, 403)
+
+
+# ── fase 4: vendas das lojas com o contrato vinti4 de cada uma ──
+
+CHAVE_LOJA = 'LojaChave12345'
+
+
+def _loja(dono, estado='ativa', pos_id='90099', portal=None):
+    from .models import AdesaoVinti4, Loja, UtilizadorLoja
+    from .utils import vinti4 as adesoes
+    loja = Loja.objects.create(dono=dono, nome=f'Loja {dono.user.username}', slug=f'loja-{dono.user.username}',
+                               categoria='moda')
+    UtilizadorLoja.objects.get_or_create(loja=loja, utilizador=dono, defaults={'role': 'dono', 'ativo': True})
+    AdesaoVinti4.objects.create(loja=loja, estado=estado, pos_id=pos_id, merchant_id='M1',
+                                chave_cifrada=adesoes.cifrar(CHAVE_LOJA),
+                                portal_id=(portal or ('', ''))[0],
+                                portal_password_cifrada=adesoes.cifrar(portal[1]) if portal else '')
+    return loja
+
+
+@override_settings(**CRED, PAGAMENTOS_FORNECEDOR='vinti4', PAGAMENTOS_FORNECEDOR_BENDI='vinti4')
+class VendasDasLojas(TestCase):
+
+    def setUp(self):
+        self.dono = _utilizador('dono')
+        self.cliente = _utilizador('compra')
+        self.f = obter('vinti4')
+
+    def test_credenciais_da_loja(self):
+        loja = _loja(self.dono)
+        inicio = self.f.iniciar(Cobranca(referencia='enc-5-cartao-1', valor=Decimal('2300'), descricao='Encomenda #5',
+                                         pagador=self.cliente, loja=loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        self.assertEqual((tx.loja_id, tx.pos_id, inicio.campos['posID']), (loja.id, '90099', '90099'))
+        # a assinatura é feita com a chave da loja, não com a da Bendi
+        self.assertEqual(inicio.campos['FingerPrint'], v4.fingerprint_pedido(
+            CHAVE_LOJA, inicio.campos['TimeStamp'], 2300, tx.ref, tx.sessao, '90099'))
+        # e a resposta valida-se com a chave da loja
+        with mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'}):
+            v4.processar_resposta(_resposta_sucesso(tx, chave=CHAVE_LOJA))
+        tx.refresh_from_db()
+        self.assertEqual(tx.estado, 'paga')
+
+    def test_mesmo_pos_que_a_bendi(self):
+        """A CV PRIME STORE (loja) e a Bendi usam o mesmo POS ID: cada transacção tem a sua referência."""
+        loja = _loja(self.dono, pos_id=CRED['VINTI4_POS_ID'])
+        a = self.f.iniciar(Cobranca(referencia='enc-6-cartao-1', valor=Decimal('500'), descricao='E', pagador=self.cliente, loja=loja))
+        b = self.f.iniciar(Cobranca(referencia='fat-6-cartao-1', valor=Decimal('500'), descricao='F', pagador=self.dono))
+        self.assertNotEqual(a.campos['merchantRef'], b.campos['merchantRef'])
+        self.assertEqual(a.campos['posID'], b.campos['posID'])
+
+    def test_sem_adesao_ou_suspensa_recusa(self):
+        loja = _loja(self.dono, estado='suspensa')
+        with self.assertRaises(ErroPagamento):
+            self.f.iniciar(Cobranca(referencia='enc-7-cartao-1', valor=Decimal('500'), descricao='E', pagador=self.cliente, loja=loja))
+
+    def test_em_testes_so_a_equipa(self):
+        from .utils.banco import online_suspenso
+        loja = _loja(self.dono, estado='teste')
+        self.assertTrue(online_suspenso(loja))                    # o público não vê o cartão
+        self.assertTrue(online_suspenso(loja, self.cliente))
+        self.assertFalse(online_suspenso(loja, self.dono))        # a equipa experimenta
+        loja.vinti4.estado = 'ativa'
+        loja.vinti4.save(update_fields=['estado'])
+        self.assertFalse(online_suspenso(loja))
+        loja.vinti4.estado = 'por_validar'
+        loja.vinti4.save(update_fields=['estado'])
+        self.assertTrue(online_suspenso(loja, self.dono))
+        with override_settings(PAGAMENTOS_FORNECEDOR='simulado'):
+            self.assertFalse(online_suspenso(loja))               # simulado: nunca se aplica
+
+    def test_reembolso_e_estorno_da_loja(self):
+        with self.assertRaises(ErroPagamento) as e:
+            self.f.reembolsar('v4_1-2', Decimal('100'))
+        self.assertTrue(e.exception.estorno_loja)
+        from types import SimpleNamespace
+        from .utils import devolucoes as dev
+        with mock.patch.object(dev, 'pagamento_de', return_value=SimpleNamespace(fornecedor='vinti4')):
+            self.assertEqual(dev.como_devolve(None), 'cartao')
+        with mock.patch.object(dev, 'pagamento_de', return_value=SimpleNamespace(fornecedor='simulado', metodo_id=None,
+                                                                                  referencia_transacao='x')):
+            self.assertEqual(dev.como_devolve(None), 'dinheiro')
+
+    @mock.patch('app.pagamentos.vinti4.requests.post')
+    def test_api_de_estado_com_o_portal_da_loja(self, post):
+        loja = _loja(self.dono, portal=('portal-loja', 'segredo123'))
+        inicio = self.f.iniciar(Cobranca(referencia='enc-8-cartao-1', valor=Decimal('900'), descricao='E', pagador=self.cliente, loja=loja))
+        tx = TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+        post.return_value.json.return_value = {'result': True, 'transactionSuccess': False}
+        self.assertEqual(v4.consultar_estado(tx), 'nao_paga')
+        kw = post.call_args.kwargs
+        self.assertEqual(kw['auth'], ('portal-loja', 'segredo123'))
+        self.assertEqual(kw['json']['posID'], '90099')
+        self.assertEqual(kw['json']['posAuthCode'], CHAVE_LOJA)
+        # sem portal: não pergunta
+        loja2 = _loja(_utilizador('dono2'), pos_id='90100')
+        inicio = self.f.iniciar(Cobranca(referencia='enc-9-cartao-1', valor=Decimal('900'), descricao='E', pagador=self.cliente, loja=loja2))
+        post.reset_mock()
+        self.assertIsNone(v4.consultar_estado(TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])))
+        post.assert_not_called()
+
+    def test_guardar_portal(self):
+        from types import SimpleNamespace
+        from .utils import vinti4 as adesoes
+        loja = _loja(self.dono)
+        pedido = SimpleNamespace(user=self.dono.user)
+        _, erros = adesoes.guardar_portal(pedido, loja, 'tem espaço', 'x')
+        self.assertIn('portal_id', erros)
+        self.assertIn('portal_password', erros)
+        a, erros = adesoes.guardar_portal(pedido, loja, 'P123', 'segredo-123')
+        self.assertIsNone(erros)
+        self.assertEqual(adesoes.portal(loja), ('P123', 'segredo-123'))
+        self.assertNotIn('segredo', a.portal_password_cifrada)
+        self.assertEqual(a.estado, 'ativa')                       # não volta a pedir validação
+        adesoes.guardar_portal(pedido, loja, '', '')
+        self.assertIsNone(adesoes.portal(loja))

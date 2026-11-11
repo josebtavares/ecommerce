@@ -16,9 +16,12 @@ class ErroPagamento(Exception):
     não se volta a tentar sozinho: a Bendi confirma primeiro no painel do fornecedor (utils/devolucoes).
     """
 
-    def __init__(self, mensagem='', incerto=False, destino_ref=''):
+    def __init__(self, mensagem='', incerto=False, destino_ref='', estorno_loja=False):
         super().__init__(mensagem)
         self.incerto = incerto
+        # cartão vinti4 de uma loja: o dinheiro está na conta dela — é a loja que faz o estorno no Portal do
+        # Comerciante da SISP e o marca como feito (nada a tentar de novo do nosso lado)
+        self.estorno_loja = estorno_loja
         self.destino_ref = destino_ref      # a nossa referência do que se pagava: o regresso mostra o caminho de volta
 
 

@@ -6,7 +6,11 @@
   <section class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3" data-teste="reembolso-por-concluir">
     <div>
       <p class="text-sm font-bold text-amber-200">Reembolso de {{ dinheiro(valor) }} por concluir</p>
-      <p v-if="incerto" class="text-xs text-amber-300 mt-1" data-teste="reembolso-incerto">
+      <p v-if="estornoLoja" class="text-xs text-amber-300 mt-1" data-teste="reembolso-estorno-loja">
+        O cliente pagou com cartão e o dinheiro está na conta da loja: faz o estorno desta transação no Portal do
+        Comerciante da SISP e marca-o aqui com a referência do estorno.
+      </p>
+      <p v-else-if="incerto" class="text-xs text-amber-300 mt-1" data-teste="reembolso-incerto">
         O pagamento online não respondeu — o dinheiro pode já ter saído<template v-if="erro">: <span class="text-amber-200">“{{ semPonto(erro) }}”</span></template>.
         {{ podeTentar || porFora ? 'Confirma no painel do fornecedor antes de tentar de novo ou de o dar como devolvido.'
                                  : 'A equipa da Bendi vai confirmar se o dinheiro já saiu.' }}
@@ -16,7 +20,7 @@
         <template v-if="proxima">Tentamos de novo sozinhos a {{ dataHora(proxima) }}.</template>
         <template v-else>Já não tentamos sozinhos — {{ porFora ? 'tenta de novo ou dá-o como devolvido.' : 'a equipa da Bendi foi avisada e vai tratar disso.' }}</template>
       </p>
-      <p class="text-[11px] text-zinc-500 mt-1">{{ tentativas }} tentativa(s) até agora.<template v-if="!incerto"> Tentar de novo nunca devolve duas vezes.</template></p>
+      <p v-if="!estornoLoja" class="text-[11px] text-zinc-500 mt-1">{{ tentativas }} tentativa(s) até agora.<template v-if="!incerto"> Tentar de novo nunca devolve duas vezes.</template></p>
     </div>
     <template v-if="podeTentar">
       <label v-if="incerto" class="flex items-start gap-2 text-xs text-zinc-300">
@@ -33,10 +37,10 @@
     <template v-if="porFora">
       <button v-if="!foraAberto" type="button" @click="foraAberto = true" data-teste="reembolso-por-fora-abrir"
         class="w-full py-2 rounded-xl text-xs font-semibold border border-zinc-700 text-zinc-300 hover:bg-zinc-800">
-        {{ incerto ? 'Já foi devolvido (confirmado no fornecedor ou por transferência)' : 'Já devolvemos por fora (ex.: transferência)' }}
+        {{ estornoLoja ? 'Estorno feito' : incerto ? 'Já foi devolvido (confirmado no fornecedor ou por transferência)' : 'Já devolvemos por fora (ex.: transferência)' }}
       </button>
       <div v-else class="space-y-2 pt-1">
-        <input v-model.trim="referencia" maxlength="100" placeholder="Referência da devolução (obrigatória)" data-teste="reembolso-por-fora-ref"
+        <input v-model.trim="referencia" maxlength="100" :placeholder="estornoLoja ? 'Referência do estorno no Portal do Comerciante' : 'Referência da devolução (obrigatória)'" data-teste="reembolso-por-fora-ref"
           class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500" />
         <input v-model.trim="nota" maxlength="300" placeholder="Nota (opcional, o cliente vê)"
           class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500" />
@@ -45,7 +49,7 @@
           <button type="button" @click="$emit('por-fora', { referencia, nota })" :disabled="aEnviar || referencia.length < 3"
             data-teste="reembolso-por-fora-confirmar"
             class="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50">
-            Dar como devolvido
+            {{ estornoLoja ? 'Marcar estorno feito' : 'Dar como devolvido' }}
           </button>
         </div>
       </div>
@@ -65,7 +69,8 @@ defineProps({
   proxima:    { type: String, default: null },
   incerto:    { type: Boolean, default: false },     // o fornecedor não respondeu — pode já ter devolvido
   podeTentar: { type: Boolean, default: true },
-  porFora:    { type: Boolean, default: false },     // só a Bendi com gerir_pagamentos
+  porFora:    { type: Boolean, default: false },     // só a Bendi com gerir_pagamentos (ou a loja no estorno)
+  estornoLoja: { type: Boolean, default: false },    // cartão vinti4 da loja: a loja devolve no Portal do Comerciante
   aEnviar:    { type: Boolean, default: false },
 })
 defineEmits(['tentar', 'por-fora'])
