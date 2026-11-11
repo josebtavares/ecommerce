@@ -2,7 +2,7 @@
 Pagamento com cartão (vinti4) — a adesão de cada loja à SISP (utils/vinti4.py).
 
   GET  /app/loja/<loja_id>/vinti4/       → { adesao, requisitos, ficha, pode_pedir, pede_password, simulado }   (dono)
-  POST /app/loja/<loja_id>/vinti4/       { acao: 'pedir' }                                                       (dono)
+  POST /app/loja/<loja_id>/vinti4/       { acao: 'pedir' | 'contrato' }  (contrato = já tem contrato com a SISP)  (dono)
   PUT  /app/loja/<loja_id>/vinti4/       { pos_id, merchant_id, chave, password } → por_validar                  (dono)
   GET  /app/admin/lojas/<loja_id>/vinti4/                                                                       (gerir_pagamentos)
   POST /app/admin/lojas/<loja_id>/vinti4/ { acao: teste|ativar|suspender|recusar, motivo? }                     (gerir_pagamentos)
@@ -33,9 +33,12 @@ def _dono(request, loja):
 
 def _lista_loja(request, loja):
     reqs = vinti4.requisitos(loja)
+    reqs_contrato = vinti4.requisitos(loja, 'contrato')
     a = vinti4.adesao(loja)
-    return {'adesao': vinti4.payload(a), 'requisitos': reqs, 'ficha': vinti4.ficha(loja),
+    return {'adesao': vinti4.payload(a), 'requisitos': reqs, 'requisitos_contrato': reqs_contrato,
+            'comprovativo': vinti4.comprovativo(loja), 'ficha': vinti4.ficha(loja),
             'pode_pedir': not a and all(r['ok'] for r in reqs),
+            'pode_contrato': not a and all(r['ok'] for r in reqs_contrato),
             'pede_password': request.user.has_usable_password(), 'simulado': not cobra_a_serio()}
 
 
@@ -52,9 +55,10 @@ def loja_vinti4(request, loja_id):
         return Response({'detail': 'Demasiados pedidos seguidos. Aguarda um momento.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     try:
         if request.method == 'POST':
-            if request.data.get('acao') != 'pedir':
+            acao = request.data.get('acao')
+            if acao not in ('pedir', 'contrato'):
                 return Response({'detail': 'Acção inválida.'}, status=status.HTTP_400_BAD_REQUEST)
-            vinti4.pedir(loja)
+            vinti4.pedir(loja, 'contrato' if acao == 'contrato' else 'pedido')
         else:
             if request.user.has_usable_password():
                 from .utilizadorView import _password_errada
@@ -71,8 +75,9 @@ def loja_vinti4(request, loja_id):
 
 
 def _lista_admin(loja):
-    return {'adesao': vinti4.payload(vinti4.adesao(loja), admin=True), 'requisitos': vinti4.requisitos(loja),
-            'simulado': not cobra_a_serio()}
+    a = vinti4.adesao(loja)
+    return {'adesao': vinti4.payload(a, admin=True), 'requisitos': vinti4.requisitos(loja, a.modo if a else 'pedido'),
+            'comprovativo': vinti4.comprovativo(loja), 'simulado': not cobra_a_serio()}
 
 
 @api_view(['GET', 'POST'])

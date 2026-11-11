@@ -71,9 +71,32 @@ def ativa(loja):
     return AdesaoVinti4.objects.filter(loja=loja, estado__in=ESTADOS_COM_CARTAO).exists()
 
 
-def requisitos(loja):
-    """O que a SISP pede antes de aderir (e o que a cláusula 3ª pede ao site)."""
+def comprovativo(loja):
+    """O comprovativo do contrato vinti4 mais recente (Documentos da loja, tipo contrato_sisp) ou None."""
+    from .documentos_loja import expirado
+    d = loja.documentos.filter(tipo='contrato_sisp').order_by('-enviado_em', '-id').first()
+    if not d:
+        return None
+    exp = expirado(d)
+    return {'id': d.id, 'estado': 'expirado' if exp else d.estado,
+            'estado_nome': 'Expirado' if exp else d.get_estado_display(), 'motivo': d.motivo}
+
+
+def requisitos(loja, modo='pedido'):
+    """O que a SISP pede antes de aderir (e o que a cláusula 3ª pede ao site). Quem já tem contrato com a SISP
+    (modo 'contrato') só precisa do NIF, dos contactos e do comprovativo do contrato: a SISP já verificou a loja."""
     from .documentos_loja import verificada
+    if modo == 'contrato':
+        c = comprovativo(loja)
+        base = requisitos(loja)
+        recusado = bool(c and c['estado'] == 'rejeitado')
+        ajuda = 'O contrato assinado com a SISP ou o email/carta da SISP com o teu POS ID (PDF ou foto).'
+        if recusado:
+            ajuda = 'A Bendi recusou o que enviaste' + (f' ({c["motivo"]})' if c['motivo'] else '') + ' — envia outro.'
+        return [r for r in base if r['chave'] in ('nif', 'contactos')] + [
+            {'chave': 'comprovativo', 'titulo': 'Comprovativo do contrato vinti4 com a SISP',
+             'ok': bool(c and c['estado'] in ('pendente', 'aprovado')), 'ajuda': ajuda},
+        ] + [r for r in base if r['chave'] == 'estado']
     return [
         {'chave': 'nif', 'titulo': 'NIF da loja', 'ok': bool(re.fullmatch(r'\d{9}', loja.nif or '')),
          'ajuda': 'Configurações → Dados fiscais.'},
@@ -120,6 +143,7 @@ def payload(a, admin=False):
         return None
     out = {
         'estado': a.estado, 'estado_nome': a.get_estado_display(), 'motivo': a.motivo,
+        'modo': a.modo, 'modo_nome': a.get_modo_display(),
         'pos_id': a.pos_id, 'merchant_id': a.merchant_id, 'chave_definida': bool(a.chave_cifrada),
         'pedida_em': a.pedida_em.isoformat() if a.pedida_em else None,
         'credenciais_em': a.credenciais_em.isoformat() if a.credenciais_em else None,
@@ -173,18 +197,20 @@ def _bloquear(loja):
     return AdesaoVinti4.objects.filter(loja=loja).first()
 
 
-def pedir(loja):
-    """O dono entregou a ficha na SISP."""
+def pedir(loja, modo='pedido'):
+    """O dono entregou a ficha na SISP (pedido) ou já tinha contrato e vai pôr as credenciais (contrato)."""
     from ..models import AdesaoVinti4
-    falta = [r['titulo'] for r in requisitos(loja) if not r['ok']]
+    if modo not in ('pedido', 'contrato'):
+        raise ErroVinti4('Acção inválida.')
+    falta = [r['titulo'] for r in requisitos(loja, modo) if not r['ok']]
     if falta:
-        raise ErroVinti4('Antes de pedir a adesão falta: ' + '; '.join(falta) + '.')
+        raise ErroVinti4('Antes de continuar falta: ' + '; '.join(falta) + '.')
     with transaction.atomic():
         a = _bloquear(loja)
         if a:
             raise ErroVinti4('A adesão já foi pedida.')
-        a = AdesaoVinti4.objects.create(loja=loja, estado='pedida')
-        _registar(loja, 'pedida', a)
+        a = AdesaoVinti4.objects.create(loja=loja, estado='pedida', modo=modo)
+        _registar(loja, 'pedida' if modo == 'pedido' else 'contrato', a)
     return a
 
 
@@ -232,6 +258,8 @@ def decidir(request, loja, acao, motivo=''):
             raise ErroVinti4('Não é possível neste estado.')
         if para in ('teste', 'ativa') and not (a.pos_id and a.merchant_id and a.chave_cifrada):
             raise ErroVinti4('Faltam as credenciais.')
+        if para in ('teste', 'ativa') and a.modo == 'contrato' and (comprovativo(loja) or {}).get('estado') != 'aprovado':
+            raise ErroVinti4('Primeiro aprova o comprovativo do contrato vinti4 (Documentos da loja).')
         antes = a.estado
         a.estado, a.motivo = para, motivo
         a.decidido_em, a.decidido_por = timezone.now(), request.user
