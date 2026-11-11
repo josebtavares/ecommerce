@@ -20,6 +20,7 @@
         </label>
         <CampoLocalizacao v-if="campos.includes('cidade')" v-model="localizacao" :classe-campo="classeCampo" classe-rotulo="text-zinc-400" />
         <p v-if="erro" class="text-sm text-red-400" data-teste="dados-pagador-erro">{{ erro }}</p>
+        <MarcasCartao pequeno class="pt-1" />
       </div>
       <div class="px-6 pb-5 flex justify-end gap-2">
         <button type="button" @click="$emit('fechar')" class="px-4 py-2 rounded-xl text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-200">Cancelar</button>
@@ -34,11 +35,12 @@
 <script>
 import api from '@/services/api'
 import CampoLocalizacao from '@/components/forms/CampoLocalizacao.vue'
+import MarcasCartao from '@/components/pagamento/MarcasCartao.vue'
 import { localizacaoCompleta, localizacaoDe } from '@/utils/geografia'
 
 export default {
   name: 'DadosPagador',
-  components: { CampoLocalizacao },
+  components: { CampoLocalizacao, MarcasCartao },
   props: {
     campos: { type: Array, default: () => [] },     // 'telefone' | 'morada' | 'cidade'
   },

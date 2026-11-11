@@ -422,3 +422,70 @@ def bende_csv(request):
     r = HttpResponse(_csv(out), content_type='text/csv; charset=utf-8')
     r['Content-Disposition'] = f'attachment; filename="recebimentos-bende-{timezone.localdate()}.csv"'
     return r
+
+
+# ── Cartão (vinti4): cada ida à página da SISP, com o que a SISP respondeu ──
+#   GET /app/admin/pagamentos/vinti4/?estado=&credenciais=bendi|lojas&de=&ate=&q=&limit=&offset=
+#   GET /app/admin/pagamentos/vinti4/<id>/      (com as respostas guardadas)
+
+def _v4_item(t, completo=False):
+    from ..pagamentos.servico import TIPOS, destino, ler_referencia
+    lido = ler_referencia(t.referencia)
+    d = {'id': t.id, 'ref': t.ref, 'referencia': t.referencia, 'tipo': TIPOS.get(lido[0], '') if lido else '',
+         'loja': {'id': t.loja_id, 'nome': t.loja.nome} if t.loja_id else None,
+         'pos_id': t.pos_id, 'pagador': (t.utilizador.get_full_name() or t.utilizador.username) if t.utilizador_id else '',
+         'valor': str(t.valor), 'montante': t.montante, 'descricao': t.descricao,
+         'estado': t.estado, 'estado_nome': t.get_estado_display(), 'transacao': t.transacao if t.tid else '',
+         'pan': t.pan, 'erro_codigo': t.erro_codigo, 'erro': t.erro, 'mensagem': t.mensagem,
+         'dcc': t.dcc, 'confirmada_por': t.confirmada_por, 'efeito': t.efeito, 'consultas': t.consultas,
+         'criada_em': _quando(t.criada_em), 'terminada_em': _quando(t.terminada_em)}
+    if completo:          # o caminho no site pede uma consulta por linha: só na ficha
+        d['destino'] = destino(t.referencia)[1]
+        d['respostas'] = t.respostas
+    return d
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vinti4_lista(request):
+    from ..models import TransacaoVinti4
+    erro = _exige(request)
+    if erro:
+        return erro
+    de, ate, erro = _datas(request)
+    if erro:
+        return erro
+    qs = TransacaoVinti4.objects.select_related('loja', 'utilizador').order_by('-criada_em')
+    estados = dict(TransacaoVinti4.ESTADOS)
+    estado = request.GET.get('estado')
+    if estado in estados:
+        qs = qs.filter(estado=estado)
+    cred = request.GET.get('credenciais')
+    if cred == 'bendi':
+        qs = qs.filter(loja__isnull=True)
+    elif cred == 'lojas':
+        qs = qs.filter(loja__isnull=False)
+    if de:
+        qs = qs.filter(criada_em__date__gte=de)
+    if ate:
+        qs = qs.filter(criada_em__date__lte=ate)
+    q = str(request.GET.get('q') or '').strip()[:60]
+    if q:
+        qs = qs.filter(Q(ref__icontains=q) | Q(referencia__icontains=q) | Q(descricao__icontains=q)
+                       | Q(loja__nome__icontains=q) | Q(utilizador__username__icontains=q) | Q(utilizador__email__icontains=q))
+    contagem = dict(qs.order_by().values_list('estado').annotate(n=Count('id')))
+    pagina, total = _paginar(request, qs)
+    return Response({'count': total, 'results': [_v4_item(t) for t in pagina],
+                     'estados': [{'valor': k, 'nome': v, 'n': contagem.get(k, 0)} for k, v in TransacaoVinti4.ESTADOS]})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vinti4_detalhe(request, tx_id):
+    from django.shortcuts import get_object_or_404
+    from ..models import TransacaoVinti4
+    erro = _exige(request)
+    if erro:
+        return erro
+    t = get_object_or_404(TransacaoVinti4.objects.select_related('loja', 'utilizador'), id=tx_id)
+    return Response(_v4_item(t, completo=True))

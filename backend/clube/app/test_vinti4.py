@@ -408,3 +408,118 @@ class CobrancasBendi(TestCase):
         self.assertFalse(TransacaoVinti4.objects.filter(referencia__startswith='fat-32-').exists())
         with self.assertRaises(ErroPagamento):                    # POS sem dono (nunca deve acontecer)
             servico.iniciar_fatura(fatura, None)
+
+
+# ── fase 3: respostas guardadas, erros do comerciante (BT202108A), recibo, Admin → Pagamentos → Cartão ──
+
+def _resposta_erro_comerciante(tx, chave=CHAVE):
+    d = {'messageType': '6', 'merchantRespMerchantRef': tx.ref, 'merchantRespMerchantSession': tx.sessao,
+         'merchantRespMessageID': 'MSG0000000000000003', 'merchantRespErrorCode': '1',
+         'merchantRespErrorDescription': 'Erro nos dados', 'merchantRespErrorDetail': 'FingerPrint',
+         'merchantRespTimeStamp': '2026-11-11 10:02:00',
+         'merchantRespAdditionalErrorMessage': 'Dados do pedido inválidos. Corrigir e reenviar.'}
+    d['resultFingerPrint'] = v4.fingerprint_erro(chave, d)
+    return d
+
+
+@override_settings(**CRED)
+class Certificacao(TestCase):
+
+    def setUp(self):
+        self.u = _utilizador()
+        self.f = obter('vinti4')
+
+    def _iniciar(self, referencia='fat-7-cartao-1'):
+        inicio = self.f.iniciar(Cobranca(referencia=referencia, valor=Decimal('1500'), descricao='Plano', pagador=self.u))
+        return TransacaoVinti4.objects.get(ref=inicio.campos['merchantRef'])
+
+    def test_classificar_erros(self):
+        self.assertTrue(v4.erro_do_comerciante('Dados do pedido inválidos. Corrigir e reenviar.'))
+        self.assertTrue(v4.erro_do_comerciante('Falha na configuração.'))
+        self.assertTrue(v4.erro_do_comerciante('Invalid order data. Fix and resend.'))
+        self.assertFalse(v4.erro_do_comerciante('Saldo do cartão insuficiente'))
+        self.assertFalse(v4.erro_do_comerciante('Código de autenticação errado. Favor tentar novamente'))
+        self.assertFalse(v4.erro_do_comerciante(''))
+
+    def test_erro_do_cliente_mostra_se_e_guarda(self):
+        tx = self._iniciar()
+        v4.processar_resposta(_resposta_erro(tx))
+        tx.refresh_from_db()
+        self.assertIn('Código de autenticação errado', tx.mensagem)
+        self.assertEqual(len(tx.respostas), 1)
+        self.assertEqual(tx.respostas[0]['origem'], 'resposta')
+        self.assertEqual(tx.respostas[0]['campos']['merchantRespErrorCode'], '2')
+
+    @mock.patch('app.Views.notificacaoView.notificar_admins')
+    def test_erro_do_comerciante_avisa_a_bendi(self, notificar):
+        tx = self._iniciar()
+        v4.processar_resposta(_resposta_erro_comerciante(tx))
+        tx.refresh_from_db()
+        self.assertEqual(tx.estado, 'falhada')
+        self.assertEqual(tx.mensagem, v4.MENSAGEM_ERRO_COMERCIANTE)
+        self.assertTrue(tx.erro.startswith('[comerciante] Dados do pedido'))
+        notificar.assert_called_once()
+        self.assertEqual(notificar.call_args.kwargs['tipo'], 'pagamento_erro')
+
+    def test_respostas_guardadas_ate_ao_limite(self):
+        tx = self._iniciar()
+        for _ in range(v4.MAX_RESPOSTAS + 3):
+            v4.processar_resposta({'merchantRef': tx.ref, 'UserCancelled': 'true', 'x': 'y' * 1000})
+        tx.refresh_from_db()
+        self.assertEqual(len(tx.respostas), v4.MAX_RESPOSTAS)
+        self.assertEqual(len(tx.respostas[-1]['campos']['x']), 400)
+
+    @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
+    def test_recibo_do_cartao(self, _confirmar):
+        from types import SimpleNamespace
+        from .utils import documentos
+        tx = self._iniciar('fat-77-cartao-1')
+        v4.processar_resposta(_resposta_sucesso(tx, dcc='Y', dccAmount='16.30', dccCurrency='USD', dccMarkup='3',
+                                                dccRate='92.65882'))
+        tx.refresh_from_db()
+        self.assertEqual(tx.estado, 'paga')
+        linhas = []
+
+        class P:
+            def seccao(self, t): linhas.append(('S', t))
+            def linha(self, r, v, destaque=False): linhas.append((r, str(v)))
+            def texto(self, t): linhas.append(('T', t))
+        self.assertTrue(documentos._cartao_vinti4(P(), 'fat', 77))
+        d = dict(l for l in linhas if l[0] not in ('S', 'T'))
+        self.assertEqual(d['Referência do pagamento'], tx.ref)
+        self.assertEqual(d['Nº da transação'], '1234-56')
+        self.assertEqual(d['Cartão'], '************1112')
+        self.assertEqual(d['Loja virtual'], 'https://exemplo.cv')
+        self.assertEqual(d['[x] TOTAL'], '16.30 USD')
+        self.assertIn(('T', 'Exchange rate provided by Banco de Cabo Verde.'), linhas)
+        self.assertFalse(documentos._cartao_vinti4(P(), 'fat', 78))
+        # o PDF inteiro gera-se
+        f = SimpleNamespace(id=77, pos_id=None, alvo=SimpleNamespace(nome='Loja', nif=''), descricao='Plano',
+                            periodo_inicio=timezone.now().date(), periodo_fim=timezone.now().date() + timedelta(days=30),
+                            paga_em=timezone.now(), metodo='online', get_metodo_display=lambda: 'Online', valor=Decimal('1500'))
+        with mock.patch('app.utils.subscricoes.nome_alvo', return_value='Loja'):
+            self.assertTrue(documentos.pdf_comprovativo_subscricao(f).startswith(b'%PDF'))
+
+    def test_admin_lista_e_ficha(self):
+        tx = self._iniciar()
+        v4.processar_resposta(_resposta_erro(tx))
+        admin = _utilizador('adminv4')
+        admin.user.is_staff = True
+        admin.user.save(update_fields=['is_staff'])
+        papel = next(r for r, perms in Utilizador.PERMISSOES_ADMIN.items() if 'gerir_pagamentos' in perms)
+        admin.role_admin = papel
+        admin.save(update_fields=['role_admin'])
+        from rest_framework.test import APIClient
+        api = APIClient()
+        api.force_authenticate(admin.user)
+        r = api.get('/app/admin/pagamentos/vinti4/', {'estado': 'falhada'})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertEqual(r.json()['count'], 1)
+        self.assertEqual(r.json()['results'][0]['tipo'], 'fatura')
+        self.assertNotIn('respostas', r.json()['results'][0])
+        r = api.get(f'/app/admin/pagamentos/vinti4/{tx.id}/')
+        self.assertEqual(len(r.json()['respostas']), 1)
+        self.assertEqual(r.json()['destino'], '')               # a fatura 7 não existe neste teste
+        cliente = _utilizador('naoadmin')
+        api.force_authenticate(cliente.user)
+        self.assertEqual(api.get('/app/admin/pagamentos/vinti4/').status_code, 403)

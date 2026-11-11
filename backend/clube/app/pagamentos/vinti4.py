@@ -232,6 +232,42 @@ def _timestamp():
 
 # ── resposta ────────────────────────────────────────────────────
 
+MAX_RESPOSTAS = 10
+
+# BT202108A 1.1 — erros do lado do comerciante (configuração, FingerPrint, parâmetros): o cliente não pode fazer
+# nada; vê uma mensagem simples e a Bendi é avisada. Os de 1.2 (saldo, cartão, OTP…) mostram-se tal como vêm.
+ERROS_COMERCIANTE = (
+    'dados do pedido invalidos', 'invalid order data', 'donnees de commande invalides',
+    'erro de formatacao', 'formatting error', 'erreur de formatage',
+    'falha na configuracao', 'setup failed', "echec de l'installation",
+    'data invalida', 'invalid date', 'date invalide',
+    'dados invalido para este contexto', 'invalid data for this context', 'donnees invalides pour ce contexte',
+    'falha nas chaves de autenticacao', 'authentication keys failed', "echec des cles d'authentification",
+    'valor da transacao abaixo do minimo', 'transaction amount below the minimum', 'montant de la transaction inferieur',
+)
+MENSAGEM_ERRO_COMERCIANTE = ('Não foi possível concluir o pagamento por um problema do nosso lado. '
+                             'Já fomos avisados — tenta de novo mais tarde.')
+
+
+def _normalizar(texto):
+    import unicodedata
+    t = unicodedata.normalize('NFKD', str(texto or '')).encode('ascii', 'ignore').decode().lower()
+    return ' '.join(t.split())
+
+
+def erro_do_comerciante(mensagem):
+    m = _normalizar(mensagem)
+    return bool(m) and any(e in m for e in ERROS_COMERCIANTE)
+
+
+def _guardar_resposta(tx, origem, campos):
+    """Junta o que a SISP mandou a tx.respostas (texto curto por campo, as últimas MAX_RESPOSTAS)."""
+    limpos = {str(k)[:60]: (v if isinstance(v, (bool, int, float)) or v is None else str(v)[:400])
+              for k, v in list((campos or {}).items())[:60]}
+    tx.respostas = (list(tx.respostas or []) + [{'em': timezone.now().isoformat(timespec='seconds'),
+                                                  'origem': origem, 'campos': limpos}])[-MAX_RESPOSTAS:]
+
+
 def _cancelou(d):
     return _txt(d.get('userCancelled') or d.get('UserCancelled')).lower() == 'true'
 
@@ -242,6 +278,19 @@ def _avisar_admins(titulo, mensagem, loja=None):
     if Notificacao.objects.filter(tipo='pagamento_reembolsar', titulo=titulo).exists():
         return
     notificar_admins(tipo='pagamento_reembolsar', titulo=titulo, mensagem=mensagem, loja=loja, link='/admin', email=2)
+
+
+def _avisar_erro_comerciante(tx):
+    """Erro de configuração/pedido do lado da Bendi (BT202108A 1.1): um aviso por hora, com o que a SISP disse."""
+    from datetime import timedelta
+    from ..models import Notificacao
+    from ..Views.notificacaoView import notificar_admins
+    if Notificacao.objects.filter(tipo='pagamento_erro', data_criacao__gte=timezone.now() - timedelta(hours=1)).exists():
+        return
+    notificar_admins(tipo='pagamento_erro', titulo=f'vinti4: erro de configuração — {tx.ref}',
+                     mensagem=f'A SISP recusou o pedido {tx.ref} ({tx.referencia}): {tx.erro[13:200]}. '
+                              f'Verifica o POS ID, o posAutCode e os parâmetros (Admin → Pagamentos → Cartão).',
+                     loja=tx.loja, link='/admin/pagamentos', email=2)
 
 
 def _registar(tx, evento, estado_anterior=''):
@@ -284,6 +333,8 @@ def processar_resposta(d):
             log.warning('vinti4: resposta para um merchantRef desconhecido (%r)', ref[:20])
             return None
         anterior = tx.estado
+        _guardar_resposta(tx, 'resposta', d)
+        tx.save(update_fields=['respostas'])
         tipo = _txt(d.get('messageType'))
         if tipo == SUCESSO_COMPRA:
             chave = _credenciais_da(tx).chave
@@ -327,8 +378,14 @@ def processar_resposta(d):
             tx.erro = ' — '.join(filter(None, (_txt(d.get('merchantRespErrorDescription')),
                                                _txt(d.get('merchantRespErrorDetail')))))[:300]
             tx.mensagem = _txt(d.get('merchantRespAdditionalErrorMessage'))[:200]
+            do_comerciante = erro_do_comerciante(tx.mensagem) or erro_do_comerciante(tx.erro)
+            if do_comerciante:
+                tx.erro = f'[comerciante] {tx.mensagem} — {tx.erro}'[:300]
+                tx.mensagem = MENSAGEM_ERRO_COMERCIANTE
             tx.save()
             _registar(tx, 'cartao_recusado', anterior)
+            if do_comerciante:
+                _avisar_erro_comerciante(tx)
             return tx
         if _cancelou(d):
             if tx.estado in ('iniciada', 'por_confirmar'):
@@ -343,11 +400,16 @@ def processar_resposta(d):
 # ── API de estado (Plan Test 38–41) ────────────────────────────
 
 def consultar_estado(tx):
-    """Pergunta à SISP se a transacção foi paga → 'paga' | 'nao_paga' | None (sem API, sem resposta ou recusada).
-    Só para as transacções da Bendi: as das lojas pedem o portal de cada uma (fase das lojas)."""
+    """Pergunta à SISP se a transacção foi paga → 'paga' | 'nao_paga' | None (sem API, sem resposta ou recusada)."""
+    return consultar(tx)[0]
+
+
+def consultar(tx):
+    """→ (resultado, corpo da resposta da API ou None). Só para as transacções da Bendi: as das lojas pedem o
+    portal de cada uma (fase das lojas)."""
     portal, password = settings.VINTI4_PORTAL_ID.strip(), settings.VINTI4_PORTAL_PASSWORD.strip()
     if tx.loja_id is not None or not (portal and password and settings.VINTI4_ESTADO_URL):
-        return None
+        return None, None
     try:
         cred = _credenciais_da(tx)
         resp = requests.post(settings.VINTI4_ESTADO_URL, auth=(portal, password), timeout=15,
@@ -355,11 +417,13 @@ def consultar_estado(tx):
         corpo = resp.json()
     except (ErroPagamento, requests.RequestException, ValueError) as e:
         log.warning('vinti4: API de estado sem resposta para %s: %s', tx.ref, type(e).__name__)
-        return None
+        return None, {'erro': type(e).__name__}
+    if not isinstance(corpo, dict):
+        return None, {'erro': 'resposta inesperada'}
     if corpo.get('result') is not True:
         log.warning('vinti4: API de estado recusou %s: %s', tx.ref, str(corpo.get('msg'))[:120])
-        return None
-    return 'paga' if corpo.get('transactionSuccess') is True else 'nao_paga'
+        return None, corpo
+    return ('paga' if corpo.get('transactionSuccess') is True else 'nao_paga'), corpo
 
 
 def rever_sem_resposta(agora=None):
@@ -374,12 +438,14 @@ def rever_sem_resposta(agora=None):
     mudaram = 0
     for tid in list(candidatas):
         tx = TransacaoVinti4.objects.select_related('loja').get(pk=tid)
-        resultado = consultar_estado(tx)
+        resultado, corpo = consultar(tx)
         with transaction.atomic():
             tx = TransacaoVinti4.objects.select_for_update(of=('self',)).select_related('loja').get(pk=tid)
             if tx.estado not in ('iniciada', 'por_confirmar'):     # a resposta chegou entretanto
                 continue
             anterior = tx.estado
+            if corpo is not None:
+                _guardar_resposta(tx, 'estado', corpo)
             tx.consultas += 1
             tx.consultada_em = agora
             if resultado == 'paga':

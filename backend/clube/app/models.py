@@ -1653,6 +1653,7 @@ class Notificacao(models.Model):
         ('nova_encomenda',           'Nova encomenda'),
         ('pagamento_aprovado',       'Pagamento aprovado'),
         ('pagamento_reembolsar',     'Pagamento a reembolsar'),
+        ('pagamento_erro',           'Erro nos pagamentos com cartão'),
         ('reembolso_pedido',         'Pedido de reembolso'),
         ('reembolso_atualizado',     'Reembolso actualizado'),
         ('reembolso_disputa',        'Reembolso em disputa'),
@@ -2727,6 +2728,9 @@ class TransacaoVinti4(models.Model):
     efeito          = models.CharField(max_length=12, blank=True, default='')    # pago | reembolso | erro (servico.confirmar)
     consultas       = models.PositiveSmallIntegerField(default=0)                # perguntas à API de estado
     consultada_em   = models.DateTimeField(null=True, blank=True)
+    # o que a SISP mandou (cada POST da resposta e cada consulta à API de estado), para diagnóstico e certificação:
+    # [{em, origem: resposta|estado, campos}] — sem nada secreto (a SISP não devolve o posAutCode; o cartão vem mascarado)
+    respostas       = models.JSONField(default=list, blank=True)
     criada_em       = models.DateTimeField(auto_now_add=True, db_index=True)
     terminada_em    = models.DateTimeField(null=True, blank=True)
 

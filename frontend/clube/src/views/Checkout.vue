@@ -177,9 +177,7 @@
           <!-- cartão (contrato SISP, cl.3): pagamento seguro na página da SISP + dados de quem paga -->
           <div v-if="pagaOnline" class="mt-4 space-y-3" data-teste="checkout-cartao">
             <div class="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-400 leading-relaxed">
-              <div class="flex flex-wrap items-center gap-1.5 mb-2" aria-label="Cartões aceites">
-                <span v-for="l in CARTOES" :key="l" class="px-2 py-0.5 rounded-md border border-zinc-700 bg-zinc-800 text-[11px] font-bold text-zinc-300">{{ l }}</span>
-              </div>
+              <MarcasCartao pequeno class="mb-2" />
               <p class="flex items-start gap-2">
                 <font-awesome-icon :icon="['fas', 'lock']" class="w-3 h-3 mt-0.5 flex-shrink-0 text-green-400" />
                 <span>Pagas na página segura da SISP (vinti4, 3-D Secure), diretamente a <b class="text-zinc-300">{{ loja?.nome }}</b>.
@@ -412,6 +410,7 @@ import { seguirPagamento } from '@/utils/pagamentoOnline'
 import { porConfirmar } from '@/services/confirmarEmail'
 import { LIMITE_NIF_CLIENTE } from '@/utils/fiscal'
 import CampoLocalizacao from '@/components/forms/CampoLocalizacao.vue'
+import MarcasCartao from '@/components/pagamento/MarcasCartao.vue'
 import { localizacaoCompleta, localizacaoDe } from '@/utils/geografia'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
@@ -432,7 +431,7 @@ const METODOS_ONLINE = ['cartao', 'mobile_money', 'mbway', 'flutterwave', 'strip
 export default {
   name: 'CheckoutPage',
   mixins: [temaPainel],
-  components: { BotaoTema, CampoLocalizacao, EscolherHora, LojaVendedor, SiteRodape },
+  components: { BotaoTema, CampoLocalizacao, EscolherHora, LojaVendedor, MarcasCartao, SiteRodape },
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()
@@ -459,7 +458,6 @@ export default {
       agendarPara: null,   // null = o mais cedo possível · '' = a escolher · 'AAAA-MM-DDTHH:MM'
       redirecionando: false,
       metodosOnline: METODOS_ONLINE,
-      CARTOES: ['vinti4', 'VISA', 'Mastercard'],
       perfilTelefone: user.telefone || '',
       telefone:       '',
       moradaCliente:  '',
