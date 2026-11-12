@@ -27,6 +27,8 @@
           </p>
           <p class="text-xs text-zinc-400">{{ duracaoTexto(s.duracao_min) }} · {{ s.preco_texto }}
             <template v-if="s.categoria"> · {{ s.categoria }}</template></p>
+          <p v-if="pagamentoPadrao && s.pagamento !== pagamentoPadrao" class="text-[11px] text-sky-300 mt-1" data-teste="pagamento-diferente">
+            Pagamento: {{ NOMES_PAGAMENTO[s.pagamento] }} (a regra geral é {{ NOMES_PAGAMENTO[pagamentoPadrao] }})</p>
           <p v-if="s.e_pacote" class="text-[11px] text-zinc-400 mt-1 line-clamp-2">Inclui: {{ s.componentes.map(c => c.nome).join(' + ') }}</p>
           <p class="text-[11px] text-zinc-500 mt-1 truncate">
             {{ s.profissionais.length ? nomesProf(s.profissionais) : 'Sem profissionais — ninguém o pode fazer' }}
@@ -185,6 +187,7 @@ import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
 import { CAMPO, duracaoTexto } from '@/utils/servicos'
 
+const NOMES_PAGAMENTO = { ambos: 'já ou no local', antecipado: 'só antecipado', local: 'só no local' }
 const DURACOES = [5, 10, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 480, 600, 720]
 
 export default {
@@ -193,10 +196,12 @@ export default {
     lojaId: { type: [String, Number], required: true },
     profissionais: { type: Array, default: () => [] },
     podeGerir: { type: Boolean, default: false },
+    // Regras → Pagamento das marcações: o que os serviços novos trazem
+    pagamentoPadrao: { type: String, default: '' },
   },
   emits: ['alterado'],
   data () {
-    return { servicos: [], carregando: true, form: null, erro: '', aGuardar: false, novas: [], CAMPO, DURACOES }
+    return { servicos: [], carregando: true, form: null, erro: '', aGuardar: false, novas: [], CAMPO, DURACOES, NOMES_PAGAMENTO }
   },
   computed: {
     titulo () {
@@ -250,7 +255,7 @@ export default {
       this.form = s
         ? { ...s, preco: Number(s.preco), profissionais: [...s.profissionais], imagens: [...s.imagens],
             componentes: s.componentes.map(c => c.id), profsTocados: true }
-        : { id: null, nome: '', duracao_min: 30, intervalo_min: 0, preco: '', tipo_preco: 'fixo', pagamento: 'ambos',
+        : { id: null, nome: '', duracao_min: 30, intervalo_min: 0, preco: '', tipo_preco: 'fixo', pagamento: this.pagamentoPadrao || 'ambos',
             categoria: '', descricao: '', ativo: true, visivel: true, imagens: [],
             e_pacote: pacote, preco_auto: pacote, duracao_auto: pacote, componentes: [], profsTocados: false,
             profissionais: pacote ? [] : this.profissionais.filter(p => p.ativo).map(p => p.id) }

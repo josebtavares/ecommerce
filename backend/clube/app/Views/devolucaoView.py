@@ -651,12 +651,28 @@ def _marcacoes_por_concluir():
             .select_related('loja', 'cliente__user'))
 
 
+def _dia(dt):
+    from django.utils import timezone as tz
+    return tz.localtime(dt).strftime('%d/%m/%Y')
+
+
+def _erro_marcacao(m):
+    """O erro do fornecedor, ou em que ponto está a devolução de outra forma (a Bendi vê o histórico)."""
+    if m.devolucao_outra_prazo:
+        return (f'A loja devolveu de outra forma a {_dia(m.devolucao_outra_em)} ({m.devolucao_outra_nota[:150]}) — '
+                f'à espera da confirmação do cliente até {_dia(m.devolucao_outra_prazo)}.')
+    if m.devolucao_nao_recebida_em:
+        return (f'A loja disse que devolveu de outra forma ({m.devolucao_outra_nota[:150]}), mas o cliente diz que não '
+                f'recebeu. Vê a prova e as mensagens na marcação.')
+    return m.reembolso_erro
+
+
 def _marcacao_por_concluir(request, m):
     from ..servicos import marcacoes as ops
     return {'id': m.id, 'loja_id': m.loja_id, 'loja_nome': m.loja.nome, 'servico_nome': m.servico_nome,
             'cliente_nome': (m.cliente.nome if m.cliente_id else '') or m.cliente_nome,
             'inicio': _data(m.inicio), 'estado': m.estado, 'estado_label': m.get_estado_display(),
-            'valor': str(ops.por_reembolsar(m)), 'erro': m.reembolso_erro, 'tentativas': m.reembolso_tentativas,
+            'valor': str(ops.por_reembolsar(m)), 'erro': _erro_marcacao(m), 'tentativas': m.reembolso_tentativas,
             'proxima_tentativa': _data(m.reembolso_proxima), 'incerto': m.reembolso_incerto,
             'pode_tentar': not m.reembolso_incerto or _financeiro(request), 'pode_por_fora': _financeiro(request)}
 

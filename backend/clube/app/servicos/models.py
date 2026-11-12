@@ -45,6 +45,9 @@ class ConfigServicos(models.Model):
     reembolso_fora_prazo  = models.CharField(max_length=6, choices=REEMBOLSO, default='nenhum')
     cliente_escolhe_profissional = models.BooleanField(default=True)
     profissional_altera_preco    = models.BooleanField(default=False)
+    # regra geral do pagamento das marcações: o valor dos serviços novos ("Aplicar a todos" muda os que já existem)
+    PAGAMENTO_PADRAO = [('ambos', 'Antecipado ou no local'), ('antecipado', 'Só antecipado'), ('local', 'Só no local')]
+    pagamento_padrao      = models.CharField(max_length=10, choices=PAGAMENTO_PADRAO, default='ambos', db_default='ambos')
     data_atualizacao      = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -184,6 +187,8 @@ class Marcacao(models.Model):
     preco_final_por    = models.CharField(max_length=100, blank=True, default='')
     preco_final_motivo = models.CharField(max_length=200, blank=True, default='')
     pagamento     = models.CharField(max_length=10, choices=PAGAMENTOS, default='local')
+    # o cliente aceitou os Termos e a Política de devoluções ao marcar (ou ao pagar, nas antigas) — como nas encomendas
+    termos_aceites_em = models.DateTimeField(null=True, blank=True)
     pago          = models.BooleanField(default=False)
     pago_em       = models.DateTimeField(null=True, blank=True)
     # a marcação por pagar segura o horário até aqui; depois expira
@@ -211,6 +216,13 @@ class Marcacao(models.Model):
     reembolso_tentativas = models.PositiveSmallIntegerField(default=0, db_default=0)
     reembolso_proxima = models.DateTimeField(null=True, blank=True)
     reembolso_incerto = models.BooleanField(default=False, db_default=False)   # ver Reembolso.reembolso_incerto
+    # cartão vinti4: o estorno não deu (ou devolveu-se ao balcão) e a loja devolveu de outra forma, com prova em foto
+    # na conversa; o cliente confirma "Recebi" até devolucao_outra_prazo (depois fica confirmado) ou diz que não
+    devolucao_outra_em    = models.DateTimeField(null=True, blank=True)
+    devolucao_outra_nota  = models.CharField(max_length=500, blank=True, default='', db_default='')
+    devolucao_outra_ref   = models.CharField(max_length=100, blank=True, default='', db_default='')
+    devolucao_outra_prazo = models.DateTimeField(null=True, blank=True)     # preenchido = à espera do cliente
+    devolucao_nao_recebida_em = models.DateTimeField(null=True, blank=True)
     # conversa: até quando cada lado leu (mensagens por ler)
     lida_cliente_em = models.DateTimeField(null=True, blank=True)
     lida_loja_em  = models.DateTimeField(null=True, blank=True)

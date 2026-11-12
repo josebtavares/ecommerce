@@ -48,7 +48,29 @@
           <!-- o pagamento online recusou a devolução: está a ser tratado (o motivo técnico não se mostra) -->
           <div v-if="m.reembolso_por_concluir" class="text-amber-500" data-teste="reembolso-a-processar">
             <div class="flex justify-between"><span>Devolução a processar</span><span>{{ dinheiro(m.reembolso_por_concluir.valor) }}</span></div>
-            <p class="text-xs" :class="suave">Houve um atraso a processar a devolução. Estamos a tratar disso — não precisas de fazer nada.</p>
+            <!-- a loja devolveu de outra forma (com prova nas mensagens): o cliente confirma ou diz que não recebeu -->
+            <div v-if="m.reembolso_por_concluir.outra_forma" class="space-y-2 pt-1" data-teste="confirmar-devolucao">
+              <p class="text-xs" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
+                A loja diz que te devolveu este valor de outra forma: <b>{{ m.reembolso_por_concluir.outra_forma.nota }}</b><template
+                v-if="m.reembolso_por_concluir.outra_forma.referencia"> (referência {{ m.reembolso_por_concluir.outra_forma.referencia }})</template>.
+                A prova está nas mensagens. Se não disseres nada até {{ diaCurto(m.reembolso_por_concluir.outra_forma.prazo) }}, fica confirmado.</p>
+              <div v-if="!naoRecebiAberto" class="flex gap-2">
+                <button type="button" @click="acao({ acao: 'devolucao_recebida' }, 'Obrigado — devolução confirmada.')" :disabled="aEnviar"
+                  class="flex-1 py-2 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-bold" data-teste="recebi">Recebi</button>
+                <button type="button" @click="naoRecebiAberto = true" :disabled="aEnviar"
+                  class="flex-1 py-2 rounded-xl border text-sm" :class="botaoSec" data-teste="nao-recebi">Não recebi</button>
+              </div>
+              <div v-else class="space-y-2">
+                <input v-model="textoNaoRecebi" maxlength="500" placeholder="Conta-nos o que se passou (opcional)" aria-label="O que se passou"
+                  class="w-full px-3 py-2 rounded-xl text-sm border focus:outline-none focus:border-red-500"
+                  :class="isDark ? 'bg-zinc-950 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300 text-zinc-900'" />
+                <button type="button" @click="acao({ acao: 'devolucao_nao_recebida', texto: textoNaoRecebi }, 'A Bendi vai analisar.')" :disabled="aEnviar"
+                  class="w-full py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold" data-teste="nao-recebi-confirmar">Não recebi o dinheiro</button>
+              </div>
+            </div>
+            <p v-else-if="m.reembolso_por_concluir.nao_recebida_em" class="text-xs" :class="suave">
+              Disseste que não recebeste. A equipa da Bendi vai analisar com a loja.</p>
+            <p v-else class="text-xs" :class="suave">Houve um atraso a processar a devolução. Estamos a tratar disso — não precisas de fazer nada.</p>
           </div>
           <!-- pago online: comprovativo da Bendi (também chegou por email) -->
           <div v-if="m.pago" class="flex justify-between gap-3" data-teste="comprovativo-cliente"><span :class="suave">Comprovativo</span>
@@ -65,7 +87,9 @@
         <!-- pagar -->
         <div v-if="porPagar" class="space-y-2">
           <p class="text-xs text-amber-500">Paga até às {{ hora(m.expira_em) }} — depois o horário é libertado.</p>
-          <button type="button" @click="acao({ acao: 'pagar' }, 'Pago. Obrigado!', `Pagar ${dinheiro(m.preco_indicado)}?${m.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)" :disabled="aEnviar"
+          <PagamentoServico :loja-id="m.loja_id" :nome-loja="m.loja_nome" cartao :termos="!m.termos_aceites" v-model="aceitaTermos"
+            :is-dark="isDark" />
+          <button type="button" @click="pagar" :disabled="aEnviar || (!m.termos_aceites && !aceitaTermos)"
             class="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold" data-teste="pagar">Pagar {{ dinheiro(m.preco_indicado) }}</button>
         </div>
       </section>
@@ -126,12 +150,13 @@ import { ouvirMarcacoes } from '@/utils/servicos'
 import { temaEscuro } from '@/utils/tema'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
 import DadosPagador from '@/components/forms/DadosPagador.vue'
+import PagamentoServico from '@/components/servicos/PagamentoServico.vue'
 
 export default {
   name: 'MarcacaoCliente',
-  components: { BotaoPdf, MarcacaoConversa, NotificacaoSino, DadosPagador },
+  components: { BotaoPdf, MarcacaoConversa, NotificacaoSino, DadosPagador, PagamentoServico },
   data () {
-    return { faltaDados: [], m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
+    return { faltaDados: [], aceitaTermos: false, naoRecebiAberto: false, textoNaoRecebi: '', m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
              novoDia: null, horas: [], novaHora: null, versao: 0, isDark: temaEscuro(), DIAS_CURTOS }
   },
   computed: {
@@ -163,6 +188,7 @@ export default {
     },
     diaDe, diaSemana, hora, rotuloDia, urlFicheiro,
     dinheiro (v) { return formatarDinheiro(Number(v) || 0) },
+    diaCurto (s) { return s ? new Date(s).toLocaleDateString('pt-PT') : '' },
     chip (ativo) {
       return ['px-3 py-1.5 rounded-xl border text-sm font-semibold',
               ativo ? 'border-red-500 bg-red-600 text-white' : (this.isDark ? 'border-zinc-700 text-zinc-200' : 'border-gray-300 text-zinc-700')]
@@ -204,9 +230,13 @@ export default {
         if (corpo.acao === 'pagar') this.carregar(true)
       } finally { this.aEnviar = false }
     },
+    // marcações antigas aceitam os Termos ao pagar (as novas já os aceitaram ao marcar)
+    pagar () {
+      this.acao({ acao: 'pagar', ...(this.m.termos_aceites ? {} : { aceita_termos: this.aceitaTermos }) }, 'Pago. Obrigado!')
+    },
     repetirPagar () {
       this.faltaDados = []
-      this.acao({ acao: 'pagar' }, 'Pago. Obrigado!')
+      this.pagar()
     },
     responder ({ id, aceitar }) {
       this.acao({ acao: aceitar ? 'aceitar_proposta' : 'recusar_proposta', proposta_id: id }, aceitar ? 'Preço aceite.' : 'Proposta recusada.')
