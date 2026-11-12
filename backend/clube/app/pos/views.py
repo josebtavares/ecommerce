@@ -66,7 +66,7 @@ PREFETCH_CONJUNTO_POS = ('componentes__produto_pos', 'componentes__variante_pos'
 PREFETCH_CONJUNTO_LOJA = ('componentes__produto__inventario', 'componentes__variante',
                           'grupos__opcoes__produto__inventario', 'grupos__opcoes__variante',
                           'componentes__produto__variantes', 'grupos__opcoes__produto__variantes')
-from app.utils.auth import autenticar
+from app.utils.auth import autenticar, captcha_em_falta, contar_falha_captcha, corpo_erro
 from app.utils.dinheiro import ler_valor, formatar as formatar_dinheiro
 from app.utils.google_auth import google_obter_utilizador
 from app.utils.password import mensagem_password_fraca
@@ -588,7 +588,7 @@ def pos_login(request):
 
     user, erro, codigo = autenticar(request, email, password)
     if erro:
-        return Response({'detail': erro}, status=codigo)
+        return Response(corpo_erro(request, email, erro), status=codigo)
 
     try:
         utilizador = user.utilizador
@@ -698,6 +698,12 @@ def pos_membro_login(request):
         return Response({'detail': 'Demasiadas tentativas. Aguarda um momento antes de tentar novamente.'},
                         status=status.HTTP_429_TOO_MANY_REQUESTS)
 
+    # captcha adaptativo (utils/auth.py): depois de falhas neste username ou nesta ligação
+    ident = f'membro:{username}'
+    falta = captcha_em_falta(request, ident)
+    if falta:
+        return Response({'detail': falta, 'turnstile': True}, status=status.HTTP_400_BAD_REQUEST)
+
     membros = UtilizadorPOS.objects.filter(username_pos__iexact=username, ativo=True).select_related('pos')
     if pos_id:
         membros = membros.filter(pos_id=pos_id)
@@ -706,7 +712,8 @@ def pos_membro_login(request):
     # (dava para descobrir usernames) e listava os POS de um username sem password
     candidatos = [m for m in membros if m.check_password(password)]
     if not candidatos:
-        return Response({'detail': 'Credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
+        contar_falha_captcha(request, ident)
+        return Response(corpo_erro(request, ident, 'Credenciais inválidas'), status=status.HTTP_401_UNAUTHORIZED)
 
     # o mesmo username (e password) em vários POS → pedir escolha
     if len(candidatos) > 1:

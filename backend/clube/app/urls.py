@@ -10,9 +10,8 @@ urlpatterns = [
     path('', include('app.Urls.seoUrl')),
     path('', include('app.Urls.inventariocarrinhoencomendaUrl')),
     path('', include('app.Urls.pagamentoUrl')),
-    # galeria (projeto antigo): sem uso no site e as rotas aceitavam criar/editar sem login e
-    # apagar itens de outros — desligadas. O modelo fica (o worker de vídeo ainda o conhece).
-    # path('',include('app.Urls.galeriaUrl')),
+    # galeria (projeto antigo, sem uso no site): rotas e vistas removidas. O modelo fica (o worker de vídeo
+    # ainda o conhece).
     path('', include('app.Urls.entregaavaliacaoUrl')),
     path('', include('app.Urls.adminUrl')),
     path('', include('app.Urls.notificacaoUrl')),

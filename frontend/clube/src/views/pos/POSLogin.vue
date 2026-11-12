@@ -87,6 +87,9 @@
             </div>
           </div>
 
+          <!-- captcha adaptativo (backend utils/auth.py): só depois de tentativas falhadas -->
+          <Turnstile v-if="captcha" ref="turnstile" v-model="turnstile" />
+
           <button
             type="submit"
             :disabled="loading"
@@ -153,6 +156,9 @@
             </div>
           </div>
 
+          <!-- captcha adaptativo (backend utils/auth.py): só depois de tentativas falhadas -->
+          <Turnstile v-if="captcha" ref="turnstile" v-model="turnstile" />
+
           <button
             type="submit"
             :disabled="loading"
@@ -196,10 +202,11 @@ import { iniciarLoginGoogle } from '@/services/google'
 import { guardarSessaoPrincipalPOS, destinoPOS } from '@/services/posSessao'
 import BotaoGoogle from './components/BotaoGoogle.vue'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
+import Turnstile from '@/components/forms/Turnstile.vue'
 
 export default {
   name: 'POSLogin',
-  components: { BotaoGoogle, BotaoVerPassword },
+  components: { BotaoGoogle, BotaoVerPassword, Turnstile },
 
   data() {
     return {
@@ -223,6 +230,10 @@ export default {
         password: '',
       },
 
+      // "não sou um robô": o servidor pede-o depois de tentativas falhadas (resposta com turnstile: true)
+      captcha: false,
+      turnstile: '',
+
       // Escolha de POS (quando username existe em vários)
       escolherPOS: false,
       posDisponiveis: [],
@@ -233,6 +244,8 @@ export default {
     mudarModo(m) {
       this.modo = m
       this.error = null
+      this.captcha = false        // cada modo é outra conta: o servidor volta a pedir se for preciso
+      this.turnstile = ''
       this.escolherPOS = false
     },
 
@@ -242,15 +255,16 @@ export default {
       this.error = null
 
       try {
-        const { data } = await api.post('/api/pos/login/', {
+        const { data } = await api.post('/api/pos/login/', this._comCaptcha({
           email: this.form.email,
           password: this.form.password,
-        })
+        }))
 
         this._guardarSessaoPrincipal(data)
         this._redirecionar(data)
 
       } catch (err) {
+        this._talvezCaptcha(err)
         this.error = err.response?.data?.detail || 'Erro ao entrar'
       } finally {
         this.loading = false
@@ -276,10 +290,10 @@ export default {
       this.escolherPOS = false
 
       try {
-        const { data } = await api.post('/api/pos/login/membro/', {
+        const { data } = await api.post('/api/pos/login/membro/', this._comCaptcha({
           username: this.formMembro.username,
           password: this.formMembro.password,
-        })
+        }))
 
         // Backend pede para escolher POS
         if (data.escolher_pos) {
@@ -292,6 +306,7 @@ export default {
         this.$router.push('/pos/dashboard')
 
       } catch (err) {
+        this._talvezCaptcha(err)
         this.error = err.response?.data?.detail || 'Credenciais inválidas'
       } finally {
         this.loading = false
@@ -304,16 +319,17 @@ export default {
       this.error = null
 
       try {
-        const { data } = await api.post('/api/pos/login/membro/', {
+        const { data } = await api.post('/api/pos/login/membro/', this._comCaptcha({
           username: this.formMembro.username,
           password: this.formMembro.password,
           pos_id: posId,
-        })
+        }))
 
         this._guardarSessaoMembro(data)
         this.$router.push('/pos/dashboard')
 
       } catch (err) {
+        this._talvezCaptcha(err)
         this.error = err.response?.data?.detail || 'Erro ao entrar'
       } finally {
         this.loading = false
@@ -322,6 +338,17 @@ export default {
     },
 
     // ── HELPERS ───────────────────────────────────────────────────
+    _comCaptcha(corpo) {
+      return this.captcha ? { ...corpo, turnstile: this.turnstile } : corpo
+    },
+
+    // o servidor pediu o "não sou um robô" (utils/auth.py); cada resposta do Turnstile só vale uma vez
+    _talvezCaptcha(err) {
+      if (!err.response?.data?.turnstile) return
+      if (this.captcha) this.$refs.turnstile?.repor()
+      this.captcha = true
+    },
+
     _guardarSessaoPrincipal(data) {
       guardarSessaoPrincipalPOS(data)
     },

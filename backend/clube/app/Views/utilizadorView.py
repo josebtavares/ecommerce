@@ -21,7 +21,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ..models import Utilizador, UtilizadorLoja
-from ..utils.auth import autenticar
+from ..utils.auth import autenticar, corpo_erro, limite_login_ip
 from ..autenticacao import terminar_sessoes, tokens_depois_da_troca
 from ..utils.google_auth import GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, google_obter_utilizador
 from ..utils.contas import USERNAME_RE, username_em_uso, email_em_uso, sugerir_usernames
@@ -108,6 +108,7 @@ def _build_auth_response(utilizador: Utilizador, request=None) -> dict:
 @api_view(['POST'])
 @authentication_classes([])   # um token antigo/inválido no browser não pode impedir o login
 @permission_classes([AllowAny])
+@limite_login_ip
 def utilizador_login(request):
     """
     POST /app/utilizador/login/
@@ -126,7 +127,7 @@ def utilizador_login(request):
     # username ou email, numa só tentativa (ver utils/auth.py)
     user, erro, codigo = autenticar(request, username, password)
     if erro:
-        return Response({'detail': erro}, status=codigo)
+        return Response(corpo_erro(request, username, erro), status=codigo)
 
     try:
         utilizador = user.utilizador
