@@ -430,7 +430,10 @@ def processar_resposta(d):
             return tx
         if tipo == ERRO:
             chave = _credenciais_da(tx).chave
-            if not _igual(d.get('resultFingerPrint'), fingerprint_erro(chave, d)):
+            # o middleware 3DS da SISP assina os erros com a fórmula de SUCESSO (visto em testes reais, 2026-11-12);
+            # o Protocolo de Segurança descreve outra — aceitam-se as duas (ambas precisam da chave)
+            fp = d.get('resultFingerPrint')
+            if not (_igual(fp, fingerprint_erro(chave, d)) or _igual(fp, fingerprint_sucesso(chave, d))):
                 log.warning('vinti4: resultFingerPrint inválido na resposta de erro de %s', tx.ref)
                 _registar(tx, 'cartao_assinatura_invalida', anterior)
                 _avisar_assinatura_invalida(tx, 'erro')

@@ -211,6 +211,27 @@ class Fluxo(TestCase):
         self.assertIn('Código de autenticação errado', str(e.exception))
         self.assertEqual(e.exception.destino_ref, 'fat-7-cartao-1')
 
+    def test_erro_do_middleware_3ds_assinado_como_sucesso(self):
+        """O middleware 3DS da SISP assina o messageType 6 com a fórmula de sucesso (resposta real, 2026-11-12)."""
+        _, tx = self._iniciar()
+        d = {'messageType': '6', 'merchantResp': 'C', 'merchantRespMerchantRef': tx.ref,
+             'merchantRespMerchantSession': tx.sessao, 'merchantRespMessageID': 'S8zs59e0thSzZ3bBKDHC',
+             'merchantRespErrorCode': '03', 'merchantRespErrorDetail': '', 'merchantRespCP': '', 'merchantRespTid': '',
+             'merchantRespPan': '****', 'merchantRespPurchaseAmount': '1500', 'merchantRespTimeStamp': '2026-11-12 11:51:56',
+             'merchantRespErrorDescription': 'There was an error while processing the operation',
+             'merchantRespAdditionalErrorMessage': '', 'dcc': 'N'}
+        d['resultFingerPrint'] = v4.fingerprint_sucesso(CHAVE, d)
+        v4.processar_resposta(d)
+        tx.refresh_from_db()
+        self.assertEqual((tx.estado, tx.erro_codigo), ('falhada', '03'))
+        # com outra chave continua a ser recusada
+        _, tx2 = self._iniciar(referencia='fat-8-cartao-1')
+        d2 = {**d, 'merchantRespMerchantRef': tx2.ref, 'merchantRespMerchantSession': tx2.sessao}
+        d2['resultFingerPrint'] = v4.fingerprint_sucesso('outra-chave', d2)
+        v4.processar_resposta(d2)
+        tx2.refresh_from_db()
+        self.assertEqual(tx2.estado, 'iniciada')
+
     @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
     def test_cancelar_e_sucesso_depois(self, confirmar):
         _, tx = self._iniciar()
