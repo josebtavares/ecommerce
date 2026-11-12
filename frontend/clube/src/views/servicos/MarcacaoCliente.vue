@@ -65,7 +65,9 @@
         <!-- pagar -->
         <div v-if="porPagar" class="space-y-2">
           <p class="text-xs text-amber-500">Paga até às {{ hora(m.expira_em) }} — depois o horário é libertado.</p>
-          <button type="button" @click="acao({ acao: 'pagar' }, 'Pago. Obrigado!', `Pagar ${dinheiro(m.preco_indicado)}?${m.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)" :disabled="aEnviar"
+          <PagamentoServico :loja-id="m.loja_id" :nome-loja="m.loja_nome" cartao :termos="!m.termos_aceites" v-model="aceitaTermos"
+            :is-dark="isDark" />
+          <button type="button" @click="pagar" :disabled="aEnviar || (!m.termos_aceites && !aceitaTermos)"
             class="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold" data-teste="pagar">Pagar {{ dinheiro(m.preco_indicado) }}</button>
         </div>
       </section>
@@ -126,12 +128,13 @@ import { ouvirMarcacoes } from '@/utils/servicos'
 import { temaEscuro } from '@/utils/tema'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
 import DadosPagador from '@/components/forms/DadosPagador.vue'
+import PagamentoServico from '@/components/servicos/PagamentoServico.vue'
 
 export default {
   name: 'MarcacaoCliente',
-  components: { BotaoPdf, MarcacaoConversa, NotificacaoSino, DadosPagador },
+  components: { BotaoPdf, MarcacaoConversa, NotificacaoSino, DadosPagador, PagamentoServico },
   data () {
-    return { faltaDados: [], m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
+    return { faltaDados: [], aceitaTermos: false, m: null, carregando: true, erroCarregar: '', erro: '', aEnviar: false, cancelarAberto: false, remarcarAberto: false, motivo: '',
              novoDia: null, horas: [], novaHora: null, versao: 0, isDark: temaEscuro(), DIAS_CURTOS }
   },
   computed: {
@@ -204,9 +207,13 @@ export default {
         if (corpo.acao === 'pagar') this.carregar(true)
       } finally { this.aEnviar = false }
     },
+    // marcações antigas aceitam os Termos ao pagar (as novas já os aceitaram ao marcar)
+    pagar () {
+      this.acao({ acao: 'pagar', ...(this.m.termos_aceites ? {} : { aceita_termos: this.aceitaTermos }) }, 'Pago. Obrigado!')
+    },
     repetirPagar () {
       this.faltaDados = []
-      this.acao({ acao: 'pagar' }, 'Pago. Obrigado!')
+      this.pagar()
     },
     responder ({ id, aceitar }) {
       this.acao({ acao: aceitar ? 'aceitar_proposta' : 'recusar_proposta', proposta_id: id }, aceitar ? 'Preço aceite.' : 'Proposta recusada.')

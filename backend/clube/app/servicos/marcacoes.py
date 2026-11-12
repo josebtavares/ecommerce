@@ -96,10 +96,24 @@ def anular_propostas(m=None):
     return qs.update(estado='anulada', respondida_em=timezone.now())
 
 
+def _cartao_a_decorrer(agora):
+    """Marcações com um pagamento com cartão ainda na página da SISP (iniciado há menos de 8 min, sem resposta):
+    se expirassem agora, o pagamento chegava a uma marcação expirada e a loja tinha de fazer um estorno."""
+    from django.db.models import CharField, Exists, OuterRef, Value
+    from django.db.models.functions import Cast, Concat
+    from ..models import TransacaoVinti4
+    from ..pagamentos.vinti4 import TEMPO_LIMITE
+    return Exists(TransacaoVinti4.objects.filter(
+        referencia__startswith=Concat(Value('mar-'), Cast(OuterRef('pk'), CharField()), Value('-')),
+        estado='iniciada', criada_em__gt=agora - TEMPO_LIMITE))
+
+
 def expirar_vencidas(**filtro):
-    """Pendentes por pagar cujo prazo passou → 'expirada' (libertam o horário). O worker também o faz."""
-    n = Marcacao.objects.filter(estado='pendente', expira_em__lt=timezone.now(), pago=False, **filtro).update(
-        estado='expirada', data_atualizacao=timezone.now())
+    """Pendentes por pagar cujo prazo passou → 'expirada' (libertam o horário). O worker também o faz.
+    Com um pagamento com cartão a decorrer espera-se pela resposta (no máximo os 8 minutos da SISP)."""
+    agora = timezone.now()
+    n = (Marcacao.objects.filter(estado='pendente', expira_em__lt=agora, pago=False, **filtro)
+         .exclude(_cartao_a_decorrer(agora)).update(estado='expirada', data_atualizacao=agora))
     if n:
         anular_propostas()
     return n

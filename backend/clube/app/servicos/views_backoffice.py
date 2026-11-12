@@ -201,6 +201,9 @@ def catalogo(request, loja_id):
             comps, msg = pacotes.ler_componentes(loja, request.data.get('componentes'))
             if msg:
                 return _erro(msg)
+        if 'pagamento' not in campos:           # sem escolha: a regra geral da loja (Regras → Pagamento)
+            from . import cobranca as _cob
+            campos['pagamento'] = _cob.config(loja).pagamento_padrao
         with transaction.atomic():
             s = Servico(loja=loja, e_pacote=e_pacote, **campos)
             if e_pacote:
