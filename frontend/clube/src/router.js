@@ -246,9 +246,18 @@ const router = createRouter({
     scrollBehavior(to, from, savedPosition) {
         if (savedPosition) {
             return savedPosition;
-        } else {
-            return { top: 0, behavior: 'smooth' };
         }
+        // a mesma lista, só abriu/fechou uma ficha (utils/ficha.js): fica onde está; ao abrir, depois de a
+        // anterior fechar e a nova se expandir, mostra o cartão aberto ([data-ficha="<id>"]) em vez de ir ao topo
+        if (to.name === from.name && to.params.seccao === from.params.seccao && to.params.id === from.params.id
+            && to.params.ficha !== from.params.ficha) {
+            if (!to.params.ficha) return false;
+            return new Promise(resolve => setTimeout(() => {
+                const el = document.querySelector(`[data-ficha="${to.params.ficha}"]`);
+                resolve(el ? { el, top: 72, behavior: 'smooth' } : false);
+            }, 120));
+        }
+        return { top: 0, behavior: 'smooth' };
     },
 });
 

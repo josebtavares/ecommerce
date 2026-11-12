@@ -38,7 +38,7 @@
 
     <!-- Lista -->
     <div v-else class="space-y-3">
-      <div v-for="enc in lista" :key="enc.id"
+      <div v-for="enc in lista" :key="enc.id" :data-ficha="enc.id"
            class="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
 
         <!-- Header -->

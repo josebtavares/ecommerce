@@ -128,8 +128,9 @@ export default {
       }
     },
 
+    // replace: a seta "voltar" da página seguinte não regressa a este "Pagamento confirmado" (nem volta a verificar)
     continuar () {
-      this.$router.push(this.destino || { name: 'Home' })
+      this.$router.replace(this.destino || { name: 'Home' })
     },
   },
 }
