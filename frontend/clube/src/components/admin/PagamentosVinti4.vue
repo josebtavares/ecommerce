@@ -150,6 +150,33 @@
               {{ perguntando ? 'A perguntar…' : 'Perguntar à SISP' }}</button>
             <span v-if="consulta" :class="consulta.erro ? 'text-red-300' : 'text-zinc-300'" data-teste="v4-consulta">{{ consulta.texto }}</span>
           </div>
+          <!-- sem resposta da SISP e a API de estado não responde: fecha-se à mão, depois de ver no Portal do Comerciante -->
+          <div v-if="podeAgir && ['por_confirmar', 'iniciada'].includes(aberto.estado)" data-teste="v4-resolver"
+               class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+            <p class="font-semibold text-amber-200">Confirmar à mão</p>
+            <p class="text-zinc-400">Se "Perguntar à SISP" não responder, vê no Portal do Comerciante se este pagamento
+              ({{ aberto.ref }}, {{ aberto.montante }} CVE) existe e confirma aqui.
+              <template v-if="aberto.estado === 'iniciada'"> Só dá passados 8 minutos do início (o cliente pode ainda estar a pagar).</template></p>
+            <textarea v-model="resolver.nota" rows="2" maxlength="300" data-teste="v4-resolver-nota"
+                      placeholder="O que viste no Portal (ex.: não aparece nenhuma transação com esta referência)"
+                      class="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-200 resize-none"></textarea>
+            <div v-if="!resolver.confirmar" class="flex flex-wrap gap-2">
+              <button type="button" @click="pedirResolver('nao_paga')" :disabled="!notaOk" data-teste="v4-resolver-nao-paga"
+                      class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-200 font-semibold">Não foi paga</button>
+              <button type="button" @click="pedirResolver('paga')" :disabled="!notaOk" data-teste="v4-resolver-paga"
+                      class="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-40 text-white font-semibold">Foi paga</button>
+            </div>
+            <div v-else class="flex flex-wrap items-center gap-2" data-teste="v4-resolver-confirmar">
+              <span class="text-zinc-200">{{ resolver.confirmar === 'paga'
+                ? 'Dar como paga? O que se pagava passa a pago, como se a SISP tivesse respondido.'
+                : 'Dar como não paga? Fica "sem resposta" e pode pagar-se outra vez.' }}</span>
+              <button type="button" @click="enviarResolver" :disabled="resolver.aEnviar" data-teste="v4-resolver-sim"
+                      class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold">
+                {{ resolver.aEnviar ? 'A guardar…' : 'Sim, confirmar' }}</button>
+              <button type="button" @click="resolver.confirmar = ''" class="px-3 py-1.5 text-zinc-400 hover:text-zinc-200">Voltar</button>
+            </div>
+            <p v-if="resolver.erro" class="text-red-300" role="alert">{{ resolver.erro }}</p>
+          </div>
           <div v-if="aberto.reembolsos?.length" class="space-y-1" data-teste="v4-reembolsos">
             <p class="font-semibold text-zinc-300">Reembolsos deste pagamento</p>
             <router-link v-for="r in aberto.reembolsos" :key="r.titulo" :to="r.link" :data-teste="`v4-reembolso-${r.estado}`"
@@ -174,7 +201,7 @@
             <p class="font-semibold text-zinc-300 mb-1">O que a SISP respondeu</p>
             <p v-if="!aberto.respostas?.length" class="text-zinc-500">Nada ainda (o cliente não voltou da página da SISP).</p>
             <details v-for="(r, i) in aberto.respostas" :key="i" class="mb-1">
-              <summary class="cursor-pointer text-zinc-300">{{ r.origem === 'estado' ? 'API de estado' : 'Resposta' }} · {{ quando(r.em) }}</summary>
+              <summary class="cursor-pointer text-zinc-300">{{ ORIGEM[r.origem] || 'Resposta' }} · {{ quando(r.em) }}</summary>
               <pre class="mt-1 p-2 rounded-lg bg-black/40 text-zinc-300 overflow-x-auto whitespace-pre-wrap break-all">{{ formatar(r.campos) }}</pre>
             </details>
           </div>
@@ -202,7 +229,9 @@ const COR = {
 }
 const TIPOS = [{ v: 'encomenda', t: 'Encomendas' }, { v: 'marcacao', t: 'Marcações' },
   { v: 'fatura', t: 'Mensalidades' }, { v: 'comissoes', t: 'Comissões' }]
-const CONFIRMADA = { resposta: 'resposta da SISP', estado: 'API de estado', admin: 'admin' }
+const CONFIRMADA = { resposta: 'resposta da SISP', estado: 'API de estado', admin: 'admin (à mão)', loja: 'loja (à mão)' }
+const ORIGEM = { estado: 'API de estado', manual: 'Confirmado à mão' }
+const RESOLVER = { nota: '', confirmar: '', aEnviar: false, erro: '' }
 const ABAS = [{ key: 'transacoes', label: 'Transações' }, { key: 'vbvt', label: 'Reconciliação (ficheiros VBVT)' }]
 const RESULTADO = { paga: 'a SISP confirma que foi paga', nao_paga: 'a SISP diz que não foi paga' }
 const VAZIO = { estado: '', q: '', tipo: '', reconciliacao: '', credenciais: '', loja_id: '', de: '', ate: '' }
@@ -222,13 +251,14 @@ export default {
   },
   data () {
     return {
-      LIMITE, COR, CONFIRMADA, ABAS, aba: 'transacoes', d: null, offset: 0,
+      LIMITE, COR, CONFIRMADA, ORIGEM, ABAS, resolver: { ...RESOLVER }, aba: 'transacoes', d: null, offset: 0,
       f: { ...VAZIO }, aberto: null, carregando: false, erro: '',
       perguntando: false, consulta: null, aDescarregar: false,
     }
   },
   computed: {
     estados () { return this.d?.estados || [] },
+    notaOk () { return this.resolver.nota.trim().length >= 5 },
     lojas () { return this.d?.lojas || [] },     // só no admin: lojas com pagamentos com cartão
     temDatas () { return this.datas !== null },
     tiposFiltro () { return this.admin ? TIPOS : TIPOS.slice(0, 2) },
@@ -285,10 +315,26 @@ export default {
     async abrir (t) {
       if (this.aberto?.id === t.id) { this.aberto = null; return }
       this.consulta = null
+      this.resolver = { ...RESOLVER }
       try {
         const { data } = await api.get(`${this.base}/${t.id}/`)
         this.aberto = data
       } catch (e) { this.erro = e.response?.data?.detail || 'Não foi possível abrir a transação.' }
+    },
+    pedirResolver (r) { this.resolver.erro = ''; this.resolver.confirmar = r },
+    async enviarResolver () {
+      this.resolver.aEnviar = true
+      this.resolver.erro = ''
+      try {
+        const { data } = await api.post(`${this.base}/${this.aberto.id}/resolver/`,
+          { resultado: this.resolver.confirmar, nota: this.resolver.nota.trim() })
+        this.aberto = data.transacao
+        this.resolver = { ...RESOLVER }
+        this.carregar(this.offset, true)
+      } catch (e) {
+        this.resolver.erro = e.response?.data?.detail || 'Não foi possível guardar.'
+        this.resolver.confirmar = ''
+      } finally { this.resolver.aEnviar = false }
     },
     async perguntar () {
       this.perguntando = true

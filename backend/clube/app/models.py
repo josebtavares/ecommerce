@@ -2734,7 +2734,7 @@ class TransacaoVinti4(models.Model):
     erro            = models.CharField(max_length=300, blank=True, default='')   # descrição + detalhe (para a Bendi)
     mensagem        = models.CharField(max_length=200, blank=True, default='')   # para mostrar ao cliente
     dcc             = models.JSONField(default=dict, blank=True)                 # se o cliente pagou noutra moeda
-    confirmada_por  = models.CharField(max_length=10, blank=True, default='')    # resposta | estado (API) | admin
+    confirmada_por  = models.CharField(max_length=10, blank=True, default='')    # resposta | estado (API) | admin | loja (à mão)
     efeito          = models.CharField(max_length=12, blank=True, default='')    # pago | reembolso | erro (servico.confirmar)
     consultas       = models.PositiveSmallIntegerField(default=0)                # perguntas à API de estado
     consultada_em   = models.DateTimeField(null=True, blank=True)

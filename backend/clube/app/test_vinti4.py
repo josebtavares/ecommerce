@@ -866,6 +866,50 @@ class PerguntarASisp(TestCase):
 
 
 @override_settings(**CRED, VINTI4_MERCHANT_ID=MID)
+class ConfirmarAMao(TestCase):
+    """Sem resposta da SISP e sem API de estado: o admin fecha à mão, depois de ver no Portal do Comerciante."""
+
+    def setUp(self):
+        self.u = _utilizador()
+
+    _tx = PerguntarASisp._tx
+
+    @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
+    def test_resolver(self, confirmar):
+        admin = _admin_api('adminamao')
+        url = lambda t: f'/app/admin/pagamentos/vinti4/{t.id}/resolver/'
+        # nota obrigatória; resultado só paga/nao_paga
+        tx = self._tx()
+        self.assertEqual(admin.post(url(tx), {'resultado': 'nao_paga', 'nota': 'x'}).status_code, 400)
+        self.assertEqual(admin.post(url(tx), {'resultado': 'talvez', 'nota': 'vi no portal'}).status_code, 400)
+        # há menos de 8 minutos: o cliente pode estar a pagar
+        recente = self._tx(minutos=2)
+        r = admin.post(url(recente), {'resultado': 'nao_paga', 'nota': 'não aparece no portal'})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(TransacaoVinti4.objects.get(pk=recente.pk).estado, 'iniciada')
+        # não paga → sem resposta, regista quem e a nota, não aplica nada
+        r = admin.post(url(tx), {'resultado': 'nao_paga', 'nota': 'não aparece no portal'})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        tx.refresh_from_db()
+        self.assertEqual(tx.estado, 'expirada')
+        self.assertEqual((tx.respostas[-1]['origem'], tx.respostas[-1]['campos']['por']), ('manual', 'adminamao'))
+        self.assertEqual(confirmar.call_count, 0)
+        # já terminada → não se mexe outra vez
+        self.assertEqual(admin.post(url(tx), {'resultado': 'paga', 'nota': 'afinal estava'}).status_code, 400)
+        # paga (por confirmar) → aplica uma vez, confirmada pelo admin
+        paga = self._tx()
+        TransacaoVinti4.objects.filter(pk=paga.pk).update(estado='por_confirmar')
+        r = admin.post(url(paga), {'resultado': 'paga', 'nota': 'TID 1234 no portal'})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        paga.refresh_from_db()
+        self.assertEqual((paga.estado, paga.confirmada_por), ('paga', 'admin'))
+        self.assertEqual(confirmar.call_count, 1)
+        # sem permissão
+        admin.force_authenticate(_utilizador('naoadmin3').user)
+        self.assertEqual(admin.post(url(self._tx()), {'resultado': 'paga', 'nota': 'vi no portal'}).status_code, 403)
+
+
+@override_settings(**CRED, VINTI4_MERCHANT_ID=MID)
 class TempoRealCartao(TestCase):
     """O admin vê as idas à SISP mudar sem recarregar; o cliente sem resposta fica à espera e a página volta a perguntar."""
 

@@ -530,6 +530,27 @@ def vinti4_consultar(request, tx_id):
     return Response({'resultado': resultado, 'resposta': corpo, 'transacao': _v4_item(tx, completo=True)})
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def vinti4_resolver(request, tx_id):
+    """POST /app/admin/pagamentos/vinti4/<id>/resolver/ {resultado: paga|nao_paga, nota} — fecha à mão um pagamento
+    sem resposta da SISP, depois de ver no Portal do Comerciante (quando a API de estado não responde)."""
+    from django.shortcuts import get_object_or_404
+    from ..models import TransacaoVinti4
+    from ..pagamentos import ErroPagamento
+    from ..pagamentos import vinti4
+    erro = _exige(request)
+    if erro:
+        return erro
+    get_object_or_404(TransacaoVinti4, id=tx_id)
+    try:
+        tx = vinti4.resolver_a_mao(tx_id, request.data.get('resultado'), request.data.get('nota'), request.user)
+    except ErroPagamento as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    tx = TransacaoVinti4.objects.select_related('loja', 'utilizador').get(id=tx.id)
+    return Response({'transacao': _v4_item(tx, completo=True)})
+
+
 # ── ficheiros de reconciliação VBVT (pagamentos/vbvt.py) ──
 
 def _vbvt_item(f, completo=False):
