@@ -874,6 +874,21 @@ class ConfirmarAMao(TestCase):
 
     _tx = PerguntarASisp._tx
 
+    def test_aviso_por_confirmar(self):
+        # sem API de estado: passa a por confirmar e avisa uma vez (admins; o dono se for de uma loja)
+        tx = self._tx()
+        with mock.patch('app.Views.notificacaoView.notificar_admins') as admins,                 mock.patch('app.Views.notificacaoView.notificar_staff') as staff,                 self.captureOnCommitCallbacks(execute=True):
+            v4.rever_sem_resposta()
+        self.assertEqual(TransacaoVinti4.objects.get(pk=tx.pk).estado, 'por_confirmar')
+        self.assertEqual(admins.call_count, 1)
+        self.assertIn(tx.ref, admins.call_args.args[1])
+        staff.assert_not_called()                       # pagamento da Bendi: não há loja
+        # o worker volta a perguntar mais tarde: não avisa outra vez
+        TransacaoVinti4.objects.filter(pk=tx.pk).update(consultada_em=None)
+        with mock.patch('app.Views.notificacaoView.notificar_admins') as admins,                 self.captureOnCommitCallbacks(execute=True):
+            v4.rever_sem_resposta()
+        admins.assert_not_called()
+
     @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
     def test_resolver(self, confirmar):
         admin = _admin_api('adminamao')
