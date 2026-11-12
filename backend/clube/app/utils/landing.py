@@ -19,8 +19,9 @@ from django.db import transaction
 from . import home as H
 
 CACHE_SEGUNDOS = 60
-TIPOS = ('hero', 'clientes', 'lojas', 'planos', 'tutoriais', 'faq', 'app', 'contactos')
-NOMES = {'hero': 'Topo (hero)', 'clientes': 'Para clientes', 'lojas': 'Para lojas', 'planos': 'Planos e preços',
+TIPOS = ('hero', 'clientes', 'lojas', 'backoffice', 'planos', 'tutoriais', 'faq', 'app', 'contactos')
+NOMES = {'hero': 'Topo (hero)', 'clientes': 'Para clientes', 'lojas': 'Para lojas', 'backoffice': 'Backoffice',
+         'planos': 'Planos e preços',
          'tutoriais': 'Tutoriais', 'faq': 'Perguntas frequentes', 'app': 'Baixar a app',
          'contactos': 'Contactos'}
 REDES = ('facebook', 'instagram', 'tiktok', 'youtube', 'linkedin', 'x')
@@ -30,6 +31,7 @@ RE_YOUTUBE_ID = re.compile(r'^[A-Za-z0-9_-]{11}$')
 RE_ANCORA = re.compile(r'^#[a-z0-9-]{1,40}$')
 RE_ITEM_ID = re.compile(r'^[a-z0-9]{1,12}$')
 MEDIAS = ('media', 'media_movel', 'media2')     # campos que guardam o id de uma HomeImagem
+LISTAS_MEDIA = ('modulos',)                    # listas cujos itens têm o seu próprio 'media'
 
 # ── campos de cada tipo: ('texto', máx) · ('bool',) · ('int', mín, máx) · ('botao',) · ('media',)
 #    ('lista', máx itens, {campo: espec}) · ('escolhas', valores) · ('redes',) · ('email',) · ('youtube',) · ('https',)
@@ -39,6 +41,9 @@ CAMPOS = {
              'escurecer': ('int', 0, 80)},
     'clientes': {'passos': ('lista', 8, _PASSO), 'botao': ('botao',), 'media': ('media',), 'media2': ('media',)},
     'lojas': {'itens': ('lista', 12, _PASSO), 'botao': ('botao',), 'media': ('media',)},
+    'backoffice': {'modulos': ('lista', 12, {'icone': ('icone',), 'titulo': ('texto', 80), 'texto': ('texto', 500),
+                                             'pontos': ('texto', 600), 'media': ('media',)}),
+                   'botao': ('botao',)},
     'planos': {'tipos': ('escolhas', TIPOS_PLANO), 'mostrar_comissao': ('bool',), 'comissao_titulo': ('texto', 80),
                'comissao_texto': ('texto', 300), 'nota': ('texto', 300), 'botao': ('botao',)},
     'tutoriais': {'videos': ('lista', 60, {'youtube': ('youtube',), 'titulo': ('texto', 120),
@@ -96,6 +101,49 @@ PADRAO = [
                                                                   'simples.'},
      ],
      'botao': _b('Criar a minha loja', '/loja/criar'), 'media': None},
+    # o backoffice da loja por dentro, um módulo de cada vez com uma captura de ecrã. Começa escondida: o admin
+    # liga-a depois de carregar as capturas (sem captura, cada módulo mostra um esboço)
+    {'tipo': 'backoffice', 'ativa': False, 'nav': 'Backoffice',
+     'titulo': 'Conhece o teu backoffice\nTudo num só painel',
+     'subtitulo': 'Gere a loja online, o balcão, as entregas e a faturação no mesmo sítio, no computador ou no '
+                  'telemóvel, com tudo a atualizar em tempo real.',
+     'modulos': [
+         {'icone': 'gauge-high', 'titulo': 'Painel',
+          'texto': 'O resumo do dia logo ao entrar: vendas, encomendas por tratar e avisos importantes.',
+          'pontos': 'Vendas de hoje e do mês\nEncomendas e marcações por tratar\nAvisos em tempo real',
+          'media': None},
+         {'icone': 'box-open', 'titulo': 'Produtos e stock',
+          'texto': 'Catálogo com fotos, variantes (tamanho, cor) e stock por variante, com sugestões para '
+                   'melhorar os produtos.',
+          'pontos': 'Variantes com stock próprio\nConjuntos e menus\nAviso de stock baixo',
+          'media': None},
+         {'icone': 'bag-shopping', 'titulo': 'Encomendas',
+          'texto': 'Cada encomenda numa ficha: pagamento, preparação, entrega e devoluções, sem perder nada.',
+          'pontos': 'Atualiza sozinha quando chega uma encomenda\nDevoluções e reembolsos guiados\n'
+                    'Conversa com o cliente',
+          'media': None},
+         {'icone': 'cash-register', 'titulo': 'POS',
+          'texto': 'Vende ao balcão com caixa, mesas, gorjetas e contas divididas, com o mesmo stock da loja online.',
+          'pontos': 'Abertura e fecho de caixa\nContas divididas e descontos\nFunciona com a tua equipa',
+          'media': None},
+         {'icone': 'motorcycle', 'titulo': 'Entregas',
+          'texto': 'Os teus condutores recebem as entregas, mostram a prova e fazem o acerto do dinheiro.',
+          'pontos': 'Calendário de entregas\nProva de entrega com foto\nResumo do dia por condutor',
+          'media': None},
+         {'icone': 'calendar-days', 'titulo': 'Serviços e marcações',
+          'texto': 'Agenda com profissionais, horários e pacotes; o cliente marca e paga online.',
+          'pontos': 'Agenda por profissional\nPacotes de sessões\nPagamento antecipado ou no local',
+          'media': None},
+         {'icone': 'file-invoice', 'titulo': 'Faturação',
+          'texto': 'Faturas e-Fatura emitidas a partir das vendas e o arquivo fiscal pronto para a contabilidade.',
+          'pontos': 'Faturas da loja e do POS\nArquivo fiscal em ZIP\nNIF do cliente quando o pedir',
+          'media': None},
+         {'icone': 'chart-line', 'titulo': 'Relatórios',
+          'texto': 'Vendas, produtos e clientes em gráficos simples, por dia, mês ou ano.',
+          'pontos': 'Produtos mais vendidos\nComparação com o período anterior\nExportar para CSV',
+          'media': None},
+     ],
+     'botao': _b('Criar a minha loja', '/loja/criar')},
     {'tipo': 'planos', 'ativa': True, 'nav': 'Planos',
      'titulo': 'Planos e preços',
      'subtitulo': 'Começa sem mensalidade e muda quando quiseres.',
@@ -133,7 +181,7 @@ PADRAO = [
      'email': '', 'telefone': '', 'whatsapp': '', 'morada': '', 'horario': '', 'redes': {}, 'media': None},
 ]
 for _s in PADRAO:      # ids estáveis dos itens de origem (o editor usa-os como chave)
-    for _k in ('passos', 'itens', 'videos', 'perguntas'):
+    for _k in ('passos', 'itens', 'modulos', 'videos', 'perguntas'):
         for _n, _i in enumerate(_s.get(_k) or []):
             _i['id'] = f'p{_n + 1}'
 
@@ -423,6 +471,19 @@ def tem_alteracoes(r=None):
     return r.dados != publicada()[1]
 
 
+def ids_medias(s):
+    """Ids de HomeImagem de uma secção guardada: os campos de topo (MEDIAS) e os dos itens (LISTAS_MEDIA)."""
+    if not isinstance(s, dict):
+        return set()
+    ids = {v for k, v in s.items() if k in MEDIAS and isinstance(v, int) and not isinstance(v, bool)}
+    for k in LISTAS_MEDIA:
+        for i in s.get(k) or []:
+            v = i.get('media') if isinstance(i, dict) else None
+            if isinstance(v, int) and not isinstance(v, bool):
+                ids.add(v)
+    return ids
+
+
 def medias_usadas():
     """Ids de HomeImagem usados pelo rascunho ou por alguma publicação (H.limpar_imagens não os apaga)."""
     from ..models import LandingPublicacao, LandingRascunho
@@ -431,8 +492,7 @@ def medias_usadas():
     listas += list(LandingPublicacao.objects.values_list('dados', flat=True))
     for dados in listas:
         for s in dados or []:
-            if isinstance(s, dict):
-                usadas.update(v for k, v in s.items() if k in MEDIAS and isinstance(v, int))
+            usadas |= ids_medias(s)
     return usadas
 
 
@@ -474,7 +534,7 @@ def resolver(seccoes, request, todas=False):
     """Secções guardadas → o que a página mostra. todas=False (visitantes): só activas e com conteúdo.
     todas=True (editor): todas, com 'vazia' a dizer quais os visitantes não vêem."""
     from ..models import HomeImagem
-    ids = {s.get(k) for s in seccoes for k in MEDIAS if s.get(k)}
+    ids = set().union(*(ids_medias(s) for s in seccoes)) if seccoes else set()
     imagens = HomeImagem.objects.in_bulk(ids) if ids else {}
     out = []
     for s in seccoes:
@@ -482,6 +542,10 @@ def resolver(seccoes, request, todas=False):
         for k in MEDIAS:
             if k in s:
                 r[k] = H._media(imagens.get(s[k]), request) if s[k] else None
+        for k in LISTAS_MEDIA:
+            if k in s:
+                r[k] = [{**i, 'media': H._media(imagens.get(i.get('media')), request) if i.get('media') else None}
+                        for i in s[k] or []]
         t = s['tipo']
         if t == 'planos':
             r['planos'] = _planos(s.get('tipos') or [])
@@ -499,6 +563,8 @@ def resolver(seccoes, request, todas=False):
             vazia = not s.get('passos')
         elif t == 'lojas':
             vazia = not s.get('itens')
+        elif t == 'backoffice':
+            vazia = not s.get('modulos')
         else:
             vazia = False
         if todas:

@@ -85,6 +85,26 @@
         <CampoBotao v-model="f.botao" nome="botao" />
       </template>
 
+      <!-- BACKOFFICE -->
+      <template v-if="tipo === 'backoffice'">
+        <p class="text-xs text-zinc-400 rounded-xl bg-zinc-900 px-4 py-3">Um módulo por separador, com a captura de ecrã do backoffice.
+          A imagem fica melhor deitada (16:10, ex.: 1600×1000) e mostra-se a partir de cima. Sem imagem, aparece um esboço com o ícone.</p>
+        <ListaItens v-model="f.modulos" :novo="() => ({ icone: 'circle-check', titulo: '', texto: '', pontos: '', media: null })"
+                    rotulo="Módulo" nome="modulos" :maximo="12" vazio="Sem módulos: a secção fica escondida aos visitantes.">
+          <template #default="{ item }">
+            <div class="space-y-2">
+              <CampoIcone v-model="item.icone" />
+              <input v-model="item.titulo" maxlength="80" class="campo" placeholder="Nome do módulo (ex.: Encomendas)" data-teste="item-titulo" />
+              <textarea v-model="item.texto" maxlength="500" rows="3" class="campo" placeholder="Porque é bom (texto)" data-teste="item-texto"></textarea>
+              <textarea v-model="item.pontos" maxlength="600" rows="3" class="campo" placeholder="Pontos fortes, um por linha (opcional)" data-teste="item-pontos"></textarea>
+              <CampoMedia v-model="item.media" :media="mediaDe(item.media)" :nome="'modulo-' + (item.id || 'novo')" :limites="limites"
+                          vazio="Sem captura (mostra um esboço)" @media="m => guardarMedia(m)" />
+            </div>
+          </template>
+        </ListaItens>
+        <CampoBotao v-model="f.botao" nome="botao" />
+      </template>
+
       <!-- PLANOS -->
       <template v-if="tipo === 'planos'">
         <p class="text-xs text-zinc-400 rounded-xl bg-zinc-900 px-4 py-3">Os planos e os preços vêm de <b>Admin → Subscrições</b>
@@ -227,15 +247,17 @@ const CAMPOS = {
   hero: ['media', 'media_movel', 'escurecer', 'botao', 'botao2'],
   clientes: ['passos', 'botao', 'media', 'media2'],
   lojas: ['itens', 'botao', 'media'],
+  backoffice: ['modulos', 'botao'],
   planos: ['tipos', 'mostrar_comissao', 'comissao_titulo', 'comissao_texto', 'nota', 'botao'],
   tutoriais: ['videos'],
   faq: ['perguntas'],
   app: ['play_store', 'app_store', 'itens', 'media'],
   contactos: ['email', 'telefone', 'whatsapp', 'morada', 'horario', 'redes', 'media'],
 }
-const LISTAS = ['passos', 'itens', 'videos', 'perguntas']
+const LISTAS = ['passos', 'itens', 'modulos', 'videos', 'perguntas']
 const CAMPOS_ITEM = {
   passos: ['id', 'icone', 'titulo', 'texto'], itens: ['id', 'icone', 'titulo', 'texto'],
+  modulos: ['id', 'icone', 'titulo', 'texto', 'pontos', 'media'],
   videos: ['id', 'youtube', 'titulo', 'descricao', 'categoria'], perguntas: ['id', 'pergunta', 'resposta'],
 }
 const TIPOS_PLANO = [{ tipo: 'loja', nome: 'Loja online' }, { tipo: 'pos', nome: 'POS' }, { tipo: 'loja_pos', nome: 'Loja + POS' },
@@ -295,7 +317,10 @@ export default {
       for (const c of CAMPOS[this.tipo]) {
         let v = f[c]
         if (c === 'botao' || c === 'botao2') v = v && (v.texto || '').trim() ? { texto: v.texto, link: v.link || '' } : null
-        else if (LISTAS.includes(c)) v = (v || []).map(it => Object.fromEntries(CAMPOS_ITEM[c].filter(k => k in it && (k !== 'id' || it.id)).map(k => [k, it[k] ?? ''])))
+        else if (LISTAS.includes(c)) {
+          v = (v || []).map(it => Object.fromEntries(CAMPOS_ITEM[c].filter(k => k in it && (k !== 'id' || it.id))
+            .map(k => [k, k === 'media' ? (it[k] || null) : (it[k] ?? '')])))
+        }
         else if (c === 'redes') v = Object.fromEntries(Object.entries(v || {}).filter(([, u]) => (u || '').trim()).map(([k, u]) => [k, u.trim()]))
         else if (c === 'media' || c === 'media_movel' || c === 'media2') v = v || null
         else if (c === 'tipos') v = [...(v || [])]

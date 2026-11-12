@@ -30,7 +30,7 @@ def _estado(request, r=None):
     pub = LandingPublicacao.objects.select_related('publicado_por').only(
         'id', 'publicado_em', 'publicado_por__username').first()
     # imagens/vídeos do rascunho como o editor os mostra (com o estado da conversão dos vídeos)
-    ids = {s.get(k) for s in r.dados for k in L.MEDIAS if s.get(k)}
+    ids = set().union(*(L.ids_medias(s) for s in r.dados)) if r.dados else set()
     medias = {str(i): homeView._media_admin(im, request) for i, im in HomeImagem.objects.in_bulk(ids).items()} if ids else {}
     return {
         'versao': r.versao,

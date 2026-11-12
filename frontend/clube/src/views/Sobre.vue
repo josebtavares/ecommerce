@@ -41,6 +41,7 @@
           <LandingClientes v-else-if="s.tipo === 'clientes'" :s="s" :isDark="isDark" :alternado="alternado(n)"
                            :temTutoriais="visiveis.some(v => v.tipo === 'tutoriais' && !v.vazia && (v.ativa || comMolduras))" @acao="acao" />
           <LandingLojas v-else-if="s.tipo === 'lojas'" :s="s" :isDark="isDark" @acao="acao" />
+          <LandingBackoffice v-else-if="s.tipo === 'backoffice'" :s="s" :isDark="isDark" @acao="acao" />
           <LandingPlanos v-else-if="s.tipo === 'planos'" :s="s" :isDark="isDark" :alternado="alternado(n)" @acao="acao" />
           <LandingTutoriais v-else-if="s.tipo === 'tutoriais'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
           <LandingFaq v-else-if="s.tipo === 'faq'" :s="s" :isDark="isDark" :alternado="alternado(n)" />
@@ -83,6 +84,7 @@ import LandingNav from '@/components/landing/LandingNav.vue'
 import LandingHero from '@/components/landing/LandingHero.vue'
 import LandingClientes from '@/components/landing/LandingClientes.vue'
 import LandingLojas from '@/components/landing/LandingLojas.vue'
+import LandingBackoffice from '@/components/landing/LandingBackoffice.vue'
 import LandingPlanos from '@/components/landing/LandingPlanos.vue'
 import LandingTutoriais from '@/components/landing/LandingTutoriais.vue'
 import LandingFaq from '@/components/landing/LandingFaq.vue'
@@ -103,7 +105,7 @@ function lerUser () {
 export default {
   name: 'PaginaSobre',
   components: {
-    SiteRodape, LandingNav, LandingHero, LandingClientes, LandingLojas, LandingPlanos, LandingTutoriais, LandingFaq, LandingApp, LandingContactos, JanelaConta,
+    SiteRodape, LandingNav, LandingHero, LandingClientes, LandingLojas, LandingBackoffice, LandingPlanos, LandingTutoriais, LandingFaq, LandingApp, LandingContactos, JanelaConta,
     BarraEdicao, PainelSeccao,
   },
 
