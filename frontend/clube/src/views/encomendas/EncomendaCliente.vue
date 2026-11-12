@@ -25,6 +25,19 @@
       </div>
 
       <template v-else-if="enc">
+        <!-- acabou de comprar (a ficha abriu do "Ver a encomenda"): o caminho de volta é a loja, não o pagamento -->
+        <section v-if="deCompra" class="rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                 :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'" data-teste="depois-da-compra">
+          <p class="text-sm flex-1" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">Encomenda feita. Podes acompanhá-la aqui.</p>
+          <div class="flex gap-2">
+            <router-link :to="`/loja/${enc.loja}`" data-teste="voltar-loja"
+                         class="px-3 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-500 truncate max-w-[14rem]">
+              Voltar à {{ enc.loja_nome || 'loja' }}</router-link>
+            <router-link to="/" data-teste="voltar-inicio" class="px-3 py-2 rounded-xl text-sm font-semibold border"
+                         :class="isDark ? 'border-zinc-700 text-zinc-200 hover:bg-zinc-800' : 'border-gray-300 text-zinc-700 hover:bg-gray-50'">
+              Início</router-link>
+          </div>
+        </section>
         <section class="rounded-2xl border p-4" :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'" data-teste="encomenda-cabecalho">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -77,6 +90,7 @@ export default {
   },
   computed: {
     id () { return String(this.$route.params.id) },
+    deCompra () { return this.$route.query.de === 'compra' },     // aberta do "Ver a encomenda" depois de pagar
   },
   watch: {
     // de uma ficha para outra (um aviso no sino com a página aberta): carrega a nova
@@ -124,6 +138,8 @@ export default {
       }
     },
     voltar () {
+      // acabou de comprar: atrás estão as páginas do pagamento (e a da SISP) — a seta leva à loja onde estava
+      if (this.deCompra) return this.$router.push(this.enc ? `/loja/${this.enc.loja}` : '/')
       // veio da lista (ou de outra página do site): volta para lá; aberta de um email/aviso: a lista
       if (window.history.state?.back) this.$router.back()
       else this.$router.push('/encomendas')
