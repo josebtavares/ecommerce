@@ -1,9 +1,16 @@
-from rest_framework.exceptions import Throttled, AuthenticationFailed
+from rest_framework import status
+from rest_framework.exceptions import APIException, AuthenticationFailed, Throttled
+from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from ..autenticacao import conta_ativa
-from ..utils.auth import autenticar
+from ..utils.auth import autenticar, corpo_erro, ip_excedeu_pedidos
+
+
+class CaptchaNecessario(APIException):
+    status_code = 400
+    default_code = 'turnstile'
 
 
 class MyTokenSerializer(TokenObtainPairSerializer):
@@ -17,11 +24,16 @@ class MyTokenSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         request = self.context.get('request')
-        user, erro, codigo = autenticar(request, attrs.get('username', ''), attrs.get('password', ''))
+        ident = attrs.get('username', '')
+        user, erro, codigo = autenticar(request, ident, attrs.get('password', ''))
         if erro:
             if codigo == 429:
                 raise Throttled(detail=erro)
-            raise AuthenticationFailed(erro)
+            # {'detail', 'turnstile'?} — o mesmo corpo do login do site (detail atribuído tal e qual: o construtor
+            # das exceções passaria o True a texto)
+            e = CaptchaNecessario() if codigo == 400 else AuthenticationFailed()
+            e.detail = corpo_erro(request, ident, erro)
+            raise e
         if not conta_ativa(user):
             from ..utils.moderacao import mensagem_bloqueio
             perfil = getattr(user, 'utilizador', None)
@@ -68,3 +80,10 @@ class MyTokenSerializer(TokenObtainPairSerializer):
 class MyTokenView(TokenObtainPairView):
     serializer_class = MyTokenSerializer
     authentication_classes = []   # um token antigo/inválido no browser não pode impedir o login
+
+    def post(self, request, *args, **kwargs):
+        # o mesmo limite por IP do login do site (utils/auth.limite_login_ip)
+        if ip_excedeu_pedidos(request):
+            return Response({'detail': 'Demasiadas tentativas. Aguarda um momento antes de tentar novamente.'},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS)
+        return super().post(request, *args, **kwargs)

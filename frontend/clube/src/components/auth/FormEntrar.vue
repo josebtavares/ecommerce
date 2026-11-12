@@ -34,6 +34,9 @@
       </div>
     </div>
 
+    <!-- captcha adaptativo (backend utils/auth.py): só aparece depois de tentativas falhadas -->
+    <Turnstile v-if="captcha" ref="turnstile" v-model="turnstile" :isDark="isDark" />
+
     <div v-if="warning"
          class="px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
       {{ warningMsg }}
@@ -82,11 +85,12 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api.js'
 import BotaoVerPassword from '@/components/forms/BotaoVerPassword.vue'
 import BotaoGoogle from '@/components/auth/BotaoGoogle.vue'
+import Turnstile from '@/components/forms/Turnstile.vue'
 import { guardarSessao } from '@/services/sessao'
 
 export default {
   name: 'FormEntrar',
-  components: { BotaoVerPassword, BotaoGoogle },
+  components: { BotaoVerPassword, BotaoGoogle, Turnstile },
   props: {
     isDark: { type: Boolean, default: false },
     seguinte: { type: String, default: '/Home' },     // para onde o Google volta depois de entrar
@@ -100,7 +104,8 @@ export default {
   },
 
   data () {
-    return { username: '', password: '', verPassword: false, warning: false, warningMsg: 'Credenciais inválidas.' }
+    return { username: '', password: '', verPassword: false, warning: false, warningMsg: 'Credenciais inválidas.',
+             captcha: false, turnstile: '' }
   },
 
   methods: {
@@ -108,11 +113,18 @@ export default {
       await this.wrap(async () => {
         this.warning = false
         try {
-          const res = await api.post('/app/utilizador/login/', { username: this.username, password: this.password })
+          const corpo = { username: this.username, password: this.password }
+          if (this.captcha) corpo.turnstile = this.turnstile
+          const res = await api.post('/app/utilizador/login/', corpo)
           guardarSessao(res.data)
           this.$emit('entrou', res.data)
         } catch (err) {
           const msg = err.response?.data?.detail || 'Credenciais inválidas.'
+          // depois de algumas falhas o servidor pede o "não sou um robô"; cada resposta só vale uma vez
+          if (err.response?.data?.turnstile) {
+            if (this.captcha) this.$refs.turnstile?.repor()
+            this.captcha = true
+          }
           this.warningMsg = msg
           this.warning = true
           toast.error(msg, { autoClose: 3000 })
