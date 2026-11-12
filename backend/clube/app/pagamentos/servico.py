@@ -301,9 +301,13 @@ def _confirmar_marcacao(f, conf, oid, _metodo):
     destino = f'/minhas-marcacoes/{m.id}'
     if m.pago and m.pagamento_referencia == conf.transacao:
         return _resultado('marcacao', m, 'pago', destino)
-    if not _bate(f, conf, m.preco_indicado):
-        raise ErroPagamento('O valor pago não corresponde à marcação.')
     try:
+        if not _bate(f, conf, m.preco_indicado):
+            # o preço mudou entretanto: em escudos regista-se o que foi cobrado e devolve-se tudo
+            if conf.moeda != 'CVE':
+                raise ErroPagamento('O valor pago não corresponde à marcação.')
+            raise ops.ErroMarcacao(f'o valor cobrado ({formatar(Decimal(conf.valor))}) não é o preço da marcação '
+                                   f'({formatar(m.preco_indicado)})')
         ops.pagar(m, fornecedor=f.codigo, referencia=conf.transacao)
     except ops.ErroMarcacao as e:
         m.refresh_from_db()
@@ -315,9 +319,11 @@ def _confirmar_marcacao(f, conf, oid, _metodo):
         if RegistoTransacao.objects.filter(tipo='marcacao', evento='pago_sem_efeito', objeto_id=m.id,
                                            referencia=conf.transacao[:255]).exists():
             return _resultado('marcacao', m, 'reembolso', destino)
-        registar('marcacao', 'pago_sem_efeito', objeto_id=m.id, loja_id=m.loja_id, valor=m.preco_indicado,
+        # o que foi cobrado (em escudos — _bate já confirmou a moeda quando o valor bate)
+        cobrado = Decimal(conf.valor) if conf.moeda == 'CVE' else m.preco_indicado
+        registar('marcacao', 'pago_sem_efeito', objeto_id=m.id, loja_id=m.loja_id, valor=cobrado,
                  metodo=f.codigo, referencia=conf.transacao, dados={'motivo': str(e)})
-        registado = ops.pago_sem_efeito(m, f.codigo, conf.transacao, m.preco_indicado, str(e))
+        registado = ops.pago_sem_efeito(m, f.codigo, conf.transacao, cobrado, str(e))
         if f.codigo == 'vinti4':
             como = ('Ficou na marcação como reembolso por concluir: a loja já foi avisada para fazer o estorno no '
                     'Portal do Comerciante da SISP e marcar "Estorno feito" (Devoluções → por concluir).')
@@ -327,7 +333,7 @@ def _confirmar_marcacao(f, conf, oid, _metodo):
         else:
             como = 'Reembolsa o cliente.'
         _avisar_reembolso(f'Reembolso necessário — Marcação #{m.id} ({conf.transacao})',
-                          f'{f.nome} confirmou {formatar(m.preco_indicado)} (tx {conf.transacao}) para uma marcação '
+                          f'{f.nome} confirmou {formatar(cobrado)} (tx {conf.transacao}) para uma marcação '
                           f'que já não pode ser paga ({e}). {como}', loja=m.loja)
         return _resultado('marcacao', m, 'reembolso', destino)
     return _resultado('marcacao', m, 'pago', destino)

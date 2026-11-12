@@ -201,6 +201,9 @@ def catalogo(request, loja_id):
             comps, msg = pacotes.ler_componentes(loja, request.data.get('componentes'))
             if msg:
                 return _erro(msg)
+        if 'pagamento' not in campos:           # sem escolha: a regra geral da loja (Regras → Pagamento)
+            from . import cobranca as _cob
+            campos['pagamento'] = _cob.config(loja).pagamento_padrao
         with transaction.atomic():
             s = Servico(loja=loja, e_pacote=e_pacote, **campos)
             if e_pacote:
@@ -793,7 +796,9 @@ def marcacao_acao(request, loja_id, marcacao_id):
       { acao: 'propor_preco', valor, motivo? }   (o cliente aceita ou recusa na conversa)
       { acao: 'concluir', preco_final?, motivo? } · { acao: 'falta' }   (também o profissional da marcação)
       { acao: 'tentar_reembolso' }   (devolução recusada pelo fornecedor — reembolso_por_concluir)
-      { acao: 'estorno_feito', referencia, nota? }   (cartão vinti4: a loja devolveu no Portal do Comerciante)
+      { acao: 'estorno_feito', referencia?, nota? }   (cartão vinti4: a loja devolveu no Portal do Comerciante)
+      multipart { acao: 'devolvido_outra_forma', nota, referencia?, fotos }   (cartão vinti4: outra forma, com prova)
+      { acao: 'concluir', pago_no_local: true }   (antecipado que não foi pago online: o cliente pagou ao balcão)
     """
     loja = get_object_or_404(Loja, id=loja_id)
     membro = _get_membro(request, loja)
@@ -860,7 +865,7 @@ def marcacao_acao(request, loja_id, marcacao_id):
             motivo, e = _texto(d, 'motivo', 200)
             if e:
                 return _erro(e)
-            m = ops.concluir(m, por, preco, motivo, membro=membro)
+            m = ops.concluir(m, por, preco, motivo, membro=membro, pago_no_local=d.get('pago_no_local') in (True, 'true'))
         elif acao == 'falta':
             m = ops.marcar_falta(m, por)
         elif acao == 'tentar_reembolso':       # o fornecedor recusou a devolução: pedir outra vez
@@ -870,6 +875,11 @@ def marcacao_acao(request, loja_id, marcacao_id):
             m = ops.tentar_reembolso(m)
         elif acao == 'estorno_feito':          # cartão vinti4: a loja fez o estorno no Portal do Comerciante
             m = ops.estorno_feito(m, d.get('referencia'), d.get('nota', ''))
+        elif acao == 'devolvido_outra_forma':  # cartão vinti4: devolveu de outra forma, com prova em foto
+            if not membro.pode('gerir_marcacoes'):
+                return _erro('Sem permissão: gerir_marcacoes', status.HTTP_403_FORBIDDEN)
+            fotos = request.FILES.getlist('fotos') if hasattr(request, 'FILES') else []
+            m = ops.devolvido_outra_forma(m, request.user.utilizador, d.get('nota', ''), d.get('referencia', ''), fotos)
         elif acao == 'notas':
             notas, e = _texto(d, 'notas_internas', 500)
             if e:
@@ -879,6 +889,8 @@ def marcacao_acao(request, loja_id, marcacao_id):
         else:
             return _erro('Acção inválida.')
     except ErroMarcacao as e:
+        if e.codigo:
+            return Response({'detail': str(e), 'codigo': e.codigo}, status=status.HTTP_400_BAD_REQUEST)
         return _erro(str(e))
     m = Marcacao.objects.select_related('profissional', 'cliente__user').get(pk=m.pk)
     return Response({**_com_conversa(m), 'avisos': avisos})

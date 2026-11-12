@@ -11,6 +11,7 @@ from rest_framework.response import Response
 
 from ..models import Loja, Subscricao
 from ..utils import subscricoes as subs
+from ..utils.banco import online_suspenso
 from ..Views.lojaView import _exige_permissao
 from . import cobranca
 from .models import ConfigServicos
@@ -24,14 +25,16 @@ def config_payload(cfg):
     return {'confirmacao': cfg.confirmacao, 'antecedencia_min': cfg.antecedencia_min, 'dias_max': cfg.dias_max,
             'cancelar_horas': cfg.cancelar_horas, 'reembolso_fora_prazo': cfg.reembolso_fora_prazo,
             'cliente_escolhe_profissional': cfg.cliente_escolhe_profissional,
-            'profissional_altera_preco': cfg.profissional_altera_preco}
+            'profissional_altera_preco': cfg.profissional_altera_preco, 'pagamento_padrao': cfg.pagamento_padrao}
 
 
 def _estado(loja, membro):
     loja.refresh_from_db()
     cfg = cobranca.config(loja)
     return {**cobranca.resumo(loja), 'config': config_payload(cfg),
-            'pode_gerir': membro.pode('gerir_servicos'), 'pode_pagar': membro.pode('pagar_subscricao')}
+            'pode_gerir': membro.pode('gerir_servicos'), 'pode_pagar': membro.pode('pagar_subscricao'),
+            # sem contrato vinti4 activo os clientes não pagam antecipado (os "só antecipado" não aparecem)
+            'cartao_suspenso': online_suspenso(loja)}
 
 
 @api_view(['GET'])
@@ -110,6 +113,11 @@ def servicos_config(request, loja_id):
             return _erro('Confirmação inválida (auto ou manual).')
         cfg.confirmacao = dados['confirmacao']
         campos.append('confirmacao')
+    if 'pagamento_padrao' in dados:
+        if dados['pagamento_padrao'] not in dict(ConfigServicos.PAGAMENTO_PADRAO):
+            return _erro('Forma de pagamento inválida (ambos, antecipado ou local).')
+        cfg.pagamento_padrao = dados['pagamento_padrao']
+        campos.append('pagamento_padrao')
     if 'reembolso_fora_prazo' in dados:
         if dados['reembolso_fora_prazo'] not in REEMBOLSOS:
             return _erro('Regra de reembolso inválida (total ou nenhum).')
@@ -141,7 +149,13 @@ def servicos_config(request, loja_id):
         sub.save(update_fields=['auto_renovar', 'data_atualizacao'])
     if campos:
         cfg.save(update_fields=[*campos, 'data_atualizacao'])
-    return Response(_estado(loja, membro))
+    resposta = _estado(loja, membro)
+    # "Aplicar a todos os serviços": muda o pagamento dos que já existem para a regra geral (pacotes incluídos)
+    if dados.get('aplicar_pagamento_a_todos') is True:
+        from .models import Servico
+        resposta['servicos_alterados'] = (Servico.objects.filter(loja=loja).exclude(pagamento=cfg.pagamento_padrao)
+                                          .update(pagamento=cfg.pagamento_padrao))
+    return Response(resposta)
 
 
 @api_view(['POST'])

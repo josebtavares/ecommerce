@@ -125,6 +125,9 @@ def processar(agora=None):
     for loja in Loja.objects.filter(marcacoes__estado__in=Marcacao.ATIVOS, marcacoes__inicio__gt=agora).distinct()[:500]:
         r['avisos_loja'] += sincronizar_loja(loja)
 
+    # devolvidas de outra forma sem resposta do cliente no prazo → dadas como recebidas
+    r['devolucoes_confirmadas'] = ops.devolucoes_por_confirmar(agora)
+
     # as recusadas pelo fornecedor (reembolso_erro) seguem as esperas de marcacoes.reembolsos_por_concluir
     for pk in Marcacao.objects.filter(pago=True, reembolso_erro='', reembolso_devido__gt=F('valor_reembolsado')).values_list('pk', flat=True)[:200]:
         with transaction.atomic():

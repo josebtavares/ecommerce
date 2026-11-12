@@ -34,7 +34,11 @@
           </div>
         </div>
         <!-- o pagamento online recusou a devolução: quem gere tenta de novo (o worker também tenta sozinho) -->
-        <ReembolsoPorConcluir v-if="m.reembolso_por_concluir && podeGerir" :valor="m.reembolso_por_concluir.valor"
+        <!-- cartão vinti4: a loja devolve por estorno ou de outra forma (com prova; o cliente confirma) -->
+        <DevolverCartaoMarcacao v-if="m.reembolso_por_concluir && podeGerir && m.reembolso_por_concluir.estorno_loja"
+          :info="m.reembolso_por_concluir" :a-enviar="aGuardar" @estorno="estornoFeito"
+          @outra="fd => acao(fd, 'Devolução registada — o cliente vai confirmar.')" />
+        <ReembolsoPorConcluir v-else-if="m.reembolso_por_concluir && podeGerir" :valor="m.reembolso_por_concluir.valor"
           :erro="m.reembolso_por_concluir.erro" :tentativas="m.reembolso_por_concluir.tentativas"
           :proxima="m.reembolso_por_concluir.proxima_tentativa" :incerto="m.reembolso_por_concluir.incerto"
           :podeTentar="!m.reembolso_por_concluir.incerto && !m.reembolso_por_concluir.estorno_loja"
@@ -163,6 +167,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import MarcacaoConversa from './MarcacaoConversa.vue'
 import FaturaVenda from '@/components/fiscal/FaturaVenda.vue'
 import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
+import DevolverCartaoMarcacao from './DevolverCartaoMarcacao.vue'
 import { descarregarComprovativoMarcacao } from '@/utils/documentos'
 import BotaoPdf from '@/components/fiscal/BotaoPdf.vue'
 
@@ -171,7 +176,7 @@ const PAINEIS = [{ k: 'remarcar', t: 'Remarcar' }, { k: 'reatribuir', t: 'Outro 
 
 export default {
   name: 'MarcacaoDetalhe',
-  components: { BotaoPdf, FaturaVenda, MarcacaoConversa, ReembolsoPorConcluir },
+  components: { BotaoPdf, DevolverCartaoMarcacao, FaturaVenda, MarcacaoConversa, ReembolsoPorConcluir },
   props: {
     lojaId: { type: [String, Number], required: true },
     marcacaoId: { type: Number, required: true },
@@ -180,7 +185,7 @@ export default {
   emits: ['fechar', 'alterada'],
   data () {
     return { m: null, notas: '', painel: null, novoDia: '', horas: [], escolhida: null, foraHorario: false, horaLivre: '',
-             livres: [], novoProf: null, motivo: '', novoPreco: '', versao: 0, precoFinal: '', motivoPreco: '', erro: '', ok: '', avisos: [], aGuardar: false, hoje: hojeCV(),
+             livres: [], novoProf: null, motivo: '', novoPreco: '', versao: 0, precoFinal: '', motivoPreco: '', erro: '', ok: '', codigo: '', avisos: [], aGuardar: false, hoje: hojeCV(),
              CAMPO, ESTADOS: ESTADOS_MARCACAO, PAINEIS }
   },
   computed: {
@@ -215,13 +220,20 @@ export default {
         { params: { servico: this.m.servico_id, dia: this.novoDia, profissional: this.m.profissional_id, excluir: this.m.id } })
       this.horas = data.horas
     },
-    concluir () {
+    async concluir () {
       const corpo = { acao: 'concluir' }
       if (this.precoFinal !== '' && Number(this.precoFinal) !== Number(this.m.preco_indicado)) {
         corpo.preco_final = String(this.precoFinal)
         corpo.motivo = this.motivoPreco
       }
-      this.acao(corpo, 'Serviço concluído.')
+      await this.acao(corpo, 'Serviço concluído.')
+      // "só antecipado" que não foi pago online: a loja confirma que o cliente pagou ao balcão
+      if (this.codigo === 'pago_no_local' &&
+          confirm(`O cliente não pagou esta marcação online.
+
+Pagou ${this.m.preco_texto} no local? A marcação fica concluída como paga no local.`)) {
+        await this.acao({ ...corpo, pago_no_local: true }, 'Serviço concluído (pago no local).')
+      }
     },
     async estornoFeito ({ referencia, nota }) {
       await this.acao({ acao: 'estorno_feito', referencia, nota }, 'Estorno registado.')
@@ -237,7 +249,7 @@ export default {
     },
     async acao (corpo, ok = '', pergunta = '') {
       if (pergunta && !confirm(pergunta)) return
-      this.erro = ''; this.ok = ''; this.avisos = []; this.aGuardar = true
+      this.erro = ''; this.ok = ''; this.codigo = ''; this.avisos = []; this.aGuardar = true
       try {
         const { data } = await api.post(this.base() + 'acao/', corpo)
         this.m = data
@@ -250,6 +262,8 @@ export default {
         this.$emit('alterada', data)
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível.'
+        this.codigo = e.response?.data?.codigo || ''
+        if (this.codigo === 'pago_no_local') this.erro = ''      // concluir() pergunta logo
       } finally { this.aGuardar = false }
     },
   },

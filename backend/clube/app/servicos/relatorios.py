@@ -47,7 +47,8 @@ def _receita(m):
     if m.estado == 'concluida':
         return m.preco
     if m.estado in ('falta', 'cancelada') and m.pago:
-        return m.valor_pago - m.valor_reembolsado
+        # o que fica: o pago menos o devolvido ou ainda por devolver (estorno por fazer)
+        return max(ZERO, m.valor_pago - max(m.reembolso_devido, m.valor_reembolsado))
     return ZERO
 
 
