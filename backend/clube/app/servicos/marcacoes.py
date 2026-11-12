@@ -108,14 +108,26 @@ def _cartao_a_decorrer(agora):
         estado='iniciada', criada_em__gt=agora - TEMPO_LIMITE))
 
 
+def cartao_a_decorrer(m):
+    """O cliente está na página da SISP a pagar esta marcação (o valor a cobrar já foi enviado)."""
+    return Marcacao.objects.filter(pk=m.pk).filter(_cartao_a_decorrer(timezone.now())).exists()
+
+
 def expirar_vencidas(**filtro):
     """Pendentes por pagar cujo prazo passou → 'expirada' (libertam o horário). O worker também o faz.
     Com um pagamento com cartão a decorrer espera-se pela resposta (no máximo os 8 minutos da SISP)."""
     agora = timezone.now()
-    n = (Marcacao.objects.filter(estado='pendente', expira_em__lt=agora, pago=False, **filtro)
-         .exclude(_cartao_a_decorrer(agora)).update(estado='expirada', data_atualizacao=agora))
-    if n:
-        anular_propostas()
+    qs = (Marcacao.objects.filter(estado='pendente', expira_em__lt=agora, pago=False, **filtro)
+          .exclude(_cartao_a_decorrer(agora)))
+    ids = list(qs.values_list('pk', flat=True)[:1000])
+    if not ids:
+        return 0
+    n = Marcacao.objects.filter(pk__in=ids, estado='pendente', pago=False).update(estado='expirada', data_atualizacao=agora)
+    anular_propostas()
+    # update() não dispara o sinal: a agenda da loja e a página do cliente actualizam-se na mesma
+    from . import tempo_real
+    for pk in ids:
+        tempo_real.emitir(pk)
     return n
 
 
@@ -403,6 +415,8 @@ def _reembolso_feito(m, falta, referencia, texto=''):
                                             reembolso_incerto=False)
     from ..utils import tempo_real_faturacao          # update() não dispara o sinal: a receita da marcação mudou
     tempo_real_faturacao.emitir('marcacoes', m.pk, m.loja_id)
+    from . import tempo_real
+    tempo_real.emitir(m.pk)
     if m.pagamento_fornecedor == 'vinti4':            # backoffice → Pagamentos: a ficha da transacção mostra o estorno
         from ..utils.tempo_real_listas import emitir as emitir_lista
         emitir_lista('cartao', m.loja_id)
@@ -441,6 +455,8 @@ def _reembolso_falhou(m, falta, erro):
                            if not incerto and m.reembolso_tentativas <= len(ESPERAS_REEMBOLSO) else None)
     Marcacao.objects.filter(pk=m.pk).update(reembolso_erro=m.reembolso_erro, reembolso_tentativas=m.reembolso_tentativas,
                                             reembolso_proxima=m.reembolso_proxima, reembolso_incerto=incerto)
+    from . import tempo_real                 # update() não dispara o sinal: a ficha mostra a nova tentativa
+    tempo_real.emitir(m.pk)
     registar('marcacao', 'reembolso_falhou', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
              metodo=m.pagamento, dados={'tentativa': m.reembolso_tentativas, 'erro': m.reembolso_erro,
                                         'incerto': incerto})
@@ -483,6 +499,8 @@ def _estorno_pela_loja(m, falta, erro, primeira, transacao=None):
     m.reembolso_incerto, m.reembolso_proxima = False, None
     Marcacao.objects.filter(pk=m.pk).update(reembolso_erro=m.reembolso_erro, reembolso_tentativas=m.reembolso_tentativas,
                                             reembolso_proxima=None, reembolso_incerto=False)
+    from . import tempo_real
+    tempo_real.emitir(m.pk)
     registar('marcacao', 'estorno_pedido', objeto_id=m.pk, loja_id=m.loja_id, valor=falta, estado_novo=m.estado,
              metodo=m.pagamento, dados={'referencia': transacao})
     emitir_lista('cartao', m.loja_id)           # backoffice → Pagamentos: a ficha da transacção mostra o estorno
@@ -544,7 +562,8 @@ def pago_sem_efeito(m, fornecedor, transacao, valor, motivo=''):
 
 
 def estorno_feito(m, referencia, nota=''):
-    """A loja fez o estorno do cartão vinti4 no Portal do Comerciante (referência do estorno obrigatória)."""
+    """A loja fez o estorno do cartão vinti4 no Portal do Comerciante. A referência do estorno é opcional (como nas
+    encomendas): ajuda o cliente a encontrá-lo no banco; o VBVT confirma-o depois."""
     if m.pagamento_fornecedor != 'vinti4':
         raise ErroMarcacao('Esta marcação não foi paga com cartão vinti4.')
     referencia, nota = (referencia or '').strip(), (nota or '').strip()
@@ -552,10 +571,11 @@ def estorno_feito(m, referencia, nota=''):
     falta = por_reembolsar(m)
     if not falta:
         raise ErroMarcacao('Esta marcação não tem reembolso por concluir.')
-    if not 3 <= len(referencia) <= 100:
-        raise ErroMarcacao('Indica a referência do estorno (do Portal do Comerciante).')
-    _reembolso_feito(m, falta, referencia, texto=f'A loja devolveu {formatar(falta)} ao teu cartão (estorno '
-                                                 f'{referencia}).' + (f' {nota}' if nota else ''))
+    if len(referencia) > 100:
+        raise ErroMarcacao('A referência do estorno é demasiado longa.')
+    _reembolso_feito(m, falta, referencia or 'estorno no Portal do Comerciante',
+                     texto=f'A loja devolveu {formatar(falta)} ao teu cartão'
+                           + (f' (estorno {referencia}).' if referencia else '.') + (f' {nota}' if nota else ''))
     return m
 
 

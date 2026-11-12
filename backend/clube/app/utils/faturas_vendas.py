@@ -49,7 +49,9 @@ def base(origem):
         qs = qs.annotate(preco_ef=Coalesce('preco_final', 'preco_indicado')).annotate(receita=Case(
             # concluída: o preço (o que se devolveu foi só o pago a mais — o cliente pagou o preço)
             When(estado='concluida', then=F('preco_ef')),
-            When(estado__in=('falta', 'cancelada'), pago=True, then=F('valor_pago') - F('valor_reembolsado')),
+            # o pago menos o devolvido ou ainda por devolver (estorno por fazer: o dinheiro não é da loja)
+            When(estado__in=('falta', 'cancelada'), pago=True,
+                 then=Greatest(F('valor_pago') - Greatest(F('reembolso_devido'), F('valor_reembolsado')), Value(ZERO))),
             default=Value(ZERO), output_field=dec))
     elif origem == 'pos':
         qs = qs.annotate(valor_faturavel=Greatest(F('total') - F('gorjeta'), Value(ZERO),

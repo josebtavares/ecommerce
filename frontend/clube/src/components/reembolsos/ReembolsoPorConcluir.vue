@@ -40,13 +40,13 @@
         {{ estornoLoja ? 'Estorno feito' : incerto ? 'Já foi devolvido (confirmado no fornecedor ou por transferência)' : 'Já devolvemos por fora (ex.: transferência)' }}
       </button>
       <div v-else class="space-y-2 pt-1">
-        <input v-model.trim="referencia" maxlength="100" :placeholder="estornoLoja ? 'Referência do estorno no Portal do Comerciante' : 'Referência da devolução (obrigatória)'" data-teste="reembolso-por-fora-ref"
+        <input v-model.trim="referencia" maxlength="100" :placeholder="estornoLoja ? 'Referência do estorno (opcional — ajuda o cliente a encontrá-lo no banco)' : 'Referência da devolução (obrigatória)'" data-teste="reembolso-por-fora-ref"
           class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500" />
         <input v-model.trim="nota" maxlength="300" placeholder="Nota (opcional, o cliente vê)"
           class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500" />
         <div class="flex gap-2">
           <button type="button" @click="foraAberto = false" class="flex-1 py-2 rounded-xl text-sm border border-zinc-700 text-zinc-300">Voltar</button>
-          <button type="button" @click="$emit('por-fora', { referencia, nota })" :disabled="aEnviar || referencia.length < 3"
+          <button type="button" @click="$emit('por-fora', { referencia, nota })" :disabled="aEnviar || (!estornoLoja && referencia.length < 3)"
             data-teste="reembolso-por-fora-confirmar"
             class="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50">
             {{ estornoLoja ? 'Marcar estorno feito' : 'Dar como devolvido' }}
