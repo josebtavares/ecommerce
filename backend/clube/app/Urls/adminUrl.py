@@ -65,6 +65,8 @@ urlpatterns = [
     path('admin/pagamentos/vinti4/<int:tx_id>/', pagamentosAdminView.vinti4_detalhe, name='admin-pagamentos-vinti4-detalhe'),
     path('admin/pagamentos/vinti4/<int:tx_id>/consultar/', pagamentosAdminView.vinti4_consultar,
          name='admin-pagamentos-vinti4-consultar'),
+    path('admin/pagamentos/vinti4/<int:tx_id>/resolver/', pagamentosAdminView.vinti4_resolver,
+         name='admin-pagamentos-vinti4-resolver'),
     path('admin/pagamentos/vbvt/',               pagamentosAdminView.vbvt,           name='admin-pagamentos-vbvt'),
     path('admin/pagamentos/vbvt/<int:ficheiro_id>/', pagamentosAdminView.vbvt_detalhe, name='admin-pagamentos-vbvt-detalhe'),
     path('admin/pagamentos/bende.csv',          pagamentosAdminView.bende_csv,       name='admin-pagamentos-bende-csv'),

@@ -583,6 +583,43 @@ def consultar_agora(tx_id):
     return tx, resultado, corpo
 
 
+def resolver_a_mao(tx_id, resultado, nota, quem, por='admin'):
+    """Admin (ou a loja, nas dela) fecha à mão uma transacção sem resposta da SISP, depois de ver no Portal do
+    Comerciante se o pagamento existe — para quando a API de estado não responde (SISP em baixo, certificado…).
+    resultado 'paga' → aplica o pagamento (como se a resposta tivesse chegado); 'nao_paga' → sem resposta.
+    Só as que estão por confirmar, ou iniciadas há mais de 8 minutos (antes disso o cliente pode estar a pagar).
+    Fica no registo com quem foi e a nota. Uma resposta da SISP que chegue depois segue o caminho de sempre
+    (pagamento tardio → reembolso). → tx."""
+    from ..models import TransacaoVinti4
+    if resultado not in ('paga', 'nao_paga'):
+        raise ErroPagamento('Escolhe "paga" ou "não paga".')
+    nota = ' '.join(str(nota or '').split())
+    if len(nota) < 5:
+        raise ErroPagamento('Escreve uma nota (pelo menos 5 caracteres): o que viste no Portal do Comerciante.')
+    nota = nota[:300]
+    agora = timezone.now()
+    with transaction.atomic():
+        tx = TransacaoVinti4.objects.select_for_update(of=('self',)).select_related('loja').get(pk=tx_id)
+        aberta = tx.estado == 'por_confirmar' or (tx.estado == 'iniciada' and tx.criada_em <= agora - TEMPO_LIMITE)
+        if not aberta:
+            raise ErroPagamento('Só se confirma à mão um pagamento sem resposta da SISP (por confirmar, ou iniciado '
+                                'há mais de 8 minutos).' if tx.estado == 'iniciada' else
+                                f'Este pagamento já está terminado ({tx.get_estado_display().lower()}).')
+        anterior = tx.estado
+        _guardar_resposta(tx, 'manual', {'resultado': resultado, 'nota': nota, 'por': getattr(quem, 'username', '')})
+        tx.terminada_em = agora
+        if resultado == 'paga':
+            tx.estado, tx.confirmada_por = 'paga', por
+        else:
+            tx.estado = 'expirada'
+            tx.mensagem = 'Sem resposta da SISP: o pagamento não foi feito.'
+        tx.save()
+        _registar(tx, f'cartao_{tx.estado}', anterior)
+        if tx.estado == 'paga':
+            _aplicar(tx)
+    return tx
+
+
 def _sem_outro_a_decorrer(referencia):
     """Um pagamento com cartão de cada vez para a mesma encomenda/marcação/fatura/cobrança: com outro ainda na
     página da SISP (iniciado há menos de 8 minutos, sem resposta) podiam ficar os dois cobrados. Quem cancela na
