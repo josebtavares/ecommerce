@@ -22,7 +22,9 @@ from .models import Marcacao, Profissional, ReatribuicaoMarcacao
 
 
 class ErroMarcacao(Exception):
-    pass
+    def __init__(self, mensagem='', codigo=''):
+        super().__init__(mensagem)
+        self.codigo = codigo
 
 
 def quando_texto(dt):
@@ -410,9 +412,10 @@ def _reembolso_feito(m, falta, referencia, texto=''):
     m.valor_reembolsado += falta
     m.reembolsado_em = timezone.now()
     m.reembolso_erro, m.reembolso_tentativas, m.reembolso_proxima, m.reembolso_incerto = '', 0, None, False
+    m.devolucao_outra_prazo = None
     Marcacao.objects.filter(pk=m.pk).update(valor_reembolsado=m.valor_reembolsado, reembolsado_em=m.reembolsado_em,
                                             reembolso_erro='', reembolso_tentativas=0, reembolso_proxima=None,
-                                            reembolso_incerto=False)
+                                            reembolso_incerto=False, devolucao_outra_prazo=None)
     from ..utils import tempo_real_faturacao          # update() não dispara o sinal: a receita da marcação mudou
     tempo_real_faturacao.emitir('marcacoes', m.pk, m.loja_id)
     from . import tempo_real
@@ -571,12 +574,125 @@ def estorno_feito(m, referencia, nota=''):
     falta = por_reembolsar(m)
     if not falta:
         raise ErroMarcacao('Esta marcação não tem reembolso por concluir.')
+    if m.devolucao_outra_prazo:
+        raise ErroMarcacao('Já indicaste que devolveste de outra forma — à espera da confirmação do cliente.')
     if len(referencia) > 100:
         raise ErroMarcacao('A referência do estorno é demasiado longa.')
     _reembolso_feito(m, falta, referencia or 'estorno no Portal do Comerciante',
                      texto=f'A loja devolveu {formatar(falta)} ao teu cartão'
                            + (f' (estorno {referencia}).' if referencia else '.') + (f' {nota}' if nota else ''))
     return m
+
+
+def devolvido_outra_forma(m, utilizador, nota, referencia='', ficheiros=()):
+    """
+    Cartão vinti4: a loja devolveu o que falta de outra forma (ex.: em dinheiro ao balcão, transferência), porque o
+    estorno não deu ou combinou-o com o cliente. Diz como e junta a prova em foto (vai para a conversa, o cliente
+    vê-a). O cliente confirma "Recebi" em PRAZO_DINHEIRO_DIAS — depois fica confirmado sozinho — ou diz que não
+    recebeu (vai para a Bendi). Igual às encomendas (utils/devolucoes.loja_dinheiro_entregue, como='outro').
+    """
+    from . import conversa
+    from ..utils.devolucoes import PRAZO_DINHEIRO_DIAS
+    from ..utils.registo import registar
+    from ..Views.notificacaoView import notificar
+    nota, referencia, ficheiros = (nota or '').strip(), (referencia or '').strip(), list(ficheiros or [])
+    if m.pagamento_fornecedor != 'vinti4':
+        raise ErroMarcacao('Só se devolve de outra forma um pagamento com cartão vinti4.')
+    if not por_reembolsar(m):
+        raise ErroMarcacao('Esta marcação não tem reembolso por concluir.')
+    if m.devolucao_outra_prazo:
+        raise ErroMarcacao('Já indicaste que devolveste — à espera da confirmação do cliente.')
+    if len(nota) < 5:
+        raise ErroMarcacao('Diz como devolveste o dinheiro (ex.: em dinheiro ao balcão, transferência para a conta do cliente).')
+    if len(nota) > 500 or len(referencia) > 100:
+        raise ErroMarcacao('A nota ou a referência são demasiado longas.')
+    if not ficheiros:
+        raise ErroMarcacao('Junta a prova da devolução (foto ou captura do comprovativo).')
+    if not m.cliente_id:
+        raise ErroMarcacao('Esta marcação não tem conta de cliente para confirmar a devolução.')
+    falta = por_reembolsar(m)
+    texto = (f'A loja devolveu {formatar(falta)} de outra forma: {nota}' + (f' (referência {referencia})' if referencia else '')
+             + '. A prova está nesta mensagem.')
+    try:
+        conversa.escrever(m, utilizador, 'loja', texto, ficheiros)       # valida e grava as fotos (a prova)
+    except conversa.ErroConversa as e:
+        raise ErroMarcacao(e.mensagem)
+    agora = timezone.now()
+    prazo = agora + timedelta(days=PRAZO_DINHEIRO_DIAS)
+    with transaction.atomic():
+        m = _bloqueada(m)
+        if m.devolucao_outra_prazo or not por_reembolsar(m):
+            raise ErroMarcacao('A devolução mudou entretanto — recarrega a marcação.')
+        Marcacao.objects.filter(pk=m.pk).update(devolucao_outra_em=agora, devolucao_outra_nota=nota,
+                                                devolucao_outra_ref=referencia, devolucao_outra_prazo=prazo,
+                                                devolucao_nao_recebida_em=None, data_atualizacao=agora)
+        registar('marcacao', 'devolvido_outra_forma', objeto_id=m.pk, loja_id=m.loja_id, valor=falta,
+                 estado_novo=m.estado, metodo=m.pagamento, referencia=referencia, dados={'nota': nota})
+    notificar(utilizador=m.cliente, tipo='marcacao_atualizada', titulo='A loja devolveu-te o dinheiro',
+              mensagem=f'{m.servico_nome}: {formatar(falta)} de outra forma ({nota[:120]}). Confirma na marcação se '
+                       f'recebeste até {prazo.astimezone(fuso()):%d/%m} — depois disso fica confirmado.',
+              loja=m.loja, link=f'/minhas-marcacoes/{m.id}', email=FE.IMPORTANTE)
+    m.refresh_from_db()
+    return m
+
+
+@transaction.atomic
+def devolucao_recebida(m, auto=False):
+    """O cliente confirma que recebeu a devolução feita de outra forma (ou o prazo acabou: auto)."""
+    m = _bloqueada(m)
+    if not m.devolucao_outra_prazo:
+        raise ErroMarcacao('Não há nenhuma devolução à espera da tua confirmação.')
+    falta = por_reembolsar(m)
+    if not falta:                                    # outra operação já acertou
+        Marcacao.objects.filter(pk=m.pk).update(devolucao_outra_prazo=None)
+        return m
+    texto = (f'Sem resposta do cliente — a devolução de {formatar(falta)} feita de outra forma ficou dada como recebida.'
+             if auto else f'Confirmaste que recebeste os {formatar(falta)} devolvidos pela loja. Obrigado!')
+    _reembolso_feito(m, falta, m.devolucao_outra_ref or 'outra forma', texto=texto)
+    avisar_loja(m, 'Devolução confirmada', f'{m.servico_nome}: ' + ('ficou confirmada (o cliente não respondeu).' if auto
+                                                                     else f'o cliente confirmou que recebeu {formatar(falta)}.'))
+    return m
+
+
+@transaction.atomic
+def devolucao_nao_recebida(m, utilizador, texto=''):
+    """O cliente diz que não recebeu a devolução feita de outra forma → a Bendi analisa (Devoluções → por concluir)."""
+    from .models import MensagemMarcacao
+    from ..Views.notificacaoView import notificar_admins
+    m = _bloqueada(m)
+    if not m.devolucao_outra_prazo:
+        raise ErroMarcacao('Não há nenhuma devolução à espera da tua confirmação.')
+    falta = por_reembolsar(m)
+    agora = timezone.now()
+    erro = 'O cliente diz que não recebeu a devolução feita de outra forma.'
+    Marcacao.objects.filter(pk=m.pk).update(devolucao_outra_prazo=None, devolucao_nao_recebida_em=agora,
+                                            reembolso_erro=erro, data_atualizacao=agora)
+    texto = (texto or '').strip()[:500] or 'Não recebi o dinheiro.'
+    MensagemMarcacao.objects.create(marcacao=m, autor=utilizador, autor_nome=(utilizador.nome or '')[:100],
+                                    papel='cliente', texto=texto)
+    avisar_loja(m, 'O cliente diz que não recebeu a devolução',
+                f'{m.servico_nome}: {formatar(falta)}. A Bendi vai analisar — fala com o cliente pelas mensagens.', email=2)
+    notificar_admins(tipo='pagamento_reembolsar', titulo=f'Devolução não recebida — Marcação #{m.id}',
+                     mensagem=f'{m.loja.nome} · {formatar(falta)} · devolvido de outra forma ({m.devolucao_outra_nota[:120]}); '
+                              f'o cliente diz que não recebeu.',
+                     loja=m.loja, link='/admin/devolucoes?grupo=por_concluir', email=2)
+    return m
+
+
+def devolucoes_por_confirmar(agora=None):
+    """Worker: devoluções de outra forma sem resposta do cliente no prazo → dadas como recebidas."""
+    import logging
+    agora = agora or timezone.now()
+    n = 0
+    for mid in list(Marcacao.objects.filter(devolucao_outra_prazo__lte=agora).values_list('id', flat=True)[:200]):
+        try:
+            devolucao_recebida(Marcacao(pk=mid), auto=True)
+            n += 1
+        except ErroMarcacao:
+            pass
+        except Exception:
+            logging.getLogger(__name__).exception('marcação #%s: confirmar a devolução de outra forma falhou', mid)
+    return n
 
 
 def por_reembolsar(m):
@@ -657,12 +773,21 @@ def _pode_preco(membro, m):
 
 
 @transaction.atomic
-def concluir(m, por='', preco_final=None, motivo='', membro=None):
-    """Serviço feito. Preço final opcional (fica registado quem e porquê); pago a mais → devolve-se."""
+def concluir(m, por='', preco_final=None, motivo='', membro=None, pago_no_local=False):
+    """Serviço feito. Preço final opcional (fica registado quem e porquê); pago a mais → devolve-se.
+    Antecipado que não foi pago online: só com pago_no_local (a loja confirma que o cliente pagou ao balcão) —
+    passa a "no local", para o registo e a faturação dizerem a verdade."""
     m = Marcacao.objects.select_for_update(of=('self',)).select_related('loja__config_servicos', 'profissional').get(pk=m.pk)
     _exige_ativa(m)
     if timezone.now() < m.inicio - timedelta(minutes=15):
         raise ErroMarcacao('Só se conclui a partir da hora marcada.')
+    por_pagar_online = m.pagamento == 'antecipado' and not m.pago
+    if por_pagar_online:
+        if cartao_a_decorrer(m):
+            raise ErroMarcacao('O cliente está a pagar esta marcação com cartão — espera uns minutos e tenta de novo.')
+        if not pago_no_local:
+            raise ErroMarcacao('O cliente não pagou online. Se pagou no local, confirma para concluir.', codigo='pago_no_local')
+        m.pagamento = 'local'
     if preco_final is not None and preco_final != m.preco_indicado:
         if membro is not None and not _pode_preco(membro, m):
             raise ErroMarcacao('A loja não deixa os profissionais mudarem o preço — fala com o dono ou o gestor.')
@@ -671,7 +796,11 @@ def concluir(m, por='', preco_final=None, motivo='', membro=None):
     if m.pago:
         m.reembolso_devido = max(Decimal('0'), m.valor_pago - m.preco)
     m.save(update_fields=['estado', 'concluida_em', 'expira_em', 'preco_final', 'preco_final_por', 'preco_final_motivo',
-                          'reembolso_devido', 'data_atualizacao'])
+                          'reembolso_devido', 'pagamento', 'data_atualizacao'])
+    if por_pagar_online:
+        from ..utils.registo import registar
+        registar('marcacao', 'pago_no_local', objeto_id=m.pk, loja_id=m.loja_id, valor=m.preco, estado_novo=m.estado,
+                 metodo='local', dados={'por': por[:100], 'era': 'antecipado'})
     anular_propostas(m)
     if m.cliente_id:
         texto = f'{m.servico_nome} concluído — {formatar(m.preco)}.'
@@ -740,6 +869,13 @@ def marcacao_payload(m, completo=False):
     d['reembolso_por_concluir'] = ({'valor': str(falta), 'erro': m.reembolso_erro, 'tentativas': m.reembolso_tentativas,
                                     'incerto': m.reembolso_incerto,
                                     'estorno_loja': m.pagamento_fornecedor == 'vinti4',
+                                    # devolvido de outra forma, à espera do cliente; ou o cliente disse que não recebeu
+                                    'outra_forma': {'em': m.devolucao_outra_em.astimezone(tz).isoformat(),
+                                                    'nota': m.devolucao_outra_nota, 'referencia': m.devolucao_outra_ref,
+                                                    'prazo': m.devolucao_outra_prazo.astimezone(tz).isoformat()}
+                                    if m.devolucao_outra_prazo else None,
+                                    'nao_recebida_em': m.devolucao_nao_recebida_em.astimezone(tz).isoformat()
+                                    if m.devolucao_nao_recebida_em else None,
                                     'proxima_tentativa': m.reembolso_proxima.astimezone(tz).isoformat()
                                     if m.reembolso_proxima else None} if falta else None)
     if completo:

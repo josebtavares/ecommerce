@@ -216,6 +216,13 @@ class Marcacao(models.Model):
     reembolso_tentativas = models.PositiveSmallIntegerField(default=0, db_default=0)
     reembolso_proxima = models.DateTimeField(null=True, blank=True)
     reembolso_incerto = models.BooleanField(default=False, db_default=False)   # ver Reembolso.reembolso_incerto
+    # cartão vinti4: o estorno não deu (ou devolveu-se ao balcão) e a loja devolveu de outra forma, com prova em foto
+    # na conversa; o cliente confirma "Recebi" até devolucao_outra_prazo (depois fica confirmado) ou diz que não
+    devolucao_outra_em    = models.DateTimeField(null=True, blank=True)
+    devolucao_outra_nota  = models.CharField(max_length=500, blank=True, default='', db_default='')
+    devolucao_outra_ref   = models.CharField(max_length=100, blank=True, default='', db_default='')
+    devolucao_outra_prazo = models.DateTimeField(null=True, blank=True)     # preenchido = à espera do cliente
+    devolucao_nao_recebida_em = models.DateTimeField(null=True, blank=True)
     # conversa: até quando cada lado leu (mensagens por ler)
     lida_cliente_em = models.DateTimeField(null=True, blank=True)
     lida_loja_em  = models.DateTimeField(null=True, blank=True)

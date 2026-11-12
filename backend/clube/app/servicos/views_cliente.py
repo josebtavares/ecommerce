@@ -197,7 +197,9 @@ def _cliente_payload(request, m, completo=False):
     from ..pagamentos import cobra_a_serio
     d['pagamento_simulado'] = not cobra_a_serio()
     if d.get('reembolso_por_concluir'):     # o cliente só sabe que está a ser tratado (sem o erro do fornecedor)
-        d['reembolso_por_concluir'] = {'valor': d['reembolso_por_concluir']['valor']}
+        r = d['reembolso_por_concluir']
+        d['reembolso_por_concluir'] = {'valor': r['valor'], 'outra_forma': r['outra_forma'],
+                                       'nao_recebida_em': r['nao_recebida_em']}
     cfg = m.loja.config_servicos
     d.update({'loja_id': m.loja_id, 'loja_slug': m.loja.slug, 'loja_nome': m.loja.nome, 'loja_logo': _url(request, m.loja.logo),
               'profissional_foto': _url(request, m.profissional.foto),
@@ -381,6 +383,13 @@ def minha_acao(request, marcacao_id):
             if inicio.minute % 15 or inicio.second:
                 return _erro('Escolhe uma das horas propostas.')
             m = ops.remarcar(m, inicio, por='Cliente', pelo_cliente=True)
+        elif acao == 'devolucao_recebida':        # a loja devolveu de outra forma: "Recebi"
+            m = ops.devolucao_recebida(m)
+        elif acao == 'devolucao_nao_recebida':
+            texto, e = _texto(d, 'texto', 500)
+            if e:
+                return _erro(e)
+            m = ops.devolucao_nao_recebida(m, request.user.utilizador, texto)
         elif acao in ('aceitar_proposta', 'recusar_proposta'):
             pid = d.get('proposta_id')
             if isinstance(pid, bool) or not isinstance(pid, int):
