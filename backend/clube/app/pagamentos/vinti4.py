@@ -543,9 +543,32 @@ def rever_sem_resposta(agora=None):
             if tx.estado != anterior:
                 mudaram += 1
                 _registar(tx, f'cartao_{tx.estado}', anterior)
+                if tx.estado == 'por_confirmar':
+                    transaction.on_commit(lambda t=tx: _avisar_por_confirmar(t))
             if tx.estado == 'paga':
                 _aplicar(tx)
     return mudaram
+
+
+def _avisar_por_confirmar(tx):
+    """Uma transacção ficou por confirmar (sem resposta da SISP e a API de estado não respondeu): os admins e, se o
+    pagamento é de uma loja, o dono — para confirmarem no Portal do Comerciante e fecharem à mão. Uma vez por
+    transacção (só na passagem de iniciada a por confirmar); o worker continua a perguntar à SISP."""
+    from ..Views.notificacaoView import notificar_admins, notificar_staff
+    from ..utils.fila_emails import IMPORTANTE
+    titulo = f'Pagamento com cartão por confirmar — {tx.ref}'
+    msg = (f'Não chegou resposta da SISP ao pagamento {tx.ref} ({tx.montante} CVE, {tx.descricao or tx.referencia}) e '
+           f'não foi possível perguntar-lhe o estado. Vê no Portal do Comerciante se o pagamento existe e confirma-o '
+           f'em Pagamentos → Cartão ("Foi paga" / "Não foi paga"). Entretanto continuamos a perguntar à SISP.')
+    chave = f'por_confirmar:{tx.id}'
+    try:
+        if tx.loja_id:
+            notificar_staff(tx.loja, ['dono'], 'vinti4', titulo, msg, link=f'/loja/{tx.loja_id}/backoffice/pagamentos',
+                            email=IMPORTANTE, email_chave=chave)
+        notificar_admins('vinti4', titulo, msg, loja=tx.loja, link='/admin/pagamentos', email=IMPORTANTE,
+                         email_chave=chave)
+    except Exception:          # o estado já está gravado: o aviso não o pode estragar
+        log.exception('vinti4: aviso de pagamento por confirmar falhou (%s)', tx.ref)
 
 
 def _mudar_pela_consulta(tx, resultado, agora):
