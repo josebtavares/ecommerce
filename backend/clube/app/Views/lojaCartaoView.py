@@ -126,6 +126,24 @@ def consultar(request, loja_id, tx_id):
                      'transacao': cartao_listas.item(tx, completo=True, destino_loja=_destino(loja))})
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def resolver(request, loja_id, tx_id):
+    """A loja fecha à mão um pagamento dela sem resposta da SISP, depois de ver no Portal do Comerciante dela."""
+    from ..pagamentos import ErroPagamento, vinti4
+    loja, erro = _loja(request, loja_id)
+    if erro:
+        return erro
+    get_object_or_404(TransacaoVinti4, id=tx_id, loja=loja)
+    try:
+        tx = vinti4.resolver_a_mao(tx_id, request.data.get('resultado'), request.data.get('nota'), request.user,
+                                   por='loja')
+    except ErroPagamento as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    tx = TransacaoVinti4.objects.select_related('loja', 'utilizador').get(id=tx.id)
+    return Response({'transacao': cartao_listas.item(tx, completo=True, destino_loja=_destino(loja))})
+
+
 def _vbvt_item(f, completo=False):
     d = _vbvt_admin(f, completo)
     if f.carregado_por_id and f.carregado_por.is_staff:      # a loja não vê as contas do admin

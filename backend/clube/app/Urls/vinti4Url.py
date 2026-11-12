@@ -12,4 +12,5 @@ urlpatterns = [
     path('loja/<int:loja_id>/cartao/vbvt/<int:ficheiro_id>/',       c.vbvt_detalhe, name='loja-cartao-vbvt-detalhe'),
     path('loja/<int:loja_id>/cartao/<int:tx_id>/',                  c.detalhe,      name='loja-cartao-detalhe'),
     path('loja/<int:loja_id>/cartao/<int:tx_id>/consultar/',        c.consultar,    name='loja-cartao-consultar'),
+    path('loja/<int:loja_id>/cartao/<int:tx_id>/resolver/',         c.resolver,     name='loja-cartao-resolver'),
 ]
