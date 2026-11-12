@@ -211,6 +211,27 @@ class Fluxo(TestCase):
         self.assertIn('Código de autenticação errado', str(e.exception))
         self.assertEqual(e.exception.destino_ref, 'fat-7-cartao-1')
 
+    def test_erro_do_middleware_3ds_assinado_como_sucesso(self):
+        """O middleware 3DS da SISP assina o messageType 6 com a fórmula de sucesso (resposta real, 2026-11-12)."""
+        _, tx = self._iniciar()
+        d = {'messageType': '6', 'merchantResp': 'C', 'merchantRespMerchantRef': tx.ref,
+             'merchantRespMerchantSession': tx.sessao, 'merchantRespMessageID': 'S8zs59e0thSzZ3bBKDHC',
+             'merchantRespErrorCode': '03', 'merchantRespErrorDetail': '', 'merchantRespCP': '', 'merchantRespTid': '',
+             'merchantRespPan': '****', 'merchantRespPurchaseAmount': '1500', 'merchantRespTimeStamp': '2026-11-12 11:51:56',
+             'merchantRespErrorDescription': 'There was an error while processing the operation',
+             'merchantRespAdditionalErrorMessage': '', 'dcc': 'N'}
+        d['resultFingerPrint'] = v4.fingerprint_sucesso(CHAVE, d)
+        v4.processar_resposta(d)
+        tx.refresh_from_db()
+        self.assertEqual((tx.estado, tx.erro_codigo), ('falhada', '03'))
+        # com outra chave continua a ser recusada
+        _, tx2 = self._iniciar(referencia='fat-8-cartao-1')
+        d2 = {**d, 'merchantRespMerchantRef': tx2.ref, 'merchantRespMerchantSession': tx2.sessao}
+        d2['resultFingerPrint'] = v4.fingerprint_sucesso('outra-chave', d2)
+        v4.processar_resposta(d2)
+        tx2.refresh_from_db()
+        self.assertEqual(tx2.estado, 'iniciada')
+
     @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
     def test_cancelar_e_sucesso_depois(self, confirmar):
         _, tx = self._iniciar()
@@ -1555,3 +1576,48 @@ class MarcacaoEstornoNoVBVT(TestCase):
         m.refresh_from_db()
         self.assertEqual(ops.por_reembolsar(m), Decimal('0'))
         self.assertEqual(m.valor_reembolsado, Decimal('1200'))
+
+
+@override_settings(**CRED)
+class ComprovativosChecklist(TestCase):
+    """Checklist SISP 'Validação de site do Merchant' 7–8: recibo das marcações com cartão e data de entrega."""
+
+    def _linhas(self, gerar, *args):
+        from .utils import documentos
+        original = documentos._Pdf.linha
+        linhas = []
+
+        def guardar(self_pdf, rotulo, valor, destaque=False):
+            linhas.append((rotulo, str(valor)))
+            return original(self_pdf, rotulo, valor, destaque)
+        with mock.patch.object(documentos._Pdf, 'linha', guardar):
+            self.assertTrue(gerar(*args).startswith(b'%PDF'))
+        return dict(linhas)
+
+    def test_marcacao_paga_com_cartao_tem_o_recibo_do_cartao(self):
+        from .utils import documentos
+        dono, cliente = _utilizador('donocomp'), _utilizador('clicomp')
+        loja = _loja(dono)
+        m = _marcacao(loja, cliente, estado='confirmada', pago=True)
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'mar-{m.id}-cartao-1', valor=Decimal('1200'),
+                                                  descricao='Corte', pagador=cliente, loja=loja))
+        TransacaoVinti4.objects.filter(ref=inicio.campos['merchantRef']).update(
+            estado='paga', tid='55', periodo='987', pan='************1112', terminada_em=timezone.now())
+        d = self._linhas(documentos.pdf_comprovativo_marcacao, m)
+        self.assertEqual(d['Referência do pagamento'], inicio.campos['merchantRef'])
+        self.assertEqual(d['Comerciante'], loja.nome)
+
+    def test_encomenda_mostra_a_entrega(self):
+        from .models import Encomenda
+        from .utils import documentos
+        dono, cliente = _utilizador('donoenc'), _utilizador('clienc')
+        loja = _loja(dono)
+        quando = timezone.now() + timedelta(days=1)
+        enc = Encomenda.objects.create(comprador=cliente, loja=loja, valor_total=Decimal('500'), status='pago',
+                                       tipo_entrega='entrega', agendada_para=quando)
+        d = self._linhas(documentos.pdf_comprovativo_encomenda, enc)
+        self.assertEqual(d['Forma de entrega'], 'Entrega ao domicílio')
+        self.assertEqual(d['Entrega agendada para'], timezone.localtime(quando).strftime('%d/%m/%Y %H:%M'))
+        enc.data_conclusao = timezone.now()
+        d = self._linhas(documentos.pdf_comprovativo_encomenda, enc)
+        self.assertIn('Entregue a', d)

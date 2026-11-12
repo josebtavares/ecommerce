@@ -248,6 +248,15 @@ def pdf_comprovativo_encomenda(enc):
     p.seccao('Cliente')
     _cliente(p, enc.comprador, enc.morada_entrega, enc.cliente_nif)
     p.linha('Data da encomenda', _data(enc.data_criacao))
+    # checklist SISP 7.5: data de envio/entrega da mercadoria
+    levantar = enc.tipo_entrega == 'levantamento'
+    p.linha('Forma de entrega', enc.get_tipo_entrega_display())
+    if enc.data_conclusao:
+        p.linha('Levantada a' if levantar else 'Entregue a', _hora(enc.data_conclusao))
+    elif enc.agendada_para:
+        p.linha('Levantamento agendado para' if levantar else 'Entrega agendada para', _hora(enc.agendada_para))
+    else:
+        p.linha('Quando', 'Assim que a loja preparar a encomenda')
 
     itens = list(enc.itens.select_related('produto'))
     linhas, soma = [], 0
@@ -312,6 +321,7 @@ def pdf_comprovativo_marcacao(m):
     if m.valor_reembolsado:
         p.linha('Devolvido', formatar(m.valor_reembolsado) + (f' ({_data(m.reembolsado_em)})' if m.reembolsado_em else ''))
     p.linha('Total pago', formatar(m.valor_pago - m.valor_reembolsado), destaque=True)
+    _cartao_vinti4(p, 'mar', m.id)        # pago com cartão: comerciante, referência, cartão, DCC (checklist SISP 7–8)
     nota = 'Pagamento simulado (ambiente de testes). ' if m.pagamento_fornecedor == 'simulado' else ''
     return p.fim(nota + 'A fatura legal é emitida pela loja no e-Fatura e fica na marcação.')
 
