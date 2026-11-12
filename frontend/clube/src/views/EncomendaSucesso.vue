@@ -69,7 +69,7 @@
           class="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold transition">
           Voltar ao início
         </button>
-        <button @click="$router.push(encomenda ? `/encomendas/${encomenda.id}` : '/encomendas')" data-teste="ver-encomenda"
+        <button @click="$router.replace(encomenda ? { path: `/encomendas/${encomenda.id}`, query: { de: 'compra' } } : '/encomendas')" data-teste="ver-encomenda"
           class="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold transition">
           Ver a encomenda
         </button>
