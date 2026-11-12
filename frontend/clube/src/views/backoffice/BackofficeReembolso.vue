@@ -179,6 +179,12 @@
                   {{ o.t }}</button>
               </div>
               <template v-if="como === 'estorno'">
+                <!-- regra da SISP (MOP021 2.3, cond. 3): estorno noutro dia só até ao total de compras com cartão desse dia -->
+                <p class="text-xs text-zinc-400" data-teste="estorno-regra-dia">
+                  Faz o estorno no Portal do Comerciante (dá para devolver só parte do valor). Atenção: se não for no dia da
+                  compra, a SISP só deixa estornar até ao total das vendas com cartão do dia em que o fazes. Se o Portal
+                  recusar por isso, tenta noutro dia ou usa «Devolvi de outra forma».
+                </p>
                 <input v-model="referencia" maxlength="100" placeholder="Referência do estorno (Portal do Comerciante)" data-teste="estorno-referencia"
                   class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-amber-500" />
                 <p class="text-[11px] text-zinc-500">Opcional — ajuda o cliente a encontrar o estorno no banco. Se carregares o ficheiro VBVT em Pagamentos, a SISP confirma o estorno e o pedido fecha sozinho.</p>

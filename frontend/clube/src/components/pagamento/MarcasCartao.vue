@@ -1,6 +1,6 @@
 <template>
   <!-- Logótipos oficiais das marcas aceites (pacote da SISP, pasta "g"; checklist "Validação de site do
-       Merchant", ponto 2). O do Mastercard ID Check tem letras brancas: vai sempre num fundo escuro. -->
+       Merchant", ponto 2: vinti4, Visa, Mastercard e Amex). O do Mastercard ID Check tem letras brancas: vai sempre num fundo escuro. -->
   <div class="flex items-center flex-wrap" :class="pequeno ? 'gap-1.5' : 'gap-2'" aria-label="Cartões aceites"
        data-teste="marcas-cartao">
     <span class="rounded-md flex items-center" :style="CLARO" :class="pequeno ? 'px-1 h-6' : 'px-1.5 h-8'">
@@ -11,6 +11,9 @@
     </span>
     <span class="rounded-md flex items-center" :style="ESCURO" :class="pequeno ? 'px-1 h-6' : 'px-1.5 h-8'">
       <img src="/img/cartoes/mastercard-idcheck.png" alt="Mastercard ID Check" :class="pequeno ? 'h-4' : 'h-6'" class="w-auto" loading="lazy" />
+    </span>
+    <span class="rounded-md flex items-center" :style="CLARO" :class="pequeno ? 'px-1 h-6' : 'px-1.5 h-8'">
+      <img src="/img/cartoes/amex-safekey.png" alt="American Express SafeKey" :class="pequeno ? 'h-4' : 'h-6'" class="w-auto" loading="lazy" />
     </span>
   </div>
 </template>
