@@ -196,12 +196,22 @@ def _indicador_idade(dt):
 
 
 def _telefone(telefone, indicativo):
-    """'+238 991 12 23' → {'cc': '238', 'subscriber': '9911223'} | None."""
-    digitos = re.sub(r'\D', '', str(telefone or ''))
+    """'+238 991 12 23' → {'cc': '238', 'subscriber': '9911223'} | None.
+    Escrito com indicativo ('+351 …' ou '00351 …'), vale o indicativo escrito, mesmo que o país da conta seja outro
+    (o OTP do 3-D Secure vai para este número); sem ele, usa o do país da conta."""
+    from ..utils import geografia
+    texto = str(telefone or '').strip()
+    digitos = re.sub(r'\D', '', texto)
+    internacional = texto.startswith('+') or digitos.startswith('00')
     if digitos.startswith('00'):
         digitos = digitos[2:]
     if not digitos:
         return None
+    if internacional:
+        conhecidos = {re.sub(r'\D', '', p[2]) for p in geografia.PAISES}
+        escrito = next((digitos[:n] for n in (3, 2, 1) if digitos[:n] in conhecidos and len(digitos) > n + 5), None)
+        if escrito:
+            return {'cc': escrito, 'subscriber': digitos[len(escrito):][:15]}
     cc = indicativo or '238'
     if digitos.startswith(cc) and len(digitos) > len(cc) + 6:
         digitos = digitos[len(cc):]

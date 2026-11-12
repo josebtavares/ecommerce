@@ -124,6 +124,15 @@ class Fluxo(TestCase):
         self.assertEqual(d['mobilePhone']['cc'], '351')
         self.assertEqual(d['acctInfo']['chAccAgeInd'], '03')
 
+    def test_telefone_com_indicativo_escrito(self):
+        # conta de Cabo Verde com telemóvel português: o OTP tem de ir para +351, não para +238 351…
+        self.assertEqual(v4._telefone('+351 931 125 571', '238'), {'cc': '351', 'subscriber': '931125571'})
+        self.assertEqual(v4._telefone('00351931125571', '238'), {'cc': '351', 'subscriber': '931125571'})
+        self.assertEqual(v4._telefone('+238 979 86 89', '351'), {'cc': '238', 'subscriber': '9798689'})
+        self.assertEqual(v4._telefone('979 86 89', '238'), {'cc': '238', 'subscriber': '9798689'})
+        self.assertEqual(v4._telefone('238 9798689', '238'), {'cc': '238', 'subscriber': '9798689'})
+        self.assertIsNone(v4._telefone('', '238'))
+
     def test_iniciar(self):
         inicio, tx = self._iniciar('1250.50')
         c = inicio.campos
