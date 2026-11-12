@@ -1576,3 +1576,48 @@ class MarcacaoEstornoNoVBVT(TestCase):
         m.refresh_from_db()
         self.assertEqual(ops.por_reembolsar(m), Decimal('0'))
         self.assertEqual(m.valor_reembolsado, Decimal('1200'))
+
+
+@override_settings(**CRED)
+class ComprovativosChecklist(TestCase):
+    """Checklist SISP 'Validação de site do Merchant' 7–8: recibo das marcações com cartão e data de entrega."""
+
+    def _linhas(self, gerar, *args):
+        from .utils import documentos
+        original = documentos._Pdf.linha
+        linhas = []
+
+        def guardar(self_pdf, rotulo, valor, destaque=False):
+            linhas.append((rotulo, str(valor)))
+            return original(self_pdf, rotulo, valor, destaque)
+        with mock.patch.object(documentos._Pdf, 'linha', guardar):
+            self.assertTrue(gerar(*args).startswith(b'%PDF'))
+        return dict(linhas)
+
+    def test_marcacao_paga_com_cartao_tem_o_recibo_do_cartao(self):
+        from .utils import documentos
+        dono, cliente = _utilizador('donocomp'), _utilizador('clicomp')
+        loja = _loja(dono)
+        m = _marcacao(loja, cliente, estado='confirmada', pago=True)
+        inicio = obter('vinti4').iniciar(Cobranca(referencia=f'mar-{m.id}-cartao-1', valor=Decimal('1200'),
+                                                  descricao='Corte', pagador=cliente, loja=loja))
+        TransacaoVinti4.objects.filter(ref=inicio.campos['merchantRef']).update(
+            estado='paga', tid='55', periodo='987', pan='************1112', terminada_em=timezone.now())
+        d = self._linhas(documentos.pdf_comprovativo_marcacao, m)
+        self.assertEqual(d['Referência do pagamento'], inicio.campos['merchantRef'])
+        self.assertEqual(d['Comerciante'], loja.nome)
+
+    def test_encomenda_mostra_a_entrega(self):
+        from .models import Encomenda
+        from .utils import documentos
+        dono, cliente = _utilizador('donoenc'), _utilizador('clienc')
+        loja = _loja(dono)
+        quando = timezone.now() + timedelta(days=1)
+        enc = Encomenda.objects.create(comprador=cliente, loja=loja, valor_total=Decimal('500'), status='pago',
+                                       tipo_entrega='entrega', agendada_para=quando)
+        d = self._linhas(documentos.pdf_comprovativo_encomenda, enc)
+        self.assertEqual(d['Forma de entrega'], 'Entrega ao domicílio')
+        self.assertEqual(d['Entrega agendada para'], timezone.localtime(quando).strftime('%d/%m/%Y %H:%M'))
+        enc.data_conclusao = timezone.now()
+        d = self._linhas(documentos.pdf_comprovativo_encomenda, enc)
+        self.assertIn('Entregue a', d)
