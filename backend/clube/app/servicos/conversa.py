@@ -136,6 +136,13 @@ def por_ler(m, papel_):
 
 # ── propostas de preço ───────────────────────────────────────
 
+def _sem_cartao_a_decorrer(m):
+    """Com o cliente a pagar na página da SISP o preço não muda: o valor cobrado tem de ser o da marcação."""
+    from .marcacoes import cartao_a_decorrer
+    if not m.pago and cartao_a_decorrer(m):
+        raise ErroConversa('O cliente está a pagar esta marcação com cartão — espera uns minutos e tenta de novo.', 409)
+
+
 @transaction.atomic
 def propor(m, valor, motivo, por):
     m = Marcacao.objects.select_for_update().get(pk=m.pk)
@@ -145,6 +152,7 @@ def propor(m, valor, motivo, por):
         raise ErroConversa('Marcação sem conta de cliente: muda o preço directamente ao concluir.')
     if valor == m.preco_indicado:
         raise ErroConversa('Esse já é o preço da marcação.')
+    _sem_cartao_a_decorrer(m)
     m.propostas.filter(estado='pendente').update(estado='anulada', respondida_em=timezone.now())
     p = PropostaPreco.objects.create(marcacao=m, valor=valor, valor_antes=m.preco_indicado, motivo=motivo[:300], criada_por=por[:100])
     _sistema(m, f'A loja propõe um preço novo: {formatar(valor)} (era {formatar(m.preco_indicado)}).'
@@ -164,6 +172,8 @@ def responder(m, proposta_id, aceitar, u):
         raise ErroConversa('Esta proposta já não está à espera de resposta.')
     if m.estado not in Marcacao.ATIVOS:
         raise ErroConversa('Esta marcação já não está activa.')
+    if aceitar:
+        _sem_cartao_a_decorrer(m)
     p.estado, p.respondida_em = ('aceite' if aceitar else 'recusada'), timezone.now()
     p.save(update_fields=['estado', 'respondida_em'])
     if aceitar:

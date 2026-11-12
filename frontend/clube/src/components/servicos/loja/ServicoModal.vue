@@ -158,6 +158,8 @@
                   </p>
                   <p v-if="regras.confirmacao === 'manual'">A loja confirma a marcação.</p>
                 </div>
+                <PagamentoServico :loja-id="lojaId" :cartao="pagamentoEfetivo === 'antecipado'" v-model="aceitaTermos"
+                  :is-dark="isDark" :cor="cor" />
               </div>
             </transition>
           </div>
@@ -166,9 +168,10 @@
           <div class="flex-shrink-0 px-5 sm:px-6 py-3 border-t" :class="isDark ? 'border-zinc-800 bg-zinc-900' : 'border-gray-200 bg-white'"
                style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
             <p v-if="erro" class="text-sm text-red-500 mb-2" role="alert">{{ erro }}</p>
-            <button type="button" @click="marcar" :disabled="aMarcar || !escolhida" data-teste="confirmar"
+            <button type="button" @click="marcar" :disabled="aMarcar || !escolhida || (autenticado && !aceitaTermos)" data-teste="confirmar"
               class="w-full py-3 rounded-xl text-white font-bold disabled:opacity-40 hover:brightness-110 transition" :style="{ backgroundColor: cor }">
               {{ !escolhida ? 'Escolhe o dia e a hora' : !autenticado ? 'Entrar para marcar'
+                 : !aceitaTermos ? 'Aceita os Termos para marcar'
                  : pagamentoEfetivo === 'antecipado' ? `Marcar e pagar ${precoTexto}` : 'Confirmar marcação' }}
             </button>
           </div>
@@ -200,6 +203,8 @@
           </div>
         </transition>
       </div>
+      <!-- cartão: faltam dados do perfil de quem paga (3DS) → pede-os e paga a marcação já feita -->
+      <DadosPagador :campos="faltaDados" @guardado="pagarDepoisDosDados" @fechar="irParaMarcacao(aPagar)" />
     </div>
   </transition>
 </template>
@@ -211,11 +216,14 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import { DIAS_CURTOS, diaSemana, duracaoTexto, hora, rotuloDia } from '@/utils/servicos'
 import { seguirPagamento } from '@/utils/pagamentoOnline'
 import { porConfirmar } from '@/services/confirmarEmail'
+import DadosPagador from '@/components/forms/DadosPagador.vue'
+import PagamentoServico from '@/components/servicos/PagamentoServico.vue'
 
 export const GUARDADO = 'servicos_escolha'
 
 export default {
   name: 'ServicoModal',
+  components: { DadosPagador, PagamentoServico },
   props: {
     lojaId: { type: [String, Number], required: true },
     servico: { type: Object, required: true },
@@ -231,7 +239,7 @@ export default {
     return { foto: 0, completa: false, profId: i.prof ?? null, dia: null, dias: [], horas: [], escolhida: null,
              aCarregar: false, aCarregarDias: false, pedidoDias: 0, pedidoHoras: 0,
              notas: i.notas || '', pagamento: i.pagamento || (this.servico.pagamento === 'local' ? 'local' : 'antecipado'),
-             erro: '', aMarcar: false, autenticado: estaAutenticado(), DIAS_CURTOS }
+             erro: '', aMarcar: false, aceitaTermos: false, faltaDados: [], aPagar: null, autenticado: estaAutenticado(), DIAS_CURTOS }
   },
   computed: {
     suave () { return this.isDark ? 'text-zinc-400' : 'text-zinc-500' },
@@ -307,29 +315,41 @@ export default {
       this.erro = ''; this.aMarcar = true
       try {
         const { data } = await api.post(`/app/lojas/${this.lojaId}/servicos/marcar/`, {
-          servico_id: this.servico.id, profissional_id: this.profId, inicio: this.escolhida, pagamento: this.pagamentoEfetivo, notas: this.notas.trim() })
-        let m = data
-        if (m.pagamento === 'antecipado' && !m.pago && confirm(`Pagar ${formatarDinheiro(Number(m.preco_indicado))}?${m.pagamento_simulado === false ? '' : '\n\n(Pagamento simulado)'}`)) {
-          let pago = null
-          try {
-            pago = (await api.post(`/app/marcacoes/${m.id}/acao/`, { acao: 'pagar' })).data
-          } catch (e) {
-            // a marcação ficou feita: o pagamento continua na página dela (pede lá os dados em falta)
-            if (e.response?.data?.codigo === 'dados_cliente') {
-              this.$router.push({ path: `/minhas-marcacoes/${m.id}`, query: { nova: 1 } })
-              return
-            }
-            throw e
-          }
-          if (seguirPagamento(pago)) return       // paga na página do fornecedor e volta a /pagamento/callback
-          m = pago
-        }
-        this.$router.push({ path: `/minhas-marcacoes/${m.id}`, query: { nova: 1 } })
+          servico_id: this.servico.id, profissional_id: this.profId, inicio: this.escolhida, pagamento: this.pagamentoEfetivo,
+          notas: this.notas.trim(), aceita_termos: this.aceitaTermos })
+        // antecipado: segue logo para a página de pagamento (o botão já dizia "Marcar e pagar")
+        if (data.pagamento === 'antecipado' && !data.pago) return await this.pagar(data)
+        this.irParaMarcacao(data)
       } catch (e) {
         this.erro = e.response?.data?.detail || 'Não foi possível marcar.'
         if (porConfirmar(e)) return             // conta nova sem o email confirmado (aviso no topo)
         this.carregarDias(this.dia)
       } finally { this.aMarcar = false }
+    },
+    // a marcação já está feita: o que falhar no pagamento continua na página dela (botão "Pagar")
+    async pagar (m) {
+      this.aPagar = m
+      let pago
+      try {
+        pago = (await api.post(`/app/marcacoes/${m.id}/acao/`, { acao: 'pagar' })).data
+      } catch (e) {
+        if (e.response?.data?.codigo === 'dados_cliente') {   // cartão: faltam dados do perfil
+          this.faltaDados = e.response.data.campos || []
+          return
+        }
+        return this.irParaMarcacao(m)
+      }
+      if (seguirPagamento(pago)) return       // paga na página do fornecedor e volta a /pagamento/callback
+      this.irParaMarcacao(pago)
+    },
+    async pagarDepoisDosDados () {
+      this.faltaDados = []
+      this.aMarcar = true
+      try { await this.pagar(this.aPagar) } finally { this.aMarcar = false }
+    },
+    irParaMarcacao (m) {
+      this.faltaDados = []
+      if (m) this.$router.push({ path: `/minhas-marcacoes/${m.id}`, query: { nova: 1 } })
     },
   },
 }

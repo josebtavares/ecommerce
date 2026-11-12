@@ -197,7 +197,9 @@ def _cliente_payload(request, m, completo=False):
     from ..pagamentos import cobra_a_serio
     d['pagamento_simulado'] = not cobra_a_serio()
     if d.get('reembolso_por_concluir'):     # o cliente só sabe que está a ser tratado (sem o erro do fornecedor)
-        d['reembolso_por_concluir'] = {'valor': d['reembolso_por_concluir']['valor']}
+        r = d['reembolso_por_concluir']
+        d['reembolso_por_concluir'] = {'valor': r['valor'], 'outra_forma': r['outra_forma'],
+                                       'nao_recebida_em': r['nao_recebida_em']}
     cfg = m.loja.config_servicos
     d.update({'loja_id': m.loja_id, 'loja_slug': m.loja.slug, 'loja_nome': m.loja.nome, 'loja_logo': _url(request, m.loja.logo),
               'profissional_foto': _url(request, m.profissional.foto),
@@ -205,6 +207,7 @@ def _cliente_payload(request, m, completo=False):
               'reembolso_fora_prazo': cfg.reembolso_fora_prazo,
               'pode_conversar': conversa.pode_conversar(m),
               'loja_indisponivel': not cobranca.disponivel(m.loja),
+              'termos_aceites': bool(m.termos_aceites_em),
               'por_ler': conversa.por_ler(m, 'cliente')})
     if completo:
         d['mensagens'] = conversa.mensagens_payload(request, m, 'cliente')
@@ -219,6 +222,14 @@ def _hora_proposta(servico, inicio, prof, desde):
     return any(h['inicio'] == inicio for h in agenda.horas_livres(servico, dia, profs, desde=desde))
 
 
+ERRO_TERMOS = {'detail': 'Para marcar tens de aceitar os Termos e a Política de devoluções.', 'codigo': 'termos'}
+
+
+def _aceitou_termos(request):
+    """O cliente marcou "Li e aceito os Termos e a Política de devoluções" (como no checkout das encomendas)."""
+    return request.data.get('aceita_termos') in (True, 'true', '1', 1)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def marcar(request, loja_id):
@@ -228,6 +239,8 @@ def marcar(request, loja_id):
     """
     if is_ratelimited(request=request, group='servicos_marcar', key='user', rate='30/h', method='POST', increment=True):
         return _erro('Demasiadas marcações seguidas. Tenta mais tarde.', 429)
+    if not _aceitou_termos(request):
+        return Response(ERRO_TERMOS, status=status.HTTP_400_BAD_REQUEST)
     from ..utils.confirmar_email import exigir
     falta = exigir(request.user.utilizador, 'marcar')
     if falta:
@@ -283,6 +296,7 @@ def marcar(request, loja_id):
                       por='', expira_em=expira)
     except ErroMarcacao as e:
         return _erro(str(e))
+    Marcacao.objects.filter(pk=m.pk).update(termos_aceites_em=timezone.now())
     if pagamento == 'local':
         ops.avisar_loja(m, 'Nova marcação' if estado == 'confirmada' else 'Nova marcação — confirma-a',
                         f'{m.servico_nome} a {ops.quando_texto(m.inicio)} com {m.profissional.nome} — {u.nome}.', tipo='marcacao_nova',
@@ -341,6 +355,10 @@ def minha_acao(request, marcacao_id):
     acao = d.get('acao')
     try:
         if acao == 'pagar':
+            if not m.termos_aceites_em:             # marcações feitas antes de se pedir: aceita-os ao pagar
+                if not _aceitou_termos(request):
+                    return Response(ERRO_TERMOS, status=status.HTTP_400_BAD_REQUEST)
+                Marcacao.objects.filter(pk=m.pk).update(termos_aceites_em=timezone.now())
             inicio, m = pagamentos.iniciar_marcacao(m, request.user.utilizador)
             if inicio.estado == 'redirecionar':          # o cliente paga na página do fornecedor
                 return Response(pagamentos.para_frontend(inicio))
@@ -365,6 +383,13 @@ def minha_acao(request, marcacao_id):
             if inicio.minute % 15 or inicio.second:
                 return _erro('Escolhe uma das horas propostas.')
             m = ops.remarcar(m, inicio, por='Cliente', pelo_cliente=True)
+        elif acao == 'devolucao_recebida':        # a loja devolveu de outra forma: "Recebi"
+            m = ops.devolucao_recebida(m)
+        elif acao == 'devolucao_nao_recebida':
+            texto, e = _texto(d, 'texto', 500)
+            if e:
+                return _erro(e)
+            m = ops.devolucao_nao_recebida(m, request.user.utilizador, texto)
         elif acao in ('aceitar_proposta', 'recusar_proposta'):
             pid = d.get('proposta_id')
             if isinstance(pid, bool) or not isinstance(pid, int):

@@ -123,7 +123,8 @@
         </div>
 
         <AgendaServicos v-if="aba === 'agenda'" :loja-id="lojaId" :servicos="servicos" :profissionais-todos="profissionais" :pode-gerir="true" />
-        <CatalogoServicos v-else-if="aba === 'servicos'" :loja-id="lojaId" :profissionais="profissionais" :pode-gerir="dados.pode_gerir" @alterado="carregarListas" />
+        <CatalogoServicos v-else-if="aba === 'servicos'" :loja-id="lojaId" :profissionais="profissionais" :pode-gerir="dados.pode_gerir"
+          :pagamento-padrao="dados.config?.pagamento_padrao" @alterado="carregarListas" />
         <ProfissionaisServicos v-else-if="aba === 'profissionais'" :loja-id="lojaId" :profissionais="profissionais" :equipa="equipa"
           :limites="dados.limites" :servicos="servicos" :pode-gerir="dados.pode_gerir" @alterado="carregarListas" />
 
@@ -165,6 +166,28 @@
               </select>
               <span class="text-[11px] text-zinc-500">O cliente vê esta regra antes de pagar.</span>
             </label>
+            <div class="sm:col-span-2" data-teste="pagamento-padrao">
+              <label class="block">
+                <span class="text-sm font-semibold text-zinc-200">Pagamento das marcações</span>
+                <select v-model="regras.pagamento_padrao" :class="[CAMPO, 'mt-1']">
+                  <option value="ambos">O cliente escolhe: já (cartão) ou no local</option>
+                  <option value="antecipado">Só antecipado (cartão)</option>
+                  <option value="local">Só no local</option>
+                </select>
+              </label>
+              <span class="block text-[11px] text-zinc-500 mt-1">
+                É o que os serviços novos trazem; cada serviço pode ter a sua regra (Serviços → Editar).</span>
+              <div v-if="servicosDiferentes" class="flex flex-wrap items-center gap-2 mt-2">
+                <span class="text-[11px] text-amber-300">{{ servicosDiferentes }} serviço(s) com outra regra.</span>
+                <button type="button" @click="aplicarATodos" :disabled="aGuardar" data-teste="aplicar-todos"
+                  class="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-200 text-xs font-bold">
+                  Aplicar a todos os serviços</button>
+              </div>
+              <p v-if="dados.cartao_suspenso && regras.pagamento_padrao !== 'local'" class="text-[11px] text-amber-300 mt-2" role="alert"
+                 data-teste="sem-contrato">
+                A loja ainda não tem o contrato vinti4 activo: os clientes só podem pagar no local — os serviços "só antecipado"
+                não aparecem e o "Pagar já" não é mostrado. Activa o contrato em Pagamentos.</p>
+            </div>
           </div>
 
           <div class="space-y-3">
@@ -237,6 +260,11 @@ export default {
       return a
     },
     aguardaPagamento () { return this.dados?.subscricao?.estado === 'aguarda' && !!this.dados.fatura_pendente },
+    // serviços (e pacotes) cujo pagamento não é a regra geral escolhida
+    servicosDiferentes () {
+      const p = this.regras.pagamento_padrao
+      return p ? this.servicos.filter(s => s.pagamento !== p).length : 0
+    },
     mudou () { return JSON.stringify(this.regras) !== JSON.stringify(this.dados?.config || {}) },
     resumoCobranca () {
       const d = this.dados
@@ -325,6 +353,19 @@ export default {
     async guardarRegras () {
       const data = await this.pedido(() => api.patch(`/app/loja/${this.lojaId}/servicos/config/`, this.regras))
       if (data) this.guardado = true
+    },
+    async aplicarATodos () {
+      const nomes = { ambos: 'o cliente escolhe (já ou no local)', antecipado: 'só antecipado', local: 'só no local' }
+      if (!confirm(`Mudar o pagamento de ${this.servicosDiferentes} serviço(s) para "${nomes[this.regras.pagamento_padrao]}"?
+
+` +
+                   'As marcações já feitas não mudam.')) return
+      const data = await this.pedido(() => api.patch(`/app/loja/${this.lojaId}/servicos/config/`,
+        { ...this.regras, aplicar_pagamento_a_todos: true }))
+      if (data) {
+        this.guardado = true
+        await this.carregarListas()
+      }
     },
   },
 }
