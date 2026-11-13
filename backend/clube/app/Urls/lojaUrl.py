@@ -14,6 +14,7 @@ urlpatterns = [
 
     # ── Criar loja (utilizador autenticado) ───────────────────
     path('loja/criar/',                                 lojaView.loja_create,           name='loja-criar'),
+    path('bancos/',                                     lojaView.bancos,                name='bancos'),
 
     # ── Lojas do utilizador autenticado ───────────────────────
     path('loja/minhas/',                                lojaView.minhas_lojas,          name='loja-minhas'),
