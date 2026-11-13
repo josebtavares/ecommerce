@@ -45,7 +45,7 @@
           <div v-if="menu" class="absolute right-0 mt-2 w-60 rounded-xl border shadow-xl py-1.5 text-sm" data-teste="nav-conta-menu"
                :class="isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-stone-200 text-zinc-700'">
             <p class="sm:hidden px-4 py-2 text-xs font-semibold truncate" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Olá, {{ nome }}</p>
-            <router-link to="/Home" class="item-menu" :class="hover"><font-awesome-icon :icon="['fas', 'store']" fixed-width class="mr-2 opacity-70" />Ir à loja Bendi</router-link>
+            <router-link to="/" class="item-menu" :class="hover"><font-awesome-icon :icon="['fas', 'store']" fixed-width class="mr-2 opacity-70" />Ir à loja Bendi</router-link>
             <router-link to="/encomendas" class="item-menu" :class="hover">
               <font-awesome-icon :icon="['fas', 'bag-shopping']" fixed-width class="mr-2 opacity-70" />As minhas encomendas</router-link>
             <router-link v-for="l in lojas" :key="l.id" :to="`/loja/${l.id}/backoffice`" class="item-menu" :class="hover" data-teste="nav-backoffice">
@@ -58,7 +58,7 @@
           </div>
         </div>
 
-        <router-link to="/Home" data-teste="nav-loja"
+        <router-link to="/" data-teste="nav-loja"
           class="hidden md:inline-flex px-4 py-2 rounded-xl text-sm font-bold border transition-colors"
           :class="user ? (isDark ? 'bg-red-600 border-red-600 text-white hover:opacity-90' : 'bg-orange-500 border-orange-500 text-white hover:opacity-90')
                        : (claro ? 'border-white/40 text-white hover:bg-white/10' : (isDark ? 'border-zinc-700 text-zinc-200 hover:bg-zinc-800' : 'border-stone-300 text-zinc-700 hover:bg-stone-100'))">
@@ -84,7 +84,7 @@
           <button type="button" @click="aberto = false; $emit('registo')" class="py-2.5 rounded-xl text-sm font-bold text-white"
                   :class="isDark ? 'bg-red-600' : 'bg-orange-500'">Criar conta</button>
         </template>
-        <router-link to="/Home" class="col-span-2 py-2.5 rounded-xl text-sm font-bold text-center border"
+        <router-link to="/" class="col-span-2 py-2.5 rounded-xl text-sm font-bold text-center border"
                      :class="isDark ? 'border-zinc-700 text-zinc-100' : 'border-stone-300 text-zinc-800'">Ir à loja Bendi</router-link>
       </div>
     </div>

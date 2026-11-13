@@ -87,7 +87,7 @@ export function destino (tipo, r) {
   if (tipo === 'loja') return caminhoLoja(r)
   if (tipo === 'produto') return caminhoLoja(r.loja, { produto: r.id })
   if (tipo === 'servico') return caminhoLoja(r.loja, { servico: r.id })
-  if (tipo === 'categoria') return { path: '/Home', query: { categoria: r.valor } }   // a home filtra o catálogo
+  if (tipo === 'categoria') return { path: '/', query: { categoria: r.valor } }   // a home filtra o catálogo
   return { path: '/pesquisa', query: { q: r } }
 }
 

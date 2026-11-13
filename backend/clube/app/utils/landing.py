@@ -67,7 +67,7 @@ PADRAO = [
      'titulo': 'Tudo o que precisas, nas lojas de Cabo Verde',
      'subtitulo': 'Compra nas lojas da tua ilha, marca serviços e recebe em casa. Para quem vende, a Bendi junta '
                   'loja online, POS, entregas e faturação num só lugar.',
-     'botao': _b('Ir à loja Bendi', '/Home'), 'botao2': _b('Criar conta', '#criar-conta'),
+     'botao': _b('Ir à loja Bendi', '/'), 'botao2': _b('Criar conta', '#criar-conta'),
      'media': None, 'media_movel': None, 'escurecer': 45},
     {'tipo': 'clientes', 'ativa': True, 'nav': 'Para clientes',
      'titulo': 'Comprar na Bendi é simples',
@@ -82,7 +82,7 @@ PADRAO = [
          {'icone': 'calendar-check', 'titulo': 'Marca serviços', 'texto': 'Cabeleireiro, estética, reparações: '
                                                                           'escolhe o dia e a hora.'},
      ],
-     'botao': _b('Explorar lojas', '/Home'), 'media': None, 'media2': None},
+     'botao': _b('Explorar lojas', '/'), 'media': None, 'media2': None},
     {'tipo': 'lojas', 'ativa': True, 'nav': 'Para lojas',
      'titulo': 'Vende mais com a Bendi',
      'subtitulo': 'Tudo o que a tua loja precisa para vender online e ao balcão.',
@@ -218,6 +218,22 @@ class Invalido(ValueError):
     pass
 
 
+def _inicio(link):
+    """A página inicial é "/" (antes /Home, que agora redirecciona): botões antigos passam a apontar para "/"."""
+    return '/' if isinstance(link, str) and link.rstrip('/').lower() == '/home' else link
+
+
+def _botoes_inicio(r):
+    """/Home → "/" nos botões já gravados (no topo da secção e nos itens das listas), sem mexer no que está guardado."""
+    for k, v in list(r.items()):
+        if isinstance(v, dict) and 'link' in v:
+            r[k] = {**v, 'link': _inicio(v['link'])}
+        elif isinstance(v, list):
+            r[k] = [{**i, **{c: {**b, 'link': _inicio(b['link'])} for c, b in i.items() if isinstance(b, dict) and 'link' in b}}
+                    if isinstance(i, dict) else i for i in v]
+    return r
+
+
 def link_valido(link):
     """'/caminho', http(s)://…, ou uma âncora da página ('#planos', '#entrar', '#criar-conta')."""
     return bool(RE_ANCORA.match(link)) or H._link_valido(link)
@@ -315,7 +331,7 @@ def _valor(espec, v, nome, medias):
             raise Invalido(f'{nome}: o botão precisa de texto e de link.')
         if not link_valido(link):
             raise Invalido(f'{nome}: link inválido (usa /caminho, https://… ou #secção).')
-        return {'texto': texto, 'link': link}
+        return {'texto': texto, 'link': _inicio(link)}
     if tipo == 'media':
         if v in (None, ''):
             return None
@@ -546,6 +562,7 @@ def resolver(seccoes, request, todas=False):
             if k in s:
                 r[k] = [{**i, 'media': H._media(imagens.get(i.get('media')), request) if i.get('media') else None}
                         for i in s[k] or []]
+        _botoes_inicio(r)
         t = s['tipo']
         if t == 'planos':
             r['planos'] = _planos(s.get('tipos') or [])

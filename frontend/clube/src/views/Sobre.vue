@@ -20,7 +20,7 @@
       <div class="flex gap-3">
         <button type="button" @click="carregar" class="px-5 py-2.5 rounded-xl border text-sm font-semibold"
                 :class="isDark ? 'border-zinc-700' : 'border-stone-300'">Tentar outra vez</button>
-        <router-link to="/Home" class="px-5 py-2.5 rounded-xl text-sm font-bold text-white" :class="isDark ? 'bg-red-600' : 'bg-orange-500'">Ir à loja</router-link>
+        <router-link to="/" class="px-5 py-2.5 rounded-xl text-sm font-bold text-white" :class="isDark ? 'bg-red-600' : 'bg-orange-500'">Ir à loja</router-link>
       </div>
     </div>
 
@@ -331,7 +331,7 @@ export default {
     acao (link) {
       if (!link) return
       if (ACOES_CONTA[link]) {
-        if (this.user) this.$router.push('/Home')
+        if (this.user) this.$router.push('/')
         else this.janela = ACOES_CONTA[link]
       } else if (link.startsWith('#')) {
         this.ir(link.slice(1))

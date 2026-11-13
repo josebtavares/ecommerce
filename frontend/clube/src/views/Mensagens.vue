@@ -60,7 +60,7 @@ export default {
     },
     voltar () {
       if (window.history.length > 1) this.$router.back()
-      else this.$router.push('/Home')
+      else this.$router.push('/')
     },
     alternarTema () {
       this.isDark = !this.isDark

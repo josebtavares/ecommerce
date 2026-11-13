@@ -36,7 +36,7 @@
         <div v-if="autenticado && porConfirmar" class="mt-5">
           <AvisoConfirmarEmail :isDark="isDark">O link pode ter expirado.</AvisoConfirmarEmail>
         </div>
-        <router-link v-else :to="autenticado ? { name: 'Home' } : { name: 'Login', query: { seguinte: '/Home' } }"
+        <router-link v-else :to="autenticado ? { name: 'Home' } : { name: 'Login', query: { seguinte: '/' } }"
           class="mt-6 inline-block px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-500">
           {{ autenticado ? 'Voltar' : 'Entrar e pedir um novo link' }}
         </router-link>

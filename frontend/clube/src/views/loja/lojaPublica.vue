@@ -19,7 +19,7 @@
       <p class="text-sm text-zinc-500 mt-2 max-w-sm">
         {{ indisponivel.fechada ? 'Volta mais tarde — a loja não está a receber encomendas de momento.' : 'O link pode estar errado ou a loja já não existe.' }}
       </p>
-      <router-link to="/Home" class="mt-6 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition">
+      <router-link to="/" class="mt-6 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition">
         Explorar outras lojas
       </router-link>
     </div>
