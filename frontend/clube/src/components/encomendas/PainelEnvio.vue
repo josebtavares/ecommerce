@@ -38,6 +38,12 @@
         <span class="text-zinc-500">Enviada a</span>
         <span class="text-zinc-300">{{ dataHora(envio.data_envio) }}</span>
       </div>
+      <div v-if="envio.fecho_previsto_em" class="flex justify-between gap-2" data-teste="envio-fecho">
+        <span class="text-zinc-500">Fecho automático</span>
+        <span :class="envio.nao_recebido_em ? 'text-amber-300' : 'text-zinc-300'">
+          {{ envio.nao_recebido_em ? 'parado (o cliente não recebeu)' : data(envio.fecho_previsto_em) + ' (se o cliente não disser nada)' }}
+        </span>
+      </div>
       <div v-if="envio.talao" class="flex justify-between gap-2">
         <span class="text-zinc-500">Talão</span>
         <a :href="envio.talao" target="_blank" rel="noopener noreferrer" class="text-red-400 hover:text-red-300">Ver foto</a>
@@ -154,7 +160,8 @@ import api from '@/services/api'
 const ESTADO = { a_caminho: 'A caminho', entregue: 'Entregue', devolvida: 'Devolvida', cancelada: 'Cancelada' }
 const COR = { a_caminho: 'bg-indigo-500/15 text-indigo-400', entregue: 'bg-green-500/15 text-green-400',
               devolvida: 'bg-amber-500/15 text-amber-300', cancelada: 'bg-zinc-500/15 text-zinc-400' }
-const ACAO = { enviado: 'Enviada', corrigido: 'Dados corrigidos', adicionado: 'Código adicionado', devolvido: 'Devolvida', reenviado: 'Reenviada' }
+const ACAO = { enviado: 'Enviada', corrigido: 'Dados corrigidos', adicionado: 'Código adicionado', devolvido: 'Devolvida', reenviado: 'Reenviada',
+               recebido: 'O cliente confirmou que recebeu', fechado_auto: 'Fechada automaticamente (sem resposta do cliente)' }
 
 export default {
   name: 'PainelEnvio',
@@ -186,6 +193,7 @@ export default {
   },
   methods: {
     formVazio () { return { transportadora: '', outra: '', codigos: [''], talao: null, nota: '' } },
+    data (d) { return new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) },
     dataHora (d) { return new Date(d).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) },
     async carregarTransportadoras () {
       if (this.transportadoras.length) return

@@ -10,6 +10,7 @@ POST  /app/loja/<id>/encomendas/<enc>/envio/                  multipart { transp
 POST  /app/loja/<id>/encomendas/<enc>/envio/corrigir/         { transportadora_id | transportadora_outra, codigos, nota? }
 POST  /app/loja/<id>/encomendas/<enc>/envio/devolvida/        { nota }
 POST  /app/encomenda/<id>/envio/recebi/ · nao-recebi/          o cliente (fase 2)
+GET   /app/admin/envios/?filtro=&loja_id=                     envios com problemas (gerir_encomendas, fase 3)
 """
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
@@ -202,3 +203,17 @@ def cliente_nao_recebi(request, encomenda_id):
     except E.ErroEnvio as e:
         return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     return Response({'encomenda_id': enc.id, 'status': enc.status})
+
+
+# ── admin: envios com problemas ────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_envios(request):
+    erro = _exige_admin(request, 'gerir_encomendas')
+    if erro:
+        return erro
+    loja_id = request.GET.get('loja_id') or None
+    if loja_id and not str(loja_id).isdigit():
+        return Response({'detail': 'Loja inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(E.problemas(request.GET.get('filtro') or 'problemas', loja_id))

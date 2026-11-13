@@ -1224,6 +1224,9 @@ class Entrega(models.Model):
     # ela agir (corrigir, devolvida, reenviar ou concluir)
     nao_recebido_em   = models.DateTimeField(null=True, blank=True)
     nao_recebido_nota = models.CharField(max_length=300, blank=True, default='', db_default='')
+    # fecho automático (utils/envios.processar_prazos): lembrete ao cliente 3 dias antes, depois conclui
+    fecho_previsto_em = models.DateTimeField(null=True, blank=True)
+    lembrete_envio_em = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f'Entrega da encomenda #{self.encomenda_id}'

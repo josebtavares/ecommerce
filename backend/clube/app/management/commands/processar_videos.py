@@ -292,6 +292,14 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(f'  encomendas: expirar falhou: {e}')
         try:
+            # envios por transportadora: lembrete ao cliente (dia 7) e fecho automático (dia 10) — utils/envios.py
+            from app.utils.envios import processar_prazos
+            lembretes, fechadas = processar_prazos()
+            if lembretes or fechadas:
+                self.stdout.write(f'  envios: {lembretes} lembrete(s), {fechadas} fechada(s) automaticamente')
+        except Exception as e:
+            self.stderr.write(f'  envios: prazos falharam: {e}')
+        try:
             from app.pagamentos.vinti4 import rever_sem_resposta
             n = rever_sem_resposta()
             if n:

@@ -70,6 +70,7 @@ urlpatterns = [
     # ── Envio por transportadora (utils/envios.py) ─────────────
     path('transportadoras/', envio.transportadoras),
     path('admin/transportadoras/', envio.admin_transportadoras),
+    path('admin/envios/', envio.admin_envios),
     path('admin/transportadoras/<int:transportadora_id>/', envio.admin_transportadora),
     path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/', envio.enviar),
     path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/corrigir/', envio.corrigir),

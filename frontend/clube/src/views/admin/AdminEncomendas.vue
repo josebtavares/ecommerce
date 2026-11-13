@@ -1,5 +1,7 @@
 <template>
   <div class="space-y-5">
+    <!-- envios por transportadora com problemas (utils/envios.problemas) -->
+    <AdminEnvios ref="envios" :loja-id="filtroLoja" @abrir="abrirDoEnvio" />
 
     <!-- Filtro por loja -->
     <div class="flex flex-wrap gap-3 items-center">
@@ -165,8 +167,10 @@ import api from '@/services/api'
 import { ouvirListas } from '@/utils/tempoRealEncomendas'
 import { iconePagamento } from '@/utils/icones'
 import { fichaDaRota, irParaFicha } from '@/utils/ficha'
+import AdminEnvios from '@/components/admin/AdminEnvios.vue'
 export default {
   name: 'AdminEncomendas',
+  components: { AdminEnvios },
   data () {
     return {
       loading: true, encomendas: [], totalCount: 0,
@@ -193,7 +197,10 @@ export default {
     expandedId: { handler: 'abrirFicha', immediate: true },
   },
   async created () {
-    this.pararTempoReal = ouvirListas('encomenda', () => this.fetchEncomendas(this.page, true, true))
+    this.pararTempoReal = ouvirListas('encomenda', () => {
+      this.fetchEncomendas(this.page, true, true)
+      this.$refs.envios?.carregar(true)
+    })
     await Promise.all([this.fetchLojas(), this.fetchEncomendas(1, true)])
   },
   beforeUnmount () { this.pararTempoReal?.() },
@@ -207,6 +214,8 @@ export default {
       return map[s] || 'bg-zinc-500/15 text-zinc-400'
     },
     // a encomenda aberta vai no endereço (/admin/encomendas/<id>)
+    // da lista dos envios: abre a ficha dessa encomenda (aparece no topo, mesmo noutra página)
+    abrirDoEnvio (id) { if (this.expandedId !== id) irParaFicha(this.$router, this.$route, id) },
     toggleExpand (id) { irParaFicha(this.$router, this.$route, this.expandedId === id ? null : id) },
     async abrirFicha (id) {
       if (!id) { this.fixada = null; return }

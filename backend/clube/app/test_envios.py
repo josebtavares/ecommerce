@@ -373,3 +373,102 @@ class EnviosSemCodigo(BaseEnvios):
         self.assertEqual(r.status_code, 200, r.content[:300])
         n = Notificacao.objects.filter(utilizador=self.dono).latest('id')
         self.assertIn('sem código de rastreio', n.mensagem)
+
+
+class EnviosPrazos(BaseEnvios):
+    """Fase 3: lembrete ao cliente (dia 7), fecho automático (dia 10), "Não recebi" pára, lista do admin."""
+
+    def _enviada(self, codigos=('A1',)):
+        enc = self._encomenda()
+        r = self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': list(codigos)}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        return enc, Entrega.objects.get(encomenda=enc)
+
+    def test_lembrete_e_fecho_automatico(self):
+        enc, ent = self._enviada()
+        self.assertAlmostEqual((ent.fecho_previsto_em - ent.data_envio).total_seconds(), 10 * 86400, delta=5)
+        agora = timezone.now()
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=6)), (0, 0))
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=7, hours=1)), (1, 0))
+        n = Notificacao.objects.filter(utilizador=self.cliente).latest('id')
+        self.assertIn('Já recebeste', n.titulo)
+        self.assertIn('Não recebi', n.mensagem)
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=8)), (0, 0))       # só um lembrete
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=10, minutes=1)), (0, 1))
+        enc.refresh_from_db()
+        ent.refresh_from_db()
+        self.assertEqual((enc.status, ent.status), ('concluido', 'entregue'))
+        self.assertIsNotNone(enc.data_conclusao)
+        self.assertEqual(ent.historico_envio[-1]['acao'], 'fechado_auto')
+        self.assertTrue(Notificacao.objects.filter(utilizador=self.cliente, tipo='encomenda_concluida').exists())
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=11)), (0, 0))
+
+    def test_nao_recebi_para_e_loja_responde_com_mais_tempo(self):
+        enc, ent = self._enviada()
+        capi = APIClient()
+        capi.force_authenticate(self.cliente.user)
+        capi.post(f'/app/encomenda/{enc.id}/envio/nao-recebi/', {}, format='json')
+        Entrega.objects.filter(id=ent.id).update(fecho_previsto_em=timezone.now() - timedelta(days=1))
+        self.assertEqual(E.processar_prazos(), (0, 0))                                  # parado
+        enc.refresh_from_db()
+        self.assertEqual(enc.status, 'enviado')
+        # a lista do admin mostra-o
+        admin = _conta('envadmin3', staff=True)
+        aapi = APIClient()
+        aapi.force_authenticate(admin.user)
+        r = aapi.get('/app/admin/envios/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['contagens']['nao_recebidos'], 1)
+        self.assertEqual([x['encomenda_id'] for x in r.data['resultados']], [enc.id])
+        # a loja corrige → o cliente tem pelo menos 3 dias
+        self.api.post(self._url(enc, 'corrigir/'), {'transportadora_id': self.dhl.id, 'codigos': ['A2']}, format='json')
+        ent.refresh_from_db()
+        self.assertGreater(ent.fecho_previsto_em, timezone.now() + timedelta(days=2, hours=23))
+        agora = timezone.now()
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=2))[1], 0)
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=3, minutes=5))[1], 1)
+
+    def test_devolvida_e_reenvio_recomecam_o_prazo(self):
+        enc, ent = self._enviada()
+        E.processar_prazos(timezone.now() + timedelta(days=8))                          # lembrete enviado
+        self.api.post(self._url(enc, 'devolvida/'), {'nota': 'Morada errada'}, format='json')
+        ent.refresh_from_db()
+        self.assertIsNone(ent.fecho_previsto_em)
+        self.assertEqual(E.processar_prazos(timezone.now() + timedelta(days=30)), (0, 0))
+        admin = _conta('envadmin4', staff=True)
+        aapi = APIClient()
+        aapi.force_authenticate(admin.user)
+        self.assertEqual(aapi.get('/app/admin/envios/', {'filtro': 'devolvidos'}).data['contagens']['devolvidos'], 1)
+        self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': []}, format='json')
+        ent.refresh_from_db()
+        self.assertIsNone(ent.lembrete_envio_em)
+        self.assertGreater(ent.fecho_previsto_em, timezone.now() + timedelta(days=9))
+        r = aapi.get('/app/admin/envios/', {'filtro': 'sem_codigo'})
+        self.assertEqual([x['encomenda_id'] for x in r.data['resultados']], [enc.id])
+
+    def test_cliente_ve_data_do_fecho(self):
+        enc, ent = self._enviada()
+        capi = APIClient()
+        capi.force_authenticate(self.cliente.user)
+        r = capi.get(f'/app/encomenda/{enc.id}/')
+        self.assertIsNotNone(r.data['envio']['fecho_previsto_em'])
+
+    def test_admin_envios_permissoes(self):
+        r = self.api.get('/app/admin/envios/')                       # dono de loja, não é admin
+        self.assertEqual(r.status_code, 403)
+        admin = _conta('envadmin5', staff=True)
+        aapi = APIClient()
+        aapi.force_authenticate(admin.user)
+        self.assertEqual(aapi.get('/app/admin/envios/', {'loja_id': 'x'}).status_code, 400)
+        self.assertEqual(aapi.get('/app/admin/envios/', {'loja_id': self.loja.id}).status_code, 200)
+
+
+    def test_nunca_fecha_sem_lembrete(self):
+        enc, ent = self._enviada()
+        agora = timezone.now()
+        # o worker esteve parado: chega já depois do fecho previsto → primeiro o lembrete, fecha só 1 dia depois
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=12)), (1, 0))
+        ent.refresh_from_db()
+        self.assertGreater(ent.fecho_previsto_em, agora + timedelta(days=12, hours=23))
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=12, hours=12))[1], 0)
+        self.assertEqual(E.processar_prazos(agora + timedelta(days=13, minutes=5)), (0, 1))
