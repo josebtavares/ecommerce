@@ -16,7 +16,7 @@
            @mouseenter="pausa = true" @mouseleave="pausa = false">
         <!-- módulos -->
         <div class="lista -mx-5 px-5 sm:mx-0 sm:px-0 flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0"
-             role="tablist" aria-label="Módulos do backoffice" data-teste="backoffice-modulos" @keydown="teclado">
+             ref="lista" role="tablist" aria-label="Módulos do backoffice" data-teste="backoffice-modulos" @keydown="teclado">
           <button v-for="(m, n) in modulos" :key="m.id || n" type="button" role="tab" :id="'bo-tab-' + n"
                   :aria-selected="n === atual" :aria-controls="'bo-painel'" :tabindex="n === atual ? 0 : -1"
                   :data-teste="'backoffice-modulo-' + n" @click="escolher(n)" :style="{ '--atraso': (n * 60) + 'ms' }"
@@ -153,7 +153,7 @@ export default {
       this.relogio = setInterval(() => {
         if (this.pausa || document.hidden || this.modulos.length < 2) return
         passado += 250
-        if (passado >= INTERVALO) { passado = 0; this.atual = (this.atual + 1) % this.modulos.length; this.volta++ }
+        if (passado >= INTERVALO) { passado = 0; this.atual = (this.atual + 1) % this.modulos.length; this.volta++; this.mostrarBotao(this.atual) }
       }, 250)
     },
     escolher (n) {
@@ -161,8 +161,20 @@ export default {
       this.automatico = false
       clearInterval(this.relogio)
       this.relogio = null
-      // no telemóvel, o botão escolhido fica à vista
-      this.$nextTick(() => document.getElementById('bo-tab-' + n)?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' }))
+      this.mostrarBotao(n)
+    },
+    // no telemóvel (lista a deslizar na horizontal) centra o botão do módulo deslizando SÓ a lista — o scrollIntoView
+    // deslocava também a secção (overflow-hidden) quando a lista já não chegava, no último módulo, e cortava-a
+    mostrarBotao (n) {
+      this.$nextTick(() => {
+        const lista = this.$refs.lista
+        const botao = document.getElementById('bo-tab-' + n)
+        if (!lista || !botao || lista.scrollWidth <= lista.clientWidth) return
+        const l = lista.getBoundingClientRect(), b = botao.getBoundingClientRect()
+        const alvo = lista.scrollLeft + (b.left - l.left) - (lista.clientWidth - b.width) / 2
+        const reduzir = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        lista.scrollTo({ left: Math.max(0, alvo), behavior: reduzir ? 'auto' : 'smooth' })
+      })
     },
     teclado (e) {
       const passo = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
@@ -170,7 +182,7 @@ export default {
       e.preventDefault()
       const n = (this.atual + passo + this.modulos.length) % this.modulos.length
       this.escolher(n)
-      document.getElementById('bo-tab-' + n)?.focus()
+      document.getElementById('bo-tab-' + n)?.focus({ preventScroll: true })
     },
     clique (e, link) {
       if (e.ctrlKey || e.metaKey || e.shiftKey) return
