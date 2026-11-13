@@ -88,7 +88,7 @@
       <!-- BACKOFFICE -->
       <template v-if="tipo === 'backoffice'">
         <p class="text-xs text-zinc-400 rounded-xl bg-zinc-900 px-4 py-3">Um módulo por separador, com a captura de ecrã do backoffice.
-          A imagem fica melhor deitada (16:10, ex.: 1600×1000) e mostra-se a partir de cima. Sem imagem, aparece um esboço com o ícone.</p>
+          A imagem aparece sempre inteira; fica melhor deitada (ex.: 1600×1000) e com todas do mesmo tamanho. Sem imagem, aparece um esboço com o ícone.</p>
         <ListaItens v-model="f.modulos" :novo="() => ({ icone: 'circle-check', titulo: '', texto: '', pontos: '', media: null })"
                     rotulo="Módulo" nome="modulos" :maximo="12" vazio="Sem módulos: a secção fica escondida aos visitantes.">
           <template #default="{ item }">
