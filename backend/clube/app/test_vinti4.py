@@ -287,7 +287,7 @@ class SemResposta(TestCase):
 
     @override_settings(VINTI4_PORTAL_ID='1', VINTI4_PORTAL_PASSWORD='abc123')
     @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
-    @mock.patch('app.pagamentos.vinti4.requests.post')
+    @mock.patch('app.pagamentos.vinti4.requests.Session.post')
     def test_api(self, post, confirmar):
         paga, nao, recusa = self._tx(), self._tx(), self._tx()
         respostas = {
@@ -636,7 +636,7 @@ class VendasDasLojas(TestCase):
                                                                                   referencia_transacao='x')):
             self.assertEqual(dev.como_devolve(None), 'dinheiro')
 
-    @mock.patch('app.pagamentos.vinti4.requests.post')
+    @mock.patch('app.pagamentos.vinti4.requests.Session.post')
     def test_api_de_estado_com_o_portal_da_loja(self, post):
         loja = _loja(self.dono, portal=('portal-loja', 'segredo123'))
         inicio = self.f.iniciar(Cobranca(referencia='enc-8-cartao-1', valor=Decimal('900'), descricao='E', pagador=self.cliente, loja=loja))
@@ -827,7 +827,7 @@ class PerguntarASisp(TestCase):
 
     @override_settings(VINTI4_PORTAL_ID='1', VINTI4_PORTAL_PASSWORD='abc123')
     @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
-    @mock.patch('app.pagamentos.vinti4.requests.post')
+    @mock.patch('app.pagamentos.vinti4.requests.Session.post')
     def test_respostas(self, post, confirmar):
         def resposta(corpo):
             r = mock.Mock()
@@ -1336,7 +1336,7 @@ class PorConfirmarSemPortal(TestCase):
 
     @override_settings(VINTI4_PORTAL_ID='1', VINTI4_PORTAL_PASSWORD='abc123')
     @mock.patch('app.pagamentos.servico.confirmar', return_value={'estado': 'pago'})
-    @mock.patch('app.pagamentos.vinti4.requests.post')
+    @mock.patch('app.pagamentos.vinti4.requests.Session.post')
     def test_depois_das_12_continua_devagar(self, post, _confirmar):
         tx = self._tx()
         TransacaoVinti4.objects.filter(pk=tx.pk).update(estado='por_confirmar', consultas=v4.CONSULTAS_MAX,
@@ -1689,3 +1689,29 @@ class ComprovativosChecklist(TestCase):
         enc.data_conclusao = timezone.now()
         d = self._linhas(documentos.pdf_comprovativo_encomenda, enc)
         self.assertIn('Entregue a', d)
+
+
+class CertificadoDaApiDeEstado(TestCase):
+    """Servidor de teste da SISP com certificado auto-assinado: fixa-se a impressão digital, só em *.teste.sisp.cv."""
+    PIN = 'E1:3C:1D:C8:ED:FF:20:13:CB:D6:C3:5D:E3:9E:2F:94:DD:15:71:6E:96:B4:DA:BF:C0:7E:00:C7:8E:BC:1B:22'
+
+    def _adaptador(self):
+        return v4._sessao_estado().get_adapter('https://x/')
+
+    @override_settings(VINTI4_ESTADO_URL='https://comerciante.teste.sisp.cv/pos/transaction-status', VINTI4_ESTADO_CERT_SHA256=PIN)
+    def test_teste_fixa_a_impressao_digital(self):
+        a = self._adaptador()
+        self.assertIsInstance(a, v4._CertificadoFixo)
+        self.assertEqual(a.poolmanager.connection_pool_kw['assert_fingerprint'], self.PIN.replace(':', '').lower())
+
+    @override_settings(VINTI4_ESTADO_URL='https://comerciante.sisp.cv/pos/transaction-status', VINTI4_ESTADO_CERT_SHA256=PIN)
+    def test_producao_verifica_pela_ca(self):
+        self.assertNotIsInstance(self._adaptador(), v4._CertificadoFixo)
+
+    @override_settings(VINTI4_ESTADO_URL='https://comerciante.teste.sisp.cv.exemplo.com/x', VINTI4_ESTADO_CERT_SHA256=PIN)
+    def test_host_parecido_nao_conta(self):
+        self.assertNotIsInstance(self._adaptador(), v4._CertificadoFixo)
+
+    @override_settings(VINTI4_ESTADO_URL='https://comerciante.teste.sisp.cv/pos/transaction-status', VINTI4_ESTADO_CERT_SHA256='abc')
+    def test_impressao_invalida_verifica_pela_ca(self):
+        self.assertNotIsInstance(self._adaptador(), v4._CertificadoFixo)
