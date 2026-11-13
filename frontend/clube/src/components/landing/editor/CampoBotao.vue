@@ -16,7 +16,7 @@
 
 <script>
 export const DESTINOS = [
-  { link: '/Home', nome: 'Loja Bendi (página inicial)' },
+  { link: '/', nome: 'Loja Bendi (página inicial)' },
   { link: '/loja/criar', nome: 'Criar loja' },
   { link: '#criar-conta', nome: 'Janela: criar conta' },
   { link: '#entrar', nome: 'Janela: entrar' },
@@ -40,14 +40,15 @@ export default {
   data () { return { DESTINOS, manual: false } },
   computed: {
     escolha () {
-      const l = this.modelValue?.link || '/Home'
+      let l = this.modelValue?.link || '/'
+      if (l.toLowerCase() === '/home') l = '/'      // botões gravados antes de a página inicial passar para "/"
       return !this.manual && DESTINOS.some(d => d.link === l) ? l : '__outro'
     },
   },
   methods: {
     // botão sem texto = sem botão (o painel manda null ao gravar)
     mudar (campo, v) {
-      this.$emit('update:modelValue', { texto: this.modelValue?.texto || '', link: this.modelValue?.link ?? '/Home', [campo]: v })
+      this.$emit('update:modelValue', { texto: this.modelValue?.texto || '', link: this.modelValue?.link ?? '/', [campo]: v })
     },
     escolher (v) {
       this.manual = v === '__outro'

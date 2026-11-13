@@ -75,7 +75,7 @@
           </svg>
           Ver loja pública
         </button>
-        <button @click="$router.push('/Home')"
+        <button @click="$router.push('/')"
           class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition text-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -485,7 +485,7 @@ export default {
       } catch (e) {
         console.error(e)
         // modo de leitura que expirou: fica cá, com a faixa a explicar
-        if (!this.verAdminExpirou) this.$router.push('/Home')
+        if (!this.verAdminExpirou) this.$router.push('/')
       } finally {
         this.loadingLoja = false
       }

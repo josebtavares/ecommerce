@@ -9,7 +9,7 @@
     <header class="sticky top-0 z-20 border-b backdrop-blur"
             :class="isDark ? 'bg-zinc-950/90 border-zinc-800' : 'bg-stone-50/90 border-stone-200'">
       <div class="max-w-6xl mx-auto px-4 md:px-8 h-[52px] md:h-[84px] flex items-center gap-3 pr-[200px] md:pr-[220px]">
-        <router-link to="/Home" aria-label="Voltar ao início"
+        <router-link to="/" aria-label="Voltar ao início"
           class="w-9 h-9 rounded-xl flex items-center justify-center border flex-shrink-0 transition"
           :class="isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800' : 'bg-white border-stone-300 hover:bg-stone-100'">
           <font-awesome-icon :icon="['fas', 'arrow-left']" class="text-sm" />

@@ -28,7 +28,7 @@ export default {
   name: 'BotaoGoogle',
   props: {
     isDark: { type: Boolean, default: false },
-    seguinte: { type: String, default: '/Home' },
+    seguinte: { type: String, default: '/' },
     textoErro: { type: String, default: 'Erro ao iniciar login com Google.' },
   },
   data () { return { aRedirecionar: false } },

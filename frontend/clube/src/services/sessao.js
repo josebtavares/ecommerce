@@ -9,7 +9,7 @@ export function estaAutenticado () {
 }
 
 // só caminhos internos (nunca "//site" ou "https://…") — evita redirecionar para fora do site
-export function caminhoSeguro (s, alternativa = '/Home') {
+export function caminhoSeguro (s, alternativa = '/') {
   return typeof s === 'string' && s.startsWith('/') && !s.startsWith('//') && !s.startsWith('/\\')
     ? s
     : alternativa
@@ -23,7 +23,7 @@ export function caminhoAtual () {
 export const pedidoLogin = reactive({
   aberto: false,
   mensagem: '',
-  seguinte: '/Home',
+  seguinte: '/',
 })
 
 export function pedirLogin (mensagem = 'Entra ou cria conta para continuar.', seguinte = caminhoAtual()) {

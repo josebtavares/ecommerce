@@ -471,7 +471,7 @@ export default {
       else if (link.startsWith('/') && !link.startsWith('//')) this.$router.push(link)
     },
 
-    // /Home?categoria=… (vem da pesquisa) → catálogo filtrado por essa categoria
+    // /?categoria=… (vem da pesquisa) → catálogo filtrado por essa categoria
     categoriaDoLink () {
       const c = this.$route.query.categoria
       if (typeof c !== 'string' || !c || this.loadingHome) return

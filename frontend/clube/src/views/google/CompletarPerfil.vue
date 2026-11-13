@@ -145,7 +145,7 @@ export default {
     // só caminhos internos — nunca redirecionar para fora do site
     seguinte () {
       const s = this.$route.query.seguinte
-      return typeof s === 'string' && s.startsWith('/') && !s.startsWith('//') ? s : '/Home'
+      return typeof s === 'string' && s.startsWith('/') && !s.startsWith('//') ? s : '/'
     },
   },
 
