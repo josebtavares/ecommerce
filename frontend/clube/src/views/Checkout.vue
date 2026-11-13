@@ -78,15 +78,18 @@
         <!-- OPÇÕES DE ENTREGA -->
         <div v-if="tipoEntrega === 'entrega'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Opção de entrega</h2>
+          <!-- primeiro o concelho: diz a ilha e as opções que chegam lá (backend utils/envios.validar_checkout) -->
+          <label class="block mb-4">
+            <span class="text-xs text-zinc-500 mb-1 block">Concelho da entrega *</span>
+            <SeletorConcelho v-model="concelhoEntrega" data-teste="checkout-concelho"
+              classe-campo="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
+          </label>
           <div v-if="opcoesEntrega.length === 0" class="text-zinc-500 text-sm">Sem opções disponíveis.</div>
-          <div v-else-if="opcoesVisiveis.length === 0 && !concelhoEntrega" class="text-zinc-500 text-sm" data-teste="checkout-escolher-concelho">
-            Escolhe o concelho na morada de entrega para veres as opções para a tua ilha.
-          </div>
           <div v-else-if="opcoesVisiveis.length === 0" class="text-amber-300 text-sm" data-teste="checkout-sem-opcao-ilha">
             Esta loja não entrega em {{ ilhaEntrega }}.{{ loja?.levantamento_ativo ? ' Podes levantar na loja.' : '' }}
           </div>
           <div v-else class="space-y-3">
-            <p v-if="!concelhoEntrega" class="text-xs text-zinc-500">Escolhe o concelho na morada para veres todas as opções para a tua ilha.</p>
+            <p v-if="!concelhoEntrega" class="text-xs text-amber-300" data-teste="checkout-escolher-concelho">Escolhe o concelho para vermos que opções chegam à tua ilha.</p>
             <button v-for="opcao in opcoesVisiveis" :key="opcao.id" :data-teste="`checkout-opcao-${opcao.id}`"
               @click="opcaoEntregaId = opcao.id"
               :class="['w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between text-left',
@@ -114,11 +117,6 @@
         <!-- MORADA -->
         <div v-if="tipoEntrega === 'entrega'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Morada de entrega</h2>
-          <label class="block mb-3">
-            <span class="text-xs text-zinc-500 mb-1 block">Concelho *</span>
-            <SeletorConcelho v-model="concelhoEntrega" data-teste="checkout-concelho"
-              classe-campo="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
-          </label>
           <textarea v-model="moradaEntrega" rows="3"
             placeholder="Rua, número, andar, código postal, cidade..."
             class="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
@@ -507,8 +505,11 @@ export default {
   computed: {
     lojaId ()           { return this.$route.params.lojaId },
     ilhaEntrega ()      { return ilhaDoConcelho(this.concelhoEntrega) },
-    // sem concelho ainda: só as que servem todas as ilhas (as outras aparecem quando o escolher)
-    opcoesVisiveis ()   { return this.opcoesEntrega.filter(o => !(o.ilhas || []).length || (o.ilhas || []).includes(this.ilhaEntrega)) },
+    // sem concelho ainda: todas (confirmar pede o concelho); com concelho, só as que chegam a essa ilha
+    opcoesVisiveis ()   {
+      if (!this.ilhaEntrega) return this.opcoesEntrega
+      return this.opcoesEntrega.filter(o => !(o.ilhas || []).length || o.ilhas.includes(this.ilhaEntrega))
+    },
     opcaoSelecionada () { return this.opcoesVisiveis.find(o => o.id === this.opcaoEntregaId) || null },
     eEnvio ()           { return this.tipoEntrega === 'entrega' && this.opcaoSelecionada?.tipo === 'envio' },
     metodosVisiveis ()  { return this.eEnvio ? this.metodosPagamento.filter(m => m.tipo !== 'dinheiro') : this.metodosPagamento },
