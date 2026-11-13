@@ -472,3 +472,101 @@ class EnviosPrazos(BaseEnvios):
         self.assertGreater(ent.fecho_previsto_em, agora + timedelta(days=12, hours=23))
         self.assertEqual(E.processar_prazos(agora + timedelta(days=12, hours=12))[1], 0)
         self.assertEqual(E.processar_prazos(agora + timedelta(days=13, minutes=5)), (0, 1))
+
+
+class DevolucaoPeloCorreio(BaseEnvios):
+    """Fase 4: o cliente devolve o produto pelo correio (transportadora + código opcional + talão)."""
+
+    def setUp(self):
+        super().setUp()
+        from .models import ItemEncomenda, Produto
+        self.prod = Produto.objects.create(loja=self.loja, nome='Camisa', preco=Decimal('1000'))
+        enc = self._encomenda()
+        ItemEncomenda.objects.create(encomenda=enc, produto=self.prod, quantidade=1, preco=Decimal('1000'))
+        self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': ['A1']}, format='json')
+        self.capi = APIClient()
+        self.capi.force_authenticate(self.cliente.user)
+        self.capi.post(f'/app/encomenda/{enc.id}/envio/recebi/')
+        enc.refresh_from_db()
+        self.assertEqual(enc.status, 'concluido')
+        self.enc = enc
+        from .utils import devolucoes as dev
+        self.dev = dev
+        self.r = dev.pedir_devolucao(enc, self.cliente, 'mudei_ideias')
+        dev.loja_aceitar(self.r, self.dono)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'aguarda_produto')
+
+    def _acao(self, cliente=None, **dados):
+        return (cliente or self.capi).post(f'/app/reembolsos/{self.r.id}/acao/', {'acao': 'enviei_produto', **dados},
+                                           format='json')
+
+    def test_cliente_envia_e_loja_e_avisada(self):
+        r = self._acao(transportadora_id=self.dhl.id, codigos=['rr9cv'], nota='Vai num envelope')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        env = r.data['devolucao_envio']
+        self.assertEqual(env['transportadora'], 'DHL')
+        self.assertEqual(env['codigos'][0]['codigo'], 'RR9CV')
+        self.assertTrue(env['codigos'][0]['link'])
+        self.assertIsNotNone(r.data['prazo_resposta'])
+        n = Notificacao.objects.filter(utilizador=self.dono).latest('id')
+        self.assertIn('enviou o produto de volta', n.titulo)
+        self.assertIn('RR9CV', n.mensagem)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'aguarda_produto')
+        prazo = self.r.prazo_resposta
+        # correção: avisa de novo, o prazo não recomeça
+        r = self._acao(transportadora_outra='Correio Rápido', codigos=[])
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.r.refresh_from_db()
+        self.assertEqual((self.r.devolucao_transportadora_nome, self.r.devolucao_codigos, self.r.prazo_resposta),
+                         ('Correio Rápido', [], prazo))
+        self.assertEqual(self._acao(transportadora_outra='Correio Rápido', codigos=[]).status_code, 400)  # nada mudou
+        # a loja recebe → reembolso
+        self.dev.loja_recebido(self.r, self.dono)
+        self.r.refresh_from_db()
+        self.assertNotEqual(self.r.estado, 'aguarda_produto')
+        self.assertEqual(self._acao(transportadora_id=self.dhl.id).status_code, 400)
+
+    def test_so_o_cliente_e_so_em_aguarda_produto(self):
+        self.assertEqual(self._acao(cliente=self.api, transportadora_id=self.dhl.id).status_code, 403)
+        self.assertEqual(self._acao(codigos=['X']).status_code, 400)                  # sem transportadora
+        # um pedido ainda por responder não aceita o envio
+        from .models import Reembolso
+        Reembolso.objects.filter(id=self.r.id).update(estado='pedido')
+        self.assertEqual(self._acao(transportadora_id=self.dhl.id).status_code, 400)
+
+    def test_prazo_da_loja_lembrete_e_bendi(self):
+        self._acao(transportadora_id=self.dhl.id, codigos=['A9'])
+        agora = timezone.now()
+        self.assertEqual(self.dev.prazos_devolucao_correio(agora + timedelta(days=5)), 0)
+        self.assertEqual(self.dev.prazos_devolucao_correio(agora + timedelta(days=8)), 1)        # lembrete
+        n = Notificacao.objects.filter(utilizador=self.dono).latest('id')
+        self.assertIn('Já recebeste o produto devolvido', n.titulo)
+        self.assertEqual(self.dev.prazos_devolucao_correio(agora + timedelta(days=9)), 0)
+        self.assertEqual(self.dev.prazos_devolucao_correio(agora + timedelta(days=10, minutes=5)), 1)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'em_disputa')
+        self.assertIsNotNone(self.r.escalado_em)
+
+    def test_sem_envio_nao_ha_prazo(self):
+        # aceite mas o cliente ainda não enviou: nada de prazos (como antes)
+        self.assertEqual(self.dev.prazos_devolucao_correio(timezone.now() + timedelta(days=60)), 0)
+        r = self.capi.get(f'/app/reembolsos/{self.r.id}/')
+        self.assertIsNone(r.data['devolucao_envio'])
+        self.assertIsNone(r.data['prazo_resposta'])
+
+    def test_bendi_manda_devolver_de_novo_recomeca_o_prazo(self):
+        # a loja não confirmou → Bendi; a Bendi decide "reembolsar quando a loja receber": prazo novo, não volta logo à Bendi
+        self._acao(transportadora_id=self.dhl.id, codigos=['A9'])
+        depois = timezone.now() + timedelta(days=10, minutes=5)
+        self.assertEqual(self.dev.prazos_devolucao_correio(depois), 1)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'em_disputa')
+        self.dev.admin_decidir(self.r, self.dono, 'reembolsar', valor=Decimal('1000'), devolver_produto=True)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'aguarda_produto')
+        self.assertGreater(self.r.prazo_resposta, timezone.now() + timedelta(days=9))
+        self.assertEqual(self.dev.prazos_devolucao_correio(), 0)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.estado, 'aguarda_produto')

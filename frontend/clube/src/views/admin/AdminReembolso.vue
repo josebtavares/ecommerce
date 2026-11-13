@@ -109,6 +109,8 @@
           </div>
         </section>
 
+        <DevolucaoPeloCorreio :reembolso="r" papel="admin" />
+
         <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
           <p class="text-xs font-bold uppercase tracking-wider mb-3 text-zinc-500">Estado</p>
           <ReembolsoLinhaTempo :reembolso="r" papel="admin" />
@@ -130,6 +132,7 @@ import { ATIVOS, dataHora, devolucaoLoja } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
+import DevolucaoPeloCorreio from '@/components/reembolsos/DevolucaoPeloCorreio.vue'
 import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 
