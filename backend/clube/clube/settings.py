@@ -228,6 +228,12 @@ VINTI4_POS_AUT_CODE = os.environ.get('VINTI4_POS_AUT_CODE', '')
 VINTI4_MERCHANT_ID  = os.environ.get('VINTI4_MERCHANT_ID', '')
 # API de estado (Portal do Comerciante): confirma as transacções sem resposta ao fim de 8 minutos
 VINTI4_ESTADO_URL   = os.environ.get('VINTI4_ESTADO_URL', 'https://comerciante.teste.sisp.cv/pos/transaction-status')
+# o servidor de TESTE da API de estado tem um certificado auto-assinado (CN entidadeservico.teste.sisp.cv; a SISP
+# disse para o ignorar no teste): em vez de desligar a verificação, fixa-se a impressão digital SHA-256 dele —
+# só para *.teste.sisp.cv (pagamentos/vinti4._sessao_estado). Produção: verificação normal pela CA.
+VINTI4_ESTADO_CERT_SHA256 = os.environ.get(
+    'VINTI4_ESTADO_CERT_SHA256',
+    'E1:3C:1D:C8:ED:FF:20:13:CB:D6:C3:5D:E3:9E:2F:94:DD:15:71:6E:96:B4:DA:BF:C0:7E:00:C7:8E:BC:1B:22')
 VINTI4_PORTAL_ID    = os.environ.get('VINTI4_PORTAL_ID', '')
 VINTI4_PORTAL_PASSWORD = os.environ.get('VINTI4_PORTAL_PASSWORD', '')
 # endereço público desta API (a SISP manda a resposta para <isto>/app/pagamento/vinti4/resposta/), ex.: https://api.e-bendi.cv

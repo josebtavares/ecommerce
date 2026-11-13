@@ -28,9 +28,10 @@ import string
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import requests
+from requests.adapters import HTTPAdapter
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -481,6 +482,35 @@ def processar_resposta(d):
 
 # ── API de estado (Plan Test 38–41) ────────────────────────────
 
+class _CertificadoFixo(HTTPAdapter):
+    """Aceita o servidor só se o certificado tiver esta impressão digital SHA-256 (urllib3 assert_fingerprint).
+    Substitui a verificação pela CA — que falha num certificado auto-assinado — por uma comparação exacta."""
+
+    def __init__(self, impressao):
+        self._impressao = impressao
+        super().__init__()
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs['assert_fingerprint'] = self._impressao
+        super().init_poolmanager(*args, **kwargs)
+
+    def send(self, request, **kwargs):
+        kwargs['verify'] = False        # a verificação passa a ser a impressão digital acima (não fica desligada)
+        return super().send(request, **kwargs)
+
+
+def _sessao_estado():
+    """Sessão para a API de estado. No servidor de TESTE da SISP (*.teste.sisp.cv, certificado auto-assinado) o
+    certificado tem de ter a impressão digital VINTI4_ESTADO_CERT_SHA256; em qualquer outro servidor (produção),
+    verificação normal pela CA."""
+    sessao = requests.Session()
+    host = (urlsplit(settings.VINTI4_ESTADO_URL).hostname or '').lower()
+    impressao = re.sub(r'[^0-9a-f]', '', (settings.VINTI4_ESTADO_CERT_SHA256 or '').lower())
+    if host.endswith('.teste.sisp.cv') and len(impressao) == 64:
+        sessao.mount('https://', _CertificadoFixo(impressao))
+    return sessao
+
+
 def consultar_estado(tx):
     """Pergunta à SISP se a transacção foi paga → 'paga' | 'nao_paga' | None (sem API, sem resposta ou recusada)."""
     return consultar(tx)[0]
@@ -498,8 +528,9 @@ def consultar(tx):
         return None, None
     try:
         cred = _credenciais_da(tx)
-        resp = requests.post(settings.VINTI4_ESTADO_URL, auth=(portal, password), timeout=15,
-                             json={'posID': cred.pos_id, 'posAuthCode': cred.chave, 'merchantRef': tx.ref})
+        with _sessao_estado() as sessao:
+            resp = sessao.post(settings.VINTI4_ESTADO_URL, auth=(portal, password), timeout=15,
+                               json={'posID': cred.pos_id, 'posAuthCode': cred.chave, 'merchantRef': tx.ref})
         corpo = resp.json()
     except (ErroPagamento, requests.RequestException, ValueError) as e:
         log.warning('vinti4: API de estado sem resposta para %s: %s', tx.ref, type(e).__name__)
