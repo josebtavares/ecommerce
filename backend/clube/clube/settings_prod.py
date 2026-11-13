@@ -154,16 +154,8 @@ else:
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-# ══════════════════════════════════════════════════════════════
-# SENTRY — monitorização de erros em produção
-# ══════════════════════════════════════════════════════════════
-import sentry_sdk
-
-sentry_sdk.init(
-    dsn=os.environ.get('SENTRY_DSN', ''),
-    traces_sample_rate=0.1,
-    send_default_pii=False,
-)
+# SENTRY: configurado em clube/sentry.py (chamado no fim do settings.py) — aqui não se volta a iniciar, senão
+# perdiam-se os filtros de privacidade (variáveis locais, nomes sensíveis, emails).
 
 # ══════════════════════════════════════════════════════════════
 # HTTPS — Enforcement em produção
