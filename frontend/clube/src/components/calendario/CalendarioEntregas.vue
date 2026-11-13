@@ -126,7 +126,10 @@
               {{ e.tipo_entrega === 'entrega' ? (e.morada || 'Entrega') : 'Levantamento na loja' }}
             </p>
             <p class="text-xs text-zinc-500 mt-0.5 truncate">{{ e.itens }}</p>
-            <p v-if="e.entrega" class="text-xs text-zinc-400 mt-1">
+            <p v-if="e.envio" class="text-xs text-sky-300 mt-1">
+              <font-awesome-icon :icon="['fas', 'box']" class="mr-1" />Envio por transportadora{{ e.entrega ? ' · ' + ESTADO_ENTREGA[e.entrega.status] : ' · por enviar' }}
+            </p>
+            <p v-else-if="e.entrega" class="text-xs text-zinc-400 mt-1">
               {{ ESTADO_ENTREGA[e.entrega.status] }}{{ e.entrega.condutor_nome ? ' · ' + e.entrega.condutor_nome : ' · sem condutor' }}
             </p>
             <p v-else-if="e.tipo_entrega === 'entrega'" class="text-xs text-amber-400 mt-1">Sem condutor atribuído</p>
@@ -186,13 +189,19 @@
           </div>
           <div class="flex justify-between gap-3"><dt class="text-zinc-500">Encomenda</dt>
             <dd><span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', corEstado(detalhe.status)]">{{ detalhe.status }}</span></dd></div>
-          <div v-if="detalhe.entrega" class="flex justify-between gap-3"><dt class="text-zinc-500">Entrega</dt>
+          <div v-if="detalhe.envio" class="flex justify-between gap-3"><dt class="text-zinc-500">Entrega</dt>
+            <dd class="text-sky-300 text-right">Envio por transportadora{{ detalhe.entrega ? ' · ' + ESTADO_ENTREGA[detalhe.entrega.status] : '' }}</dd></div>
+          <div v-else-if="detalhe.entrega" class="flex justify-between gap-3"><dt class="text-zinc-500">Entrega</dt>
             <dd class="text-zinc-200 text-right">{{ ESTADO_ENTREGA[detalhe.entrega.status] }} · {{ detalhe.entrega.condutor_nome || 'sem condutor' }}</dd></div>
         </dl>
 
         <!-- Acções -->
         <div class="mt-5 space-y-2">
-          <template v-if="detalhe.entrega && ['atribuido', 'a_caminho'].includes(detalhe.entrega.status) && (!isCondutor || detalhe.entrega.condutor_id)">
+          <!-- envio por transportadora: envia-se com o código nas Encomendas -->
+          <p v-if="detalhe.envio" class="text-xs text-zinc-400">
+            <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />Envio por transportadora: o código de rastreio e o estado gerem-se em Encomendas.
+          </p>
+          <template v-if="!detalhe.envio && detalhe.entrega && ['atribuido', 'a_caminho'].includes(detalhe.entrega.status) && (!isCondutor || detalhe.entrega.condutor_id)">
             <div class="flex flex-wrap gap-2">
               <button v-if="detalhe.entrega.status === 'atribuido'" type="button" @click="mudarEntrega('a_caminho')" :disabled="aGuardar"
                 class="px-3 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-xs font-semibold">
@@ -247,7 +256,7 @@ import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 const VISTAS = [{ key: 'dia', label: 'Dia' }, { key: 'semana', label: 'Semana' }, { key: 'mes', label: 'Mês' }, { key: 'ano', label: 'Ano' }]
-const ESTADO_ENTREGA = { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada' }
+const ESTADO_ENTREGA = { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada', devolvida: 'Devolvida' }
 
 // datas como 'AAAA-MM-DD' (dia no fuso da plataforma, vindo da API) — contas em UTC para não mudar de dia
 const D = s => new Date(s + 'T00:00:00Z')
@@ -367,7 +376,7 @@ export default {
       return 'bg-red-500/80 text-white hover:bg-red-500'
     },
     podeAtribuir (e) {
-      return e.tipo_entrega === 'entrega' && !e.transferencia_por_confirmar && ['pago', 'preparando', 'enviado'].includes(e.status) &&
+      return e.tipo_entrega === 'entrega' && !e.envio && !e.transferencia_por_confirmar && ['pago', 'preparando', 'enviado'].includes(e.status) &&
         (!e.entrega || ['atribuido', 'a_caminho', 'falhou'].includes(e.entrega.status))
     },
 

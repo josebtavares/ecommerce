@@ -57,7 +57,7 @@ def do_dia(loja, dia, condutor=None):
         x['cobrado'] = r['cob'] or Decimal('0.00')
 
     if dia == hoje:
-        em_curso = Entrega.objects.filter(encomenda__loja=loja, status__in=ENTREGA_EM_CURSO).filter(
+        em_curso = Entrega.objects.filter(encomenda__loja=loja, tipo='condutor', status__in=ENTREGA_EM_CURSO).filter(
             Q(encomenda__agendada_para__isnull=True) | Q(encomenda__agendada_para__lt=fim))
         if condutor:
             em_curso = em_curso.filter(condutor=condutor)

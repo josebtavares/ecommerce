@@ -79,8 +79,15 @@
         <div v-if="tipoEntrega === 'entrega'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Opção de entrega</h2>
           <div v-if="opcoesEntrega.length === 0" class="text-zinc-500 text-sm">Sem opções disponíveis.</div>
+          <div v-else-if="opcoesVisiveis.length === 0 && !concelhoEntrega" class="text-zinc-500 text-sm" data-teste="checkout-escolher-concelho">
+            Escolhe o concelho na morada de entrega para veres as opções para a tua ilha.
+          </div>
+          <div v-else-if="opcoesVisiveis.length === 0" class="text-amber-300 text-sm" data-teste="checkout-sem-opcao-ilha">
+            Esta loja não entrega em {{ ilhaEntrega }}.{{ loja?.levantamento_ativo ? ' Podes levantar na loja.' : '' }}
+          </div>
           <div v-else class="space-y-3">
-            <button v-for="opcao in opcoesEntrega" :key="opcao.id"
+            <p v-if="!concelhoEntrega" class="text-xs text-zinc-500">Escolhe o concelho na morada para veres todas as opções para a tua ilha.</p>
+            <button v-for="opcao in opcoesVisiveis" :key="opcao.id" :data-teste="`checkout-opcao-${opcao.id}`"
               @click="opcaoEntregaId = opcao.id"
               :class="['w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between text-left',
                        opcaoEntregaId === opcao.id ? 'border-red-500 bg-red-500/10' : 'border-zinc-700 hover:border-zinc-600']">
@@ -91,6 +98,9 @@
                 </div>
                 <div>
                   <p class="text-sm font-semibold text-zinc-200">{{ opcao.nome }}</p>
+                  <p v-if="opcao.tipo === 'envio'" class="text-xs text-sky-300">
+                    <font-awesome-icon :icon="['fas', 'box']" class="mr-1" />Envio por {{ opcao.transportadora_nome }} · com código de rastreio
+                  </p>
                   <p v-if="opcao.tempo_estimado" class="text-xs text-zinc-500">{{ opcao.tempo_estimado }}</p>
                 </div>
               </div>
@@ -104,6 +114,11 @@
         <!-- MORADA -->
         <div v-if="tipoEntrega === 'entrega'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Morada de entrega</h2>
+          <label class="block mb-3">
+            <span class="text-xs text-zinc-500 mb-1 block">Concelho *</span>
+            <SeletorConcelho v-model="concelhoEntrega" data-teste="checkout-concelho"
+              classe-campo="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
+          </label>
           <textarea v-model="moradaEntrega" rows="3"
             placeholder="Rua, número, andar, código postal, cidade..."
             class="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
@@ -118,7 +133,7 @@
         </div>
 
         <!-- QUANDO (o cliente escolhe dia e hora, se a loja deixar) -->
-        <EscolherHora v-if="loja?.agendamento?.ativo && tipoEntrega && !(lojaFechada && !aceitaAgendar)"
+        <EscolherHora v-if="loja?.agendamento?.ativo && tipoEntrega && !eEnvio && !(lojaFechada && !aceitaAgendar)"
           ref="escolherHora" v-model="agendarPara" :loja-id="lojaId" :tipo-entrega="tipoEntrega"
           :texto-asap="lojaFechada ? `Quando a loja abrir — ${quandoAbre(loja.horario)}` : 'Assim que a loja preparar'" />
 
@@ -143,14 +158,18 @@
           </div>
 
           <!-- Sem métodos -->
-          <div v-else-if="metodosPagamento.length === 0"
+          <div v-else-if="metodosVisiveis.length === 0"
                class="text-center py-6 text-zinc-500 text-sm border border-dashed border-zinc-700 rounded-xl">
-            Esta loja não tem métodos de pagamento configurados.
+            {{ eEnvio ? 'O envio só aceita pagamento antecipado e esta loja não tem cartão nem transferência.'
+                      : 'Esta loja não tem métodos de pagamento configurados.' }}
           </div>
 
           <!-- Lista de métodos -->
           <div v-else class="space-y-3">
-            <button v-for="metodo in metodosPagamento" :key="metodo.tipo"
+            <p v-if="eEnvio && metodosVisiveis.length < metodosPagamento.length" class="text-xs text-zinc-500" data-teste="checkout-envio-sem-dinheiro">
+              <font-awesome-icon :icon="['fas', 'circle-info']" class="mr-1" />O envio por transportadora paga-se antes: o dinheiro na entrega não está disponível.
+            </p>
+            <button v-for="metodo in metodosVisiveis" :key="metodo.tipo"
               @click="metodoPagamento = metodo.tipo"
               :class="['w-full p-4 rounded-xl border-2 transition-all flex items-center gap-3 text-left',
                        metodoPagamento === metodo.tipo ? 'border-red-500 bg-red-500/10' : 'border-zinc-700 hover:border-zinc-600']">
@@ -411,7 +430,8 @@ import { porConfirmar } from '@/services/confirmarEmail'
 import { LIMITE_NIF_CLIENTE } from '@/utils/fiscal'
 import CampoLocalizacao from '@/components/forms/CampoLocalizacao.vue'
 import MarcasCartao from '@/components/pagamento/MarcasCartao.vue'
-import { localizacaoCompleta, localizacaoDe } from '@/utils/geografia'
+import { ilhaDoConcelho, localizacaoCompleta, localizacaoDe } from '@/utils/geografia'
+import SeletorConcelho from '@/components/forms/SeletorConcelho.vue'
 
 // mapa de rótulos e descrições para cada tipo de método (o ícone vem de utils/icones.js)
 const METODO_INFO = {
@@ -431,7 +451,15 @@ const METODOS_ONLINE = ['cartao', 'mobile_money', 'mbway', 'flutterwave', 'strip
 export default {
   name: 'CheckoutPage',
   mixins: [temaPainel],
-  components: { BotaoTema, CampoLocalizacao, EscolherHora, LojaVendedor, MarcasCartao, SiteRodape },
+  components: { BotaoTema, CampoLocalizacao, EscolherHora, LojaVendedor, MarcasCartao, SeletorConcelho, SiteRodape },
+
+  watch: {
+    concelhoEntrega () { this.escolherOpcao() },
+    // envio escolhido com "Dinheiro" marcado → passa para o primeiro que serve
+    metodosVisiveis (lista) {
+      if (lista.length && !lista.some(m => m.tipo === this.metodoPagamento)) this.metodoPagamento = lista[0].tipo
+    },
+  },
 
   setup () {
     const { loading: loadingConfirmar, wrap } = useAsyncAction()
@@ -452,6 +480,8 @@ export default {
       opcaoEntregaId: null,
       moradaEntrega:  user.morada || '',
       moradaPerfil:   user.morada || '',
+      // concelho da morada de entrega → a ilha → as opções que servem lá (backend utils/envios.validar_checkout)
+      concelhoEntrega: (user.pais || 'CV') === 'CV' ? (user.concelho || '') : '',
       notas:          '',
       metodoPagamento: '',
       erro: '',
@@ -476,7 +506,12 @@ export default {
 
   computed: {
     lojaId ()           { return this.$route.params.lojaId },
-    opcaoSelecionada () { return this.opcoesEntrega.find(o => o.id === this.opcaoEntregaId) || null },
+    ilhaEntrega ()      { return ilhaDoConcelho(this.concelhoEntrega) },
+    // sem concelho ainda: só as que servem todas as ilhas (as outras aparecem quando o escolher)
+    opcoesVisiveis ()   { return this.opcoesEntrega.filter(o => !(o.ilhas || []).length || (o.ilhas || []).includes(this.ilhaEntrega)) },
+    opcaoSelecionada () { return this.opcoesVisiveis.find(o => o.id === this.opcaoEntregaId) || null },
+    eEnvio ()           { return this.tipoEntrega === 'entrega' && this.opcaoSelecionada?.tipo === 'envio' },
+    metodosVisiveis ()  { return this.eEnvio ? this.metodosPagamento.filter(m => m.tipo !== 'dinheiro') : this.metodosPagamento },
     subtotal () {
       return this.itens.reduce((s, i) => s + parseFloat(i.preco_unitario ?? i.produto?.preco ?? 0) * i.quantidade, 0)
     },
@@ -520,6 +555,8 @@ export default {
       if (this.faltaDadosCartao) return false
       if (this.nifInvalido) return false             // só um NIF mal escrito; sem NIF passa sempre
       if (this.tipoEntrega === 'entrega') {
+        if (!this.concelhoEntrega || !this.opcaoSelecionada) return false
+        if (!this.metodosVisiveis.some(m => m.tipo === this.metodoPagamento)) return false
         if (!this.opcaoEntregaId) return false
         if (!this.moradaEntrega.trim()) return false
       }
@@ -559,6 +596,7 @@ export default {
         const { data } = await api.get('/app/utilizador/me/')
         this.perfilTelefone = data.telefone || ''
         this.perfilLocalizacao = localizacaoDe(data)
+        if (!this.concelhoEntrega && (data.pais || 'CV') === 'CV' && data.concelho) this.concelhoEntrega = data.concelho
         if (!localizacaoCompleta(this.localizacao)) this.localizacao = localizacaoDe(data)
         // dados de faturação actuais; não mexe no que a pessoa já escreveu
         const f = { nif: data.nif || '', nome_fiscal: data.nome_fiscal || '', morada_fiscal: data.morada_fiscal || '' }
@@ -585,13 +623,15 @@ export default {
       try {
         const { data } = await api.get(`/app/loja/${this.lojaId}/entrega/opcoes/`)
         this.opcoesEntrega = data.results || data
-        if (this.opcoesEntrega.length > 0) {
-          const maisBara = this.opcoesEntrega.reduce((a, b) =>
-            parseFloat(a.preco) <= parseFloat(b.preco) ? a : b
-          )
-          this.opcaoEntregaId = maisBara.id
-        }
+        this.escolherOpcao()
       } catch (e) { console.error(e) }
+    },
+
+    // a mais barata das que servem a ilha (ao abrir e quando o concelho muda)
+    escolherOpcao () {
+      if (this.opcaoSelecionada) return
+      const v = this.opcoesVisiveis
+      this.opcaoEntregaId = v.length ? v.reduce((a, b) => parseFloat(a.preco) <= parseFloat(b.preco) ? a : b).id : null
     },
 
     async fetchMetodosPagamento () {
@@ -663,6 +703,8 @@ export default {
         const payload = {
           tipo_entrega:   this.tipoEntrega,
           morada_entrega: this.tipoEntrega === 'entrega' ? this.moradaEntrega : '',
+          concelho_entrega: this.tipoEntrega === 'entrega' ? this.concelhoEntrega : '',
+          metodo_pagamento: this.metodoPagamento,
           notas:          this.notas,
           aceita_termos:  this.aceitaTermos,
         }

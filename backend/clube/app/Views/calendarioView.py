@@ -72,8 +72,11 @@ def _item(e, tz):
         'notas':          e.notas,
         'itens':          ', '.join(f'{i.quantidade}× {i.produto.nome if i.produto else "Produto removido"}'
                                     for i in e.itens.all()),
+        # envio por transportadora (utils/envios.py): sem condutor — o calendário não oferece atribuir/entregar
+        'envio':          bool((entrega and entrega.tipo == 'envio') or (e.opcao_entrega and e.opcao_entrega.tipo == 'envio')),
         'entrega': {
             'status':        entrega.status,
+            'tipo':          entrega.tipo,
             'condutor_id':   cond.id if cond else None,
             'condutor_nome': (cond.utilizador.nome or cond.utilizador.user.username) if cond else '',
         } if entrega else None,
@@ -119,7 +122,7 @@ def entrega_calendario(request, loja_id):
                        for e in qs.values('agendada_para', 'data_criacao'))
         return Response({**base, 'dias': dict(dias)})
 
-    qs = qs.select_related('comprador__user', 'entrega__condutor__utilizador__user').prefetch_related('itens__produto')
+    qs = qs.select_related('comprador__user', 'entrega__condutor__utilizador__user', 'opcao_entrega').prefetch_related('itens__produto')
     lista = [_item(e, tz) for e in qs[:MAX_ITENS + 1]]
     lista.sort(key=lambda x: (x['data'], x['hora'], x['encomenda_id']))
     return Response({**base, 'itens': lista[:MAX_ITENS], 'truncado': len(lista) > MAX_ITENS})

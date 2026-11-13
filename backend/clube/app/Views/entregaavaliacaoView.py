@@ -231,6 +231,10 @@ def entrega_criar(request, loja_id, encomenda_id):
                         status=status.HTTP_400_BAD_REQUEST)
     if transferencia_por_confirmar(encomenda):
         return Response({'detail': MSG_TRANSFERENCIA}, status=status.HTTP_400_BAD_REQUEST)
+    from ..utils import envios
+    if envios.e_envio(encomenda):
+        return Response({'detail': 'O cliente escolheu envio por transportadora: usa "Enviar por transportadora".'},
+                        status=status.HTTP_400_BAD_REQUEST)
  
     condutor = None
     if request.data.get('condutor_id'):
@@ -340,6 +344,9 @@ def entrega_get(request, loja_id, encomenda_id):
     entrega   = get_object_or_404(Entrega, encomenda=encomenda)
     if not _entrega_do_membro(membro, entrega):
         return Response({'detail': 'Esta entrega não é tua.'}, status=status.HTTP_403_FORBIDDEN)
+    if entrega.tipo == 'envio':
+        return Response({'detail': 'Esta encomenda foi enviada por transportadora: gere-a nas Encomendas.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     serializer = EntregaSerializer(entrega, context={'request': request})
     return Response(serializer.data)
 
@@ -558,8 +565,9 @@ def entrega_morada(request, loja_id, encomenda_id):
 
     encomenda = get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=encomenda_id, loja=loja)
     entrega   = get_object_or_404(Entrega, encomenda=encomenda)
-    if entrega.status != 'falhou' or encomenda.status != 'preparando':
-        return Response({'detail': 'Só se corrige a morada de uma entrega que falhou.'},
+    # devolvida: envio que a transportadora devolveu (utils/envios.py) — a morada pode ter sido a causa
+    if entrega.status not in ('falhou', 'devolvida') or encomenda.status != 'preparando':
+        return Response({'detail': 'Só se corrige a morada de uma entrega que falhou ou foi devolvida.'},
                         status=status.HTTP_400_BAD_REQUEST)
 
     morada = str(request.data.get('morada') or '').strip()
@@ -724,8 +732,9 @@ def entrega_list_loja(request, loja_id):
 
     # primeiro as por entregar, a mais urgente à frente; depois as terminadas, a mais recente à frente
     por_entregar = Q(status__in=['atribuido', 'a_caminho'])
+    # os envios por transportadora não têm condutor: vivem nas Encomendas (utils/envios.py)
     qs = Entrega.objects.filter(
-        encomenda__loja=loja
+        encomenda__loja=loja, tipo='condutor'
     ).select_related(
         'condutor__utilizador__user',
         'opcao_entrega',

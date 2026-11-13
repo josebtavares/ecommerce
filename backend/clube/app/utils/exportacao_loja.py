@@ -188,7 +188,9 @@ def escrever_zip(destino, exp):
             'excecoes_horario': [{'de': str(e.inicio), 'ate': str(e.fim), 'intervalos': e.intervalos, 'mensagem': e.mensagem}
                                  for e in ExcecaoHorario.objects.filter(loja=loja).order_by('inicio')],
             'opcoes_entrega': [{'nome': o.nome, 'preco': _v(o.preco), 'tempo': o.tempo_estimado, 'area': o.area_cobertura,
-                                'ativa': o.ativa} for o in OpcaoEntrega.objects.filter(loja=loja)],
+                                'ativa': o.ativa, 'tipo': o.tipo, 'ilhas': o.ilhas,
+                                'transportadora': o.transportadora.nome if o.transportadora else o.transportadora_outra}
+                               for o in OpcaoEntrega.objects.filter(loja=loja).select_related('transportadora')],
             'categorias': [{'nome': c.nome, 'ativa': c.ativo} for c in loja.categorias.order_by('ordem', 'nome')],
         }
         zf.writestr('loja.json', json.dumps(dados, ensure_ascii=False, indent=2))

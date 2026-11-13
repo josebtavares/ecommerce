@@ -82,10 +82,18 @@
               </button>
             </div>
           </div>
-          <div>
-            <label class="text-xs text-zinc-500 mb-1.5 block">Localização</label>
-            <input v-model="form.localizacao" type="text" placeholder="ex: Lisboa, Portugal"
-              class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs text-zinc-500 mb-1.5 block">Concelho *</label>
+              <SeletorConcelho v-model="form.concelho"
+                classe-campo="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
+              <p class="text-[10px] text-zinc-600 mt-1">Diz em que ilha está a loja (para entregas e envios).</p>
+            </div>
+            <div>
+              <label class="text-xs text-zinc-500 mb-1.5 block">Localização</label>
+              <input v-model="form.localizacao" type="text" placeholder="ex: Plateau, Praia"
+                class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+            </div>
           </div>
         </div>
 
@@ -300,7 +308,7 @@
               <div class="flex items-center gap-3">
                 <div class="flex-1">
                   <label class="text-[10px] text-zinc-500 mb-1 block">Tempo estimado</label>
-                  <input v-model="op.tempo_estimado" type="text" placeholder="ex: 30-45 min"
+                  <input v-model="op.tempo_estimado" type="text" :placeholder="op.tipo === 'envio' ? 'ex: 2-5 dias úteis' : 'ex: 30-45 min'"
                     class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
                 </div>
                 <button @click="form.opcoes_entrega.splice(idx, 1)"
@@ -310,6 +318,7 @@
                   </svg>
                 </button>
               </div>
+              <CamposEnvio :opcao="op" :concelho-loja="form.concelho" @mudar="Object.assign(op, $event)" />
             </div>
             <div v-if="form.opcoes_entrega.length === 0"
                  class="text-center py-4 text-xs rounded-xl border border-dashed border-red-500/50 text-red-400/70 bg-red-500/5">
@@ -503,6 +512,8 @@ import { temaPainel } from '@/utils/tema'
 import BotaoTema from '@/components/BotaoTema.vue'
 import AvisoConfirmarEmail from '@/components/auth/AvisoConfirmarEmail.vue'
 import { EVENTO, utilizadorGuardado } from '@/services/confirmarEmail'
+import SeletorConcelho from '@/components/forms/SeletorConcelho.vue'
+import CamposEnvio from '@/components/entregas/CamposEnvio.vue'
 
 const TAG_STYLES = {
   'Versátil':  { background:'rgba(220,38,38,0.12)',  color:'#f87171', border:'1px solid rgba(220,38,38,0.25)'   },
@@ -520,7 +531,8 @@ const TAG_STYLES = {
 export default {
   name: 'CriarLoja',
   mixins: [temaPainel],
-  components: { BotaoTema, TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca, DadosFiscais, AvisoConfirmarEmail },
+  components: { BotaoTema, TemplateMiniPreview, TemplatePreviewFrame, EscolherCobranca, DadosFiscais, AvisoConfirmarEmail,
+                SeletorConcelho, CamposEnvio },
 
   data () {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -542,6 +554,7 @@ export default {
         descricao:          '',
         categoria:          '',
         localizacao:        '',
+        concelho:           '',
         logo:               null,
         banner:             null,
         cor_primaria:       '#dc2626',
@@ -627,12 +640,30 @@ export default {
     },
 
     podeAvancar () {
-      if (this.step === 1) return this.form.nome.trim() && this.form.categoria && dadosFiscaisValidos(this.fiscal)
+      if (this.step === 1) return this.form.nome.trim() && this.form.categoria && this.form.concelho && dadosFiscaisValidos(this.fiscal)
       if (this.step === 2) return true
       return false
     },
 
+    opcoesValidas () {
+      return this.form.opcoes_entrega.filter(o => o.nome.trim())
+    },
+
+    // envio por transportadora: transportadora + ilhas, e só com pagamento antecipado (backend utils/envios.py)
+    erroEnvio () {
+      if (!this.form.entrega_ativa) return null
+      const envios = this.opcoesValidas.filter(o => o.tipo === 'envio')
+      if (!envios.length) return null
+      if (envios.some(o => !o.transportadora_id && (o.transportadora_outra || '').trim().length < 2))
+        return 'Escolhe a transportadora de cada opção de envio.'
+      if (envios.some(o => !(o.ilhas || []).length)) return 'Escolhe as ilhas de cada opção de envio.'
+      if (!this.form.metodos_pagamento.some(m => m !== 'dinheiro'))
+        return 'O envio por transportadora só aceita pagamento antecipado: ativa também o cartão ou a transferência.'
+      return null
+    },
+
     podeCriar () {
+      if (this.erroEnvio) return false
       if (this.form.metodos_pagamento.length === 0) return false
       if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0) return false
       if (!this.form.entrega_ativa && !this.form.levantamento_ativo) return false
@@ -645,7 +676,7 @@ export default {
         return 'Com entrega ao domicílio activa tens de adicionar pelo menos uma opção de entrega.'
       if (!this.form.entrega_ativa && !this.form.levantamento_ativo)
         return 'Tens de activar pelo menos um tipo de serviço.'
-      return null
+      return this.erroEnvio
     },
   },
 
@@ -724,7 +755,8 @@ export default {
     },
 
     adicionarOpcao () {
-      this.form.opcoes_entrega.push({ nome: '', preco: 0, tempo_estimado: '' })
+      this.form.opcoes_entrega.push({ nome: '', preco: 0, tempo_estimado: '', tipo: 'local', transportadora_id: null,
+                                      transportadora_outra: '', ilhas: [] })
     },
 
     async submeter () {
@@ -737,6 +769,7 @@ export default {
         fd.append('descricao',          this.form.descricao)
         fd.append('categoria',          this.form.categoria)
         fd.append('localizacao',        this.form.localizacao)
+        fd.append('concelho',           this.form.concelho)
         fd.append('cor_primaria',       this.form.cor_primaria)
         fd.append('cor_secundaria',     this.form.cor_secundaria)
         fd.append('template_id',        this.form.template_id)
@@ -749,9 +782,7 @@ export default {
         if (this.form.banner) fd.append('banner', this.form.banner)
         this.form.metodos_pagamento.forEach(m => fd.append('metodos_pagamento', m))
         if (this.form.opcoes_entrega.length > 0) {
-          fd.append('opcoes_entrega', JSON.stringify(
-            this.form.opcoes_entrega.filter(o => o.nome.trim())
-          ))
+          fd.append('opcoes_entrega', JSON.stringify(this.opcoesValidas))
         }
         await api.post('/app/loja/criar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
         this.sucesso = true

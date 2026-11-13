@@ -38,13 +38,62 @@
       <div class="flex items-center justify-between text-xs">
         <span :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Tipo de entrega</span>
         <span :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
-          <font-awesome-icon :icon="['fas', detalhe.tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mr-1" />
-          {{ detalhe.tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}
+          <font-awesome-icon :icon="['fas', detalhe.e_envio ? 'box' : detalhe.tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mr-1" />
+          {{ detalhe.e_envio ? (detalhe.opcao_entrega_nome || 'Envio por transportadora') : detalhe.tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}
         </span>
+      </div>
+      <!-- envio por transportadora: a transportadora e o código de rastreio (backend utils/envios.py) -->
+      <div v-if="detalhe.envio" class="rounded-xl px-3 py-2.5 space-y-1.5 text-xs" data-teste="enc-envio"
+           :class="isDark ? 'bg-sky-500/10 border border-sky-500/25' : 'bg-sky-50 border border-sky-200'">
+        <p class="font-semibold" :class="isDark ? 'text-sky-200' : 'text-sky-800'">
+          {{ detalhe.envio.estado === 'devolvida' ? 'A transportadora devolveu a encomenda à loja'
+             : detalhe.envio.estado === 'entregue' ? 'Entregue' : 'Enviada por ' + detalhe.envio.transportadora }}
+        </p>
+        <div v-for="c in detalhe.envio.codigos" :key="c.codigo" class="flex items-center justify-between gap-2">
+          <span :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Código de rastreio</span>
+          <span class="flex items-center gap-2">
+            <span class="font-mono select-all" :class="isDark ? 'text-zinc-100' : 'text-zinc-800'">{{ c.codigo }}</span>
+            <a v-if="c.link" :href="c.link" target="_blank" rel="noopener noreferrer"
+               class="px-2 py-0.5 rounded-md font-semibold bg-red-600 text-white hover:bg-red-500">Seguir envio</a>
+          </span>
+        </div>
+        <p v-if="detalhe.envio.contacto" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
+          Contacto da transportadora: {{ detalhe.envio.contacto }}
+        </p>
+        <!-- a caminho: o cliente confirma que recebeu (conclui) ou avisa a loja que não recebeu -->
+        <template v-if="detalhe.envio.estado === 'a_caminho' && detalhe.status === 'enviado'">
+          <p v-if="detalhe.envio.nao_recebido_em" class="pt-1" :class="isDark ? 'text-amber-300' : 'text-amber-700'" data-teste="enc-nao-recebido">
+            Avisaste a loja de que não recebeste. Ela vai confirmar com a transportadora — podes falar com ela no chat da encomenda.
+          </p>
+          <button v-if="detalhe.envio.nao_recebido_em" type="button" @click="recebi" :disabled="aEnviarEnvio" data-teste="enc-recebi"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-40">
+            <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Afinal recebi
+          </button>
+          <div v-else-if="envioAcao === 'nao'" class="pt-1 space-y-2">
+            <input v-model="envioNota" type="text" maxlength="300" placeholder="O que se passa? (opcional)"
+                   :class="['w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-red-500',
+                            isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-800']" />
+            <div class="flex justify-end gap-2">
+              <button type="button" @click="envioAcao = ''" class="px-3 py-1.5 rounded-lg text-xs" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Voltar</button>
+              <button type="button" @click="naoRecebi" :disabled="aEnviarEnvio" data-teste="enc-nao-recebi-confirmar"
+                      class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-40">Avisar a loja</button>
+            </div>
+          </div>
+          <div v-else class="flex flex-wrap gap-2 pt-1">
+            <button type="button" @click="recebi" :disabled="aEnviarEnvio" data-teste="enc-recebi"
+                    class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-40">
+              <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Recebi a encomenda
+            </button>
+            <button type="button" @click="envioAcao = 'nao'" data-teste="enc-nao-recebi"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold" :class="isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-700'">
+              Não recebi
+            </button>
+          </div>
+        </template>
       </div>
       <div v-if="detalhe.morada_entrega" class="flex items-start justify-between text-xs gap-2">
         <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Morada</span>
-        <span class="text-right" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhe.morada_entrega }}</span>
+        <span class="text-right" :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">{{ detalhe.morada_entrega }}{{ detalhe.concelho_entrega ? ' · ' + nomeConcelho(detalhe.concelho_entrega) : '' }}</span>
       </div>
       <div v-if="detalhe.cliente_nif" class="flex items-start justify-between text-xs gap-2" data-teste="enc-meu-nif">
         <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Fatura com NIF</span>
@@ -132,6 +181,7 @@ import { ref } from 'vue'
 import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { formatarDinheiro } from '@/utils/dinheiro'
+import { nomeConcelho } from '@/utils/geografia'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { descarregarComprovativoEncomenda, urlFicheiro } from '@/utils/documentos'
 import { contactarLoja } from '@/services/chat'
@@ -150,6 +200,28 @@ const props = defineProps({
 const emit = defineEmits(['detalhe', 'atualizada', 'navegar'])
 
 function formatPrice (val) { return formatarDinheiro(val || 0) }
+
+// envio por transportadora: "Recebi" conclui a encomenda; "Não recebi" avisa a loja (backend utils/envios.py)
+const envioAcao = ref('')
+const envioNota = ref('')
+const aEnviarEnvio = ref(false)
+async function acaoEnvio (sufixo, corpo, ok) {
+  if (aEnviarEnvio.value) return
+  aEnviarEnvio.value = true
+  try {
+    await api.post(`/app/encomenda/${props.detalhe.id}/envio/${sufixo}/`, corpo)
+    envioAcao.value = ''
+    toast.success(ok)
+    emit('atualizada')
+  } catch (e) {
+    toast.error(e.response?.data?.detail || 'Não foi possível guardar.')
+  } finally { aEnviarEnvio.value = false }
+}
+function recebi () {
+  if (!confirm('Confirmas que recebeste a encomenda? Fica concluída.')) return
+  acaoEnvio('recebi', {}, 'Obrigado! A encomenda ficou concluída.')
+}
+function naoRecebi () { acaoEnvio('nao-recebi', { nota: envioNota.value }, 'A loja foi avisada.') }
 
 function falarSobreEncomenda () {
   emit('navegar')
