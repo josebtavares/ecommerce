@@ -34,7 +34,7 @@
       <div class="lg:col-span-2 space-y-6">
 
         <!-- TIPO DE ENTREGA -->
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
+        <div data-campo="tipo" :class="['bg-zinc-900 rounded-2xl border p-5', erroEm('tipo') ? 'border-red-500' : 'border-zinc-800']">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Como queres receber?</h2>
           <div class="grid grid-cols-2 gap-3">
             <button @click="tipoEntrega = 'entrega'" :disabled="!loja?.entrega_ativa"
@@ -76,17 +76,21 @@
         </div>
 
         <!-- OPÇÕES DE ENTREGA -->
-        <div v-if="tipoEntrega === 'entrega'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
+        <div v-if="tipoEntrega === 'entrega'" data-campo="opcao"
+             :class="['bg-zinc-900 rounded-2xl border p-5', erroEm('opcao') ? 'border-red-500' : 'border-zinc-800']">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Opção de entrega</h2>
+          <!-- primeiro o concelho: diz a ilha e as opções que chegam lá (backend utils/envios.validar_checkout) -->
+          <label class="block mb-4" data-campo="concelho">
+            <span class="text-xs mb-1 block" :class="erroEm('concelho') ? 'text-red-400' : 'text-zinc-500'">Concelho da entrega *</span>
+            <SeletorConcelho v-model="concelhoEntrega" data-teste="checkout-concelho"
+              :classe-campo="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition', erroEm('concelho') ? 'border-red-500' : 'border-zinc-700']" />
+          </label>
           <div v-if="opcoesEntrega.length === 0" class="text-zinc-500 text-sm">Sem opções disponíveis.</div>
-          <div v-else-if="opcoesVisiveis.length === 0 && !concelhoEntrega" class="text-zinc-500 text-sm" data-teste="checkout-escolher-concelho">
-            Escolhe o concelho na morada de entrega para veres as opções para a tua ilha.
-          </div>
           <div v-else-if="opcoesVisiveis.length === 0" class="text-amber-300 text-sm" data-teste="checkout-sem-opcao-ilha">
             Esta loja não entrega em {{ ilhaEntrega }}.{{ loja?.levantamento_ativo ? ' Podes levantar na loja.' : '' }}
           </div>
           <div v-else class="space-y-3">
-            <p v-if="!concelhoEntrega" class="text-xs text-zinc-500">Escolhe o concelho na morada para veres todas as opções para a tua ilha.</p>
+            <p v-if="!concelhoEntrega" class="text-xs text-amber-300" data-teste="checkout-escolher-concelho">Escolhe o concelho para vermos que opções chegam à tua ilha.</p>
             <button v-for="opcao in opcoesVisiveis" :key="opcao.id" :data-teste="`checkout-opcao-${opcao.id}`"
               @click="opcaoEntregaId = opcao.id"
               :class="['w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between text-left',
@@ -99,7 +103,7 @@
                 <div>
                   <p class="text-sm font-semibold text-zinc-200">{{ opcao.nome }}</p>
                   <p v-if="opcao.tipo === 'envio'" class="text-xs text-sky-300">
-                    <font-awesome-icon :icon="['fas', 'box']" class="mr-1" />Envio por {{ opcao.transportadora_nome }} · com código de rastreio
+                    <font-awesome-icon :icon="['fas', 'box']" class="mr-1" />Envio por {{ opcao.transportadora_nome }}
                   </p>
                   <p v-if="opcao.tempo_estimado" class="text-xs text-zinc-500">{{ opcao.tempo_estimado }}</p>
                 </div>
@@ -114,15 +118,9 @@
         <!-- MORADA -->
         <div v-if="tipoEntrega === 'entrega'" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Morada de entrega</h2>
-          <label class="block mb-3">
-            <span class="text-xs text-zinc-500 mb-1 block">Concelho *</span>
-            <SeletorConcelho v-model="concelhoEntrega" data-teste="checkout-concelho"
-              classe-campo="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
-          </label>
-          <textarea v-model="moradaEntrega" rows="3"
+          <textarea v-model="moradaEntrega" rows="3" data-campo="morada" data-teste="checkout-morada-entrega"
             placeholder="Rua, número, andar, código postal, cidade..."
-            class="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
-                   placeholder-zinc-500 focus:outline-none focus:border-red-500 transition resize-none"></textarea>
+            :class="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition resize-none', erroEm('morada') ? 'border-red-500' : 'border-zinc-700']"></textarea>
           <p v-if="moradaPerfil && moradaEntrega !== moradaPerfil" class="text-xs text-zinc-500 mt-2 flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -134,7 +132,7 @@
 
         <!-- QUANDO (o cliente escolhe dia e hora, se a loja deixar) -->
         <EscolherHora v-if="loja?.agendamento?.ativo && tipoEntrega && !eEnvio && !(lojaFechada && !aceitaAgendar)"
-          ref="escolherHora" v-model="agendarPara" :loja-id="lojaId" :tipo-entrega="tipoEntrega"
+          ref="escolherHora" data-campo="hora" v-model="agendarPara" :loja-id="lojaId" :tipo-entrega="tipoEntrega"
           :texto-asap="lojaFechada ? `Quando a loja abrir — ${quandoAbre(loja.horario)}` : 'Assim que a loja preparar'" />
 
         <!-- NOTAS -->
@@ -149,7 +147,7 @@
         </div>
 
         <!-- MÉTODO DE PAGAMENTO -->
-        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
+        <div data-campo="metodo" :class="['bg-zinc-900 rounded-2xl border p-5', erroEm('metodo') ? 'border-red-500' : 'border-zinc-800']">
           <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">Método de pagamento</h2>
 
           <!-- Loading métodos -->
@@ -207,13 +205,13 @@
             <div v-if="precisaTelefone || precisaMorada || precisaCidade" class="grid sm:grid-cols-2 gap-3" data-teste="checkout-dados-cliente">
               <p class="sm:col-span-2 text-xs text-zinc-500">Para pagar com cartão precisamos de completar o teu perfil (fica guardado).</p>
               <input v-if="precisaTelefone" v-model="telefone" type="tel" maxlength="30" inputmode="tel" autocomplete="tel"
-                placeholder="Telefone" data-teste="checkout-telefone"
-                class="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+                placeholder="Telefone" data-teste="checkout-telefone" data-campo="telefone"
+                :class="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition', erroEm('telefone') ? 'border-red-500' : 'border-zinc-700']" />
               <input v-if="precisaMorada" v-model="moradaCliente" maxlength="300" autocomplete="street-address"
-                placeholder="A tua morada" data-teste="checkout-morada"
-                :class="['w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition', precisaTelefone ? '' : 'sm:col-span-2']" />
-              <CampoLocalizacao v-if="precisaCidade" v-model="localizacao" :rotulos="false" class="sm:col-span-2"
-                classeCampo="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+                placeholder="A tua morada" data-teste="checkout-morada" data-campo="morada_cliente"
+                :class="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition', erroEm('morada_cliente') ? 'border-red-500' : 'border-zinc-700', precisaTelefone ? '' : 'sm:col-span-2']" />
+              <CampoLocalizacao v-if="precisaCidade" v-model="localizacao" :rotulos="false" class="sm:col-span-2" data-campo="cidade"
+                :classeCampo="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition', erroEm('cidade') ? 'border-red-500' : 'border-zinc-700'].join(' ')" />
             </div>
           </div>
         </div>
@@ -237,7 +235,7 @@
           <div v-if="querFaturaNif" class="grid sm:grid-cols-2 gap-3 mt-4">
             <div>
               <input v-model="nif" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="NIF (9 dígitos)"
-                data-teste="checkout-nif"
+                data-teste="checkout-nif" data-campo="nif"
                 :class="['w-full px-4 py-3 bg-zinc-800 border rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition',
                          nifInvalido ? 'border-red-500' : 'border-zinc-700']" />
               <p v-if="nifInvalido" class="text-[11px] text-red-400 mt-1">O NIF tem 9 dígitos — corrige-o ou apaga-o.</p>
@@ -327,30 +325,17 @@
             </div>
           </div>
 
-          <!-- Validações -->
-          <div v-if="!podeConfirmar && tipoEntrega" class="mt-3 space-y-1">
-            <p v-if="tipoEntrega === 'entrega' && !opcaoEntregaId" class="text-xs text-yellow-500 flex items-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Selecciona uma opção de entrega
-            </p>
-            <p v-if="faltaDadosCartao" class="text-xs text-yellow-500" data-teste="falta-dados-cartao">
-              Para pagar com cartão, completa o telefone, a morada e o concelho (ou a cidade)
-            </p>
-            <p v-if="tipoEntrega === 'entrega' && !moradaEntrega.trim()" class="text-xs text-yellow-500 flex items-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Introduz a morada de entrega
-            </p>
-            <p v-if="nifInvalido" class="text-xs text-yellow-500" data-teste="nif-invalido">
-              O NIF tem 9 dígitos — corrige-o ou apaga-o
-            </p>
-          </div>
+          <!-- O que falta (computed faltas): sempre visível; ao carregar no botão cinzento também vai num toast -->
+          <ul v-if="faltas.length && tipoEntrega && itens.length" class="mt-3 space-y-1" data-teste="checkout-faltas">
+            <li v-for="f in faltas" :key="f.campo">
+              <button type="button" @click="irPara(f.campo)" class="text-xs text-yellow-500 hover:text-yellow-400 flex items-center gap-1 text-left">
+                <font-awesome-icon :icon="['fas', 'circle-exclamation']" class="w-3 h-3 flex-shrink-0" />{{ f.texto }}
+              </button>
+            </li>
+          </ul>
 
           <!-- Loja fechada (horário) -->
-          <div v-if="lojaFechada" role="status"
+          <div v-if="lojaFechada" role="status" data-campo="horario"
             :class="['mt-4 rounded-xl px-3 py-2.5 text-xs leading-relaxed border',
                      aceitaAgendar ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-red-500/10 border-red-500/30 text-red-300']">
             <p class="font-bold mb-0.5">A loja está fechada</p>
@@ -372,7 +357,9 @@
           </div>
 
           <!-- Aceitar os termos (fica registado na encomenda: termos_aceites_em) -->
-          <label class="mt-4 flex items-start gap-2.5 text-xs text-zinc-400 leading-relaxed cursor-pointer" data-teste="aceitar-termos">
+          <label data-teste="aceitar-termos" data-campo="termos"
+                 :class="['mt-4 flex items-start gap-2.5 text-xs leading-relaxed cursor-pointer rounded-lg',
+                          erroEm('termos') ? 'text-red-300 ring-1 ring-red-500 p-2 -mx-2' : 'text-zinc-400']">
             <input v-model="aceitaTermos" type="checkbox" class="mt-0.5 w-4 h-4 flex-shrink-0 accent-red-600" />
             <span>
               Li e aceito os <router-link to="/termos" target="_blank" class="font-semibold text-red-400 hover:underline">Termos de Serviço</router-link>
@@ -384,8 +371,8 @@
           <p v-if="erro" class="text-xs text-red-400 mt-3 bg-red-500/10 rounded-lg px-3 py-2">{{ erro }}</p>
 
           <!-- Botão confirmar -->
-          <button @click="confirmarEncomenda"
-            :disabled="loadingConfirmar || !podeConfirmar"
+          <button @click="clicarConfirmar" data-teste="checkout-confirmar" :aria-disabled="!podeConfirmar"
+            :disabled="loadingConfirmar"
             :class="['w-full mt-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2',
                      !podeConfirmar ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' :
                      loadingConfirmar ? 'bg-red-700 cursor-not-allowed opacity-70 text-white' :
@@ -415,6 +402,7 @@
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
+import { toast } from 'vue3-toastify'
 import api from '@/services/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
@@ -473,6 +461,7 @@ export default {
       loadingMetodos: false,
       loja:           null,
       aceitaTermos:   false,
+      tentou:         false,      // carregou em Confirmar com coisas por preencher → campos a vermelho
       itens:          [],
       opcoesEntrega:  [],
       metodosPagamento: [],   // carregados da API
@@ -507,8 +496,11 @@ export default {
   computed: {
     lojaId ()           { return this.$route.params.lojaId },
     ilhaEntrega ()      { return ilhaDoConcelho(this.concelhoEntrega) },
-    // sem concelho ainda: só as que servem todas as ilhas (as outras aparecem quando o escolher)
-    opcoesVisiveis ()   { return this.opcoesEntrega.filter(o => !(o.ilhas || []).length || (o.ilhas || []).includes(this.ilhaEntrega)) },
+    // sem concelho ainda: todas (confirmar pede o concelho); com concelho, só as que chegam a essa ilha
+    opcoesVisiveis ()   {
+      if (!this.ilhaEntrega) return this.opcoesEntrega
+      return this.opcoesEntrega.filter(o => !(o.ilhas || []).length || o.ilhas.includes(this.ilhaEntrega))
+    },
     opcaoSelecionada () { return this.opcoesVisiveis.find(o => o.id === this.opcaoEntregaId) || null },
     eEnvio ()           { return this.tipoEntrega === 'entrega' && this.opcaoSelecionada?.tipo === 'envio' },
     metodosVisiveis ()  { return this.eEnvio ? this.metodosPagamento.filter(m => m.tipo !== 'dinheiro') : this.metodosPagamento },
@@ -547,21 +539,30 @@ export default {
       const [, m, dia] = d.split('-')
       return `${dia}/${m} às ${h}`
     },
-    podeConfirmar () {
-      if (this.lojaFechada && !this.aceitaAgendar) return false
-      if (this.agendarPara === '') return false            // escolheu "dia e hora" mas ainda não a hora
-      if (!this.tipoEntrega || this.itens.length === 0 || !this.metodoPagamento) return false
-      if (!this.aceitaTermos) return false
-      if (this.faltaDadosCartao) return false
-      if (this.nifInvalido) return false             // só um NIF mal escrito; sem NIF passa sempre
+    // o que falta para confirmar, pela ordem da página — campo = data-campo do elemento a marcar/mostrar
+    faltas () {
+      const f = []
+      const add = (campo, texto) => f.push({ campo, texto })
+      if (this.lojaFechada && !this.aceitaAgendar) add('horario', 'A loja está fechada — só aceita encomendas dentro do horário')
+      if (!this.tipoEntrega) add('tipo', 'Escolhe como queres receber')
       if (this.tipoEntrega === 'entrega') {
-        if (!this.concelhoEntrega || !this.opcaoSelecionada) return false
-        if (!this.metodosVisiveis.some(m => m.tipo === this.metodoPagamento)) return false
-        if (!this.opcaoEntregaId) return false
-        if (!this.moradaEntrega.trim()) return false
+        if (!this.concelhoEntrega) add('concelho', 'Escolhe o concelho da entrega')
+        else if (!this.opcoesVisiveis.length) add('opcao', `Esta loja não entrega em ${this.ilhaEntrega}`)
+        if (this.concelhoEntrega && this.opcoesVisiveis.length && !this.opcaoSelecionada) add('opcao', 'Escolhe uma opção de entrega')
+        if (!this.moradaEntrega.trim()) add('morada', 'Escreve a morada de entrega')
       }
-      return true
+      if (this.agendarPara === '') add('hora', 'Escolhe a hora da entrega')
+      if (!this.metodoPagamento || (this.tipoEntrega === 'entrega' && !this.metodosVisiveis.some(m => m.tipo === this.metodoPagamento))) {
+        add('metodo', 'Escolhe o método de pagamento')
+      }
+      if (this.precisaTelefone && !this.telefone.trim()) add('telefone', 'Para pagar com cartão, escreve o teu telefone')
+      if (this.precisaMorada && !this.moradaCliente.trim()) add('morada_cliente', 'Para pagar com cartão, escreve a tua morada')
+      if (this.precisaCidade && !localizacaoCompleta(this.localizacao)) add('cidade', 'Para pagar com cartão, escolhe o concelho (ou a cidade)')
+      if (this.nifInvalido) add('nif', 'O NIF tem 9 dígitos — corrige-o ou apaga-o')
+      if (!this.aceitaTermos) add('termos', 'Aceita os Termos de Serviço e a Política de devoluções')
+      return f
     },
+    podeConfirmar () { return this.itens.length > 0 && this.faltas.length === 0 },
   },
 
   async created () {
@@ -694,6 +695,29 @@ export default {
       }
     },
 
+    erroEm (campo) { return this.tentou && this.faltas.some(f => f.campo === campo) },
+    // leva o cliente ao campo (e foca-o se der)
+    irPara (campo) {
+      const el = document.querySelector(`[data-campo="${campo}"]`)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const foco = el.matches('input, select, textarea') ? el : el.querySelector('input, select, textarea')
+      if (foco) setTimeout(() => foco.focus({ preventScroll: true }), 350)
+    },
+    // botão cinzento continua clicável: diz o que falta em vez de não fazer nada
+    clicarConfirmar () {
+      if (this.loadingConfirmar) return
+      if (!this.podeConfirmar) {
+        this.tentou = true
+        if (!this.faltas.length) return
+        const [primeira, ...resto] = this.faltas
+        toast.warning(resto.length ? `${primeira.texto} (e mais ${resto.length} ${resto.length === 1 ? 'coisa' : 'coisas'} — vê a lista junto ao total)` : primeira.texto,
+                      { autoClose: 4000 })
+        this.irPara(primeira.campo)
+        return
+      }
+      this.confirmarEncomenda()
+    },
     async confirmarEncomenda () {
       this.erro = ''
       await this.wrap(async () => {

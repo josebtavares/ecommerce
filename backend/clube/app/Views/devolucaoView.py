@@ -84,7 +84,8 @@ def _resumo(r):
         'valor_aprovado': str(r.valor_aprovado) if r.valor_aprovado is not None else None,
         'devolver_produto': r.devolver_produto,
         'metodo': r.metodo,
-        'prazo_resposta': _data(r.prazo_resposta) if r.estado in ('pedido', 'a_devolver') else None,
+        'prazo_resposta': _data(r.prazo_resposta) if (r.estado in ('pedido', 'a_devolver')
+                                                       or (r.estado == 'aguarda_produto' and r.devolucao_enviada_em)) else None,
         'data_criacao': _data(r.data_criacao),
         'data_atualizacao': _data(r.data_atualizacao),
     }
@@ -117,6 +118,18 @@ def _mensagens(request, r, antes=None, depois=None, limit=MENSAGENS_POR_PAGINA):
              'criada_em': _data(m.criada_em), 'fotos': fotos.get(m.id, [])} for m in pagina], mais
 
 
+def _devolucao_envio(r):
+    """O produto devolvido pelo correio (o cliente indicou a transportadora e o código)."""
+    if not r.devolucao_enviada_em:
+        return None
+    from ..utils.envios import link_rastreio
+    t = r.devolucao_transportadora
+    url = t.url_rastreio if t else ''
+    return {'transportadora': r.devolucao_transportadora_nome, 'transportadora_id': r.devolucao_transportadora_id,
+            'codigos': [{'codigo': c, 'link': link_rastreio(url, c)} for c in (r.devolucao_codigos or [])],
+            'enviada_em': _data(r.devolucao_enviada_em), 'contacto': t.contacto if t else ''}
+
+
 def _detalhe(request, r, papel):
     u = request.user.utilizador
     mensagens, mais_antigas = _mensagens(request, r)
@@ -131,6 +144,7 @@ def _detalhe(request, r, papel):
         'data_resposta_loja': _data(r.data_resposta_loja),
         'metodo_label': r.get_metodo_display() if r.metodo else '',
         'produto_recebido_em': _data(r.produto_recebido_em),
+        'devolucao_envio': _devolucao_envio(r),
         'stock_reposto': r.stock_reposto,
         'data_decisao': _data(r.data_decisao),
         'data_reembolso': _data(r.data_reembolso),
@@ -291,10 +305,21 @@ ACOES_CLIENTE = {
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def acao_cliente(request, id):
-    acao = ACOES_CLIENTE.get(request.data.get('acao'))
+    nome = request.data.get('acao')
+    acao = ACOES_CLIENTE.get(nome)
+    if nome == 'enviei_produto':
+        # devolução pelo correio: { transportadora_id | transportadora_outra, codigos (JSON), nota? } + fotos (talão)
+        acao = lambda r, u, d: dev.cliente_enviou_produto(  # noqa: E731
+            r, u, d.get('transportadora_id') or None, d.get('transportadora_outra', ''), d.get('codigos'),
+            d.get('nota', ''), fotos)
     if not acao:
         return Response({'detail': 'Acção inválida.'}, status=status.HTTP_400_BAD_REQUEST)
     try:
+        fotos = []
+        if nome == 'enviei_produto':
+            if _limitado(request, 'enviei_produto', '20/h'):
+                return Response({'detail': 'Demasiadas tentativas. Tenta mais tarde.'}, status=429)
+            fotos = dev.preparar_fotos(_ficheiros(request), ja_tem=FotoReembolso.objects.filter(reembolso_id=id).count())
         with transaction.atomic():
             r = _reembolso_bloqueado(id)
             if r.comprador_id != request.user.utilizador.id:

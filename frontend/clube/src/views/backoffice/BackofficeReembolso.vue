@@ -128,8 +128,12 @@
 
         <section v-else-if="r.estado === 'aguarda_produto'" class="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
           <p class="text-sm text-zinc-200">
-            O cliente vai devolver o produto. Quando o receberes, confirma aqui e o cliente recebe
+            {{ r.devolucao_envio ? `O cliente enviou o produto por ${r.devolucao_envio.transportadora}.` : 'O cliente vai devolver o produto.' }}
+            Quando o receberes, confirma aqui e o cliente recebe
             <b>{{ dinheiro(r.valor_aprovado ?? r.valor_pedido) }}</b>.
+          </p>
+          <p v-if="r.devolucao_envio && r.prazo_resposta" class="text-xs text-indigo-200/80" data-teste="loja-prazo-produto">
+            Tens até <b>{{ dataHora(r.prazo_resposta) }}</b> — depois disso o pedido vai para a equipa da Bendi.
           </p>
           <template v-if="!aRecusar">
             <label class="flex items-start gap-2 text-sm text-zinc-200 cursor-pointer">
@@ -218,6 +222,8 @@
           <p v-if="r.motivo_recusa && r.estado === 'recusado'" class="mt-2 text-zinc-400">“{{ r.motivo_recusa }}”</p>
         </section>
 
+        <DevolucaoPeloCorreio :reembolso="r" papel="loja" />
+
         <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
           <p class="text-xs font-bold uppercase tracking-wider mb-3 text-zinc-500">Estado</p>
           <ReembolsoLinhaTempo :reembolso="r" papel="loja" />
@@ -239,6 +245,7 @@ import { dataHora, devolucaoLoja } from '@/utils/reembolsos'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
+import DevolucaoPeloCorreio from '@/components/reembolsos/DevolucaoPeloCorreio.vue'
 import ReembolsoPorConcluir from '@/components/reembolsos/ReembolsoPorConcluir.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 

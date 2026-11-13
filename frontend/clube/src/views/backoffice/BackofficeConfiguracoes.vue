@@ -144,9 +144,6 @@
       <p v-if="erroEntrega" class="mt-3 text-xs text-red-400" role="alert">{{ erroEntrega }}</p>
     </div>
 
-    <!-- Horário (abre/fecha) -->
-    <HorarioEditor v-if="lojaId" :loja-id="lojaId" />
-
     <!-- Opções de entrega -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <div class="flex items-center justify-between mb-4">
@@ -219,6 +216,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Horário (abre/fecha) -->
+    <HorarioEditor v-if="lojaId" :loja-id="lojaId" />
 
     <!-- ═══ MÉTODOS DE PAGAMENTO ═══ -->
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-alvo="envio_pagamento">

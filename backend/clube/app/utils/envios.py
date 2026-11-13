@@ -4,14 +4,20 @@ Envio por transportadora — a loja manda a encomenda pelos correios/transportad
 Regras (decididas com o dono, 2026-11-12):
 - Só Cabo Verde. Cada OpcaoEntrega 'envio' tem preço fixo e as ilhas onde serve (OpcaoEntrega.ilhas).
 - Só com pagamento antecipado: cartão pago ou transferência confirmada. Dinheiro nunca vai por transportadora.
-- A loja indica a transportadora (lista do admin ou "Outra"), 1+ códigos (volumes) e, se quiser, a foto do talão.
+- A loja indica a transportadora (lista do admin ou "Outra"), 0+ códigos (volumes; o código é opcional e pode
+  juntá-lo depois) e, se quiser, a foto do talão.
   A encomenda passa a "enviado" e a Entrega (tipo 'envio', sem condutor) fica 'a_caminho'.
 - Os códigos podem ser corrigidos enquanto está a caminho (fica no histórico e o cliente é avisado de novo).
-- Fecha-se como as outras: a loja conclui (ou, na fase 2/3, o cliente "Recebi" / fecho automático aos 10 dias).
+- Fecha-se quando a loja conclui, o cliente diz "Recebi" ou, sem resposta, 10 dias depois do envio
+  (lembrete ao cliente 3 dias antes; worker → processar_prazos). "Não recebi" pára o fecho até a loja agir;
+  quando ela corrige o código o cliente tem pelo menos mais 3 dias.
 - Devolvida pela transportadora → a encomenda volta a "em preparação": a loja reenvia (novo código, sem pagar de
   novo) ou cancela (stock e reembolso pelo caminho normal do cancelamento).
 - Depois de enviada não se cancela (a loja marca primeiro como devolvida).
 """
+from datetime import timedelta
+
+from django.db import transaction
 from django.utils import timezone
 
 from . import fila_emails as FE
@@ -22,6 +28,10 @@ CODIGO_MAX = 60
 CODIGOS_MAX = 10
 NOTA_MAX = 200
 OUTRA_MAX = 80
+DIAS_FECHO = 10            # fecho automático depois do envio
+DIAS_LEMBRETE = 3          # lembrete ao cliente antes do fecho (dia 7)
+DIAS_APOS_RESPOSTA = 3     # depois de a loja responder a um "Não recebi", o cliente tem pelo menos isto
+DIAS_APOS_LEMBRETE = 1     # nunca fecha sem lembrete: lembrete atrasado (worker parado) → pelo menos 1 dia
 
 
 class ErroEnvio(Exception):
@@ -150,6 +160,8 @@ def pode_enviar(encomenda):
 
 
 def limpar_codigos(codigos):
+    if codigos is None:
+        return []
     if isinstance(codigos, str):
         import json
         try:
@@ -168,8 +180,7 @@ def limpar_codigos(codigos):
         if c not in vistos:
             vistos.add(c)
             out.append(c)
-    if not out:
-        raise ErroEnvio('Indica o código de rastreio.')
+    # sem código também se envia (há envios sem rastreio, p. ex. correio simples): o estado não depende dele
     if len(out) > CODIGOS_MAX:
         raise ErroEnvio(f'No máximo {CODIGOS_MAX} códigos por envio.')
     return out
@@ -198,7 +209,15 @@ def _historico(entrega, acao, quem, nota=''):
 
 
 def _texto_codigos(entrega):
-    return ', '.join(entrega.codigos or [])
+    return ', '.join(entrega.codigos or []) or 'sem código de rastreio'
+
+
+def _frase_codigos(entrega):
+    """Para as mensagens ao cliente."""
+    c = list(entrega.codigos or [])
+    if not c:
+        return ('A loja não indicou código de rastreio — se precisares, fala com ela no chat da encomenda.')
+    return f'{"Códigos" if len(c) > 1 else "Código"} de rastreio: {", ".join(c)}.'
 
 
 def _avisar_cliente(encomenda, titulo, mensagem, importante=True):
@@ -229,6 +248,7 @@ def enviar(encomenda, quem, transportadora_id=None, outra='', codigos=(), talao=
     ent.transportadora, ent.transportadora_nome = t, nome_transportadora(t, outra)
     ent.codigos, ent.data_envio = codigos, agora
     ent.nao_recebido_em, ent.nao_recebido_nota = None, ''
+    ent.fecho_previsto_em, ent.lembrete_envio_em = agora + timedelta(days=DIAS_FECHO), None
     if talao:
         ent.comprovativo_envio.save(talao.name, talao, save=False)
     _historico(ent, 'reenviado' if reenvio else 'enviado', quem, nota)
@@ -237,12 +257,11 @@ def enviar(encomenda, quem, transportadora_id=None, outra='', codigos=(), talao=
     encomenda.status = 'enviado'
     encomenda.save(update_fields=['status'])
     devolucoes.ao_avancar_encomenda(encomenda, quem)
-    plural = 'Códigos' if len(codigos) > 1 else 'Código'
     _avisar_cliente(
         encomenda,
         f'Encomenda {"reenviada" if reenvio else "enviada"} #{encomenda.id}',
         f'{encomenda.loja.nome} {"voltou a enviar" if reenvio else "enviou"} a tua encomenda por '
-        f'{ent.transportadora_nome}. {plural} de rastreio: {_texto_codigos(ent)}.')
+        f'{ent.transportadora_nome}. {_frase_codigos(ent)}')
     return ent
 
 
@@ -256,14 +275,24 @@ def corrigir(encomenda, quem, transportadora_id=None, outra='', codigos=(), nota
     nome = nome_transportadora(t, outra)
     if nome == ent.transportadora_nome and codigos == list(ent.codigos or []):
         raise ErroEnvio('Não mudaste nada.')
+    adicionado = not ent.codigos and bool(codigos) and nome == ent.transportadora_nome
+    if ent.nao_recebido_em:              # a loja respondeu ao "Não recebi": o cliente tem tempo para ver o código novo
+        minimo = timezone.now() + timedelta(days=DIAS_APOS_RESPOSTA)
+        if not ent.fecho_previsto_em or ent.fecho_previsto_em < minimo:
+            ent.fecho_previsto_em = minimo
     ent.transportadora, ent.transportadora_nome, ent.codigos = t, nome, codigos
     ent.nao_recebido_em, ent.nao_recebido_nota = None, ''
-    _historico(ent, 'corrigido', quem, nota)
+    _historico(ent, 'adicionado' if adicionado else 'corrigido', quem, nota)
     ent.save(update_fields=['transportadora', 'transportadora_nome', 'codigos', 'historico_envio', 'nao_recebido_em',
-                            'nao_recebido_nota'])
-    _avisar_cliente(encomenda, f'Código de rastreio corrigido — Encomenda #{encomenda.id}',
-                    f'{encomenda.loja.nome} corrigiu os dados do envio: {ent.transportadora_nome}, '
-                    f'{_texto_codigos(ent)}.')
+                            'nao_recebido_nota', 'fecho_previsto_em'])
+    if adicionado:
+        _avisar_cliente(encomenda, f'Código de rastreio — Encomenda #{encomenda.id}',
+                        f'{encomenda.loja.nome} juntou o código de rastreio do envio por {ent.transportadora_nome}: '
+                        f'{_texto_codigos(ent)}.')
+    else:
+        _avisar_cliente(encomenda, f'Dados do envio corrigidos — Encomenda #{encomenda.id}',
+                        f'{encomenda.loja.nome} corrigiu os dados do envio: {ent.transportadora_nome}. '
+                        f'{_frase_codigos(ent)}')
     return ent
 
 
@@ -277,8 +306,9 @@ def devolvida(encomenda, quem, nota=''):
         raise ErroEnvio('Diz o que aconteceu (pelo menos 5 caracteres).')
     ent.status = 'devolvida'
     ent.nao_recebido_em, ent.nao_recebido_nota = None, ''
+    ent.fecho_previsto_em = None
     _historico(ent, 'devolvido', quem, nota)
-    ent.save(update_fields=['status', 'historico_envio', 'nao_recebido_em', 'nao_recebido_nota'])
+    ent.save(update_fields=['status', 'historico_envio', 'nao_recebido_em', 'nao_recebido_nota', 'fecho_previsto_em'])
     if encomenda.status == 'enviado':
         encomenda.status = 'preparando'
         encomenda.save(update_fields=['status'])
@@ -298,9 +328,13 @@ def concluir(encomenda, por='cliente'):
     from ..Views.notificacaoView import notificar, notificar_staff
     if not em_transito(encomenda) or encomenda.status != 'enviado':
         raise ErroEnvio('Esta encomenda não está a caminho.')
+    ent = _entrega(encomenda)
     encomenda.status, encomenda.data_conclusao = 'concluido', timezone.now()
     encomenda.save(update_fields=['status', 'data_conclusao'])
     fechar_entrega(encomenda)
+    ent.refresh_from_db()
+    _historico(ent, 'recebido' if por == 'cliente' else 'fechado_auto', None)
+    ent.save(update_fields=['historico_envio'])
     ao_avancar_encomenda(encomenda, None)
     quem = 'O cliente confirmou que recebeu' if por == 'cliente' else 'Fechada automaticamente (sem resposta do cliente)'
     notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor'], tipo='encomenda_concluida_loja',
@@ -333,6 +367,96 @@ def nao_recebi(encomenda, nota=''):
     return ent
 
 
+# ── prazos: lembrete e fecho automático (worker, a cada minuto) ────────────────
+
+def _a_fechar():
+    """Envios a caminho, sem "Não recebi", com a encomenda enviada."""
+    from ..models import Entrega
+    return Entrega.objects.filter(tipo='envio', status='a_caminho', encomenda__status='enviado',
+                                  nao_recebido_em__isnull=True, fecho_previsto_em__isnull=False)
+
+
+def processar_prazos(agora=None):
+    """Lembrete ao cliente (3 dias antes do fecho) e fecho automático. Devolve (lembretes, fechadas).
+    Cada encomenda é tratada sozinha e bloqueada: o cliente/a loja podem estar a mexer-lhe ao mesmo tempo."""
+    from ..models import Encomenda, Entrega
+    from ..Views.notificacaoView import notificar
+    from .devolucoes import ativo
+    agora = agora or timezone.now()
+    lembretes = fechadas = 0
+    for eid in list(_a_fechar().filter(lembrete_envio_em__isnull=True,
+                                       fecho_previsto_em__lte=agora + timedelta(days=DIAS_LEMBRETE))
+                    .values_list('id', flat=True)[:200]):
+        with transaction.atomic():
+            ent = (_a_fechar().select_for_update(of=('self',)).select_related('encomenda__loja', 'encomenda__comprador')
+                   .filter(id=eid, lembrete_envio_em__isnull=True).first())
+            if not ent:
+                continue
+            ent.lembrete_envio_em = agora
+            minimo = agora + timedelta(days=DIAS_APOS_LEMBRETE)
+            if ent.fecho_previsto_em < minimo:
+                ent.fecho_previsto_em = minimo
+            ent.save(update_fields=['lembrete_envio_em', 'fecho_previsto_em'])
+            enc = ent.encomenda
+            quando = timezone.localtime(ent.fecho_previsto_em).strftime('%d/%m')
+            notificar(utilizador=enc.comprador, tipo='encomenda_enviada', titulo=f'Já recebeste a encomenda #{enc.id}?',
+                      mensagem=(f'A tua encomenda de {enc.loja.nome} foi enviada por {ent.transportadora_nome}. '
+                                f'Se já a recebeste, confirma na encomenda. Se não, carrega em "Não recebi" — sem '
+                                f'resposta, damo-la como entregue a {quando}.'),
+                      loja=enc.loja, link=f'/encomendas/{enc.id}', email=FE.IMPORTANTE)
+            lembretes += 1
+    for enc_id in list(_a_fechar().filter(fecho_previsto_em__lte=agora, lembrete_envio_em__isnull=False)
+                       .values_list('encomenda_id', flat=True)[:200]):
+        with transaction.atomic():
+            enc = Encomenda.objects.select_for_update(of=('self',)).filter(id=enc_id, status='enviado').first()
+            if not enc:
+                continue
+            ent = Entrega.objects.filter(encomenda=enc).first()
+            if (not ent or ent.tipo != 'envio' or ent.status != 'a_caminho' or ent.nao_recebido_em
+                    or not ent.lembrete_envio_em or not ent.fecho_previsto_em or ent.fecho_previsto_em > agora):
+                continue
+            if ativo(enc):                # um pedido de reembolso/cancelamento em curso decide primeiro
+                continue
+            concluir(enc, por='auto')
+            fechadas += 1
+    return lembretes, fechadas
+
+
+def problemas(filtro='problemas', loja_id=None, agora=None):
+    """Envios para o admin (Admin → Encomendas → Envios). filtro: problemas | nao_recebidos | sem_codigo | devolvidos |
+    a_caminho. "Problemas" = não recebidos + devolvidos por resolver + a caminho já fora do prazo (fecho parado)."""
+    from django.db.models import Q
+    from ..models import Entrega
+    agora = agora or timezone.now()
+    base = Entrega.objects.filter(tipo='envio').exclude(encomenda__status__in=('cancelado', 'concluido'))
+    if loja_id:
+        base = base.filter(encomenda__loja_id=loja_id)
+    filtros = {
+        'nao_recebidos': Q(status='a_caminho', nao_recebido_em__isnull=False),
+        'sem_codigo': Q(status='a_caminho', codigos=[]),
+        'devolvidos': Q(status='devolvida'),
+        'a_caminho': Q(status='a_caminho'),
+    }
+    filtros['problemas'] = (filtros['nao_recebidos'] | filtros['devolvidos']
+                            | Q(status='a_caminho', fecho_previsto_em__lt=agora))
+    contagens = {k: base.filter(q).count() for k, q in filtros.items()}
+    qs = (base.filter(filtros.get(filtro, filtros['problemas']))
+          .select_related('encomenda__loja', 'encomenda__comprador__user').order_by('data_envio')[:200])
+    linhas = []
+    for e in qs:
+        enc = e.encomenda
+        linhas.append({
+            'encomenda_id': enc.id, 'encomenda_status': enc.status, 'loja_id': enc.loja_id, 'loja_nome': enc.loja.nome,
+            'comprador': enc.comprador.user.username, 'transportadora': e.transportadora_nome,
+            'codigos': list(e.codigos or []), 'estado': e.status, 'data_envio': e.data_envio,
+            'dias': (agora - e.data_envio).days if e.data_envio else None,
+            'fecho_previsto_em': e.fecho_previsto_em if e.status == 'a_caminho' else None,
+            'nao_recebido_em': e.nao_recebido_em, 'nao_recebido_nota': e.nao_recebido_nota,
+            'parado': bool(e.status == 'a_caminho' and e.fecho_previsto_em and e.fecho_previsto_em < agora),
+        })
+    return {'contagens': contagens, 'resultados': linhas}
+
+
 # ── para os serializers ────────────────────────────────────────────────────────
 
 def dados(entrega, request=None, loja=False):
@@ -350,6 +474,7 @@ def dados(entrega, request=None, loja=False):
         'estado': entrega.status,
         'data_entrega': entrega.data_entrega,
         'nao_recebido_em': entrega.nao_recebido_em,
+        'fecho_previsto_em': entrega.fecho_previsto_em if entrega.status == 'a_caminho' else None,
         'nao_recebido_nota': entrega.nao_recebido_nota,
     }
     if loja:

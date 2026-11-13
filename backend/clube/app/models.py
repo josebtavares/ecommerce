@@ -1224,6 +1224,9 @@ class Entrega(models.Model):
     # ela agir (corrigir, devolvida, reenviar ou concluir)
     nao_recebido_em   = models.DateTimeField(null=True, blank=True)
     nao_recebido_nota = models.CharField(max_length=300, blank=True, default='', db_default='')
+    # fecho automático (utils/envios.processar_prazos): lembrete ao cliente 3 dias antes, depois conclui
+    fecho_previsto_em = models.DateTimeField(null=True, blank=True)
+    lembrete_envio_em = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f'Entrega da encomenda #{self.encomenda_id}'
@@ -2407,6 +2410,14 @@ class Reembolso(models.Model):
     # o fornecedor não respondeu (ou o dinheiro saiu e não ficou registado): pode já ter devolvido — só a Bendi,
     # depois de confirmar no painel do fornecedor, volta a tentar ou dá como devolvido (o worker e a loja não)
     reembolso_incerto = models.BooleanField(default=False, db_default=False)
+    # devolução pelo correio (aguarda_produto): o cliente indica a transportadora e o(s) código(s); a loja tem
+    # prazo_resposta para dizer que recebeu (lembrete antes; depois vai à Bendi) — utils/devolucoes.cliente_enviou_produto
+    devolucao_transportadora = models.ForeignKey('Transportadora', on_delete=models.SET_NULL, null=True, blank=True,
+                                                 related_name='devolucoes')
+    devolucao_transportadora_nome = models.CharField(max_length=80, blank=True, default='', db_default='')
+    devolucao_codigos = models.JSONField(default=list, blank=True, db_default=[])
+    devolucao_enviada_em = models.DateTimeField(null=True, blank=True)
+    devolucao_lembrete_em = models.DateTimeField(null=True, blank=True)
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
 
