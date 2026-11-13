@@ -49,7 +49,7 @@ class PrecoNoServidor(TestCase):
                              {'produto_id': self.produto.id, 'quantidade': 2, **extra}, format='json')
 
     def _encomendar(self, **extra):
-        corpo = {'tipo_entrega': 'entrega', 'opcao_entrega_id': self.entrega.id, 'morada_entrega': 'Rua 1, Praia',
+        corpo = {'tipo_entrega': 'entrega', 'opcao_entrega_id': self.entrega.id, 'morada_entrega': 'Rua 1, Praia', 'concelho_entrega': 'PR',
                  'aceita_termos': True, **extra}
         return self.api.post(f'/app/loja/{self.loja.id}/encomenda/criar/', corpo, format='json')
 

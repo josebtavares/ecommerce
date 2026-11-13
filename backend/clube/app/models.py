@@ -1220,6 +1220,10 @@ class Entrega(models.Model):
                                           blank=True, default='', db_default='', max_length=200)
     # o que mudou no envio: [{em, acao, por, codigos, transportadora, nota}] — correções de código, reenvios
     historico_envio   = models.JSONField(default=list, blank=True, db_default=[])
+    # o cliente disse "Não recebi" (utils/envios.nao_recebi): a loja é avisada e o fecho automático fica parado até
+    # ela agir (corrigir, devolvida, reenviar ou concluir)
+    nao_recebido_em   = models.DateTimeField(null=True, blank=True)
+    nao_recebido_nota = models.CharField(max_length=300, blank=True, default='', db_default='')
 
     def __str__(self):
         return f'Entrega da encomenda #{self.encomenda_id}'

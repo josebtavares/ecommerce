@@ -16,6 +16,8 @@ from django.utils import timezone
 
 from . import fila_emails as FE
 
+MSG_SEM_DINHEIRO = ('O envio por transportadora só aceita pagamento antecipado (cartão ou transferência). '
+                    'Escolhe outro método de pagamento.')
 CODIGO_MAX = 60
 CODIGOS_MAX = 10
 NOTA_MAX = 200
@@ -76,6 +78,23 @@ def serve_ilha(opcao, ilha):
 
 def nome_transportadora(transportadora, outra):
     return transportadora.nome if transportadora else (outra or '').strip()[:OUTRA_MAX]
+
+
+def validar_checkout(opcao, concelho, metodo=None, agendada=False):
+    """Entrega ao domicílio no checkout → (concelho limpo, mensagem de erro ou None).
+    O concelho é obrigatório; a opção tem de servir a ilha; o envio não aceita dinheiro nem hora marcada."""
+    from .geografia import concelho as achar, ilha
+    codigo = str(concelho or '').strip().upper()
+    if not achar(codigo):
+        return '', 'Escolhe o concelho da morada de entrega.'
+    if opcao and not serve_ilha(opcao, ilha(codigo)):
+        return codigo, f'A opção "{opcao.nome}" não entrega em {ilha(codigo)}. Escolhe outra opção de entrega.'
+    if opcao and opcao.tipo == 'envio':
+        if metodo == 'dinheiro':
+            return codigo, MSG_SEM_DINHEIRO
+        if agendada:
+            return codigo, 'O envio por transportadora não tem dia e hora marcados.'
+    return codigo, None
 
 
 # ── encomenda ──────────────────────────────────────────────────────────────────
@@ -209,6 +228,7 @@ def enviar(encomenda, quem, transportadora_id=None, outra='', codigos=(), talao=
     ent.motivo_falha = ent.nota_falha = ''
     ent.transportadora, ent.transportadora_nome = t, nome_transportadora(t, outra)
     ent.codigos, ent.data_envio = codigos, agora
+    ent.nao_recebido_em, ent.nao_recebido_nota = None, ''
     if talao:
         ent.comprovativo_envio.save(talao.name, talao, save=False)
     _historico(ent, 'reenviado' if reenvio else 'enviado', quem, nota)
@@ -237,8 +257,10 @@ def corrigir(encomenda, quem, transportadora_id=None, outra='', codigos=(), nota
     if nome == ent.transportadora_nome and codigos == list(ent.codigos or []):
         raise ErroEnvio('Não mudaste nada.')
     ent.transportadora, ent.transportadora_nome, ent.codigos = t, nome, codigos
+    ent.nao_recebido_em, ent.nao_recebido_nota = None, ''
     _historico(ent, 'corrigido', quem, nota)
-    ent.save(update_fields=['transportadora', 'transportadora_nome', 'codigos', 'historico_envio'])
+    ent.save(update_fields=['transportadora', 'transportadora_nome', 'codigos', 'historico_envio', 'nao_recebido_em',
+                            'nao_recebido_nota'])
     _avisar_cliente(encomenda, f'Código de rastreio corrigido — Encomenda #{encomenda.id}',
                     f'{encomenda.loja.nome} corrigiu os dados do envio: {ent.transportadora_nome}, '
                     f'{_texto_codigos(ent)}.')
@@ -254,14 +276,60 @@ def devolvida(encomenda, quem, nota=''):
     if len(nota) < 5:
         raise ErroEnvio('Diz o que aconteceu (pelo menos 5 caracteres).')
     ent.status = 'devolvida'
+    ent.nao_recebido_em, ent.nao_recebido_nota = None, ''
     _historico(ent, 'devolvido', quem, nota)
-    ent.save(update_fields=['status', 'historico_envio'])
+    ent.save(update_fields=['status', 'historico_envio', 'nao_recebido_em', 'nao_recebido_nota'])
     if encomenda.status == 'enviado':
         encomenda.status = 'preparando'
         encomenda.save(update_fields=['status'])
     _avisar_cliente(encomenda, f'Envio devolvido à loja — Encomenda #{encomenda.id}',
                     f'A transportadora devolveu a tua encomenda a {encomenda.loja.nome}. A loja vai voltar a '
                     f'enviá-la ou contactar-te.')
+    return ent
+
+
+# ── cliente: recebi / não recebi ───────────────────────────────────────────────
+
+def concluir(encomenda, por='cliente'):
+    """Fecha um envio a caminho como entregue (por='cliente': "Recebi"; 'auto': fecho automático — fase 3).
+    encomenda bloqueada. Conta como a loja a concluir: data de conclusão (prazo de devolução) e entrega fechada."""
+    from .devolucoes import ao_avancar_encomenda
+    from .encomendas import fechar_entrega
+    from ..Views.notificacaoView import notificar, notificar_staff
+    if not em_transito(encomenda) or encomenda.status != 'enviado':
+        raise ErroEnvio('Esta encomenda não está a caminho.')
+    encomenda.status, encomenda.data_conclusao = 'concluido', timezone.now()
+    encomenda.save(update_fields=['status', 'data_conclusao'])
+    fechar_entrega(encomenda)
+    ao_avancar_encomenda(encomenda, None)
+    quem = 'O cliente confirmou que recebeu' if por == 'cliente' else 'Fechada automaticamente (sem resposta do cliente)'
+    notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor'], tipo='encomenda_concluida_loja',
+                    titulo=f'Encomenda #{encomenda.id} concluída ✓', mensagem=f'{quem} — envio por transportadora.',
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}')
+    if por != 'cliente':
+        notificar(utilizador=encomenda.comprador, tipo='encomenda_concluida', titulo=f'Encomenda concluída #{encomenda.id}',
+                  mensagem='Demos a encomenda como entregue. Se houver algum problema, podes pedir ajuda na encomenda.',
+                  loja=encomenda.loja, link=f'/encomendas/{encomenda.id}', email=FE.INFORMATIVO)
+
+
+def nao_recebi(encomenda, nota=''):
+    """O cliente diz que não recebeu: a loja é avisada (email) e o fecho automático fica parado até ela agir."""
+    from ..Views.notificacaoView import notificar_staff
+    ent = _entrega(encomenda)
+    if not em_transito(encomenda):
+        raise ErroEnvio('Esta encomenda não está a caminho.')
+    if ent.nao_recebido_em:
+        raise ErroEnvio('Já avisaste a loja. Espera pela resposta ou fala com ela no chat da encomenda.')
+    nota = ' '.join((nota or '').split())[:300]
+    ent.nao_recebido_em, ent.nao_recebido_nota = timezone.now(), nota
+    ent.save(update_fields=['nao_recebido_em', 'nao_recebido_nota'])
+    notificar_staff(loja=encomenda.loja, roles=['dono', 'gestor'], tipo='encomenda_atualizada',
+                    titulo=f'O cliente não recebeu a encomenda #{encomenda.id}',
+                    mensagem=(f'Envio por {ent.transportadora_nome} ({_texto_codigos(ent)}). '
+                              + (f'O cliente diz: "{nota}". ' if nota else '')
+                              + 'Confirma com a transportadora: corrige o código, marca-a como devolvida ou conclui-a '
+                                'se já foi entregue.'),
+                    link=f'/loja/{encomenda.loja_id}/backoffice/encomendas/{encomenda.id}', email=FE.IMPORTANTE)
     return ent
 
 
@@ -281,6 +349,8 @@ def dados(entrega, request=None, loja=False):
         'data_envio': entrega.data_envio,
         'estado': entrega.status,
         'data_entrega': entrega.data_entrega,
+        'nao_recebido_em': entrega.nao_recebido_em,
+        'nao_recebido_nota': entrega.nao_recebido_nota,
     }
     if loja:
         out['historico'] = entrega.historico_envio or []

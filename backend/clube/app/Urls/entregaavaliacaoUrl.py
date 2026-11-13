@@ -74,4 +74,6 @@ urlpatterns = [
     path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/', envio.enviar),
     path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/corrigir/', envio.corrigir),
     path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/devolvida/', envio.devolvida),
+    path('encomenda/<int:encomenda_id>/envio/recebi/', envio.cliente_recebi),
+    path('encomenda/<int:encomenda_id>/envio/nao-recebi/', envio.cliente_nao_recebi),
 ]

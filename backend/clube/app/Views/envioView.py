@@ -9,6 +9,7 @@ POST  /app/loja/<id>/encomendas/<enc>/envio/                  multipart { transp
                                                                 codigos (JSON), talao?, nota? } — enviar / reenviar
 POST  /app/loja/<id>/encomendas/<enc>/envio/corrigir/         { transportadora_id | transportadora_outra, codigos, nota? }
 POST  /app/loja/<id>/encomendas/<enc>/envio/devolvida/        { nota }
+POST  /app/encomenda/<id>/envio/recebi/ · nao-recebi/          o cliente (fase 2)
 """
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
@@ -165,3 +166,39 @@ def devolvida(request, loja_id, encomenda_id):
     except E.ErroEnvio as e:
         return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     return _resposta(enc, request)
+
+
+# ── cliente ────────────────────────────────────────────────────────────────────
+# POST /app/encomenda/<id>/envio/recebi/       → conclui (prazo de devolução começa agora)
+# POST /app/encomenda/<id>/envio/nao-recebi/   { nota? } → avisa a loja; o fecho automático fica parado
+
+def _do_cliente(request, encomenda_id):
+    return get_object_or_404(Encomenda.objects.select_for_update(of=('self',)), id=encomenda_id,
+                             comprador=request.user.utilizador)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cliente_recebi(request, encomenda_id):
+    try:
+        with transaction.atomic():
+            enc = _do_cliente(request, encomenda_id)
+            E.concluir(enc, por='cliente')
+    except E.ErroEnvio as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'encomenda_id': enc.id, 'status': enc.status})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cliente_nao_recebi(request, encomenda_id):
+    nota = request.data.get('nota') or ''
+    if not isinstance(nota, str):
+        return Response({'detail': 'Nota inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        with transaction.atomic():
+            enc = _do_cliente(request, encomenda_id)
+            E.nao_recebi(enc, nota)
+    except E.ErroEnvio as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'encomenda_id': enc.id, 'status': enc.status})

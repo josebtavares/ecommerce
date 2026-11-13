@@ -28,7 +28,7 @@ def _conta(username, staff=False):
     return u
 
 
-class Envios(TestCase):
+class BaseEnvios(TestCase):
 
     def setUp(self):
         self.dono = _conta('envdono')
@@ -55,6 +55,9 @@ class Envios(TestCase):
 
     def _url(self, enc, sufixo=''):
         return f'/app/loja/{self.loja.id}/encomendas/{enc.id}/envio/{sufixo}'
+
+
+class Envios(BaseEnvios):
 
     # ── enviar ───────────────────────────────────────────────────────────────
     def test_enviar_com_codigos(self):
@@ -234,3 +237,102 @@ class Envios(TestCase):
         self.assertTrue(r.data['e_envio'])
         self.assertEqual(r.data['envio']['codigos'][0]['codigo'], 'A1')
         self.assertNotIn('historico', r.data['envio'])
+
+
+class EnviosCliente(BaseEnvios):
+    """Fase 2: checkout por ilha, sem dinheiro no envio, "Recebi" / "Não recebi"."""
+
+    def setUp(self):
+        super().setUp()
+        from .models import Inventario, Produto
+        self.produto = Produto.objects.create(loja=self.loja, nome='Camisa', preco=Decimal('1000'))
+        Inventario.objects.update_or_create(produto=self.produto, defaults={'loja': self.loja, 'quantidade': 50})
+        self.local = OpcaoEntrega.objects.create(loja=self.loja, nome='Mindelo', preco=Decimal('100'), ilhas=['São Vicente'])
+        MetodoPagamento.objects.get_or_create(loja=self.loja, tipo='dinheiro', defaults={'ativo': True})
+        self.capi = APIClient()
+        self.capi.force_authenticate(self.cliente.user)
+
+    def _checkout(self, opcao, concelho, **extra):
+        self.capi.post(f'/app/loja/{self.loja.id}/carrinho/adicionar/', {'produto_id': self.produto.id, 'quantidade': 1},
+                       format='json')
+        corpo = {'tipo_entrega': 'entrega', 'opcao_entrega_id': opcao.id, 'morada_entrega': 'Rua 1',
+                 'aceita_termos': True, **({'concelho_entrega': concelho} if concelho is not None else {}), **extra}
+        return self.capi.post(f'/app/loja/{self.loja.id}/encomenda/criar/', corpo, format='json')
+
+    def test_checkout_exige_concelho_e_ilha_servida(self):
+        r = self._checkout(self.opcao, None)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('concelho', r.data['detail'])
+        r = self._checkout(self.opcao, 'SV')                   # envio só para Santiago
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('São Vicente', r.data['detail'])
+        r = self._checkout(self.local, 'PR')                   # local só em São Vicente
+        self.assertEqual(r.status_code, 400)
+        r = self._checkout(self.opcao, 'pr', metodo_pagamento='cartao')
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        self.assertEqual(Encomenda.objects.get(id=r.data['id']).concelho_entrega, 'PR')
+
+    def test_envio_sem_dinheiro_nem_hora(self):
+        r = self._checkout(self.opcao, 'PR', metodo_pagamento='dinheiro')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('antecipado', r.data['detail'])
+        r = self._checkout(self.opcao, 'PR', agendar_para='2030-01-01T10:00')
+        self.assertEqual(r.status_code, 400)
+        # mesmo que o browser não diga o método ao criar, o pagamento em dinheiro é recusado
+        r = self._checkout(self.opcao, 'PR')
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        r = self.capi.post('/app/pagamento/iniciar/', {'encomenda_id': r.data['id'], 'metodo': 'dinheiro'}, format='json')
+        self.assertEqual(r.status_code, 400, r.content[:300])
+        self.assertFalse(Pagamento.objects.filter(encomenda__comprador=self.cliente).exists())
+
+    def test_local_aceita_dinheiro(self):
+        r = self._checkout(self.local, 'SV', metodo_pagamento='dinheiro')
+        self.assertEqual(r.status_code, 201, r.content[:300])
+
+    def _enviada(self):
+        enc = self._encomenda()
+        self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': ['A1']}, format='json')
+        return enc
+
+    def test_recebi(self):
+        enc = self._encomenda()
+        r = self.capi.post(f'/app/encomenda/{enc.id}/envio/recebi/')
+        self.assertEqual(r.status_code, 400)                   # ainda não foi enviada
+        self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': ['A1']}, format='json')
+        outro = APIClient()
+        outro.force_authenticate(self.dono.user)
+        self.assertEqual(outro.post(f'/app/encomenda/{enc.id}/envio/recebi/').status_code, 404)
+        r = self.capi.post(f'/app/encomenda/{enc.id}/envio/recebi/')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        enc.refresh_from_db()
+        self.assertEqual((enc.status, enc.entrega.status), ('concluido', 'entregue'))
+        self.assertIsNotNone(enc.data_conclusao)
+        self.assertTrue(Notificacao.objects.filter(utilizador=self.dono, tipo='encomenda_concluida_loja').exists())
+        self.assertEqual(self.capi.post(f'/app/encomenda/{enc.id}/envio/recebi/').status_code, 400)
+
+    def test_nao_recebi(self):
+        enc = self._enviada()
+        r = self.capi.post(f'/app/encomenda/{enc.id}/envio/nao-recebi/', {'nota': 'Passaram 10 dias'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        ent = Entrega.objects.get(encomenda=enc)
+        self.assertIsNotNone(ent.nao_recebido_em)
+        n = Notificacao.objects.filter(utilizador=self.dono).latest('id')
+        self.assertIn('não recebeu', n.titulo)
+        self.assertIn('Passaram 10 dias', n.mensagem)
+        self.assertEqual(self.capi.post(f'/app/encomenda/{enc.id}/envio/nao-recebi/').status_code, 400)
+        r = self.api.get(f'/app/encomenda/{enc.id}/')
+        self.assertIsNotNone(r.data['envio']['nao_recebido_em'])
+        # a loja corrige o código → o aviso sai
+        self.api.post(self._url(enc, 'corrigir/'), {'transportadora_id': self.dhl.id, 'codigos': ['A2']}, format='json')
+        ent.refresh_from_db()
+        self.assertIsNone(ent.nao_recebido_em)
+
+    def test_afinal_recebi_depois_de_nao_recebi(self):
+        enc = self._enviada()
+        self.capi.post(f'/app/encomenda/{enc.id}/envio/nao-recebi/', {}, format='json')
+        r = self.capi.post(f'/app/encomenda/{enc.id}/envio/recebi/')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        enc.refresh_from_db()
+        self.assertEqual(enc.status, 'concluido')
+        # já concluída: "não recebi" deixa de fazer sentido
+        self.assertEqual(self.capi.post(f'/app/encomenda/{enc.id}/envio/nao-recebi/').status_code, 400)

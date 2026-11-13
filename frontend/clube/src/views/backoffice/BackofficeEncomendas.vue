@@ -247,7 +247,7 @@
                  class="border-t border-zinc-800 pt-3 space-y-1 text-xs">
               <div v-if="detalhes[enc.id].morada_entrega" class="flex gap-2">
                 <span class="text-zinc-500 flex-shrink-0"><font-awesome-icon :icon="['fas', 'location-dot']" class="mr-1" fixed-width />Morada:</span>
-                <span class="text-zinc-300">{{ detalhes[enc.id].morada_entrega }}</span>
+                <span class="text-zinc-300">{{ detalhes[enc.id].morada_entrega }}<template v-if="detalhes[enc.id].concelho_entrega"> · <b class="font-medium">{{ nomeConcelho(detalhes[enc.id].concelho_entrega) }} ({{ ilhaDoConcelho(detalhes[enc.id].concelho_entrega) }})</b></template></span>
               </div>
               <div v-if="detalhes[enc.id].notas" class="flex gap-2">
                 <span class="text-zinc-500 flex-shrink-0"><font-awesome-icon :icon="['fas', 'note-sticky']" class="mr-1" fixed-width />Notas:</span>
@@ -498,6 +498,7 @@ import { formatarDinheiro } from '@/utils/dinheiro'
 import api from '@/services/api'
 import { formatarAtributos, temAtributos } from '@/utils/atributos'
 import { iconePagamento } from '@/utils/icones'
+import { ilhaDoConcelho, nomeConcelho } from '@/utils/geografia'
 import PausaLoja from '@/components/horario/PausaLoja.vue'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import { EM_CURSO } from '@/utils/reembolsos'
@@ -608,6 +609,8 @@ export default {
   beforeUnmount () { this.pararTempoReal?.() },
 
   methods: {
+    nomeConcelho,
+    ilhaDoConcelho,
     // NIF para a fatura: a loja pede-o no chat ou escreve o que o cliente lhe deu (nada fica bloqueado sem ele)
     falarSobreNif (d) { contactarCliente(this.lojaId, d.comprador, d.id) },
     editarNif (d) {

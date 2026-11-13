@@ -52,6 +52,13 @@
       </details>
     </div>
 
+    <p v-if="envio && envio.estado === 'a_caminho' && envio.nao_recebido_em" data-teste="envio-nao-recebido"
+       class="text-xs text-amber-200 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-2">
+      <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1" />
+      <b>O cliente diz que não recebeu</b> ({{ dataHora(envio.nao_recebido_em) }}){{ envio.nao_recebido_nota ? ': “' + envio.nao_recebido_nota + '”' : '' }}.
+      Confirma com a transportadora: corrige o código, marca-a como devolvida ou conclui-a se já foi entregue.
+    </p>
+
     <p v-if="envio && envio.estado === 'devolvida'" class="text-xs text-amber-200 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-2">
       <font-awesome-icon :icon="['fas', 'rotate-left']" class="mr-1" />
       A transportadora devolveu a encomenda. Reenvia-a (o cliente não paga outra vez) ou cancela a encomenda — o cliente é reembolsado e o stock volta.

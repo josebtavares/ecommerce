@@ -432,6 +432,16 @@ def encomenda_criar(request, loja_id):
         if opcao:
             custo_entrega = opcao.preco
 
+    # ── Concelho da morada de entrega: diz a ilha → as opções que servem lá (utils/envios.py) ──
+    concelho_entrega = ''
+    if serializer.validated_data.get('tipo_entrega') == 'entrega':
+        from ..utils import envios
+        concelho_entrega, msg = envios.validar_checkout(opcao, request.data.get('concelho_entrega'),
+                                                        request.data.get('metodo_pagamento'),
+                                                        bool(request.data.get('agendar_para')))
+        if msg:
+            return Response({'detail': msg, 'codigo': 'entrega_invalida'}, status=status.HTTP_400_BAD_REQUEST)
+
     # ── Agendamento escolhido pelo cliente (dia e hora dentro do horário) ──
     agendada_para, origem = None, ''
     pedido = request.data.get('agendar_para')
@@ -551,6 +561,7 @@ def encomenda_criar(request, loja_id):
         valor_total    = valor_total,
         tipo_entrega   = serializer.validated_data.get('tipo_entrega', 'levantamento'),
         morada_entrega = serializer.validated_data.get('morada_entrega', ''),
+        concelho_entrega = concelho_entrega,
         notas          = serializer.validated_data.get('notas', ''),
         status         = 'pendente',
         opcao_entrega  = opcao,
