@@ -250,6 +250,10 @@ const router = createRouter({
         if (savedPosition) {
             return savedPosition;
         }
+        // a mesma loja, só abriu/fechou um produto (?produto=, composables/useLojaData.js): fica onde está
+        if (to.path === from.path && (to.query.produto || from.query.produto) && to.query.produto !== from.query.produto) {
+            return false;
+        }
         // a mesma lista, só abriu/fechou uma ficha (utils/ficha.js): fica onde está; ao abrir, depois de a
         // anterior fechar e a nova se expandir, mostra o cartão aberto ([data-ficha="<id>"]) em vez de ir ao topo
         if (to.name === from.name && to.params.seccao === from.params.seccao && to.params.id === from.params.id

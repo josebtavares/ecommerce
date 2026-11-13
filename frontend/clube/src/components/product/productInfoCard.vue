@@ -62,7 +62,7 @@
             </span>
 
             <!-- Botão fechar (mobile) -->
-            <button @click.stop="$emit('close')"
+            <button @click.stop="$emit('close')" aria-label="Fechar" data-teste="produto-fechar"
               class="absolute top-3 right-3 md:hidden w-8 h-8 rounded-full bg-black/50 hover:bg-black/70
                      flex items-center justify-center transition">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -127,7 +127,7 @@
               <span :class="isDark ? 'text-zinc-700' : 'text-gray-300'">·</span>
               <span class="text-xs" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">{{ produto.categoria }}</span>
             </div>
-            <button @click="$emit('close')"
+            <button @click="$emit('close')" aria-label="Fechar" data-teste="produto-fechar"
               class="hidden md:flex w-8 h-8 rounded-full items-center justify-center transition flex-shrink-0"
               :class="isDark ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-gray-100 hover:bg-gray-200'">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'"
@@ -372,7 +372,7 @@
 
 <script>
 import { formatarDinheiro } from '@/utils/dinheiro'
-import { caminhoLoja, hrefLoja } from '@/utils/enderecoLoja'
+import { caminhoLoja, hrefLoja, idDaLoja } from '@/utils/enderecoLoja'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import api from '@/services/api'
 import { DEFAULT_PRODUTO } from '@/services/media'
@@ -610,9 +610,8 @@ export default {
     },
 
     mostrarBotaoLoja () {
-      const rotaActual   = this.$route?.name
-      const lojaIdActual = this.$route?.params?.id
-      if (rotaActual === 'LojaPublica' && String(lojaIdActual) === String(this.loja?.id)) return false
+      // já na página desta loja (/loja/<endereço>): o nome não leva a lado nenhum
+      if (this.$route?.name === 'Loja' && idDaLoja(this.$route.params.id) === String(this.loja?.id)) return false
       return !!this.loja?.id
     },
   },
