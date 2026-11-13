@@ -320,3 +320,30 @@ def admin_emails(request):
         n = fila_emails.tentar_outra_vez(ids)
         return Response({'reenviar': n, **fila_emails.resumo()})
     return Response(fila_emails.resumo())
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_sentry_teste(request):
+    """
+    GET  /app/admin/plataforma/sentry/  → { ligado, ambiente }
+    POST /app/admin/plataforma/sentry/  → envia uma mensagem de teste ao Sentry → { ligado, evento }
+    Para confirmar que os erros chegam (clube/sentry.py) sem provocar uma avaria. Admins com gerir_plataforma.
+    """
+    erro = _exige_admin(request, 'gerir_plataforma')
+    if erro:
+        return erro
+    from django.conf import settings
+    ligado = bool(getattr(settings, 'SENTRY_LIGADO', False))
+    if request.method == 'GET' or not ligado:
+        ambiente = None
+        if ligado:
+            import sentry_sdk
+            ambiente = sentry_sdk.get_client().options.get('environment')
+        return Response({'ligado': ligado, 'ambiente': ambiente})
+    import sentry_sdk
+    with sentry_sdk.new_scope() as scope:
+        scope.set_tag('teste', 'sim')
+        evento = sentry_sdk.capture_message('Teste do Sentry pedido no painel admin', level='error')
+    sentry_sdk.flush(timeout=5)
+    return Response({'ligado': True, 'evento': evento})

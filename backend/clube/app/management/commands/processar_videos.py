@@ -20,6 +20,7 @@ from django.db.utils import OperationalError, ProgrammingError
 
 from app.models import ConversaoVideo, Galeria, Loja, Produto
 from app.utils import horarios, limpeza, repor_backup, subscricoes, video
+from app.utils.erros import reportar
 
 
 class Command(BaseCommand):
@@ -116,6 +117,7 @@ class Command(BaseCommand):
                         self.stdout.write(f'  emails: {n} registo(s) antigo(s) apagado(s)')
             except Exception as e:      # uma falha aqui não pode parar a thread
                 self.stderr.write(f'  emails: ciclo falhou: {e}')
+                reportar(e)
                 time.sleep(10)
             time.sleep(3)
 
@@ -134,6 +136,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  subscrições: {r}')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  subscrições: ciclo falhou: {e}')
+            reportar(e)
         try:
             # cobrança mensal das comissões (utils/cobranca_comissoes.py): emite no início do mês, avisa à volta do vencimento
             from app.utils import cobranca_comissoes
@@ -142,6 +145,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  comissões: {n} cobranças emitidas, {a} avisos')
         except Exception as e:
             self.stderr.write(f'  comissões: ciclo falhou: {e}')
+            reportar(e)
 
     def _backup_diario(self):
         """De 5 em 5 minutos vê se já é hora do backup da base de dados (utils/backups.py)."""
@@ -159,6 +163,7 @@ class Command(BaseCommand):
                 self.stderr.write(f'  backup: falhou: {b.erro[-300:]}')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  backup: {e}')
+            reportar(e)
 
     def _exportacoes(self):
         """De 10 em 10 segundos: gera a próxima exportação de dados de loja pedida; de hora a hora apaga as
@@ -176,12 +181,14 @@ class Command(BaseCommand):
                 self.stdout.write('  exportação de loja gerada')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  exportação: {e}')
+            reportar(e)
         try:                            # arquivo fiscal grande (Faturação → ZIP), utils/arquivo_fiscal.py
             from app.utils import arquivo_fiscal
             if arquivo_fiscal.processar_fila():
                 self.stdout.write('  arquivo fiscal gerado')
         except Exception as e:
             self.stderr.write(f'  arquivo fiscal: {e}')
+            reportar(e)
 
     def _ensaio_reposicao(self):
         """De 10 em 10 segundos: o ensaio de reposição pedido no admin, ou o periódico quando é devido
@@ -201,6 +208,7 @@ class Command(BaseCommand):
                     self.stderr.write(f"  ensaio de reposição: falhou: {d.get('erro', '')[-300:]}")
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  ensaio de reposição: {e}')
+            reportar(e)
 
     def _copia_media(self):
         """De 10 em 10 segundos: a cópia das fotos e vídeos pedida no admin; de 5 em 5 minutos vê se é hora
@@ -223,6 +231,7 @@ class Command(BaseCommand):
                     self.stderr.write(f'  cópia media: falhou: {c.erro[-300:]}')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  cópia media: {e}')
+            reportar(e)
 
     def _limpar_sessoes(self):
         """Uma vez por dia: apaga os tokens de sessão já expirados (lista negra do logout)."""
@@ -234,6 +243,7 @@ class Command(BaseCommand):
             call_command('flushexpiredtokens', verbosity=0)
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  sessões: limpeza falhou: {e}')
+            reportar(e)
 
     def _indice_pesquisa(self):
         """Barra de pesquisa (utils/pesquisa.py): os sinais mantêm o índice; de 6 em 6 horas (e logo que esteja
@@ -257,6 +267,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  pesquisa: {apagados} registo(s) antigos apagados')
         except Exception as e:
             self.stderr.write(f'  pesquisa: índice falhou: {e}')
+            reportar(e)
 
     def _vetores_pesquisa(self):
         """Pesquisa semântica (utils/semantica.py): de 30 em 30 s, vetores do que é novo ou mudou (só com chave)."""
@@ -271,6 +282,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  pesquisa: {n} vetor(es) semântico(s) calculados')
         except Exception as e:
             self.stderr.write(f'  pesquisa: vetores falharam: {e}')
+            reportar(e)
 
     def _avisos_horario(self):
         """Uma vez por minuto: avisa as lojas das encomendas agendadas para hoje (utils/horarios.py) e cancela
@@ -284,6 +296,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  horários: {n} loja(s) avisada(s) das encomendas agendadas para hoje')
         except Exception as e:          # um erro aqui não pode parar os vídeos
             self.stderr.write(f'  horários: aviso falhou: {e}')
+            reportar(e)
         try:
             from app.utils.encomendas import expirar_por_pagar
             n = expirar_por_pagar()
@@ -291,6 +304,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  encomendas: {n} por pagar fora do prazo cancelada(s) (stock reposto)')
         except Exception as e:
             self.stderr.write(f'  encomendas: expirar falhou: {e}')
+            reportar(e)
         try:
             # envios por transportadora: lembrete ao cliente (dia 7) e fecho automático (dia 10) — utils/envios.py
             from app.utils.envios import processar_prazos
@@ -299,6 +313,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  envios: {lembretes} lembrete(s), {fechadas} fechada(s) automaticamente')
         except Exception as e:
             self.stderr.write(f'  envios: prazos falharam: {e}')
+            reportar(e)
         try:
             from app.pagamentos.vinti4 import rever_sem_resposta
             n = rever_sem_resposta()
@@ -306,6 +321,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  vinti4: {n} pagamento(s) sem resposta revisto(s) (API de estado / 8 min)')
         except Exception as e:
             self.stderr.write(f'  vinti4: rever sem resposta falhou: {e}')
+            reportar(e)
         try:
             from app.utils.encomendas import expirar_transferencias
             lembradas, canceladas = expirar_transferencias()
@@ -313,6 +329,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  transferências: {lembradas} lembrada(s), {canceladas} cancelada(s) sem confirmação')
         except Exception as e:
             self.stderr.write(f'  transferências: expirar falhou: {e}')
+            reportar(e)
         try:
             from app.servicos.ciclo import processar as ciclo_marcacoes
             r = ciclo_marcacoes()
@@ -320,6 +337,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  marcações: {r}')
         except Exception as e:
             self.stderr.write(f'  marcações: ciclo falhou: {e}')
+            reportar(e)
         try:
             # mensagens do chat por ler há alguns minutos: aviso no sino e depois email (app/chat/avisos.py)
             from app.chat.avisos import avisar_por_ler
@@ -328,6 +346,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  chat: {sinos} aviso(s) no sino, {emails} email(s) de mensagens por ler')
         except Exception as e:
             self.stderr.write(f'  chat: avisos falharam: {e}')
+            reportar(e)
         try:
             from app.utils.devolucoes import escalar_sem_resposta
             n = escalar_sem_resposta()
@@ -335,6 +354,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  devoluções: {n} pedido(s) sem resposta da loja enviado(s) à Bendi')
         except Exception as e:
             self.stderr.write(f'  devoluções: escalar falhou: {e}')
+            reportar(e)
         try:
             # reembolsos que o fornecedor recusou: nova tentativa quando a espera acaba (utils/devolucoes.py)
             from app.utils.devolucoes import reembolsos_por_concluir
@@ -344,6 +364,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  reembolsos: {n} encomenda(s) e {m} marcação(ões) tentada(s) de novo')
         except Exception as e:
             self.stderr.write(f'  reembolsos: nova tentativa falhou: {e}')
+            reportar(e)
         try:
             # suspensões que acabaram (as lojas suspensas com a conta voltam a horas) e contas
             # cujo prazo para apagar acabou (utils/moderacao.py, utils/eliminacao.py)
@@ -354,6 +375,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'  contas: {n} suspensão(ões) terminada(s), {m} conta(s) apagada(s)')
         except Exception as e:
             self.stderr.write(f'  contas: falhou: {e}')
+            reportar(e)
         # documentos das lojas a expirar ou expirados (utils/documentos_loja.py) — de hora a hora chega
         if time.monotonic() - getattr(self, '_ultimo_documentos', -1e9) >= 3600:
             self._ultimo_documentos = time.monotonic()
@@ -365,6 +387,7 @@ class Command(BaseCommand):
                     self.stdout.write(f'  contas: {n} conta(s) por confirmar há mais de 7 dias apagada(s)')
             except Exception as e:
                 self.stderr.write(f'  contas: limpeza das por confirmar falhou: {e}')
+                reportar(e)
             try:
                 from app.utils.documentos_loja import avisar_validades
                 n = avisar_validades()
@@ -372,6 +395,7 @@ class Command(BaseCommand):
                     self.stdout.write(f'  documentos: {n} aviso(s) de validade')
             except Exception as e:
                 self.stderr.write(f'  documentos: avisos falharam: {e}')
+                reportar(e)
 
     def _sinal(self, *_):
         # termina a conversão em curso e sai

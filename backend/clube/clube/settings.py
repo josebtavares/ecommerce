@@ -336,3 +336,9 @@ AXES_IGNORE_URLS = [                         # ← e isto
     '/app/utilizador/recuperar_senha/',
     '/app/utilizador/recuperar_senha/confirmar/',
 ]
+
+# ══════════════════════════════════════════════════════════════
+# SENTRY — erros do servidor e do worker (clube/sentry.py); desligado sem SENTRY_DSN
+# ══════════════════════════════════════════════════════════════
+from clube.sentry import iniciar as _iniciar_sentry  # noqa: E402
+SENTRY_LIGADO = _iniciar_sentry(DEBUG)
