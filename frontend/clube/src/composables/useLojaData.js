@@ -162,17 +162,51 @@ export function useLojaData () {
     router.push({ name: 'Login' })
   }
 
-  // /loja/<id>?produto=<id> abre logo o produto (vindo dos favoritos do perfil)
+  // ── O produto aberto vive no endereço: /loja/<endereço>?produto=<id> ──────────
+  // Abrir um produto acrescenta ?produto= ao histórico (link copiável, recarregar mantém-no aberto) e o "voltar" do
+  // telemóvel/browser fecha o pop-up em vez de sair da loja. Fechar no ✕ desfaz essa entrada (sem passo "fantasma");
+  // se o produto veio de um link, só tira o ?produto= do endereço. O router não mexe no scroll (router.js).
+  // A pré-visualização do backoffice e a loja demo (produtos fictícios) ficam de fora.
+  const idReal = p => /^\d+$/.test(String(p?.id ?? ''))
+  const sincronizar = () => !route.query.preview && lojaId.value !== DEMO_ID
+  let empurrado = null   // id do produto cuja entrada no histórico foi criada aqui
+
+  function semProduto () {
+    const q = { ...route.query }
+    delete q.produto
+    return q
+  }
+
+  watch(selectedProduct, (p) => {
+    if (!sincronizar()) return
+    const noEndereco = route.query.produto
+    if (p && idReal(p)) {
+      if (String(p.id) === String(noEndereco ?? '')) return
+      empurrado = String(p.id)
+      router.push({ query: { ...route.query, produto: String(p.id) } })
+    } else if (!p && noEndereco) {
+      const desfazer = empurrado === String(noEndereco) && !!window.history.state?.back
+      empurrado = null
+      if (desfazer) router.back()
+      else router.replace({ query: semProduto() })
+    }
+  })
+
+  // o endereço mudou (link, recarregar, voltar/avançar) → abre ou fecha o pop-up para condizer
   async function abrirProdutoDoLink () {
     const pid = route.query.produto
-    if (!/^\d+$/.test(String(pid ?? ''))) return
-    const resto = { ...route.query }
-    delete resto.produto
-    router.replace({ query: resto })
+    if (pid === undefined) {
+      if (sincronizar() && idReal(selectedProduct.value)) selectedProduct.value = null   // "voltar"
+      return
+    }
+    if (!/^\d+$/.test(String(pid))) return
+    if (String(selectedProduct.value?.id ?? '') === String(pid)) return
     try {
       const { data } = await api.get(`/app/produto/${pid}/`)
-      if (String(data.loja?.id) === String(lojaId.value)) selectedProduct.value = data
+      if (String(route.query.produto) !== String(pid)) return          // o endereço mudou entretanto
+      if (String(data.loja?.id) === String(lojaId.value)) { selectedProduct.value = data; return }
     } catch { /* produto indisponível — fica a página da loja */ }
+    if (String(route.query.produto) === String(pid)) router.replace({ query: semProduto() })
   }
 
   watch(() => route.query.produto, abrirProdutoDoLink)
