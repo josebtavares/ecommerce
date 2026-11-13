@@ -308,7 +308,7 @@
                   Não fica nada para enviar: a encomenda vai ser cancelada{{ pagoDigital(enc) ? ' e o cliente reembolsado de tudo, com a taxa de entrega' : ' (ainda não estava paga — não é cobrado nada)' }}.
                   O stock destes artigos não volta.
                 </p>
-                <p v-else class="text-xs text-sky-100">
+                <p v-else class="text-xs text-sky-200">
                   Escolhe o que não tens. {{ pagoDigital(enc) ? 'O cliente é reembolsado desses artigos na hora' : 'Como ainda não está pago, o valor é descontado no que o cliente paga' }};
                   o resto da encomenda segue. A taxa de entrega não é devolvida e o stock não volta.
                 </p>
