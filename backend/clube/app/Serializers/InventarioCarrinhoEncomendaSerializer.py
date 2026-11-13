@@ -252,6 +252,11 @@ class EncomendaSerializer(serializers.ModelSerializer):
     comprovativo       = serializers.SerializerMethodField()   # do pagamento online (referência, data, valor)
     transferencia      = serializers.SerializerMethodField()   # banco/IBAN/valor/referência — por pagar, por transferência
     nif_em_falta       = serializers.SerializerMethodField()   # ≥ 20 000$00 ou fatura pedida, sem NIF (só aviso)
+    # envio por transportadora (utils/envios.py): e_envio = pedida com opção de envio ou já enviada assim
+    e_envio            = serializers.SerializerMethodField()
+    envio              = serializers.SerializerMethodField()   # transportadora, códigos com link, datas
+    opcao_entrega_nome = serializers.SerializerMethodField()
+    opcao_transportadora_id = serializers.SerializerMethodField()   # a habitual da opção (pré-escolhida ao enviar)
  
     class Meta:
         model  = Encomenda
@@ -279,9 +284,10 @@ class EncomendaSerializer(serializers.ModelSerializer):
             'reembolso', 'valor_reembolsado', 'valor_a_pagar', 'transferencia_por_confirmar', 'prazo_transferencia',
             'fatura',
             'fatura_pedida', 'cliente_nif', 'cliente_nome_fiscal', 'cliente_morada_fiscal', 'nif_em_falta',
+            'concelho_entrega', 'e_envio', 'envio', 'opcao_entrega_nome', 'opcao_transportadora_id',
         ]
         read_only_fields = [
-            'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem',
+            'comprador', 'loja', 'valor_total', 'agendada_para', 'agendamento_origem', 'concelho_entrega',
             'data_criacao', 'data_atualizacao',
             'fatura_pedida', 'cliente_nif', 'cliente_nome_fiscal', 'cliente_morada_fiscal',
         ]
@@ -368,6 +374,23 @@ class EncomendaSerializer(serializers.ModelSerializer):
                 )
         return attrs
     
+    def get_e_envio(self, obj):
+        from ..utils import envios
+        return envios.e_envio(obj)
+
+    def get_envio(self, obj):
+        from ..utils import envios
+        req = self.context.get('request')
+        u = getattr(getattr(req, 'user', None), 'utilizador', None) if req else None
+        # a equipa da loja vê também o histórico e o talão; o cliente só a transportadora e os códigos
+        return envios.dados(envios._entrega(obj), req, loja=bool(u and u.id != obj.comprador_id))
+
+    def get_opcao_entrega_nome(self, obj):
+        return obj.opcao_entrega.nome if obj.opcao_entrega_id and obj.opcao_entrega else ''
+
+    def get_opcao_transportadora_id(self, obj):
+        return obj.opcao_entrega.transportadora_id if obj.opcao_entrega_id and obj.opcao_entrega else None
+
     def get_entrega_condutor(self, obj):
         try:
             condutor = obj.entrega.condutor

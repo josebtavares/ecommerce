@@ -210,6 +210,29 @@ def loja_create(request):
     serializer = LojaSerializer(data=request.data, context={'request': request})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # o concelho diz em que ilha está a loja (envio por transportadora — utils/envios.py)
+    if not serializer.validated_data.get('concelho'):
+        return Response({'concelho': ['Escolhe o concelho onde fica a loja.']}, status=status.HTTP_400_BAD_REQUEST)
+    # opções de entrega validadas antes de criar a loja (antes, as erradas desapareciam sem aviso)
+    opcoes_validas = []
+    opcoes_raw = request.data.get('opcoes_entrega')
+    if opcoes_raw:
+        import json
+        from ..Serializers.EntregaAvaliacaoSerializer import OpcaoEntregaSerializer
+        try:
+            opcoes = json.loads(opcoes_raw)
+        except (json.JSONDecodeError, TypeError):
+            return Response({'opcoes_entrega': ['Opções de entrega inválidas.']}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(opcoes, list):
+            return Response({'opcoes_entrega': ['Opções de entrega inválidas.']}, status=status.HTTP_400_BAD_REQUEST)
+        for i, op in enumerate(o for o in opcoes if isinstance(o, dict) and str(o.get('nome') or '').strip()):
+            s_op = OpcaoEntregaSerializer(data={**op, 'ativa': True})
+            if not s_op.is_valid():
+                return Response({'opcoes_entrega': [f'Opção "{op.get("nome")}": '
+                                                    + ' '.join(str(m) for v in s_op.errors.values() for m in
+                                                               (v if isinstance(v, list) else [v]))]},
+                                status=status.HTTP_400_BAD_REQUEST)
+            opcoes_validas.append(s_op)
     # NIF, particular/atividade e a declaração de responsabilidade fiscal são obrigatórios
     fiscais, erros = validar_dados_fiscais(request.data)
     if erros:
@@ -257,22 +280,8 @@ def loja_create(request):
             if tipo in METODOS_LOJA:
                 MetodoPagamento.objects.get_or_create(loja=loja, tipo=tipo, defaults={'ativo': True})
 
-    import json
-    opcoes_raw = request.data.get('opcoes_entrega')
-    if opcoes_raw:
-        try:
-            opcoes = json.loads(opcoes_raw)
-            from ..models import OpcaoEntrega
-            for op in opcoes:
-                if op.get('nome'):
-                    OpcaoEntrega.objects.create(
-                        loja=loja, nome=op['nome'],
-                        preco=op.get('preco', 0),
-                        tempo_estimado=op.get('tempo_estimado', ''),
-                        ativa=True,
-                    )
-        except (json.JSONDecodeError, TypeError):
-            pass
+    for s_op in opcoes_validas:
+        s_op.save(loja=loja)
 
     return Response(
         LojaSerializer(loja, context={'request': request}).data,

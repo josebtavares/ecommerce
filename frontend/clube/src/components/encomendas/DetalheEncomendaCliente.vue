@@ -38,9 +38,28 @@
       <div class="flex items-center justify-between text-xs">
         <span :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Tipo de entrega</span>
         <span :class="isDark ? 'text-zinc-300' : 'text-zinc-700'">
-          <font-awesome-icon :icon="['fas', detalhe.tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mr-1" />
-          {{ detalhe.tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}
+          <font-awesome-icon :icon="['fas', detalhe.e_envio ? 'box' : detalhe.tipo_entrega === 'entrega' ? 'truck' : 'store']" class="mr-1" />
+          {{ detalhe.e_envio ? (detalhe.opcao_entrega_nome || 'Envio por transportadora') : detalhe.tipo_entrega === 'entrega' ? 'Entrega ao domicílio' : 'Takeaway' }}
         </span>
+      </div>
+      <!-- envio por transportadora: a transportadora e o código de rastreio (backend utils/envios.py) -->
+      <div v-if="detalhe.envio" class="rounded-xl px-3 py-2.5 space-y-1.5 text-xs" data-teste="enc-envio"
+           :class="isDark ? 'bg-sky-500/10 border border-sky-500/25' : 'bg-sky-50 border border-sky-200'">
+        <p class="font-semibold" :class="isDark ? 'text-sky-200' : 'text-sky-800'">
+          {{ detalhe.envio.estado === 'devolvida' ? 'A transportadora devolveu a encomenda à loja'
+             : detalhe.envio.estado === 'entregue' ? 'Entregue' : 'Enviada por ' + detalhe.envio.transportadora }}
+        </p>
+        <div v-for="c in detalhe.envio.codigos" :key="c.codigo" class="flex items-center justify-between gap-2">
+          <span :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">Código de rastreio</span>
+          <span class="flex items-center gap-2">
+            <span class="font-mono select-all" :class="isDark ? 'text-zinc-100' : 'text-zinc-800'">{{ c.codigo }}</span>
+            <a v-if="c.link" :href="c.link" target="_blank" rel="noopener noreferrer"
+               class="px-2 py-0.5 rounded-md font-semibold bg-red-600 text-white hover:bg-red-500">Seguir envio</a>
+          </span>
+        </div>
+        <p v-if="detalhe.envio.contacto" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
+          Contacto da transportadora: {{ detalhe.envio.contacto }}
+        </p>
       </div>
       <div v-if="detalhe.morada_entrega" class="flex items-start justify-between text-xs gap-2">
         <span class="flex-shrink-0" :class="isDark ? 'text-zinc-500' : 'text-zinc-400'">Morada</span>

@@ -73,6 +73,17 @@ def avaliar(loja, com_produtos=False):
          'ok': bool(completos or servicos_ok),
          'ajuda': f'Com foto, preço e descrição (pelo menos {DESCRICAO_MIN} caracteres).'},
     ]
+    # envio por transportadora: as opções dizem para que ilhas servem, a loja tem de dizer onde está (utils/envios.py)
+    if loja.entrega_ativa and loja.opcoes_entrega.filter(ativa=True, tipo='envio').exists():
+        from .geografia import concelho
+        requisitos.append({'chave': 'concelho', 'titulo': 'Concelho da loja (envio por transportadora)',
+                           'seccao': 'configuracoes', 'ok': bool(concelho(loja.concelho)),
+                           'ajuda': 'Em Configurações → Informações: o concelho onde fica a loja.'})
+        # o envio só aceita pagamento antecipado: sem cartão/transferência ligados ninguém o pode escolher
+        requisitos.append({'chave': 'envio_pagamento', 'titulo': 'Pagamento antecipado para o envio', 'seccao': 'configuracoes',
+                           'ok': loja.metodos_pagamento.filter(ativo=True).exclude(tipo='dinheiro').exists(),
+                           'ajuda': 'Em Configurações → Métodos de pagamento: liga o cartão ou a transferência '
+                                    '(o envio por transportadora não aceita dinheiro na entrega).'})
     # com pagamentos online a sério, quem aceita cartão (ou tem serviços pagos antecipadamente) precisa do seu
     # contrato vinti4 ativo — a SISP paga direto à loja (utils/vinti4.py). Sem ele, o online fica suspenso (utils/banco).
     from ..pagamentos import cobra_a_serio

@@ -255,6 +255,11 @@
               </div>
             </div>
 
+            <!-- Envio por transportadora (components/encomendas/PainelEnvio.vue — backend utils/envios.py) -->
+            <PainelEnvio v-if="detalhes[enc.id].e_envio" :loja-id="lojaId" :encomenda="detalhes[enc.id]"
+                         :pedido="pedidoEnvio.id === enc.id ? pedidoEnvio.n : 0"
+                         @ocupado="envioOcupado = $event" @atualizada="envioAtualizado(enc, $event)" />
+
             <!-- Condutor atribuído -->
             <div v-if="detalhes[enc.id].entrega_condutor"
                  class="border-t border-zinc-800 pt-3 flex items-center gap-2 text-xs">
@@ -352,8 +357,8 @@
                         : s.class + ' cursor-pointer'
                   ]">
                   <font-awesome-icon v-if="s.value === enc.status" :icon="['fas', 'check']" class="mr-1" />{{ s.label }}
-                  <span v-if="s.value === 'enviado' && enc.tipo_entrega === 'entrega' && enc.status === 'preparando'"
-                        class="ml-1 text-[9px] opacity-70">+ condutor</span>
+                  <span v-if="s.value === 'enviado' && enc.tipo_entrega === 'entrega' && ['pago', 'preparando'].includes(enc.status)"
+                        class="ml-1 text-[9px] opacity-70">{{ detalhes[enc.id]?.e_envio ? '+ código' : '+ condutor' }}</span>
                 </button>
               </div>
               <p v-if="estadosBloqueados.includes(enc.status)" class="text-xs text-zinc-600">
@@ -502,6 +507,7 @@ import { fichaDaRota, irParaFicha } from '@/utils/ficha'
 import { formatarPrazo } from '@/utils/transferencia'
 import { ouvirEncomendas } from '@/utils/tempoRealEncomendas'
 import AvisoMudouPorFora from '@/components/encomendas/AvisoMudouPorFora.vue'
+import PainelEnvio from '@/components/encomendas/PainelEnvio.vue'
 import { contactarCliente } from '@/services/chat'
 
 const TODOS_ESTADOS = [
@@ -517,7 +523,7 @@ const ESTADOS_BLOQUEADOS = ['concluido', 'cancelado', 'enviado']
 
 export default {
   name: 'BackofficeEncomendas',
-  components: { PausaLoja, EstadoReembolso, FaturaEncomenda, AvisoMudouPorFora },
+  components: { PausaLoja, EstadoReembolso, FaturaEncomenda, AvisoMudouPorFora, PainelEnvio },
   emits: ['ver-reembolso'],
   props: {
     lojaId: [String, Number],
@@ -528,7 +534,7 @@ export default {
     return {
       nifEdicao: { id: null },   // formulário do NIF do cliente (ficha aberta)
       aConfirmar: null,
-      ESTADO_ENTREGA: { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada' },
+      ESTADO_ENTREGA: { atribuido: 'Atribuída', a_caminho: 'A caminho', entregue: 'Entregue', falhou: 'Falhou', cancelada: 'Cancelada', devolvida: 'Devolvida' },
       loading: true,
       encomendas: [],
       totalCount: 0,
@@ -562,6 +568,8 @@ export default {
       condutorSelecionado: null,
       loadingCondutores:  false,
       loadingEnvio:       false,
+      pedidoEnvio:        { id: null, n: 0 },   // "Enviado" numa encomenda de envio → abre o formulário do PainelEnvio
+      envioOcupado:       false,
       adiada:             null,     // aviso em tempo real à espera de a pessoa acabar a acção ({ id } | 'todas')
     }
   },
@@ -575,7 +583,7 @@ export default {
     totalPages () { return Math.ceil(this.totalCount / this.limit) },
     // a meio de uma acção sobre uma encomenda: os dados não mudam por baixo da pessoa
     ocupada () {
-      return !!(this.modalCondutor || this.esgotadoAberto || this.loadingStatus || this.aConfirmar || this.aEsgotar || this.loadingEnvio)
+      return !!(this.modalCondutor || this.esgotadoAberto || this.loadingStatus || this.aConfirmar || this.aEsgotar || this.loadingEnvio || this.envioOcupado)
     },
     paginasVisiveis () {
       const start = Math.max(1, this.page - 2)
@@ -814,6 +822,11 @@ export default {
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'levantamento') return
       // cancelar uma encomenda paga reembolsa o cliente (utils/devolucoes.py) — confirmar antes
       if (novoStatus === 'cancelado' && !confirm(this.avisoCancelar(enc))) return
+      // envio por transportadora: sai com o código de rastreio (PainelEnvio), não com condutor
+      if (novoStatus === 'enviado' && this.detalhes[enc.id]?.e_envio) {
+        this.pedidoEnvio = { id: enc.id, n: this.pedidoEnvio.n + 1 }
+        return
+      }
       if (novoStatus === 'enviado' && enc.tipo_entrega === 'entrega') {
         this.abrirModalCondutor(enc)
         return
@@ -901,6 +914,17 @@ export default {
         await this.fetchContagens()
         this.modalCondutor = null
       } finally { this.loadingEnvio = false }
+    },
+
+    // enviada / corrigida / devolvida: a encomenda pode ter mudado de estado — recarrega a ficha e as contagens
+    async envioAtualizado (enc, data) {
+      this.envioOcupado = false
+      if (data?.status && data.status !== enc.status) enc.status = data.status
+      try {
+        const { data: d } = await api.get(`/app/encomenda/${enc.id}/`)
+        this.detalhes = { ...this.detalhes, [enc.id]: d }
+      } catch { /* fica o que estava */ }
+      this.fetchContagens()
     },
 
     async mudarStatus (enc, novoStatus) {

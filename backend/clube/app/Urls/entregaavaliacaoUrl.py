@@ -2,6 +2,7 @@ from django.urls import path
 from ..Views import entregaavaliacaoView as v
 from ..Views import acertoCondutorView as acerto
 from ..Views import entregaProvaView as prova
+from ..Views import envioView as envio
 
 urlpatterns = [
 
@@ -66,4 +67,11 @@ urlpatterns = [
     path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/entrega/prova/', prova.prova_juntar),
     path('entregas/<int:entrega_id>/prova/<str:parte>/', prova.prova_ficheiro),
     path('loja/<int:loja_id>/entrega/resumo-dia/', prova.resumo_dia),
+    # ── Envio por transportadora (utils/envios.py) ─────────────
+    path('transportadoras/', envio.transportadoras),
+    path('admin/transportadoras/', envio.admin_transportadoras),
+    path('admin/transportadoras/<int:transportadora_id>/', envio.admin_transportadora),
+    path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/', envio.enviar),
+    path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/corrigir/', envio.corrigir),
+    path('loja/<int:loja_id>/encomendas/<int:encomenda_id>/envio/devolvida/', envio.devolvida),
 ]

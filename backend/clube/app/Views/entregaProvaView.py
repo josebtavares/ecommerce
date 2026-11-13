@@ -68,7 +68,7 @@ def prova_ficheiro(request, entrega_id, parte):
         return Response({'detail': 'Link inválido ou expirado.'}, status=403)
     e = Entrega.objects.select_related('encomenda__loja', 'condutor').filter(id=entrega_id).first()
     u = Utilizador.objects.filter(id=lido[2]).select_related('user').first()
-    f = getattr(e, f'prova_{parte}', None) if e else None
+    f = (e.comprovativo_envio if parte == 'talao' else getattr(e, f'prova_{parte}', None)) if e else None
     # o acesso volta a ser verificado: quem saiu da loja deixa de ver, mesmo com o link
     pode = u and u.user.is_active and (P.pode_ver(u, e) or (lido[3] and u.user.is_staff))
     if not f or not pode:

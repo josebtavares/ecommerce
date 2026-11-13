@@ -831,6 +831,14 @@ def encomenda_atualizar_status(request, loja_id, id):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
  
     novo_status = serializer.validated_data.get('status')
+    # envio por transportadora (utils/envios.py): sai com o código de rastreio; a caminho não se cancela
+    from ..utils import envios
+    if novo_status == 'enviado' and envios.e_envio(encomenda):
+        return Response({'detail': 'O cliente escolheu envio por transportadora: usa "Enviar por transportadora" '
+                                   'e indica o código de rastreio.'}, status=status.HTTP_400_BAD_REQUEST)
+    if novo_status == 'cancelado' and envios.em_transito(encomenda):
+        return Response({'detail': 'A encomenda está com a transportadora. Se ela a devolver, marca-a como devolvida '
+                                   'e depois podes cancelar.'}, status=status.HTTP_400_BAD_REQUEST)
     if novo_status in ('enviado', 'concluido') and transferencia_por_confirmar(encomenda):
         return Response({'detail': 'Confirma primeiro que a transferência chegou: a encomenda não sai sem estar paga.'},
                         status=status.HTTP_400_BAD_REQUEST)
