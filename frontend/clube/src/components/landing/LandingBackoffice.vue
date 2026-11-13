@@ -50,10 +50,11 @@
                 <font-awesome-icon :icon="['fas', 'lock']" class="mr-1.5 text-[9px] text-green-500" />e-bendi.cv/backoffice
               </span>
             </div>
-            <div class="relative aspect-[16/10]" data-teste="backoffice-ecra">
+            <!-- com captura, o ecrã toma a proporção dela (a imagem aparece inteira); sem captura, esboço a 16:10 -->
+            <div class="relative" :class="{ 'aspect-[16/10]': !modulo.media }" data-teste="backoffice-ecra">
               <transition name="troca" mode="out-in">
-                <div :key="atual" class="absolute inset-0">
-                  <LandingFoto v-if="modulo.media" :media="modulo.media" class="object-top" />
+                <div :key="atual" :class="modulo.media ? '' : 'absolute inset-0'">
+                  <LandingFoto v-if="modulo.media" :media="modulo.media" inteira />
                   <!-- esboço do backoffice quando ainda não há captura -->
                   <div v-else class="w-full h-full flex" aria-hidden="true" data-teste="backoffice-esboco">
                     <div class="w-1/5 hidden sm:flex flex-col gap-2 p-3" :class="isDark ? 'bg-zinc-900' : 'bg-slate-50'">
@@ -193,7 +194,6 @@ export default {
 .troca-enter-active, .troca-leave-active { transition: opacity .25s ease, transform .25s ease; }
 .troca-enter-from { opacity: 0; transform: translateY(.5rem); }
 .troca-leave-to { opacity: 0; }
-:deep(img), :deep(video) { object-position: top; }
 @media (prefers-reduced-motion: reduce) {
   .modulo, .janela-bloco { opacity: 1; animation: none !important; }
   .troca-enter-active, .troca-leave-active { transition: none; }
