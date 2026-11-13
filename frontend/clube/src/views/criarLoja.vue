@@ -97,6 +97,27 @@
           </div>
         </div>
 
+        <!-- Contactos da loja: aparecem na página da loja; pelo menos um é preciso para publicar -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4" data-teste="criar-contactos">
+          <div>
+            <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Contactos da loja *</h2>
+            <p class="text-xs text-zinc-600 mt-0.5">Pelo menos um. Os clientes veem-nos na página da loja.</p>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs text-zinc-500 mb-1.5 block">Telefone</label>
+              <input v-model="form.contacto_telefone" type="tel" maxlength="40" placeholder="ex.: +238 900 00 00"
+                data-teste="criar-telefone" class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+            </div>
+            <div>
+              <label class="text-xs text-zinc-500 mb-1.5 block">Email</label>
+              <input v-model="form.contacto_email" type="email" maxlength="254" placeholder="ex.: loja@exemplo.cv"
+                data-teste="criar-email" class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+              <p v-if="emailInvalido" class="text-[10px] text-red-400 mt-1">Este email não parece válido.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Dados fiscais (utils/fiscal.js) — o NIF não aparece na loja pública -->
         <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4">
           <div>
@@ -183,17 +204,22 @@
               <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Template da loja</h2>
               <p class="text-xs text-zinc-600 mt-0.5">Podes mudar a qualquer altura no backoffice → Aparência.</p>
             </div>
-            <span v-if="form.categoria" class="text-[10px] text-zinc-600">
+            <span v-if="form.categoria && filtroTemplate === 'sugeridos'" class="text-[10px] text-zinc-600">
               Sugeridos para <span class="text-zinc-400 capitalize">{{ form.categoria }}</span>
             </span>
           </div>
 
           <!-- Filtro por categoria -->
           <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            <button @click="filtroTemplate = null"
+            <button v-if="form.categoria" @click="filtroTemplate = 'sugeridos'" data-teste="templates-sugeridos"
+              :class="['px-3 py-1.5 rounded-full text-xs font-semibold transition whitespace-nowrap flex-shrink-0',
+                       filtroTemplate === 'sugeridos' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+              Sugeridos
+            </button>
+            <button @click="filtroTemplate = null" data-teste="templates-todos"
               :class="['px-3 py-1.5 rounded-full text-xs font-semibold transition whitespace-nowrap flex-shrink-0',
                        filtroTemplate === null ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-              Todos
+              Todos <span class="opacity-70">{{ todosTemplates.length }}</span>
             </button>
             <button v-for="cat in categoriasFiltroTemplate" :key="cat.value"
               @click="filtroTemplate = cat.value"
@@ -289,10 +315,20 @@
         <div v-if="form.entrega_ativa" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4">
           <div class="flex items-center justify-between">
             <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Opções de entrega</h2>
-            <button @click="adicionarOpcao" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition">+ Adicionar</button>
+            <button type="button" @click="adicionarOpcao" data-teste="criar-opcao-adicionar"
+              class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-xs font-semibold text-white transition">
+              <font-awesome-icon :icon="['fas', 'plus']" class="mr-1" />{{ form.opcoes_entrega.length ? 'Outra opção' : 'Adicionar' }}
+            </button>
           </div>
           <div class="space-y-3">
-            <div v-for="(op, idx) in form.opcoes_entrega" :key="idx" class="bg-zinc-800/60 rounded-xl p-4 space-y-3">
+            <div v-for="(op, idx) in form.opcoes_entrega" :key="idx" class="bg-zinc-800/60 rounded-xl p-4 space-y-3" data-teste="criar-opcao">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold text-zinc-400">Opção {{ idx + 1 }}</span>
+                <button type="button" @click="form.opcoes_entrega.splice(idx, 1)" data-teste="criar-opcao-remover"
+                  class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-red-400 hover:text-red-300 hover:bg-red-500/10 transition">
+                  <font-awesome-icon :icon="['fas', 'trash']" class="text-[10px]" />Remover
+                </button>
+              </div>
               <div class="grid grid-cols-3 gap-3">
                 <div class="col-span-2">
                   <label class="text-[10px] text-zinc-500 mb-1 block">Nome</label>
@@ -305,18 +341,10 @@
                     class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
                 </div>
               </div>
-              <div class="flex items-center gap-3">
-                <div class="flex-1">
-                  <label class="text-[10px] text-zinc-500 mb-1 block">Tempo estimado</label>
-                  <input v-model="op.tempo_estimado" type="text" :placeholder="op.tipo === 'envio' ? 'ex: 2-5 dias úteis' : 'ex: 30-45 min'"
-                    class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
-                </div>
-                <button @click="form.opcoes_entrega.splice(idx, 1)"
-                  class="mt-4 w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition flex-shrink-0">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+              <div>
+                <label class="text-[10px] text-zinc-500 mb-1 block">Tempo estimado</label>
+                <input v-model="op.tempo_estimado" type="text" :placeholder="op.tipo === 'envio' ? 'ex: 2-5 dias úteis' : 'ex: 30-45 min'"
+                  class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
               </div>
               <CamposEnvio :opcao="op" :concelho-loja="form.concelho" @mudar="Object.assign(op, $event)" />
             </div>
@@ -332,6 +360,74 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p class="text-sm text-red-400">{{ avisoEntrega }}</p>
+        </div>
+
+        <!-- Dados bancários: só com transferência; sem eles a transferência não aparece aos clientes -->
+        <div v-if="form.metodos_pagamento.includes('transferencia')" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4"
+             data-teste="criar-banco">
+          <div>
+            <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Dados bancários</h2>
+            <p class="text-xs text-zinc-600 mt-0.5">Para receberes as transferências. O cliente vê o IBAN e o titular quando escolhe pagar
+              assim. Podes juntá-los depois em Configurações — até lá a transferência não aparece aos clientes.</p>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs text-zinc-500 mb-1.5 block">Banco</label>
+              <select v-model="banco.banco" data-teste="criar-banco-banco" class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition">
+                <option value="">Escolhe o banco</option>
+                <option v-for="b in bancos" :key="b" :value="b">{{ b }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-zinc-500 mb-1.5 block">Titular</label>
+              <input v-model="banco.titular" maxlength="120" autocomplete="off" placeholder="Nome como aparece no banco"
+                data-teste="criar-banco-titular" class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="text-xs text-zinc-500 mb-1.5 block">IBAN ou NIB</label>
+              <input v-model="banco.nib" maxlength="40" autocomplete="off" placeholder="CV64 0003 0000 0000 0000 0000 0"
+                data-teste="criar-banco-nib" class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition font-mono" />
+            </div>
+          </div>
+          <p v-if="bancoIncompleto" class="text-xs text-amber-400" data-teste="criar-banco-incompleto">
+            Preenche os três campos (ou deixa-os todos vazios e junta-os depois).
+          </p>
+        </div>
+
+        <!-- Políticas: já vêm com um texto-base (utils/politicasBase.js); são precisas para publicar -->
+        <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4" data-teste="criar-politicas">
+          <div>
+            <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Políticas da loja</h2>
+            <p class="text-xs text-zinc-600 mt-0.5">Já escrevemos um texto-base com as regras da Bendi — muda o que quiseres.
+              Os clientes veem-no antes de comprar.</p>
+          </div>
+          <div>
+            <label class="text-xs text-zinc-500 mb-1.5 block">Devoluções por mudança de ideias</label>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="o in PRAZOS_DEVOLUCAO" :key="o.dias" type="button" @click="mudarPrazoDevolucao(o.dias)"
+                :data-teste="`criar-prazo-${o.dias}`"
+                :class="['px-3 py-1.5 rounded-full text-xs font-semibold transition',
+                         form.prazo_devolucao_dias === o.dias ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+                {{ o.label }}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-zinc-500 mb-1.5 block">Política de devoluções *</label>
+            <textarea v-model="form.politica_devolucao" rows="6" maxlength="5000" data-teste="criar-politica-devolucao"
+              @input="editou.devolucao = true" class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition resize-y"></textarea>
+            <!-- o dono mexeu no texto e depois mudou o prazo: o texto pode já não bater certo -->
+            <p v-if="prazoForaDoTexto" class="mt-1 text-[11px] text-amber-400 flex flex-wrap items-center gap-x-2" data-teste="criar-prazo-aviso">
+              O texto não fala {{ form.prazo_devolucao_dias ? `em ${form.prazo_devolucao_dias} dias` : 'em não aceitar devoluções' }} — confirma-o.
+              <button type="button" @click="reporPolitica" class="font-semibold text-red-400 hover:text-red-300" data-teste="criar-politica-repor">
+                Repor o texto-base</button>
+            </p>
+          </div>
+          <div v-if="form.entrega_ativa">
+            <label class="text-xs text-zinc-500 mb-1.5 block">Política de entregas *</label>
+            <textarea v-model="form.politica_entregas" rows="4" maxlength="5000" data-teste="criar-politica-entregas"
+              class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition resize-y"></textarea>
+          </div>
         </div>
 
         <!-- Resumo template escolhido -->
@@ -408,8 +504,21 @@
           A tua loja está pendente com o template
           <span class="text-zinc-200 font-semibold">{{ templateEscolhido?.nome }}</span>.
         </p>
-        <button @click="$router.push('/')"
+        <!-- o que ainda falta para a Bendi a poder aprovar (utils/prontidao.py) -->
+        <div v-if="emFalta.length" class="text-left rounded-xl bg-zinc-800/60 p-3 space-y-1.5" data-teste="criar-falta">
+          <p class="text-xs font-semibold text-zinc-300">Para a Bendi aprovar a loja, falta:</p>
+          <p v-for="r in emFalta" :key="r.chave" class="text-xs text-amber-300 flex gap-1.5">
+            <font-awesome-icon :icon="['fas', 'circle-exclamation']" class="mt-0.5 flex-shrink-0" />
+            <span>{{ r.titulo }}<span class="block text-[10px] text-zinc-500">{{ r.ajuda }}</span></span>
+          </p>
+        </div>
+        <p v-else-if="lojaCriada" class="text-xs text-green-400">Está tudo pronto — a Bendi vai analisar a tua loja.</p>
+        <button v-if="lojaCriada" @click="$router.push(`/loja/${lojaCriada.id}/backoffice`)" data-teste="criar-ir-backoffice"
           class="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition">
+          Ir para o backoffice
+        </button>
+        <button @click="$router.push('/')" data-teste="criar-voltar-inicio"
+          class="w-full py-2.5 rounded-xl border border-zinc-700 text-zinc-300 hover:border-zinc-500 text-sm transition">
           Voltar ao início
         </button>
       </div>
@@ -514,6 +623,7 @@ import AvisoConfirmarEmail from '@/components/auth/AvisoConfirmarEmail.vue'
 import { EVENTO, utilizadorGuardado } from '@/services/confirmarEmail'
 import SeletorConcelho from '@/components/forms/SeletorConcelho.vue'
 import CamposEnvio from '@/components/entregas/CamposEnvio.vue'
+import { PRAZOS_DEVOLUCAO, politicaDevolucaoBase, politicaEntregasBase } from '@/utils/politicasBase'
 
 const TAG_STYLES = {
   'Versátil':  { background:'rgba(220,38,38,0.12)',  color:'#f87171', border:'1px solid rgba(220,38,38,0.25)'   },
@@ -564,7 +674,17 @@ export default {
         levantamento_ativo: true,
         metodos_pagamento:  ['dinheiro'],
         opcoes_entrega:     [],
+        contacto_telefone:  '',
+        contacto_email:     '',
+        prazo_devolucao_dias: 14,
+        politica_devolucao: politicaDevolucaoBase(14),
+        politica_entregas:  politicaEntregasBase(),
       },
+      editou:     { devolucao: false },       // depois de mexer no texto, mudar o prazo já não o reescreve
+      banco:      { banco: '', titular: '', nib: '' },
+      bancos:     [],
+      PRAZOS_DEVOLUCAO,
+      lojaCriada: null,
 
       logoPreview:   null,
       bannerPreview: null,
@@ -586,14 +706,15 @@ export default {
     todosTemplates () { return TEMPLATES },
 
     templatesFiltrados () {
+      if (this.filtroTemplate === 'sugeridos') {
+        return this.form.categoria ? getTemplatesSugeridos(this.form.categoria) : TEMPLATES
+      }
       if (this.filtroTemplate) {
         return TEMPLATES.filter(t =>
           t.categorias.includes('todos') || t.categorias.includes(this.filtroTemplate)
         )
       }
-      return this.form.categoria
-        ? getTemplatesSugeridos(this.form.categoria)
-        : TEMPLATES
+      return TEMPLATES          // "Todos" = todos os templates
     },
 
     templateEscolhido () {
@@ -639,8 +760,29 @@ export default {
       return TEMPLATES.findIndex(t => t.id === this.previewModal.id)
     },
 
+    emailInvalido () {
+      const e = this.form.contacto_email.trim()
+      return !!e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
+    },
+    temContacto () {
+      return !!(this.form.contacto_telefone.trim() || this.form.contacto_email.trim()) && !this.emailInvalido
+    },
+    // banco: tudo ou nada (o backend valida o IBAN)
+    bancoIncompleto () {
+      const v = Object.values(this.banco).map(x => x.trim())
+      return v.some(Boolean) && !v.every(Boolean)
+    },
+    prazoForaDoTexto () {
+      if (!this.editou.devolucao) return false
+      const t = this.form.politica_devolucao
+      const d = this.form.prazo_devolucao_dias
+      return d ? !t.includes(`${d} dias`) : !/não aceitamos/i.test(t)
+    },
+    emFalta () {
+      return (this.lojaCriada?.prontidao?.requisitos || []).filter(r => !r.ok)
+    },
     podeAvancar () {
-      if (this.step === 1) return this.form.nome.trim() && this.form.categoria && this.form.concelho && dadosFiscaisValidos(this.fiscal)
+      if (this.step === 1) return this.form.nome.trim() && this.form.categoria && this.form.concelho && dadosFiscaisValidos(this.fiscal) && this.temContacto
       if (this.step === 2) return true
       return false
     },
@@ -664,6 +806,9 @@ export default {
 
     podeCriar () {
       if (this.erroEnvio) return false
+      if (this.bancoIncompleto) return false
+      if (!this.form.politica_devolucao.trim()) return false
+      if (this.form.entrega_ativa && !this.form.politica_entregas.trim()) return false
       if (this.form.metodos_pagamento.length === 0) return false
       if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0) return false
       if (!this.form.entrega_ativa && !this.form.levantamento_ativo) return false
@@ -672,8 +817,11 @@ export default {
     },
 
     avisoEntrega () {
-      if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0)
-        return 'Com entrega ao domicílio activa tens de adicionar pelo menos uma opção de entrega.'
+      if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0) {
+        return this.form.opcoes_entrega.length
+          ? 'Dá um nome à opção de entrega (ex.: Standard) — é o que o cliente vê no checkout.'
+          : 'Com entrega ao domicílio activa tens de adicionar pelo menos uma opção de entrega.'
+      }
       if (!this.form.entrega_ativa && !this.form.levantamento_ativo)
         return 'Tens de activar pelo menos um tipo de serviço.'
       return this.erroEnvio
@@ -684,6 +832,7 @@ export default {
   beforeUnmount () { window.removeEventListener(EVENTO, this.lerUtilizador) },
 
   async created () {
+    this.fetchBancos()
     await this.fetchCategorias()
   },
 
@@ -727,6 +876,7 @@ export default {
     },
 
     autoSelecionarTemplate (categoriaNome) {
+      this.filtroTemplate = 'sugeridos'     // abre nos sugeridos; "Todos" mostra o resto
       const sugeridos = getTemplatesSugeridos(categoriaNome)
       const actual = TEMPLATES.find(t => t.id === this.form.template_id)
       if (!actual || actual.categorias.includes('todos')) {
@@ -754,6 +904,21 @@ export default {
       else this.form.metodos_pagamento.push(tipo)
     },
 
+    mudarPrazoDevolucao (dias) {
+      this.form.prazo_devolucao_dias = dias
+      if (!this.editou.devolucao) this.form.politica_devolucao = politicaDevolucaoBase(dias)
+    },
+
+    reporPolitica () {
+      this.form.politica_devolucao = politicaDevolucaoBase(this.form.prazo_devolucao_dias)
+      this.editou.devolucao = false
+    },
+
+    async fetchBancos () {
+      if (this.bancos.length) return
+      try { this.bancos = (await api.get('/app/bancos/')).data } catch { this.bancos = [] }
+    },
+
     adicionarOpcao () {
       this.form.opcoes_entrega.push({ nome: '', preco: 0, tempo_estimado: '', tipo: 'local', transportadora_id: null,
                                       transportadora_outra: '', ilhas: [] })
@@ -777,6 +942,14 @@ export default {
         if (this.cobranca.plano_id) fd.append('plano_id', this.cobranca.plano_id)
         fd.append('entrega_ativa',      this.form.entrega_ativa)
         fd.append('levantamento_ativo', this.form.levantamento_ativo)
+        fd.append('contacto_telefone',  this.form.contacto_telefone.trim())
+        fd.append('contacto_email',     this.form.contacto_email.trim())
+        fd.append('prazo_devolucao_dias', this.form.prazo_devolucao_dias)
+        fd.append('politica_devolucao', this.form.politica_devolucao.trim())
+        if (this.form.entrega_ativa) fd.append('politica_entregas', this.form.politica_entregas.trim())
+        if (this.form.metodos_pagamento.includes('transferencia') && this.banco.nib.trim()) {
+          Object.entries(this.banco).forEach(([k, v]) => fd.append(k, v.trim()))
+        }
         Object.entries(corpoDadosFiscais(this.fiscal)).forEach(([k, v]) => fd.append(k, v))
         if (this.form.logo)   fd.append('logo',   this.form.logo)
         if (this.form.banner) fd.append('banner', this.form.banner)
@@ -784,7 +957,8 @@ export default {
         if (this.form.opcoes_entrega.length > 0) {
           fd.append('opcoes_entrega', JSON.stringify(this.opcoesValidas))
         }
-        await api.post('/app/loja/criar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        const { data } = await api.post('/app/loja/criar/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        this.lojaCriada = data
         this.sucesso = true
       } catch (e) {
         const d = e.response?.data
