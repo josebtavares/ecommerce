@@ -183,17 +183,22 @@
               <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Template da loja</h2>
               <p class="text-xs text-zinc-600 mt-0.5">Podes mudar a qualquer altura no backoffice → Aparência.</p>
             </div>
-            <span v-if="form.categoria" class="text-[10px] text-zinc-600">
+            <span v-if="form.categoria && filtroTemplate === 'sugeridos'" class="text-[10px] text-zinc-600">
               Sugeridos para <span class="text-zinc-400 capitalize">{{ form.categoria }}</span>
             </span>
           </div>
 
           <!-- Filtro por categoria -->
           <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            <button @click="filtroTemplate = null"
+            <button v-if="form.categoria" @click="filtroTemplate = 'sugeridos'" data-teste="templates-sugeridos"
+              :class="['px-3 py-1.5 rounded-full text-xs font-semibold transition whitespace-nowrap flex-shrink-0',
+                       filtroTemplate === 'sugeridos' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
+              Sugeridos
+            </button>
+            <button @click="filtroTemplate = null" data-teste="templates-todos"
               :class="['px-3 py-1.5 rounded-full text-xs font-semibold transition whitespace-nowrap flex-shrink-0',
                        filtroTemplate === null ? 'bg-red-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200']">
-              Todos
+              Todos <span class="opacity-70">{{ todosTemplates.length }}</span>
             </button>
             <button v-for="cat in categoriasFiltroTemplate" :key="cat.value"
               @click="filtroTemplate = cat.value"
@@ -289,10 +294,20 @@
         <div v-if="form.entrega_ativa" class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4">
           <div class="flex items-center justify-between">
             <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Opções de entrega</h2>
-            <button @click="adicionarOpcao" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition">+ Adicionar</button>
+            <button type="button" @click="adicionarOpcao" data-teste="criar-opcao-adicionar"
+              class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-xs font-semibold text-white transition">
+              <font-awesome-icon :icon="['fas', 'plus']" class="mr-1" />{{ form.opcoes_entrega.length ? 'Outra opção' : 'Adicionar' }}
+            </button>
           </div>
           <div class="space-y-3">
-            <div v-for="(op, idx) in form.opcoes_entrega" :key="idx" class="bg-zinc-800/60 rounded-xl p-4 space-y-3">
+            <div v-for="(op, idx) in form.opcoes_entrega" :key="idx" class="bg-zinc-800/60 rounded-xl p-4 space-y-3" data-teste="criar-opcao">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold text-zinc-400">Opção {{ idx + 1 }}</span>
+                <button type="button" @click="form.opcoes_entrega.splice(idx, 1)" data-teste="criar-opcao-remover"
+                  class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-red-400 hover:text-red-300 hover:bg-red-500/10 transition">
+                  <font-awesome-icon :icon="['fas', 'trash']" class="text-[10px]" />Remover
+                </button>
+              </div>
               <div class="grid grid-cols-3 gap-3">
                 <div class="col-span-2">
                   <label class="text-[10px] text-zinc-500 mb-1 block">Nome</label>
@@ -305,18 +320,10 @@
                     class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
                 </div>
               </div>
-              <div class="flex items-center gap-3">
-                <div class="flex-1">
-                  <label class="text-[10px] text-zinc-500 mb-1 block">Tempo estimado</label>
-                  <input v-model="op.tempo_estimado" type="text" :placeholder="op.tipo === 'envio' ? 'ex: 2-5 dias úteis' : 'ex: 30-45 min'"
-                    class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
-                </div>
-                <button @click="form.opcoes_entrega.splice(idx, 1)"
-                  class="mt-4 w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition flex-shrink-0">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+              <div>
+                <label class="text-[10px] text-zinc-500 mb-1 block">Tempo estimado</label>
+                <input v-model="op.tempo_estimado" type="text" :placeholder="op.tipo === 'envio' ? 'ex: 2-5 dias úteis' : 'ex: 30-45 min'"
+                  class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-red-500 transition" />
               </div>
               <CamposEnvio :opcao="op" :concelho-loja="form.concelho" @mudar="Object.assign(op, $event)" />
             </div>
@@ -586,14 +593,15 @@ export default {
     todosTemplates () { return TEMPLATES },
 
     templatesFiltrados () {
+      if (this.filtroTemplate === 'sugeridos') {
+        return this.form.categoria ? getTemplatesSugeridos(this.form.categoria) : TEMPLATES
+      }
       if (this.filtroTemplate) {
         return TEMPLATES.filter(t =>
           t.categorias.includes('todos') || t.categorias.includes(this.filtroTemplate)
         )
       }
-      return this.form.categoria
-        ? getTemplatesSugeridos(this.form.categoria)
-        : TEMPLATES
+      return TEMPLATES          // "Todos" = todos os templates
     },
 
     templateEscolhido () {
@@ -672,8 +680,11 @@ export default {
     },
 
     avisoEntrega () {
-      if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0)
-        return 'Com entrega ao domicílio activa tens de adicionar pelo menos uma opção de entrega.'
+      if (this.form.entrega_ativa && this.form.opcoes_entrega.filter(o => o.nome.trim()).length === 0) {
+        return this.form.opcoes_entrega.length
+          ? 'Dá um nome à opção de entrega (ex.: Standard) — é o que o cliente vê no checkout.'
+          : 'Com entrega ao domicílio activa tens de adicionar pelo menos uma opção de entrega.'
+      }
       if (!this.form.entrega_ativa && !this.form.levantamento_ativo)
         return 'Tens de activar pelo menos um tipo de serviço.'
       return this.erroEnvio
@@ -727,6 +738,7 @@ export default {
     },
 
     autoSelecionarTemplate (categoriaNome) {
+      this.filtroTemplate = 'sugeridos'     // abre nos sugeridos; "Todos" mostra o resto
       const sugeridos = getTemplatesSugeridos(categoriaNome)
       const actual = TEMPLATES.find(t => t.id === this.form.template_id)
       if (!actual || actual.categorias.includes('todos')) {
