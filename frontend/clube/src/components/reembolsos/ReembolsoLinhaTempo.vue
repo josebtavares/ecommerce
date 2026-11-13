@@ -66,7 +66,13 @@ const passos = computed(() => {
                estado: decidiu ? (r.estado === 'recusado' ? 'falhou' : 'feito') : (r.estado === 'em_disputa' ? 'atual' : 'futuro') })
   }
   if (r.devolver_produto) {
+    // devolução pelo correio: o cliente disse por onde enviou
+    if (r.devolucao_envio) {
+      out.push({ chave: 'produto_enviado', estado: 'feito', texto: dataHora(r.devolucao_envio.enviada_em),
+                 titulo: `${cliente ? 'Enviaste' : 'O cliente enviou'} o produto por ${r.devolucao_envio.transportadora}` })
+    }
     out.push({ chave: 'produto', titulo: r.produto_recebido_em ? 'A loja recebeu o produto'
+                                        : r.devolucao_envio ? 'A loja confirma que recebeu'
                                         : (cliente ? 'Devolver o produto à loja' : 'O cliente devolve o produto'),
                texto: r.produto_recebido_em ? dataHora(r.produto_recebido_em) : '',
                estado: r.produto_recebido_em ? 'feito' : (r.estado === 'aguarda_produto' ? 'atual' : 'futuro') })

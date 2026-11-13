@@ -121,6 +121,9 @@
         </div>
       </section>
 
+      <!-- devolução pelo correio: o cliente diz por onde enviou o produto -->
+      <DevolucaoPeloCorreio :reembolso="r" papel="cliente" :isDark="isDark" @atualizado="r = $event" />
+
       <!-- artigos -->
       <section v-if="r.itens.length" class="rounded-2xl border p-4" :class="cartao">
         <p class="text-xs font-bold uppercase tracking-wider mb-2" :class="suave">Artigos</p>
@@ -169,6 +172,7 @@ import { contactarLoja } from '@/services/chat'
 import EstadoReembolso from '@/components/reembolsos/EstadoReembolso.vue'
 import ReembolsoLinhaTempo from '@/components/reembolsos/ReembolsoLinhaTempo.vue'
 import ReembolsoConversa from '@/components/reembolsos/ReembolsoConversa.vue'
+import DevolucaoPeloCorreio from '@/components/reembolsos/DevolucaoPeloCorreio.vue'
 import NotificacaoSino from '@/components/notificacao/notificacaoSino.vue'
 import { useTempoRealReembolsos } from '@/composables/useTempoRealReembolsos'
 import { temaEscuro, guardarTema } from '@/utils/tema'
@@ -211,8 +215,10 @@ const aviso = computed(() => {
       ? `A loja diz que te devolveu ${formatarDinheiro(x.valor_aprovado)} ${devolucaoLoja(x).como}. Recebeste? Se não disseres nada até ${dataHora(x.prazo_resposta)}, fica confirmado.`
       : `${devolucaoLoja(x).pagou}: a loja vai devolver-te ${formatarDinheiro(x.valor_aprovado)} ${devolucaoLoja(x).como} (até ${dataHora(x.prazo_resposta)}). Combina pelas mensagens.`,
     por_reembolsar: `O reembolso de ${formatarDinheiro(x.valor_aprovado)} foi aceite, mas houve um atraso a processá-lo. Estamos a tratar disso — não precisas de fazer nada.`,
-    aguarda_produto: `Devolve o produto à loja ${x.loja_nome}. Combina a devolução pelas mensagens — o reembolso é feito quando a loja o receber.` +
-                     (x.motivo === 'mudei_ideias' ? ' O envio de volta é por tua conta.' : ''),
+    aguarda_produto: x.devolucao_envio
+      ? `Enviaste o produto à loja ${x.loja_nome}. O reembolso é feito quando a loja confirmar que o recebeu.`
+      : `Devolve o produto à loja ${x.loja_nome}: entrega-o em mão (combina pelas mensagens) ou envia-o pelo correio e diz aqui por onde. O reembolso é feito quando a loja o receber.` +
+        (x.motivo === 'mudei_ideias' ? ' O envio de volta é por tua conta.' : ''),
     recusado: x.decisao_admin ? 'A equipa da Bendi analisou o pedido e recusou-o.'
             : (x.pode_escalar ? 'A loja recusou o pedido. Se não concordas, a equipa da Bendi pode analisá-lo.' : 'O pedido foi recusado.'),
   }[x.estado] || ''

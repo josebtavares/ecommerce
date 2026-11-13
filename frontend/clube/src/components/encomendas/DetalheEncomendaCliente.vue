@@ -57,6 +57,12 @@
                class="px-2 py-0.5 rounded-md font-semibold bg-red-600 text-white hover:bg-red-500">Seguir envio</a>
           </span>
         </div>
+        <p v-if="!detalhe.envio.codigos.length && detalhe.envio.estado !== 'devolvida'" data-teste="enc-sem-codigo"
+           :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
+          A loja não indicou código de rastreio.
+          <button v-if="detalhe.envio.estado === 'a_caminho'" type="button" @click="falarSobreEncomenda"
+                  class="underline font-semibold" :class="isDark ? 'text-sky-300' : 'text-sky-700'">Falar com a loja</button>
+        </p>
         <p v-if="detalhe.envio.contacto" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
           Contacto da transportadora: {{ detalhe.envio.contacto }}
         </p>
@@ -79,7 +85,11 @@
                       class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-40">Avisar a loja</button>
             </div>
           </div>
-          <div v-else class="flex flex-wrap gap-2 pt-1">
+          <p v-if="!detalhe.envio.nao_recebido_em && envioAcao !== 'nao' && detalhe.envio.fecho_previsto_em"
+             class="pt-1" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'" data-teste="enc-fecho">
+            Se não disseres nada, damos a encomenda como entregue a {{ dataCurta(detalhe.envio.fecho_previsto_em) }}.
+          </p>
+          <div v-if="!detalhe.envio.nao_recebido_em && envioAcao !== 'nao'" class="flex flex-wrap gap-2 pt-1">
             <button type="button" @click="recebi" :disabled="aEnviarEnvio" data-teste="enc-recebi"
                     class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-green-600 hover:bg-green-500 disabled:opacity-40">
               <font-awesome-icon :icon="['fas', 'check']" class="mr-1" />Recebi a encomenda
@@ -203,6 +213,7 @@ function formatPrice (val) { return formatarDinheiro(val || 0) }
 
 // envio por transportadora: "Recebi" conclui a encomenda; "Não recebi" avisa a loja (backend utils/envios.py)
 const envioAcao = ref('')
+const dataCurta = (d) => new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })
 const envioNota = ref('')
 const aEnviarEnvio = ref(false)
 async function acaoEnvio (sufixo, corpo, ok) {

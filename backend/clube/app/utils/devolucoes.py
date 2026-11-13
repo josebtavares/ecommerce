@@ -525,6 +525,74 @@ def _recusar(r, utilizador, motivo_recusa, papel, admin=False):
     mensagem(r, papel, f'Recusado: {motivo_recusa}', utilizador)
 
 
+# ── devolução pelo correio (o cliente envia o produto à loja) ──────────────
+
+DIAS_LOJA_RECEBER = 10          # depois de o cliente enviar, a loja tem isto para dizer que recebeu
+DIAS_LEMBRETE_LOJA = 3          # lembrete à loja antes do fim do prazo
+
+
+def cliente_enviou_produto(r, utilizador, transportadora_id=None, outra='', codigos=(), nota='', fotos=None):
+    """O cliente enviou o produto pelo correio/transportadora (código opcional, talão em foto opcional).
+    Segunda vez = correção (a loja é avisada de novo; o prazo não recomeça)."""
+    from . import envios
+    if r.estado != 'aguarda_produto':
+        raise ErroReembolso('Este pedido não está à espera do produto.')
+    try:
+        t, outra = envios.escolher_transportadora(transportadora_id, outra)
+        codigos = envios.limpar_codigos(codigos)
+    except envios.ErroEnvio as e:
+        raise ErroReembolso(str(e))
+    nome = envios.nome_transportadora(t, outra)
+    correcao = bool(r.devolucao_enviada_em)
+    if correcao and nome == r.devolucao_transportadora_nome and codigos == list(r.devolucao_codigos or []) \
+            and not fotos and not (nota or '').strip():
+        raise ErroReembolso('Não mudaste nada.')
+    agora = timezone.now()
+    r.devolucao_transportadora, r.devolucao_transportadora_nome, r.devolucao_codigos = t, nome, codigos
+    if not correcao:
+        r.devolucao_enviada_em = agora
+        r.prazo_resposta = agora + timedelta(days=DIAS_LOJA_RECEBER)
+        r.devolucao_lembrete_em = None
+    r.save()
+    cods = ', '.join(codigos) if codigos else 'sem código de rastreio'
+    texto = (f'{"Corrigi os dados do envio" if correcao else "Enviei o produto"} por {nome} ({cods}).'
+             + (f' {nota.strip()}' if (nota or '').strip() else ''))
+    m = mensagem(r, 'cliente', texto, utilizador)
+    gravar_fotos(r, fotos or [], utilizador, m)
+    _avisar_loja(r, 'Dados do envio de volta corrigidos' if correcao else 'O cliente enviou o produto de volta',
+                 f'Por {nome} ({cods}). Quando o receberes, marca "Recebi o produto" no pedido'
+                 + ('' if correcao else f' — tens até {_hora(r.prazo_resposta)}; depois disso a Bendi decide') + '.')
+    return r
+
+
+def prazos_devolucao_correio(agora=None, lote=200):
+    """Worker: lembrete à loja e, passado o prazo sem "Recebi o produto", o pedido vai à Bendi. → n tratados."""
+    from django.db import transaction
+    from ..models import Reembolso
+    agora = agora or timezone.now()
+    n = 0
+    base = Reembolso.objects.filter(estado='aguarda_produto', devolucao_enviada_em__isnull=False,
+                                    prazo_resposta__isnull=False)
+    with transaction.atomic():
+        for r in (base.select_for_update(skip_locked=True, of=('self',))
+                  .filter(devolucao_lembrete_em__isnull=True, prazo_resposta__gt=agora,
+                          prazo_resposta__lte=agora + timedelta(days=DIAS_LEMBRETE_LOJA))
+                  .select_related('loja', 'comprador').order_by('id')[:lote]):
+            r.devolucao_lembrete_em = agora
+            r.save(update_fields=['devolucao_lembrete_em'])
+            _avisar_loja(r, 'Já recebeste o produto devolvido?',
+                         f'O cliente enviou-o por {r.devolucao_transportadora_nome} a '
+                         f'{_hora(r.devolucao_enviada_em)}. Marca "Recebi o produto" no pedido até '
+                         f'{_hora(r.prazo_resposta)} — depois disso a Bendi decide.')
+            n += 1
+        for r in (base.select_for_update(skip_locked=True, of=('self',)).filter(prazo_resposta__lt=agora)
+                  .select_related('loja', 'comprador').order_by('id')[:lote]):
+            escalar(r, f'A loja não confirmou em {DIAS_LOJA_RECEBER} dias que recebeu o produto devolvido '
+                       f'(enviado por {r.devolucao_transportadora_nome}).')
+            n += 1
+    return n
+
+
 def loja_recebido(r, utilizador, repor=False):
     """O produto devolvido chegou à loja → reembolsa (e, se está em condições, volta ao stock)."""
     from .encomendas import repor_stock
@@ -738,6 +806,11 @@ def admin_decidir(r, utilizador, decisao, valor=None, devolver_produto=False, no
     if r.tipo == 'devolucao' and devolver_produto and r.motivo in ('defeito', 'errado', 'mudei_ideias'):
         r.devolver_produto = True
         r.estado = 'aguarda_produto'
+        if r.devolucao_enviada_em:
+            # o cliente já tinha enviado o produto pelo correio: a loja tem de novo o prazo todo para o receber
+            # (senão o prazo antigo, já passado, mandava logo o pedido outra vez para a Bendi)
+            r.prazo_resposta = timezone.now() + timedelta(days=DIAS_LOJA_RECEBER)
+            r.devolucao_lembrete_em = None
         r.save()
         _avisar_cliente(r, 'Decisão da Bendi', f'Vais receber {formatar(valor)} quando a loja receber o produto.')
         _avisar_loja(r, 'Decisão da Bendi', f'Reembolso de {formatar(valor)} quando receberes o produto.')
@@ -1043,6 +1116,8 @@ def escalar_sem_resposta(agora=None, lote=200):
             else:
                 escalar(r, f'A loja não indicou em {PRAZO_DINHEIRO_DIAS} dias que devolveu o dinheiro {_como_devolve(r)}.')
             n += 1
+    # devolução pelo correio: a loja tem de dizer que recebeu o produto
+    n += prazos_devolucao_correio(agora, lote)
     return n
 
 
