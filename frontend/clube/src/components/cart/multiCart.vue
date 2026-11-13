@@ -64,6 +64,7 @@
         <div class="flex min-w-max">
           <button v-for="loja in lojas" :key="loja.id"
             @click="activeLojaId = loja.id"
+            role="tab" :aria-selected="activeLojaId === loja.id" data-teste="carrinho-aba"
             :class="[
               'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 whitespace-nowrap',
               activeLojaId === loja.id
@@ -296,7 +297,10 @@ export default {
   },
 
   watch: {
-    '$route' (to) {
+    '$route' (to, from) {
+      // só ao mudar de página: abrir/fechar um produto (?produto=) ou o perfil (?perfil=) não recarrega o carrinho
+      // — recarregar logo depois de "Adicionar" tirava o foco da loja do produto adicionado
+      if (from && to.path === from.path) return
       const rotasCheckout = ['EncomendaSucesso', 'Checkout']
       if (!rotasCheckout.includes(to.name)) {
         if (estaAutenticado()) this.restoreCarrinhos()
@@ -406,7 +410,8 @@ export default {
             [carrinho.loja.id]: { carrinho_id: carrinho.id, itens: carrinho.itens || [] }
           }
         }
-        if (this.lojas.length > 0) this.activeLojaId = this.lojas[0].id
+        // mantém a aba que estava aberta (ex.: a loja do produto acabado de adicionar); senão, a primeira
+        if (!this.lojas.some(l => l.id === this.activeLojaId)) this.activeLojaId = this.lojas[0]?.id || null
       } catch (e) { console.error('Erro ao restaurar carrinhos', e) }
     },
 
