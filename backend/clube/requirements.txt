@@ -30,6 +30,9 @@ redis==8.1.0          # fixo: o channels_redis depende do socket_timeout (ver CH
 # Stripe
 stripe==9.5.0
 
+# Erros do servidor e do worker (clube/sentry.py; só liga com SENTRY_DSN)
+sentry-sdk[django]==2.73.0
+
 # Variaveis de ambiente
 python-dotenv==1.2.4
 

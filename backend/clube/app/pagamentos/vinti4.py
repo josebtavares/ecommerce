@@ -25,7 +25,7 @@ import logging
 import re
 import secrets
 import string
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from urllib.parse import urlencode, urlsplit
@@ -158,7 +158,7 @@ def verificar_configuracao(app_configs=None, **kwargs):
 @dataclass
 class Credenciais:
     pos_id: str
-    chave: str
+    chave: str = field(repr=False)      # nunca aparece em logs nem no Sentry
 
 
 def credenciais(loja=None, so_ativas=True):

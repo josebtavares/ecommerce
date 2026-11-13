@@ -52,6 +52,7 @@ urlpatterns = [
     path('loja/<int:loja_id>/aparencia/', lojaView.loja_aparencia, name='loja-aparencia'),
     path("loja/<int:loja_id>/horario/", horarioView.loja_horario, name="loja-horario"),
     path("admin/plataforma/", horarioView.admin_plataforma, name="admin-plataforma"),
+    path("admin/plataforma/sentry/", horarioView.admin_sentry_teste, name="admin-sentry-teste"),
     path("admin/emails/", horarioView.admin_emails, name="admin-emails"),
     path("loja/<int:loja_id>/agendamento/vagas/", horarioView.loja_vagas, name="loja-vagas"),
     path("loja/<int:loja_id>/pausa/", horarioView.loja_pausa, name="loja-pausa"),
