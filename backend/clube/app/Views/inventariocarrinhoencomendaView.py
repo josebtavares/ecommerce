@@ -432,6 +432,16 @@ def encomenda_criar(request, loja_id):
         if opcao:
             custo_entrega = opcao.preco
 
+    # ── Concelho da morada de entrega: diz a ilha → as opções que servem lá (utils/envios.py) ──
+    concelho_entrega = ''
+    if serializer.validated_data.get('tipo_entrega') == 'entrega':
+        from ..utils import envios
+        concelho_entrega, msg = envios.validar_checkout(opcao, request.data.get('concelho_entrega'),
+                                                        request.data.get('metodo_pagamento'),
+                                                        bool(request.data.get('agendar_para')))
+        if msg:
+            return Response({'detail': msg, 'codigo': 'entrega_invalida'}, status=status.HTTP_400_BAD_REQUEST)
+
     # ── Agendamento escolhido pelo cliente (dia e hora dentro do horário) ──
     agendada_para, origem = None, ''
     pedido = request.data.get('agendar_para')
@@ -551,6 +561,7 @@ def encomenda_criar(request, loja_id):
         valor_total    = valor_total,
         tipo_entrega   = serializer.validated_data.get('tipo_entrega', 'levantamento'),
         morada_entrega = serializer.validated_data.get('morada_entrega', ''),
+        concelho_entrega = concelho_entrega,
         notas          = serializer.validated_data.get('notas', ''),
         status         = 'pendente',
         opcao_entrega  = opcao,
@@ -831,6 +842,14 @@ def encomenda_atualizar_status(request, loja_id, id):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
  
     novo_status = serializer.validated_data.get('status')
+    # envio por transportadora (utils/envios.py): sai com o código de rastreio; a caminho não se cancela
+    from ..utils import envios
+    if novo_status == 'enviado' and envios.e_envio(encomenda):
+        return Response({'detail': 'O cliente escolheu envio por transportadora: usa "Enviar por transportadora" '
+                                   'e indica o código de rastreio.'}, status=status.HTTP_400_BAD_REQUEST)
+    if novo_status == 'cancelado' and envios.em_transito(encomenda):
+        return Response({'detail': 'A encomenda está com a transportadora. Se ela a devolver, marca-a como devolvida '
+                                   'e depois podes cancelar.'}, status=status.HTTP_400_BAD_REQUEST)
     if novo_status in ('enviado', 'concluido') and transferencia_por_confirmar(encomenda):
         return Response({'detail': 'Confirma primeiro que a transferência chegou: a encomenda não sai sem estar paga.'},
                         status=status.HTTP_400_BAD_REQUEST)

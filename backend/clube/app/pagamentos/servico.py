@@ -180,6 +180,9 @@ def iniciar_encomenda(encomenda, tipo_metodo, utilizador):
     from .base import Inicio
     if tipo_metodo not in METODOS_OFFLINE + METODOS_ONLINE:
         raise ErroPagamento('Método de pagamento inválido.')
+    from ..utils import envios
+    if tipo_metodo == 'dinheiro' and envios.e_envio(encomenda):
+        raise ErroPagamento(envios.MSG_SEM_DINHEIRO)
     metodo = MetodoPagamento.objects.filter(loja=encomenda.loja, tipo=tipo_metodo, ativo=True).first()
     if not metodo:
         raise ErroPagamento('Esta loja não aceita este método de pagamento.')

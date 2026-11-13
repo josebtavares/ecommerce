@@ -284,6 +284,11 @@ export const PAISES = [
 
 export const nomeConcelho = (codigo) => CONCELHOS_CV.find(c => c.codigo === codigo)?.nome || ''
 
+// ilhas habitadas de norte para sul (Barlavento, depois Sotavento) — igual a geografia.ILHAS no backend
+export const ILHAS = ['Santo Antão', 'São Vicente', 'São Nicolau', 'Sal', 'Boa Vista', 'Maio', 'Santiago', 'Fogo', 'Brava']
+export const ilhaDoConcelho = (codigo) => CONCELHOS_CV.find(c => c.codigo === codigo)?.ilha || ''
+export const concelhosPorIlha = () => ILHAS.map(nome => ({ nome, concelhos: CONCELHOS_CV.filter(c => c.ilha === nome) }))
+
 // tem o que o pagamento com cartão pede (igual a pagamentos.servico.tem_cidade no backend)
 export function localizacaoCompleta (v) {
   if (!v) return false

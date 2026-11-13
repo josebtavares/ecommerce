@@ -77,6 +77,12 @@
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100
                      focus:outline-none focus:border-red-500 transition" />
           </div>
+          <div data-alvo="concelho" class="col-span-2 sm:col-span-1">
+            <label class="text-xs text-zinc-500 mb-1 block">Concelho</label>
+            <SeletorConcelho v-model="form.concelho"
+              classe-campo="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
+            <p class="text-[10px] text-zinc-600 mt-1">A ilha da loja — preciso para os envios por transportadora.</p>
+          </div>
         </div>
       </div>
       <BarraGuardarSeccao seccao="info" v-bind="barra('info')" @guardar="guardarSeccao('info')" />
@@ -145,7 +151,7 @@
     <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Opções de entrega</h2>
-        <button @click="novaOpcao = true"
+        <button @click="novaOpcao = true" data-teste="opcao-adicionar"
           class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition">
           + Adicionar
         </button>
@@ -157,9 +163,15 @@
       <div v-else class="space-y-2">
         <div v-for="op in opcoesEntrega" :key="op.id"
              class="flex items-center justify-between p-3 bg-zinc-800/50 rounded-xl">
-          <div>
-            <p class="text-sm font-medium text-zinc-200">{{ op.nome }}</p>
-            <p class="text-xs text-zinc-500">{{ op.tempo_estimado }} · {{ op.area_cobertura }}</p>
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-zinc-200">
+              {{ op.nome }}
+              <span v-if="op.tipo === 'envio'" class="ml-1 px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 text-[10px] font-semibold align-middle">
+                <font-awesome-icon :icon="['fas', 'box']" class="mr-0.5" />Envio · {{ op.transportadora_nome }}
+              </span>
+            </p>
+            <p class="text-xs text-zinc-500">{{ [op.tempo_estimado, op.area_cobertura].filter(Boolean).join(' · ') }}</p>
+            <p v-if="op.tipo === 'envio'" class="text-[11px] text-zinc-500 mt-0.5">Para: {{ (op.ilhas || []).join(', ') }}</p>
           </div>
           <div class="flex items-center gap-3">
             <span class="text-sm font-bold" :class="op.preco == 0 ? 'text-green-400' : 'text-red-400'">
@@ -190,24 +202,26 @@
           </div>
           <div>
             <label class="text-xs text-zinc-500 mb-1 block">Tempo estimado</label>
-            <input v-model="formOpcao.tempo_estimado" type="text" placeholder="30-45 min"
+            <input v-model="formOpcao.tempo_estimado" type="text" :placeholder="formOpcao.tipo === 'envio' ? '2-5 dias úteis' : '30-45 min'"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
           </div>
           <div>
             <label class="text-xs text-zinc-500 mb-1 block">Área de cobertura</label>
-            <input v-model="formOpcao.area_cobertura" type="text" placeholder="Lisboa"
+            <input v-model="formOpcao.area_cobertura" type="text" :placeholder="formOpcao.tipo === 'envio' ? 'ex: Entrega na estação dos correios' : 'ex: Praia e arredores'"
               class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-red-500 transition" />
           </div>
         </div>
+        <CamposEnvio :opcao="formOpcao" :concelho-loja="form.concelho" @mudar="Object.assign(formOpcao, $event)" />
+        <p v-if="erroOpcao" class="text-xs text-red-400" role="alert">{{ erroOpcao }}</p>
         <div class="flex gap-2">
-          <button @click="novaOpcao = false" class="flex-1 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-xs font-semibold transition hover:text-zinc-200">Cancelar</button>
+          <button @click="novaOpcao = false; erroOpcao = ''" class="flex-1 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-xs font-semibold transition hover:text-zinc-200">Cancelar</button>
           <button @click="criarOpcao" class="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition">Criar opção</button>
         </div>
       </div>
     </div>
 
     <!-- ═══ MÉTODOS DE PAGAMENTO ═══ -->
-    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6" data-alvo="envio_pagamento">
       <div class="flex items-center justify-between mb-2">
         <h2 class="text-sm font-bold text-zinc-400 uppercase tracking-wider">Métodos de pagamento</h2>
         <span v-if="loadingMetodos" class="text-xs text-zinc-600">A carregar…</span>
@@ -388,13 +402,15 @@ import SeccaoVinti4 from '@/components/loja/SeccaoVinti4.vue'
 import SeccaoEndereco from '@/components/loja/SeccaoEndereco.vue'
 import ExportacoesLoja from '@/components/ExportacoesLoja.vue'
 import BarraGuardarSeccao from '@/components/loja/BarraGuardarSeccao.vue'
+import SeletorConcelho from '@/components/forms/SeletorConcelho.vue'
+import CamposEnvio from '@/components/entregas/CamposEnvio.vue'
 
 // campos de texto que o dono pode apagar (os outros vazios não se enviam)
 const LIMPAVEIS = ['localizacao', 'politica_devolucao', 'termos_servico', 'politica_privacidade', 'politica_entregas',
                    'contacto_email', 'contacto_telefone']
 // cada secção guarda só os seus campos, com o seu botão (Entrega & Takeaway guarda ao ligar/desligar)
 const SECCOES = {
-  info:      ['nome', 'descricao', 'categoria', 'localizacao'],
+  info:      ['nome', 'descricao', 'categoria', 'localizacao', 'concelho'],
   contactos: ['contacto_email', 'contacto_telefone'],
   impostos:  ['percentagem_iva'],
   politicas: ['prazo_devolucao_dias', 'politica_devolucao', 'politica_entregas', 'termos_servico', 'politica_privacidade'],
@@ -407,6 +423,7 @@ function valoresDaLoja (l) {
     descricao:            l.descricao            || '',
     categoria:            l.categoria            || '',
     localizacao:          l.localizacao          || '',
+    concelho:             l.concelho             || '',
     entrega_ativa:        l.entrega_ativa        || false,
     levantamento_ativo:   l.levantamento_ativo   || false,
     politica_devolucao:   l.politica_devolucao   || '',
@@ -434,13 +451,18 @@ const ANTIGOS = [
   { tipo: 'stripe',      icon: iconePagamento('cartao'),      label: 'Stripe',      antigo: true },
   { tipo: 'paypal',      icon: iconePagamento('cartao'),      label: 'PayPal',      antigo: true },
 ]
+function opcaoVazia () {
+  return { nome: '', preco: 0, tempo_estimado: '', area_cobertura: '', tipo: 'local', transportadora_id: null,
+           transportadora_outra: '', ilhas: [] }
+}
 function isVideo (url) {
   return /\.(mp4|webm|mov|mkv)$/i.test(url || '')
 }
 
 export default {
   name: 'BackofficeConfiguracoes',
-  components: { BarraGuardarSeccao, ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos, SeccaoVinti4, SeccaoEndereco },
+  components: { BarraGuardarSeccao, ExportacoesLoja, HorarioEditor, SeccaoDadosFiscais, SeccaoDadosBancarios, SeccaoDocumentos, SeccaoVinti4, SeccaoEndereco,
+                SeletorConcelho, CamposEnvio },
   props: {
     lojaId: [String, Number],
     loja:   { type: Object, default: null },
@@ -460,7 +482,7 @@ export default {
       aAlternar:  false,   // Entrega & Takeaway
       erroEntrega: '',
       form: {
-        nome: '', descricao: '', categoria: '', localizacao: '',
+        nome: '', descricao: '', categoria: '', localizacao: '', concelho: '',
         entrega_ativa: false, levantamento_ativo: false,
         politica_devolucao: '', termos_servico: '', politica_privacidade: '', politica_entregas: '',
         contacto_email: '', contacto_telefone: '',
@@ -479,7 +501,8 @@ export default {
       bannerPoster:   '',
       opcoesEntrega:  [],
       novaOpcao:      false,
-      formOpcao:      { nome: '', preco: 0, tempo_estimado: '', area_cobertura: '' },
+      formOpcao:      opcaoVazia(),
+      erroOpcao:      '',
 
       // métodos de pagamento
       metodosActivos:   [],   // lista de tipos activos: ['dinheiro', 'cartao', ...]
@@ -735,12 +758,18 @@ export default {
     },
 
     async criarOpcao () {
+      this.erroOpcao = ''
+      if (!String(this.formOpcao.nome || '').trim()) { this.erroOpcao = 'Dá um nome à opção.'; return }
       try {
         await api.post(`/app/loja/${this.lojaId}/entrega/opcoes/criar/`, this.formOpcao)
-        this.formOpcao = { nome: '', preco: 0, tempo_estimado: '', area_cobertura: '' }
+        this.formOpcao = opcaoVazia()
         this.novaOpcao = false
         await this.fetchOpcoes()
-      } catch (e) { console.error(e) }
+        this.$emit('updated')          // a barra de prontidão pode passar a pedir o concelho
+      } catch (e) {
+        const d = e.response?.data
+        this.erroOpcao = d?.detail || Object.values(d || {}).flat()[0] || 'Não foi possível criar a opção.'
+      }
     },
 
     async eliminarOpcao (op) {

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from ..models import (
-    OpcaoEntrega, Condutor, Entrega,
+    OpcaoEntrega, Condutor, Entrega, Transportadora,
     AvaliacaoLoja, Encomenda
 )
 from .UtilizadorSerializer import UtilizadorMiniSerializer
@@ -16,17 +16,52 @@ CANCELAMENTO_POR_DECIDIR = ('pedido', 'em_disputa')
 # ══════════════════════════════════════════════════════════════
 
 class OpcaoEntregaSerializer(serializers.ModelSerializer):
+    # envio por transportadora (utils/envios.py): transportadora da lista ou "Outra" + as ilhas onde serve
+    transportadora_id   = serializers.PrimaryKeyRelatedField(
+        source='transportadora', queryset=Transportadora.objects.filter(ativa=True),
+        required=False, allow_null=True)
+    transportadora_nome = serializers.SerializerMethodField()
+
     class Meta:
         model  = OpcaoEntrega
         fields = [
             'id', 'nome', 'preco',
             'tempo_estimado', 'area_cobertura', 'ativa',
+            'tipo', 'transportadora_id', 'transportadora_nome', 'transportadora_outra', 'ilhas',
         ]
+
+    def get_transportadora_nome(self, obj):
+        from ..utils.envios import nome_transportadora
+        return nome_transportadora(obj.transportadora, obj.transportadora_outra)
 
     def validate_preco(self, value):
         if value < 0:
             raise serializers.ValidationError('O preço não pode ser negativo.')
         return value
+
+    def validate_ilhas(self, value):
+        from ..utils.envios import ErroEnvio, limpar_ilhas
+        try:
+            return limpar_ilhas(value)
+        except ErroEnvio as e:
+            raise serializers.ValidationError(str(e))
+
+    def validate(self, attrs):
+        inst = self.instance
+        tipo = attrs.get('tipo', inst.tipo if inst else 'local')
+        if tipo == 'envio':
+            t = attrs['transportadora'] if 'transportadora' in attrs else (inst.transportadora if inst else None)
+            outra = (attrs.get('transportadora_outra', inst.transportadora_outra if inst else '') or '').strip()
+            if not t and len(outra) < 2:
+                raise serializers.ValidationError({'transportadora_id': 'Escolhe a transportadora (ou escreve o nome em "Outra").'})
+            if t:
+                attrs['transportadora_outra'] = ''
+            ilhas = attrs['ilhas'] if 'ilhas' in attrs else (inst.ilhas if inst else [])
+            if not ilhas:
+                raise serializers.ValidationError({'ilhas': 'Escolhe pelo menos uma ilha para onde envias.'})
+        elif 'tipo' in attrs:
+            attrs['transportadora'], attrs['transportadora_outra'] = None, ''
+        return attrs
 
 
 # ══════════════════════════════════════════════════════════════
@@ -107,6 +142,8 @@ class EntregaSerializer(serializers.ModelSerializer):
     cancelamento_pedido = serializers.SerializerMethodField()
     condutor_veiculo  = serializers.SerializerMethodField()
     condutor_id_field = serializers.SerializerMethodField()
+    tipo              = serializers.CharField(read_only=True)        # 'condutor' | 'envio' (utils/envios.py)
+    envio             = serializers.SerializerMethodField()
     data_criacao      = serializers.DateTimeField(format='%d-%m-%Y %H:%M', read_only=True)
     data_entrega      = serializers.DateTimeField(format='%d-%m-%Y %H:%M', read_only=True)
 
@@ -125,8 +162,13 @@ class EntregaSerializer(serializers.ModelSerializer):
             'opcao_entrega_nome', 'opcao_entrega_tempo', 'opcao_entrega_preco',
             'condutor_nome', 'condutor_veiculo', 'condutor_id_field',
             'valor_recebido', 'acertado_em', 'prova', 'pode_juntar_prova', 'cancelamento_pedido',
+            'tipo', 'envio',
         ]
         read_only_fields = ['data_criacao']
+
+    def get_envio(self, obj):
+        from ..utils import envios
+        return envios.dados(obj, self.context.get('request'), loja=True)
 
     def validate_status(self, value):
         instancia = self.instance
@@ -138,6 +180,7 @@ class EntregaSerializer(serializers.ModelSerializer):
             'a_caminho' : ['entregue', 'falhou'],
             'entregue'  : [],
             'cancelada' : [],
+            'devolvida' : [],
             'falhou'    : [],     # só a loja volta a pôr em curso, ao reatribuir (entrega_criar/entrega_atualizar)
         }
         permitidos = transicoes.get(instancia.status, [])

@@ -17,6 +17,7 @@ SALT = 'prova-entrega'
 VALIDADE = 3600
 NOME_MAX = 100
 PARTES = ('foto', 'assinatura')
+LINKS = PARTES + ('talao',)      # talao: foto do talão do envio por transportadora (utils/envios.py)
 
 
 class ErroProva(Exception):
@@ -41,7 +42,7 @@ def assinar(entrega_id, parte, utilizador_id, admin=False):
 def ler(token):
     try:
         d = signing.loads(token, salt=SALT, max_age=VALIDADE)
-        if d['p'] not in PARTES:
+        if d['p'] not in LINKS:
             return None
         return int(d['e']), d['p'], int(d['u']), bool(d.get('a'))
     except (signing.BadSignature, KeyError, TypeError, ValueError):

@@ -294,6 +294,16 @@ def concelho(codigo):
     return _CONCELHOS.get(str(codigo or '').upper())
 
 
+# ilhas habitadas, de Barlavento a Sotavento (as opções de entrega guardam estes nomes — utils/envios.py)
+ILHAS = ['Santo Antão', 'São Vicente', 'São Nicolau', 'Sal', 'Boa Vista', 'Maio', 'Santiago', 'Fogo', 'Brava']
+
+
+def ilha(codigo_concelho):
+    """'PR' → 'Santiago' | '' (sem concelho ou desconhecido)."""
+    c = concelho(codigo_concelho)
+    return c[2] if c else ''
+
+
 def pais(iso2):
     """'CV' → ('CV', '132', '238', 'Cabo Verde') | None."""
     return _PAISES.get(str(iso2 or '').upper())

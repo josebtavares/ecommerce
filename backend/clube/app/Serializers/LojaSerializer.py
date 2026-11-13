@@ -60,7 +60,7 @@ class LojaSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'dono',
-            'nome', 'slug', 'descricao', 'categoria', 'localizacao',
+            'nome', 'slug', 'descricao', 'categoria', 'localizacao', 'concelho',
             'percentagem_iva',
             'entrega_ativa', 'levantamento_ativo',
             'logo', 'logo_url',
@@ -87,6 +87,13 @@ class LojaSerializer(serializers.ModelSerializer):
             'logo'  : {'write_only': True, 'required': False},
             'banner': {'write_only': True, 'required': False},
         }
+
+    def validate_concelho(self, value):
+        from ..utils.geografia import concelho
+        value = (value or '').strip().upper()
+        if value and not concelho(value):
+            raise serializers.ValidationError('Concelho desconhecido.')
+        return value
 
     def validate_percentagem_iva(self, value):
         if value is None or value < 0 or value > 100:

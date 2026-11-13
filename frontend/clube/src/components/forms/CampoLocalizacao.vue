@@ -35,10 +35,7 @@
 </template>
 
 <script>
-import { CONCELHOS_CV, PAISES } from '@/utils/geografia'
-
-// ordem das ilhas de norte para sul (Barlavento, depois Sotavento)
-const ORDEM_ILHAS = ['Santo Antão', 'São Vicente', 'São Nicolau', 'Sal', 'Boa Vista', 'Maio', 'Santiago', 'Fogo', 'Brava']
+import { PAISES, concelhosPorIlha } from '@/utils/geografia'
 
 export default {
   name: 'CampoLocalizacao',
@@ -61,9 +58,7 @@ export default {
       return { pais: v.pais || 'CV', concelho: v.concelho || '', cidade: v.cidade || '', codigo_postal: v.codigo_postal || '' }
     },
     emCaboVerde () { return this.valor.pais === 'CV' },
-    ilhas () {
-      return ORDEM_ILHAS.map(nome => ({ nome, concelhos: CONCELHOS_CV.filter(c => c.ilha === nome) }))
-    },
+    ilhas () { return concelhosPorIlha() },
   },
   methods: {
     mudar (campo, valor) {

@@ -226,6 +226,9 @@ class Loja(models.Model):
     descricao       = models.TextField(blank=True, default='')
     categoria       = models.CharField(max_length=100)          # ex: 'comida', 'roupa', 'eletronicos'
     localizacao     = models.CharField(max_length=300, blank=True, default='')
+    # concelho onde a loja está (utils/geografia.CONCELHOS_CV) → a ilha; pedido ao criar a loja e obrigatório com
+    # envio por transportadora (utils/envios.py, utils/prontidao.py)
+    concelho        = models.CharField(max_length=3, blank=True, default='', db_default='')
     percentagem_iva = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     percentagem_comissao = models.DecimalField(max_digits=5, decimal_places=2, default=10.00, validators=[MinValueValidator(0), MaxValueValidator(100)],help_text='Percentagem de comissao cobrada pela plataforma')
     # como a plataforma ganha com a loja: % por venda (comissão) ou mensalidade (subscrição — ver Subscricao)
@@ -922,6 +925,8 @@ class Encomenda(models.Model):
     tipo_entrega    = models.CharField(max_length=15, choices=TIPO_ENTREGA, default='levantamento')
     status          = models.CharField(max_length=15, choices=STATUS, default='pendente')
     morada_entrega  = models.CharField(max_length=300, blank=True, default='')
+    # concelho da morada de entrega (utils/geografia.CONCELHOS_CV): escolhe as opções da ilha do cliente
+    concelho_entrega = models.CharField(max_length=3, blank=True, default='', db_default='')
     notas           = models.TextField(blank=True, default='')
     data_criacao    = models.DateTimeField(auto_now_add=True)
     data_atualizacao= models.DateTimeField(auto_now=True)
@@ -1004,13 +1009,38 @@ class ItemEncomenda(models.Model):
 # ENTREGA & CONDUTOR  (opcionais por loja)
 # ══════════════════════════════════════════════════════════════
 
+class Transportadora(models.Model):
+    """Transportadoras para o envio com código de rastreio (Admin → Definições; utils/envios.py).
+    url_rastreio leva {codigo} no sítio do código (vazio = a transportadora não tem rastreio online)."""
+    nome          = models.CharField(max_length=80, unique=True)
+    url_rastreio  = models.CharField(max_length=300, blank=True, default='')
+    contacto      = models.CharField(max_length=200, blank=True, default='')
+    ativa         = models.BooleanField(default=True)
+    ordem         = models.PositiveSmallIntegerField(default=100)
+
+    class Meta:
+        ordering = ['ordem', 'nome']
+
+    def __str__(self):
+        return self.nome
+
+
 class OpcaoEntrega(models.Model):
+    TIPOS = [('local', 'Entrega local (condutor da loja)'), ('envio', 'Envio por transportadora')]
+
     loja            = models.ForeignKey(Loja, on_delete=models.CASCADE, related_name='opcoes_entrega')
     nome            = models.CharField(max_length=100)          # ex: 'Standard', 'Expresso'
     preco           = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     tempo_estimado  = models.CharField(max_length=100, blank=True, default='')  # ex: '30–45 min'
     area_cobertura  = models.CharField(max_length=300, blank=True, default='')
     ativa           = models.BooleanField(default=True)
+    tipo            = models.CharField(max_length=5, choices=TIPOS, default='local', db_default='local')
+    # envio: a transportadora habitual (a loja pode escolher outra ao enviar); vazia + transportadora_outra = "Outra"
+    transportadora  = models.ForeignKey(Transportadora, on_delete=models.SET_NULL, null=True, blank=True,
+                                        related_name='+')
+    transportadora_outra = models.CharField(max_length=80, blank=True, default='', db_default='')
+    # ilhas onde a opção serve (nomes de utils/geografia.ILHAS); vazio = todas (as opções antigas)
+    ilhas           = models.JSONField(default=list, blank=True, db_default=[])
 
     def __str__(self):
         return f'{self.nome} ({self.loja.nome})'
@@ -1145,7 +1175,9 @@ class Entrega(models.Model):
         ('entregue',    'Entregue'),
         ('falhou',      'Falhou'),
         ('cancelada',   'Cancelada'),      # a encomenda foi cancelada com a entrega em curso
+        ('devolvida',   'Devolvida pela transportadora'),   # envio: voltou à loja (reenviar ou cancelar)
     ]
+    TIPOS = [('condutor', 'Condutor da loja'), ('envio', 'Envio por transportadora')]
     MOTIVOS_FALHA = [
         ('cliente_ausente', 'Cliente ausente'),
         ('sem_contacto',    'Cliente não atende'),
@@ -1177,6 +1209,21 @@ class Entrega(models.Model):
                                          blank=True, default='', db_default='', max_length=200)
     recebido_por_nome = models.CharField(max_length=100, blank=True, default='', db_default='')
     prova_em          = models.DateTimeField(null=True, blank=True)
+    # envio por transportadora (utils/envios.py): sem condutor; o estado fica 'a_caminho' até entregue/devolvida
+    tipo              = models.CharField(max_length=8, choices=TIPOS, default='condutor', db_default='condutor')
+    transportadora    = models.ForeignKey(Transportadora, on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='entregas')
+    transportadora_nome = models.CharField(max_length=80, blank=True, default='', db_default='')   # como estava ao enviar
+    codigos           = models.JSONField(default=list, blank=True, db_default=[])    # 1+ códigos de rastreio (volumes)
+    data_envio        = models.DateTimeField(null=True, blank=True)
+    comprovativo_envio = models.FileField(upload_to=prova_entrega_upload, storage=_armazenamento_privado,
+                                          blank=True, default='', db_default='', max_length=200)
+    # o que mudou no envio: [{em, acao, por, codigos, transportadora, nota}] — correções de código, reenvios
+    historico_envio   = models.JSONField(default=list, blank=True, db_default=[])
+    # o cliente disse "Não recebi" (utils/envios.nao_recebi): a loja é avisada e o fecho automático fica parado até
+    # ela agir (corrigir, devolvida, reenviar ou concluir)
+    nao_recebido_em   = models.DateTimeField(null=True, blank=True)
+    nao_recebido_nota = models.CharField(max_length=300, blank=True, default='', db_default='')
 
     def __str__(self):
         return f'Entrega da encomenda #{self.encomenda_id}'
