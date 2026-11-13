@@ -31,8 +31,8 @@ export function hojeCV () {
 
 export const ESTADOS_MARCACAO = {
   pendente:   { nome: 'Pendente',   cor: 'bg-amber-500/15 border-amber-500/40 text-amber-200', ponto: 'bg-amber-400' },
-  confirmada: { nome: 'Confirmada', cor: 'bg-sky-500/15 border-sky-500/40 text-sky-100',       ponto: 'bg-sky-400' },
-  concluida:  { nome: 'Concluída',  cor: 'bg-green-500/15 border-green-500/40 text-green-100', ponto: 'bg-green-400' },
+  confirmada: { nome: 'Confirmada', cor: 'bg-sky-500/15 border-sky-500/40 text-sky-200',       ponto: 'bg-sky-400' },
+  concluida:  { nome: 'Concluída',  cor: 'bg-green-500/15 border-green-500/40 text-green-200', ponto: 'bg-green-400' },
   cancelada:  { nome: 'Cancelada',  cor: 'bg-zinc-800/60 border-zinc-700 text-zinc-500 line-through', ponto: 'bg-zinc-500' },
   falta:      { nome: 'Falta',      cor: 'bg-red-500/10 border-red-500/30 text-red-300',       ponto: 'bg-red-400' },
   expirada:   { nome: 'Expirada',   cor: 'bg-zinc-800/60 border-zinc-700 text-zinc-500',       ponto: 'bg-zinc-600' },

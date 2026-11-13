@@ -25,7 +25,7 @@
     <!-- ══ CRÉDITOS DA LOJA (reembolsos depois de liquidar) ══ -->
     <div v-if="lojaSelecionada && Number(lojaSelecionada.credito) > 0"
          class="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-      <div class="flex-1 text-sm text-sky-100">
+      <div class="flex-1 text-sm text-sky-200">
         <p class="font-semibold">{{ lojaSelecionada.nome }} tem {{ $dinheiro(lojaSelecionada.credito) }} de créditos por descontar.</p>
         <p class="text-xs text-sky-200/70 mt-0.5">
           São comissões de encomendas reembolsadas depois de a comissão já estar paga. Descontam-se sozinhos na próxima
