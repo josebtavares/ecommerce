@@ -150,6 +150,8 @@ def pode_enviar(encomenda):
 
 
 def limpar_codigos(codigos):
+    if codigos is None:
+        return []
     if isinstance(codigos, str):
         import json
         try:
@@ -168,8 +170,7 @@ def limpar_codigos(codigos):
         if c not in vistos:
             vistos.add(c)
             out.append(c)
-    if not out:
-        raise ErroEnvio('Indica o código de rastreio.')
+    # sem código também se envia (há envios sem rastreio, p. ex. correio simples): o estado não depende dele
     if len(out) > CODIGOS_MAX:
         raise ErroEnvio(f'No máximo {CODIGOS_MAX} códigos por envio.')
     return out
@@ -198,7 +199,15 @@ def _historico(entrega, acao, quem, nota=''):
 
 
 def _texto_codigos(entrega):
-    return ', '.join(entrega.codigos or [])
+    return ', '.join(entrega.codigos or []) or 'sem código de rastreio'
+
+
+def _frase_codigos(entrega):
+    """Para as mensagens ao cliente."""
+    c = list(entrega.codigos or [])
+    if not c:
+        return ('A loja não indicou código de rastreio — se precisares, fala com ela no chat da encomenda.')
+    return f'{"Códigos" if len(c) > 1 else "Código"} de rastreio: {", ".join(c)}.'
 
 
 def _avisar_cliente(encomenda, titulo, mensagem, importante=True):
@@ -237,12 +246,11 @@ def enviar(encomenda, quem, transportadora_id=None, outra='', codigos=(), talao=
     encomenda.status = 'enviado'
     encomenda.save(update_fields=['status'])
     devolucoes.ao_avancar_encomenda(encomenda, quem)
-    plural = 'Códigos' if len(codigos) > 1 else 'Código'
     _avisar_cliente(
         encomenda,
         f'Encomenda {"reenviada" if reenvio else "enviada"} #{encomenda.id}',
         f'{encomenda.loja.nome} {"voltou a enviar" if reenvio else "enviou"} a tua encomenda por '
-        f'{ent.transportadora_nome}. {plural} de rastreio: {_texto_codigos(ent)}.')
+        f'{ent.transportadora_nome}. {_frase_codigos(ent)}')
     return ent
 
 
@@ -256,14 +264,20 @@ def corrigir(encomenda, quem, transportadora_id=None, outra='', codigos=(), nota
     nome = nome_transportadora(t, outra)
     if nome == ent.transportadora_nome and codigos == list(ent.codigos or []):
         raise ErroEnvio('Não mudaste nada.')
+    adicionado = not ent.codigos and bool(codigos) and nome == ent.transportadora_nome
     ent.transportadora, ent.transportadora_nome, ent.codigos = t, nome, codigos
     ent.nao_recebido_em, ent.nao_recebido_nota = None, ''
-    _historico(ent, 'corrigido', quem, nota)
+    _historico(ent, 'adicionado' if adicionado else 'corrigido', quem, nota)
     ent.save(update_fields=['transportadora', 'transportadora_nome', 'codigos', 'historico_envio', 'nao_recebido_em',
                             'nao_recebido_nota'])
-    _avisar_cliente(encomenda, f'Código de rastreio corrigido — Encomenda #{encomenda.id}',
-                    f'{encomenda.loja.nome} corrigiu os dados do envio: {ent.transportadora_nome}, '
-                    f'{_texto_codigos(ent)}.')
+    if adicionado:
+        _avisar_cliente(encomenda, f'Código de rastreio — Encomenda #{encomenda.id}',
+                        f'{encomenda.loja.nome} juntou o código de rastreio do envio por {ent.transportadora_nome}: '
+                        f'{_texto_codigos(ent)}.')
+    else:
+        _avisar_cliente(encomenda, f'Dados do envio corrigidos — Encomenda #{encomenda.id}',
+                        f'{encomenda.loja.nome} corrigiu os dados do envio: {ent.transportadora_nome}. '
+                        f'{_frase_codigos(ent)}')
     return ent
 
 

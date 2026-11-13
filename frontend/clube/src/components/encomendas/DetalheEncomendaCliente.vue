@@ -57,6 +57,12 @@
                class="px-2 py-0.5 rounded-md font-semibold bg-red-600 text-white hover:bg-red-500">Seguir envio</a>
           </span>
         </div>
+        <p v-if="!detalhe.envio.codigos.length && detalhe.envio.estado !== 'devolvida'" data-teste="enc-sem-codigo"
+           :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
+          A loja não indicou código de rastreio.
+          <button v-if="detalhe.envio.estado === 'a_caminho'" type="button" @click="falarSobreEncomenda"
+                  class="underline font-semibold" :class="isDark ? 'text-sky-300' : 'text-sky-700'">Falar com a loja</button>
+        </p>
         <p v-if="detalhe.envio.contacto" :class="isDark ? 'text-zinc-400' : 'text-zinc-500'">
           Contacto da transportadora: {{ detalhe.envio.contacto }}
         </p>

@@ -91,10 +91,8 @@ class Envios(BaseEnvios):
         self.assertIn('já paga', r.data['detail'])
         self.assertFalse(Entrega.objects.filter(encomenda=enc).exists())
 
-    def test_enviar_sem_codigo_ou_transportadora(self):
+    def test_enviar_sem_transportadora_ou_codigo_longo(self):
         enc = self._encomenda()
-        r = self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': ['  ']}, format='json')
-        self.assertEqual(r.status_code, 400)
         r = self.api.post(self._url(enc), {'codigos': ['A1']}, format='json')
         self.assertEqual(r.status_code, 400)
         r = self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': ['A' * 61]}, format='json')
@@ -336,3 +334,42 @@ class EnviosCliente(BaseEnvios):
         self.assertEqual(enc.status, 'concluido')
         # já concluída: "não recebi" deixa de fazer sentido
         self.assertEqual(self.capi.post(f'/app/encomenda/{enc.id}/envio/nao-recebi/').status_code, 400)
+
+
+class EnviosSemCodigo(BaseEnvios):
+    """O código de rastreio é opcional: o estado não depende dele; a loja pode juntá-lo depois."""
+
+    def test_enviar_sem_codigo_e_adicionar_depois(self):
+        enc = self._encomenda()
+        r = self.api.post(self._url(enc), {'transportadora_id': self.dhl.id}, format='multipart')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        enc.refresh_from_db()
+        ent = Entrega.objects.get(encomenda=enc)
+        self.assertEqual((enc.status, ent.status, ent.codigos), ('enviado', 'a_caminho', []))
+        self.assertIsNotNone(ent.data_envio)
+        n = Notificacao.objects.filter(utilizador=self.cliente).latest('id')
+        self.assertIn('não indicou código', n.mensagem)
+        # códigos em branco também contam como "sem código"
+        r = self.api.post(self._url(enc, 'corrigir/'), {'transportadora_id': self.dhl.id, 'codigos': ['  ']}, format='json')
+        self.assertEqual(r.status_code, 400)                   # não mudou nada
+        r = self.api.post(self._url(enc, 'corrigir/'), {'transportadora_id': self.dhl.id, 'codigos': ['rr1cv']},
+                          format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        ent.refresh_from_db()
+        self.assertEqual(ent.codigos, ['RR1CV'])
+        self.assertEqual(ent.historico_envio[-1]['acao'], 'adicionado')
+        n = Notificacao.objects.filter(utilizador=self.cliente).latest('id')
+        self.assertIn('juntou o código', n.mensagem)
+        self.assertIn('RR1CV', n.mensagem)
+
+    def test_cliente_ve_sem_codigo_e_nao_recebi(self):
+        enc = self._encomenda()
+        self.api.post(self._url(enc), {'transportadora_id': self.dhl.id, 'codigos': []}, format='json')
+        capi = APIClient()
+        capi.force_authenticate(self.cliente.user)
+        r = capi.get(f'/app/encomenda/{enc.id}/')
+        self.assertEqual(r.data['envio']['codigos'], [])
+        r = capi.post(f'/app/encomenda/{enc.id}/envio/nao-recebi/', {}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        n = Notificacao.objects.filter(utilizador=self.dono).latest('id')
+        self.assertIn('sem código de rastreio', n.mensagem)

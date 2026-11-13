@@ -99,7 +99,7 @@
                 <div>
                   <p class="text-sm font-semibold text-zinc-200">{{ opcao.nome }}</p>
                   <p v-if="opcao.tipo === 'envio'" class="text-xs text-sky-300">
-                    <font-awesome-icon :icon="['fas', 'box']" class="mr-1" />Envio por {{ opcao.transportadora_nome }} · com código de rastreio
+                    <font-awesome-icon :icon="['fas', 'box']" class="mr-1" />Envio por {{ opcao.transportadora_nome }}
                   </p>
                   <p v-if="opcao.tempo_estimado" class="text-xs text-zinc-500">{{ opcao.tempo_estimado }}</p>
                 </div>
