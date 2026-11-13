@@ -3,7 +3,7 @@
   <div class="min-h-screen" :class="isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-gray-100 text-zinc-900'">
     <header class="sticky top-0 z-10 flex items-center gap-3 px-4 h-14 border-b"
             :class="isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'">
-      <button type="button" aria-label="Voltar" @click="$router.push({ path: '/Home', query: { perfil: 'reembolsos' } })"
+      <button type="button" aria-label="Voltar" @click="$router.push({ path: '/', query: { perfil: 'reembolsos' } })"
               class="h-9 w-9 rounded-lg flex items-center justify-center" :class="isDark ? 'hover:bg-zinc-800' : 'hover:bg-gray-100'">
         <font-awesome-icon :icon="['fas', 'arrow-left']" />
       </button>

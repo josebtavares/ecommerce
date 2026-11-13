@@ -62,10 +62,17 @@ const routes = [
         component: () => import('@/views/PaginaPublica.vue'),
     },
     {
-        path: '/Home',
+        // a página inicial vive em "/" (o Google indexa este endereço); pública: ver lojas e produtos não exige
+        // conta (encomendar sim — checkout tem requiresAuth)
+        path: '/',
         name: 'Home',
         component: App,
-        // pública: ver lojas e produtos não exige conta (encomendar sim — checkout tem requiresAuth)
+    },
+    {
+        // endereço antigo (links guardados, botões da landing): vai para "/" com a mesma query (?perfil=, ?categoria=…)
+        // — o servidor (scripts/servidor.js) já responde 301 a quem pede /Home directamente
+        path: '/Home',
+        redirect: to => ({ path: '/', query: to.query, hash: to.hash }),
     },
     {
         // todos os resultados da barra de pesquisa (pública)
@@ -100,10 +107,6 @@ const routes = [
         path: '/sobre',
         name: 'Sobre',
         component: () => import('@/views/Sobre.vue'),
-    },
-        {
-        path: '/',
-        redirect: '/Home'
     },
     {   path: '/checkout/:lojaId',  
         name: 'Checkout',        
@@ -160,7 +163,7 @@ const routes = [
     {
         // o perfil é uma gaveta da home: as notificações antigas apontam para /perfil
         path: '/perfil',
-        redirect: { path: '/Home', query: { perfil: 'encomendas' } },
+        redirect: { path: '/', query: { perfil: 'encomendas' } },
     },
     {
         path: '/perfil/reembolsos',

@@ -68,7 +68,7 @@
 
       <!-- Footer -->
       <div class="border-t border-zinc-800 p-3 flex-shrink-0">
-        <button @click="$router.push('/Home')"
+        <button @click="$router.push('/')"
           :title="!sidebarExpandida ? 'Voltar ao site' : ''"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800">
           <font-awesome-icon :icon="['fas', 'house']" class="flex-shrink-0 w-4 h-4" fixed-width />

@@ -187,7 +187,7 @@ export default {
   components: { PasswordForca, BotaoVerPassword, EstadoDisponibilidade, Turnstile, BotaoGoogle },
   props: {
     isDark: { type: Boolean, default: false },
-    seguinte: { type: String, default: '/Home' },     // para onde o Google volta depois de entrar
+    seguinte: { type: String, default: '/' },     // para onde o Google volta depois de entrar
     modal: { type: Boolean, default: false },
   },
   emits: ['criou', 'trocar'],

@@ -152,6 +152,13 @@ async function atender (req, res) {
     const og = c.match(/^\/og\/(loja|produto|landing)\/(\d{1,12})\.jpg$/)
     if (og) return imagemPartilha(res, og[1], og[2], req.method === 'HEAD')
     if (c === '/sitemap.xml') return mapaDoSite(res)
+    // a página inicial é "/": o endereço antigo /Home responde 301 (antes "/" saltava para /Home pelo JavaScript e o
+    // Google ficava com "página com redireccionamento" e sem indexar nenhuma das duas)
+    if (c.replace(/\/+$/, '').toLowerCase() === '/home') {
+      res.statusCode = 301
+      res.setHeader('Location', '/' + url.search)
+      return res.end()
+    }
     if (c.replace(/\/+$/, '').toLowerCase() === '/sobre') return paginaLanding(res)
     // /loja/<slug> (ou /loja/<id>, endereço antigo); /loja/criar e /loja/demo são páginas da app
     const loja = c.match(/^\/loja\/([a-z0-9][a-z0-9-]{0,59})\/?$/i)
