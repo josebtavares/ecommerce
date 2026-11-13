@@ -237,6 +237,14 @@ def loja_create(request):
     fiscais, erros = validar_dados_fiscais(request.data)
     if erros:
         return Response(erros, status=status.HTTP_400_BAD_REQUEST)
+    # dados bancários (opcionais, para a transferência): na criação não se pede a password — a loja ainda
+    # não vendeu nada, não há dinheiro a desviar; depois disso, mudar a conta pede a password (loja_banco)
+    from ..utils import banco as banco_util
+    banco_dados = None
+    if any(str(request.data.get(k) or '').strip() for k in ('banco', 'nib', 'titular')):
+        banco_dados, erros = banco_util.validar(request.data)
+        if erros:
+            return Response(erros, status=status.HTTP_400_BAD_REQUEST)
 
     # como a plataforma vai ganhar com a loja: comissão (por defeito) ou subscrição com um plano
     from ..utils.subscricoes import plano_ativo
@@ -283,10 +291,25 @@ def loja_create(request):
     for s_op in opcoes_validas:
         s_op.save(loja=loja)
 
-    return Response(
-        LojaSerializer(loja, context={'request': request}).data,
-        status=status.HTTP_201_CREATED
-    )
+    if banco_dados:
+        from ..models import DadosBancarios
+        from ..utils.registo import registar
+        DadosBancarios.objects.create(loja=loja, atualizado_por=request.user, **banco_dados)
+        registar('banco', 'definidos', objeto_id=loja.id, loja_id=loja.id,
+                 dados={'banco': banco_dados['banco'], 'titular': banco_dados['titular'],
+                        'conta': banco_util.mascarado(banco_dados['nib']), 'conta_anterior': ''})
+
+    dados = LojaSerializer(loja, context={'request': request}).data
+    dados['prontidao'] = prontidao.avaliar(loja)
+    return Response(dados, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def bancos(request):
+    """GET /app/bancos/ — os bancos de Cabo Verde (criação da loja: dados para a transferência)."""
+    from ..utils.banco import BANCOS
+    return Response(BANCOS)
 
 
 # ══════════════════════════════════════════════════════════════
