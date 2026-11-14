@@ -22,6 +22,8 @@ const pagamentos = (process.env.VUE_APP_PAGAMENTOS_FORM || '').split(/[\s,]+/).m
 const lista = (...v) => [...new Set(v.filter(Boolean))].join(' ')
 // "não sou um robô" (components/forms/Turnstile.vue): só com a chave definida
 const turnstile = process.env.VUE_APP_TURNSTILE_SITE_KEY ? 'https://challenges.cloudflare.com' : null
+// erros do site (utils/sentry.js): o browser envia-os para o endereço do DSN (ex.: https://o1.ingest.de.sentry.io)
+const sentry = origem((process.env.VUE_APP_SENTRY_DSN || '').replace(/\/\/[^@/]*@/, '//'))
 
 const politica = [
   "default-src 'self'",
@@ -32,7 +34,7 @@ const politica = [
   // fotos e vídeos das lojas: do armazenamento, da API e pré-visualizações locais (blob:)
   `img-src ${lista("'self'", 'data:', 'blob:', api, media, 'https:')}`,
   `media-src ${lista("'self'", 'blob:', api, media, 'https:')}`,
-  `connect-src ${lista("'self'", api, ws, media, turnstile)}`,
+  `connect-src ${lista("'self'", api, ws, media, turnstile, sentry)}`,
   // tutoriais da landing page (/sobre): vídeos do YouTube no modo de privacidade (sem cookies até tocar)
   `frame-src ${lista("'self'", turnstile, 'https://www.youtube-nocookie.com')}`,
   "frame-ancestors 'self'",
