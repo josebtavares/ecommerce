@@ -353,6 +353,21 @@ def fazer_backup(tipo='automatico', user=None):
 
 # ── quando fazer ───────────────────────────────────────────────────
 
+def monitor_sentry():
+    """Cron Monitor "backup-diario" no Sentry (worker processar_videos._backup_diario): o backup automático
+    começa a BACKUP_HORA (hora de Cabo Verde) no primeiro ciclo do worker — até 5 min depois. Margem de 30 min
+    para avisar que não começou; LIMITE_S + folga para avisar que ficou preso. Uma falha já abre o alerta
+    (as novas tentativas, 30 min depois, fecham-no se correrem bem)."""
+    return {
+        'schedule': {'type': 'crontab', 'value': f'0 {settings.BACKUP_HORA} * * *'},
+        'timezone': settings.TIME_ZONE,
+        'checkin_margin': 30,
+        'max_runtime': LIMITE_S // 60 + 15,
+        'failure_issue_threshold': 1,
+        'recovery_threshold': 1,
+    }
+
+
 def backup_devido(agora=None):
     agora = timezone.localtime(agora or timezone.now())
     if agora.hour < settings.BACKUP_HORA:
