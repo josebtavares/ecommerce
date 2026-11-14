@@ -20,7 +20,7 @@ from django.db.utils import OperationalError, ProgrammingError
 
 from app.models import ConversaoVideo, Galeria, Loja, Produto
 from app.utils import horarios, limpeza, repor_backup, subscricoes, video
-from app.utils.erros import reportar
+from app.utils.erros import cron_fim, cron_inicio, reportar
 
 
 class Command(BaseCommand):
@@ -156,7 +156,14 @@ class Command(BaseCommand):
             from app.utils import backups
             if not backups.backup_devido():
                 return
-            b = backups.fazer_backup('automatico')
+            config = backups.monitor_sentry()
+            checkin, inicio = cron_inicio('backup-diario', config), time.monotonic()
+            try:
+                b = backups.fazer_backup('automatico')
+            except Exception:
+                cron_fim('backup-diario', checkin, False, time.monotonic() - inicio, config)
+                raise
+            cron_fim('backup-diario', checkin, b.estado == 'ok', b.duracao_s, config)
             if b.estado == 'ok':
                 self.stdout.write(self.style.SUCCESS(f'  backup: {b.chave} ({b.tamanho / 1e6:.1f} MB em {b.duracao_s}s)'))
             else:
