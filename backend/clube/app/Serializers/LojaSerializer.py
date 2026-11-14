@@ -249,12 +249,25 @@ class LojaPublicSerializer(serializers.ModelSerializer):
             obj._notas_visiveis = [a.pontuacao for a in obj.avaliacoes.all() if not a.oculta]
         return obj._notas_visiveis
 
+    # listas (loja_list): anotar_avaliacoes() já trouxe a média e o total na mesma consulta — sem ler as avaliações
     def get_rating_medio(self, obj):
+        if hasattr(obj, 'avaliacoes_total'):
+            return round(float(obj.avaliacoes_media), 2) if obj.avaliacoes_total else None
         notas = self._visiveis(obj)
         return round(sum(notas) / len(notas), 2) if notas else None
 
     def get_total_avaliacoes(self, obj):
+        if hasattr(obj, 'avaliacoes_total'):
+            return obj.avaliacoes_total
         return len(self._visiveis(obj))
+
+
+def anotar_avaliacoes(qs):
+    """Média e total das avaliações visíveis de cada loja numa só consulta (LojaPublicSerializer usa-as)."""
+    from django.db.models import Avg, Count, Q
+    visiveis = Q(avaliacoes__oculta=False)
+    return qs.annotate(avaliacoes_media=Avg('avaliacoes__pontuacao', filter=visiveis),
+                       avaliacoes_total=Count('avaliacoes', filter=visiveis))
 
 
 # ══════════════════════════════════════════════════════════════
