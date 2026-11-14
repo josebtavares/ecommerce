@@ -2,6 +2,9 @@
   "name": "clube",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build && node scripts/sentry-mapas.js && node scripts/csp.js",

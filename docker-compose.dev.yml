@@ -73,7 +73,7 @@ services:
 
   # Frontend Vue
   frontend:
-    image: node:20-alpine
+    image: node:22-alpine     # igual à Railway (package.json engines 22.x)
     restart: unless-stopped
     working_dir: /app
     volumes:
