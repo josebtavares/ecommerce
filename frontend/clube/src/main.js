@@ -6,6 +6,7 @@ import App from './App.vue';
 import { formatarDinheiro } from './utils/dinheiro';
 import { aplicarIcones, carregarAparencia, logoPara, logoProprio } from './utils/aparencia';
 import router from './router'; // Import the router
+import { iniciarSentry } from './utils/sentry';
 import '@/assets/toastify.css';
 import 'vue3-toastify/dist/index.css';
 import '@/assets/tailwind.css';
@@ -25,6 +26,7 @@ import { faCommentDots } from '@fortawesome/free-solid-svg-icons'
 library.add(faBars, fas, faCommentDots); // Add the icons to the library
 
 const app = createApp(App);
+iniciarSentry(app, router); // erros do site → Sentry, só com VUE_APP_SENTRY_DSN (utils/sentry.js)
 
 app.component('font-awesome-icon', FontAwesomeIcon);
 app.directive('video-visivel', videoVisivel); // vídeos só tocam quando visíveis (directives/videoVisivel.js)

@@ -143,6 +143,8 @@
         <span v-if="guardadoTeste" class="text-sm text-green-400">Guardado.</span>
       </div>
     </div>
+
+    <AdminSentry v-if="!loading" />
   </div>
 </template>
 
@@ -151,6 +153,7 @@ import api from '@/services/api'
 import AdminAparencia from '@/components/admin/AdminAparencia.vue'
 import AdminEmails from '@/components/admin/AdminEmails.vue'
 import AdminTransportadoras from '@/components/admin/AdminTransportadoras.vue'
+import AdminSentry from '@/components/admin/AdminSentry.vue'
 
 const CAMPOS = [
   { k: 'titular_nome',      label: 'Nome do titular (pessoa ou empresa)', ph: 'ex.: Maria Silva', max: 200 },
@@ -177,7 +180,7 @@ const SUGESTOES = [
 
 export default {
   name: 'AdminPlataforma',
-  components: { AdminAparencia, AdminEmails, AdminTransportadoras },
+  components: { AdminAparencia, AdminEmails, AdminTransportadoras, AdminSentry },
   data () {
     return { CAMPOS, ident: {}, erroIdent: '', guardadoIdent: false,
              SUGESTOES, loading: true, aGuardar: false, guardado: false, erro: '',
