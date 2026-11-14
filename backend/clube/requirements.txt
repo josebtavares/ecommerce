@@ -9,6 +9,7 @@ django-ratelimit==4.1.0
 # psycopg 3 + pool de ligações (Django 5.2: OPTIONS['pool'] — ver DATABASES no settings)
 psycopg[binary]==3.2.13
 psycopg-pool==3.2.8
+dj-database-url==2.1.0
 
 # CORS
 django-cors-headers==4.9.0
@@ -38,6 +39,14 @@ python-dotenv==1.2.4
 # Utilitarios
 Pillow==13.0.0
 numpy==2.3.4
+
+# Producao
+gunicorn==23.0.0
+whitenoise==6.9.0
+
+# Cloudflare R2 / S3 storage
+django-storages==1.14.6
+boto3==1.34.69
 
 # Relatórios (exportação Excel e PDF)
 openpyxl==3.1.5
