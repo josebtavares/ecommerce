@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build && node scripts/csp.js",
+    "build": "vue-cli-service build && node scripts/sentry-mapas.js && node scripts/csp.js",
     "start": "node scripts/servidor.js",
     "lint": "vue-cli-service lint"
   },
@@ -35,6 +35,7 @@
   "devDependencies": {
     "@babel/core": "^7.12.16",
     "@babel/eslint-parser": "^7.12.16",
+    "@sentry/cli": "3.8.2",
     "@tailwindcss/postcss": "^4.1.4",
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-plugin-eslint": "~5.0.0",
