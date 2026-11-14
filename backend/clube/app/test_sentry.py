@@ -167,3 +167,50 @@ class BotaoDeTesteDoAdmin(TestCase):
         self.assertTrue(r['ligado'] and r['evento'])
         self.assertEqual(len(t.eventos), 1)
         self.assertEqual(t.eventos[0]['tags'].get('teste'), 'sim')
+
+
+class CronMonitorDoBackup(TestCase):
+    """O backup diário avisa o Sentry (Cron Monitor 'backup-diario') quando começa e acaba — só na produção."""
+
+    def _correr(self, ambiente='producao', estado='ok', excepcao=None):
+        from app.management.commands.processar_videos import Command
+        from app.utils import backups
+        b = mock.Mock(estado=estado, duracao_s=12.5, chave='bd/x.dump', tamanho=1e6, erro='falhou o pg_dump')
+        cliente = mock.Mock(options={'environment': ambiente})
+        with override_settings(SENTRY_LIGADO=True), \
+                mock.patch('sentry_sdk.get_client', return_value=cliente), \
+                mock.patch('sentry_sdk.crons.capture_checkin', return_value='id-1') as chk, \
+                mock.patch.object(backups, 'backup_devido', return_value=True), \
+                mock.patch.object(backups, 'fazer_backup', side_effect=excepcao, return_value=b), \
+                mock.patch('app.management.commands.processar_videos.reportar') as rep:
+            cmd = Command()
+            cmd._backup_diario()
+        return chk, rep
+
+    def test_backup_ok(self):
+        chk, _ = self._correr()
+        self.assertEqual([c.kwargs['status'] for c in chk.call_args_list], ['in_progress', 'ok'])
+        fim = chk.call_args_list[1].kwargs
+        self.assertEqual((fim['monitor_slug'], fim['check_in_id'], fim['duration']), ('backup-diario', 'id-1', 12.5))
+        cfg = chk.call_args_list[0].kwargs['monitor_config']
+        self.assertEqual(cfg['schedule'], {'type': 'crontab', 'value': '0 3 * * *'})
+        self.assertEqual(cfg['timezone'], 'Atlantic/Cape_Verde')
+
+    def test_backup_falhou(self):
+        chk, _ = self._correr(estado='erro')
+        self.assertEqual([c.kwargs['status'] for c in chk.call_args_list], ['in_progress', 'error'])
+
+    def test_excepcao_marca_erro_e_nao_parte_o_worker(self):
+        chk, rep = self._correr(excepcao=RuntimeError('sem disco'))
+        self.assertEqual([c.kwargs['status'] for c in chk.call_args_list], ['in_progress', 'error'])
+        rep.assert_called_once()
+
+    def test_dev_nao_faz_checkin(self):
+        chk, _ = self._correr(ambiente='dev')
+        chk.assert_not_called()
+
+    def test_sem_sentry_nao_faz_checkin(self):
+        from app.utils.erros import cron_inicio
+        with override_settings(SENTRY_LIGADO=False), mock.patch('sentry_sdk.crons.capture_checkin') as chk:
+            self.assertIsNone(cron_inicio('backup-diario', {}))
+        chk.assert_not_called()
