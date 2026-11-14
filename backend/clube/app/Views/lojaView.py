@@ -93,6 +93,10 @@ def loja_list(request):
         from ..utils.documentos_loja import anotar_verificada
         qs = anotar_verificada(qs)
 
+    # média e total das avaliações na mesma consulta (antes: uma consulta por loja — Sentry N+1)
+    from ..Serializers.LojaSerializer import anotar_avaliacoes
+    qs = anotar_avaliacoes(qs)
+
     response, erro = paginar(request, qs, LojaPublicSerializer, limit_default=5)
     if erro:
         return erro

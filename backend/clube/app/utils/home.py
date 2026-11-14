@@ -8,6 +8,7 @@ Cada secção resolve-se aqui, sempre só com conteúdo válido (lojas activas, 
 dessas lojas): uma loja escolhida à mão que entretanto foi suspensa desaparece sozinha.
 Secções sem conteúdo não são devolvidas.
 """
+import time
 from datetime import timedelta
 
 from django.core.cache import cache
@@ -71,10 +72,23 @@ ROTULOS_CATEGORIA = {
 }
 
 
+def _nomes_categorias():
+    """{NOME EM MAIÚSCULAS: nome como o admin o escreveu} — uma consulta por minuto (antes: uma por categoria)."""
+    mapa = cache.get('home:nomes_categorias')
+    if mapa is None:
+        from ..models import Categoria
+        mapa = {}
+        for nome in Categoria.objects.order_by('id').values_list('nome', flat=True):
+            mapa.setdefault(nome.upper(), nome)
+        cache.set('home:nomes_categorias', mapa, CACHE_SEGUNDOS)
+    return mapa
+
+
 def rotulo_categoria(valor):
     # o nome como o admin o escreveu ("Beleza & Bem-estar"); senão os rótulos antigos
-    from ..models import Categoria
-    nome = Categoria.objects.filter(nome__iexact=valor).values_list('nome', flat=True).first()
+    if not valor:
+        return valor
+    nome = _nomes_categorias().get(str(valor).upper())
     return nome or ROTULOS_CATEGORIA.get(valor) or (valor[:1].upper() + valor[1:])
 
 
@@ -719,14 +733,26 @@ def montar(seccoes, request, pub_id):
     return {'publicacao': pub_id, 'seccoes': resolvidas, 'categorias_lojas': categorias_lojas()}
 
 
+GUARDAR_SEGUNDOS = 15 * 60     # quanto tempo a última versão serve enquanto outra se monta
+
+
 def home(request):
-    """Payload completo da home (cache curta por publicação e por origem do pedido)."""
+    """Payload completo da home (cache por publicação e por origem do pedido).
+    Fica fresca CACHE_SEGUNDOS; depois disso UM pedido volta a montá-la (tranca) e os outros recebem a versão
+    anterior — antes, quando a cache expirava com muita gente a entrar, todos montavam ao mesmo tempo (~85
+    consultas cada) e a home ficava lenta (teste de carga 2026-11-14)."""
     pub_id, seccoes = publicada()
-    chave = f'home:v1:{pub_id}:{request.build_absolute_uri("/")}'
-    dados = cache.get(chave)
-    if dados is None:
+    chave = f'home:v2:{pub_id}:{request.build_absolute_uri("/")}'
+    guardado = cache.get(chave)
+    if guardado is not None and time.time() - guardado['t'] < CACHE_SEGUNDOS:
+        return guardado['dados']
+    if guardado is not None and not cache.add(chave + ':a_montar', 1, 30):
+        return guardado['dados']            # outro pedido já está a montar: serve a anterior
+    try:
         dados = montar(seccoes, request, pub_id)
-        cache.set(chave, dados, CACHE_SEGUNDOS)
+        cache.set(chave, {'dados': dados, 't': time.time()}, GUARDAR_SEGUNDOS)
+    finally:
+        cache.delete(chave + ':a_montar')
     return dados
 
 
